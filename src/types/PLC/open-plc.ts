@@ -196,6 +196,8 @@ const bodySchema = z.discriminatedUnion('language', [
     value: zodFBDFlowSchema,
   }),
 ])
+
+type BodySchema = z.infer<typeof bodySchema>
 //
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
@@ -310,6 +312,7 @@ export {
 
 export type {
   BaseType,
+  BodySchema,
   PLCArrayDatatype,
   PLCConfiguration,
   PLCDataType,

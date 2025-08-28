@@ -24,6 +24,7 @@ const AcceleratorHandler = () => {
 
   const {
     project,
+    editor: { meta },
     deviceDefinitions,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
@@ -31,7 +32,9 @@ const AcceleratorHandler = () => {
     workspaceActions: { switchAppTheme, toggleMaximizedWindow },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
+    snapshotActions: { undo, redo },
   } = useOpenPLCStore()
+  const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
 
   const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
 
@@ -243,6 +246,34 @@ const AcceleratorHandler = () => {
       window.bridge.removeSaveFileAccelerator()
     }
   }, [selectedProjectLeaf])
+
+  /*
+   * ==== Edit Related Accelerators ====
+   */
+  useEffect(() => {
+    window.bridge.handleUndoRequest((_) => {
+      if (!meta?.name) {
+        return
+      }
+
+      undo(meta.name)
+    })
+    return () => {
+      window.bridge.removeUndoRequestListener()
+    }
+  }, [meta.name, isMonacoFocused])
+  useEffect(() => {
+    window.bridge.handleRedoRequest((_) => {
+      if (!meta?.name) {
+        return
+      }
+
+      redo(meta.name)
+    })
+    return () => {
+      window.bridge.removeRedoRequestListener()
+    }
+  }, [meta.name, isMonacoFocused])
 
   /**
    * ==== Window Related Accelerators ====

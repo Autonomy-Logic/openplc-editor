@@ -10,6 +10,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       name: 'available',
     },
   },
+  isMonacoFocused: false,
   editorActions: {
     addModel: (editor) =>
       setState(
@@ -271,5 +272,9 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           }
         }),
       ),
+
+    setMonacoFocused: (focused: boolean) => {
+      setState({ isMonacoFocused: focused })
+    },
   },
 })

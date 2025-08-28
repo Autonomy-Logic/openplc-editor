@@ -429,5 +429,29 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
         }),
       )
     },
+
+    /**
+     * Control the undo and redo actions
+     */
+    applyLadderFlowSnapshot: ({ editorName, snapshot }) => {
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          if (snapshot) {
+            const flowIndex = ladderFlows.findIndex((ladderFlow) => ladderFlow.name === editorName)
+            const rungs = snapshot.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
+            const newFlow = { ...snapshot, name: editorName, rungs }
+
+            if (flowIndex === -1) {
+              ladderFlows.push(newFlow)
+            } else {
+              ladderFlows[flowIndex] = newFlow
+            }
+          } else {
+            const flowIndex = ladderFlows.findIndex((ladderFlow) => ladderFlow.name === editorName)
+            if (flowIndex !== -1) ladderFlows.splice(flowIndex, 1)
+          }
+        }),
+      )
+    },
   },
 })

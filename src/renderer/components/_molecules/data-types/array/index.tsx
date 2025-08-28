@@ -24,7 +24,9 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       data: { dataTypes },
     },
     libraries: sliceLibraries,
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
   const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
   const userDataTypes = dataTypes
     .map((type) => type.name)
@@ -89,7 +91,13 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const addNewRow = () => {
     setTableData((prevRows) => {
+      const isFirst = prevRows.length === 0
       const newRows = [...prevRows, { dimension: '' }]
+
+      if (isFirst) {
+        addSnapshot(editor.meta.name)
+      }
+
       setArrayTable({ selectedRow: newRows.length - 1 })
       updateDatatype(data.name, { dimensions: newRows } as PLCArrayDatatype)
       return newRows
@@ -97,6 +105,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const removeRow = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null) {
         const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
@@ -117,6 +127,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const moveRowUp = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
         const newRows = [...prevRows]
@@ -140,6 +152,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const moveRowDown = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
         const newRows = [...prevRows]

@@ -116,6 +116,13 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('window-controls:request-close')
   }
 
+  handleUndoRequest() {
+    this.mainWindow.webContents.send('edit:undo-request')
+  }
+  handleRedoRequest() {
+    this.mainWindow.webContents.send('edit:redo-request')
+  }
+
   /**
    * --------------------------------------------------------------------------------------------
    */
@@ -234,14 +241,12 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:edit.submenu.undo'),
           accelerator: 'Cmd+Z',
-          selector: 'undo:',
-          enabled: true,
+          click: () => this.handleUndoRequest(),
         },
         {
           label: i18n.t('menu:edit.submenu.redo'),
-          accelerator: 'Cmd+Y',
-          selector: 'redo:',
-          enabled: true,
+          accelerator: 'Cmd+Shift+Z',
+          click: () => this.handleRedoRequest(),
         },
         { type: 'separator' },
         {
@@ -507,15 +512,13 @@ export default class MenuBuilder {
         submenu: [
           {
             label: i18n.t('menu:edit.submenu.undo'),
-            enabled: true,
             accelerator: 'Ctrl+Z',
-            role: 'undo',
+            click: () => this.handleUndoRequest(),
           },
           {
             label: i18n.t('menu:edit.submenu.redo'),
-            enabled: true,
-            accelerator: 'Ctrl+Y',
-            role: 'redo',
+            accelerator: 'Ctrl+Shift+Z',
+            click: () => this.handleRedoRequest(),
           },
           { type: 'separator' },
           {

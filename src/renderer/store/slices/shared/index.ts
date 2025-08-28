@@ -2,13 +2,16 @@ import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
+import { PLCVariable as VariablePLC } from '@root/types/PLC'
 import {
   PLCArrayDatatype,
+  PLCDataType,
   PLCEnumeratedDatatype,
   PLCPou,
   PLCProject,
   PLCProjectSchema,
   PLCStructureDatatype,
+  PLCVariable,
 } from '@root/types/PLC/open-plc'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
 import { StateCreator } from 'zustand'
@@ -19,6 +22,7 @@ import { EditorModel, EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType, ZodFBDFlowType } from '../fbd'
 import { duplicateFBDRung } from '../fbd/utils'
 import { FileSlice, FileSliceDataObject } from '../files'
+import { HistorySlice, HistorySnapshot } from '../history'
 import { LadderFlowSlice, LadderFlowType, ZodLadderFlowType } from '../ladder'
 import { duplicateLadderRung } from '../ladder/utils'
 import { LibrarySlice } from '../library'
@@ -80,6 +84,11 @@ export type SharedSlice = {
     // File and workspace saved state management
     handleFileAndWorkspaceSavedState: (name: string) => void
   }
+  snapshotActions: {
+    addSnapshot: (pouName: string) => void
+    undo: (pouName: string) => void
+    redo: (pouName: string) => void
+  }
 }
 
 export const createSharedSlice: StateCreator<
@@ -94,6 +103,7 @@ export const createSharedSlice: StateCreator<
     DeviceSlice &
     FileSlice &
     ConsoleSlice &
+    HistorySlice &
     SharedSlice,
   [],
   [],
@@ -1516,6 +1526,287 @@ export const createSharedSlice: StateCreator<
       // If the workspace state is not 'unsaved', set it to 'unsaved' because a file was modified
       if (getState().workspace.editingState !== 'unsaved') {
         getState().workspaceActions.setEditingState('unsaved')
+      }
+    },
+  },
+  snapshotActions: {
+    addSnapshot: (pouName) => {
+      const ladderFlows = getState().ladderFlows
+      const fbdFlows = getState().fbdFlows
+      const resource = getState().project.data.configuration.resource
+      const dataTypes = getState().project.data.dataTypes
+
+      const { globalVariables, tasks, instances } = resource
+
+      const pou = getState().project.data.pous.find((pou) => pou.data.name === pouName)
+      const flow = ladderFlows.find((ladderFlow) => ladderFlow.name === pouName)
+      const fbdFlow = fbdFlows.find((fbdFlow) => fbdFlow.name === pouName)
+
+      const isDataType = dataTypes.some((dataType) => dataType.name === pouName)
+      const isResource = pouName === 'resource'
+
+      if (
+        !isResource &&
+        !isDataType &&
+        !pou &&
+        !flow &&
+        !fbdFlow &&
+        globalVariables.length === 0 &&
+        tasks.length === 0 &&
+        instances.length === 0
+      ) {
+        return
+      }
+
+      const snapshot: HistorySnapshot = {
+        variables: [],
+        body: undefined,
+        ladderFlow: undefined,
+        fbdFlow: undefined,
+        globalVariables: [],
+        tasks: [],
+        instances: [],
+        dataTypes: undefined,
+      }
+
+      if (pou) {
+        snapshot.variables = JSON.parse(JSON.stringify(pou.data.variables)) as VariablePLC[]
+        snapshot.body = JSON.parse(JSON.stringify(pou.data.body)) as unknown as string
+      }
+
+      if (flow) {
+        snapshot.ladderFlow = JSON.parse(JSON.stringify(flow)) as HistorySnapshot['ladderFlow']
+      }
+
+      if (fbdFlow) {
+        snapshot.fbdFlow = JSON.parse(JSON.stringify(fbdFlow)) as HistorySnapshot['fbdFlow']
+      }
+
+      if (globalVariables.length) {
+        snapshot.globalVariables = JSON.parse(JSON.stringify(globalVariables)) as VariablePLC[]
+      }
+
+      if (tasks.length) {
+        snapshot.tasks = JSON.parse(JSON.stringify(tasks)) as HistorySnapshot['tasks']
+      }
+
+      if (instances.length) {
+        snapshot.instances = JSON.parse(JSON.stringify(instances)) as HistorySnapshot['instances']
+      }
+
+      if (getState().history[pouName]) {
+        getState().history[pouName] = { past: [], future: [] }
+      }
+
+      if (isDataType) {
+        const dataType = dataTypes.find((dataType) => dataType.name === pouName)!
+
+        snapshot.dataTypes = JSON.parse(JSON.stringify(dataType)) as HistorySnapshot['dataTypes']
+      }
+
+      getState().historyActions.addPastHistory(pouName, snapshot)
+
+      if (getState().history[pouName].past.length > 50) {
+        getState().history[pouName].past.shift()
+      }
+    },
+    undo: (pouName) => {
+      const ladderFlows = getState().ladderFlows
+      const fbdFlows = getState().fbdFlows
+      const resource = getState().project.data.configuration.resource
+      const dataTypes = getState().project.data.dataTypes
+
+      const { globalVariables, tasks, instances } = resource
+
+      const history = getState().history[pouName]
+
+      if (!history || history.past.length === 0) {
+        return
+      }
+
+      const isDataType = dataTypes.some((dataType) => dataType.name === pouName)
+      const isResource = pouName === 'resource'
+
+      const pou = isResource ? undefined : getState().project.data.pous.find((p) => p.data.name === pouName)
+
+      const flowIndex = ladderFlows.findIndex((ladderFlow) => ladderFlow.name === pouName)
+      const fbdIndex = fbdFlows.findIndex((fbdFlow) => fbdFlow.name === pouName)
+
+      const currentSnapshot: HistorySnapshot = {
+        variables: pou ? (JSON.parse(JSON.stringify(pou.data.variables)) as HistorySnapshot['variables']) : [],
+        body: pou ? (JSON.parse(JSON.stringify(pou.data.body)) as unknown as string) : undefined,
+        ladderFlow:
+          flowIndex !== -1
+            ? (JSON.parse(JSON.stringify(ladderFlows[flowIndex])) as HistorySnapshot['ladderFlow'])
+            : undefined,
+        fbdFlow:
+          fbdIndex !== -1 ? (JSON.parse(JSON.stringify(fbdFlows[fbdIndex])) as HistorySnapshot['fbdFlow']) : undefined,
+        globalVariables: globalVariables.length
+          ? (JSON.parse(JSON.stringify(globalVariables)) as HistorySnapshot['globalVariables'])
+          : [],
+        tasks: tasks.length ? (JSON.parse(JSON.stringify(tasks)) as HistorySnapshot['tasks']) : [],
+        instances: instances.length ? (JSON.parse(JSON.stringify(instances)) as HistorySnapshot['instances']) : [],
+        dataTypes: isDataType
+          ? (JSON.parse(JSON.stringify(dataTypes.find((dt) => dt.name === pouName))) as HistorySnapshot['dataTypes'])
+          : undefined,
+      }
+
+      getState().historyActions.addFutureHistory(pouName, currentSnapshot)
+
+      const previous = getState().historyActions.popPastHistory(pouName)
+
+      if (!previous) {
+        return
+      }
+
+      if (isResource) {
+        const { setGlobalVariables, setTasks, setInstances } = getState().projectActions
+
+        setGlobalVariables({ variables: (previous?.globalVariables ?? []) as PLCVariable[] })
+        setTasks({ tasks: previous?.tasks ?? [] })
+        setInstances({ instances: previous?.instances ?? [] })
+
+        return
+      }
+
+      if (isDataType && previous.dataTypes) {
+        const { applyDatatypeSnapshot } = getState().projectActions
+
+        applyDatatypeSnapshot(pouName, previous.dataTypes as unknown as PLCDataType)
+
+        return
+      }
+
+      if (!isResource && pou) {
+        getState().projectActions.applyPouSnapshot(
+          pouName,
+          previous.variables as PLCVariable[],
+          previous.body as typeof pou.data.body,
+        )
+      }
+
+      getState().ladderFlowActions.applyLadderFlowSnapshot({
+        editorName: pouName,
+        snapshot: previous.ladderFlow as LadderFlowType | null,
+      })
+
+      getState().fbdFlowActions.applyFBDFlowSnapshot({
+        editorName: pouName,
+        snapshot: previous.fbdFlow as FBDFlowType | null,
+      })
+
+      const variables = previous.variables as PLCVariable[]
+      if (variables.length > 0) {
+        getState().editorActions.updateModelVariables({
+          display: 'table',
+          selectedRow: variables.length - 1,
+        })
+      } else {
+        getState().editorActions.updateModelVariables({
+          display: 'table',
+          selectedRow: -1,
+        })
+      }
+    },
+    redo: (pouName) => {
+      const ladderFlows = getState().ladderFlows
+      const fbdFlows = getState().fbdFlows
+      const resource = getState().project.data.configuration.resource
+      const dataTypes = getState().project.data.dataTypes
+
+      const { globalVariables, tasks, instances } = resource
+
+      const history = getState().history[pouName]
+
+      if (!history || history.future.length === 0) {
+        return
+      }
+
+      const isDataType = dataTypes.some((dataType) => dataType.name === pouName)
+      const isResource = pouName === 'resource'
+
+      const pou = isResource ? undefined : getState().project.data.pous.find((p) => p.data.name === pouName)
+
+      const flowIndex = ladderFlows.findIndex((ladderFlow) => ladderFlow.name === pouName)
+      const fbdIndex = fbdFlows.findIndex((fbdFlow) => fbdFlow.name === pouName)
+
+      const currentSnapshot: HistorySnapshot = {
+        variables: pou ? (JSON.parse(JSON.stringify(pou.data.variables)) as HistorySnapshot['variables']) : [],
+        body: pou ? (JSON.parse(JSON.stringify(pou.data.body)) as unknown as string) : undefined,
+        ladderFlow:
+          flowIndex !== -1
+            ? (JSON.parse(JSON.stringify(ladderFlows[flowIndex])) as HistorySnapshot['ladderFlow'])
+            : undefined,
+        fbdFlow:
+          fbdIndex !== -1 ? (JSON.parse(JSON.stringify(fbdFlows[fbdIndex])) as HistorySnapshot['fbdFlow']) : undefined,
+        globalVariables: globalVariables.length
+          ? (JSON.parse(JSON.stringify(globalVariables)) as HistorySnapshot['globalVariables'])
+          : [],
+        tasks: tasks.length ? (JSON.parse(JSON.stringify(tasks)) as HistorySnapshot['tasks']) : [],
+        instances: instances.length ? (JSON.parse(JSON.stringify(instances)) as HistorySnapshot['instances']) : [],
+        dataTypes: isDataType
+          ? (JSON.parse(JSON.stringify(dataTypes.find((dt) => dt.name === pouName))) as HistorySnapshot['dataTypes'])
+          : undefined,
+      }
+
+      getState().historyActions.addPastHistory(pouName, currentSnapshot)
+
+      const next = getState().historyActions.popFutureHistory(pouName)
+
+      if (!next) {
+        return
+      }
+
+      if (isResource) {
+        const { setGlobalVariables, setTasks, setInstances } = getState().projectActions
+
+        setGlobalVariables({ variables: (next?.globalVariables ?? []) as PLCVariable[] })
+        setTasks({ tasks: next?.tasks ?? [] })
+        setInstances({ instances: next?.instances ?? [] })
+
+        return
+      }
+
+      if (isDataType && next.dataTypes) {
+        const { applyDatatypeSnapshot } = getState().projectActions
+
+        applyDatatypeSnapshot(pouName, next.dataTypes as unknown as PLCDataType)
+
+        return
+      }
+
+      if (!isResource && pou) {
+        getState().projectActions.applyPouSnapshot(
+          pouName,
+          next.variables as PLCVariable[],
+          next.body as typeof pou.data.body,
+        )
+      }
+
+      getState().ladderFlowActions.applyLadderFlowSnapshot({
+        editorName: pouName,
+        snapshot: next.ladderFlow as LadderFlowType | null,
+      })
+
+      getState().fbdFlowActions.applyFBDFlowSnapshot({
+        editorName: pouName,
+        snapshot: next.fbdFlow as FBDFlowType | null,
+      })
+
+      const variables = next.variables as PLCVariable[]
+
+      if (variables.length > 0) {
+        console.log(variables.length)
+
+        getState().editorActions.updateModelVariables({
+          display: 'table',
+          selectedRow: variables.length - 1,
+        })
+      } else {
+        getState().editorActions.updateModelVariables({
+          display: 'table',
+          selectedRow: -1,
+        })
       }
     },
   },

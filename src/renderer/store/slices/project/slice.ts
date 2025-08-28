@@ -1,5 +1,12 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { PLCArrayDatatype, PLCGlobalVariable, PLCInstance, PLCTask, PLCVariable } from '@root/types/PLC/open-plc'
+import {
+  PLCArrayDatatype,
+  PLCDataType,
+  PLCGlobalVariable,
+  PLCInstance,
+  PLCTask,
+  PLCVariable,
+} from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -201,6 +208,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
 
           pou.data.name = nextName
+    applyPouSnapshot: (pouName: string, variables: PLCVariable[], body: unknown): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const pou = project.data.pous.find((pou) => pou.data.name === pouName)
+
+          if (!pou) {
+            return
+          }
+
+          pou.data.variables = variables
+          pou.data.body = body as typeof pou.data.body
         }),
       )
     },
@@ -623,6 +641,19 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
 
           dataType.variable.splice(newIndex, 0, removed)
+        }),
+      )
+    },
+    applyDatatypeSnapshot: (name: string, snapshot: PLCDataType): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const index = project.data.dataTypes.findIndex((dataType) => dataType.name === name)
+
+          if (index === -1) {
+            return
+          }
+
+          project.data.dataTypes[index] = snapshot
         }),
       )
     },

@@ -145,6 +145,8 @@ type LadderFlowActions = {
   }) => void
 
   setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
+
+  applyLadderFlowSnapshot: ({ editorName, snapshot }: { editorName: string; snapshot: LadderFlowType | null }) => void
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */

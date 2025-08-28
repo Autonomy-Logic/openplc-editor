@@ -46,6 +46,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     projectActions: { deleteVariable },
     modals,
     modalActions: { closeModal, openModal },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -172,6 +173,8 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     newNodeType: CustomFbdNodeTypes,
     library: string | undefined,
   ) => {
+    addSnapshot(editor.meta.name)
+
     let pouLibrary = undefined
     if (library) {
       const [blockLibraryType, blockLibrary, pouName] = library.split('/')
@@ -250,6 +253,8 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
    * It is used to remove the selected nodes and edges from the flow
    */
   const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
+    addSnapshot(editor.meta.name)
+
     if (nodes.length > 0) {
       fbdFlowActions.removeNodes({
         nodes: nodes,
@@ -310,6 +315,8 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
    * It is used to update the local rung state
    */
   const handleOnConnect = (connection: Connection) => {
+    addSnapshot(editor.meta.name)
+
     setRungLocal((rung) => ({
       ...rung,
       edges: addEdge(connection, rung.edges),

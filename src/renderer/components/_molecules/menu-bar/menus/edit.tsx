@@ -9,6 +9,7 @@ export const EditMenu = () => {
   const {
     workspaceActions: { setModalOpen },
     modalActions: { openModal },
+    snapshotActions: { undo, redo },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
   const findInProject = () => {
@@ -20,11 +21,11 @@ export const EditMenu = () => {
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:edit.label')}</MenuPrimitive.Trigger>
       <MenuPrimitive.Portal>
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
-          <MenuPrimitive.Item className={ITEM}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => undo(editor.meta.name)}>
             <span>{i18n.t('menu:edit.submenu.undo')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Z'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => redo(editor.meta.name)}>
             <span>{i18n.t('menu:edit.submenu.redo')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Y'}</span>
           </MenuPrimitive.Item>

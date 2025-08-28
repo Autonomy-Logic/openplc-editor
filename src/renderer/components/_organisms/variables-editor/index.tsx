@@ -41,7 +41,6 @@ const VariablesEditor = () => {
       data: { pous, dataTypes },
     },
     editorActions: { updateModelVariables },
-
     projectActions: {
       createVariable,
       deleteVariable,
@@ -50,6 +49,7 @@ const VariablesEditor = () => {
       updatePouReturnType,
       setPouVariables,
     },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   /**
@@ -151,6 +151,9 @@ const VariablesEditor = () => {
 
   const handleRearrangeVariables = (index: number, row?: number) => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     const variable = tableData[row ?? parseInt(editorVariables.selectedRow)]
     rearrangeVariables({
       scope: 'local',
@@ -166,6 +169,8 @@ const VariablesEditor = () => {
 
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
 
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     const selectedRow = parseInt(editorVariables.selectedRow)
@@ -227,6 +232,8 @@ const VariablesEditor = () => {
 
   const handleRemoveVariable = () => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
     const selectedVariable = tableData[selectedRow]
@@ -291,7 +298,8 @@ const VariablesEditor = () => {
     renamedPairs: { oldName: string; type: string }[],
     fbdFlows: FBDFlowState['fbdFlows'],
     updateNode: FBDFlowActions['updateNode'],
-  ) =>
+  ) => {
+    addSnapshot(editor.meta.name)
     fbdFlows.forEach((flow) =>
       flow.rung.nodes.forEach((node) => {
         const data = (node.data as { variable?: PLCVariable }).variable
@@ -316,12 +324,15 @@ const VariablesEditor = () => {
         })
       }),
     )
+  }
 
   const unlinkRenamedVariablesByName = (
     renamedPairs: { oldName: string; type: string }[],
     ladderFlows: LadderFlowState['ladderFlows'],
     updateNode: LadderFlowActions['updateNode'],
   ) => {
+    addSnapshot(editor.meta.name)
+
     ladderFlows.forEach((flow) =>
       flow.rungs.forEach((rung) =>
         rung.nodes.forEach((node) => {
@@ -358,6 +369,8 @@ const VariablesEditor = () => {
     updateNode: LadderFlowActions['updateNode'],
     propagateRenamed: boolean,
   ): void => {
+    addSnapshot(editor.meta.name)
+
     ladderFlows.forEach((flow) =>
       flow.rungs.forEach((rung) =>
         rung.nodes.forEach((node) => {
@@ -408,6 +421,8 @@ const VariablesEditor = () => {
     updateNode: FBDFlowActions['updateNode'],
     propagateRenamed: boolean,
   ): void => {
+    addSnapshot(editor.meta.name)
+
     fbdFlows.forEach((flow) =>
       flow.rung.nodes.forEach((node) => {
         const nodeVar = (node.data as { variable?: PLCVariable }).variable
@@ -575,6 +590,8 @@ const VariablesEditor = () => {
 
   const commitCode = async (): Promise<boolean> => {
     try {
+      addSnapshot(editor.meta.name)
+
       const language = 'language' in editor.meta ? editor.meta.language : undefined
 
       if (!language) return false
