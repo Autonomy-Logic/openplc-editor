@@ -1659,6 +1659,11 @@ export const createSharedSlice: StateCreator<
         return
       }
 
+      getState().fileActions.updateFile({
+        name: pouName,
+        saved: false,
+      })
+
       if (isResource) {
         const { setGlobalVariables, setTasks, setInstances } = getState().projectActions
 
@@ -1756,6 +1761,11 @@ export const createSharedSlice: StateCreator<
       if (!next) {
         return
       }
+
+      getState().fileActions.updateFile({
+        name: pouName,
+        saved: false,
+      })
 
       if (isResource) {
         const { setGlobalVariables, setTasks, setInstances } = getState().projectActions

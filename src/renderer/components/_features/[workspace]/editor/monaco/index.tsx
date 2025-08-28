@@ -333,8 +333,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }
 
   function handleWriteInPou(value: string | undefined) {
-    if (!value) return      
-    
+    if (value === undefined) return
+
     setLocalText(value)
     handleFileAndWorkspaceSavedState(name)
     updatePou({ name, content: { language, value } })
