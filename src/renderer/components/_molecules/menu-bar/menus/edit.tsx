@@ -7,6 +7,7 @@ import { MenuClasses } from '../constants'
 
 export const EditMenu = () => {
   const {
+    editor,
     workspaceActions: { setModalOpen },
     modalActions: { openModal },
     snapshotActions: { undo, redo },

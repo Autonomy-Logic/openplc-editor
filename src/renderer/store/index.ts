@@ -8,6 +8,7 @@ import type {
   EditorSlice,
   FBDFlowSlice,
   FileSlice,
+  HistorySlice,
   LadderFlowSlice,
   LibrarySlice,
   ModalSlice,
@@ -23,6 +24,7 @@ import {
   createEditorSlice,
   createFBDFlowSlice,
   createFileSlice,
+  createHistorySlice,
   createLadderFlowSlice,
   createLibrarySlice,
   createModalSlice,
@@ -32,7 +34,6 @@ import {
   createTabsSlice,
   createWorkspaceSlice,
 } from './slices'
-import { createHistorySlice, HistorySlice } from './slices/history'
 
 export const openPLCStoreBase = create(
   subscribeWithSelector<

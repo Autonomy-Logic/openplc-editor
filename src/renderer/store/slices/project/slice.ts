@@ -208,6 +208,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
 
           pou.data.name = nextName
+        }),
+      )
+    },
     applyPouSnapshot: (pouName: string, variables: PLCVariable[], body: unknown): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
