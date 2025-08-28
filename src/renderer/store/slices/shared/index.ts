@@ -560,14 +560,19 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      /**
+       * Get all names.
+       */
+      const allNames = [
+        ...getState().project.data.pous.map((pou) => pou.data.name),
+        ...getState().project.data.dataTypes.map((datatype) => datatype.name),
+      ]
+
       const copiedPou = {
         type: originalPou.type,
         data: {
           ...originalPou.data,
-          name: generatePouCopyUniqueName(
-            originalPou.data.name,
-            getState().project.data.pous.map((pou) => pou.data.name),
-          ),
+          name: generatePouCopyUniqueName(originalPou.data.name, allNames),
         },
       } as PLCPou
 
@@ -832,12 +837,17 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      /**
+       * Get all names.
+       */
+      const allNames = [
+        ...getState().project.data.pous.map((pou) => pou.data.name),
+        ...getState().project.data.dataTypes.map((datatype) => datatype.name),
+      ]
+
       const copiedDatatype = {
         ...originalDatatype,
-        name: generatePouCopyUniqueName(
-          originalDatatype.name,
-          getState().project.data.dataTypes.map((dt) => dt.name),
-        ),
+        name: generatePouCopyUniqueName(originalDatatype.name, allNames),
       }
 
       getState().projectActions.createDatatype({ data: copiedDatatype })
@@ -1660,7 +1670,7 @@ export const createSharedSlice: StateCreator<
       }
 
       getState().fileActions.updateFile({
-        name: pouName,
+        name: pouName === 'resource' ? 'Resource' : pouName,
         saved: false,
       })
 
@@ -1763,7 +1773,7 @@ export const createSharedSlice: StateCreator<
       }
 
       getState().fileActions.updateFile({
-        name: pouName,
+        name: pouName === 'resource' ? 'Resource' : pouName,
         saved: false,
       })
 
