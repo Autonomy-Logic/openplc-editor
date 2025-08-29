@@ -20,6 +20,13 @@ interface MethodsResult<T> {
 }
 type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'error') => void
 
+type CompileArduinoProgramArgs = {
+  boardTarget: string
+  boardHalsContent: HalsFile[string]
+  compilationPath: string
+  handleOutputData: HandleOutputDataCallback
+}
+
 class CompilerModule {
   binaryDirectoryPath: string
   sourceDirectoryPath: string
@@ -143,6 +150,14 @@ class CompilerModule {
       xml2stBinaryPath += '.exe'
     }
     return spawn(xml2stBinaryPath, args)
+  }
+
+  #executeArduinoCliCommand(args: string[]) {
+    let arduinoCliBinaryPath = this.arduinoCliBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      arduinoCliBinaryPath += '.exe'
+    }
+    return spawn(arduinoCliBinaryPath, args)
   }
 
   // ############################################################################
@@ -649,7 +664,7 @@ class CompilerModule {
 
     const stProgramFilePath = join(buildTargetDirectoryPath, 'src', 'program.st')
 
-    const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
+    const definitionsFilePath = join(buildTargetDirectoryPath, 'examples', 'Baremetal', 'defines.h')
 
     // === Files contents that we need ===
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
@@ -835,6 +850,65 @@ class CompilerModule {
     return result
   }
 
+  async handleCompileArduinoProgram({
+    boardHalsContent,
+    compilationPath,
+    handleOutputData,
+  }: CompileArduinoProgramArgs) {
+    const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
+
+    let buildProjectFlags = ['compile', '-v']
+
+    if (boardHalsContent['c_flags']) {
+      buildProjectFlags = [
+        ...buildProjectFlags,
+        '--build-property',
+        `${boardHalsContent['c_flags'].map((f) => f).join(' ')}`,
+      ]
+    }
+
+    if (boardHalsContent['cxx_flags']) {
+      buildProjectFlags = [
+        ...buildProjectFlags,
+        '--build-property',
+        `${boardHalsContent['cxx_flags'].map((f) => f).join(' ')}`,
+      ]
+    }
+
+    buildProjectFlags = [
+      ...buildProjectFlags,
+      '--library',
+      `${join(compilationPath, 'src')}`, // Basic libraries
+      '--library',
+      `${join(compilationPath, 'src', 'lib')}`, // Arduino libraries
+      '--export-binaries', // Export binaries
+      '-b',
+      boardHalsContent['platform'], // Board target
+      join(baremetalPath, 'Baremetal.ino'), // Arduino .ino file
+      ...this.arduinoCliBaseParameters, // Base parameters
+    ]
+
+    console.log('Build project flags:', buildProjectFlags)
+
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      const process = this.#executeArduinoCliCommand(buildProjectFlags)
+      let stderrData = ''
+      process.stdout.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      process.stderr.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+      process.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true })
+        } else {
+          reject(new Error(`Compilation failed with code ${code}\n${stderrData}`))
+        }
+      })
+    })
+  }
+
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
@@ -897,6 +971,8 @@ class CompilerModule {
     ]
 
     const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
+
+    const halsContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
 
     const normalizedProjectPath = projectPath.replace('project.json', '')
 
@@ -1158,6 +1234,27 @@ class CompilerModule {
     try {
       await this.handleGenerateArduinoCppFile(normalizedProjectPath, boardTarget)
       _mainProcessPort.postMessage({ logLevel: 'info', message: 'Arduino CPP file generated successfully.' })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    // Step 11: Compile Arduino Program
+    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compiling Arduino program...' })
+    try {
+      await this.handleCompileArduinoProgram({
+        boardTarget,
+        boardHalsContent: halsContent[boardTarget],
+        compilationPath,
+        handleOutputData: (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+      })
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Arduino program compiled successfully.' })
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
