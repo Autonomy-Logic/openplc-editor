@@ -1434,7 +1434,15 @@ export const createSharedSlice: StateCreator<
               },
             }
           }
-          saveContent = projectData.data
+          // Ensure project.json doesn't contain POUs (POUs live as separate files)
+          const sanitizedProject = {
+            ...projectData.data,
+            data: {
+              ...projectData.data.data,
+              pous: [],
+            },
+          } as PLCProject
+          saveContent = sanitizedProject
           break
         }
         default:
