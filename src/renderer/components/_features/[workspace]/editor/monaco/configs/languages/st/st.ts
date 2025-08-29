@@ -1,5 +1,5 @@
 /* eslint-disable no-useless-escape */
-import { PLCDataType } from '@root/types/PLC/open-plc'
+import { PLCDataType, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { languages } from 'monaco-editor'
 
 // Optimized regex based on tmlanguage rules
@@ -604,8 +604,8 @@ export const updateLocalVariablesInTokenizer = (localVariables: string[]) => {
 export const updateDataTypeVariablesInTokenizer = (customDataTypes: PLCDataType[]) => {
   // Extract all variable names from all structure data types
   const allVariableNames = customDataTypes
-    .filter((dt) => dt.derivation === 'structure')
-    .flatMap((dt) => dt.variable.map((v) => v.name))
+    .filter((dt) => dt.derivation === 'structure' && dt.variable.length > 0)
+    .flatMap((dt) => (dt as PLCStructureDatatype).variable.map((v) => v.name))
     .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
 
   // Update the global array and language definition
@@ -621,9 +621,11 @@ export const updateDataTypeVariablesInTokenizer = (customDataTypes: PLCDataType[
 
 export const updateEnumValuesInTokenizer = (customDataTypes: PLCDataType[]) => {
   const allEnumValues = customDataTypes
-    .filter((dt) => dt.derivation === 'enumerated')
-    .flatMap((dt) => dt.values.map((v) => v.description))
+    .filter((dt) => dt.derivation === 'enumerated' && dt.values.length > 0)
+    .flatMap((dt) => (dt as PLCEnumeratedDatatype).values.map((v) => v.description))
     .filter((value, index, arr) => arr.indexOf(value) === index)
+
+  if (allEnumValues.length === 0) return
 
   customEnumValueKeywords.length = 0
   customEnumValueKeywords.push(...allEnumValues)
