@@ -17,7 +17,9 @@ const StructureDataType = () => {
     },
     editorActions: { updateModelStructure },
     projectActions: { updateDatatype, rearrangeStructureVariables },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
   const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
 
   const [editorStructure, setEditorStructure] = useState<StructureTableType>({
@@ -52,6 +54,8 @@ const StructureDataType = () => {
   }
 
   const handleCreateStructureVariable = () => {
+    addSnapshot(editor.meta.name)
+
     const structureVariables = tableData.filter((variable) => variable.name || variable.type)
     const selectedRow = parseInt(editorStructure.selectedRow)
 
@@ -139,6 +143,8 @@ const StructureDataType = () => {
   }
 
   const handleDeleteStructureVariable = () => {
+    addSnapshot(editor.meta.name)
+
     const structureVariables = tableData.filter((variable) => variable.name || variable.type)
     const selectedRow = parseInt(editorStructure.selectedRow)
 
@@ -167,6 +173,8 @@ const StructureDataType = () => {
   }
 
   const handleRearrangeStructureVariables = (index: number, row?: number) => {
+    addSnapshot(editor.meta.name)
+
     rearrangeStructureVariables({
       associatedDataType: editor.meta.name,
       rowId: row ?? parseInt(editorStructure.selectedRow),

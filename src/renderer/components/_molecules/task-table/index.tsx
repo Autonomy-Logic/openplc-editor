@@ -55,7 +55,11 @@ type PLCTaskTableProps = {
 
 const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps) => {
   const {
+    editor: {
+      meta: { name },
+    },
     projectActions: { updateTask },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   return (
@@ -64,8 +68,11 @@ const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps
       tableData={tableData}
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
-      // @ts-expect-error - The data value is a literal type that need to be parsed
-      updateData={(rowIndex, columnId, value) => updateTask({ rowId: rowIndex, data: { [columnId]: value } })}
+      updateData={(rowIndex, columnId, value) => {
+        addSnapshot(name)
+        // @ts-expect-error - The data value is a literal type that need to be parsed
+        return updateTask({ rowId: rowIndex, data: { [columnId]: value } })
+      }}
       tableContext='Tasks'
     />
   )
