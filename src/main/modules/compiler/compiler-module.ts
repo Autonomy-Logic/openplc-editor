@@ -831,6 +831,22 @@ class CompilerModule {
     }
   }
 
+  async handlePatchGeneratedFiles(compilationPath: string, handleOutputData: HandleOutputDataCallback) {
+    const pousCFilePath = join(compilationPath, 'src', 'POUS.c')
+    const res0FilePath = join(compilationPath, 'src', 'Res0.c')
+
+    const pousCContent = await readFile(pousCFilePath, { encoding: 'utf8' })
+    const patchedPousCContent = `#include "POUS.h"\n#include "Config0.h"\n\n${pousCContent}`
+    await writeFile(pousCFilePath, patchedPousCContent, { encoding: 'utf8' })
+
+    const res0FileContent = await readFile(res0FilePath, { encoding: 'utf8' })
+
+    const patchedRes0FileContent = res0FileContent.replaceAll('#include "POUS.c"', '#include "POUS.h"\n')
+
+    await writeFile(res0FilePath, patchedRes0FileContent, { encoding: 'utf8' })
+    handleOutputData('Required files patched', 'info')
+  }
+
   async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
     let result: MethodsResult<string> = { success: false }
 
@@ -887,8 +903,6 @@ class CompilerModule {
       join(baremetalPath, 'Baremetal.ino'), // Arduino .ino file
       ...this.arduinoCliBaseParameters, // Base parameters
     ]
-
-    console.log('Build project flags:', buildProjectFlags)
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
       const process = this.#executeArduinoCliCommand(buildProjectFlags)
@@ -1167,7 +1181,25 @@ class CompilerModule {
       return
     }
 
-    // Step 7: Handle core installation
+    // Step 7: Handle patch files
+    try {
+      await this.handlePatchGeneratedFiles(compilationPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    // Step 8: Handle core installation
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling core installation...' })
     try {
       await this.handleCoreInstallation(boardCore, (data, logLevel) => {
@@ -1185,7 +1217,7 @@ class CompilerModule {
       _mainProcessPort.close()
       return
     }
-    // Step 8: Handle library installation
+    // Step 9: Handle library installation
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling library installation...' })
     try {
       await this.handleLibraryInstallation((data, logLevel) => {
@@ -1204,7 +1236,7 @@ class CompilerModule {
       return
     }
 
-    // Step 9: Handle defines.h file generation
+    // Step 10: Handle defines.h file generation
     try {
       if (buildMD5Hash === null) {
         _mainProcessPort.postMessage({
@@ -1229,7 +1261,7 @@ class CompilerModule {
       })
     }
 
-    // Step 10: Generate Arduino CPP file
+    // Step 11: Generate Arduino CPP file
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Generating Arduino CPP file...' })
     try {
       await this.handleGenerateArduinoCppFile(normalizedProjectPath, boardTarget)
@@ -1243,7 +1275,7 @@ class CompilerModule {
       return
     }
 
-    // Step 11: Compile Arduino Program
+    // Step 12: Compile Arduino Program
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compiling Arduino program...' })
     try {
       await this.handleCompileArduinoProgram({
