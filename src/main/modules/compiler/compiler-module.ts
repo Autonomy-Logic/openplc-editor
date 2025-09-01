@@ -905,15 +905,15 @@ class CompilerModule {
     ]
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const process = this.#executeArduinoCliCommand(buildProjectFlags)
+      const child = this.#executeArduinoCliCommand(buildProjectFlags)
       let stderrData = ''
-      process.stdout.on('data', (data: Buffer) => {
+      child.stdout.on('data', (data: Buffer) => {
         handleOutputData(data)
       })
-      process.stderr.on('data', (data: Buffer) => {
+      child.stderr.on('data', (data: Buffer) => {
         stderrData += data.toString()
       })
-      process.on('close', (code) => {
+      child.on('close', (code) => {
         if (code === 0) {
           resolve({ success: true })
         } else {
