@@ -92,6 +92,7 @@ export const BlockNodeElement = <T extends object>({
       data: { pous },
     },
     projectActions: { updateVariable, deleteVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const {
@@ -227,6 +228,8 @@ export const BlockNodeElement = <T extends object>({
         title: '',
       }
 
+      addSnapshot(editor.meta.name)
+
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
         deleteVariable({
           rowId: variableIndex,
@@ -316,6 +319,8 @@ export const BlockNodeElement = <T extends object>({
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
 
+    addSnapshot(editor.meta.name)
+
     setNodes({
       editorName: editor.meta.name,
       rungId: rung.id,
@@ -397,6 +402,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     projectActions: { createVariable },
     libraries: { user: userLibraries },
     ladderFlows,
+    snapshotActions: { addSnapshot },
     ladderFlowActions: { updateNode, setNodes, setEdges },
   } = useOpenPLCStore()
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
@@ -543,6 +549,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (matchingVariable) {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
+        addSnapshot(editor.meta.name)
+
         const creationResult = createVariable({
           data: {
             id: uuidv4(),

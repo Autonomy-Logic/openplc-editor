@@ -86,6 +86,7 @@ type FBDFlowActions = {
   removeEdges: ({ edges, editorName }: { edges: Edge[]; editorName: string }) => void
 
   setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
+  applyFBDFlowSnapshot: ({ editorName, snapshot }: { editorName: string; snapshot: FBDFlowType | null }) => void
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */

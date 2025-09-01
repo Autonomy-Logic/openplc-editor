@@ -135,6 +135,7 @@ const VariablesTable = ({
       data: { pous },
     },
     projectActions: { updateVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const pou = pous.find((p) => p.data.name === name)
@@ -146,6 +147,8 @@ const VariablesTable = ({
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
       updateData={(rowIndex, columnId, value) => {
+        addSnapshot(name)
+
         if (columnId === 'class' && filterValue !== undefined && filterValue !== 'all' && filterValue !== value) {
           return {
             ok: false,
