@@ -66,6 +66,12 @@ const rendererProcessBridge = {
   switchPerspective: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
 
+  // ===================== EDIT METHODS =====================
+  handleUndoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:undo-request', callback),
+  removeUndoRequestListener: () => ipcRenderer.removeAllListeners('edit:undo-request'),
+  handleRedoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:redo-request', callback),
+  removeRedoRequestListener: () => ipcRenderer.removeAllListeners('edit:redo-request'),
+
   // ===================== APP & SYSTEM METHODS =====================
   darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),
   getRecent: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),

@@ -54,6 +54,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
+  const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
 
   const {
     editor,
@@ -77,11 +78,21 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
     workspaceActions: { setEditingState },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
+  const [localText, setLocalText] = useState<string>(() => {
+    const pou = openPLCStoreBase.getState().project.data.pous.find((pou) => pou.data.name === name)
+    return typeof pou?.data.body.value === 'string' ? pou.data.body.value : ''
+  })
+
+  useEffect(() => {
+    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+    setLocalText(typeof pou?.data.body.value === 'string' ? pou.data.body.value : '')
+  }, [name, language])
 
   const pou = pous.find((pou) => pou.data.name === name)
 
@@ -368,6 +379,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // you can also store it in `useRef` for further usage
     monacoRef.current = monacoInstance
 
+    focusDisposables.current.onFocus?.dispose()
+    focusDisposables.current.onBlur?.dispose()
+
+    if (editorInstance) {
+      focusDisposables.current.onFocus = editorInstance.onDidFocusEditorText(() => {
+        openPLCStoreBase.getState().editorActions.setMonacoFocused(true)
+      })
+
+      focusDisposables.current.onBlur = editorInstance.onDidBlurEditorText(() => {
+        openPLCStoreBase.getState().editorActions.setMonacoFocused(false)
+      })
+    }
+
     if (searchQuery) {
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
@@ -408,8 +432,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }
 
   function handleWriteInPou(value: string | undefined) {
-    if (!value) return
-    if (editingState !== 'unsaved') setEditingState('unsaved')
+    if (!value) {
+      return
+    }
+
+    setLocalText(value)
+
+    if (editingState !== 'unsaved') {
+      setEditingState('unsaved')
+    }
+
     updatePou({ name, content: { language, value } })
   }
 
@@ -482,6 +514,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const handleRenamePou = () => {
     if (!contentToDrop || !editorRef.current) return
+
+    addSnapshot(editor.meta.name)
 
     const currentEditor = pous.find((pou) => pou.data.name === editor.meta.name)
     if (!currentEditor) return
@@ -567,6 +601,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           path={path}
           language={language}
           defaultValue={''}
+          value={localText}
           onMount={handleEditorDidMount}
           onChange={handleWriteInPou}
           theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}

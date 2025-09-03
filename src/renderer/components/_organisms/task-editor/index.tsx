@@ -30,6 +30,7 @@ const TaskEditor = () => {
     },
     editorActions: { updateModelTasks },
     projectActions: { createTask, rearrangeTasks, deleteTask, setTasks, setInstances },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const [taskData, setTaskData] = useState<PLCTask[]>([])
@@ -92,6 +93,9 @@ const TaskEditor = () => {
 
   const handleRearrangeTasks = (index: number, row?: number) => {
     if (editorTasks.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     rearrangeTasks({
       rowId: row ?? parseInt(editorTasks.selectedRow),
       newIndex: (row ?? parseInt(editorTasks.selectedRow)) + index,
@@ -104,6 +108,9 @@ const TaskEditor = () => {
 
   const handleCreateTask = () => {
     if (editorTasks.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     const tasks = taskData.filter((task) => task.name)
     const selectedRow = parseInt(editorTasks.selectedRow)
 
@@ -156,6 +163,8 @@ const TaskEditor = () => {
   const handleDeleteTask = () => {
     if (editorTasks.display === 'code') return
 
+    addSnapshot(editor.meta.name)
+
     const selectedRow = parseInt(editorTasks.selectedRow)
     deleteTask({
       rowId: selectedRow,
@@ -179,6 +188,8 @@ const TaskEditor = () => {
 
   const commitCode = (): boolean => {
     try {
+      addSnapshot(editor.meta.name)
+
       const { instances, tasks } = parseResourceStringToConfiguration(editorCode)
 
       const response = setInstances({
