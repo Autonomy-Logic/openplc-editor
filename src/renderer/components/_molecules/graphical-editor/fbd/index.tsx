@@ -57,7 +57,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
 
   const [insideViewport, setInsideViewport] = useState(false)
   const [mousePosition, setMousePosition] = useState<XYPosition>({ x: 0, y: 0 })
-  const _fbdClipboard = useFBDClipboard({
+  useFBDClipboard({
     mousePosition,
     insideViewport,
     reactFlowInstance,
@@ -92,13 +92,49 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   }
 
   const updateRungState = () => {
-    if (dragging || isEqual(rungLocal, rung)) {
+    const rungLocalCopy = {
+      ...rungLocal,
+      nodes: rungLocal.nodes.map((node) => {
+        const localObjectData = { ...node.data }
+        delete localObjectData.hasDivergence
+        return { ...node, data: localObjectData }
+      }),
+    }
+
+    if (dragging || isEqual(rungLocalCopy, rung)) {
       return
     }
 
+    // Make node data mirror be the rung and not the rungLocal
+    // This is made because the rungLocal is a local copy and may not reflect the latest changes in the store
+    // And the store saves all the block data updates
+    const isNodeLengthEqual = rungLocalCopy.nodes.length === rung.nodes.length
+    const isNodeDataEqual =
+      isNodeLengthEqual &&
+      rungLocalCopy.nodes.every((localNode, idx) => {
+        const rungNode = rung.nodes[idx]
+        return rungNode && isEqual(localNode.data, rungNode.data)
+      })
+
+    const updatedNodes = isNodeDataEqual
+      ? rungLocalCopy.nodes
+      : isNodeLengthEqual
+        ? rung.nodes.map((node, index) => {
+            return {
+              ...rungLocalCopy.nodes[index],
+              data: { ...node.data },
+            }
+          })
+        : rung.nodes
+    const selectedNodes = updatedNodes.filter((node) => node.selected)
+
     fbdFlowActions.setRung({
       editorName: editor.meta.name,
-      rung: rungLocal,
+      rung: {
+        ...rungLocalCopy,
+        nodes: updatedNodes,
+        selectedNodes,
+      },
     })
   }
 

@@ -11,13 +11,13 @@ export const useFBDClipboard = ({
   mousePosition,
   insideViewport,
   reactFlowInstance,
-  rungLocal,
+  rung,
   handleDeleteNodes,
 }: {
   mousePosition: { x: number; y: number }
   insideViewport: boolean
   reactFlowInstance: ReactFlowInstance | null
-  rungLocal: FBDRungState
+  rung: FBDRungState
   handleDeleteNodes: (nodes: Node[], edges: Edge[]) => void
 }) => {
   const { editor, fbdFlowActions } = useOpenPLCStore()
@@ -26,12 +26,12 @@ export const useFBDClipboard = ({
    * Set data to clipboard when copying the viewport
    */
   const setDataToClipboard = (event: ClipboardEvent) => {
-    const selectedIds = new Set(rungLocal.selectedNodes.map((n) => n.id))
-    const selectedEdges = rungLocal.edges.filter((edge) => selectedIds.has(edge.source) || selectedIds.has(edge.target))
+    const selectedIds = new Set(rung.selectedNodes.map((n) => n.id))
+    const selectedEdges = rung.edges.filter((edge) => selectedIds.has(edge.source) || selectedIds.has(edge.target))
     const clipboard: ClipboardType = {
       language: 'fbd',
       content: {
-        nodes: rungLocal.selectedNodes as NodeType[],
+        nodes: rung.selectedNodes as NodeType[],
         edges: selectedEdges as EdgeType[],
       },
     }
@@ -44,7 +44,7 @@ export const useFBDClipboard = ({
    */
   const handleCopyEvent = useCallback(
     (event: ClipboardEvent) => {
-      if (!rungLocal.selectedNodes.length) {
+      if (!rung.selectedNodes.length) {
         toast({
           title: 'Nothing to copy',
           description: 'No nodes selected to copy.',
@@ -60,7 +60,7 @@ export const useFBDClipboard = ({
         variant: 'default',
       })
     },
-    [rungLocal],
+    [rung],
   )
 
   /**
@@ -68,7 +68,7 @@ export const useFBDClipboard = ({
    */
   const handleCutEvent = useCallback(
     (event: ClipboardEvent) => {
-      if (!rungLocal.selectedNodes.length) {
+      if (!rung.selectedNodes.length) {
         toast({
           title: 'Nothing to cut',
           description: 'No nodes selected to cut.',
@@ -78,17 +78,17 @@ export const useFBDClipboard = ({
       }
 
       setDataToClipboard(event)
-      const selectedEdges = rungLocal.edges.filter((edge) =>
-        rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
+      const selectedEdges = rung.edges.filter((edge) =>
+        rung.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
       )
-      handleDeleteNodes(rungLocal.selectedNodes, selectedEdges)
+      handleDeleteNodes(rung.selectedNodes, selectedEdges)
       toast({
         title: 'Cut to clipboard',
         description: `FBD data cut to clipboard`,
         variant: 'default',
       })
     },
-    [rungLocal, handleDeleteNodes],
+    [rung, handleDeleteNodes],
   )
 
   /**
@@ -134,18 +134,14 @@ export const useFBDClipboard = ({
             })
           : { x: reactFlowInstance.getViewport().x, y: reactFlowInstance.getViewport().y }
         : { x: 0, y: 0 }
-
       const data = pasteNodesAtFBD(parsedData.content.nodes as Node[], parsedData.content.edges as Edge[], nodePosition)
 
       // De-Select all selected nodes
-      const newNodes = rungLocal.nodes.map((node) => {
-        if (parsedData.content.nodes.some((n) => n.id === node.id)) {
-          return {
-            ...node,
-            selected: false,
-          }
+      const newNodes = rung.nodes.map((node) => {
+        return {
+          ...node,
+          selected: false,
         }
-        return node
       })
       newNodes.push(...data.nodes)
       fbdFlowActions.setNodes({
@@ -160,13 +156,18 @@ export const useFBDClipboard = ({
         })
       })
 
+      fbdFlowActions.setSelectedNodes({
+        nodes: data.nodes,
+        editorName: editor.meta.name,
+      })
+
       toast({
         title: 'Pasted from clipboard',
         description: `FBD data pasted from clipboard`,
         variant: 'default',
       })
     },
-    [insideViewport, mousePosition, reactFlowInstance, fbdFlowActions, rungLocal],
+    [insideViewport, mousePosition, reactFlowInstance, fbdFlowActions, rung],
   )
 
   useEffect(() => {
