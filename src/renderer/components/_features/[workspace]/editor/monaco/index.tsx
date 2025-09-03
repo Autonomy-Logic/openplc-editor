@@ -114,9 +114,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         range,
         variables: (pou?.data.variables || []) as PLCVariable[],
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -129,9 +130,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         range,
         variables: globalVariables as PLCVariable[],
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -146,9 +148,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         pous,
         editor,
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -168,10 +171,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         customFBs,
         editorName: name,
       }).suggestions
-
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -189,11 +192,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         pouVariables: pou?.data.variables || [],
         customDataTypes: dataTypes,
       }).suggestions
-
-      const labels = suggestions.map((suggestion) => suggestion.label)
-
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -209,6 +211,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
       let filteredSuggestions = allSuggestions
       let filteredLabels = allSuggestions.map((suggestion) => suggestion.label)
+      let uniqueSuggestions = allSuggestions
 
       if (language === 'st') {
         const stSnippetLabels = [
@@ -234,11 +237,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           (suggestion) => !stSnippetLabels.includes(suggestion.label.toLowerCase()),
         )
 
-        filteredLabels = filteredSuggestions.map((suggestion) => suggestion.label)
+        uniqueSuggestions = Array.from(new Map(filteredSuggestions.map((s) => [s.label, s])).values())
+        filteredLabels = uniqueSuggestions.map((suggestion) => suggestion.label)
       }
 
       return {
-        suggestions: filteredSuggestions,
+        suggestions: uniqueSuggestions,
         labels: filteredLabels,
       }
     },
@@ -251,9 +255,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         range,
         language,
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -333,18 +338,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           range,
         }))
 
-        return {
-          suggestions: [
-            ...fbSuggestions(range, model, position).suggestions,
-            ...dataTypeSuggestions(range, model, position).suggestions,
-            ...snippetsSTSuggestions(range).suggestions,
-            ...variablesSuggestions(range).suggestions,
-            ...globalVariablesSuggestions(range).suggestions,
-            ...librarySuggestions(range).suggestions,
-            ...keywordsSuggestions(range).suggestions,
-            ...identifiersSuggestions,
-          ],
-        }
+        const suggestions = [
+          ...fbSuggestions(range, model, position).suggestions,
+          ...dataTypeSuggestions(range, model, position).suggestions,
+          ...snippetsSTSuggestions(range).suggestions,
+          ...variablesSuggestions(range).suggestions,
+          ...globalVariablesSuggestions(range).suggestions,
+          ...librarySuggestions(range).suggestions,
+          ...keywordsSuggestions(range).suggestions,
+          ...identifiersSuggestions,
+        ]
+        const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+
+        return { suggestions: uniqueSuggestions }
       },
     })
     return () => disposable.dispose()
