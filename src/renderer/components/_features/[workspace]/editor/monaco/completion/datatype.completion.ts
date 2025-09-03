@@ -1,5 +1,6 @@
 import { VariableDTO } from '@root/renderer/store/slices'
 import { PLCDataType, PLCStructureVariable } from '@root/types/PLC/open-plc'
+import { escapeRegExp } from 'lodash'
 import * as monaco from 'monaco-editor'
 
 interface DataTypeCompletionContext {
@@ -222,7 +223,7 @@ function findCustomDataType(
   }
 
   // Fallback: parse code for declarations like "myStruct : MyStructType;"
-  const declarationRegex = new RegExp(`\\b${instanceName}\\s*:\\s*(\\w+)\\s*;`, 'i')
+  const declarationRegex = new RegExp(`\\b${escapeRegExp(instanceName)}\\s*:\\s*(\\w+)\\s*;`, 'i')
   const match = code.match(declarationRegex)
 
   if (match) {

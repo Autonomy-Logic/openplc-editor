@@ -602,10 +602,12 @@ export const updateLocalVariablesInTokenizer = (localVariables: string[]) => {
 }
 
 export const updateDataTypeVariablesInTokenizer = (customDataTypes: PLCDataType[]) => {
-  // Extract all variable names from all structure data types
+  const isStructure = (dt: PLCDataType): dt is PLCStructureDatatype =>
+    dt.derivation === 'structure' && Array.isArray(dt.variable) && dt.variable.length > 0
+
   const allVariableNames = customDataTypes
-    .filter((dt) => dt.derivation === 'structure' && dt.variable.length > 0)
-    .flatMap((dt) => (dt as PLCStructureDatatype).variable.map((v) => v.name))
+    .filter(isStructure)
+    .flatMap((dt) => dt.variable.map((v) => v.name))
     .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
 
   // Update the global array and language definition
