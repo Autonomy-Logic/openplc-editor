@@ -271,18 +271,68 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // you can also store it in `useRef` for further usage
     monacoRef.current = monacoInstance
 
+    if (!editorInstance) return
+
+    if (language === 'python') {
+      const currentValue = pou?.data.body.value as string
+      const shouldInjectTemplate = !currentValue || currentValue.trim() === ''
+
+      if (shouldInjectTemplate) {
+        const pythonTemplate = `from multiprocessing import shared_memory
+import struct
+import time
+import os
+
+def block_init():
+    print('Block was initialized')
+
+def block_loop():
+    print('Block has run the loop function')
+`
+
+        try {
+          // Set the template as the initial value
+          editorInstance.setValue(pythonTemplate)
+
+          // Update the POU data with the template
+          // This ensures the template is saved when the user saves the project
+          handleWriteInPou(pythonTemplate)
+        } catch (error) {
+          console.warn('Failed to inject Python template:', error)
+        }
+      }
+
+      // Position cursor at the last available line (for both template and existing code)
+      try {
+        const model = editorInstance.getModel()
+        if (model) {
+          const lineCount = model.getLineCount()
+          const lastLineContent = model.getLineContent(lineCount)
+
+          // Position at the end of the last line
+          const position = {
+            lineNumber: lineCount,
+            column: lastLineContent.length + 1,
+          }
+
+          editorInstance.setPosition(position)
+        }
+      } catch (error) {
+        console.warn('Failed to position cursor at bottom:', error)
+      }
+    }
+
+    // Existing functionality for other languages
     if (searchQuery) {
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    if (!editorInstance) return
-
-    if (editor.cursorPosition) {
+    if (editor.cursorPosition && language !== 'python') {
       editorInstance.setPosition(editor.cursorPosition)
       editorInstance.revealPositionInCenter(editor.cursorPosition)
     }
 
-    if (editor.scrollPosition) {
+    if (editor.scrollPosition && language !== 'python') {
       editorInstance.setScrollTop(editor.scrollPosition.top)
       editorInstance.setScrollLeft(editor.scrollPosition.left)
     }
