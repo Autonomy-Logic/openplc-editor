@@ -61,7 +61,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     mousePosition,
     insideViewport,
     reactFlowInstance,
-    rungLocal,
+    rung,
     handleDeleteNodes: (nodes, edges) => {
       handleOnDelete(nodes, edges)
     },
@@ -96,43 +96,31 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
       ...rungLocal,
       nodes: rungLocal.nodes.map((node) => {
         const localObjectData = { ...node.data }
-        delete localObjectData.hasDivergence
         return { ...node, data: localObjectData }
       }),
-    }
-
-    if (dragging || isEqual(rungLocalCopy, rung)) {
-      return
     }
 
     // Make node data mirror be the rung and not the rungLocal
     // This is made because the rungLocal is a local copy and may not reflect the latest changes in the store
     // And the store saves all the block data updates
-    const isNodeLengthEqual = rungLocalCopy.nodes.length === rung.nodes.length
-    const isNodeDataEqual =
-      isNodeLengthEqual &&
-      rungLocalCopy.nodes.every((localNode, idx) => {
-        const rungNode = rung.nodes[idx]
-        return rungNode && isEqual(localNode.data, rungNode.data)
-      })
-
-    const updatedNodes = isNodeDataEqual
-      ? rungLocalCopy.nodes
-      : isNodeLengthEqual
-        ? rung.nodes.map((node, index) => {
-            return {
-              ...rungLocalCopy.nodes[index],
-              data: { ...node.data },
-            }
+    const isSelectedNodeDataEqual =
+      rung.selectedNodes.length > 0
+        ? rung.selectedNodes.every((node) => {
+            const localNode = rungLocalCopy.nodes.find((n) => n.id === node.id)
+            return localNode ? isEqual(localNode.data, node.data) : false
           })
-        : rung.nodes
-    const selectedNodes = updatedNodes.filter((node) => node.selected)
+        : true
+    const skipUpdate = (dragging || isEqual(rungLocalCopy, rung)) && isSelectedNodeDataEqual
 
+    if (skipUpdate) {
+      return
+    }
+
+    const selectedNodes = rungLocalCopy.nodes.filter((node) => node.selected)
     fbdFlowActions.setRung({
       editorName: editor.meta.name,
       rung: {
         ...rungLocalCopy,
-        nodes: updatedNodes,
         selectedNodes,
       },
     })
@@ -156,9 +144,10 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
       debounceUpdateRungRef.current?.()
     }
     // debounce the func that was created once, but has access to the latest sendRequest
-    return debounce(func, 100)
+    const timer = dragging ? 100 : 10
+    return debounce(func, timer)
     // no dependencies! never gets updated
-  }, [])
+  }, [dragging])
 
   useEffect(() => {
     updateRungLocalFromStore()

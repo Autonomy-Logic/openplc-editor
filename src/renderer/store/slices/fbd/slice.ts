@@ -1,5 +1,5 @@
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
-import { addEdge } from '@xyflow/react'
+import { addEdge, Node } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 

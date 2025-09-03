@@ -26,6 +26,7 @@ export const useFBDClipboard = ({
    * Set data to clipboard when copying the viewport
    */
   const setDataToClipboard = (event: ClipboardEvent) => {
+    event.preventDefault()
     const selectedIds = new Set(rung.selectedNodes.map((n) => n.id))
     const selectedEdges = rung.edges.filter((edge) => selectedIds.has(edge.source) || selectedIds.has(edge.target))
     const clipboard: ClipboardType = {
@@ -36,7 +37,6 @@ export const useFBDClipboard = ({
       },
     }
     event.clipboardData?.setData('fbd:nodes', JSON.stringify(clipboard))
-    event.preventDefault()
   }
 
   /**
@@ -137,7 +137,7 @@ export const useFBDClipboard = ({
       const data = pasteNodesAtFBD(parsedData.content.nodes as Node[], parsedData.content.edges as Edge[], nodePosition)
 
       // De-Select all selected nodes
-      const newNodes = rung.nodes.map((node) => {
+      const newNodes: Node[] = rung.nodes.map((node) => {
         return {
           ...node,
           selected: false,
