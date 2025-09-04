@@ -26,6 +26,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       pins: [],
       currentSelectedPinTableRow: -1,
     },
+    compileOnly: true, // This flag indicates if the device is set to compile only (no deployment)
   },
   deviceUpdated: {
     updated: false, // This flag is used to track if the device has been updated
@@ -423,6 +424,14 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           if (staticHostConfiguration.subnet !== undefined)
             deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.subnet =
               staticHostConfiguration.subnet
+        }),
+      )
+    },
+    setCompileOnly: (compileOnly): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when setting compile only
+          deviceDefinitions.compileOnly = compileOnly
         }),
       )
     },

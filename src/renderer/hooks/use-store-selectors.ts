@@ -46,9 +46,14 @@ const pinSelectors = {
     useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.currentSelectedPinTableRow),
 }
 
-export const deviceSelectors = {
+const deviceSelectors = {
   useDeviceUpdated: () => useOpenPLCStore((state) => state.deviceUpdated.updated),
   useResetDeviceUpdated: () => useOpenPLCStore((state) => state.deviceActions.resetDeviceUpdated),
+}
+
+const compileOnlySelectors = {
+  useCompileOnly: () => useOpenPLCStore((state) => state.deviceDefinitions.compileOnly),
+  useSetCompileOnly: () => useOpenPLCStore((state) => state.deviceActions.setCompileOnly),
 }
 
 const communicationSelectors = {
@@ -104,7 +109,9 @@ const consoleSelectors = {
 export {
   boardSelectors,
   communicationSelectors,
+  compileOnlySelectors,
   consoleSelectors,
+  deviceSelectors,
   editorSelectors,
   pinSelectors,
   rtuSelectors,
