@@ -1,4 +1,5 @@
 /* eslint-disable no-useless-escape */
+import { PLCDataType, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { languages } from 'monaco-editor'
 
 // Optimized regex based on tmlanguage rules
@@ -9,6 +10,48 @@ const dateLiterals = /D#[0-9\-]+|DT#[0-9\-_:]+|TOD#[0-9:]+/
 const bitLiterals = /[XBWDL]#[0-9A-Fa-f_]+|%[IQM][XBWDL]?[0-9.]+/
 const gxwDevices = /\b[MTCRSDXYZ][0-9]{1,5}(?:[ZV][0-9])?\b/
 const identifiers = /[a-zA-Z_][a-zA-Z0-9_]*/
+
+// Standard Function Block variables that should be highlighted
+const standardFBVariables = [
+  // Timer variables
+  'IN',
+  'PT',
+  'Q',
+  'ET',
+  // Counter variables
+  'CU',
+  'CD',
+  'RESET',
+  'LOAD',
+  'PV',
+  'CV',
+  'QU',
+  'QD',
+  // Trigger variables
+  'CLK',
+  'M',
+  // Bistable variables
+  'S',
+  'R',
+  'S1',
+  'R1',
+  'Q1',
+  // Common FB outputs
+  'OUT',
+  'ERROR',
+  'STATUS',
+  'DONE',
+  'BUSY',
+  // Common FB inputs
+  'ENABLE',
+  'START',
+  'STOP',
+  'EXECUTE',
+]
+
+// Dynamic DataType variables (will be populated at runtime)
+const customDataTypeVariables: string[] = []
+const customEnumValueKeywords: string[] = []
 
 export const conf: languages.LanguageConfiguration = {
   comments: {
@@ -50,6 +93,8 @@ export const language: languages.IMonarchLanguage = {
   defaultToken: 'invalid',
   tokenPostfix: '.st',
   localVariables: [],
+  standardFBVariables, // Add FB variables to the language definition
+  customDataTypeVariables, // Dynamic variables for custom data types
 
   keywords: [
     // Structural declarations
@@ -433,10 +478,10 @@ export const language: languages.IMonarchLanguage = {
       // Labels
       [/^[a-zA-Z_][a-zA-Z0-9_]*:/, 'type.identifier'],
 
-      // Function calls
+      // Function calls (before FB variable access)
       [/([a-zA-Z_][a-zA-Z0-9_]*)(\s*)(\()/, ['keyword', 'white', 'delimiter.parenthesis']],
 
-      // Keywords and identifiers
+      // Keywords and identifiers (MOVED BEFORE FB Variable access)
       [
         /[a-zA-Z_][a-zA-Z0-9_]*/,
         {
@@ -445,19 +490,21 @@ export const language: languages.IMonarchLanguage = {
             '@keywords': 'st.keyword',
             '@builtinFunctions': 'keyword',
             '@operators': 'operator',
+            '@standardFBVariables': 'keyword',
+            '@customDataTypeVariables': 'keyword',
             'TRUE|FALSE': 'constant.language',
             '@default': 'variable',
           },
         },
       ],
 
+      // Member access (single dot)
+      [/\./, 'delimiter.accessor'],
+
       // Special assignment operators
       [/:=/, 'operator.assignment'],
       [/=>/, 'operator.arrow'],
       [/\.\./, 'operator.range'],
-
-      // Member access
-      [/\./, 'delimiter.accessor'],
 
       // Other operators
       [
@@ -548,6 +595,43 @@ export const language: languages.IMonarchLanguage = {
 // Update local variables in the tokenizer
 export const updateLocalVariablesInTokenizer = (localVariables: string[]) => {
   language.localVariables = localVariables
+
+  void import('monaco-editor').then((monaco) => {
+    monaco.languages.setMonarchTokensProvider('st', language)
+  })
+}
+
+export const updateDataTypeVariablesInTokenizer = (customDataTypes: PLCDataType[]) => {
+  const isStructure = (dt: PLCDataType): dt is PLCStructureDatatype =>
+    dt.derivation === 'structure' && Array.isArray(dt.variable) && dt.variable.length > 0
+
+  const allVariableNames = customDataTypes
+    .filter(isStructure)
+    .flatMap((dt) => dt.variable.map((v) => v.name))
+    .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
+
+  // Update the global array and language definition
+  customDataTypeVariables.length = 0
+  customDataTypeVariables.push(...allVariableNames)
+  language.customDataTypeVariables = customDataTypeVariables
+
+  // Re-register the language with Monaco
+  void import('monaco-editor').then((monaco) => {
+    monaco.languages.setMonarchTokensProvider('st', language)
+  })
+}
+
+export const updateEnumValuesInTokenizer = (customDataTypes: PLCDataType[]) => {
+  const allEnumValues = customDataTypes
+    .filter((dt) => dt.derivation === 'enumerated' && dt.values.length > 0)
+    .flatMap((dt) => (dt as PLCEnumeratedDatatype).values.map((v) => v.description))
+    .filter((value, index, arr) => arr.indexOf(value) === index)
+
+  if (allEnumValues.length === 0) return
+
+  customEnumValueKeywords.length = 0
+  customEnumValueKeywords.push(...allEnumValues)
+  language.tokenizer.root.unshift([new RegExp(`\\b(${customEnumValueKeywords.join('|')})\\b`, 'i'), 'keyword'])
 
   void import('monaco-editor').then((monaco) => {
     monaco.languages.setMonarchTokensProvider('st', language)
