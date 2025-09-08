@@ -130,9 +130,10 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
       className='flex h-full w-full flex-1 flex-row gap-4 overflow-hidden bg-transparent'
       {...rest}
     >
-      <div className='flex w-full justify-between gap-8'>
-        <div className='w-[600px]'>
-          <div aria-label='Enumerated base type container' className='flex flex-col gap-3'></div>
+      <div className='flex h-full w-full justify-between gap-8 overflow-hidden'>
+        <div className='flex h-full w-[600px] flex-col overflow-hidden'>
+          <div aria-label='Enumerated base type container'></div>
+
           <div
             aria-label='Enum data type table actions container'
             className='mb-3 flex h-8 w-full items-center justify-between'
@@ -179,14 +180,16 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
             </div>
           </div>
 
-          <EnumeratedTable
-            name={data.name}
-            values={tableData}
-            initialValue={initialValueData}
-            selectedRow={arrayTable.selectedRow}
-            handleRowClick={(row) => setArrayTable({ selectedRow: Number.parseInt(row.id) })}
-            setArrayTable={setArrayTable}
-          />
+          <div className='h-full w-full overflow-auto pr-1' style={{ scrollbarGutter: 'stable' }}>
+            <EnumeratedTable
+              name={data.name}
+              values={tableData}
+              initialValue={initialValueData}
+              selectedRow={arrayTable.selectedRow}
+              handleRowClick={(row) => setArrayTable({ selectedRow: Number.parseInt(row.id) })}
+              setArrayTable={setArrayTable}
+            />
+          </div>
         </div>
 
         <div aria-label='Enumerated initial value container' className='w-1/2'>

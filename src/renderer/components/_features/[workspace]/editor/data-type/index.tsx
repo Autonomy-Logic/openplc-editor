@@ -66,11 +66,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   }
 
   return (
-    <div
-      aria-label='Data type editor container'
-      className=' flex h-full w-full flex-col gap-4  overflow-hidden'
-      {...rest}
-    >
+    <div aria-label='Data type editor container' className='flex h-full w-full flex-col gap-4' {...rest}>
       <div
         aria-label='Data type metadata container'
         className='h-46 flex w-full items-center gap-4 rounded-md bg-neutral-50 p-2 shadow-md dark:border dark:border-neutral-800 dark:bg-neutral-1000'
@@ -106,7 +102,8 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
           </div>
         </div>
       </div>
-      <div aria-label='Data type content container' className='h-full w-full overflow-hidden'>
+
+      <div className='h-full w-full overflow-hidden'>
         {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
         {editorContent?.derivation === 'enumerated' && <EnumeratorDataType data={editorContent} />}
         {editorContent?.derivation === 'structure' && <StructureDataType />}
