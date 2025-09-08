@@ -95,7 +95,6 @@ const Board = memo(function () {
     },
     [setAvailableOptions],
   )
-  console.log('compileOnly', compileOnly)
 
   const handleSetDeviceBoard = useCallback(
     (board: string) => {
