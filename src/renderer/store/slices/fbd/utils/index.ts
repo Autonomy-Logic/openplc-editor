@@ -20,11 +20,6 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
     { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity },
   )
 
-  console.log({
-    nodes,
-    edges,
-  })
-
   const nodeIdMap = new Map<string, string>()
   const newNodes: Node[] = []
   for (const node of nodes) {

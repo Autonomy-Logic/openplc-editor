@@ -1,5 +1,5 @@
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
-import { addEdge } from '@xyflow/react'
+import { addEdge, Node } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -143,8 +143,10 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
 
           flow.rung.nodes.push(node)
 
+          const selectedNodes: Node[] = []
           flow.rung.nodes = flow.rung.nodes.map((n) => {
             if (n.id === node.id) {
+              selectedNodes.push(n)
               return {
                 ...n,
                 selected: true,
@@ -156,6 +158,7 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
             }
           })
 
+          flow.rung.selectedNodes = selectedNodes
           flow.updated = true
         }),
       )
@@ -167,6 +170,9 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           if (!flow) return
 
           flow.rung.nodes = flow.rung.nodes.filter((node) => !nodes.find((n) => n.id === node.id))
+          flow.rung.selectedNodes = flow.rung.selectedNodes.filter(
+            (selectedNode) => !nodes.find((n) => n.id === selectedNode.id),
+          )
           flow.updated = true
         }),
       )
