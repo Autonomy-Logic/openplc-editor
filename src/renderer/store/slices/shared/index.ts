@@ -514,10 +514,6 @@ export const createSharedSlice: StateCreator<
         snapshot.instances = JSON.parse(JSON.stringify(instances)) as HistorySnapshot['instances']
       }
 
-      if (getState().history[pouName]) {
-        getState().history[pouName] = { past: [], future: [] }
-      }
-
       if (isDataType) {
         const dataType = dataTypes.find((dataType) => dataType.name === pouName)!
 

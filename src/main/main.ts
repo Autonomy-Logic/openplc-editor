@@ -81,7 +81,8 @@ const titlebarOptionsMap: Record<string, OptTitlebar> = {
 
 const titlebarStyles = titlebarOptionsMap[systemInfo] || titlebarOptionsMap.default
 
-const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
+// const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
+const isDebug = true
 
 if (isDebug) {
   void import('electron-debug')
