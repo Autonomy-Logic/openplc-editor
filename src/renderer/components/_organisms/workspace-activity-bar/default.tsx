@@ -1,6 +1,8 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn } from '@root/utils'
+import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
+import { generateSTCode } from '@root/utils/python/generateSTCode'
 import { injectPythonCode } from '@root/utils/python/injectPythonCode'
 import { useState } from 'react'
 
@@ -54,7 +56,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     let processedProjectData: PLCProjectData = projectData
 
     if (hasPythonCode) {
-      const pythonData = extractPythonData(projectData.pous)
       const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'python')
 
       pythonPous.forEach((pou) => {
@@ -71,15 +72,28 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: `Processing ${pythonPous.length} Python POU(s)...`,
       })
 
+      processedProjectData = addPythonLocalVariables(projectData)
+
+      const pythonData = extractPythonData(processedProjectData.pous)
       const processedPythonCodes = injectPythonCode(pythonData)
-      processedProjectData = structuredClone(projectData)
+
+      console.log(processedProjectData)
 
       let pythonIndex = 0
       processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
         if (pou.data.body.language === 'python') {
           if (processedPythonCodes[pythonIndex]) {
-            const pythonBody = pou.data.body as { value: string; language: 'python' }
-            pythonBody.value = processedPythonCodes[pythonIndex]
+            const stCode = generateSTCode({
+              pouName: pou.data.name,
+              allVariables: pou.data.variables,
+              processedPythonCode: processedPythonCodes[pythonIndex],
+            })
+
+            pou.data.body = {
+              language: 'st',
+              value: stCode,
+            }
+
             pythonIndex++
           }
         }
@@ -93,8 +107,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       })
     }
 
+    console.log('processado:', processedProjectData)
+    console.log('original:', projectData)
+
     window.bridge.runCompileProgram(
-      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, projectData],
+      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, processedProjectData],
       (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
         setIsCompiling(true)
         if (typeof data.message === 'string') {
