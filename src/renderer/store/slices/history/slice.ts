@@ -36,6 +36,10 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
           }
 
           history[pouName].future.push(snapshot as unknown as HistorySnapshot)
+
+          if (history[pouName].past.length > 50) {
+            history[pouName].past.shift()
+          }
         }),
       )
     },

@@ -525,10 +525,6 @@ export const createSharedSlice: StateCreator<
       }
 
       getState().historyActions.addPastHistory(pouName, snapshot)
-
-      if (getState().history[pouName].past.length > 50) {
-        getState().history[pouName].past.shift()
-      }
     },
     undo: (pouName) => {
       const ladderFlows = getState().ladderFlows
