@@ -58,7 +58,7 @@ const deviceStateSchema = z.object({
   deviceDefinitions: z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
-    compileOnly: z.boolean(),
+    compileOnly: z.boolean().default(true),
   }),
   deviceUpdated: z.object({
     updated: z.boolean(),

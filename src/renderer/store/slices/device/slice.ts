@@ -66,6 +66,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pins: [],
             currentSelectedPinTableRow: -1,
           }
+          deviceDefinitions.compileOnly = true
         }),
       )
     },

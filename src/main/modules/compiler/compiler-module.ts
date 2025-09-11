@@ -939,8 +939,13 @@ class CompilerModule {
     const { communicationPort: port } =
       await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
+
+    if (!port) {
+      handleOutputData('No communication port specified', 'error')
+      return
+    }
+
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      if (!port) reject(new Error('No communication port specified in device configuration'))
       const child = this.#executeArduinoCliCommand([
         'upload',
         '--port',

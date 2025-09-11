@@ -10,6 +10,7 @@ import {
 } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
+import { ConsoleSlice } from '../console'
 import { DeviceSlice } from '../device'
 import { EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
@@ -79,6 +80,7 @@ export const createSharedSlice: StateCreator<
     WorkspaceSlice &
     DeviceSlice &
     HistorySlice &
+    ConsoleSlice &
     SharedSlice,
   [],
   [],
@@ -232,6 +234,7 @@ export const createSharedSlice: StateCreator<
       getState().ladderFlowActions.clearLadderFlows()
       getState().projectActions.clearProjects()
       getState().deviceActions.clearDeviceDefinitions()
+      getState().consoleActions.clearLogs()
       window.bridge.rebuildMenu()
     },
 
