@@ -13,8 +13,8 @@ import { PinMappingTable } from './components/pin-mapping-table'
 const Board = memo(function () {
   const {
     deviceDefinitions: { compileOnly },
+    deviceAvailableOptions: { availableBoards },
   } = useOpenPLCStore()
-  const availableBoards = boardSelectors.useAvailableBoards()
   const availableCommunicationPorts = boardSelectors.useAvailableCommunicationPorts()
   const deviceBoard = boardSelectors.useDeviceBoard()
   const communicationPort = boardSelectors.useCommunicationPort()

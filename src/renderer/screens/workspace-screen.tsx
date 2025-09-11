@@ -29,6 +29,7 @@ const WorkspaceScreen = () => {
     workspace: { isCollapsed },
     editor,
     workspaceActions: { toggleCollapse },
+    deviceActions: { setAvailableOptions },
     searchResults,
   } = useOpenPLCStore()
 
@@ -75,7 +76,13 @@ const WorkspaceScreen = () => {
       }
     })
   }, [isCollapsed])
-
+  useEffect(() => {
+    const getAvailableBoardOptions = async () => {
+      const boards = await window.bridge.getAvailableBoards()
+      setAvailableOptions({ availableBoards: boards })
+    }
+    void getAvailableBoardOptions()
+  }, [])
   const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false)
 
   const handleSwitchPerspective = () => {

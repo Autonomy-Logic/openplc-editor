@@ -1,11 +1,11 @@
-import { useOpenPLCStore } from '@root/renderer/store'
+import { consoleSelectors } from '@root/renderer/hooks'
 import { debounce } from 'lodash'
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 
 import { LogComponent } from './log'
 
-const Console = () => {
-  const { logs } = useOpenPLCStore()
+const Console = memo(() => {
+  const logs = consoleSelectors.useLogs()
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -36,5 +36,5 @@ const Console = () => {
       <div ref={bottomLogRef} id='bottom-log' />
     </div>
   )
-}
+})
 export { Console }

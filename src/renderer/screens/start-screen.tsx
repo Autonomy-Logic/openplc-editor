@@ -43,13 +43,6 @@ const StartScreen = () => {
   }, [])
 
   useEffect(() => {
-    const getAvailableBoardOptions = async () => {
-      const boards = await window.bridge.getAvailableBoards()
-      setAvailableOptions({ availableBoards: boards })
-    }
-    void getAvailableBoardOptions()
-  }, [])
-  useEffect(() => {
     const getAvailableCommunicationPortsOptions = async () => {
       const ports = await window.bridge.getAvailableCommunicationPorts()
       setAvailableOptions({ availableCommunicationPorts: ports })
