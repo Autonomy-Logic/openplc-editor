@@ -285,10 +285,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 # ---------------------------------------------------------------
 # - All variables are shared with the runtime through shared memory.
 # - The block_init() function is called once when the block starts.
-# - The block_run() function is called periodcally (~100ms).
-# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle. once per scan.
+# - The block_loop() function is called periodically (~100ms).
+# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
+#   It is NOT guaranteed that block_loop() will execute once per scan.
 #
-# Use this block for non-time-critical tsks. For logc that must
+# Use this block for non-time-critical tasks. For logic that must
 # match the PLC scan cycle, use standard IEC 61131-3 function blocks.
 # ================================================================
 
