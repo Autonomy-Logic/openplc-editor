@@ -22,12 +22,24 @@ const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
           .join('\n')
       : '# No output variables to initialize'
 
-  const inputVariableNames =
-    inputVariables.length > 0
-      ? inputVariables.length === 1
-        ? `${inputVariables[0].name},`
-        : inputVariables.map((variable) => variable.name).join(', ')
-      : ''
+  const inputVariableNames = (() => {
+    if (inputVariables.length === 0) return ''
+
+    const variablesList = inputVariables
+      .map((variable) => {
+        if (variable.type?.value === 'string') {
+          return `${variable.name}_body, ${variable.name}_len`
+        }
+        return variable.name
+      })
+      .join(', ')
+
+    const totalElements = inputVariables.reduce((count, variable) => {
+      return count + (variable.type?.value === 'string' ? 2 : 1)
+    }, 0)
+
+    return totalElements === 1 ? `${variablesList},` : variablesList
+  })()
 
   const outputVariableNames =
     outputVariables.length > 0 ? outputVariables.map((variable) => variable.name).join(', ') : ''
