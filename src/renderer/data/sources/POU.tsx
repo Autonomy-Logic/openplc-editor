@@ -29,12 +29,12 @@ const PouLanguageSources = [
     value: 'Functional Block Diagram',
   },
   {
-    icon: <SFCIcon />,
-    value: 'Sequential Functional Chart',
-  },
-  {
     icon: <PythonIcon />,
     value: 'Python',
+  },
+  {
+    icon: <SFCIcon />,
+    value: 'Sequential Functional Chart',
   },
 ] as const
 

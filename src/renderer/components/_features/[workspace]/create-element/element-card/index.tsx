@@ -347,7 +347,10 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                 align='center'
                                 side='bottom'
                               >
-                                {PouLanguageSources.map((lang) => {
+                                {PouLanguageSources.filter((lang) => {
+                                  if (target === 'function-block') return true
+                                  return lang.value !== 'Python'
+                                }).map((lang) => {
                                   return (
                                     <SelectItem
                                       key={lang.value}
