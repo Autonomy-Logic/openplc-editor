@@ -71,8 +71,15 @@ const SelectableTypeCell = ({
   // Filter available types based on language
   const getAvailableTypes = () => {
     if (language === 'python') {
-      // Only show Base Type for Python
-      return VariableTypes.filter((type) => type.definition === 'base-type')
+      const excludedPythonTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
+
+      // Only show Base Type for Python and filter out specific types
+      const availableTypes = VariableTypes.filter((type) => type.definition === 'base-type').map((type) => ({
+        ...type,
+        values: type.values.filter((value) => !excludedPythonTypes.includes(value.toUpperCase())),
+      }))
+
+      return availableTypes
     }
     return VariableTypes
   }
