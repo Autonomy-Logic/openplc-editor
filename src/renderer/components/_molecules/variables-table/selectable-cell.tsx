@@ -446,8 +446,8 @@ const SelectableClassCell = ({
 }: ISelectableCellProps) => {
   const { editor } = useOpenPLCStore()
 
+  const language = 'language' in editor.meta ? editor.meta.language : null
   const getVariableClasses = () => {
-    const language = 'language' in editor.meta ? editor.meta.language : null
     if (language === 'python') {
       return ['input', 'output']
     }
@@ -455,8 +455,8 @@ const SelectableClassCell = ({
   }
 
   const variableClasses = getVariableClasses()
-
-  const initialValue = getValue()
+  // If Python selected, we need to set initial value to input
+  const initialValue = language === 'python' ? 'input' : getValue()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
 
