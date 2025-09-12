@@ -278,7 +278,21 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       const shouldInjectTemplate = !currentValue || currentValue.trim() === ''
 
       if (shouldInjectTemplate) {
-        const pythonTemplate = `from multiprocessing import shared_memory
+        const pythonTemplate = `# ================================================================
+# DISCLAIMER: Python Function Block Execution
+#
+# This block runs asynchronously from the main PLC runtime.
+# ---------------------------------------------------------------
+# - All variables are shared with the runtime through shared memory.
+# - The block_init() function is called once when the block starts.
+# - The block_run() function is called periodcally (~100ms).
+# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle. once per scan.
+#
+# Use this block for non-time-critical tsks. For logc that must
+# match the PLC scan cycle, use standard IEC 61131-3 function blocks.
+# ================================================================
+
+from multiprocessing import shared_memory
 import struct
 import time
 import os

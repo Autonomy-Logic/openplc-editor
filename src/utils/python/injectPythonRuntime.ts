@@ -83,7 +83,7 @@ while True:
 ${readInputSection}
 
     # Run block
-    block_run()
+    block_loop()
 
 ${writeOutputSection}
 
