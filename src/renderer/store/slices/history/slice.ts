@@ -3,6 +3,8 @@ import { StateCreator } from 'zustand'
 
 import { HistorySlice, HistorySnapshot } from './types'
 
+const HISTORY_LIMIT = 50
+
 const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (setState, _getState) => ({
   history: {
     'default-history': {
@@ -21,7 +23,13 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
             }
           }
 
+          history[pouName].future = []
+
           history[pouName].past.push(snapshot as unknown as HistorySnapshot)
+
+          if (history[pouName].past.length > HISTORY_LIMIT) {
+            history[pouName].past.shift()
+          }
         }),
       )
     },
