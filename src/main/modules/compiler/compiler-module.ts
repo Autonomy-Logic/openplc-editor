@@ -879,7 +879,7 @@ class CompilerModule {
       buildProjectFlags = [
         ...buildProjectFlags,
         '--build-property',
-        `${boardHalsContent['c_flags'].map((f) => f).join(' ')}`,
+        `compiler.c.extra_flags=${boardHalsContent['c_flags'].map((f) => f).join(' ')}`,
       ]
     }
 
@@ -887,7 +887,7 @@ class CompilerModule {
       buildProjectFlags = [
         ...buildProjectFlags,
         '--build-property',
-        `${boardHalsContent['cxx_flags'].map((f) => f).join(' ')}`,
+        `compiler.cpp.extra_flags=${boardHalsContent['cxx_flags'].map((f) => f).join(' ')}`,
       ]
     }
 
@@ -918,6 +918,59 @@ class CompilerModule {
           resolve({ success: true })
         } else {
           reject(new Error(`Compilation failed with code ${code}\n${stderrData}`))
+        }
+      })
+    })
+  }
+
+  async handleUploadProgram({
+    projectPath,
+    arduinoPlatform,
+    compilationPath,
+    handleOutputData,
+  }: {
+    projectPath: string
+    arduinoPlatform: string
+    compilationPath: string
+    handleOutputData: HandleOutputDataCallback
+  }) {
+    const devicesDirectoryPath = join(projectPath, 'devices')
+    const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
+    const { communicationPort: port } =
+      await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+    const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
+
+    if (!port) {
+      handleOutputData('No communication port specified', 'error')
+      return
+    }
+
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      const child = this.#executeArduinoCliCommand([
+        'upload',
+        '--port',
+        port,
+        '--fqbn',
+        arduinoPlatform,
+        baremetalPath,
+        ...this.arduinoCliBaseParameters,
+      ])
+
+      let stderrData = ''
+
+      child.stdout.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      child.stderr.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve({
+            success: true,
+          })
+        } else {
+          reject(new Error(`Upload failed with code ${code}\n${stderrData}`))
         }
       })
     })
@@ -977,10 +1030,11 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting compilation process...' })
     // INFO: We assume the first argument is the project path,
     // INFO: the second argument is the board target, and the third argument is the project data.
-    const [projectPath, boardTarget, boardCore, projectData] = args as [
+    const [projectPath, boardTarget, boardCore, compileOnly, projectData] = args as [
       string,
       string,
       string | null,
+      boolean,
       ProjectState['data'],
     ]
 
@@ -1294,6 +1348,28 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    // Step 13: Upload program to board if necessary
+    if (!compileOnly) {
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Uploading program to board...' })
+      try {
+        await this.handleUploadProgram({
+          projectPath: normalizedProjectPath,
+          arduinoPlatform: halsContent[boardTarget]['platform'],
+          compilationPath,
+          handleOutputData: (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          },
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.close()
+        return
+      }
     }
 
     // -- Final message --
