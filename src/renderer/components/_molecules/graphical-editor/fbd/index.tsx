@@ -58,11 +58,11 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
 
   const [insideViewport, setInsideViewport] = useState(false)
   const [mousePosition, setMousePosition] = useState<XYPosition>({ x: 0, y: 0 })
-  const _fbdClipboard = useFBDClipboard({
+  useFBDClipboard({
     mousePosition,
     insideViewport,
     reactFlowInstance,
-    rungLocal,
+    rung,
     handleDeleteNodes: (nodes, edges) => {
       handleOnDelete(nodes, edges)
     },
@@ -93,13 +93,37 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   }
 
   const updateRungState = () => {
-    if (dragging || isEqual(rungLocal, rung)) {
+    const rungLocalCopy = {
+      ...rungLocal,
+      nodes: rungLocal.nodes.map((node) => {
+        const localObjectData = { ...node.data }
+        return { ...node, data: localObjectData }
+      }),
+    }
+
+    // Make node data mirror be the rung and not the rungLocal
+    // This is made because the rungLocal is a local copy and may not reflect the latest changes in the store
+    // And the store saves all the block data updates
+    const isSelectedNodeDataEqual =
+      rung.selectedNodes.length > 0
+        ? rung.selectedNodes.every((node) => {
+            const localNode = rungLocalCopy.nodes.find((n) => n.id === node.id)
+            return localNode ? isEqual(localNode.data, node.data) : false
+          })
+        : true
+    const skipUpdate = (dragging || isEqual(rungLocalCopy, rung)) && isSelectedNodeDataEqual
+
+    if (skipUpdate) {
       return
     }
 
+    const selectedNodes = rungLocalCopy.nodes.filter((node) => node.selected)
     fbdFlowActions.setRung({
       editorName: editor.meta.name,
-      rung: rungLocal,
+      rung: {
+        ...rungLocalCopy,
+        selectedNodes,
+      },
     })
   }
 
@@ -121,9 +145,10 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
       debounceUpdateRungRef.current?.()
     }
     // debounce the func that was created once, but has access to the latest sendRequest
-    return debounce(func, 100)
+    const timer = dragging ? 100 : 10
+    return debounce(func, timer)
     // no dependencies! never gets updated
-  }, [])
+  }, [dragging])
 
   useEffect(() => {
     updateRungLocalFromStore()

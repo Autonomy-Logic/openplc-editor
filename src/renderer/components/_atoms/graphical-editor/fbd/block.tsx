@@ -20,7 +20,7 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
-  hasDivergence?: boolean
+  hasDivergence: boolean
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
@@ -760,6 +760,7 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
       executionOrder: 0,
       executionControl: executionControlAux,
+      hasDivergence: false,
       draggable: true,
       selectable: true,
       deletable: true,

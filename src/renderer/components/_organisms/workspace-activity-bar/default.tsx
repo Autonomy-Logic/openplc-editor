@@ -1,3 +1,4 @@
+import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { BufferToStringArray, cn } from '@root/utils'
 import { useState } from 'react'
@@ -31,10 +32,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const disabledButtonClass = 'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
+  const compileOnly = compileOnlySelectors.useCompileOnly()
+
   const handleRequest = () => {
     const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
     window.bridge.runCompileProgram(
-      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, projectData],
+      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, compileOnly, projectData],
       (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
         setIsCompiling(true)
         if (typeof data.message === 'string') {

@@ -1,16 +1,20 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { boardSelectors, pinSelectors } from '@hooks/use-store-selectors'
+import { boardSelectors, compileOnlySelectors, pinSelectors } from '@hooks/use-store-selectors'
 import { MinusIcon, PlusIcon, RefreshIcon } from '@root/renderer/assets'
-import { Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { Checkbox, Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
-  const availableBoards = boardSelectors.useAvailableBoards()
+  const {
+    deviceDefinitions: { compileOnly },
+    deviceAvailableOptions: { availableBoards },
+  } = useOpenPLCStore()
   const availableCommunicationPorts = boardSelectors.useAvailableCommunicationPorts()
   const deviceBoard = boardSelectors.useDeviceBoard()
   const communicationPort = boardSelectors.useCommunicationPort()
@@ -19,6 +23,8 @@ const Board = memo(function () {
   const setAvailableOptions = boardSelectors.useSetAvailableOptions()
   const currentSelectedPinTableRow = pinSelectors.useCurrentSelectedPinTableRow()
   const setCurrentSelectedPinTableRow = pinSelectors.useSelectPinTableRow()
+
+  const setCompileOnly = compileOnlySelectors.useSetCompileOnly()
 
   const pins = pinSelectors.usePins()
   const createNewPin = pinSelectors.useCreateNewPin()
@@ -100,8 +106,24 @@ const Board = memo(function () {
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
+  const handleCompileOnly = () => {
+    setCompileOnly(!memoizedCompileOnly)
+  }
+  const memoizedCompileOnly = useMemo(() => compileOnly, [compileOnly])
+
   return (
     <DeviceEditorSlot heading='Board Settings'>
+      <div id='compile-only-container' className='flex select-none items-center gap-2'>
+        <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
+          Compile Only
+        </Label>
+        <Checkbox
+          id='compile-only-checkbox'
+          className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
+          checked={compileOnly}
+          onCheckedChange={handleCompileOnly}
+        />
+      </div>
       <div id='board-selection-container' className='flex h-2/5 min-h-[325px] w-full justify-between'>
         <div
           id='board-preferences-container'

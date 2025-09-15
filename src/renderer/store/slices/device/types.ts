@@ -58,6 +58,7 @@ const deviceStateSchema = z.object({
   deviceDefinitions: z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
+    compileOnly: z.boolean().default(true),
   }),
   deviceUpdated: z.object({
     updated: z.boolean(),
@@ -130,6 +131,7 @@ const deviceActionSchema = z.object({
     .args(z.object({ tcpWifiSSID: z.string(), tcpWifiPassword: z.string() }).partial())
     .returns(z.void()),
   setStaticHostConfiguration: z.function().args(staticHostConfigurationSchema.partial()).returns(z.void()),
+  setCompileOnly: z.function().args(z.boolean()).returns(z.void()),
 })
 
 type DeviceActions = z.infer<typeof deviceActionSchema>

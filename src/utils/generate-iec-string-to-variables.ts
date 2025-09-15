@@ -13,7 +13,7 @@ const varBlockToClass: Record<string, PLCVariable['class']> = {
 
 const lineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)(?:\s+AT\s+(?<location>%[\w\d\._]+))?\s*:\s*(?<type>[\w\s]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)(?:\s+AT\s+(?<location>%[\w\d\._]+))?\s*:\s*(?<type>[\w\s\[\]\.]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 const guessErrorReason = (line: string): string => {
   if (!line.includes(';')) return 'missing semicolon (;) at the end of the declaration'

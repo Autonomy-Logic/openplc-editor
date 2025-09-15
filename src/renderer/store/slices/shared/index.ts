@@ -1612,10 +1612,6 @@ export const createSharedSlice: StateCreator<
         snapshot.instances = JSON.parse(JSON.stringify(instances)) as HistorySnapshot['instances']
       }
 
-      if (getState().history[pouName]) {
-        getState().history[pouName] = { past: [], future: [] }
-      }
-
       if (isDataType) {
         const dataType = dataTypes.find((dataType) => dataType.name === pouName)!
 
@@ -1623,10 +1619,6 @@ export const createSharedSlice: StateCreator<
       }
 
       getState().historyActions.addPastHistory(pouName, snapshot)
-
-      if (getState().history[pouName].past.length > 50) {
-        getState().history[pouName].past.shift()
-      }
     },
     undo: (pouName) => {
       const ladderFlows = getState().ladderFlows
