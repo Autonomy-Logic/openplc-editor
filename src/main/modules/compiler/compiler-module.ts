@@ -879,7 +879,7 @@ class CompilerModule {
       buildProjectFlags = [
         ...buildProjectFlags,
         '--build-property',
-        `${boardHalsContent['c_flags'].map((f) => f).join(' ')}`,
+        `compiler.c.extra_flags=${boardHalsContent['c_flags'].map((f) => f).join(' ')}`,
       ]
     }
 
@@ -887,7 +887,7 @@ class CompilerModule {
       buildProjectFlags = [
         ...buildProjectFlags,
         '--build-property',
-        `${boardHalsContent['cxx_flags'].map((f) => f).join(' ')}`,
+        `compiler.cxx.extra_flags=${boardHalsContent['cxx_flags'].map((f) => f).join(' ')}`,
       ]
     }
 
