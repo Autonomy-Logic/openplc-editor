@@ -4,6 +4,7 @@ const logObjectSchema = z.object({
   id: z.string(),
   level: z.enum(['info', 'warning', 'error']).optional(),
   message: z.string(),
+  tstamp: z.date(),
 })
 
 const consoleStateSchema = z.object({

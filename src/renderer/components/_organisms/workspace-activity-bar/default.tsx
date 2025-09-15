@@ -50,6 +50,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 id: crypto.randomUUID(),
                 level: data.logLevel,
                 message: line,
+                tstamp: new Date(),
               })
             })
         }
@@ -59,6 +60,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               id: crypto.randomUUID(),
               level: data.logLevel,
               message,
+              tstamp: new Date(),
             })
           })
         }
