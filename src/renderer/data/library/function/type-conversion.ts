@@ -7763,12 +7763,12 @@ const TypeConversion: TypeConversionLibrary = {
       language: 'st',
       variables: [
         {
-          name: 'DT',
+          name: 'IN',
           class: 'input',
           type: { definition: 'base-type', value: 'DT' },
         },
         {
-          name: 'TOD',
+          name: 'OUT',
           class: 'output',
           type: { definition: 'base-type', value: 'TOD' },
         },
@@ -7783,12 +7783,12 @@ const TypeConversion: TypeConversionLibrary = {
       language: 'st',
       variables: [
         {
-          name: 'DT',
+          name: 'IN',
           class: 'input',
           type: { definition: 'base-type', value: 'DT' },
         },
         {
-          name: 'DATE',
+          name: 'OUT',
           class: 'output',
           type: { definition: 'base-type', value: 'DATE' },
         },
