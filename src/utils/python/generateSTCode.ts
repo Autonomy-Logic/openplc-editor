@@ -88,7 +88,14 @@ const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
   code += '        memcpy(&data_out, shm_out_ptr, sizeof(data_out));\n'
 
   outputVars.forEach((variable) => {
-    code += `        data__->${variable.name.toUpperCase()}.value = data_out.${variable.name};\n`
+    const isString = variable.type?.definition === 'base-type' && variable.type?.value === 'string'
+
+    if (isString) {
+      code += `        data__->${variable.name.toUpperCase()}.value.len = data_out.${variable.name}.len;\n`
+      code += `        memcpy(data__->${variable.name.toUpperCase()}.value.body, data_out.${variable.name}.body, STR_MAX_LEN);\n`
+    } else {
+      code += `        data__->${variable.name.toUpperCase()}.value = data_out.${variable.name};\n`
+    }
   })
 
   return code
