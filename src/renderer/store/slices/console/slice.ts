@@ -1,7 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { ConsoleSlice } from './types'
+import { ConsoleSlice, logObjectSchema } from './types'
 
 const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (setState) => ({
   logs: [],
@@ -9,7 +9,7 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
     addLog: (log) => {
       setState(
         produce((state: ConsoleSlice) => {
-          state.logs.push(log)
+          state.logs.push(logObjectSchema.parse(log))
         }),
       )
     },

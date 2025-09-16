@@ -15,13 +15,13 @@ const useCompiler = () => {
       parseTo,
     )
     if (success) {
-      addLog({ id: uuidv4(), level: 'warning', message: 'Attempting to generate the xml file', tstamp: new Date() })
-      addLog({ id: uuidv4(), level: 'info', message: logMessage, tstamp: new Date() })
+      addLog({ id: uuidv4(), level: 'warning', message: 'Attempting to generate the xml file' })
+      addLog({ id: uuidv4(), level: 'info', message: logMessage })
     } else {
       if (typeof logMessage === 'string') {
-        addLog({ id: uuidv4(), level: 'error', message: logMessage, tstamp: new Date() })
+        addLog({ id: uuidv4(), level: 'error', message: logMessage })
       } else {
-        addLog({ id: uuidv4(), level: 'error', message: 'An unknown error occurred.', tstamp: new Date() })
+        addLog({ id: uuidv4(), level: 'error', message: 'An unknown error occurred.' })
       }
     }
   }
