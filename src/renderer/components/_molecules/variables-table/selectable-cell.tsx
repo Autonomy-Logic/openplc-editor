@@ -462,8 +462,20 @@ const SelectableClassCell = ({
   }
 
   const variableClasses = getVariableClasses()
-  // If Python selected, we need to set initial value to input
-  const initialValue = language === 'python' ? 'input' : getValue()
+
+  // Get the current value from the table
+  const currentValue = getValue()
+
+  // Determine initial value: use "input" for Python if current value is empty/undefined
+  const getInitialValue = () => {
+    if (language === 'python' && currentValue === 'local') {
+      return 'input'
+    }
+    return currentValue
+  }
+
+  const initialValue = getInitialValue()
+
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
 
@@ -482,10 +494,17 @@ const SelectableClassCell = ({
     }
   }
 
-  // If the initialValue is changed external, sync it up with our state
+  // Effect to handle language changes and set default value for Python
   useEffect(() => {
-    setCellValue(initialValue)
-  }, [initialValue])
+    if (language === 'python' && currentValue === 'local') {
+      // Set default value to "input" for Python and update the table
+      setCellValue('input')
+      table.options.meta?.updateData(index, id, 'input')
+    } else {
+      console.log(currentValue)
+      setCellValue(currentValue)
+    }
+  }, [currentValue, language, index, id, table])
 
   return (
     <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)}>
