@@ -651,7 +651,6 @@ export const createSharedSlice: StateCreator<
   },
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
-      console.log('Essa merda caiu aqui!!')
       getState().projectActions.createDatatype({ data: propsToCreateDatatype })
 
       // Add the file to the file slice
@@ -1530,12 +1529,10 @@ export const createSharedSlice: StateCreator<
     // File and workspace saved state management
     handleFileAndWorkspaceSavedState: (name: string) => {
       const { file } = getState().fileActions.getFile({ name })
-      console.log('Essa merda caiu aqui ->', file)
       if (!file) {
         console.warn(`File with name ${name} does not exist.`)
       }
 
-      console.warn('Modificação detectada, atualizando estado do arquivo e workspace...', file?.saved)
       // If the file is saved, set the saved to false because it was modified
       if (file?.saved) {
         console.warn(`File with name ${name} was marked as saved, but it was modified. Marking as unsaved.`)

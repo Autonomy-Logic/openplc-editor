@@ -310,8 +310,6 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
 
     if (isDatatype) {
       const res = await renameDatatype(label, newLabel)
-      console.warn('rename datatype res', res)
-
       if (!res.success) {
         setNewLabel(label || '')
       }
@@ -433,10 +431,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       )}
       onClick={(e) => {
         handleLeafSelection()
-        if (label === name) {
-          console.warn('Already selected')
-          return
-        }
+        if (label === name) return
         if (handleLeafClick) handleLeafClick(e)
       }}
       {...res}
