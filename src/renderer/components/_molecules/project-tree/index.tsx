@@ -243,6 +243,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     editor: {
       meta: { name },
     },
+    workspace: { selectedProjectTreeLeaf },
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
@@ -270,6 +271,10 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       })
       return
     }
+
+    const { label: currentLabel } = selectedProjectTreeLeaf
+
+    if (label === currentLabel) return
 
     setSelectedProjectTreeLeaf({ label, type: leafType })
   }
@@ -305,6 +310,8 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
 
     if (isDatatype) {
       const res = await renameDatatype(label, newLabel)
+      console.warn('rename datatype res', res)
+
       if (!res.success) {
         setNewLabel(label || '')
       }
@@ -426,7 +433,10 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       )}
       onClick={(e) => {
         handleLeafSelection()
-
+        if (label === name) {
+          console.warn('Already selected')
+          return
+        }
         if (handleLeafClick) handleLeafClick(e)
       }}
       {...res}

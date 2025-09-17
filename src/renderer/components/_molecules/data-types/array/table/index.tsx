@@ -31,6 +31,7 @@ const DimensionsTable = ({
     editor,
     projectActions: { updateDatatype },
     snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const columnHelper = createColumnHelper<{ dimension: string }>()
@@ -92,6 +93,7 @@ const DimensionsTable = ({
         }
         updateDatatype(name, optionalSchema as PLCDataType)
       }
+      handleFileAndWorkspaceSavedState(editor.meta.name)
     }
   }
 

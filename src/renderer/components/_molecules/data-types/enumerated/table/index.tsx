@@ -30,7 +30,9 @@ const EnumeratedTable = ({
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
   const {
+    editor,
     projectActions: { updateDatatype },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const columnHelper = createColumnHelper<{ description: string }>()
@@ -133,6 +135,7 @@ const EnumeratedTable = ({
         updateDatatype(name, optionalSchema as PLCDataType)
         return newRows
       }
+      handleFileAndWorkspaceSavedState(editor.meta.name)
     }
   }
 

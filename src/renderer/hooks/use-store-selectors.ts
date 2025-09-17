@@ -96,6 +96,11 @@ const pouSelectors = {
     useOpenPLCStore((state) => state.project.data.pous.find((pou) => pou.data.name === fileName) as PLCPou),
 }
 
+// ===================== Datatype selectors. =====================
+const datatypeSelectors = {
+  useDatatypes: () => useOpenPLCStore((state) => state.project.data.dataTypes),
+}
+
 // ===================== Project selectors. =====================
 const projectSelectors = {
   useProjectPath: () => useOpenPLCStore((state) => state.project.meta.path),
@@ -137,6 +142,7 @@ export {
   communicationSelectors,
   compileOnlySelectors,
   consoleSelectors,
+  datatypeSelectors,
   deviceSelectors,
   editorSelectors,
   fileSelectors,
