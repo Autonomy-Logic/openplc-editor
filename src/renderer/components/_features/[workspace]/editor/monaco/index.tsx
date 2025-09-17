@@ -71,6 +71,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
 
+  const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
+
   const pou = pous.find((pou) => pou.data.name === name)
 
   useEffect(() => {
@@ -88,6 +90,75 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       updateLocalVariablesInTokenizer(variableNames)
     }
   }, [pou?.data.variables, language])
+
+  useEffect(() => {
+    if (language === 'python' && editorRef.current && pou) {
+      const editorModel = editorRef.current.getModel()
+      if (!editorModel) return
+
+      const stateValue = pou.data.body.value as string
+      const editorValue = editorModel.getValue()
+
+      const stateIsEmpty = !stateValue || stateValue.trim() === ''
+      const editorIsEmpty = !editorValue || editorValue.trim() === ''
+
+      const alreadyInjected = templatesInjected.has(name)
+
+      const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
+
+      if (shouldInjectTemplate) {
+        const pythonTemplate = `# ================================================================
+# DISCLAIMER: Python Function Block Execution
+#
+# This block runs asynchronously from the main PLC runtime.
+# ---------------------------------------------------------------
+# - All variables are shared with the runtime through shared memory.
+# - The block_init() function is called once when the block starts.
+# - The block_loop() function is called periodically (~100ms).
+# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
+#   It is NOT guaranteed that block_loop() will execute once per scan.
+#
+# Use this block for non-time-critical tasks. For logic that must
+# match the PLC scan cycle, use standard IEC 61131-3 function blocks.
+# ================================================================
+
+from multiprocessing import shared_memory
+import struct
+import time
+import os
+
+def block_init():
+    print('Block was initialized')
+
+def block_loop():
+    print('Block has run the loop function')
+`
+
+        editorRef.current.setValue(pythonTemplate)
+        handleWriteInPou(pythonTemplate)
+
+        const lineCount = editorModel.getLineCount()
+        const lastLineContent = editorModel.getLineContent(lineCount)
+        const position = {
+          lineNumber: lineCount,
+          column: lastLineContent.length + 1,
+        }
+        editorRef.current.setPosition(position)
+
+        setTemplatesInjected((prev) => new Set(prev).add(name))
+      }
+    }
+  }, [language, name, pou])
+
+  useEffect(() => {
+    return () => {
+      setTemplatesInjected((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(name)
+        return newSet
+      })
+    }
+  }, [name])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
@@ -272,70 +343,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     monacoRef.current = monacoInstance
 
     if (!editorInstance) return
-
-    if (language === 'python') {
-      const currentValue = pou?.data.body.value as string
-      const shouldInjectTemplate = !currentValue || currentValue.trim() === ''
-
-      if (shouldInjectTemplate) {
-        const pythonTemplate = `# ================================================================
-# DISCLAIMER: Python Function Block Execution
-#
-# This block runs asynchronously from the main PLC runtime.
-# ---------------------------------------------------------------
-# - All variables are shared with the runtime through shared memory.
-# - The block_init() function is called once when the block starts.
-# - The block_loop() function is called periodically (~100ms).
-# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
-#   It is NOT guaranteed that block_loop() will execute once per scan.
-#
-# Use this block for non-time-critical tasks. For logic that must
-# match the PLC scan cycle, use standard IEC 61131-3 function blocks.
-# ================================================================
-
-from multiprocessing import shared_memory
-import struct
-import time
-import os
-
-def block_init():
-    print('Block was initialized')
-
-def block_loop():
-    print('Block has run the loop function')
-`
-
-        try {
-          // Set the template as the initial value
-          editorInstance.setValue(pythonTemplate)
-
-          // Update the POU data with the template
-          // This ensures the template is saved when the user saves the project
-          handleWriteInPou(pythonTemplate)
-        } catch (error) {
-          console.warn('Failed to inject Python template:', error)
-        }
-      }
-
-      // Position cursor at the last available line (for both template and existing code)
-      try {
-        const model = editorInstance.getModel()
-        if (model) {
-          const lineCount = model.getLineCount()
-          const lastLineContent = model.getLineContent(lineCount)
-
-          // Position at the end of the last line
-          const position = {
-            lineNumber: lineCount,
-            column: lastLineContent.length + 1,
-          }
-
-          editorInstance.setPosition(position)
-        }
-      } catch (error) {
-        console.warn('Failed to position cursor at bottom:', error)
-      }
-    }
 
     // Existing functionality for other languages
     if (searchQuery) {
