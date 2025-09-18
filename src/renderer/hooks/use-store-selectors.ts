@@ -137,6 +137,12 @@ const fileSelectors = {
   useUpdateFile: () => useOpenPLCStore((state) => state.fileActions.updateFile),
 }
 
+// ===================== Shared selectors =====================
+const sharedSelectors = {
+  useHandleFileAndWorkspaceSavedState: () =>
+    useOpenPLCStore((state) => state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState),
+}
+
 export {
   boardSelectors,
   communicationSelectors,
@@ -152,6 +158,7 @@ export {
   resourceSelectors,
   rtuSelectors,
   searchSelectors,
+  sharedSelectors,
   staticHostSelectors,
   tcpSelectors,
   variablesSelectors,
