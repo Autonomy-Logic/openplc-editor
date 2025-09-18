@@ -7,9 +7,10 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
   logs: [],
   consoleActions: {
     addLog: (log) => {
+      const parsed = logObjectSchema.parse(log)
       setState(
         produce((state: ConsoleSlice) => {
-          state.logs.push(logObjectSchema.parse(log))
+          state.logs.push(parsed)
         }),
       )
     },
