@@ -659,6 +659,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     })
     updatedNewNode.data = {
       ...updatedNewNode.data,
+      connectedVariables: (node.data as BlockNodeData<BlockVariant>).connectedVariables,
       variable: variables.selected ?? { name: '' },
     }
 
@@ -674,7 +675,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         ...edge,
         id: edge.id.replace(node.id, newBlockNode.id),
         source: newBlockNode.id,
-        sourceHandle: newBlockNode.data.outputConnector.id,
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
@@ -683,7 +683,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         ...edge,
         id: edge.id.replace(node.id, newBlockNode.id),
         target: newBlockNode.id,
-        targetHandle: newBlockNode.data.inputConnector.id,
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
