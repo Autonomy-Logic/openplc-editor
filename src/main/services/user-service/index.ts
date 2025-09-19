@@ -58,9 +58,9 @@ class UserService {
       await writeFile(filePath, JSON.stringify(data, null, 2), { flag: 'wx' })
     } catch (err) {
       // If the error is due to the file already existing, log a warning and continue.
-      if (err instanceof Error && err.message.includes('EEXIST')) {
+      if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'EEXIST') {
         console.warn(`File already exists at ${filePath}.\nSkipping creation.`)
-        throw new Error(`File already exists at ${filePath}. Skipping creation.`)
+        return
       } else if (err instanceof Error) {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
         throw new Error(`Failed to create file at ${filePath}: ${String(err)}`)
@@ -210,9 +210,8 @@ class UserService {
     await writeFile(pathToArduinoCoreControlFile, JSON.stringify(installedCoresFromListOutput, null, 2), { flag: 'w' })
 
     // This is a legacy file that is no longer used, should be removed in the next major release!!!
-    const removeLegacy = promisify(rm)
     const pathToLegacyHals = join(pathToRuntimeFolder, 'hals.json')
-    await removeLegacy(pathToLegacyHals, { recursive: true, force: true })
+    await rm(pathToLegacyHals, { recursive: true, force: true })
   }
 
   async #checkIfArduinoLibraryControlFileExists() {

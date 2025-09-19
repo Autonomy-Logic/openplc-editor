@@ -78,6 +78,8 @@ const EnumeratedTable = ({
           description: `The row was removed because the value was empty.`,
           variant: 'fail',
         })
+        handleFileAndWorkspaceSavedState(editor.meta.name)
+
         return newRows
       }
 
@@ -103,6 +105,8 @@ const EnumeratedTable = ({
           description: `The value already exists in the list.`,
           variant: 'fail',
         })
+        handleFileAndWorkspaceSavedState(editor.meta.name)
+
         return newRows
       }
 
@@ -121,6 +125,8 @@ const EnumeratedTable = ({
           description: `The enumerated value is invalid. Valid names: CamelCase, PascalCase or SnakeCase.`,
           variant: 'fail',
         })
+        handleFileAndWorkspaceSavedState(editor.meta.name)
+
         return newRows
       } else {
         const newRows = prevRows.map((row, index) => ({
@@ -133,9 +139,10 @@ const EnumeratedTable = ({
           initialValue: initialValue,
         }
         updateDatatype(name, optionalSchema as PLCDataType)
+        handleFileAndWorkspaceSavedState(editor.meta.name)
+
         return newRows
       }
-      handleFileAndWorkspaceSavedState(editor.meta.name)
     }
   }
 

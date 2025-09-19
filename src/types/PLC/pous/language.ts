@@ -11,4 +11,5 @@ const pousAllLanguages = [
   ...pousLanguageSchema.shape.graphical.options,
 ] as const
 
-export { pousAllLanguages, PousLanguage, pousLanguageSchema }
+export { pousAllLanguages, pousLanguageSchema }
+export type { PousLanguage }

@@ -1408,13 +1408,14 @@ export const createSharedSlice: StateCreator<
             }
           }
 
-          // saveContent = {
-          //   configuration: deviceConfiguration.data,
-          //   pinMapping: {
-          //     pins: devicePinMapping.data,
-          //     currentSelectedPinTableRow: -1,
-          //   },
-          // }
+          saveContent = {
+            configuration: deviceConfiguration.data,
+            pinMapping: {
+              pins: devicePinMapping.data,
+              currentSelectedPinTableRow: -1,
+            },
+            compileOnly: getState().deviceDefinitions.compileOnly,
+          }
           break
         }
         case 'data-type':
