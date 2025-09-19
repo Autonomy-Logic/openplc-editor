@@ -595,32 +595,72 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
     if (!libMatch) return
 
-    const libVariables = pous.find((pou) => pou.data.name === libMatch.name)?.data
+    const libPou = pous.find((pou) => pou.data.name === libMatch.name)
+    if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant
 
-    const newNodeVariables = (libVariables?.variables || []).map((variable) => ({
+    const newNodeVariables = (libPou.data.variables || []).map((variable) => ({
       ...variable,
-      type: {
-        ...variable.type,
-        value: variable.type.value.toUpperCase(),
-      },
+      type:
+        variable.type.definition === 'array'
+          ? {
+              ...variable.type,
+              value: variable.type.value.toUpperCase(),
+              data: variable.type.data,
+            }
+          : variable.type.definition === 'base-type'
+            ? {
+                value: variable.type.value.toUpperCase(),
+                definition: 'base-type',
+              }
+            : variable.type.definition === 'user-data-type'
+              ? {
+                  value: variable.type.value.toUpperCase(),
+                  definition: 'user-data-type',
+                }
+              : variable.type.definition === 'derived'
+                ? {
+                    value: variable.type.value.toUpperCase(),
+                    definition: 'derived',
+                  }
+                : variable.type,
     }))
+
+    if (libPou.type === 'function') {
+      const variable = getVariableRestrictionType(libPou.data.returnType)
+      newNodeVariables.push({
+        name: 'OUT',
+        class: 'output',
+        type: {
+          definition:
+            variable.definition === 'array' ||
+            variable.definition === 'base-type' ||
+            variable.definition === 'user-data-type' ||
+            variable.definition === 'derived'
+              ? variable.definition
+              : 'derived',
+          value: libPou.data.returnType.toUpperCase(),
+        },
+        location: '',
+        documentation: '',
+        debug: false,
+      })
+    }
+
     const updatedNewNode = buildBlockNode({
       id: `BLOCK_${uuidv4()}`,
       posX: node.position.x,
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
       handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
-      variant: { ...libVariables, type: blockVariant.type, variables: newNodeVariables },
+      variant: { ...libPou.data, type: blockVariant.type, variables: newNodeVariables },
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
     updatedNewNode.data = {
       ...updatedNewNode.data,
       variable: variables.selected ?? { name: '' },
     }
-
-    if (!rung) return
 
     const newBlockNode = { ...updatedNewNode }
 

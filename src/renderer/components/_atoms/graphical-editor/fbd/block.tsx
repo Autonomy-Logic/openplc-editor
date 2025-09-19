@@ -12,7 +12,7 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockVariant } from '../types/block'
-import { getBlockDocumentation } from '../utils'
+import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
@@ -540,8 +540,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { rung, node, pou } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
-
-    if (!node || !rung) return
+    if (!pou || !rung || !node) return
 
     const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
     if (!variant) return
@@ -549,17 +548,58 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
     if (!libMatch) return
 
-    const libVariables = pous.find((pou) => pou.data.name === libMatch.name)?.data
+    const libPou = pous.find((pou) => pou.data.name === libMatch.name)
+    if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant
 
-    const newNodeVariables = (libVariables?.variables || []).map((variable) => ({
+    const newNodeVariables = (libPou.data.variables || []).map((variable) => ({
       ...variable,
-      type: {
-        ...variable.type,
-        value: variable.type.value.toUpperCase(),
-      },
+      type:
+        variable.type.definition === 'array'
+          ? {
+              ...variable.type,
+              value: variable.type.value.toUpperCase(),
+              data: variable.type.data,
+            }
+          : variable.type.definition === 'base-type'
+            ? {
+                value: variable.type.value.toUpperCase(),
+                definition: 'base-type',
+              }
+            : variable.type.definition === 'user-data-type'
+              ? {
+                  value: variable.type.value.toUpperCase(),
+                  definition: 'user-data-type',
+                }
+              : variable.type.definition === 'derived'
+                ? {
+                    value: variable.type.value.toUpperCase(),
+                    definition: 'derived',
+                  }
+                : variable.type,
     }))
+
+    if (libPou.type === 'function') {
+      const variable = getVariableRestrictionType(libPou.data.returnType)
+      newNodeVariables.push({
+        name: 'OUT',
+        class: 'output',
+        type: {
+          definition:
+            variable.definition === 'array' ||
+            variable.definition === 'base-type' ||
+            variable.definition === 'user-data-type' ||
+            variable.definition === 'derived'
+              ? variable.definition
+              : 'derived',
+          value: libPou.data.returnType.toUpperCase(),
+        },
+        location: '',
+        documentation: '',
+        debug: false,
+      })
+    }
 
     const updatedNewNode = buildBlockNode({
       id: `BLOCK_${crypto.randomUUID()}`,
@@ -567,15 +607,13 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         x: node.position.x,
         y: node.position.y,
       },
-      variant: { ...libVariables, type: blockVariant.type, variables: newNodeVariables },
+      variant: { ...libPou.data, type: blockVariant.type, variables: newNodeVariables },
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
     updatedNewNode.data = {
       ...updatedNewNode.data,
       variable: variables.selected ?? { name: '' },
     }
-
-    if (!pou || !rung || !node) return
 
     const newNode = { ...updatedNewNode }
 
