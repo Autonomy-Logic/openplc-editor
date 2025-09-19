@@ -665,6 +665,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     const newBlockNode = { ...updatedNewNode }
 
+    console.log('node', node)
+    console.log('newBlockNode', newBlockNode)
+
     let newNodes = [...rung.nodes]
     let newEdges = [...rung.edges]
 
@@ -827,11 +830,24 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
+  let variantVariables = (variant as BlockVariant)?.variables ?? []
+  const outIndex = variantVariables.findIndex((v) => v.name === 'OUT')
+  if (outIndex > 0) {
+    const [outVar] = variantVariables.splice(outIndex, 1)
+    variantVariables = [outVar, ...variantVariables]
+  }
+  const newVariant = variant ? { ...(variant as BlockVariant), variables: variantVariables } : DEFAULT_BLOCK_TYPE
+
   const {
     variant: variantLib,
     executionControl: executionControlAux,
     lockExecutionControl,
-  } = getBlockVariantAndExecutionControl({ ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }, executionControl)
+  } = getBlockVariantAndExecutionControl(
+    {
+      ...(newVariant as BlockVariant),
+    },
+    executionControl,
+  )
   const { handles, leftHandles, rightHandles, height, width } = getBlockSize(variantLib, { x: handleX, y: handleY })
 
   return {

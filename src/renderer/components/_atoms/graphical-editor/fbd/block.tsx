@@ -773,8 +773,16 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
+  let variantVariables = (variant as BlockVariant)?.variables ?? []
+  const outIndex = variantVariables.findIndex((v) => v.name === 'OUT')
+  if (outIndex > 0) {
+    const [outVar] = variantVariables.splice(outIndex, 1)
+    variantVariables = [outVar, ...variantVariables]
+  }
+  const newVariant = variant ? { ...(variant as BlockVariant), variables: variantVariables } : DEFAULT_BLOCK_TYPE
+
   const { variant: variantLib, executionControl: executionControlAux } = getBlockVariantAndExecutionControl(
-    { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) },
+    { ...(newVariant as BlockVariant) },
     executionControl,
   )
   const handlePosition = {
