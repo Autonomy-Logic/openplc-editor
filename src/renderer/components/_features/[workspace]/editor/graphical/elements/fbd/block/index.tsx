@@ -210,7 +210,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(Number(prevState.inputs) + 1),
     }))
 
-    const defaultInputType = blockVariant.variables[0].type
+    const firstInput = blockVariant.variables.find((variable) => variable.class === 'input' && variable.name !== 'EN')
+    const defaultInputType = (firstInput || blockVariant.variables[0]).type
     const blockVariables = [
       ...blockVariant.variables,
       {

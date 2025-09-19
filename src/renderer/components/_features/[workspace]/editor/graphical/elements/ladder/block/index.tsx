@@ -215,7 +215,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(Number(prevState.inputs) + 1),
     }))
 
-    const defaultInputType = LadderBlockVariant.variables[0].type
+    const firstInput = LadderBlockVariant.variables.find(
+      (variable) => variable.class === 'input' && variable.name !== 'EN',
+    )
+    const defaultInputType = (firstInput || LadderBlockVariant.variables[0]).type
     const blockVariables = [
       ...LadderBlockVariant.variables,
       {
