@@ -129,13 +129,14 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           ...relatedBlock,
           data: {
             ...relatedBlock.data,
-            connectedVariables: {
+            connectedVariables: [
               ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
-              [(variableNode as VariableNode).data.block.handleId]: {
+              {
                 variable: variable,
                 type: variableNode.data.variant,
+                handleId: (variableNode as VariableNode).data.block.handleId,
               },
-            },
+            ],
           },
         },
       })

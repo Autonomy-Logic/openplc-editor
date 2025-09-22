@@ -27,12 +27,15 @@ export type BlockVariant = {
   documentation: string
   extensible: boolean
 }
-type Variables = {
-  [key: string]: {
-    variable: PLCVariable | undefined
-    type: 'input' | 'output'
-  }
+
+type OldVariables = {
+  [key: string]: { variable: PLCVariable; type: 'input' | 'output' }
 }
+type Variables = {
+  variable: PLCVariable | undefined
+  type: 'input' | 'output'
+  handleId: string
+}[]
 
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
@@ -495,6 +498,44 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   }, [pous])
 
   /**
+   * useEffect to check if the connectedVariable is the correct type when the block variant is changed
+   */
+  useEffect(() => {
+    if (
+      data.connectedVariables &&
+      typeof data.connectedVariables === 'object' &&
+      !Array.isArray(data.connectedVariables)
+    ) {
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+        nodeId: id,
+      })
+      if (!node || !rung) return
+
+      const newVariables: Variables = []
+      Object.entries(data.connectedVariables as OldVariables).forEach(([key, connectedVariable]) => {
+        newVariables.push({
+          variable: connectedVariable.variable,
+          type: connectedVariable.type,
+          handleId: key,
+        })
+      })
+
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            connectedVariables: newVariables,
+          },
+        },
+      })
+    }
+  }, [data])
+
+  /**
    * Handle with the variable input onBlur event
    */
   const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string, createIfNotFound?: boolean) => {
@@ -586,7 +627,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
-
     if (!node || !rung) return
 
     const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
@@ -654,19 +694,21 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
       handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
-      variant: { ...libPou.data, type: blockVariant.type, variables: newNodeVariables },
+      variant: { ...libPou.data, type: blockVariant.type, variables: [...newNodeVariables] },
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
+
+    const connectedVariables: Variables = (node.data as BlockNodeData<BlockVariant>).connectedVariables.filter(
+      (connectedVariable) => newNodeVariables.find((newVar) => newVar.name === connectedVariable.handleId),
+    )
+
     updatedNewNode.data = {
       ...updatedNewNode.data,
-      connectedVariables: (node.data as BlockNodeData<BlockVariant>).connectedVariables,
+      connectedVariables: connectedVariables ?? [],
       variable: variables.selected ?? { name: '' },
     }
 
     const newBlockNode = { ...updatedNewNode }
-
-    console.log('node', node)
-    console.log('newBlockNode', newBlockNode)
 
     let newNodes = [...rung.nodes]
     let newEdges = [...rung.edges]
@@ -866,7 +908,7 @@ export const buildBlockNode = <T extends object | undefined>({
       executionOrder: 0,
       executionControl: executionControlAux,
       lockExecutionControl,
-      connectedVariables: {},
+      connectedVariables: [] as Variables,
       draggable: true,
       selectable: true,
       deletable: true,

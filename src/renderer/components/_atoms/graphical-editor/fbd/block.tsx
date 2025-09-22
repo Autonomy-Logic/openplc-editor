@@ -618,62 +618,62 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const newNode = { ...updatedNewNode }
 
     const originalNodeInputs = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'input',
+      (variable) => variable.class === 'input' || variable.class === 'inOut',
     )
     const originalNodeSources = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'output',
+      (variable) => variable.class === 'output' || variable.class === 'inOut',
     )
 
-    const updatedInputVariables = newNode.data.variant.variables.filter((variable) => variable.class === 'input')
-    const updatedOutputVariables = newNode.data.variant.variables.filter((variable) => variable.class === 'output')
+    const updatedInputVariables = newNode.data.variant.variables.filter(
+      (variable) => variable.class === 'input' || variable.class === 'inOut',
+    )
+    const updatedOutputVariables = newNode.data.variant.variables.filter(
+      (variable) => variable.class === 'output' || variable.class === 'inOut',
+    )
 
     let newNodes = [...rung.nodes]
     newNodes = newNodes.map((nodeItem) => (nodeItem.id === node.id ? newNode : nodeItem))
 
-    // filter unchanged and removed edges
-    let newEdges = [...rung.edges].filter((edge) => {
-      const isSource = edge.source === node.id
-      const isTarget = edge.target === node.id
+    // Update edges to match new node and variable positions
+    // Only reconnect edges that were previously connected to the node and have a matching handle in the updated node
+    const newEdges = rung.edges
+      .map((edge) => {
+        const isSource = edge.source === node.id
+        const isTarget = edge.target === node.id
 
-      const isUnchanged = !isSource && !isTarget
-      if (isUnchanged) return true
+        // Only update edges that were previously connected to the node
+        if (isSource) {
+          // Find the handle name in the original node's output variables
+          const outputIndex = originalNodeSources.findIndex((v) => v.name === edge.sourceHandle)
+          // Only connect if the handle exists in both original and updated node
+          if (outputIndex === -1) return null
+          const updatedHandle = updatedOutputVariables.find((v) => v.name === originalNodeSources[outputIndex].name)
+          if (!updatedHandle) return null
+          return {
+            ...edge,
+            source: newNode.id,
+            sourceHandle: updatedHandle.name,
+          }
+        }
 
-      // check if output exists in original position
-      if (isSource) {
-        const outputIndex = originalNodeSources.findIndex((originalEdge) => originalEdge.name === edge.sourceHandle)
-        return !!updatedOutputVariables[outputIndex]
-      }
+        if (isTarget) {
+          // Find the handle name in the original node's input variables
+          const inputIndex = originalNodeInputs.findIndex((v) => v.name === edge.targetHandle)
+          // Only connect if the handle exists in both original and updated node
+          if (inputIndex === -1) return null
+          const updatedHandle = updatedInputVariables.find((v) => v.name === originalNodeInputs[inputIndex].name)
+          if (!updatedHandle) return null
+          return {
+            ...edge,
+            target: newNode.id,
+            targetHandle: updatedHandle.name,
+          }
+        }
 
-      // check if input exists in original position
-      if (isTarget) {
-        const inputIndex = originalNodeInputs.findIndex((originalEdge) => originalEdge.name === edge.targetHandle)
-        return !!updatedInputVariables[inputIndex]
-      }
-
-      return false
-    })
-
-    newEdges = newEdges.map((edge) => {
-      const updatedData = { ...edge }
-
-      const isSource = edge.source === node.id
-      const isTarget = edge.target === node.id
-
-      if (isSource) {
-        const outputIndex = originalNodeSources.findIndex((originalEdge) => originalEdge.name === edge.sourceHandle)
-
-        updatedData.source = newNode.id
-        updatedData.sourceHandle = updatedOutputVariables[outputIndex].name
-      }
-      if (isTarget) {
-        const inputIndex = originalNodeInputs.findIndex((originalEdge) => originalEdge.name === edge.targetHandle)
-
-        updatedData.target = newNode.id
-        updatedData.targetHandle = updatedInputVariables[inputIndex].name
-      }
-
-      return updatedData
-    })
+        // Unchanged edge
+        return edge
+      })
+      .filter((edge) => edge !== null)
 
     setNodes({
       editorName: editor.meta.name,

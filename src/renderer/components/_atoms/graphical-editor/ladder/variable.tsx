@@ -72,6 +72,17 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
+    const connectedVariables = [
+      ...(relatedBlock.data as BlockNodeData<object>).connectedVariables.filter(
+        (v) => v.type !== variableNode.data.variant || v.handleId !== variableNode.data.block.handleId,
+      ),
+      {
+        variable: variable,
+        type: variableNode.data.variant,
+        handleId: variableNode.data.block.handleId,
+      },
+    ]
+
     updateNode({
       editorName: editor.meta.name,
       rungId: rung.id,
@@ -80,13 +91,7 @@ const VariableElement = (block: VariableProps) => {
         ...relatedBlock,
         data: {
           ...relatedBlock.data,
-          connectedVariables: {
-            ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
-            [variableNode.data.block.handleId]: {
-              variable: variable,
-              type: variableNode.data.variant,
-            },
-          },
+          connectedVariables,
         },
       },
     })

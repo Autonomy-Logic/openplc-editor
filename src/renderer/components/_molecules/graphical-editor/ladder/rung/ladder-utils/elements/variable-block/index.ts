@@ -6,13 +6,13 @@ import { v4 as uuidv4 } from 'uuid'
 
 import { buildEdge } from '../../edges'
 
-export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
+export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderState, block: Node) => {
   const variableElements: Node[] = []
   const variableEdges: Edge[] = []
   const variableElementStyle = defaultCustomNodesStyles.variable
 
   const blockElement = block as BlockNode<T>
-  const blockVariant = blockElement.data.variant as BlockVariant
+  const blockVariant = blockElement.data.variant
 
   const inputHandles =
     blockElement.data.inputHandles.length > 1
@@ -24,10 +24,10 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
       : []
 
   inputHandles.forEach((inputHandle) => {
-    const connectedVariable =
-      inputHandle.id && inputHandle.id in blockElement.data.connectedVariables
-        ? blockElement.data.connectedVariables[inputHandle.id]
-        : undefined
+    const connectedVariable = blockElement.data.connectedVariables.find((variable) => {
+      return variable.type === 'input' && variable.handleId === inputHandle.id
+    })
+
     let variableType: BlockVariant['variables'][0] = {
       name: '',
       class: '',
@@ -52,7 +52,7 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
         handleId: inputHandle.id as string,
         variableType,
       },
-      variable: connectedVariable ? connectedVariable.variable : undefined,
+      variable: connectedVariable?.variable,
     })
     const variableEdge = buildEdge(variableElement.id, blockElement.id, {
       sourceHandle: 'output',
@@ -64,7 +64,12 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
   })
 
   outputHandles.forEach((outputHandle) => {
-    const connectedVariable = blockElement.data.connectedVariables[outputHandle.id as string]
+    const connectedVariable = blockElement.data.connectedVariables.find((variable) => {
+      return variable.type === 'output' && variable.handleId === outputHandle.id
+    })
+
+    console.log('output - connectedVariable', connectedVariable)
+
     let variableType: BlockVariant['variables'][0] = {
       name: '',
       class: '',
