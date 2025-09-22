@@ -11,7 +11,6 @@ import {
   ZoomButton,
 } from '../../_molecules/workspace-activity-bar/default'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
-import { saveProjectRequest } from '../../_templates'
 
 type DefaultWorkspaceActivityBarProps = {
   zoom?: {
@@ -25,8 +24,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     deviceDefinitions,
     deviceAvailableOptions: { availableBoards },
     workspace: { editingState },
-    workspaceActions: { setEditingState },
     consoleActions: { addLog },
+    sharedWorkspaceActions: { saveProject },
   } = useOpenPLCStore()
 
   const [isCompiling, setIsCompiling] = useState(false)
@@ -71,7 +70,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const verifyAndCompile = async () => {
     if (editingState === 'unsaved') {
-      await saveProjectRequest({ data: projectData, meta: projectMeta }, deviceDefinitions, setEditingState)
+      const res = await saveProject({ data: projectData, meta: projectMeta }, deviceDefinitions)
+      if (!res.success) {
+        return
+      }
+
       handleRequest()
     } else {
       handleRequest()

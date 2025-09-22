@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import {
   ArrayIcon,
   ArrowIcon,
@@ -12,6 +13,8 @@ import {
   FunctionIcon,
   ILIcon,
   LDIcon,
+  MoreOptionsIcon,
+  PencilIcon,
   PLCIcon,
   ProgramIcon,
   ResourceIcon,
@@ -19,9 +22,15 @@ import {
   STIcon,
   StructureIcon,
 } from '@root/renderer/assets'
+import { DuplicateIcon } from '@root/renderer/assets/icons/interface/Duplicate'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { WorkspaceProjectTreeLeafType } from '@root/renderer/store/slices/workspace/types'
+import { pousAllLanguages } from '@root/types/PLC/pous/language'
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
+import { unsavedLabel } from '@root/utils/unsaved-label'
+import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+import { toast } from '../../_features/[app]/toast/use-toast'
 
 type IProjectTreeRootProps = ComponentPropsWithoutRef<'ul'> & {
   label: string
@@ -86,6 +95,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
     project: {
       data: { pous, dataTypes },
     },
+    fileActions: { getFile },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const { BranchIcon, label } = BranchSources[branchTarget]
@@ -95,6 +105,9 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
     branchTarget === 'device' ||
     (branchTarget === 'data-type' && dataTypes.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
+
+  const { file: associatedFile } = getFile({ name: label || '' })
+  const handleLabel = useCallback((label: string | undefined) => unsavedLabel(label, associatedFile), [associatedFile])
 
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
@@ -120,7 +133,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
             'truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-          dangerouslySetInnerHTML={{ __html: label || '' }}
+          dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
         />
       </div>
 
@@ -208,6 +221,7 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res' | 'devConfig' | 'devPin'
+  leafType: WorkspaceProjectTreeLeafType
   label?: string
 }
 
@@ -224,55 +238,277 @@ const LeafSources = {
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
 }
-const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
+const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
   const {
     editor: {
       meta: { name },
     },
-    modalActions: { openModal },
+    workspace: { selectedProjectTreeLeaf },
+    workspaceActions: { setSelectedProjectTreeLeaf },
+    pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
+    datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
+    fileActions: { getFile },
   } = useOpenPLCStore()
 
-  const [leafIsSelected, setLeafIsSelected] = useState<boolean>(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [newLabel, setNewLabel] = useState(label || '')
+  const [isPopoverOpen, setPopoverOpen] = useState(false)
+
+  const inputNameRef = useRef<HTMLInputElement>(null)
+
+  const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
+  const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
+
   const { LeafIcon } = LeafSources[leafLang]
+  const { file: associatedFile } = getFile({ name: label || '' })
 
-  const handleLeafSelection = useCallback(() => setLeafIsSelected(!leafIsSelected), [leafIsSelected])
-  const modalData = { leafLang, label }
+  const handleLeafSelection = () => {
+    if (!label) {
+      toast({
+        title: 'Error',
+        description: 'Pou or datatype label is required to select.',
+        variant: 'fail',
+      })
+      return
+    }
 
-  const handleDeleteTab = () => {
-    openModal('confirm-delete-element', modalData)
+    const { label: currentLabel } = selectedProjectTreeLeaf
+
+    if (label === currentLabel) return
+
+    setSelectedProjectTreeLeaf({ label, type: leafType })
   }
+
+  const handleRenameFile = async (newLabel: string) => {
+    setIsEditing(false)
+
+    if (!isAPou && !isDatatype) {
+      toast({
+        title: 'Error',
+        description: 'Only POU or datatype files can be renamed.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (!newLabel || !label) {
+      toast({
+        title: 'Error',
+        description: 'Pou or datatype label is required to rename.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (isAPou) {
+      const res = await renamePou(label, newLabel)
+      if (!res.success) {
+        setNewLabel(label || '')
+      }
+      return
+    }
+
+    if (isDatatype) {
+      const res = await renameDatatype(label, newLabel)
+      if (!res.success) {
+        setNewLabel(label || '')
+      }
+      return
+    }
+  }
+
+  const handleDuplicateFile = async () => {
+    if (!isAPou && !isDatatype) {
+      toast({
+        title: 'Error',
+        description: 'Only POU or datatype files can be duplicated.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (!label) {
+      toast({
+        title: 'Error',
+        description: 'Pou or datatype label is required to select.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (isAPou) {
+      await duplicatePou(label)
+      return
+    }
+
+    if (isDatatype) {
+      await duplicateDatatype(label)
+      return
+    }
+
+    toast({
+      title: 'Error',
+      description: 'Only POU or datatype files can be duplicated.',
+      variant: 'fail',
+    })
+  }
+
+  const handleDeleteFile = () => {
+    if (!isAPou && !isDatatype) {
+      toast({
+        title: 'Error',
+        description: 'Only POU or datatype files can be deleted.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (!label) {
+      toast({
+        title: 'Error',
+        description: 'Pou or datatype label is required to delete.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (isAPou) {
+      deletePouRequest(label)
+      return
+    }
+
+    if (isDatatype) {
+      deleteDatatypeRequest(label)
+      return
+    }
+
+    toast({
+      title: 'Error',
+      description: 'Only POU or datatype files can be deleted.',
+      variant: 'fail',
+    })
+  }
+
+  const handleLabel = useCallback((label: string | undefined) => unsavedLabel(label, associatedFile), [associatedFile])
+  const popoverOptions = useMemo(() => {
+    return [
+      {
+        name: 'Rename',
+        onClick: () => {
+          setIsEditing(true)
+        },
+        icon: <PencilIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+      },
+      {
+        name: 'Duplicate',
+        onClick: () => {
+          void handleDuplicateFile()
+        },
+        icon: <DuplicateIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+      },
+      {
+        name: 'Delete',
+        onClick: () => {
+          handleDeleteFile()
+        },
+        icon: <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+      },
+    ]
+  }, [handleDeleteFile, handleDuplicateFile, setIsEditing])
+
+  useEffect(() => {
+    if (isEditing && inputNameRef.current) {
+      inputNameRef.current.focus()
+      inputNameRef.current.select()
+    }
+  }, [inputNameRef, isEditing])
 
   return (
     <li
       className={cn(
-        ' group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+        'group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
-      onClick={handleLeafSelection}
+      onClick={(e) => {
+        handleLeafSelection()
+        if (label === name) return
+        if (handleLeafClick) handleLeafClick(e)
+      }}
       {...res}
     >
       <LeafIcon className='flex-shrink-0' />
-      <span
-        className={cn(
-          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
-          name === label && 'font-medium text-neutral-1000 dark:text-white',
-        )}
-        dangerouslySetInnerHTML={{ __html: label || '' }}
-      />
-      {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (
-        <button
-          aria-label='delete element button'
-          type='button'
-          className='mr-2 flex h-5 w-5 items-center'
-          onClick={(e) => {
-            e.stopPropagation()
-            handleDeleteTab()
+
+      {isEditing ? (
+        <input
+          ref={inputNameRef}
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void handleRenameFile(newLabel.trim() || '')
+            if (e.key === 'Escape') setIsEditing(false)
           }}
-          aria-haspopup='dialog'
-          aria-expanded='false'
-        >
-          <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
-        </button>
+          onBlur={(_e) => void handleRenameFile(newLabel || '')}
+          className='w-full border-0 bg-transparent px-1 text-xs text-neutral-850 focus:outline-none dark:text-neutral-300'
+        />
+      ) : (
+        <span
+          className={cn(
+            'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+            name === label && 'font-medium text-neutral-1000 dark:text-white',
+          )}
+          onDoubleClick={() => setIsEditing(true)}
+          dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
+        />
+      )}
+
+      {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (
+        <Popover.Root open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+          <Popover.Trigger
+            className={cn(
+              'mr-2 flex h-5 w-5 items-center justify-center rounded-md opacity-0 hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-850',
+              { 'bg-neutral-200 opacity-100 dark:bg-neutral-850': isPopoverOpen },
+            )}
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
+          >
+            <MoreOptionsIcon className='h-4 w-4' />
+          </Popover.Trigger>
+
+          <Popover.Portal>
+            <Popover.Content
+              align='start'
+              side='right'
+              sideOffset={2}
+              className={cn(
+                'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                'focus:outline-none focus-visible:outline-none',
+                'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {popoverOptions.map((option, index) => (
+                <div
+                  key={option.name}
+                  className={cn(
+                    'flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900',
+                    {
+                      'rounded-t-lg': index === 0,
+                      'rounded-b-lg': index === popoverOptions.length - 1,
+                    },
+                  )}
+                  onClick={() => {
+                    option.onClick()
+                    setPopoverOpen(false)
+                  }}
+                >
+                  {option.icon}
+                  <p>{option.name}</p>
+                </div>
+              ))}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       )}
     </li>
   )

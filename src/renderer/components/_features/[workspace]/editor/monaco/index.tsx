@@ -7,7 +7,6 @@ import { PLCVariable } from '@root/types/PLC'
 import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
@@ -62,7 +61,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     sensitiveCase,
     regularExpression,
     workspace: {
-      editingState,
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
@@ -77,7 +75,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     libraries: sliceLibraries,
     editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
@@ -432,16 +430,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }
 
   function handleWriteInPou(value: string | undefined) {
-    if (!value) {
-      return
-    }
+    if (value === undefined) return
 
     setLocalText(value)
-
-    if (editingState !== 'unsaved') {
-      setEditingState('unsaved')
-    }
-
+    handleFileAndWorkspaceSavedState(name)
     updatePou({ name, content: { language, value } })
   }
 
@@ -536,7 +528,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const res = createVariable({
       data: {
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         name: uniqueName,
         type: {
           definition: 'derived',

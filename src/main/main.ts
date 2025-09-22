@@ -21,7 +21,7 @@ import { CompilerModule } from './modules/compiler'
 import { HardwareModule } from './modules/hardware'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { ProjectService, UserService } from './services'
+import { PouService, ProjectService, UserService } from './services'
 import { resolveHtmlPath } from './utils'
 
 enableMapSet()
@@ -281,6 +281,11 @@ const createMainWindow = async () => {
   const projectService = new ProjectService(mainWindow)
 
   /**
+   * Creates a singleton instance for POU service, which will be used across the entire application
+   */
+  const pouService = new PouService()
+
+  /**
    * Creates a singleton instance for compiler service, which will be used across the entire application
    */
 
@@ -294,6 +299,7 @@ const createMainWindow = async () => {
     projectService,
     store,
     menuBuilder,
+    pouService,
     compilerModule,
     hardwareModule,
   } as unknown as MainIpcModuleConstructor)

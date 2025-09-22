@@ -2,8 +2,8 @@ import { checkIfElementIsNode } from '@root/renderer/components/_atoms/graphical
 import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/placeholder'
 import type { RungLadderState } from '@root/renderer/store/slices'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import type { Edge, Node } from '@xyflow/react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { connectNodes } from '../../edges'
 import { buildGenericNode, isNodeOfType } from '../../nodes'
@@ -33,7 +33,7 @@ export const appendSerialConnection = <T>(
     newElement = buildGenericNode({
       nodeType: node.elementType,
       blockType: node.blockVariant,
-      id: `${node.elementType.toUpperCase()}_${uuidv4()}`,
+      id: newGraphicalEditorNodeID(node.elementType.toUpperCase()),
       ...newElementPosition,
     })
   } else {

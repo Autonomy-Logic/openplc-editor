@@ -12,8 +12,10 @@ import {
   StructureIcon,
 } from '@oplc-icons/index'
 import type { TabsProps } from '@process:renderer/store/slices/tabs'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef } from 'react'
+import { unsavedLabel } from '@root/utils/unsaved-label'
+import { ComponentPropsWithoutRef, useCallback } from 'react'
 
 type ITabProps = ComponentPropsWithoutRef<'div'> & {
   fileName: string
@@ -37,6 +39,10 @@ const TabIcons = {
 }
 
 const Tab = (props: ITabProps) => {
+  const {
+    fileActions: { getFile },
+  } = useOpenPLCStore()
+
   const { fileName, fileDerivation, currentTab, handleDeleteTab, handleClickedTab, ...res } = props
   let languageOrDerivation:
     | 'il'
@@ -63,6 +69,13 @@ const Tab = (props: ITabProps) => {
   if (fileDerivation?.type === 'resource') {
     languageOrDerivation = 'resource'
   }
+
+  const { file: associatedFile } = getFile({ name: fileName || '' })
+  const handleFileName = useCallback(
+    (label: string | undefined) => unsavedLabel(label, associatedFile),
+    [associatedFile],
+  )
+
   return (
     <div
       role='tab'
@@ -77,7 +90,10 @@ const Tab = (props: ITabProps) => {
     >
       <div className='flex h-full w-full items-center gap-1 px-3 py-2 ' onClick={() => handleClickedTab()}>
         {TabIcons[languageOrDerivation]}
-        <span className='flex-grow overflow-hidden text-ellipsis whitespace-nowrap'>{fileName}</span>
+        <span
+          className='flex-grow overflow-hidden text-ellipsis whitespace-nowrap'
+          dangerouslySetInnerHTML={{ __html: handleFileName(fileName) as string }}
+        />
         <span
           aria-hidden='true'
           className={cn(currentTab ? 'bg-brand' : 'bg-transparent', 'absolute inset-x-0 top-0 z-50 h-[3px]')}

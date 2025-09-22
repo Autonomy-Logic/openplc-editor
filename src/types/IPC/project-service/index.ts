@@ -1,5 +1,5 @@
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCProject } from '@root/types/PLC/open-plc'
+import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
 
 export * from './create-project'
 export * from './project-files-schema'
@@ -19,6 +19,7 @@ export type IProjectServiceResponse = {
     }
     content: {
       project: PLCProject
+      pous: PLCPou[]
       deviceConfiguration: DeviceConfiguration
       devicePinMapping: DevicePin[]
     }

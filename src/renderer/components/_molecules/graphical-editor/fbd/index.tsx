@@ -8,6 +8,7 @@ import BlockElement from '@root/renderer/components/_features/[workspace]/editor
 import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/units/variable'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import {
   addEdge,
   applyEdgeChanges,
@@ -250,7 +251,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     }
 
     const newNode = buildGenericNode({
-      id: `${newNodeType.toUpperCase()}-${crypto.randomUUID()}`,
+      id: newGraphicalEditorNodeID(newNodeType.toUpperCase()),
       position,
       nodeType: newNodeType,
       blockType: pouLibrary,

@@ -3,38 +3,27 @@ import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
-import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
+    searchQuery,
     project: {
       data: { pous, dataTypes, configuration },
       meta: { name },
     },
     projectActions: { updateMetaName },
-    tabsActions: { updateTabs },
-    editorActions: { setEditor, addModel, getEditorFromEditors },
-    searchQuery,
+    sharedWorkspaceActions: { openFile },
+    workspaceActions: { setSelectedProjectTreeLeaf },
   } = useOpenPLCStore()
-  const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
-    const tabToBeCreated = { name, path, elementType }
-    updateTabs(tabToBeCreated)
-
-    const editor = getEditorFromEditors(tabToBeCreated.name)
-    if (!editor) {
-      const model = CreateEditorObjectFromTab(tabToBeCreated)
-      addModel(model)
-      setEditor(model)
-      return
-    }
-    addModel(editor)
-    setEditor(editor)
-  }
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState<string>(name)
+
+  const handleCreateTab = (data: TabsProps) => {
+    openFile(data)
+  }
 
   const handleBlur = () => {
     setIsEditing(false)
@@ -51,6 +40,7 @@ const Project = () => {
     <div id='project-container' className='flex h-full w-full flex-col pr-2'>
       {/* Actions handler */}
       <div id='project-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 pl-2'>
+        {/* Project name input */}
         <div
           id='project-name-container'
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
@@ -88,18 +78,21 @@ const Project = () => {
       {/* Data display */}
       <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
         <ProjectTreeRoot label={name}>
+          {/* Project Functions tree branch */}
           <ProjectTreeBranch branchTarget='function'>
             {pous
               ?.filter(({ type }) => type === 'function')
+              .sort((a, b) => a.data.name.localeCompare(b.data.name))
               .map(({ data }) => (
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
+                  leafType='function'
                   label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `/data/pous/function/${data.name}`,
+                      path: `/pous/functions/${data.name}.json`,
                       elementType: { type: 'function', language: data.language },
                     })
                   }
@@ -107,36 +100,43 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
+          {/* Project Function Blocks tree branch */}
           <ProjectTreeBranch branchTarget='function-block'>
             {pous
               ?.filter(({ type }) => type === 'function-block')
+              .sort((a, b) => a.data.name.localeCompare(b.data.name))
               .map(({ data }) => (
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
+                  leafType='function-block'
                   label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `/data/pous/function-block/${data.name}`,
+                      path: `/pous/function-blocks/${data.name}.json`,
                       elementType: { type: 'function-block', language: data.language },
                     })
                   }
                 />
               ))}
           </ProjectTreeBranch>
+
+          {/* Project Programs tree branch */}
           <ProjectTreeBranch branchTarget='program'>
             {pous
               ?.filter(({ type }) => type === 'program')
+              .sort((a, b) => a.data.name.localeCompare(b.data.name))
               .map(({ data }) => (
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
+                  leafType='program'
                   label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `/data/pous/program/${data.name}`,
+                      path: `/pous/programs/${data.name}.json`,
                       elementType: { type: 'program', language: data.language },
                     })
                   }
@@ -144,18 +144,21 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
+          {/* Project Data Types tree branch */}
           <ProjectTreeBranch branchTarget='data-type'>
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'array')
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
                   key={name}
                   leafLang='arr'
+                  leafType='data-type'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   onClick={() =>
                     handleCreateTab({
                       name,
-                      path: `/data/data-types/array/${name}`,
+                      path: `/project.json`,
                       elementType: { type: 'data-type', derivation: 'array' },
                     })
                   }
@@ -163,16 +166,18 @@ const Project = () => {
               ))}
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'enumerated')
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
                   key={name}
                   leafLang='enum'
+                  leafType='data-type'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   /** Todo: Update the tab state */
                   onClick={() =>
                     handleCreateTab({
                       name,
-                      path: `/data/data-types/enumerated/${name}`,
+                      path: `/project.json`,
                       elementType: { type: 'data-type', derivation: 'enumerated' },
                     })
                   }
@@ -180,16 +185,18 @@ const Project = () => {
               ))}
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'structure')
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
                   key={name}
                   leafLang='str'
+                  leafType='data-type'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   /** Todo: Update the tab state */
                   onClick={() =>
                     handleCreateTab({
                       name,
-                      path: `/data/data-types/structure/${name}`,
+                      path: `/project.json`,
                       elementType: { type: 'data-type', derivation: 'structure' },
                     })
                   }
@@ -197,28 +204,35 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
+          {/* Project Resources tree branch */}
           <ProjectTreeBranch
             branchTarget='resource'
-            onClick={() =>
+            onClick={() => {
               handleCreateTab({
                 configuration: configuration,
-                name: 'resource',
-                path: `/data/configuration/resource`,
+                name: 'Resource',
+                path: `/project.json`,
                 elementType: { type: 'resource' },
               })
-            }
+              setSelectedProjectTreeLeaf({
+                label: 'Resource',
+                type: 'resource',
+              })
+            }}
           />
 
+          {/* Project Device tree branch */}
           <ProjectTreeBranch branchTarget='device'>
             <ProjectTreeLeaf
               key='Configuration'
               leafLang='devConfig'
+              leafType='device'
               label='Configuration'
               /** Todo: Update the tab state */
               onClick={() =>
                 handleCreateTab({
                   name: 'Configuration',
-                  path: `/data/configuration/device/configuration`,
+                  path: `/device`,
                   elementType: { type: 'device', derivation: 'configuration' },
                 })
               }

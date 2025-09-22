@@ -39,6 +39,7 @@ type TabsProps = z.infer<typeof tabsPropsSchema>
  */
 const tabsStateSchema = z.object({
   tabs: z.array(tabsPropsSchema),
+  selectedTab: z.string().nullable(),
 })
 
 /** This is a zod schema for the tabs slice actions.
@@ -46,11 +47,12 @@ const tabsStateSchema = z.object({
  * in most cases you can use the type inferred from it.
  */
 const _tabsActionsSchema = z.object({
-  setTabs: z.function().args(z.array(tabsPropsSchema)).returns(z.void()),
   updateTabs: z.function().args(tabsPropsSchema).returns(z.void()),
   sortTabs: z.function().args(z.array(tabsPropsSchema)).returns(z.void()),
   removeTab: z.function().args(z.string()).returns(z.void()),
   clearTabs: z.function().returns(z.void()),
+  setSelectedTab: z.function().args(z.string()).returns(z.void()),
+  getSelectedTab: z.function().returns(z.string().nullable()),
   updateTabName: z.function().args(z.string(), z.string()).returns(z.void()),
 })
 

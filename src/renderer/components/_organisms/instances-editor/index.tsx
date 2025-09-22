@@ -1,6 +1,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { InstanceType } from '@root/renderer/store/slices'
 import { PLCInstance } from '@root/types/PLC/open-plc'
@@ -32,6 +33,8 @@ const InstancesEditor = () => {
     projectActions: { createInstance, rearrangeInstances, deleteInstance, setInstances, setTasks },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
+  const handleFileAndWorkspaceSavedState = sharedSelectors.useHandleFileAndWorkspaceSavedState()
 
   const [instanceData, setInstanceData] = useState<PLCInstance[]>([])
   const [editorCode, setEditorCode] = useState(() => parseResourceConfigurationToString(tasks, instanceData))
@@ -130,6 +133,8 @@ const InstancesEditor = () => {
         display: 'table',
         selectedRow: 0,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -147,6 +152,8 @@ const InstancesEditor = () => {
         display: 'table',
         selectedRow: instances.length,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -155,6 +162,7 @@ const InstancesEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleDeleteInstance = () => {
@@ -175,6 +183,7 @@ const InstancesEditor = () => {
         selectedRow: selectedRow - 1,
       })
     }
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
@@ -208,6 +217,8 @@ const InstancesEditor = () => {
 
       toast({ title: 'Update tables', description: 'Changes applied successfully.' })
       setParseError(null)
+      handleFileAndWorkspaceSavedState('Resource')
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'

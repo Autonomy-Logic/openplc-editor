@@ -1,23 +1,23 @@
-import { deviceSelectors, workspaceSelectors } from '@root/renderer/hooks'
+import { deviceSelectors } from '@root/renderer/hooks'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect } from 'react'
 
 import { DeviceConfigurationEditor } from './configuration'
 
 const DeviceEditor = () => {
+  const {
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
+  } = useOpenPLCStore()
+
   const deviceUpdated = deviceSelectors.useDeviceUpdated()
   const resetDeviceUpdated = deviceSelectors.useResetDeviceUpdated()
-  const editingState = workspaceSelectors.useEditingState()
-  const setEditingState = workspaceSelectors.useSetEditingState()
 
   useEffect(() => {
     if (deviceUpdated) {
-      if (editingState !== 'unsaved') {
-        setEditingState('unsaved')
-        return
-      }
+      handleFileAndWorkspaceSavedState('Configuration')
       resetDeviceUpdated()
     }
-  }, [editingState, deviceUpdated, setEditingState])
+  }, [deviceUpdated])
 
   return <DeviceConfigurationEditor />
 }

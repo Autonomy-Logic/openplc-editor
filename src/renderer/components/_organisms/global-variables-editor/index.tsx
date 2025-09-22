@@ -2,6 +2,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { GlobalVariablesTableType } from '@root/renderer/store/slices'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
@@ -34,6 +35,8 @@ const GlobalVariablesEditor = () => {
     projectActions: { createVariable, deleteVariable, rearrangeVariables, setGlobalVariables },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
+  const handleFileAndWorkspaceSavedState = sharedSelectors.useHandleFileAndWorkspaceSavedState()
 
   /**
    * Table data and column filters states to keep track of the table data and column filters
@@ -130,6 +133,8 @@ const GlobalVariablesEditor = () => {
         display: 'table',
         selectedRow: 0,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -142,6 +147,7 @@ const GlobalVariablesEditor = () => {
         display: 'table',
         selectedRow: variables.length,
       })
+      handleFileAndWorkspaceSavedState('Resource')
       return
     }
     createVariable({
@@ -153,6 +159,7 @@ const GlobalVariablesEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleRemoveVariable = () => {
@@ -170,6 +177,7 @@ const GlobalVariablesEditor = () => {
         selectedRow: selectedRow - 1,
       })
     }
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
@@ -195,6 +203,8 @@ const GlobalVariablesEditor = () => {
 
       toast({ title: 'Global Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
+      handleFileAndWorkspaceSavedState('Resource')
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
