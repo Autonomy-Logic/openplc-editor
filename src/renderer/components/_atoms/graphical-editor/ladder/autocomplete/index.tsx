@@ -100,6 +100,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       })
       if (!rung || !variableNode) return
 
+      console.log('submitVariableToBlock', { variable, variableNode })
+
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -121,6 +123,18 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       if (!relatedBlock) return
 
       // Update the block to include the variable
+      const connectedVariables = [
+        ...(relatedBlock.data as BlockNodeData<object>).connectedVariables.filter(
+          (v) =>
+            v.type !== variableNode.data.variant || v.handleId !== (variableNode as VariableNode).data.block.handleId,
+        ),
+        {
+          variable: variable,
+          type: (variableNode as VariableNode).data.variant,
+          handleId: (variableNode as VariableNode).data.block.handleId,
+        },
+      ]
+
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -129,14 +143,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           ...relatedBlock,
           data: {
             ...relatedBlock.data,
-            connectedVariables: [
-              ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
-              {
-                variable: variable,
-                type: variableNode.data.variant,
-                handleId: (variableNode as VariableNode).data.block.handleId,
-              },
-            ],
+            connectedVariables: connectedVariables,
           },
         },
       })

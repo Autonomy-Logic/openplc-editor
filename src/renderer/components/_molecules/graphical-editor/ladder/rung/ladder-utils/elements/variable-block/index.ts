@@ -28,6 +28,8 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
       return variable.type === 'input' && variable.handleId === inputHandle.id
     })
 
+    console.log('input - connectedVariable', connectedVariable)
+
     let variableType: BlockVariant['variables'][0] = {
       name: '',
       class: '',

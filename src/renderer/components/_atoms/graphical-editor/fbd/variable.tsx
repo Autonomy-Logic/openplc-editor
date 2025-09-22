@@ -53,6 +53,14 @@ const VariableElement = (block: VariableProps) => {
     }
   >(null)
 
+  const autocompleteRef = useRef<
+    HTMLDivElement & {
+      focus: () => void
+      isFocused: boolean
+      selectedVariable: { positionInArray: number; variableName: string }
+    }
+  >(null)
+
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
@@ -367,6 +375,9 @@ const VariableElement = (block: VariableProps) => {
                   onFocus={onChangeHandler}
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+                    if (e.key === 'Enter' && autocompleteRef.current?.selectedVariable.positionInArray !== -1) {
+                      inputVariableRef.current?.blur({ submit: false })
+                    }
                     setKeyPressedAtTextarea(e.key)
                   }}
                   onKeyUp={() => setKeyPressedAtTextarea('')}
@@ -375,6 +386,7 @@ const VariableElement = (block: VariableProps) => {
               {openAutocomplete && (
                 <div className='absolute -bottom-2'>
                   <FBDBlockAutoComplete
+                    ref={autocompleteRef}
                     block={block}
                     valueToSearch={variableValue}
                     isOpen={openAutocomplete}

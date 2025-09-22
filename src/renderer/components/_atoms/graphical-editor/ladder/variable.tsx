@@ -58,6 +58,14 @@ const VariableElement = (block: VariableProps) => {
     }
   >(null)
 
+  const autocompleteRef = useRef<
+    HTMLDivElement & {
+      focus: () => void
+      isFocused: boolean
+      selectedVariable: { positionInArray: number; variableName: string }
+    }
+  >(null)
+
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
@@ -66,11 +74,14 @@ const VariableElement = (block: VariableProps) => {
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
   const updateRelatedNode = (rung: RungLadderState, variableNode: VariableNode, variable: PLCVariable) => {
+    console.log('updateRelatedNode', { rung, variableNode, variable })
+
     const relatedBlock = rung.nodes.find((node) => node.id === variableNode.data.block.id)
     if (!relatedBlock) {
       setInputError(true)
       return
     }
+    console.log('relatedBlock', relatedBlock)
 
     const connectedVariables = [
       ...(relatedBlock.data as BlockNodeData<object>).connectedVariables.filter(
@@ -82,6 +93,7 @@ const VariableElement = (block: VariableProps) => {
         handleId: variableNode.data.block.handleId,
       },
     ]
+    console.log('connectedVariables', connectedVariables)
 
     updateNode({
       editorName: editor.meta.name,
@@ -258,6 +270,9 @@ const VariableElement = (block: VariableProps) => {
           onChange={onChangeHandler}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+            if (e.key === 'Enter' && autocompleteRef.current?.selectedVariable.positionInArray !== -1) {
+              inputVariableRef.current?.blur({ submit: false })
+            }
             setKeyPressedAtTextarea(e.key)
           }}
           onKeyUp={() => setKeyPressedAtTextarea('')}
@@ -266,6 +281,7 @@ const VariableElement = (block: VariableProps) => {
           <div className='relative flex justify-center'>
             <div className='absolute -bottom-1'>
               <VariablesBlockAutoComplete
+                ref={autocompleteRef}
                 block={block}
                 blockType={'variable'}
                 valueToSearch={variableValue}
