@@ -647,13 +647,24 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           const outputIndex = originalNodeSources.findIndex((v) => v.name === edge.sourceHandle)
           // Only connect if the handle exists in both original and updated node
           if (outputIndex === -1) return null
+
           const updatedHandle = updatedOutputVariables.find((v) => v.name === originalNodeSources[outputIndex].name)
-          if (!updatedHandle) return null
-          return {
-            ...edge,
-            source: newNode.id,
-            sourceHandle: updatedHandle.name,
-          }
+          if (updatedHandle)
+            return {
+              ...edge,
+              source: newNode.id,
+              sourceHandle: updatedHandle.name,
+            }
+
+          const updatedHandleId = updatedOutputVariables.find((v) => v.id === originalNodeSources[outputIndex].id)
+          if (updatedHandleId)
+            return {
+              ...edge,
+              source: newNode.id,
+              sourceHandle: updatedHandleId.name,
+            }
+
+          return null
         }
 
         if (isTarget) {
@@ -661,13 +672,24 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           const inputIndex = originalNodeInputs.findIndex((v) => v.name === edge.targetHandle)
           // Only connect if the handle exists in both original and updated node
           if (inputIndex === -1) return null
+
           const updatedHandle = updatedInputVariables.find((v) => v.name === originalNodeInputs[inputIndex].name)
-          if (!updatedHandle) return null
-          return {
-            ...edge,
-            target: newNode.id,
-            targetHandle: updatedHandle.name,
-          }
+          if (updatedHandle)
+            return {
+              ...edge,
+              target: newNode.id,
+              targetHandle: updatedHandle.name,
+            }
+
+          const updatedHandleId = updatedInputVariables.find((v) => v.id === originalNodeInputs[inputIndex].id)
+          if (updatedHandleId)
+            return {
+              ...edge,
+              target: newNode.id,
+              targetHandle: updatedHandleId.name,
+            }
+
+          return null
         }
 
         // Unchanged edge
