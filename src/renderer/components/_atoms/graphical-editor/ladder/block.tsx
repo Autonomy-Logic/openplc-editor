@@ -702,19 +702,20 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       node.data as BlockNodeData<BlockVariant>
     ).connectedVariables
       .map((connectedVariable) => {
-        const match = newNodeVariables.find((newVar) => newVar.name === connectedVariable.handleId)
-        if (match) return connectedVariable
+        if (newNodeVariables.some((newVar) => newVar.name === connectedVariable.handleId)) {
+          return connectedVariable
+        }
 
-        const matchId = newNodeVariables.find((newVar) => newVar.id === connectedVariable.handleTableId)
-        if (matchId)
-          return {
-            ...connectedVariable,
-            handleId: matchId.name,
+        if (connectedVariable.handleTableId) {
+          const matchId = newNodeVariables.find((newVar) => newVar.id === connectedVariable.handleTableId)
+          if (matchId) {
+            return { ...connectedVariable, handleId: matchId.name }
           }
+        }
 
         return undefined
       })
-      .filter((v) => v !== undefined)
+      .filter((v): v is NonNullable<typeof v> => v !== undefined)
 
     updatedNewNode.data = {
       ...updatedNewNode.data,

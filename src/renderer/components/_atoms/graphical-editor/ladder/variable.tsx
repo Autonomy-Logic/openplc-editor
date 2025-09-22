@@ -269,7 +269,7 @@ const VariableElement = (block: VariableProps) => {
           onChange={onChangeHandler}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
-            if (e.key === 'Enter' && autocompleteRef.current?.selectedVariable.positionInArray !== -1) {
+            if (e.key === 'Enter' && (autocompleteRef.current?.selectedVariable?.positionInArray ?? -1) !== -1) {
               inputVariableRef.current?.blur({ submit: false })
             }
             setKeyPressedAtTextarea(e.key)

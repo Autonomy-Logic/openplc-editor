@@ -215,7 +215,7 @@ export default function LadderEditor() {
         const originalPou = pous.find((pou) => pou.data.name === libMatch.name)
         if (!originalPou) continue
 
-        const originalVariables = originalPou.data.variables
+        const originalVariables = originalPou.data.variables ?? []
         const currentVariables = variant.variables.filter((variable) => !['OUT', 'EN', 'ENO'].includes(variable.name))
 
         const formatVariable = (variable: {
@@ -225,8 +225,10 @@ export default function LadderEditor() {
         }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
 
         if (originalPou.type === 'function') {
-          const outVariable = variant.variables.find((variable) => variable.name === 'OUT')
-          if (outVariable && outVariable.type.value.toUpperCase() !== originalPou.data.returnType.toUpperCase()) {
+          const outVariable = variant.variables.find((v) => v.name === 'OUT')
+          const outType = outVariable?.type?.value?.toUpperCase()
+          const returnType = originalPou.data.returnType?.toUpperCase()
+          if (!outType || !returnType || outType !== returnType) {
             divergences.push(`${rung.id}:${node.id}`)
             continue
           }

@@ -656,13 +656,16 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               sourceHandle: updatedHandle.name,
             }
 
-          const updatedHandleId = updatedOutputVariables.find((v) => v.id === originalNodeSources[outputIndex].id)
-          if (updatedHandleId)
-            return {
-              ...edge,
-              source: newNode.id,
-              sourceHandle: updatedHandleId.name,
-            }
+          const origId = originalNodeSources[outputIndex].id
+          if (origId) {
+            const updatedHandleId = updatedOutputVariables.find((v) => v.id === origId)
+            if (updatedHandleId)
+              return {
+                ...edge,
+                source: newNode.id,
+                sourceHandle: updatedHandleId.name,
+              }
+          }
 
           return null
         }
@@ -681,13 +684,16 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               targetHandle: updatedHandle.name,
             }
 
-          const updatedHandleId = updatedInputVariables.find((v) => v.id === originalNodeInputs[inputIndex].id)
-          if (updatedHandleId)
-            return {
-              ...edge,
-              target: newNode.id,
-              targetHandle: updatedHandleId.name,
-            }
+          const origIdIn = originalNodeInputs[inputIndex].id
+          if (origIdIn) {
+            const updatedHandleId = updatedInputVariables.find((v) => v.id === origIdIn)
+            if (updatedHandleId)
+              return {
+                ...edge,
+                target: newNode.id,
+                targetHandle: updatedHandleId.name,
+              }
+          }
 
           return null
         }
