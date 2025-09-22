@@ -10,12 +10,13 @@ const messageClasses = {
 type LogComponentProps = ComponentPropsWithoutRef<'p'> & {
   level?: 'info' | 'warning' | 'error'
   message: string
+  tstamp: string
 }
 
 /**
  * A single console log.
  */
-const LogComponent = ({ level, message, ...rest }: LogComponentProps) => {
+const LogComponent = ({ level, message, tstamp, ...rest }: LogComponentProps) => {
   let classForMessage = 'text-[#011432] dark:text-white pl-2'
   if (level && messageClasses[level]) {
     classForMessage = messageClasses[level]
@@ -24,7 +25,7 @@ const LogComponent = ({ level, message, ...rest }: LogComponentProps) => {
     <>
       {message && (
         <p className={cn('font-normal', classForMessage)} {...rest}>
-          {level ? `[${new Date().toLocaleTimeString()}]: ${message}` : message}
+          {level ? `[${tstamp}]: ${message}` : message}
         </p>
       )}
     </>

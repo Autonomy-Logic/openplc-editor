@@ -1,15 +1,16 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { ConsoleSlice } from './types'
+import { ConsoleSlice, logObjectSchema } from './types'
 
 const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (setState) => ({
   logs: [],
   consoleActions: {
     addLog: (log) => {
+      const parsed = logObjectSchema.parse(log)
       setState(
         produce((state: ConsoleSlice) => {
-          state.logs.push(log)
+          state.logs.push(parsed)
         }),
       )
     },
