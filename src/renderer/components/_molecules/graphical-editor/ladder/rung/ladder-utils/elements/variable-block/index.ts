@@ -28,8 +28,6 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
       return variable.type === 'input' && variable.handleId === inputHandle.id
     })
 
-    console.log('input - connectedVariable', connectedVariable)
-
     let variableType: BlockVariant['variables'][0] = {
       name: '',
       class: '',
@@ -69,8 +67,6 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
     const connectedVariable = blockElement.data.connectedVariables.find((variable) => {
       return variable.type === 'output' && variable.handleId === outputHandle.id
     })
-
-    console.log('output - connectedVariable', connectedVariable)
 
     let variableType: BlockVariant['variables'][0] = {
       name: '',

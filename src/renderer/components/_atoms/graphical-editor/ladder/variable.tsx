@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getVariableByName, validateVariableType } from '../utils'
 import { VariablesBlockAutoComplete } from './autocomplete'
-import { BlockNodeData, BlockVariant } from './block'
+import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -74,26 +74,25 @@ const VariableElement = (block: VariableProps) => {
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
   const updateRelatedNode = (rung: RungLadderState, variableNode: VariableNode, variable: PLCVariable) => {
-    console.log('updateRelatedNode', { rung, variableNode, variable })
-
     const relatedBlock = rung.nodes.find((node) => node.id === variableNode.data.block.id)
     if (!relatedBlock) {
       setInputError(true)
       return
     }
-    console.log('relatedBlock', relatedBlock)
 
-    const connectedVariables = [
-      ...(relatedBlock.data as BlockNodeData<object>).connectedVariables.filter(
+    const connectedVariables: LadderBlockConnectedVariables = [
+      ...(relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables.filter(
         (v) => v.type !== variableNode.data.variant || v.handleId !== variableNode.data.block.handleId,
       ),
       {
-        variable: variable,
-        type: variableNode.data.variant,
         handleId: variableNode.data.block.handleId,
+        handleTableId: (relatedBlock.data as BlockNodeData<BlockVariant>).variant.variables.find(
+          (v) => v.name === variableNode.data.block.handleId,
+        )?.id,
+        type: variableNode.data.variant,
+        variable: variable,
       },
     ]
-    console.log('connectedVariables', connectedVariables)
 
     updateNode({
       editorName: editor.meta.name,

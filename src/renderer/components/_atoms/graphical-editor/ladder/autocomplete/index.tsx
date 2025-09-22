@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { getVariableRestrictionType } from '../../utils'
-import { BlockNodeData } from '../block'
+import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables } from '../block'
 import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
 import { BasicNodeData } from '../utils/types'
 import { VariableNode } from '../variable'
@@ -100,8 +100,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       })
       if (!rung || !variableNode) return
 
-      console.log('submitVariableToBlock', { variable, variableNode })
-
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -123,15 +121,18 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       if (!relatedBlock) return
 
       // Update the block to include the variable
-      const connectedVariables = [
-        ...(relatedBlock.data as BlockNodeData<object>).connectedVariables.filter(
+      const connectedVariables: LadderBlockConnectedVariables = [
+        ...(relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables.filter(
           (v) =>
             v.type !== variableNode.data.variant || v.handleId !== (variableNode as VariableNode).data.block.handleId,
         ),
         {
-          variable: variable,
-          type: (variableNode as VariableNode).data.variant,
           handleId: (variableNode as VariableNode).data.block.handleId,
+          handleTableId: (relatedBlock.data as BlockNodeData<BlockVariant>).variant.variables.find(
+            (v) => v.name === (variableNode as VariableNode).data.block.handleId,
+          )?.id,
+          type: (variableNode as VariableNode).data.variant,
+          variable: variable,
         },
       ]
 

@@ -23,7 +23,7 @@ import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 export type BlockVariant = {
   name: string
   type: string
-  variables: { name: string; class: string; type: { definition: string; value: string } }[]
+  variables: { id?: string; name: string; class: string; type: { definition: string; value: string } }[]
   documentation: string
   extensible: boolean
 }
@@ -31,17 +31,18 @@ export type BlockVariant = {
 type OldVariables = {
   [key: string]: { variable: PLCVariable; type: 'input' | 'output' }
 }
-type Variables = {
-  variable: PLCVariable | undefined
-  type: 'input' | 'output'
+export type LadderBlockConnectedVariables = {
   handleId: string
+  handleTableId?: string
+  type: 'input' | 'output'
+  variable: PLCVariable | undefined
 }[]
 
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
   lockExecutionControl: boolean
-  connectedVariables: Variables
+  connectedVariables: LadderBlockConnectedVariables
   variable: { id: string; name: string } | PLCVariable
   hasDivergence?: boolean
 }
@@ -511,7 +512,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       })
       if (!node || !rung) return
 
-      const newVariables: Variables = []
+      const newVariables: LadderBlockConnectedVariables = []
       Object.entries(data.connectedVariables as OldVariables).forEach(([key, connectedVariable]) => {
         newVariables.push({
           variable: connectedVariable.variable,
@@ -639,7 +640,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant
-
     const newNodeVariables = (libPou.data.variables || []).map((variable) => ({
       ...variable,
       type:
@@ -698,9 +698,23 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
 
-    const connectedVariables: Variables = (node.data as BlockNodeData<BlockVariant>).connectedVariables.filter(
-      (connectedVariable) => newNodeVariables.find((newVar) => newVar.name === connectedVariable.handleId),
-    )
+    const connectedVariables: LadderBlockConnectedVariables = (
+      node.data as BlockNodeData<BlockVariant>
+    ).connectedVariables
+      .map((connectedVariable) => {
+        const match = newNodeVariables.find((newVar) => newVar.name === connectedVariable.handleId)
+        if (match) return connectedVariable
+
+        const matchId = newNodeVariables.find((newVar) => newVar.id === connectedVariable.handleTableId)
+        if (matchId)
+          return {
+            ...connectedVariable,
+            handleId: matchId.name,
+          }
+
+        return undefined
+      })
+      .filter((v) => v !== undefined)
 
     updatedNewNode.data = {
       ...updatedNewNode.data,
@@ -908,7 +922,7 @@ export const buildBlockNode = <T extends object | undefined>({
       executionOrder: 0,
       executionControl: executionControlAux,
       lockExecutionControl,
-      connectedVariables: [] as Variables,
+      connectedVariables: [] as LadderBlockConnectedVariables,
       draggable: true,
       selectable: true,
       deletable: true,
