@@ -57,7 +57,10 @@ export default function FbdEditor() {
       const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
       if (!libMatch) continue
 
-      const original = pous.find((pou) => pou.data.name === libMatch.name)?.data?.variables
+      const originalPou = pous.find((pou) => pou.data.name === libMatch.name)
+      if (!originalPou) continue
+
+      const originalVariables = originalPou.data.variables
       const currentVariables = variant.variables.filter((variable) => !['OUT', 'EN', 'ENO'].includes(variable.name))
 
       const formatVariable = (variable: {
@@ -66,11 +69,18 @@ export default function FbdEditor() {
         type: { definition: string; value: string }
       }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
 
-      const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
+      if (originalPou.type === 'function') {
+        const outVariable = variant.variables.find((variable) => variable.name === 'OUT')
+        if (outVariable && outVariable.type.value.toUpperCase() !== originalPou.data.returnType.toUpperCase()) {
+          divergences.push(node.id)
+          continue
+        }
+      }
 
+      const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
       const hasDivergence =
-        original?.length !== currentVariables.length ||
-        !original?.every((variable) => currentMap.has(formatVariable(variable)))
+        originalVariables?.length !== currentVariables.length ||
+        !originalVariables?.every((variable) => currentMap.has(formatVariable(variable)))
 
       if (hasDivergence) {
         divergences.push(node.id)
