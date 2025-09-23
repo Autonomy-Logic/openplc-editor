@@ -582,23 +582,26 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     if (libPou.type === 'function') {
       const variable = getVariableRestrictionType(libPou.data.returnType)
-      newNodeVariables.push({
-        name: 'OUT',
-        class: 'output',
-        type: {
-          definition:
-            variable.definition === 'array' ||
-            variable.definition === 'base-type' ||
-            variable.definition === 'user-data-type' ||
-            variable.definition === 'derived'
-              ? variable.definition
-              : 'derived',
-          value: libPou.data.returnType.toUpperCase(),
-        },
-        location: '',
-        documentation: '',
-        debug: false,
-      })
+      const hasOut = newNodeVariables.some((v) => v.name === 'OUT')
+      if (!hasOut)
+        newNodeVariables.push({
+          id: 'OUT',
+          name: 'OUT',
+          class: 'output',
+          type: {
+            definition:
+              variable.definition === 'array' ||
+              variable.definition === 'base-type' ||
+              variable.definition === 'user-data-type' ||
+              variable.definition === 'derived'
+                ? variable.definition
+                : 'derived',
+            value: libPou.data.returnType.toUpperCase(),
+          },
+          location: '',
+          documentation: '',
+          debug: false,
+        })
     }
 
     const updatedNewNode = buildBlockNode({

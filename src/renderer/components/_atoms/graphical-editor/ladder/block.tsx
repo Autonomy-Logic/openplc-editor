@@ -43,7 +43,7 @@ export type BlockNodeData<T> = BasicNodeData & {
   executionControl: boolean
   lockExecutionControl: boolean
   connectedVariables: LadderBlockConnectedVariables
-  variable: { id: string; name: string } | PLCVariable
+  variable: { id?: string; name: string } | PLCVariable
   hasDivergence?: boolean
 }
 

@@ -90,7 +90,7 @@ const VariableElement = (block: VariableProps) => {
           (v) => v.name === variableNode.data.block.handleId,
         )?.id,
         type: variableNode.data.variant,
-        variable: variable,
+        variable,
       },
     ]
 
