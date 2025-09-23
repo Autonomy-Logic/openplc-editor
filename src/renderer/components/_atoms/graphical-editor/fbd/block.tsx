@@ -552,33 +552,42 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant
-
-    const newNodeVariables = (libPou.data.variables || []).map((variable) => ({
-      ...variable,
-      type:
-        variable.type.definition === 'array'
-          ? {
-              ...variable.type,
-              value: variable.type.value.toUpperCase(),
-              data: variable.type.data,
-            }
-          : variable.type.definition === 'base-type'
-            ? {
-                value: variable.type.value.toUpperCase(),
-                definition: 'base-type',
-              }
-            : variable.type.definition === 'user-data-type'
-              ? {
-                  value: variable.type.value.toUpperCase(),
-                  definition: 'user-data-type',
-                }
-              : variable.type.definition === 'derived'
-                ? {
-                    value: variable.type.value.toUpperCase(),
-                    definition: 'derived',
-                  }
-                : variable.type,
-    }))
+    const newNodeVariables = (libPou.data.variables || []).map((variable) => {
+      let newType
+      switch (variable.type.definition) {
+        case 'array':
+          newType = {
+            ...variable.type,
+            value: variable.type.value.toUpperCase(),
+            data: variable.type.data,
+          }
+          break
+        case 'base-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'base-type',
+          }
+          break
+        case 'user-data-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'user-data-type',
+          }
+          break
+        case 'derived':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'derived',
+          }
+          break
+        default:
+          newType = variable.type
+      }
+      return {
+        ...variable,
+        type: newType,
+      }
+    })
 
     if (libPou.type === 'function') {
       const variable = getVariableRestrictionType(libPou.data.returnType)
@@ -589,13 +598,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           name: 'OUT',
           class: 'output',
           type: {
-            definition:
-              variable.definition === 'array' ||
-              variable.definition === 'base-type' ||
-              variable.definition === 'user-data-type' ||
-              variable.definition === 'derived'
-                ? variable.definition
-                : 'derived',
+            definition: variable.definition ?? 'derived',
             value: libPou.data.returnType.toUpperCase(),
           },
           location: '',
