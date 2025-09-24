@@ -4,6 +4,7 @@ import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
+import { PLCPou } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
@@ -92,63 +93,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }, [pou?.data.variables, language])
 
   useEffect(() => {
+    // Handle template injection when POU changes (for already mounted editors)
     if (language === 'python' && editorRef.current && pou) {
-      const editorModel = editorRef.current.getModel()
-      if (!editorModel) return
-
-      const stateValue = pou.data.body.value as string
-      const editorValue = editorModel.getValue()
-
-      const stateIsEmpty = !stateValue || stateValue.trim() === ''
-      const editorIsEmpty = !editorValue || editorValue.trim() === ''
-
-      const alreadyInjected = templatesInjected.has(name)
-
-      const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
-
-      if (shouldInjectTemplate) {
-        const pythonTemplate = `# ================================================================
-# DISCLAIMER: Python Function Block Execution
-#
-# This block runs asynchronously from the main PLC runtime.
-# ---------------------------------------------------------------
-# - All variables are shared with the runtime through shared memory.
-# - The block_init() function is called once when the block starts.
-# - The block_loop() function is called periodically (~100ms).
-# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
-#   It is NOT guaranteed that block_loop() will execute once per scan.
-#
-# Use this block for non-time-critical tasks. For logic that must
-# match the PLC scan cycle, use standard IEC 61131-3 function blocks.
-# ================================================================
-
-from multiprocessing import shared_memory
-import struct
-import time
-import os
-
-def block_init():
-    print('Block was initialized')
-
-def block_loop():
-    print('Block has run the loop function')
-`
-
-        editorRef.current.setValue(pythonTemplate)
-        handleWriteInPou(pythonTemplate)
-
-        const lineCount = editorModel.getLineCount()
-        const lastLineContent = editorModel.getLineContent(lineCount)
-        const position = {
-          lineNumber: lineCount,
-          column: lastLineContent.length + 1,
-        }
-        editorRef.current.setPosition(position)
-
-        setTemplatesInjected((prev) => new Set(prev).add(name))
-      }
+      injectPythonTemplateIfNeeded(editorRef.current, pou, name)
     }
-  }, [language, name, pou])
+  }, [pou])
 
   useEffect(() => {
     return () => {
@@ -334,12 +283,7 @@ def block_loop():
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
-    // here is the editor instance
-    // you can store it in `useRef` for further usage
     editorRef.current = editorInstance
-
-    // here is another way to get monaco instance
-    // you can also store it in `useRef` for further usage
     monacoRef.current = monacoInstance
 
     if (!editorInstance) return
@@ -349,6 +293,7 @@ def block_loop():
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
+    // Restore cursor and scroll position for non-Python languages
     if (editor.cursorPosition && language !== 'python') {
       editorInstance.setPosition(editor.cursorPosition)
       editorInstance.revealPositionInCenter(editor.cursorPosition)
@@ -359,7 +304,68 @@ def block_loop():
       editorInstance.setScrollLeft(editor.scrollPosition.left)
     }
 
+    if (language === 'python' && pou) {
+      injectPythonTemplateIfNeeded(editorInstance, pou, name)
+    }
+
     editorInstance.focus()
+  }
+
+  function injectPythonTemplateIfNeeded(editor: monaco.editor.IStandaloneCodeEditor, pou: PLCPou, pouName: string) {
+    const editorModel = editor.getModel()
+    if (!editorModel) return
+
+    const stateValue = pou.data.body.value as string
+    const editorValue = editorModel.getValue()
+
+    const stateIsEmpty = !stateValue || stateValue.trim() === ''
+    const editorIsEmpty = !editorValue || editorValue.trim() === ''
+    const alreadyInjected = templatesInjected.has(pouName)
+
+    const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
+
+    if (shouldInjectTemplate) {
+      const pythonTemplate = `# ================================================================
+  # DISCLAIMER: Python Function Block Execution
+  #
+  # This block runs asynchronously from the main PLC runtime.
+  # ---------------------------------------------------------------
+  # - All variables are shared with the runtime through shared memory.
+  # - The block_init() function is called once when the block starts.
+  # - The block_loop() function is called periodically (~100ms).
+  # - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
+  #   It is NOT guaranteed that block_loop() will execute once per scan.
+  #
+  # Use this block for non-time-critical tasks. For logic that must
+  # match the PLC scan cycle, use standard IEC 61131-3 function blocks.
+  # ================================================================
+
+  from multiprocessing import shared_memory
+  import struct
+  import time
+  import os
+
+  def block_init():
+      print('Block was initialized')
+
+  def block_loop():
+      print('Block has run the loop function')
+  `
+
+      editor.setValue(pythonTemplate)
+      handleWriteInPou(pythonTemplate)
+
+      // Position cursor at the end
+      const lineCount = editorModel.getLineCount()
+      const lastLineContent = editorModel.getLineContent(lineCount)
+      const position = {
+        lineNumber: lineCount,
+        column: lastLineContent.length + 1,
+      }
+      editor.setPosition(position)
+
+      setTemplatesInjected((prev) => new Set(prev).add(pouName))
+    }
   }
 
   function moveToMatch(
