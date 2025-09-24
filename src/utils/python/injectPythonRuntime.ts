@@ -28,7 +28,7 @@ const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
     const variablesList = inputVariables
       .map((variable) => {
         if (variable.type?.value === 'string') {
-          return `${variable.name}_body, ${variable.name}_len`
+          return `${variable.name}_len, ${variable.name}_body`
         }
         return variable.name
       })
@@ -41,14 +41,36 @@ const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
     return totalElements === 1 ? `${variablesList},` : variablesList
   })()
 
-  const outputVariableNames =
-    outputVariables.length > 0 ? outputVariables.map((variable) => variable.name).join(', ') : ''
+  const outputVariableNames = (() => {
+    if (outputVariables.length === 0) return ''
+
+    const variablesList = outputVariables
+      .map((variable) => {
+        if (variable.type?.value === 'string') {
+          return `${variable.name}_len, ${variable.name}_body`
+        }
+        return variable.name
+      })
+      .join(', ')
+
+    return variablesList
+  })()
 
   const stringDecodingLines = inputVariables
     .filter((variable) => variable.type?.value === 'string')
     .map(
       (variable) =>
-        `    ${variable.name} = ${variable.name}_body[:${variable.name}_len].decode('utf-8', errors='ignore')`,
+        `    ${variable.name} = ${variable.name}_len[:${variable.name}_body].decode('utf-8', errors='ignore')`,
+    )
+    .join('\n')
+
+  const stringEncodingLines = outputVariables
+    .filter((variable) => variable.type?.value === 'string')
+    .map(
+      (variable) =>
+        `    ${variable.name}_body = ${variable.name}.encode('utf-8')[:126]
+    ${variable.name}_body = ${variable.name}_body.ljust(126, b'\\0')
+    ${variable.name}_len = len(${variable.name}_body)`,
     )
     .join('\n')
 
@@ -61,7 +83,7 @@ const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
 
   const writeOutputSection =
     outputVariables.length > 0
-      ? `    # Write output variables
+      ? `    # Write output variables${stringEncodingLines ? '\n' + stringEncodingLines : ''}
     packed = struct.pack(fmt_out, ${outputVariableNames})
     shm_out.buf[:data_size_out] = packed`
       : `    # No output variables to write`
