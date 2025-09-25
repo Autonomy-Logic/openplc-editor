@@ -12,8 +12,12 @@ type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 }
 const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   const {
+    editor,
     projectActions: { updateDatatype },
+    snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
+
   const ROWS_NOT_SELECTED = -1
 
   const [arrayTable, setArrayTable] = useState<{ selectedRow: number }>({ selectedRow: ROWS_NOT_SELECTED })
@@ -31,13 +35,17 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
 
   const handleInitialValueChange = (value: string) => {
     setInitialValueData(value)
+    addSnapshot(editor.meta.name)
     updateDatatype(data.name, {
       ...data,
       initialValue: value,
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const addNewRow = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       const newRows = [...prevRows, { description: '' }]
       setArrayTable({ selectedRow: newRows.length - 1 })
@@ -45,11 +53,15 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
         values: newRows.map((row) => ({ description: row?.description })),
         initialValue: data.initialValue,
       } as PLCEnumeratedDatatype)
+      handleFileAndWorkspaceSavedState(editor.meta.name)
+
       return newRows
     })
   }
 
   const removeRow = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null) {
         const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
@@ -61,6 +73,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           values: newRows.map((row) => ({ description: row?.description })),
           initialValue: data.initialValue,
         } as PLCEnumeratedDatatype)
+        handleFileAndWorkspaceSavedState(editor.meta.name)
 
         return newRows
       }
@@ -69,6 +82,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const moveRowUp = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
         const newRows = [...prevRows]
@@ -83,6 +98,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           values: newRows.map((row) => ({ description: row?.description })),
           initialValue: data.initialValue,
         } as PLCEnumeratedDatatype)
+        handleFileAndWorkspaceSavedState(editor.meta.name)
 
         prevRows = newRows
       }
@@ -91,6 +107,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const moveRowDown = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
         const newRows = [...prevRows]
@@ -105,6 +123,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           values: newRows.map((row) => ({ description: row?.description })),
           initialValue: data.initialValue,
         } as PLCEnumeratedDatatype)
+        handleFileAndWorkspaceSavedState(editor.meta.name)
 
         prevRows = newRows
       }
@@ -118,9 +137,10 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
       className='flex h-full w-full flex-1 flex-row gap-4 overflow-hidden bg-transparent'
       {...rest}
     >
-      <div className='flex w-full justify-between gap-8'>
-        <div className='w-[600px]'>
-          <div aria-label='Enumerated base type container' className='flex flex-col gap-3'></div>
+      <div className='flex h-full w-full justify-between gap-8 overflow-hidden'>
+        <div className='flex h-full w-[600px] flex-col overflow-hidden'>
+          <div aria-label='Enumerated base type container'></div>
+
           <div
             aria-label='Enum data type table actions container'
             className='mb-3 flex h-8 w-full items-center justify-between'
@@ -167,14 +187,16 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
             </div>
           </div>
 
-          <EnumeratedTable
-            name={data.name}
-            values={tableData}
-            initialValue={initialValueData}
-            selectedRow={arrayTable.selectedRow}
-            handleRowClick={(row) => setArrayTable({ selectedRow: Number.parseInt(row.id) })}
-            setArrayTable={setArrayTable}
-          />
+          <div className='h-full w-full overflow-auto pr-1' style={{ scrollbarGutter: 'stable' }}>
+            <EnumeratedTable
+              name={data.name}
+              values={tableData}
+              initialValue={initialValueData}
+              selectedRow={arrayTable.selectedRow}
+              handleRowClick={(row) => setArrayTable({ selectedRow: Number.parseInt(row.id) })}
+              setArrayTable={setArrayTable}
+            />
+          </div>
         </div>
 
         <div aria-label='Enumerated initial value container' className='w-1/2'>

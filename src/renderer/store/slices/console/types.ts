@@ -4,6 +4,10 @@ const logObjectSchema = z.object({
   id: z.string(),
   level: z.enum(['info', 'warning', 'error']).optional(),
   message: z.string(),
+  tstamp: z.coerce
+    .date()
+    .optional()
+    .default(() => new Date()),
 })
 
 const consoleStateSchema = z.object({

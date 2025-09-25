@@ -29,6 +29,7 @@ const WorkspaceScreen = () => {
     workspace: { isCollapsed },
     editor,
     workspaceActions: { toggleCollapse },
+    deviceActions: { setAvailableOptions },
     searchResults,
   } = useOpenPLCStore()
 
@@ -75,7 +76,13 @@ const WorkspaceScreen = () => {
       }
     })
   }, [isCollapsed])
-
+  useEffect(() => {
+    const getAvailableBoardOptions = async () => {
+      const boards = await window.bridge.getAvailableBoards()
+      setAvailableOptions({ availableBoards: boards })
+    }
+    void getAvailableBoardOptions()
+  }, [])
   const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false)
 
   const handleSwitchPerspective = () => {
@@ -161,11 +168,7 @@ const WorkspaceScreen = () => {
                     <>
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-device' && <DeviceEditor />}
-                      {editor['type'] === 'plc-datatype' && (
-                        <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
-                          <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
-                        </div>
-                      )}
+                      {editor['type'] === 'plc-datatype' && <DataTypeEditor dataTypeName={editor.meta.name} />}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'

@@ -4,9 +4,9 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { FocusEvent, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
@@ -20,7 +20,7 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
-  hasDivergence?: boolean
+  hasDivergence: boolean
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
@@ -71,6 +71,7 @@ export const BlockNodeElement = <T extends object>({
       data: { pous },
     },
     projectActions: { updateVariable, deleteVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const {
@@ -165,6 +166,8 @@ export const BlockNodeElement = <T extends object>({
         title: '',
       }
 
+      addSnapshot(editor.meta.name)
+
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
         deleteVariable({
           rowId: variableIndex,
@@ -211,7 +214,7 @@ export const BlockNodeElement = <T extends object>({
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
      */
     const newBlockNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: newGraphicalEditorNodeID('BLOCK'),
       position: {
         x: node.position.x,
         y: node.position.y,
@@ -244,6 +247,8 @@ export const BlockNodeElement = <T extends object>({
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
+
+    addSnapshot(editor.meta.name)
 
     setNodes({
       editorName: editor.meta.name,
@@ -337,6 +342,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     projectActions: { createVariable },
     libraries: { user: userLibraries },
     fbdFlows,
+    snapshotActions: { addSnapshot },
     fbdFlowActions: { updateNode, setNodes, setEdges },
   } = useOpenPLCStore()
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
@@ -493,9 +499,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (matchingVariable) {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
+        addSnapshot(editor.meta.name)
+
         const creationResult = createVariable({
           data: {
-            id: uuidv4(),
+            id: crypto.randomUUID(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: nodeBlockType },
             class: 'local',
@@ -554,7 +562,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }))
 
     const updatedNewNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: newGraphicalEditorNodeID('BLOCK'),
       position: {
         x: node.position.x,
         y: node.position.y,
@@ -752,6 +760,7 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
       executionOrder: 0,
       executionControl: executionControlAux,
+      hasDivergence: false,
       draggable: true,
       selectable: true,
       deletable: true,

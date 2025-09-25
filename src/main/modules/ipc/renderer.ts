@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { ProjectState } from '../../../renderer/store/slices'
-import { PLCProject } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
@@ -12,6 +13,7 @@ type IDataToWrite = {
   projectPath: string
   content: {
     projectData: PLCProject
+    pous: PLCPou[]
     deviceConfiguration: DeviceConfiguration
     devicePinMapping: DevicePin[]
   }
@@ -40,8 +42,8 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:create', data),
   createProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
-  deletePouAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+  deleteFileAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:delete-file-accelerator', callback),
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:find-in-project-accelerator', callback),
   handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
@@ -56,15 +58,34 @@ const rendererProcessBridge = {
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
-  removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
+  removeDeleteFileListener: () => ipcRenderer.removeAllListeners('workspace:delete-file-accelerator'),
   removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
   removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
+  removeSaveFileAccelerator: () => ipcRenderer.removeAllListeners('project:save-file-accelerator'),
   removeSaveProjectAccelerator: () => ipcRenderer.removeAllListeners('project:save-accelerator'),
+  saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:save-file', filePath, content),
+  saveFileAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-file-accelerator', callback),
   saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
     ipcRenderer.invoke('project:save', dataToWrite),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+
+  // ===================== POU METHODS =====================
+  createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
+  deletePouFile: (filePath: string): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:delete', filePath),
+  renamePouFile: (data: {
+    filePath: string
+    newFileName: string
+    fileContent?: unknown
+  }): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:rename', data),
+
+  // ===================== EDIT METHODS =====================
+  handleUndoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:undo-request', callback),
+  removeUndoRequestListener: () => ipcRenderer.removeAllListeners('edit:undo-request'),
+  handleRedoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:redo-request', callback),
+  removeRedoRequestListener: () => ipcRenderer.removeAllListeners('edit:redo-request'),
 
   // ===================== APP & SYSTEM METHODS =====================
   darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),
@@ -115,7 +136,7 @@ const rendererProcessBridge = {
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
   runCompileProgram: (
-    compileProgramArgs: Array<string | null | ProjectState['data']>,
+    compileProgramArgs: Array<string | boolean | null | ProjectState['data']>,
     callback: (args: any) => void,
   ) => {
     // Create a MessageChannel to communicate between the renderer and main process

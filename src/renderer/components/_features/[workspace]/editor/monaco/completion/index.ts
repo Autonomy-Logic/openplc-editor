@@ -337,6 +337,7 @@ export const libraryCompletion = ({
         return {
           label: pou.name,
           insertText: text,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
           documentation: pou.documentation,
           kind: monaco.languages.CompletionItemKind.Function,
           range,

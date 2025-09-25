@@ -1,4 +1,5 @@
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
+import { CreateJSONFile } from '@root/main/utils'
 import {
   CreateProjectDefaultDirectoriesResponse,
   CreateProjectFileProps,
@@ -6,87 +7,87 @@ import {
   projectDefaultFilesMapSchema,
 } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 
-import { PLCProject } from '../../../../types/PLC/open-plc'
-import { CreateJSONFile } from '../../../utils'
-
-const definePouBodyData = (language: CreateProjectFileProps['language']) => {
-  switch (language) {
-    case 'ld':
-      return { language, value: { name: 'main', rungs: [] } }
-    case 'fbd':
-      return {
-        language,
-        value: {
-          name: 'main',
-          rung: {
-            comment: '',
-            edges: [],
-            nodes: [],
-          },
-        },
+const definePou = (language: CreateProjectFileProps['language']): PLCPou => ({
+  type: 'program',
+  data: {
+    name: 'main',
+    language: language,
+    variables: [],
+    documentation: '',
+    body: (() => {
+      switch (language) {
+        case 'ld':
+          return { language, value: { name: 'main', rungs: [] } }
+        case 'fbd':
+          return {
+            language,
+            value: {
+              name: 'main',
+              rung: {
+                comment: '',
+                edges: [],
+                nodes: [],
+              },
+            },
+          }
+        default:
+          return { language, value: '' }
       }
-    default:
-      return { language, value: '' }
-  }
-}
+    })(),
+  },
+})
 
-const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLCProject => {
-  return {
-    meta: {
-      name: dataToCreateProjectFile.name,
-      type: dataToCreateProjectFile.type,
-    },
-    data: {
-      pous: [
-        {
-          type: 'program',
-          data: {
-            name: 'main',
-            language: dataToCreateProjectFile.language,
-            variables: [],
-            documentation: '',
-            body: definePouBodyData(dataToCreateProjectFile.language),
+const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLCProject => ({
+  meta: {
+    name: dataToCreateProjectFile.name,
+    type: dataToCreateProjectFile.type,
+  },
+  data: {
+    pous: [],
+    dataTypes: [],
+    configuration: {
+      resource: {
+        tasks: [
+          {
+            name: 'task0',
+            triggering: 'Cyclic',
+            interval: dataToCreateProjectFile.time,
+            priority: 1,
+            id: '0',
           },
-        },
-      ],
-      dataTypes: [],
-      configuration: {
-        resource: {
-          tasks: [
-            {
-              name: 'task0',
-              triggering: 'Cyclic',
-              interval: dataToCreateProjectFile.time,
-              priority: 1,
-              id: '0',
-            },
-          ],
-          instances: [
-            {
-              name: 'instance0',
-              program: 'main',
-              task: 'task0',
-              id: '0',
-            },
-          ],
-          globalVariables: [],
-        },
+        ],
+        instances: [
+          {
+            name: 'instance0',
+            program: 'main',
+            task: 'task0',
+            id: '0',
+          },
+        ],
+        globalVariables: [],
       },
     },
-  }
-}
+  },
+})
 
 const createProjectDefaultStructure = (
   basePath: string,
   dataToCreateProjectFile: CreateProjectFileProps,
 ): CreateProjectDefaultDirectoriesResponse => {
   const content: {
-    project?: PLCProject
-    deviceConfiguration?: DeviceConfiguration
-    devicePinMapping?: DevicePin[]
-  } = {}
+    project: PLCProject | null
+    pous: PLCPou[]
+    deviceConfiguration: DeviceConfiguration | null
+    devicePinMapping: DevicePin[]
+  } = {
+    project: null,
+    pous: [],
+    deviceConfiguration: null,
+    devicePinMapping: [],
+  }
 
   /**
    * Create the default directories in the project structure
@@ -126,7 +127,18 @@ const createProjectDefaultStructure = (
     switch (file) {
       case 'project.json':
         content.project = createProjectFile(dataToCreateProjectFile)
-        CreateJSONFile(filePath, JSON.stringify(content.project, null, 2), file.split('.')[0])
+        try {
+          CreateJSONFile(filePath, JSON.stringify(content.project, null, 2), file.split('.')[0])
+        } catch (error) {
+          return {
+            success: false,
+            error: {
+              title: 'Error creating project file',
+              description: `Failed to create project file at ${filePath}`,
+              error: error,
+            },
+          }
+        }
         break
       default:
         break
@@ -147,11 +159,34 @@ const createProjectDefaultStructure = (
       switch (file) {
         case 'devices/configuration.json':
           content.deviceConfiguration = defaultValue as DeviceConfiguration
-          CreateJSONFile(filePath, JSON.stringify(content.deviceConfiguration, null, 2), fileName.split('.')[0])
+          content.deviceConfiguration.communicationConfiguration.modbusRTU.rtuBaudRate = '115200'
+          try {
+            CreateJSONFile(filePath, JSON.stringify(content.deviceConfiguration, null, 2), fileName.split('.')[0])
+          } catch (error) {
+            return {
+              success: false,
+              error: {
+                title: 'Error creating device configuration file',
+                description: `Failed to create device configuration file at ${filePath}`,
+                error: error,
+              },
+            }
+          }
           break
         case 'devices/pin-mapping.json':
           content.devicePinMapping = defaultValue as DevicePin[]
-          CreateJSONFile(filePath, JSON.stringify(content.devicePinMapping, null, 2), fileName.split('.')[0])
+          try {
+            CreateJSONFile(filePath, JSON.stringify(content.devicePinMapping, null, 2), fileName.split('.')[0])
+          } catch (error) {
+            return {
+              success: false,
+              error: {
+                title: 'Error creating device pin mapping file',
+                description: `Failed to create device pin mapping file at ${filePath}`,
+                error: error,
+              },
+            }
+          }
           break
         default:
           break
@@ -168,9 +203,24 @@ const createProjectDefaultStructure = (
     }
   }
 
-  /**
-   * TODO: Create the default pou separated from other files at pous directory
-   */
+  const pou = definePou(dataToCreateProjectFile.language)
+  const pouPath = `${basePath}/pous/${pou.type}s`
+
+  try {
+    if (!fileOrDirectoryExists(pouPath)) createDirectory(pouPath)
+    CreateJSONFile(pouPath, JSON.stringify(pou, null, 2), pou.data.name)
+  } catch (error) {
+    return {
+      success: false,
+      error: {
+        title: 'Error creating POU file',
+        description: `Failed to create POU file at ${pouPath}`,
+        error: error,
+      },
+    }
+  }
+
+  content.pous.push(pou)
 
   return {
     success: true,
@@ -178,6 +228,7 @@ const createProjectDefaultStructure = (
       meta: { path: basePath },
       content: content as {
         project: PLCProject
+        pous: PLCPou[]
         deviceConfiguration: DeviceConfiguration
         devicePinMapping: DevicePin[]
       },

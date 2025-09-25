@@ -7,6 +7,8 @@ import type {
   DeviceSlice,
   EditorSlice,
   FBDFlowSlice,
+  FileSlice,
+  HistorySlice,
   LadderFlowSlice,
   LibrarySlice,
   ModalSlice,
@@ -21,6 +23,8 @@ import {
   createDeviceSlice,
   createEditorSlice,
   createFBDFlowSlice,
+  createFileSlice,
+  createHistorySlice,
   createLadderFlowSlice,
   createLibrarySlice,
   createModalSlice,
@@ -44,7 +48,9 @@ export const openPLCStoreBase = create(
       ProjectSlice &
       ConsoleSlice &
       ModalSlice &
-      DeviceSlice
+      FileSlice &
+      DeviceSlice &
+      HistorySlice
   >((...a) => ({
     ...createWorkspaceSlice(...a),
     ...createEditorSlice(...a),
@@ -58,6 +64,8 @@ export const openPLCStoreBase = create(
     ...createConsoleSlice(...a),
     ...createModalSlice(...a),
     ...createDeviceSlice(...a),
+    ...createFileSlice(...a),
+    ...createHistorySlice(...a),
   })),
 )
 

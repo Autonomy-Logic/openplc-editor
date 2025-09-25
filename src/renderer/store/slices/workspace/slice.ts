@@ -21,6 +21,10 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       app: false,
       appDarwin: false,
     },
+    selectedProjectTreeLeaf: {
+      label: '',
+      type: null,
+    },
   },
 
   workspaceActions: {
@@ -104,6 +108,24 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
             workspace.isModalOpen[modalIndex].modalState = modalState
           } else {
             workspace.isModalOpen.push({ modalName, modalState })
+          }
+        }),
+      )
+    },
+    setSelectedProjectTreeLeaf: (selectedProjectTreeLeaf): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.selectedProjectTreeLeaf = selectedProjectTreeLeaf
+        }),
+      )
+    },
+    clearWorkspace: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.editingState = 'initial-state'
+          workspace.selectedProjectTreeLeaf = {
+            label: '',
+            type: null,
           }
         }),
       )

@@ -58,6 +58,10 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
+  handleSaveFile() {
+    this.mainWindow.webContents.send('project:save-file-accelerator')
+  }
+
   handleExportProjectRequest(xmlFormatTarget: 'old-editor' | 'codesys') {
     this.mainWindow.webContents.send('compiler:export-project-request', xmlFormatTarget)
   }
@@ -81,7 +85,7 @@ export default class MenuBuilder {
   }
 
   handleDeletePou() {
-    this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
+    this.mainWindow.webContents.send('workspace:delete-file-accelerator')
   }
 
   handleSwitchPerspective() {
@@ -110,6 +114,13 @@ export default class MenuBuilder {
 
   handleQuitAppRequest() {
     this.mainWindow.webContents.send('window-controls:request-close')
+  }
+
+  handleUndoRequest() {
+    this.mainWindow.webContents.send('edit:undo-request')
+  }
+  handleRedoRequest() {
+    this.mainWindow.webContents.send('edit:redo-request')
   }
 
   /**
@@ -154,12 +165,12 @@ export default class MenuBuilder {
       label: i18n.t('menu:file.label'),
       submenu: [
         {
-          label: i18n.t('menu:file.submenu.new'),
+          label: i18n.t('menu:file.submenu.newProject'),
           accelerator: 'Cmd+N',
           click: () => void this.handleCreateProject(),
         },
         {
-          label: i18n.t('menu:file.submenu.open'),
+          label: i18n.t('menu:file.submenu.openProject'),
           accelerator: 'Cmd+O',
           click: () => this.sendOpenRequest(),
         },
@@ -167,11 +178,16 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.save'),
           accelerator: 'Cmd+S',
+          click: () => this.handleSaveFile(),
+        },
+        {
+          label: i18n.t('menu:file.submenu.saveProject'),
+          accelerator: 'Cmd+Shift+S',
           click: () => this.handleSaveProject(),
         },
         {
           label: i18n.t('menu:file.submenu.saveAs'),
-          accelerator: 'Cmd+Shift+S',
+          accelerator: 'Cmd+Shift+A',
           click: () => {},
           enabled: false,
         },
@@ -197,7 +213,7 @@ export default class MenuBuilder {
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.pageSetup'),
-          accelerator: 'Cmd+Alt+P',
+          accelerator: 'Cmd+Option+P',
           enabled: false,
         },
         {
@@ -225,14 +241,12 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:edit.submenu.undo'),
           accelerator: 'Cmd+Z',
-          selector: 'undo:',
-          enabled: true,
+          click: () => this.handleUndoRequest(),
         },
         {
           label: i18n.t('menu:edit.submenu.redo'),
-          accelerator: 'Cmd+Y',
-          selector: 'redo:',
-          enabled: true,
+          accelerator: 'Cmd+Shift+Z',
+          click: () => this.handleRedoRequest(),
         },
         { type: 'separator' },
         {
@@ -412,12 +426,12 @@ export default class MenuBuilder {
         visible: false,
         submenu: [
           {
-            label: i18n.t('menu:file.submenu.new'),
+            label: i18n.t('menu:file.submenu.newProject'),
             accelerator: 'Ctrl+N',
             click: () => this.handleCreateProject(),
           },
           {
-            label: i18n.t('menu:file.submenu.open'),
+            label: i18n.t('menu:file.submenu.openProject'),
             accelerator: 'Ctrl+O',
             click: () => this.sendOpenRequest(),
           },
@@ -427,11 +441,16 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'Ctrl+S',
+            click: () => this.handleSaveFile(),
+          },
+          {
+            label: i18n.t('menu:file.submenu.saveProject'),
+            accelerator: 'Ctrl+Shift+S',
             click: () => this.handleSaveProject(),
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),
-            accelerator: 'Ctrl+Shift+S',
+            accelerator: 'Ctrl+Shift+A',
             enabled: false,
           },
           {
@@ -493,15 +512,13 @@ export default class MenuBuilder {
         submenu: [
           {
             label: i18n.t('menu:edit.submenu.undo'),
-            enabled: true,
             accelerator: 'Ctrl+Z',
-            role: 'undo',
+            click: () => this.handleUndoRequest(),
           },
           {
             label: i18n.t('menu:edit.submenu.redo'),
-            enabled: true,
-            accelerator: 'Ctrl+Y',
-            role: 'redo',
+            accelerator: 'Ctrl+Shift+Z',
+            click: () => this.handleRedoRequest(),
           },
           { type: 'separator' },
           {

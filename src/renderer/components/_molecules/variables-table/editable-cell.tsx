@@ -44,6 +44,7 @@ const EditableNameCell = ({
     fbdFlowActions: { updateNode: updateFBDNode },
     searchQuery,
     projectActions: { getVariable },
+    snapshotActions: { addSnapshot },
     project: {
       data: { pous },
     },
@@ -135,6 +136,8 @@ const EditableNameCell = ({
 
     /* 2 ▸ IF NOT propagating, break the link before renaming */
     if (nodesUsingVarLadder.length && !shouldPropagate && language === 'ld') {
+      addSnapshot(editor.meta.name)
+
       nodesUsingVarLadder.forEach(({ rungId, nodeId }) => {
         const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId })
         if (!rung || !node) return
@@ -162,6 +165,8 @@ const EditableNameCell = ({
     }
 
     if (nodesUsingVarFbd.length && !shouldPropagate && language === 'fbd') {
+      addSnapshot(editor.meta.name)
+
       nodesUsingVarFbd.forEach(({ flowName, nodeId }) => {
         const flow = fbdFlows.find((f) => f.name === flowName)
         if (!flow) return
@@ -319,7 +324,7 @@ const EditableNameCell = ({
         <InputWithRef
           value={cellValue}
           onChange={(e) => setCellValue(e.target.value)}
-          onBlur={onBlur}
+          onBlur={() => void onBlur()}
           className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
         />
       ) : (
@@ -436,8 +441,21 @@ const EditableInitialValueCell = ({
 
     if (cellValue === initialValue) return setIsEditing(false)
 
-    const oldName = initialValue
-    const newName = cellValue
+    // The decision was made to validate this issue at a later stage.
+
+    // if (id === 'initialValue' && variable?.type?.value) {
+    //   const validation = validateInitialValue(cellValue, variable.type.value)
+
+    //   if (!validation.valid) {
+    //     toast({ title: 'Error', description: validation.message, variant: 'fail' })
+    //     setCellValue('')
+    //     setIsEditing(false)
+    //     return
+    //   }
+    // }
+
+    const oldName = initialValue ?? ''
+    const newName = cellValue ?? ''
 
     /* 1 ▸ which blocks use the variable? */
     const nodesUsingVarLadder = findNodesUsingVariable(ladderFlows, oldName)

@@ -184,6 +184,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
 const editorStateSchema = z.object({
   editors: z.array(editorModelSchema),
   editor: editorModelSchema,
+  isMonacoFocused: z.boolean(),
 })
 
 /** This is a zod schema for the editor slice actions.
@@ -252,6 +253,8 @@ const _editorActionsSchema = z.object({
     )
     .returns(z.void()),
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),
+  updateEditorName: z.function().args(z.string(), z.string()).returns(z.void()),
+  setMonacoFocused: z.function().args(z.boolean()).returns(z.void()),
 })
 
 type StructureTableType = z.infer<typeof editorStructureSchema>

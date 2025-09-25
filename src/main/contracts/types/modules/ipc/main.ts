@@ -3,7 +3,7 @@ import { CompilerModule } from '@root/main/modules/compiler'
 import { HardwareModule } from '@root/main/modules/hardware'
 import { BrowserWindow, IpcMain } from 'electron/main'
 
-import { ProjectService } from '../../../../services'
+import { PouService, ProjectService } from '../../../../services'
 import { TStoreType } from '../store'
 
 export type MainIpcModule = {
@@ -21,6 +21,7 @@ export type MainIpcModule = {
 export type MainIpcModuleConstructor = {
   ipcMain: IpcMain
   mainWindow: InstanceType<typeof BrowserWindow> | null
+  pouService: InstanceType<typeof PouService>
   projectService: InstanceType<typeof ProjectService>
   store: TStoreType
   menuBuilder: InstanceType<typeof MenuBuilder>

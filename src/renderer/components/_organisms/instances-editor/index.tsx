@@ -1,6 +1,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { InstanceType } from '@root/renderer/store/slices'
 import { PLCInstance } from '@root/types/PLC/open-plc'
@@ -30,7 +31,10 @@ const InstancesEditor = () => {
     },
     editorActions: { updateModelInstances },
     projectActions: { createInstance, rearrangeInstances, deleteInstance, setInstances, setTasks },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
+  const handleFileAndWorkspaceSavedState = sharedSelectors.useHandleFileAndWorkspaceSavedState()
 
   const [instanceData, setInstanceData] = useState<PLCInstance[]>([])
   const [editorCode, setEditorCode] = useState(() => parseResourceConfigurationToString(tasks, instanceData))
@@ -96,6 +100,9 @@ const InstancesEditor = () => {
 
   const handleRearrangeInstances = (index: number, row?: number) => {
     if (editorInstances.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     rearrangeInstances({
       rowId: row ?? parseInt(editorInstances.selectedRow),
       newIndex: (row ?? parseInt(editorInstances.selectedRow)) + index,
@@ -108,6 +115,9 @@ const InstancesEditor = () => {
 
   const handleCreateInstance = () => {
     if (editorInstances.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     const instances = instanceData.filter((instance) => instance.name)
     const selectedRow = parseInt(editorInstances.selectedRow)
 
@@ -123,6 +133,8 @@ const InstancesEditor = () => {
         display: 'table',
         selectedRow: 0,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -140,6 +152,8 @@ const InstancesEditor = () => {
         display: 'table',
         selectedRow: instances.length,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -148,10 +162,13 @@ const InstancesEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleDeleteInstance = () => {
     if (editorInstances.display === 'code') return
+
+    addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorInstances.selectedRow)
     deleteInstance({
@@ -166,6 +183,7 @@ const InstancesEditor = () => {
         selectedRow: selectedRow - 1,
       })
     }
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
@@ -177,6 +195,8 @@ const InstancesEditor = () => {
 
   const commitCode = (): boolean => {
     try {
+      addSnapshot(editor.meta.name)
+
       const { instances, tasks } = parseResourceStringToConfiguration(editorCode)
 
       const response = setInstances({
@@ -197,6 +217,8 @@ const InstancesEditor = () => {
 
       toast({ title: 'Update tables', description: 'Changes applied successfully.' })
       setParseError(null)
+      handleFileAndWorkspaceSavedState('Resource')
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'

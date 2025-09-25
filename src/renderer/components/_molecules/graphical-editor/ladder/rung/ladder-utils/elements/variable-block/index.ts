@@ -1,8 +1,8 @@
 import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/ladder'
 import { BlockNode, BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
 import { RungLadderState } from '@root/renderer/store/slices'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Edge, Node } from '@xyflow/react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { buildEdge } from '../../edges'
 
@@ -41,7 +41,7 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
     })
 
     const variableElement = nodesBuilder.variable({
-      id: `variable_${uuidv4()}`,
+      id: newGraphicalEditorNodeID('variable'),
       posX: inputHandle.glbPosition.x - (variableElementStyle.width + variableElementStyle.gap),
       posY: inputHandle.glbPosition.y - variableElementStyle.handle.y,
       handleX: inputHandle.glbPosition.x - variableElementStyle.gap,
@@ -78,7 +78,7 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
     })
 
     const variableElement = nodesBuilder.variable({
-      id: `variable_${uuidv4()}`,
+      id: newGraphicalEditorNodeID('variable'),
       posX: outputHandle.glbPosition.x + variableElementStyle.gap,
       posY: outputHandle.glbPosition.y - variableElementStyle.handle.y,
       handleX: outputHandle.glbPosition.x + variableElementStyle.gap,

@@ -27,10 +27,6 @@ export const LadderToolbox = () => {
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const selectedNodes = flow?.rungs.flatMap((rung) => rung.selectedNodes) || []
 
-  // useEffect(() => {
-  //   console.log('FLOW UPDATED', flow?.rungs.flatMap((rung) => rung.selectedNodes))
-  // }, [flow])
-
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
     event.dataTransfer.setData('application/reactflow/ladder-blocks', iconType)
     event.dataTransfer.effectAllowed = 'move'
@@ -93,10 +89,7 @@ export const LadderToolbox = () => {
   return (
     <>
       <TooltipSidebarWrapperButton tooltipContent='Block'>
-        <BlockButton
-          onDragStart={(event) => handleDragStart(event, 'block')}
-          // onDragEnd={(_event) => console.log('drag end ladder toolbox')}
-        />
+        <BlockButton onDragStart={(event) => handleDragStart(event, 'block')} />
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton tooltipContent='Coil'>
         <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />

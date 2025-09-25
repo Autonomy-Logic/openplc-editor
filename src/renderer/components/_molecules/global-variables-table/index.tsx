@@ -67,7 +67,11 @@ type PLCVariablesTableProps = {
 
 const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVariablesTableProps) => {
   const {
+    editor: {
+      meta: { name },
+    },
     projectActions: { updateVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   return (
@@ -76,9 +80,10 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
       tableData={tableData}
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
-      updateData={(rowIndex, columnId, value) =>
-        updateVariable({ scope: 'global', rowId: rowIndex, data: { [columnId]: value } })
-      }
+      updateData={(rowIndex, columnId, value) => {
+        addSnapshot(name)
+        return updateVariable({ scope: 'global', rowId: rowIndex, data: { [columnId]: value } })
+      }}
       tableContext='Variables'
     />
   )

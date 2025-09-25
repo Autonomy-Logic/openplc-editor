@@ -4,10 +4,9 @@ import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
-import { PLCPou } from '@root/types/PLC/open-plc'
+import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
@@ -17,7 +16,13 @@ import {
   tableGlobalVariablesCompletion,
   tableVariablesCompletion,
 } from './completion'
-import { updateLocalVariablesInTokenizer } from './configs/languages/st/st'
+import { dataTypeCompletion } from './completion/datatype.completion'
+import { fbCompletion } from './completion/fb.completion'
+import {
+  updateDataTypeVariablesInTokenizer,
+  updateEnumValuesInTokenizer,
+  updateLocalVariablesInTokenizer,
+} from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -40,10 +45,15 @@ type PouToText = {
 }
 type monacoEditorOptionsType = monaco.editor.IStandaloneEditorConstructionOptions
 
+type SnippetController = {
+  insert: (snippet: string, options?: unknown) => void
+}
+
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
+  const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
 
   const {
     editor,
@@ -51,7 +61,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     sensitiveCase,
     regularExpression,
     workspace: {
-      editingState,
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
@@ -60,17 +69,28 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         configuration: {
           resource: { globalVariables },
         },
+        dataTypes,
       },
     },
     libraries: sliceLibraries,
     editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
+  const [localText, setLocalText] = useState<string>(() => {
+    const pou = openPLCStoreBase.getState().project.data.pous.find((pou) => pou.data.name === name)
+    return typeof pou?.data.body.value === 'string' ? pou.data.body.value : ''
+  })
+
+  useEffect(() => {
+    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+    setLocalText(typeof pou?.data.body.value === 'string' ? pou.data.body.value : '')
+  }, [name, language])
 
   const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
 
@@ -109,15 +129,23 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [name])
 
+useEffect(() => {
+    if (language === 'st' && dataTypes.length > 0) {
+      updateDataTypeVariablesInTokenizer(dataTypes)
+      updateEnumValuesInTokenizer(dataTypes)
+    }
+  }, [dataTypes, language])
+
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
       const suggestions = tableVariablesCompletion({
         range,
         variables: (pou?.data.variables || []) as PLCVariable[],
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -130,9 +158,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         range,
         variables: globalVariables as PLCVariable[],
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -147,13 +176,58 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         pous,
         editor,
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
     [sliceLibraries],
+  )
+
+  const fbSuggestions = useCallback(
+    (range: monaco.IRange, model: monaco.editor.ITextModel, position: monaco.IPosition) => {
+      // Filter custom function blocks from POUs
+      const customFBs = pous.filter((pou) => pou.type === 'function-block')
+
+      const suggestions = fbCompletion({
+        model,
+        position,
+        range,
+        pouVariables: pou?.data.variables || [],
+        customFBs,
+        editorName: name,
+      }).suggestions
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
+      return {
+        suggestions: uniqueSuggestions,
+        labels,
+      }
+    },
+    [pou?.data.variables, pous],
+  )
+
+  const dataTypeSuggestions = useCallback(
+    (range: monaco.IRange, model: monaco.editor.ITextModel, position: monaco.IPosition) => {
+      // Use data types from project data (not from POUs)
+
+      const suggestions = dataTypeCompletion({
+        model,
+        position,
+        range,
+        pouVariables: pou?.data.variables || [],
+        customDataTypes: dataTypes,
+      }).suggestions
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
+      return {
+        suggestions: uniqueSuggestions,
+        labels,
+      }
+    },
+    [dataTypes, pou?.data.variables],
   )
 
   const keywordsSuggestions = useCallback(
@@ -165,6 +239,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
       let filteredSuggestions = allSuggestions
       let filteredLabels = allSuggestions.map((suggestion) => suggestion.label)
+      let uniqueSuggestions = allSuggestions
 
       if (language === 'st') {
         const stSnippetLabels = [
@@ -190,11 +265,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           (suggestion) => !stSnippetLabels.includes(suggestion.label.toLowerCase()),
         )
 
-        filteredLabels = filteredSuggestions.map((suggestion) => suggestion.label)
+        uniqueSuggestions = Array.from(new Map(filteredSuggestions.map((s) => [s.label, s])).values())
+        filteredLabels = uniqueSuggestions.map((suggestion) => suggestion.label)
       }
 
       return {
-        suggestions: filteredSuggestions,
+        suggestions: uniqueSuggestions,
         labels: filteredLabels,
       }
     },
@@ -207,9 +283,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         range,
         language: language as 'st' | 'il',
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return {
-        suggestions,
+        suggestions: uniqueSuggestions,
         labels,
       }
     },
@@ -221,7 +298,30 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
    */
   useEffect(() => {
     const disposable = monaco.languages.registerCompletionItemProvider(language, {
+      triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
+        const textUntilPosition = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        })
+
+        const dotAccessMatch = textUntilPosition.match(/(\w+)\.$/)
+        if (dotAccessMatch) {
+          const variableName = dotAccessMatch[1]
+
+          const primitiveTypes: string[] = baseTypeSchema.options
+
+          const allVariables = [...(pou?.data.variables ?? []), ...(globalVariables ?? [])]
+
+          const variable = allVariables.find((v) => v.name === variableName)
+
+          if (variable && primitiveTypes.includes(variable.type.value)) {
+            return { suggestions: [] }
+          }
+        }
+
         const word = model.getWordUntilPosition(position)
         const range = {
           startLineNumber: position.lineNumber,
@@ -248,7 +348,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
                   variablesSuggestions(range).labels.includes(token) ||
                   globalVariablesSuggestions(range).labels.includes(token) ||
                   librarySuggestions(range).labels.includes(token) ||
-                  keywordsSuggestions(range).labels.includes(token)
+                  keywordsSuggestions(range).labels.includes(token) ||
+                  fbSuggestions(range, model, position).labels.includes(token) ||
+                  dataTypeSuggestions(range, model, position).labels.includes(token)
                 ) {
                   return null
                 }
@@ -264,16 +366,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           range,
         }))
 
-        return {
-          suggestions: [
-            ...snippetsSTSuggestions(range).suggestions,
-            ...variablesSuggestions(range).suggestions,
-            ...globalVariablesSuggestions(range).suggestions,
-            ...librarySuggestions(range).suggestions,
-            ...keywordsSuggestions(range).suggestions,
-            ...identifiersSuggestions,
-          ],
-        }
+        const suggestions = [
+          ...fbSuggestions(range, model, position).suggestions,
+          ...dataTypeSuggestions(range, model, position).suggestions,
+          ...snippetsSTSuggestions(range).suggestions,
+          ...variablesSuggestions(range).suggestions,
+          ...globalVariablesSuggestions(range).suggestions,
+          ...librarySuggestions(range).suggestions,
+          ...keywordsSuggestions(range).suggestions,
+          ...identifiersSuggestions,
+        ]
+        const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+
+        return { suggestions: uniqueSuggestions }
       },
     })
     return () => disposable.dispose()
@@ -289,6 +394,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!editorInstance) return
 
     // Existing functionality for other languages
+    focusDisposables.current.onFocus?.dispose()
+    focusDisposables.current.onBlur?.dispose()
+
+    if (editorInstance) {
+      focusDisposables.current.onFocus = editorInstance.onDidFocusEditorText(() => {
+        openPLCStoreBase.getState().editorActions.setMonacoFocused(true)
+      })
+
+      focusDisposables.current.onBlur = editorInstance.onDidBlurEditorText(() => {
+        openPLCStoreBase.getState().editorActions.setMonacoFocused(false)
+      })
+    }
+
     if (searchQuery) {
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
@@ -389,8 +507,10 @@ def block_loop():
   }
 
   function handleWriteInPou(value: string | undefined) {
-    if (!value) return
-    if (editingState !== 'unsaved') setEditingState('unsaved')
+    if (value === undefined) return
+
+    setLocalText(value)
+    handleFileAndWorkspaceSavedState(name)
     updatePou({ name, content: { language, value } })
   }
 
@@ -437,30 +557,13 @@ def block_loop():
 
     setContentToDrop(pouToAppend as PouToText)
 
-    const editorModel = editorRef.current?.getModel()
-    const cursorPosition = editorRef.current?.getPosition()
-
-    if (!editorModel || !cursorPosition) return
-
     if (pouToAppend?.type === 'function') {
       const contentToInsert = parsePouToStText(pouToAppend as PouToText)
 
-      editorModel.pushEditOperations(
-        [],
-        [
-          {
-            range: new monaco.Range(
-              cursorPosition.lineNumber,
-              cursorPosition.column,
-              cursorPosition.lineNumber,
-              cursorPosition.column,
-            ),
-            text: contentToInsert,
-            forceMoveMarkers: true,
-          },
-        ],
-        () => null,
-      )
+      const snippetController = editorRef.current?.getContribution('snippetController2') as unknown as SnippetController
+      if (snippetController) {
+        snippetController.insert(contentToInsert)
+      }
     } else {
       setIsOpen(true)
     }
@@ -481,6 +584,8 @@ def block_loop():
   const handleRenamePou = () => {
     if (!contentToDrop || !editorRef.current) return
 
+    addSnapshot(editor.meta.name)
+
     const currentEditor = pous.find((pou) => pou.data.name === editor.meta.name)
     if (!currentEditor) return
 
@@ -488,30 +593,11 @@ def block_loop():
     const uniqueName = checkIfVariableExists(existingNames, newName)
 
     const renamedContent = { ...contentToDrop, name: uniqueName }
-
-    const editorModel = editorRef.current.getModel()
     const contentToInsert = parsePouToStText(renamedContent)
 
-    if (editorModel) {
-      const cursorPosition = editorRef.current.getPosition()
-      if (!cursorPosition) return
-
-      editorModel.pushEditOperations(
-        [],
-        [
-          {
-            range: new monaco.Range(
-              cursorPosition.lineNumber,
-              cursorPosition.column,
-              cursorPosition.lineNumber,
-              cursorPosition.column,
-            ),
-            text: contentToInsert,
-            forceMoveMarkers: true,
-          },
-        ],
-        () => null,
-      )
+    const snippetController = editorRef.current.getContribution('snippetController2') as unknown as SnippetController
+    if (snippetController) {
+      snippetController.insert(contentToInsert)
     }
 
     setIsOpen(false)
@@ -519,7 +605,7 @@ def block_loop():
 
     const res = createVariable({
       data: {
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         name: uniqueName,
         type: {
           definition: 'derived',
@@ -584,7 +670,7 @@ def block_loop():
           path={path}
           language={language}
           defaultValue={''}
-          value={pou?.data.body.value as string}
+          value={localText}
           onMount={handleEditorDidMount}
           onChange={handleWriteInPou}
           theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}

@@ -38,20 +38,22 @@ export default function LadderEditor() {
     editor,
     ladderFlowActions,
     searchNodePosition,
+    modals,
     project: {
       data: { pous },
     },
     projectActions: { updatePou },
-    workspaceActions: { setEditingState },
     editorActions: { saveEditorViewState },
-    modals,
     modalActions: { closeModal },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
+    snapshotActions: { addSnapshot },
     libraries: { user: userLibraries },
   } = useOpenPLCStore()
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
-  const flowUpdated = flow?.updated
+  const flowUpdated = flow?.updated || false
+
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
   const nodeDivergences = getLibraryDivergences()
@@ -84,12 +86,39 @@ export default function LadderEditor() {
       },
     })
 
-    /**
-     * TODO: Verify if this is method is declared
-     */
     ladderFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
-    setEditingState('unsaved')
+
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }, [flowUpdated])
+
+  /**
+   * Editor state management for scroll position
+   */
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !scrollableRef.current) return
+        const scrollTop = scrollableRef.current.scrollTop
+        saveEditorViewState({
+          prevEditorName,
+          scrollPosition: { top: scrollTop, left: 0 },
+        })
+      },
+    )
+    return () => unsub()
+  }, [])
+  useEffect(() => {
+    const scrollable = scrollableRef.current
+    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
+
+    if (scrollable && scrollData) {
+      scrollable.scrollTop = scrollData.top
+      requestAnimationFrame(() => {
+        scrollable.scrollTop = scrollData.top
+      })
+    }
+  }, [scrollableRef.current, editor.meta.name])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 
@@ -100,7 +129,10 @@ export default function LadderEditor() {
   }
 
   const handleAddNewRung = () => {
+    addSnapshot(editor.meta.name)
+
     const defaultViewport: [number, number] = [300, 100]
+
     ladderFlowActions.startLadderRung({
       editorName: editor.meta.name,
       rungId: `rung_${editor.meta.name}_${uuidv4()}`,
@@ -147,6 +179,7 @@ export default function LadderEditor() {
     auxRungs.splice(destinationIndex, 0, removed)
 
     try {
+      addSnapshot(editor.meta.name)
       ladderFlowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)

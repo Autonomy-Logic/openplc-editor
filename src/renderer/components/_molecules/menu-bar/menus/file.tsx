@@ -1,26 +1,21 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { saveProjectRequest } from '@root/renderer/components/_templates'
-import { useCompiler, useHandleRemoveTab } from '@root/renderer/hooks'
+import { useCompiler } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
-import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const {
-    editor,
     project,
     workspace,
     deviceDefinitions,
-
-    workspaceActions: { setEditingState },
+    selectedTab,
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject },
+    sharedWorkspaceActions: { closeProject, openProject, saveProject, saveFile, closeFile },
   } = useOpenPLCStore()
   const { editingState } = workspace
-  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { handleExportProject } = useCompiler()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
@@ -44,10 +39,6 @@ export const FileMenu = () => {
     await openProject()
   }
 
-  useEffect(() => {
-    setSelectedTab(editor.meta.name)
-  }, [editor])
-
   const handleCloseProject = () => {
     closeProject()
   }
@@ -63,26 +54,27 @@ export const FileMenu = () => {
         <MenuPrimitive.Portal>
           <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleCreateProject()}>
-              <span>{i18n.t('menu:file.submenu.new')}</span>
+              <span>{i18n.t('menu:file.submenu.newProject')}</span>
               <span className={ACCELERATOR}>{'Ctrl + N'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleOpenProject()}>
-              <span>{i18n.t('menu:file.submenu.open')}</span>
+              <span>{i18n.t('menu:file.submenu.openProject')}</span>
               <span className={ACCELERATOR}>{'Ctrl + O'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item
-              className={ITEM}
-              onClick={() => void saveProjectRequest(project, deviceDefinitions, setEditingState)}
-            >
+            <MenuPrimitive.Item className={ITEM} onClick={() => selectedTab && void saveFile(selectedTab)}>
               <span>{i18n.t('menu:file.submenu.save')}</span>
               <span className={ACCELERATOR}>{'Ctrl + S'}</span>
             </MenuPrimitive.Item>
-            <MenuPrimitive.Item className={ITEM} disabled>
-              <span>{i18n.t('menu:file.submenu.saveAs')}</span>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void saveProject(project, deviceDefinitions)}>
+              <span>{i18n.t('menu:file.submenu.saveProject')}</span>
               <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
             </MenuPrimitive.Item>
-            <MenuPrimitive.Item className={ITEM} onClick={() => void handleRemoveTab(selectedTab)}>
+            <MenuPrimitive.Item className={ITEM} disabled>
+              <span>{i18n.t('menu:file.submenu.saveAs')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Shift + A'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} onClick={() => selectedTab && void closeFile(selectedTab)}>
               <span>{i18n.t('menu:file.submenu.closeTab')}</span>
               <span className={ACCELERATOR}>{'Ctrl + W'}</span>
             </MenuPrimitive.Item>
@@ -99,7 +91,7 @@ export const FileMenu = () => {
             <MenuPrimitive.Separator className={SEPARATOR} />
             <MenuPrimitive.Item className={ITEM} disabled>
               <span>{i18n.t('menu:file.submenu.pageSetup')}</span>
-              <span className={ACCELERATOR}>"Ctrl + Alt + P"</span>
+              <span className={ACCELERATOR}>{'Ctrl + Alt + P'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} disabled>
               <span>{i18n.t('menu:file.submenu.preview')}</span>

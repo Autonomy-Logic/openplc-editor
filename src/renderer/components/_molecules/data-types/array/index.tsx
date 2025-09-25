@@ -24,7 +24,10 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       data: { dataTypes },
     },
     libraries: sliceLibraries,
+    snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
+
   const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
   const userDataTypes = dataTypes
     .map((type) => type.name)
@@ -77,26 +80,37 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     const updatedData = { ...data }
     updatedData.initialValue = e.target.value
     updateDatatype(data.name, updatedData as PLCArrayDatatype)
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
-  const handleSelect = (definition: string, value: string) => {
+  const handleBaseTypeSelection = (definition: string, value: string) => {
     setBaseType(value)
     updateDatatype(data.name, {
       ...data,
       baseType: { value, definition },
     } as PLCArrayDatatype)
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
   const addNewRow = () => {
     setTableData((prevRows) => {
+      const isFirst = prevRows.length === 0
       const newRows = [...prevRows, { dimension: '' }]
+
+      if (isFirst) {
+        addSnapshot(editor.meta.name)
+      }
+
       setArrayTable({ selectedRow: newRows.length - 1 })
       updateDatatype(data.name, { dimensions: newRows } as PLCArrayDatatype)
+      handleFileAndWorkspaceSavedState(data.name)
       return newRows
     })
   }
 
   const removeRow = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null) {
         const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
@@ -112,11 +126,14 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         })
         prevRows = newRows
       }
+      handleFileAndWorkspaceSavedState(data.name)
       return prevRows
     })
   }
 
   const moveRowUp = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
         const newRows = [...prevRows]
@@ -135,11 +152,14 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         })
         prevRows = newRows
       }
+      handleFileAndWorkspaceSavedState(data.name)
       return prevRows
     })
   }
 
   const moveRowDown = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
         const newRows = [...prevRows]
@@ -158,6 +178,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         })
         prevRows = newRows
       }
+      handleFileAndWorkspaceSavedState(data.name)
       return prevRows
     })
   }
@@ -173,7 +194,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
             <TypeDropdownSelector
               value={baseType}
-              onSelect={handleSelect}
+              onSelect={handleBaseTypeSelection}
               variableTypes={VariableTypes}
               libraryTypes={LibraryTypes}
             />
@@ -196,7 +217,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         </div>
       </div>
 
-      <div className='flex w-[600px] flex-col gap-3'>
+      <div aria-label='Data type specific container' className='flex h-full w-[600px] flex-col gap-3 overflow-hidden'>
         <div aria-label='Array data type table actions container' className='flex h-fit items-center justify-between'>
           <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
             Dimensions
@@ -236,13 +257,19 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
           </div>
         </div>
 
-        <DimensionsTable
-          name={data.name}
-          tableData={tableData}
-          handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
-          selectedRow={arrayTable.selectedRow}
-          setArrayTable={setArrayTable}
-        />
+        <div
+          aria-label='Array table'
+          className='h-full w-full overflow-auto pr-1'
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <DimensionsTable
+            name={data.name}
+            tableData={tableData}
+            handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
+            selectedRow={arrayTable.selectedRow}
+            setArrayTable={setArrayTable}
+          />
+        </div>
       </div>
     </div>
   )

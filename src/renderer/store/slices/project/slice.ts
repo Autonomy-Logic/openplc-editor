@@ -1,7 +1,13 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { PLCArrayDatatype, PLCGlobalVariable, PLCInstance, PLCTask, PLCVariable } from '@root/types/PLC/open-plc'
+import {
+  PLCArrayDatatype,
+  PLCDataType,
+  PLCGlobalVariable,
+  PLCInstance,
+  PLCTask,
+  PLCVariable,
+} from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
-import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
@@ -44,6 +50,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce(({ project }: ProjectSlice) => {
           project.meta = projectState.meta
           project.data = projectState.data as ProjectSlice['project']['data']
+        }),
+      )
+    },
+    setPous: (pous): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.data.pous = pous as typeof project.data.pous
         }),
       )
     },
@@ -147,7 +160,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
-
     updatePouDocumentation: (pouName, documentation): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -155,6 +167,61 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             return pou.data.name === pouName
           })
           if (draft) draft.data.documentation = documentation
+        }),
+      )
+    },
+    updatePouName: (oldName, newName) => {
+      const nextName = (newName ?? '').trim()
+      if (!nextName) {
+        toast({ title: 'Error', description: 'New name must be non-empty.', variant: 'fail' })
+        return
+      }
+      if (oldName === nextName) return
+
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const pou = project.data.pous.find((p) => p.data.name === oldName)
+          if (!pou) {
+            toast({
+              title: 'Error',
+              description: `POU with name ${oldName} not found.`,
+              variant: 'fail',
+            })
+            return
+          }
+
+          // Prevent collisions with other POUs or Data Types
+          const nameClashWithPou = project.data.pous.some((p) => p !== pou && p.data.name === nextName)
+          const nameClashWithDatatype = project.data.dataTypes.some((dt) => dt.name === nextName)
+          if (nameClashWithPou || nameClashWithDatatype) {
+            toast({
+              title: 'Invalid name',
+              description: `A POU or Data Type named "${nextName}" already exists.`,
+              variant: 'fail',
+            })
+            return
+          }
+
+          // Update body block label for LD/FBD networks if applicable
+          if ((pou.data.language === 'ld' || pou.data.language === 'fbd') && typeof pou.data.body.value !== 'string') {
+            pou.data.body.value.name = nextName
+          }
+
+          pou.data.name = nextName
+        }),
+      )
+    },
+    applyPouSnapshot: (pouName: string, variables: PLCVariable[], body: unknown): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const pou = project.data.pous.find((pou) => pou.data.name === pouName)
+
+          if (!pou) {
+            return
+          }
+
+          pou.data.variables = variables
+          pou.data.body = body as typeof pou.data.body
         }),
       )
     },
@@ -197,7 +264,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               variableToBeCreated.data = {
                 ...variableToBeCreated.data,
                 ...createVariableValidation(pou.data.variables, variableToBeCreated.data),
-                id: variableToBeCreated.data.id ? variableToBeCreated.data.id : uuidv4(),
+                id: variableToBeCreated.data.id ? variableToBeCreated.data.id : crypto.randomUUID(),
               }
               if (variableToBeCreated.rowToInsert !== undefined) {
                 const pouVariables = pou.data.variables.filter((variable) => variable.id !== 'OUT')
@@ -244,7 +311,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 dataToBeUpdated.data.id,
               )
               if (!variableToUpdate) {
-                console.error('Variable not found')
                 response = { ok: false, title: 'Variable not found' }
                 break
               }
@@ -345,7 +411,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             variableToGet.variableId,
           )
           if (!variable) {
-            console.error('Variable not found')
             return undefined
           }
           return variable
@@ -363,7 +428,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             variableToGet.variableId,
           )
           if (!variable) {
-            console.error('Variable not found')
             return undefined
           }
           return variable
@@ -381,7 +445,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           switch (scope) {
             case 'global': {
               if (variableToBeDeleted.rowId === -1) {
-                console.error('Variable not found')
                 break
               }
               const variable = getVariableBasedOnRowIdOrVariableId(
@@ -390,7 +453,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 variableToBeDeleted.variableId,
               )
               if (!variable) {
-                console.error('Variable not found')
                 return
               }
               const index = project.data.configuration.resource.globalVariables.indexOf(variable)
@@ -411,7 +473,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 variableToBeDeleted.variableId,
               )
               if (!variable) {
-                console.error('Variable not found')
                 return
               }
               const index = pou.data.variables.indexOf(variable)
@@ -440,7 +501,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 variableId,
               )
               if (!variableToBeRemoved) {
-                console.error('Variable not found')
                 return
               }
               const index = project.data.configuration.resource.globalVariables.indexOf(variableToBeRemoved)
@@ -457,7 +517,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               const { rowId, variableId, newIndex } = variableToBeRearranged
               const variableToBeRemoved = getVariableBasedOnRowIdOrVariableId(pou.data.variables, rowId, variableId)
               if (!variableToBeRemoved) {
-                console.error('Variable not found')
                 return
               }
               const index = pou.data.variables.indexOf(variableToBeRemoved)
@@ -585,6 +644,19 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
 
           dataType.variable.splice(newIndex, 0, removed)
+        }),
+      )
+    },
+    applyDatatypeSnapshot: (name: string, snapshot: PLCDataType): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const index = project.data.dataTypes.findIndex((dataType) => dataType.name === name)
+
+          if (index === -1) {
+            return
+          }
+
+          project.data.dataTypes[index] = snapshot
         }),
       )
     },

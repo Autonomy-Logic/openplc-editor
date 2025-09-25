@@ -1,4 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
+import { PLCPou } from '@root/types/PLC/open-plc'
 
 // ===================== Device screen selectors. =====================
 const rtuSelectors = {
@@ -46,9 +47,14 @@ const pinSelectors = {
     useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.currentSelectedPinTableRow),
 }
 
-export const deviceSelectors = {
+const deviceSelectors = {
   useDeviceUpdated: () => useOpenPLCStore((state) => state.deviceUpdated.updated),
   useResetDeviceUpdated: () => useOpenPLCStore((state) => state.deviceActions.resetDeviceUpdated),
+}
+
+const compileOnlySelectors = {
+  useCompileOnly: () => useOpenPLCStore((state) => state.deviceDefinitions.compileOnly),
+  useSetCompileOnly: () => useOpenPLCStore((state) => state.deviceActions.setCompileOnly),
 }
 
 const communicationSelectors = {
@@ -68,7 +74,7 @@ const communicationSelectors = {
   useSetCommunicationPreferences: () => useOpenPLCStore((state) => state.deviceActions.setCommunicationPreferences),
 }
 
-// ===================== Project search selectors. =====================
+// ===================== Search selectors. =====================
 const searchSelectors = {
   useSearchQuery: () => useOpenPLCStore((state) => state.searchQuery),
   useSearchResults: () => useOpenPLCStore((state) => state.searchResults),
@@ -84,13 +90,35 @@ const editorSelectors = {
   useEditorState: () => useOpenPLCStore((state) => state.editor),
 }
 
+// ===================== Pous selectors. =====================
+const pouSelectors = {
+  usePous: (fileName: string): PLCPou | undefined =>
+    useOpenPLCStore((state) => state.project.data.pous.find((pou) => pou.data.name === fileName) as PLCPou),
+}
+
+// ===================== Datatype selectors. =====================
+const datatypeSelectors = {
+  useDatatypes: () => useOpenPLCStore((state) => state.project.data.dataTypes),
+}
+
+// ===================== Project selectors. =====================
+const projectSelectors = {
+  useProjectPath: () => useOpenPLCStore((state) => state.project.meta.path),
+}
+
+// ===================== Resource selectors. =====================
+const resourceSelectors = {
+  useResources: () => useOpenPLCStore((state) => state.project.data.configuration.resource),
+}
+
 /**
- * Workspace selectors.
+ * ====================== Workspace selectors. =====================
  */
 const workspaceSelectors = {
   useWorkspace: () => useOpenPLCStore((state) => state.workspace),
   useEditingState: () => useOpenPLCStore((state) => state.workspace.editingState),
   useSetEditingState: () => useOpenPLCStore((state) => state.workspaceActions.setEditingState),
+  useSelectedProjectTreeLeaf: () => useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf),
 }
 
 // ===================== Console selectors. =====================
@@ -101,14 +129,36 @@ const consoleSelectors = {
   useClearLogs: () => useOpenPLCStore((state) => state.consoleActions.clearLogs),
 }
 
+// ===================== File selectors =====================
+const fileSelectors = {
+  useFiles: () => useOpenPLCStore((state) => state.files),
+  useGetFile: () => useOpenPLCStore((state) => state.fileActions.getFile),
+  useIsFileSaved: () => useOpenPLCStore((state) => state.fileActions.getSavedState),
+  useUpdateFile: () => useOpenPLCStore((state) => state.fileActions.updateFile),
+}
+
+// ===================== Shared selectors =====================
+const sharedSelectors = {
+  useHandleFileAndWorkspaceSavedState: () =>
+    useOpenPLCStore((state) => state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState),
+}
+
 export {
   boardSelectors,
   communicationSelectors,
+  compileOnlySelectors,
   consoleSelectors,
+  datatypeSelectors,
+  deviceSelectors,
   editorSelectors,
+  fileSelectors,
   pinSelectors,
+  pouSelectors,
+  projectSelectors,
+  resourceSelectors,
   rtuSelectors,
   searchSelectors,
+  sharedSelectors,
   staticHostSelectors,
   tcpSelectors,
   variablesSelectors,

@@ -85,7 +85,7 @@ const PLCStructureVariableSchema = z.object({
     }),
     z.object({
       /**
-       * This should be ommited at variable table type options
+       * This should be omitted at variable table type options
        */
       definition: z.literal('derived'),
       value: z.string(),
@@ -200,6 +200,8 @@ const bodySchema = z.discriminatedUnion('language', [
     value: z.string(),
   }),
 ])
+
+type BodySchema = z.infer<typeof bodySchema>
 //
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python']),
@@ -314,6 +316,7 @@ export {
 
 export type {
   BaseType,
+  BodySchema,
   PLCArrayDatatype,
   PLCConfiguration,
   PLCDataType,

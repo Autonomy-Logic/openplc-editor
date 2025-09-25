@@ -2,6 +2,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { GlobalVariablesTableType } from '@root/renderer/store/slices'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
@@ -32,7 +33,10 @@ const GlobalVariablesEditor = () => {
     },
     editorActions: { updateModelVariables },
     projectActions: { createVariable, deleteVariable, rearrangeVariables, setGlobalVariables },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
+  const handleFileAndWorkspaceSavedState = sharedSelectors.useHandleFileAndWorkspaceSavedState()
 
   /**
    * Table data and column filters states to keep track of the table data and column filters
@@ -91,6 +95,9 @@ const GlobalVariablesEditor = () => {
 
   const handleRearrangeVariables = (index: number, row?: number) => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     rearrangeVariables({
       scope: 'global',
       rowId: row ?? parseInt(editorVariables.selectedRow),
@@ -104,6 +111,8 @@ const GlobalVariablesEditor = () => {
 
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
 
     const variables = globalVariables.filter((variable) => variable.name)
     const selectedRow = parseInt(editorVariables.selectedRow)
@@ -124,6 +133,8 @@ const GlobalVariablesEditor = () => {
         display: 'table',
         selectedRow: 0,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -136,6 +147,7 @@ const GlobalVariablesEditor = () => {
         display: 'table',
         selectedRow: variables.length,
       })
+      handleFileAndWorkspaceSavedState('Resource')
       return
     }
     createVariable({
@@ -147,10 +159,13 @@ const GlobalVariablesEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleRemoveVariable = () => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
     deleteVariable({ scope: 'global', rowId: selectedRow })
@@ -162,6 +177,7 @@ const GlobalVariablesEditor = () => {
         selectedRow: selectedRow - 1,
       })
     }
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
@@ -173,6 +189,8 @@ const GlobalVariablesEditor = () => {
 
   const commitCode = (): boolean => {
     try {
+      addSnapshot(editor.meta.name)
+
       const newVariables = parseIecStringToVariables(editorCode)
 
       const response = setGlobalVariables({
@@ -185,6 +203,8 @@ const GlobalVariablesEditor = () => {
 
       toast({ title: 'Global Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
+      handleFileAndWorkspaceSavedState('Resource')
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'

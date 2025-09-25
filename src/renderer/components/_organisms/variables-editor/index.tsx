@@ -1,7 +1,7 @@
-// import * as PrimitiveSwitch from '@radix-ui/react-switch'
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import {
   FBDFlowActions,
@@ -41,7 +41,6 @@ const VariablesEditor = () => {
       data: { pous, dataTypes },
     },
     editorActions: { updateModelVariables },
-
     projectActions: {
       createVariable,
       deleteVariable,
@@ -50,7 +49,10 @@ const VariablesEditor = () => {
       updatePouReturnType,
       setPouVariables,
     },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
+  const handleFileAndWorkspaceSavedState = sharedSelectors.useHandleFileAndWorkspaceSavedState()
 
   /**
    * Table data and column filters states to keep track of the table data and column filters
@@ -151,6 +153,9 @@ const VariablesEditor = () => {
 
   const handleRearrangeVariables = (index: number, row?: number) => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     const variable = tableData[row ?? parseInt(editorVariables.selectedRow)]
     rearrangeVariables({
       scope: 'local',
@@ -166,6 +171,8 @@ const VariablesEditor = () => {
 
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
 
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     const selectedRow = parseInt(editorVariables.selectedRow)
@@ -187,6 +194,7 @@ const VariablesEditor = () => {
         display: 'table',
         selectedRow: 0,
       })
+      handleFileAndWorkspaceSavedState(editor.meta.name)
       return
     }
 
@@ -207,6 +215,7 @@ const VariablesEditor = () => {
         display: 'table',
         selectedRow: variables.length,
       })
+      handleFileAndWorkspaceSavedState(editor.meta.name)
       return
     }
     createVariable({
@@ -223,10 +232,13 @@ const VariablesEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleRemoveVariable = () => {
     if (editorVariables.display === 'code') return
+
+    addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
     const selectedVariable = tableData[selectedRow]
@@ -239,6 +251,7 @@ const VariablesEditor = () => {
         selectedRow: selectedRow - 1,
       })
     }
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleFilterChange = (value: FilterOptionsType) => {
@@ -262,6 +275,7 @@ const VariablesEditor = () => {
 
   const handleReturnTypeChange = (value: BaseType) => {
     updatePouReturnType(editor.meta.name, value)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   // const forbiddenVariableToBeRemoved =
@@ -273,6 +287,7 @@ const VariablesEditor = () => {
     event.preventDefault()
     event.stopPropagation()
     updatePouDocumentation(editor.meta.name, event.target.value)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleDescriptionValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,7 +306,8 @@ const VariablesEditor = () => {
     renamedPairs: { oldName: string; type: string }[],
     fbdFlows: FBDFlowState['fbdFlows'],
     updateNode: FBDFlowActions['updateNode'],
-  ) =>
+  ) => {
+    addSnapshot(editor.meta.name)
     fbdFlows.forEach((flow) =>
       flow.rung.nodes.forEach((node) => {
         const data = (node.data as { variable?: PLCVariable }).variable
@@ -316,12 +332,16 @@ const VariablesEditor = () => {
         })
       }),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
+  }
 
   const unlinkRenamedVariablesByName = (
     renamedPairs: { oldName: string; type: string }[],
     ladderFlows: LadderFlowState['ladderFlows'],
     updateNode: LadderFlowActions['updateNode'],
   ) => {
+    addSnapshot(editor.meta.name)
+
     ladderFlows.forEach((flow) =>
       flow.rungs.forEach((rung) =>
         rung.nodes.forEach((node) => {
@@ -349,6 +369,7 @@ const VariablesEditor = () => {
         }),
       ),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const relinkVariablesByName = (
@@ -358,6 +379,8 @@ const VariablesEditor = () => {
     updateNode: LadderFlowActions['updateNode'],
     propagateRenamed: boolean,
   ): void => {
+    addSnapshot(editor.meta.name)
+
     ladderFlows.forEach((flow) =>
       flow.rungs.forEach((rung) =>
         rung.nodes.forEach((node) => {
@@ -399,6 +422,7 @@ const VariablesEditor = () => {
         }),
       ),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const relinkVariablesByNameFBD = (
@@ -408,6 +432,8 @@ const VariablesEditor = () => {
     updateNode: FBDFlowActions['updateNode'],
     propagateRenamed: boolean,
   ): void => {
+    addSnapshot(editor.meta.name)
+
     fbdFlows.forEach((flow) =>
       flow.rung.nodes.forEach((node) => {
         const nodeVar = (node.data as { variable?: PLCVariable }).variable
@@ -446,6 +472,7 @@ const VariablesEditor = () => {
         })
       }),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const getBlockExpectedType = (node: Node): string => {
@@ -517,6 +544,7 @@ const VariablesEditor = () => {
         }),
       ),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const syncNodesWithVariablesFBD = (
@@ -571,10 +599,13 @@ const VariablesEditor = () => {
         }
       }),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const commitCode = async (): Promise<boolean> => {
     try {
+      addSnapshot(editor.meta.name)
+
       const language = 'language' in editor.meta ? editor.meta.language : undefined
 
       if (!language) return false
@@ -669,6 +700,8 @@ const VariablesEditor = () => {
 
       toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
+      handleFileAndWorkspaceSavedState(editor.meta.name)
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'

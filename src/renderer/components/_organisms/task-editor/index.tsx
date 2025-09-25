@@ -1,6 +1,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TaskType } from '@root/renderer/store/slices'
 import { PLCTask } from '@root/types/PLC/open-plc'
@@ -30,7 +31,10 @@ const TaskEditor = () => {
     },
     editorActions: { updateModelTasks },
     projectActions: { createTask, rearrangeTasks, deleteTask, setTasks, setInstances },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
+  const handleFileAndWorkspaceSavedState = sharedSelectors.useHandleFileAndWorkspaceSavedState()
 
   const [taskData, setTaskData] = useState<PLCTask[]>([])
   const [editorCode, setEditorCode] = useState(() => parseResourceConfigurationToString(taskData, instances))
@@ -92,6 +96,9 @@ const TaskEditor = () => {
 
   const handleRearrangeTasks = (index: number, row?: number) => {
     if (editorTasks.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     rearrangeTasks({
       rowId: row ?? parseInt(editorTasks.selectedRow),
       newIndex: (row ?? parseInt(editorTasks.selectedRow)) + index,
@@ -100,10 +107,14 @@ const TaskEditor = () => {
       display: 'table',
       selectedRow: parseInt(editorTasks.selectedRow) + index,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleCreateTask = () => {
     if (editorTasks.display === 'code') return
+
+    addSnapshot(editor.meta.name)
+
     const tasks = taskData.filter((task) => task.name)
     const selectedRow = parseInt(editorTasks.selectedRow)
 
@@ -120,6 +131,8 @@ const TaskEditor = () => {
         display: 'table',
         selectedRow: 0,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -143,6 +156,8 @@ const TaskEditor = () => {
         display: 'table',
         selectedRow: tasks.length,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -151,10 +166,13 @@ const TaskEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleDeleteTask = () => {
     if (editorTasks.display === 'code') return
+
+    addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorTasks.selectedRow)
     deleteTask({
@@ -169,6 +187,7 @@ const TaskEditor = () => {
         selectedRow: selectedRow - 1,
       })
     }
+    handleFileAndWorkspaceSavedState('Resource')
   }
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelTasks({
@@ -179,6 +198,8 @@ const TaskEditor = () => {
 
   const commitCode = (): boolean => {
     try {
+      addSnapshot(editor.meta.name)
+
       const { instances, tasks } = parseResourceStringToConfiguration(editorCode)
 
       const response = setInstances({
@@ -199,6 +220,8 @@ const TaskEditor = () => {
 
       toast({ title: 'Update tables', description: 'Changes applied successfully.' })
       setParseError(null)
+      handleFileAndWorkspaceSavedState('Resource')
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'

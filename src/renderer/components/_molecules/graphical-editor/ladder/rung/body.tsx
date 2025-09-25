@@ -40,6 +40,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
     modalActions: { openModal },
     searchQuery,
     searchActions: { setSearchNodePosition },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -215,8 +216,12 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
       elementType: newNodeType,
       blockVariant: pouLibrary,
     })
+
+    addSnapshot(editor.meta.name)
+
     ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
     ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
+
     if (newNode)
       ladderFlowActions.setSelectedNodes({
         editorName: editor.meta.name,
@@ -230,6 +235,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
    */
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { nodes: newNodes, edges: newEdges } = removeElements({ ...rungLocal }, nodes)
+
+    addSnapshot(editor.meta.name)
+
     ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
     ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
     ladderFlowActions.setSelectedNodes({
@@ -317,6 +325,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
    */
   const handleNodeDragStop = (node: FlowNode) => {
     const result = onElementDrop(rungLocal, rung, node)
+
+    addSnapshot(editor.meta.name)
+
     setDragging(false)
     ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })
     ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })

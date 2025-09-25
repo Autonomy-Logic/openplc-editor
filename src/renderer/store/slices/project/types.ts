@@ -4,6 +4,7 @@ import {
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
   PLCInstanceSchema,
+  PLCPouSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
   PLCStructureVariableSchema,
@@ -131,6 +132,7 @@ const _projectActionsSchema = z.object({
    * Update/Set Project state
    */
   setProject: z.function().args(projectStateSchema).returns(z.void()),
+  setPous: z.function().args(z.array(PLCPouSchema)).returns(z.void()),
   clearProjects: z.function().args(z.void()).returns(z.void()),
 
   /**
@@ -150,6 +152,8 @@ const _projectActionsSchema = z.object({
   deletePou: z.function().args(z.string()).returns(z.void()),
   updatePouDocumentation: z.function().args(z.string(), z.string()).returns(z.void()),
   updatePouReturnType: z.function().args(z.string(), z.string()).returns(z.void()),
+  updatePouName: z.function().args(z.string(), z.string()).returns(z.void()),
+  applyPouSnapshot: z.function().args(z.string(), z.array(PLCVariableSchema), bodySchema).returns(z.void()),
 
   /**
    * Variables Table Actions
@@ -224,6 +228,7 @@ const _projectActionsSchema = z.object({
     .function()
     .args(structureVariableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number(), newIndex: z.number() })))
     .returns(z.void()),
+  applyDatatypeSnapshot: z.function().args(z.string(), PLCDataTypeSchema).returns(z.void()),
 
   /**
    * Task Actions

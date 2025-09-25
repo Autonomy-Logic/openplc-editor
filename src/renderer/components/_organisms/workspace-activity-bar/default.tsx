@@ -1,3 +1,4 @@
+import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn } from '@root/utils'
@@ -14,7 +15,6 @@ import {
   ZoomButton,
 } from '../../_molecules/workspace-activity-bar/default'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
-import { saveProjectRequest } from '../../_templates'
 
 type DefaultWorkspaceActivityBarProps = {
   zoom?: {
@@ -28,8 +28,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     deviceDefinitions,
     deviceAvailableOptions: { availableBoards },
     workspace: { editingState },
-    workspaceActions: { setEditingState },
     consoleActions: { addLog },
+    sharedWorkspaceActions: { saveProject },
   } = useOpenPLCStore()
 
   const [isCompiling, setIsCompiling] = useState(false)
@@ -47,6 +47,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         variables: pou.data.variables,
       }))
   }
+  
+  const compileOnly = compileOnlySelectors.useCompileOnly()
 
   const handleRequest = () => {
     const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
@@ -111,7 +113,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     console.log('original:', projectData)
 
     window.bridge.runCompileProgram(
-      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, processedProjectData],
+      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, compileOnly, processedProjectData],
       (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
         setIsCompiling(true)
         if (typeof data.message === 'string') {
@@ -144,7 +146,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const verifyAndCompile = async () => {
     if (editingState === 'unsaved') {
-      await saveProjectRequest({ data: projectData, meta: projectMeta }, deviceDefinitions, setEditingState)
+      const res = await saveProject({ data: projectData, meta: projectMeta }, deviceDefinitions)
+      if (!res.success) {
+        return
+      }
+
       handleRequest()
     } else {
       handleRequest()

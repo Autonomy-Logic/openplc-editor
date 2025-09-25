@@ -47,56 +47,6 @@ const CommentElement = (block: CommentProps) => {
     }
   }, [])
 
-  useEffect(() => {
-    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-      nodeId: id,
-    })
-    if (!commentaryBlock) return
-
-    if (commentFocused) {
-      updateNode({
-        editorName: editor.meta.name,
-        nodeId: id,
-        node: {
-          ...commentaryBlock,
-          data: {
-            ...commentaryBlock.data,
-            content: commentValue,
-          },
-          draggable: false,
-          selected: true,
-        },
-      })
-      updateModelFBD({
-        canEditorZoom: false,
-        canEditorPan: false,
-      })
-      return
-    }
-
-    updateNode({
-      editorName: editor.meta.name,
-      nodeId: id,
-      node: {
-        ...commentaryBlock,
-        data: {
-          ...commentaryBlock.data,
-          content: commentValue,
-        },
-        draggable: (commentaryBlock as CommentNode).data.draggable,
-        selected: false,
-      },
-    })
-    updateModelFBD({
-      canEditorZoom: true,
-      canEditorPan: true,
-    })
-
-    return () => {
-      updateModelFBD({ canEditorZoom: true, canEditorPan: true })
-    }
-  }, [commentFocused])
-
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
@@ -139,6 +89,82 @@ const CommentElement = (block: CommentProps) => {
     })
   }
 
+  const handleInputCommentFocus = () => {
+    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+    if (!commentaryBlock) return
+    updateNode({
+      editorName: editor.meta.name,
+      nodeId: id,
+      node: {
+        ...commentaryBlock,
+        data: {
+          ...commentaryBlock.data,
+          content: commentValue,
+        },
+        draggable: false,
+        selected: true,
+      },
+    })
+    updateModelFBD({
+      canEditorZoom: false,
+      canEditorPan: false,
+    })
+    setCommentFocused(true)
+  }
+
+  const handleInputCommentBlur = () => {
+    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+    if (!commentaryBlock) return
+    updateNode({
+      editorName: editor.meta.name,
+      nodeId: id,
+      node: {
+        ...commentaryBlock,
+        data: {
+          ...commentaryBlock.data,
+          content: commentValue,
+        },
+        draggable: true,
+        selected: true,
+      },
+    })
+    setCommentFocused(false)
+    updateModelFBD({
+      canEditorZoom: true,
+      canEditorPan: true,
+    })
+  }
+
+  const handleCommentBlockClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+    if (!commentaryBlock) return
+    if (commentFocused) return
+    updateNode({
+      editorName: editor.meta.name,
+      nodeId: id,
+      node: {
+        ...commentaryBlock,
+        data: {
+          ...commentaryBlock.data,
+          content: commentValue,
+        },
+        draggable: true,
+        selected: true,
+      },
+    })
+    updateModelFBD({
+      canEditorZoom: true,
+      canEditorPan: true,
+    })
+  }
+
   return (
     <>
       <div
@@ -154,6 +180,7 @@ const CommentElement = (block: CommentProps) => {
             'border-transparent ring-2 ring-brand': selected,
           },
         )}
+        onClick={handleCommentBlockClick}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
       >
@@ -176,12 +203,8 @@ const CommentElement = (block: CommentProps) => {
             textAreaValue={commentValue}
             setTextAreaValue={setCommentValue}
             handleSubmit={handleSubmitCommentaryValueOnTextareaBlur}
-            onFocus={() => {
-              setCommentFocused(true)
-            }}
-            onBlur={() => {
-              setCommentFocused(false)
-            }}
+            onFocus={handleInputCommentFocus}
+            onBlur={handleInputCommentBlur}
             inputHeight={{
               height: (height ?? MINIMUM_ELEMENT_HEIGHT) - 16,
               scrollLimiter: (height ?? MINIMUM_ELEMENT_HEIGHT) - 16,
