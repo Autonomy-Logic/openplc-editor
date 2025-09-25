@@ -172,7 +172,11 @@ export const createSharedSlice: StateCreator<
 
       let editorData: EditorModel
       // Textual languages
-      if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
+      if (
+        propsToCreatePou.language === 'il' ||
+        propsToCreatePou.language === 'st' ||
+        propsToCreatePou.language === 'python'
+      ) {
         editorData = CreateEditorObject({
           type: 'plc-textual',
           meta: {
