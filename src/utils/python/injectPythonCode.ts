@@ -19,8 +19,6 @@ const injectPythonCode = (pythonPous: PythonPouData[]): string[] => {
     const fmtIn = encodeCharactersFromVariable(inputVariables)
     const fmtOut = encodeCharactersFromVariable(outputVariables)
 
-    console.log(`POU "${pou.name}" format string: fmtIn = ('${fmtIn}'), fmtOut = ('${fmtOut}')`)
-
     const injectedCode = injectPythonRuntime({
       fmtIn,
       fmtOut,
@@ -29,8 +27,6 @@ const injectPythonCode = (pythonPous: PythonPouData[]): string[] => {
       originalCode: pou.code,
       pouName: pou.name,
     })
-
-    console.log(injectedCode)
 
     return injectedCode
   })
