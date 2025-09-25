@@ -1018,7 +1018,7 @@ const VariablesEditor = () => {
         {editorVariables.display === 'code' && (
           <div
             aria-label='Variables editor code container'
-            className='mb-1 h-80 overflow-y-auto'
+            className='mb-1 h-full overflow-y-auto'
             style={{ scrollbarGutter: 'stable' }}
           >
             <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
