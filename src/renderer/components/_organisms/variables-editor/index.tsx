@@ -476,27 +476,114 @@ const VariablesEditor = () => {
   const sameType = (firstType: string, secondType: string) =>
     firstType.toString().trim().toLowerCase() === secondType.toString().trim().toLowerCase()
 
+  const applyVariableToNode = (
+    variable: PLCVariable,
+    nodeId: string,
+    editorName: string,
+    ladderFlows: LadderFlowState['ladderFlows'],
+    updateNode: LadderFlowActions['updateNode'],
+  ) => {
+    let targetFlow = null
+    let targetRung = null
+    let targetNode = null
+
+    for (const flow of ladderFlows) {
+      if (flow.name === editorName) {
+        for (const rung of flow.rungs) {
+          const node = rung.nodes.find((node) => node.id === nodeId)
+
+          if (node) {
+            targetFlow = flow
+            targetRung = rung
+            targetNode = node
+
+            break
+          }
+        }
+
+        if (targetNode) {
+          break
+        }
+      }
+    }
+
+    if (!targetFlow || !targetRung || !targetNode) {
+      return
+    }
+
+    updateNode({
+      editorName: editorName,
+      rungId: targetRung.id,
+      nodeId: targetNode.id,
+      node: {
+        ...targetNode,
+        data: {
+          ...targetNode.data,
+          variable: variable,
+          wrongVariable: false,
+        },
+      },
+    })
+  }
+
+  const applyVariableToNodeFBD = (
+    variable: PLCVariable,
+    nodeId: string,
+    editorName: string,
+    fbdFlows: FBDFlowState['fbdFlows'],
+    updateNode: FBDFlowActions['updateNode'],
+  ) => {
+    let targetFlow = null
+    let targetNode = null
+
+    for (const flow of fbdFlows) {
+      if (flow.name === editorName) {
+        const node = flow.rung.nodes.find((n) => n.id === nodeId)
+        if (node) {
+          targetFlow = flow
+          targetNode = node
+          break
+        }
+      }
+    }
+
+    if (!targetFlow || !targetNode) {
+      return
+    }
+
+    updateNode({
+      editorName: editorName,
+      nodeId: targetNode.id,
+      node: {
+        ...targetNode,
+        data: {
+          ...targetNode.data,
+          variable: variable,
+          wrongVariable: false,
+        },
+      },
+    })
+  }
+
   const syncNodesWithVariables = (
     newVars: PLCVariable[],
     ladderFlows: LadderFlowState['ladderFlows'],
     updateNode: LadderFlowActions['updateNode'],
   ) => {
-    ladderFlows.forEach((flow) =>
-      flow.rungs.forEach((rung) =>
+    ladderFlows.forEach((flow) => {
+      flow.rungs.forEach((rung) => {
         rung.nodes.forEach((node) => {
           const nodeVar = (node.data as { variable?: PLCVariable }).variable
 
-          if (!nodeVar) return
+          if (!nodeVar || !nodeVar.name) {
+            return
+          }
 
-          const target = newVars.find((v) => v.name.toLowerCase() === nodeVar.name.toLowerCase())
+          const selectedVariable = newVars.find(
+            (variable) => variable.name.toLowerCase() === nodeVar.name.toLowerCase(),
+          )
 
-          if (!target) return
-
-          const expectedType = getBlockExpectedType(node)
-
-          const isTheSameType = sameType(target.type.value, expectedType)
-
-          if (!isTheSameType) {
+          if (!selectedVariable) {
             updateNode({
               editorName: flow.name,
               rungId: rung.id,
@@ -505,33 +592,40 @@ const VariablesEditor = () => {
                 ...node,
                 data: {
                   ...node.data,
-                  variable: { ...target, id: `broken-${node.id}` },
+                  variable: { ...nodeVar, id: `broken-${node.id}` },
                   wrongVariable: true,
                 },
               },
             })
-
             return
           }
 
-          if ((node.data as { wrongVariable?: PLCVariable }).wrongVariable) {
-            updateNode({
-              editorName: flow.name,
-              rungId: rung.id,
-              nodeId: node.id,
-              node: {
-                ...node,
-                data: {
-                  ...node.data,
-                  variable: target,
-                  wrongVariable: false,
+          if (node.type === 'contact' || node.type === 'coil') {
+            const expectedType = 'bool'
+            const actualType = selectedVariable.type.value.toLowerCase()
+
+            if (actualType !== expectedType) {
+              updateNode({
+                editorName: flow.name,
+                rungId: rung.id,
+                nodeId: node.id,
+                node: {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    variable: { ...selectedVariable, id: `broken-${node.id}` },
+                    wrongVariable: true,
+                  },
                 },
-              },
-            })
+              })
+              return
+            }
           }
-        }),
-      ),
-    )
+
+          applyVariableToNode(selectedVariable, node.id, flow.name, ladderFlows, updateNode)
+        })
+      })
+    })
   }
 
   const syncNodesWithVariablesFBD = (
@@ -539,21 +633,17 @@ const VariablesEditor = () => {
     fbdFlows: FBDFlowState['fbdFlows'],
     updateNode: FBDFlowActions['updateNode'],
   ) => {
-    fbdFlows.forEach((flow) =>
+    fbdFlows.forEach((flow) => {
       flow.rung.nodes.forEach((node) => {
         const nodeVar = (node.data as { variable?: PLCVariable }).variable
 
-        if (!nodeVar) return
+        if (!nodeVar || !nodeVar.name) {
+          return
+        }
 
-        const target = newVars.find((v) => v.name.toLowerCase() === nodeVar.name.toLowerCase())
+        const selectedVariable = newVars.find((variable) => variable.name.toLowerCase() === nodeVar.name.toLowerCase())
 
-        if (!target) return
-
-        const expectedType = getBlockExpectedType(node)
-
-        const isTheSameType = sameType(target.type.value, expectedType)
-
-        if (!isTheSameType) {
+        if (!selectedVariable) {
           updateNode({
             editorName: flow.name,
             nodeId: node.id,
@@ -561,31 +651,38 @@ const VariablesEditor = () => {
               ...node,
               data: {
                 ...node.data,
-                variable: { ...target, id: `broken-${node.id}` },
+                variable: { ...nodeVar, id: `broken-${node.id}` },
                 wrongVariable: true,
               },
             },
           })
-
           return
         }
 
-        if ((node.data as { wrongVariable?: PLCVariable }).wrongVariable) {
-          updateNode({
-            editorName: flow.name,
-            nodeId: node.id,
-            node: {
-              ...node,
-              data: {
-                ...node.data,
-                variable: target,
-                wrongVariable: false,
+        if (node.type === 'contact' || node.type === 'coil') {
+          const expectedType = 'bool'
+          const actualType = selectedVariable.type.value.toLowerCase()
+
+          if (actualType !== expectedType) {
+            updateNode({
+              editorName: flow.name,
+              nodeId: node.id,
+              node: {
+                ...node,
+                data: {
+                  ...node.data,
+                  variable: { ...selectedVariable, id: `broken-${node.id}` },
+                  wrongVariable: true,
+                },
               },
-            },
-          })
+            })
+            return
+          }
         }
-      }),
-    )
+
+        applyVariableToNodeFBD(selectedVariable, node.id, flow.name, fbdFlows, updateNode)
+      })
+    })
   }
 
   const commitCode = async (): Promise<boolean> => {
