@@ -326,31 +326,31 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     if (shouldInjectTemplate) {
       const pythonTemplate = `# ================================================================
-  # DISCLAIMER: Python Function Block Execution
-  #
-  # This block runs asynchronously from the main PLC runtime.
-  # ---------------------------------------------------------------
-  # - All variables are shared with the runtime through shared memory.
-  # - The block_init() function is called once when the block starts.
-  # - The block_loop() function is called periodically (~100ms).
-  # - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
-  #   It is NOT guaranteed that block_loop() will execute once per scan.
-  #
-  # Use this block for non-time-critical tasks. For logic that must
-  # match the PLC scan cycle, use standard IEC 61131-3 function blocks.
-  # ================================================================
+# DISCLAIMER: Python Function Block Execution
+#
+# This block runs asynchronously from the main PLC runtime.
+# ---------------------------------------------------------------
+# - All variables are shared with the runtime through shared memory.
+# - The block_init() function is called once when the block starts.
+# - The block_loop() function is called periodically (~100ms).
+# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
+#   It is NOT guaranteed that block_loop() will execute once per scan.
+#
+# Use this block for non-time-critical tasks. For logic that must
+# match the PLC scan cycle, use standard IEC 61131-3 function blocks.
+# ================================================================
 
-  from multiprocessing import shared_memory
-  import struct
-  import time
-  import os
+from multiprocessing import shared_memory
+import struct
+import time
+import os
 
-  def block_init():
-      print('Block was initialized')
+def block_init():
+    print('Block was initialized')
 
-  def block_loop():
-      print('Block has run the loop function')
-  `
+def block_loop():
+    print('Block has run the loop function')
+`
 
       editor.setValue(pythonTemplate)
       handleWriteInPou(pythonTemplate)
