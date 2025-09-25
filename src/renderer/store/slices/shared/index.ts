@@ -36,7 +36,7 @@ import { CreateEditorObject, CreatePouObject } from './utils'
 type PropsToCreatePou = {
   name: string
   type: 'program' | 'function' | 'function-block'
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
 }
 
 export type BasicSharedSliceResponse = {
@@ -172,7 +172,11 @@ export const createSharedSlice: StateCreator<
 
       let editorData: EditorModel
       // Textual languages
-      if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
+      if (
+        propsToCreatePou.language === 'il' ||
+        propsToCreatePou.language === 'st' ||
+        propsToCreatePou.language === 'python'
+      ) {
         editorData = CreateEditorObject({
           type: 'plc-textual',
           meta: {

@@ -195,12 +195,16 @@ const bodySchema = z.discriminatedUnion('language', [
     language: z.literal('fbd'),
     value: zodFBDFlowSchema,
   }),
+  z.object({
+    language: z.literal('python'),
+    value: z.string(),
+  }),
 ])
 
 type BodySchema = z.infer<typeof bodySchema>
 //
 const PLCFunctionSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python']),
   name: z.string(),
   returnType: z.union([baseTypeSchema, z.string()]),
   /** Array of variable - will be implemented */
@@ -212,7 +216,7 @@ const PLCFunctionSchema = z.object({
 type PLCFunction = z.infer<typeof PLCFunctionSchema>
 
 const PLCProgramSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python']),
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
@@ -232,7 +236,7 @@ const PLCInstanceSchema = z.object({
 type PLCInstance = z.infer<typeof PLCInstanceSchema>
 
 const PLCFunctionBlockSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python']),
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),

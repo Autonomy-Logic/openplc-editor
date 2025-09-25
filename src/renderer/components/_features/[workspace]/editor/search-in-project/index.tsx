@@ -281,7 +281,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
           string,
           Array<{
             name: string
-            language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st'
+            language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st' | 'python'
             pouType: 'function' | 'function-block' | 'program'
             body: string
             variable: string

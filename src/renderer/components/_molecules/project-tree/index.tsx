@@ -17,6 +17,7 @@ import {
   PencilIcon,
   PLCIcon,
   ProgramIcon,
+  PythonIcon,
   ResourceIcon,
   SFCIcon,
   STIcon,
@@ -220,7 +221,7 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
 }
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
-  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res' | 'devConfig' | 'devPin'
+  leafLang: 'il' | 'st' | 'python' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res' | 'devConfig' | 'devPin'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
 }
@@ -231,6 +232,7 @@ const LeafSources = {
   fbd: { LeafIcon: FBDIcon },
   sfc: { LeafIcon: SFCIcon },
   ld: { LeafIcon: LDIcon },
+  python: { LeafIcon: PythonIcon },
   arr: { LeafIcon: ArrayIcon },
   enum: { LeafIcon: EnumIcon },
   str: { LeafIcon: StructureIcon },

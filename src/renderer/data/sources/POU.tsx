@@ -6,6 +6,7 @@ import {
   ILIcon,
   LDIcon,
   ProgramIcon,
+  PythonIcon,
   SFCIcon,
   STIcon,
 } from '@root/renderer/assets'
@@ -26,6 +27,10 @@ const PouLanguageSources = [
   {
     icon: <FBDIcon />,
     value: 'Functional Block Diagram',
+  },
+  {
+    icon: <PythonIcon />,
+    value: 'Python',
   },
   {
     icon: <SFCIcon />,

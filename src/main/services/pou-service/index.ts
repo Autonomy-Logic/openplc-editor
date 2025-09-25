@@ -27,6 +27,7 @@ class PouService {
     }
 
     try {
+      await UserService.createDirectoryIfNotExists(dirname(filePath))
       await UserService.createJSONFileIfNotExists(filePath, props.pou)
 
       return { success: true, data: { pou: props.pou } }
