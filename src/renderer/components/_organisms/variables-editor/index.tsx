@@ -481,7 +481,7 @@ const VariablesEditor = () => {
     nodeId: string,
     editorName: string,
     ladderFlows: LadderFlowState['ladderFlows'],
-    _updateNodes: LadderFlowActions['updateNode'],
+    updateNode: LadderFlowActions['updateNode'],
   ) => {
     let targetFlow = null
     let targetRung = null
