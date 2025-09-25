@@ -62,22 +62,21 @@ export const conf: languages.LanguageConfiguration = {
     ['{', '}'],
     ['[', ']'],
     ['(', ')'],
-    ['(*', '*)'],
   ],
   autoClosingPairs: [
     { open: '{', close: '}' },
     { open: '[', close: ']' },
     { open: '(', close: ')' },
-    { open: '(*', close: '*)' },
-    { open: '"', close: '"' },
-    { open: "'", close: "'" },
-    { open: '/*', close: '*/' },
+    { open: '(*', close: '*)', notIn: ['string', 'comment'] },
+    // { open: '"', close: '"', notIn: ["string"] }, WSTRING not supported yet
+    { open: "'", close: "'", notIn: ['string'] },
+    { open: '/*', close: '*/', notIn: ['string', 'comment'] },
   ],
   surroundingPairs: [
     { open: '{', close: '}' },
     { open: '[', close: ']' },
     { open: '(', close: ')' },
-    { open: '"', close: '"' },
+    // { open: '"', close: '"' }, WSTRING not supported yet
     { open: "'", close: "'" },
   ],
   wordPattern: /(-?\d*\.\d\w*)|([^\`\~\!\@\#\%\^\&\*\(\)\-\=\+\[\{\]\}\\\|\;\:\'\"\,\.\<\>\/\?\s]+)/,
@@ -440,18 +439,11 @@ export const language: languages.IMonarchLanguage = {
       [/\(\*/, { token: 'comment', next: '@commentBlock' }],
       [/\/\*/, { token: 'comment', next: '@commentBlockC' }],
 
-      // Preprocessor directives
-      [/^\s*#\s*\w+/, 'keyword.directive'],
-
       // Attributes
       [/\{/, { token: 'delimiter.curly', next: '@attribute' }],
 
-      // Typed string literals
-      [/(W?STRING|W?CHAR)#"/, { token: 'type', next: '@stringDouble' }],
-      [/(W?STRING|W?CHAR)#'/, { token: 'type', next: '@stringSingle' }],
-
       // Normal strings
-      [/"/, { token: 'string.quote', next: '@stringDouble' }],
+      // [/"/, { token: 'string.quote', next: '@stringDouble' }], WSTRING not supported yet
       [/'/, { token: 'string.quote', next: '@stringSingle' }],
 
       // Typed number literals
@@ -478,8 +470,8 @@ export const language: languages.IMonarchLanguage = {
       // Labels
       [/^[a-zA-Z_][a-zA-Z0-9_]*:/, 'type.identifier'],
 
-      // Function calls (before FB variable access)
-      [/([a-zA-Z_][a-zA-Z0-9_]*)(\s*)(\()/, ['keyword', 'white', 'delimiter.parenthesis']],
+      // Function calls (before FB variable access) - last group has negative lookahead to not collide with (**) comments
+      [/([a-zA-Z_][a-zA-Z0-9_]*)(\s*)(\((?!\*))/, ['keyword', 'white', 'delimiter.parenthesis']],
 
       // Keywords and identifiers (MOVED BEFORE FB Variable access)
       [
@@ -546,42 +538,38 @@ export const language: languages.IMonarchLanguage = {
     ],
 
     commentBlock: [
-      [/\(\*/, 'comment', '@push'],
       [/\*\)/, 'comment', '@pop'],
       [/./, 'comment'],
     ],
 
     commentBlockC: [
-      [/\/\*/, 'comment', '@push'],
       [/\*\//, 'comment', '@pop'],
       [/./, 'comment'],
     ],
 
     commentBlockDoc: [
-      [/\(\*/, 'comment.doc', '@push'],
       [/\*\)/, 'comment.doc', '@pop'],
       [/@\w+/, 'comment.doc.tag'],
       [/./, 'comment.doc'],
     ],
 
     commentBlockCDoc: [
-      [/\/\*/, 'comment.doc', '@push'],
       [/\*\//, 'comment.doc', '@pop'],
       [/@\w+/, 'comment.doc.tag'],
       [/./, 'comment.doc'],
     ],
 
-    stringDouble: [
-      [/[^\\"$]+/, 'string'],
-      [escapes, 'string.escape'],
-      [/\\./, 'string.escape.invalid'],
-      [/"/, { token: 'string.quote', next: '@pop' }],
-    ],
+    // stringDouble: [ WSTRING not supported yet
+    //   [/[^"$]+/, 'string'],
+    //   [escapes, 'string.escape'],
+    //   [/\$./, 'string.escape.invalid'],
+    //   [/"/, { token: 'string.quote', next: '@pop' }],
+    // ],
 
     stringSingle: [
-      [/[^\\'$]+/, 'string'],
+      [/[^'$]+/, 'string'],
       [escapes, 'string.escape'],
-      [/\\./, 'string.escape.invalid'],
+      [/\$./, 'string.escape.invalid'],
       [/'/, { token: 'string.quote', next: '@pop' }],
     ],
 

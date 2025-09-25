@@ -142,6 +142,9 @@ const configuration: ICustomConfiguration = {
 
   resolve: {
     extensions: ['.ts', '.js'],
+    alias: {
+      'monaco-editor': 'monaco-editor-core',
+    }
   },
   plugins: [
     ...(skipDLLs
@@ -193,7 +196,7 @@ const configuration: ICustomConfiguration = {
       nodeModules: webpackPaths.appNodeModulesPath,
     }),
 
-    new MonacoEditorWebpackPlugin(),
+    new MonacoEditorWebpackPlugin({languages:['python']}),
 
     new EslintPlugin({
       configType: 'flat',
