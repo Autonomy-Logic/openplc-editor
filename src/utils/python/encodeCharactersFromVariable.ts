@@ -20,9 +20,9 @@ const TYPE_ENCODING_MAP: Record<string, string> = {
 }
 
 /**
- * Converte um array de variáveis PLC em uma string de formato para struct.pack/unpack do Python
- * @param variables Array de variáveis PLC
- * @returns String no formato '=hfb126sib126sH' para uso em struct.pack/unpack
+ * Converts an array of PLC variables into a format string for Python's struct.pack/unpack
+ * @param variables Array of PLC variables
+ * @returns String in the format '=hfb126sib126sH' for use with struct.pack/unpack
  */
 
 const encodeCharactersFromVariable = (variables: PLCVariable[]): string => {
