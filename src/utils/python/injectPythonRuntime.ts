@@ -60,7 +60,7 @@ const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
     .filter((variable) => variable.type?.value === 'string')
     .map(
       (variable) =>
-        `    ${variable.name} = ${variable.name}_len[:${variable.name}_body].decode('utf-8', errors='ignore')`,
+        `    ${variable.name} = ${variable.name}_body[:${variable.name}_len].decode('utf-8', errors='ignore')`,
     )
     .join('\n')
 
