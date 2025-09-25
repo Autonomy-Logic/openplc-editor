@@ -196,7 +196,7 @@ const configuration: ICustomConfiguration = {
       nodeModules: webpackPaths.appNodeModulesPath,
     }),
 
-    new MonacoEditorWebpackPlugin({languages:['python']}),
+    new MonacoEditorWebpackPlugin(),
 
     new EslintPlugin({
       configType: 'flat',
