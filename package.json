@@ -65,7 +65,6 @@
     "i18next": "^23.5.1",
     "immer": "^10.1.1",
     "lodash": "^4.17.21",
-    "monaco-editor": "^0.52.2",
     "monaco-editor-core": "^0.53.0",
     "monaco-editor-webpack-plugin": "^7.1.0",
     "path-browserify": "^1.0.1",
