@@ -112,7 +112,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
                       align='center'
                       side='bottom'
                     >
-                      {PouLanguageSources.map((lang) => {
+                      {PouLanguageSources.filter((lang) => lang.value !== 'Python').map((lang) => {
                         return (
                           <SelectItem
                             key={lang.value}
