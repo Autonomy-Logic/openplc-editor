@@ -212,8 +212,11 @@ export default function LadderEditor() {
         const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
         if (!libMatch) continue
 
-        const original = pous.find((pou) => pou.data.name === libMatch.name)?.data?.variables
-        const originalInOut = original?.filter((variable) =>
+        const originalPou = pous.find((pou) => pou.data.name === libMatch.name)
+        if (!originalPou) continue
+
+        const originalVariables = originalPou.data?.variables ?? []
+        const originalInOut = originalVariables?.filter((variable) =>
           ['input', 'output', 'inOut'].includes(variable.class || ''),
         )
 
@@ -229,8 +232,17 @@ export default function LadderEditor() {
           type: { definition: string; value: string }
         }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
 
-        const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
+        if (originalPou.type === 'function') {
+          const outVariable = variant.variables.find((v) => v.name === 'OUT')
+          const outType = outVariable?.type?.value?.toUpperCase()
+          const returnType = originalPou.data.returnType?.toUpperCase()
+          if (!outType || !returnType || outType !== returnType) {
+            divergences.push(`${rung.id}:${node.id}`)
+            continue
+          }
+        }
 
+        const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
         const hasDivergence =
           originalInOut?.length !== currentVariables.length ||
           !originalInOut?.every((variable) => currentMap.has(formatVariable(variable)))

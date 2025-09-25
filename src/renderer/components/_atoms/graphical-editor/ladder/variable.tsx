@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getVariableByName, validateVariableType } from '../utils'
 import { VariablesBlockAutoComplete } from './autocomplete'
-import { BlockNodeData, BlockVariant } from './block'
+import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -58,6 +58,14 @@ const VariableElement = (block: VariableProps) => {
     }
   >(null)
 
+  const autocompleteRef = useRef<
+    HTMLDivElement & {
+      focus: () => void
+      isFocused: boolean
+      selectedVariable: { positionInArray: number; variableName: string }
+    }
+  >(null)
+
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
@@ -72,6 +80,20 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
+    const connectedVariables: LadderBlockConnectedVariables = [
+      ...(relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables.filter(
+        (v) => v.type !== variableNode.data.variant || v.handleId !== variableNode.data.block.handleId,
+      ),
+      {
+        handleId: variableNode.data.block.handleId,
+        handleTableId: (relatedBlock.data as BlockNodeData<BlockVariant>).variant.variables.find(
+          (v) => v.name === variableNode.data.block.handleId,
+        )?.id,
+        type: variableNode.data.variant,
+        variable,
+      },
+    ]
+
     updateNode({
       editorName: editor.meta.name,
       rungId: rung.id,
@@ -80,13 +102,7 @@ const VariableElement = (block: VariableProps) => {
         ...relatedBlock,
         data: {
           ...relatedBlock.data,
-          connectedVariables: {
-            ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
-            [variableNode.data.block.handleId]: {
-              variable: variable,
-              type: variableNode.data.variant,
-            },
-          },
+          connectedVariables,
         },
       },
     })
@@ -253,6 +269,9 @@ const VariableElement = (block: VariableProps) => {
           onChange={onChangeHandler}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+            if (e.key === 'Enter' && (autocompleteRef.current?.selectedVariable?.positionInArray ?? -1) !== -1) {
+              inputVariableRef.current?.blur({ submit: false })
+            }
             setKeyPressedAtTextarea(e.key)
           }}
           onKeyUp={() => setKeyPressedAtTextarea('')}
@@ -261,6 +280,7 @@ const VariableElement = (block: VariableProps) => {
           <div className='relative flex justify-center'>
             <div className='absolute -bottom-1'>
               <VariablesBlockAutoComplete
+                ref={autocompleteRef}
                 block={block}
                 blockType={'variable'}
                 valueToSearch={variableValue}
