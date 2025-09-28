@@ -325,6 +325,7 @@ const EditableNameCell = ({
           value={cellValue}
           onChange={(e) => setCellValue(e.target.value)}
           onBlur={onBlur}
+          onInput={(e) => sanitize(e.currentTarget)}
           className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
         />
       ) : (
@@ -851,6 +852,24 @@ const EditableDocumentationCell = ({
       </PrimitivePopover.Portal>
     </PrimitivePopover.Root>
   )
+}
+
+function sanitize(e: HTMLInputElement) {
+  // const el = e
+  const originalValue = e.value
+  const originalCursorPosition = e.selectionStart || 0
+  let workingValue = originalValue
+  // numbers at the beginning are invalid, so help the user by preceding with an underscore
+  workingValue = workingValue.replace(/^([0-9])/, '_$1')
+  // substitute whitespace and hyphens with underscores
+  workingValue = workingValue.replaceAll(/[\s-]/g, '_')
+  // remove any invalid characters remaining
+  workingValue = workingValue.replaceAll(/[^a-zA-Z0-9_]/g, '')
+  e.value = workingValue
+  // need to adjust the cursor position, by default the cursor will go to the end when changing el.value
+  const cursorOffset = workingValue.length - originalValue.length
+  e.selectionStart = originalCursorPosition + cursorOffset
+  e.selectionEnd = e.selectionStart
 }
 
 export { EditableDocumentationCell, EditableInitialValueCell, EditableLocationCell, EditableNameCell }
