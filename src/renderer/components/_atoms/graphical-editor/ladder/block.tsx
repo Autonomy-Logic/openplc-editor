@@ -23,23 +23,27 @@ import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 export type BlockVariant = {
   name: string
   type: string
-  variables: { name: string; class: string; type: { definition: string; value: string } }[]
+  variables: { id?: string; name: string; class: string; type: { definition: string; value: string } }[]
   documentation: string
   extensible: boolean
 }
-type Variables = {
-  [key: string]: {
-    variable: PLCVariable | undefined
-    type: 'input' | 'output'
-  }
+
+type OldVariables = {
+  [key: string]: { variable: PLCVariable; type: 'input' | 'output' }
 }
+export type LadderBlockConnectedVariables = {
+  handleId: string
+  handleTableId?: string
+  type: 'input' | 'output'
+  variable: PLCVariable | undefined
+}[]
 
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
   lockExecutionControl: boolean
-  connectedVariables: Variables
-  variable: { id: string; name: string } | PLCVariable
+  connectedVariables: LadderBlockConnectedVariables
+  variable: { id?: string; name: string } | PLCVariable
   hasDivergence?: boolean
 }
 
@@ -495,6 +499,44 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   }, [pous])
 
   /**
+   * useEffect to check if the connectedVariable is the correct type when the block variant is changed
+   */
+  useEffect(() => {
+    if (
+      data.connectedVariables &&
+      typeof data.connectedVariables === 'object' &&
+      !Array.isArray(data.connectedVariables)
+    ) {
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+        nodeId: id,
+      })
+      if (!node || !rung) return
+
+      const newVariables: LadderBlockConnectedVariables = []
+      Object.entries(data.connectedVariables as OldVariables).forEach(([key, connectedVariable]) => {
+        newVariables.push({
+          variable: connectedVariable.variable,
+          type: connectedVariable.type,
+          handleId: key,
+        })
+      })
+
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            connectedVariables: newVariables,
+          },
+        },
+      })
+    }
+  }, [data])
+
+  /**
    * Handle with the variable input onBlur event
    */
   const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string, createIfNotFound?: boolean) => {
@@ -586,7 +628,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
-
     if (!node || !rung) return
 
     const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
@@ -595,32 +636,96 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
     if (!libMatch) return
 
-    const libVariables = pous.find((pou) => pou.data.name === libMatch.name)?.data
+    const libPou = pous.find((pou) => pou.data.name === libMatch.name)
+    if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant
+    const newNodeVariables = (libPou.data.variables || []).map((variable) => {
+      let newType
+      switch (variable.type.definition) {
+        case 'array':
+          newType = {
+            ...variable.type,
+            value: variable.type.value.toUpperCase(),
+            data: variable.type.data,
+          }
+          break
+        case 'base-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'base-type',
+          }
+          break
+        case 'user-data-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'user-data-type',
+          }
+          break
+        case 'derived':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'derived',
+          }
+          break
+        default:
+          newType = variable.type
+      }
+      return {
+        ...variable,
+        type: newType,
+      }
+    })
 
-    const newNodeVariables = (libVariables?.variables || []).map((variable) => ({
-      ...variable,
-      type: {
-        ...variable.type,
-        value: variable.type.value.toUpperCase(),
-      },
-    }))
+    if (libPou.type === 'function') {
+      const variable = getVariableRestrictionType(libPou.data.returnType)
+      newNodeVariables.push({
+        name: 'OUT',
+        class: 'output',
+        type: {
+          definition: variable.definition ?? 'derived',
+          value: libPou.data.returnType.toUpperCase(),
+        },
+        location: '',
+        documentation: '',
+        debug: false,
+      })
+    }
+
     const updatedNewNode = buildBlockNode({
       id: `BLOCK_${uuidv4()}`,
       posX: node.position.x,
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
       handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
-      variant: { ...libVariables, type: blockVariant.type, variables: newNodeVariables },
+      variant: { ...libPou.data, type: blockVariant.type, variables: [...newNodeVariables] },
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
+
+    const connectedVariables: LadderBlockConnectedVariables = (
+      node.data as BlockNodeData<BlockVariant>
+    ).connectedVariables
+      .map((connectedVariable) => {
+        if (newNodeVariables.some((newVar) => newVar.name === connectedVariable.handleId)) {
+          return connectedVariable
+        }
+
+        if (connectedVariable.handleTableId) {
+          const matchId = newNodeVariables.find((newVar) => newVar.id === connectedVariable.handleTableId)
+          if (matchId) {
+            return { ...connectedVariable, handleId: matchId.name }
+          }
+        }
+
+        return undefined
+      })
+      .filter((v): v is NonNullable<typeof v> => v !== undefined)
+
     updatedNewNode.data = {
       ...updatedNewNode.data,
+      connectedVariables: connectedVariables ?? [],
       variable: variables.selected ?? { name: '' },
     }
-
-    if (!rung) return
 
     const newBlockNode = { ...updatedNewNode }
 
@@ -634,7 +739,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         ...edge,
         id: edge.id.replace(node.id, newBlockNode.id),
         source: newBlockNode.id,
-        sourceHandle: newBlockNode.data.outputConnector.id,
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
@@ -643,7 +747,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         ...edge,
         id: edge.id.replace(node.id, newBlockNode.id),
         target: newBlockNode.id,
-        targetHandle: newBlockNode.data.inputConnector.id,
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
@@ -788,11 +891,24 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
+  let variantVariables = (variant as BlockVariant)?.variables ?? []
+  const outIndex = variantVariables.findIndex((v) => v.name === 'OUT')
+  if (outIndex > 0) {
+    const [outVar] = variantVariables.splice(outIndex, 1)
+    variantVariables = [outVar, ...variantVariables]
+  }
+  const newVariant = variant ? { ...(variant as BlockVariant), variables: variantVariables } : DEFAULT_BLOCK_TYPE
+
   const {
     variant: variantLib,
     executionControl: executionControlAux,
     lockExecutionControl,
-  } = getBlockVariantAndExecutionControl({ ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }, executionControl)
+  } = getBlockVariantAndExecutionControl(
+    {
+      ...(newVariant as BlockVariant),
+    },
+    executionControl,
+  )
   const { handles, leftHandles, rightHandles, height, width } = getBlockSize(variantLib, { x: handleX, y: handleY })
 
   return {
@@ -811,7 +927,7 @@ export const buildBlockNode = <T extends object | undefined>({
       executionOrder: 0,
       executionControl: executionControlAux,
       lockExecutionControl,
-      connectedVariables: {},
+      connectedVariables: [] as LadderBlockConnectedVariables,
       draggable: true,
       selectable: true,
       deletable: true,

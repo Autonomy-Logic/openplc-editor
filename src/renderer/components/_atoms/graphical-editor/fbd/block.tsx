@@ -12,7 +12,7 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockVariant } from '../types/block'
-import { getBlockDocumentation } from '../utils'
+import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
@@ -540,8 +540,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { rung, node, pou } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
-
-    if (!node || !rung) return
+    if (!pou || !rung || !node) return
 
     const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
     if (!variant) return
@@ -549,17 +548,64 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
     if (!libMatch) return
 
-    const libVariables = pous.find((pou) => pou.data.name === libMatch.name)?.data
+    const libPou = pous.find((pou) => pou.data.name === libMatch.name)
+    if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant
+    const newNodeVariables = (libPou.data.variables || []).map((variable) => {
+      let newType
+      switch (variable.type.definition) {
+        case 'array':
+          newType = {
+            ...variable.type,
+            value: variable.type.value.toUpperCase(),
+            data: variable.type.data,
+          }
+          break
+        case 'base-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'base-type',
+          }
+          break
+        case 'user-data-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'user-data-type',
+          }
+          break
+        case 'derived':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'derived',
+          }
+          break
+        default:
+          newType = variable.type
+      }
+      return {
+        ...variable,
+        type: newType,
+      }
+    })
 
-    const newNodeVariables = (libVariables?.variables || []).map((variable) => ({
-      ...variable,
-      type: {
-        ...variable.type,
-        value: variable.type.value.toUpperCase(),
-      },
-    }))
+    if (libPou.type === 'function') {
+      const variable = getVariableRestrictionType(libPou.data.returnType)
+      const hasOut = newNodeVariables.some((v) => v.name === 'OUT')
+      if (!hasOut)
+        newNodeVariables.push({
+          id: 'OUT',
+          name: 'OUT',
+          class: 'output',
+          type: {
+            definition: variable.definition ?? 'derived',
+            value: libPou.data.returnType.toUpperCase(),
+          },
+          location: '',
+          documentation: '',
+          debug: false,
+        })
+    }
 
     const updatedNewNode = buildBlockNode({
       id: `BLOCK_${crypto.randomUUID()}`,
@@ -567,7 +613,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         x: node.position.x,
         y: node.position.y,
       },
-      variant: { ...libVariables, type: blockVariant.type, variables: newNodeVariables },
+      variant: { ...libPou.data, type: blockVariant.type, variables: newNodeVariables },
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
     updatedNewNode.data = {
@@ -575,67 +621,93 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       variable: variables.selected ?? { name: '' },
     }
 
-    if (!pou || !rung || !node) return
-
     const newNode = { ...updatedNewNode }
 
     const originalNodeInputs = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'input',
+      (variable) => variable.class === 'input' || variable.class === 'inOut',
     )
     const originalNodeSources = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'output',
+      (variable) => variable.class === 'output' || variable.class === 'inOut',
     )
 
-    const updatedInputVariables = newNode.data.variant.variables.filter((variable) => variable.class === 'input')
-    const updatedOutputVariables = newNode.data.variant.variables.filter((variable) => variable.class === 'output')
+    const updatedInputVariables = newNode.data.variant.variables.filter(
+      (variable) => variable.class === 'input' || variable.class === 'inOut',
+    )
+    const updatedOutputVariables = newNode.data.variant.variables.filter(
+      (variable) => variable.class === 'output' || variable.class === 'inOut',
+    )
 
     let newNodes = [...rung.nodes]
     newNodes = newNodes.map((nodeItem) => (nodeItem.id === node.id ? newNode : nodeItem))
 
-    // filter unchanged and removed edges
-    let newEdges = [...rung.edges].filter((edge) => {
-      const isSource = edge.source === node.id
-      const isTarget = edge.target === node.id
+    // Update edges to match new node and variable positions
+    // Only reconnect edges that were previously connected to the node and have a matching handle in the updated node
+    const newEdges = rung.edges
+      .map((edge) => {
+        const isSource = edge.source === node.id
+        const isTarget = edge.target === node.id
 
-      const isUnchanged = !isSource && !isTarget
-      if (isUnchanged) return true
+        // Only update edges that were previously connected to the node
+        if (isSource) {
+          // Find the handle name in the original node's output variables
+          const outputIndex = originalNodeSources.findIndex((v) => v.name === edge.sourceHandle)
+          // Only connect if the handle exists in both original and updated node
+          if (outputIndex === -1) return null
 
-      // check if output exists in original position
-      if (isSource) {
-        const outputIndex = originalNodeSources.findIndex((originalEdge) => originalEdge.name === edge.sourceHandle)
-        return !!updatedOutputVariables[outputIndex]
-      }
+          const updatedHandle = updatedOutputVariables.find((v) => v.name === originalNodeSources[outputIndex].name)
+          if (updatedHandle)
+            return {
+              ...edge,
+              source: newNode.id,
+              sourceHandle: updatedHandle.name,
+            }
 
-      // check if input exists in original position
-      if (isTarget) {
-        const inputIndex = originalNodeInputs.findIndex((originalEdge) => originalEdge.name === edge.targetHandle)
-        return !!updatedInputVariables[inputIndex]
-      }
+          const origId = originalNodeSources[outputIndex].id
+          if (origId) {
+            const updatedHandleId = updatedOutputVariables.find((v) => v.id === origId)
+            if (updatedHandleId)
+              return {
+                ...edge,
+                source: newNode.id,
+                sourceHandle: updatedHandleId.name,
+              }
+          }
 
-      return false
-    })
+          return null
+        }
 
-    newEdges = newEdges.map((edge) => {
-      const updatedData = { ...edge }
+        if (isTarget) {
+          // Find the handle name in the original node's input variables
+          const inputIndex = originalNodeInputs.findIndex((v) => v.name === edge.targetHandle)
+          // Only connect if the handle exists in both original and updated node
+          if (inputIndex === -1) return null
 
-      const isSource = edge.source === node.id
-      const isTarget = edge.target === node.id
+          const updatedHandle = updatedInputVariables.find((v) => v.name === originalNodeInputs[inputIndex].name)
+          if (updatedHandle)
+            return {
+              ...edge,
+              target: newNode.id,
+              targetHandle: updatedHandle.name,
+            }
 
-      if (isSource) {
-        const outputIndex = originalNodeSources.findIndex((originalEdge) => originalEdge.name === edge.sourceHandle)
+          const origIdIn = originalNodeInputs[inputIndex].id
+          if (origIdIn) {
+            const updatedHandleId = updatedInputVariables.find((v) => v.id === origIdIn)
+            if (updatedHandleId)
+              return {
+                ...edge,
+                target: newNode.id,
+                targetHandle: updatedHandleId.name,
+              }
+          }
 
-        updatedData.source = newNode.id
-        updatedData.sourceHandle = updatedOutputVariables[outputIndex].name
-      }
-      if (isTarget) {
-        const inputIndex = originalNodeInputs.findIndex((originalEdge) => originalEdge.name === edge.targetHandle)
+          return null
+        }
 
-        updatedData.target = newNode.id
-        updatedData.targetHandle = updatedInputVariables[inputIndex].name
-      }
-
-      return updatedData
-    })
+        // Unchanged edge
+        return edge
+      })
+      .filter((edge) => edge !== null)
 
     setNodes({
       editorName: editor.meta.name,
@@ -735,8 +807,16 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
+  let variantVariables = (variant as BlockVariant)?.variables ?? []
+  const outIndex = variantVariables.findIndex((v) => v.name === 'OUT')
+  if (outIndex > 0) {
+    const [outVar] = variantVariables.splice(outIndex, 1)
+    variantVariables = [outVar, ...variantVariables]
+  }
+  const newVariant = variant ? { ...(variant as BlockVariant), variables: variantVariables } : DEFAULT_BLOCK_TYPE
+
   const { variant: variantLib, executionControl: executionControlAux } = getBlockVariantAndExecutionControl(
-    { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) },
+    { ...(newVariant as BlockVariant) },
     executionControl,
   )
   const handlePosition = {

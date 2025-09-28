@@ -32,7 +32,10 @@ const Console = memo(() => {
       aria-label='Console'
       className='relative h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
     >
-      {logs.length > 0 && logs.map((log) => <LogComponent key={log.id} level={log.level} message={log.message} />)}
+      {logs.length > 0 &&
+        logs.map((log) => (
+          <LogComponent key={log.id} level={log.level} message={log.message} tstamp={log.tstamp.toLocaleTimeString()} />
+        ))}
       <div ref={bottomLogRef} id='bottom-log' />
     </div>
   )

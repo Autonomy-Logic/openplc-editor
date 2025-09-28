@@ -2,6 +2,7 @@ import { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeSchema, generi
 import { z } from 'zod'
 
 const blockVariantVariableSchema = BaseLibraryVariableSchema.extend({
+  id: z.string().optional(),
   class: z.enum(['input', 'output', 'local', 'inOut']),
   type: z.discriminatedUnion('definition', [
     z.object({
