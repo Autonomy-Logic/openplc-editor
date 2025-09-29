@@ -1,0 +1,12 @@
+FUNCTION_BLOCK {{name}}
+    VAR_INPUT
+        {%-for line in vars%}
+        {{line}}
+        {%- endfor %}
+    END_VAR
+    VAR
+        local_temp : DINT;
+    END_VAR
+    
+    local_temp := 0;
+END_FUNCTION_BLOCK
