@@ -13,8 +13,14 @@ Stream* mb_serialport;
 int8_t mb_txpin;
 uint16_t mb_t15; // inter character time out
 uint16_t mb_t35; // frame delay
+
 #ifdef MBTCP_ETHERNET
+#ifdef BOARD_ESP32
+    WiFiServer mb_server(502);
+	WiFiClient mb_serverClients[MAX_SRV_CLIENTS];
+#else
     EthernetServer mb_server(502);
+#endif
     uint8_t mb_mbap[MBAP_SIZE];
 #ifdef BOARD_PORTENTA
     EthernetClient mb_serverClients[MAX_SRV_CLIENTS];
@@ -40,11 +46,11 @@ bool init_mbregs(uint8_t size_holding, uint8_t size_dint_memory, uint8_t size_li
     modbus.input_status_size = size_inputstatus;
 
     //round discrete regs sizes
-    if (size_coils % 8 > 0) 
+    if (size_coils % 8 > 0)
         size_coils = (size_coils / 8) + 1;
     else
         size_coils = size_coils / 8;
-    if (size_inputstatus % 8 > 0) 
+    if (size_inputstatus % 8 > 0)
         size_inputstatus = (size_inputstatus / 8) + 1;
     else
         size_inputstatus = (size_inputstatus / 8);
@@ -109,14 +115,14 @@ void mbconfig_serial_iface(Stream* port, long baud, int txPin)
     //(*port).begin(baud); //Initialization already happened on main .ino file
 
     //RS-485 control
-    if (txPin >= 0) 
+    if (txPin >= 0)
     {
         pinMode(txPin, OUTPUT);
         digitalWrite(txPin, LOW);
     }
 
     #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
-        if (mb_serialport == &Serial3) 
+        if (mb_serialport == &Serial3)
             Controllino_RS485Init();
     #elif defined(CONTROLLINO_MICRO)
     if (mb_serialport == &Serial2) {
@@ -149,20 +155,39 @@ void mbconfig_serial_iface(Stream* port, long baud, int txPin)
     mb_t35 = mb_t15 * 3.5;
 }
 
+
 #ifdef MBTCP
 void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *gateway, uint8_t *subnet)
 {
     #ifdef MBTCP_ETHERNET
-        if (ip == NULL)
-            Ethernet.begin(mac);
-        else if (dns == NULL)
-            Ethernet.begin(mac, IPAddress(ip));
-        else if (gateway == NULL)
-            Ethernet.begin(mac, IPAddress(ip), IPAddress(dns));
-        else if (subnet == NULL)
-            Ethernet.begin(mac, IPAddress(ip), IPAddress(dns), IPAddress(gateway));
-        else
-            Ethernet.begin(mac, IPAddress(ip), IPAddress(dns), IPAddress(gateway), IPAddress(subnet));
+        #ifdef BOARD_ESP32
+
+            ETH.begin();
+
+            if (ip != NULL && subnet != NULL && gateway != NULL)
+                (ETH.config(ip, gateway, subnet, dns));
+
+        #else
+            if (ip == NULL)
+                Ethernet.begin(mac);
+            else if (dns == NULL)
+                Ethernet.begin(mac, IPAddress(ip));
+            else if (gateway == NULL)
+                Ethernet.begin(mac, IPAddress(ip), IPAddress(dns));
+            else if (subnet == NULL)
+                Ethernet.begin(mac, IPAddress(ip), IPAddress(dns), IPAddress(gateway));
+            else
+                Ethernet.begin(mac, IPAddress(ip), IPAddress(dns), IPAddress(gateway), IPAddress(subnet));
+        #endif
+
+//        int num_tries = 0;
+//        while (!ETH.linkUp())
+//        {
+//            delay(500);
+//            num_tries++;
+//            if (num_tries == 20) break;
+//        }
+
     #endif
     #ifdef MBTCP_WIFI
         #if defined(BOARD_ESP8266) || defined(BOARD_ESP32)
@@ -192,14 +217,16 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
         #endif
         WiFi.begin(MBTCP_SSID, MBTCP_PWD);
         int num_tries = 0;
-        while (WiFi.status() != WL_CONNECTED) 
+        while (WiFi.status() != WL_CONNECTED)
         {
             delay(500);
             num_tries++;
             if (num_tries == 10) break;
         }
     #endif
+
     mb_server.begin();
+
 }
 #endif
 
@@ -217,8 +244,13 @@ void mbtask()
 void handle_tcp()
 {
     #ifdef MBTCP_ETHERNET
-        EthernetClient client = mb_server.available();
+        #ifdef BOARD_ESP32
+            WiFiClient client = mb_server.available();
+        #else
+            EthernetClient client = mb_server.available();
+        #endif
     #endif
+
     #if defined(MBTCP_WIFI) && !defined(BOARD_ESP8266) && !defined(BOARD_ESP32)
         WiFiClient client = mb_server.available();
     #endif
@@ -226,17 +258,19 @@ void handle_tcp()
     //ESP and Portenta boards have a slightly different implementation of the WiFi/Ethernet API - therefore their specific
     //code lies below
     #if (defined(BOARD_ESP8266) || defined(BOARD_ESP32) || defined(BOARD_PORTENTA)) || defined(BOARD_PICOW) && (defined(MBTCP_WIFI) || defined(MBTCP_ETHERNET))
-        #if defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
+
+
+        #if defined(BOARD_PORTENTA) || defined(BOARD_PICOW) || (defined(BOARD_ESP32) && defined(MBTCP_ETHERNET))
         if (client)
         #else
         if (mb_server.hasClient())
         #endif
         {
-            for (int i = 0; i < MAX_SRV_CLIENTS; i++) 
+            for (int i = 0; i < MAX_SRV_CLIENTS; i++)
             {
                 if (!mb_serverClients[i]) //equivalent to !serverClients[i].connected()
                 {
-                    #if defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
+                    #if defined(BOARD_PORTENTA) || defined(BOARD_PICOW) || defined(BOARD_ESP32) && defined(MBTCP_ETHERNET)
                     mb_serverClients[i] = client;
                     #else
                     mb_serverClients[i] = mb_server.available();
@@ -247,26 +281,31 @@ void handle_tcp()
         }
 
         //search all clients for data
-        for (int i = 0; i < MAX_SRV_CLIENTS; i++) 
+        for (int i = 0; i < MAX_SRV_CLIENTS; i++)
         {
             int j = 0;
+
+
             if (mb_serverClients[i].connected() && mb_serverClients[i].available())
+
             {
                 //Read packet
+
+
                 while (mb_serverClients[i].available())
                 {
                     mb_mbap[j] = mb_serverClients[i].read();
                     j++;
                     if (j==MBAP_SIZE) break;  //MBAP has 6 bytes (we use UnitID as SlaveID)
                 }
-                
+
                 mb_frame_len = mb_mbap[4] << 8 | mb_mbap[5];
-        
+
                 if (mb_mbap[2] !=0 || mb_mbap[3] !=0) return;   //Not a MODBUSIP packet
                 if (mb_frame_len < 6 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
 
                 j = 0;
-                while (mb_serverClients[i].available()) 
+                while (mb_serverClients[i].available())
                 {
                     mb_frame[j] = mb_serverClients[i].read();
                     j++;
@@ -281,7 +320,7 @@ void handle_tcp()
                 //Calculate packet length for MBAP header (mb_frame_len + 1)
                 mb_mbap[4] = (mb_frame_len) >> 8;
                 mb_mbap[5] = (mb_frame_len) & 0x00FF;
-    
+
                 uint8_t sendbuffer[mb_frame_len + MBAP_SIZE];
 
                 //MBAP
@@ -291,17 +330,17 @@ void handle_tcp()
                 //PDU Frame
                 for (j = 0 ; j < mb_frame_len ; j++)
                     sendbuffer[j+MBAP_SIZE] = mb_frame[j];
-                
+
                 //Write back
                 mb_serverClients[i].write(sendbuffer, mb_frame_len + MBAP_SIZE);
             }
         }
-    
+
     //If this is not an ESP board or Portenta board, then here is the default code
     #else
-        if (client) 
+        if (client)
         {
-            if (client.connected()) 
+            if (client.connected())
             {
                 int i = 0;
                 while (client.available())
@@ -312,7 +351,7 @@ void handle_tcp()
                 }
 
                 mb_frame_len = mb_mbap[4] << 8 | mb_mbap[5];
-        
+
                 if (mb_mbap[2] !=0 || mb_mbap[3] !=0) return;   //Not a MODBUSIP packet
                 if (mb_frame_len < 6 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
 
@@ -332,7 +371,7 @@ void handle_tcp()
                 //Calculate packet length for MBAP header (mb_frame_len + 1)
                 mb_mbap[4] = (mb_frame_len) >> 8;
                 mb_mbap[5] = (mb_frame_len) & 0x00FF;
-    
+
                 uint8_t sendbuffer[mb_frame_len + MBAP_SIZE];
 
                 //MBAP
@@ -342,7 +381,7 @@ void handle_tcp()
                 //PDU Frame
                 for (i = 0 ; i < mb_frame_len ; i++)
                     sendbuffer[i+MBAP_SIZE] = mb_frame[i];
-                
+
                 //Write back
                 client.write(sendbuffer, mb_frame_len + MBAP_SIZE);
             }
@@ -356,10 +395,10 @@ void handle_serial()
 {
     mb_frame_len = 0;
 
-    if ((*mb_serialport).available() == 0) 
+    if ((*mb_serialport).available() == 0)
         return;
-	
-    while ((*mb_serialport).available() > mb_frame_len) 
+
+    while ((*mb_serialport).available() > mb_frame_len)
     {
         mb_frame_len = (*mb_serialport).available();
         delayMicroseconds(mb_t15);
@@ -385,10 +424,10 @@ void handle_serial()
     if (mb_frame[1] != MB_FC_DEBUG_INFO && mb_frame[1] != MB_FC_DEBUG_SET && mb_frame[1] != MB_FC_DEBUG_GET && mb_frame[1] != MB_FC_DEBUG_GET_LIST && mb_frame[1] != MB_FC_DEBUG_GET_MD5)
     {
         packet_crc = ((mb_frame[mb_frame_len - 2] << 8) | mb_frame[mb_frame_len - 1]);
-        if (packet_crc != calcCrc()) 
+        if (packet_crc != calcCrc())
         {
-	    /* DEBUG
-            char buffer[100];
+        /* DEBUG
+	    char buffer[100];
             (*mb_serialport).println("Invalid CRC for packet: ");
             int offset = 0; // Initialize offset for buffer
             for (int i = 0; i < mb_frame_len; i++)
@@ -401,13 +440,13 @@ void handle_serial()
             (*mb_serialport).print("Calc CRC: ");
             (*mb_serialport).println(calcCrc());
             (*mb_serialport).flush();
-	    */
-            return;
+        */
+	    return;
         }
     }
 
     //Validate SlaveID
-    if (mb_frame[0] != modbus.slaveid) 
+    if (mb_frame[0] != modbus.slaveid)
     {
         (*mb_serialport).flush();
         return;
@@ -415,7 +454,7 @@ void handle_serial()
 
     //Remove CRC (must do that before processing packet)
     mb_frame_len -= 2;
-    
+
     //Process packet and write back
     process_mbpacket();
 
@@ -427,7 +466,7 @@ void handle_serial()
     mb_frame[mb_frame_len - 2] = (uint8_t)(packet_crc >> 8);
     mb_frame[mb_frame_len - 1] = (uint8_t)(packet_crc & 0x00FF);
 
-    if (mb_txpin >= 0) 
+    if (mb_txpin >= 0)
     {
         digitalWrite(mb_txpin, HIGH);
         delayMicroseconds(mb_t35);
@@ -435,7 +474,7 @@ void handle_serial()
 
     #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
         if (mb_serialport == &Serial3) // RS485 serial port
-            Controllino_RS485TxEnable(); // Enable RS485 chip to transmit 
+            Controllino_RS485TxEnable(); // Enable RS485 chip to transmit
     #elif defined(CONTROLLINO_MICRO)
         if (mb_serialport == &Serial2) {
             digitalWrite(CUSTOM_RS485_DEFAULT_DE_PIN, HIGH);
@@ -449,7 +488,7 @@ void handle_serial()
 
     if (mb_txpin >= 0)
         digitalWrite(mb_txpin, LOW);
-    
+
     #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
         if (mb_serialport == &Serial3) // RS485 serial port
             Controllino_RS485RxEnable(); // Go back to receive mode after transmitted data
@@ -472,8 +511,8 @@ void process_mbpacket()
     uint16_t len = (uint16_t)mb_frame[5] << 8 | (uint16_t)mb_frame[6];
     void *value = &mb_frame[7];
     void *endianness_check = &mb_frame[2];
-    
-    switch (fcode) 
+
+    switch (fcode)
     {
         case MB_FC_WRITE_REG:
             //field1 = reg, field2 = value
@@ -548,7 +587,7 @@ void process_mbpacket()
 void readRegisters(uint16_t startreg, uint16_t numregs)
 {
     //Check value (numregs)
-    if (numregs < 0x0001 || numregs > 0x007D) 
+    if (numregs < 0x0001 || numregs > 0x007D)
     {
         exceptionResponse(MB_FC_READ_REGS, MB_EX_ILLEGAL_VALUE);
         return;
@@ -579,7 +618,7 @@ void readRegisters(uint16_t startreg, uint16_t numregs)
     uint16_t val;
     uint16_t i = 0;
     uint8_t pos = 0;
-	while(numregs--) 
+	while(numregs--)
     {
         if ((startreg + i) < modbus.holding_size)
         {
@@ -622,7 +661,7 @@ void readRegisters(uint16_t startreg, uint16_t numregs)
                 val = (uint16_t)(modbus.lint_memory[pos] & 0xffff);
             }
         }
-        
+
         //write the high byte of the register value
         mb_frame[3 + (i * 2)]  = val >> 8;
         //write the low byte of the register value
@@ -633,7 +672,7 @@ void readRegisters(uint16_t startreg, uint16_t numregs)
 
 void writeSingleRegister(uint16_t reg, uint16_t value)
 {
-    if (reg >= (modbus.holding_size + (2*modbus.dint_memory_size) + (4*modbus.lint_memory_size))) 
+    if (reg >= (modbus.holding_size + (2*modbus.dint_memory_size) + (4*modbus.lint_memory_size)))
     {
         exceptionResponse(MB_FC_WRITE_REG, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -672,19 +711,19 @@ void writeSingleRegister(uint16_t reg, uint16_t value)
         else if (reg % 4 == 1) //second word
         {
             pos = (reg - (modbus.holding_size + (2*modbus.dint_memory_size) - 1)) / 4;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffff0000ffffffff; 
+            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffff0000ffffffff;
             modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 32);
         }
         else if (reg % 4 == 2) //third word
         {
             pos = (reg - (modbus.holding_size + (2*modbus.dint_memory_size) - 2)) / 4;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffff0000ffff; 
+            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffff0000ffff;
             modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 16);
         }
         else //fourth word
         {
             pos = (reg - (modbus.holding_size + (2*modbus.dint_memory_size) - 3)) / 4;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffffffff0000; 
+            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffffffff0000;
             modbus.lint_memory[pos] = modbus.lint_memory[pos] | value;
         }
     }
@@ -693,7 +732,7 @@ void writeSingleRegister(uint16_t reg, uint16_t value)
 void writeMultipleRegisters(uint16_t startreg, uint16_t numoutputs, uint8_t bytecount)
 {
     //Check value
-    if (numoutputs < 0x0001 || numoutputs > 0x007B || bytecount != 2 * numoutputs) 
+    if (numoutputs < 0x0001 || numoutputs > 0x007B || bytecount != 2 * numoutputs)
     {
         exceptionResponse(MB_FC_WRITE_REGS, MB_EX_ILLEGAL_VALUE);
         return;
@@ -717,10 +756,10 @@ void writeMultipleRegisters(uint16_t startreg, uint16_t numoutputs, uint8_t byte
     uint16_t value;
     uint16_t i = 0;
     uint8_t pos = 0;
-	while(numoutputs--) 
+	while(numoutputs--)
     {
         value = (uint16_t)mb_frame[7+i*2] << 8 | (uint16_t)mb_frame[8+i*2];
-        
+
         if ((startreg + i) < modbus.holding_size)
         {
             modbus.holding[(startreg + i)] = value;
@@ -752,19 +791,19 @@ void writeMultipleRegisters(uint16_t startreg, uint16_t numoutputs, uint8_t byte
             else if ((startreg + i) % 4 == 1) //second word
             {
                 pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 1)) / 4;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffff0000ffffffff; 
+                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffff0000ffffffff;
                 modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 32);
             }
             else if ((startreg + i) % 4 == 2) //third word
             {
                 pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 2)) / 4;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffff0000ffff; 
+                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffff0000ffff;
                 modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 16);
             }
             else //fourth word
             {
                 pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 3)) / 4;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffffffff0000; 
+                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffffffff0000;
                 modbus.lint_memory[pos] = modbus.lint_memory[pos] | value;
             }
         }
@@ -786,14 +825,14 @@ void exceptionResponse(uint16_t fcode, uint16_t excode)
 void readCoils(uint16_t startreg, uint16_t numregs)
 {
     //Check value (numregs)
-    if (numregs < 0x0001 || numregs > 0x07D0) 
+    if (numregs < 0x0001 || numregs > 0x07D0)
     {
         exceptionResponse(MB_FC_READ_COILS, MB_EX_ILLEGAL_VALUE);
         return;
     }
 
     //Check Address
-    if (startreg + numregs > modbus.coils_size) 
+    if (startreg + numregs > modbus.coils_size)
     {
         exceptionResponse(MB_FC_READ_COILS, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -809,7 +848,7 @@ void readCoils(uint16_t startreg, uint16_t numregs)
         exceptionResponse(MB_FC_READ_COILS, MB_EX_SLAVE_FAILURE);
         return;
     }
-    
+
     //Clean frame buffer (leave only SlaveID)
     for (int i = 1; i < mb_frame_len; i++) mb_frame[i] = 0;
 
@@ -819,14 +858,14 @@ void readCoils(uint16_t startreg, uint16_t numregs)
     uint8_t bitn = 0;
     uint16_t totregs = numregs;
     uint16_t i;
-	while (numregs) 
+	while (numregs)
     {
         i = (totregs - numregs--) / 8;
 		if (get_discrete((uint8_t)startreg, COILS))
 			bitSet(mb_frame[3+i], bitn);
 		else
 			bitClear(mb_frame[3+i], bitn);
-        
+
 		//increment the bit index
 		bitn++;
 		if (bitn == 8) bitn = 0;
@@ -838,7 +877,7 @@ void readCoils(uint16_t startreg, uint16_t numregs)
 void readInputStatus(uint16_t startreg, uint16_t numregs)
 {
     //Check value (numregs)
-    if (numregs < 0x0001 || numregs > 0x07D0) 
+    if (numregs < 0x0001 || numregs > 0x07D0)
     {
         exceptionResponse(MB_FC_READ_INPUT_STAT, MB_EX_ILLEGAL_VALUE);
         return;
@@ -871,7 +910,7 @@ void readInputStatus(uint16_t startreg, uint16_t numregs)
     byte bitn = 0;
     uint16_t totregs = numregs;
     uint16_t i;
-    while (numregs) 
+    while (numregs)
     {
         i = (totregs - numregs--) / 8;
         if (get_discrete(startreg, INPUTSTATUS))
@@ -889,14 +928,14 @@ void readInputStatus(uint16_t startreg, uint16_t numregs)
 void readInputRegisters(uint16_t startreg, uint16_t numregs)
 {
     //Check value (numregs)
-    if (numregs < 0x0001 || numregs > 0x007D) 
+    if (numregs < 0x0001 || numregs > 0x007D)
     {
         exceptionResponse(MB_FC_READ_INPUT_REGS, MB_EX_ILLEGAL_VALUE);
         return;
     }
 
     //Check Address
-    if ((startreg + numregs) > modbus.input_regs_size) 
+    if ((startreg + numregs) > modbus.input_regs_size)
     {
         exceptionResponse(MB_FC_READ_INPUT_REGS, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -920,7 +959,7 @@ void readInputRegisters(uint16_t startreg, uint16_t numregs)
 
     uint16_t val;
     uint16_t i = 0;
-    while(numregs--) 
+    while(numregs--)
     {
         //retrieve the value from the register bank for the current register
         val = modbus.input_regs[startreg + i];
@@ -957,7 +996,7 @@ void writeMultipleCoils(uint16_t startreg, uint16_t numoutputs, uint16_t bytecou
     //Check value
     uint8_t bytecount_calc = numoutputs / 8;
     if (numoutputs%8) bytecount_calc++;
-    if (numoutputs < 0x0001 || numoutputs > 0x07B0 || bytecount != bytecount_calc) 
+    if (numoutputs < 0x0001 || numoutputs > 0x07B0 || bytecount != bytecount_calc)
     {
         exceptionResponse(MB_FC_WRITE_COILS, MB_EX_ILLEGAL_VALUE);
         return;
@@ -982,7 +1021,7 @@ void writeMultipleCoils(uint16_t startreg, uint16_t numoutputs, uint16_t bytecou
     uint8_t bitn = 0;
     uint16_t totoutputs = numoutputs;
     uint16_t i;
-    while (numoutputs) 
+    while (numoutputs)
     {
         i = (totoutputs - numoutputs--) / 8;
         write_discrete(startreg, COILS, bitRead(mb_frame[7+i], bitn));
@@ -1040,7 +1079,7 @@ void debugInfo()
  * @param flag The trace flag.
  * @param len The length of the trace data.
  * @param value Pointer to the trace data.
- * 
+ *
  * @return void
  */
 void debugSetTrace(uint16_t varidx, uint8_t flag, uint16_t len, void *value)
@@ -1081,14 +1120,14 @@ void debugSetTrace(uint16_t varidx, uint8_t flag, uint16_t len, void *value)
  *
  * @param startidx The start index of the variables to get trace for.
  * @param endidx The end index of the variables to get trace for.
- * 
+ *
  * @return void
  */
 void debugGetTrace(uint16_t startidx, uint16_t endidx)
 {
     uint16_t variableCount = get_var_count();
     // Verify that startidx and endidx fall within the valid range of variables
-    if (startidx >= variableCount || endidx >= variableCount || startidx > endidx) 
+    if (startidx >= variableCount || endidx >= variableCount || startidx > endidx)
     {
         // Respond with an error indicating that the indices are out of range
         mb_frame_len = 3;
@@ -1100,8 +1139,8 @@ void debugGetTrace(uint16_t startidx, uint16_t endidx)
     uint16_t lastVarIdx = startidx;
     size_t responseSize = 0;
     uint8_t *responsePtr = &(mb_frame[11]); // Start of response data
-    
-    for (uint16_t varidx = startidx; varidx <= endidx; varidx++) 
+
+    for (uint16_t varidx = startidx; varidx <= endidx; varidx++)
     {
         size_t varSize = get_var_size(varidx);
         if ((responseSize + 11) + varSize <= MAX_MB_FRAME) // Make sure the response fits
@@ -1118,7 +1157,7 @@ void debugGetTrace(uint16_t startidx, uint16_t endidx)
             // Update the lastVarIdx
             lastVarIdx = varidx;
         }
-        else 
+        else
         {
             // Response buffer is full, break the loop
             break;
@@ -1155,7 +1194,7 @@ void debugGetTrace(uint16_t startidx, uint16_t endidx)
  *
  * @param numIndexes The number of indexes requested.
  * @param indexArray Pointer to the array containing variable indexes.
- * 
+ *
  * @return void
  */
 void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
@@ -1190,9 +1229,9 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
     }
 
     // Validate if all requested indexes are in range
-    for (uint16_t i = 0; i < numIndexes; i++) 
+    for (uint16_t i = 0; i < numIndexes; i++)
     {
-        if (varidx_array[i] >= variableCount) 
+        if (varidx_array[i] >= variableCount)
         {
             // Respond with an error indicating that the index is out of range
             mb_frame_len = 3;
@@ -1205,7 +1244,7 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
         size_t varSize = get_var_size(varidx_array[i]);
 
         // Make sure there is enough space in the response buffer
-        if (response_idx + varSize <= MAX_MB_FRAME) 
+        if (response_idx + varSize <= MAX_MB_FRAME)
         {
             // Add variable data to the response buffer
             void *varAddr = get_var_addr(varidx_array[i]);
@@ -1215,8 +1254,8 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
 
             // Update the lastVarIdx
             lastVarIdx = varidx_array[i];
-        } 
-        else 
+        }
+        else
         {
             // Response buffer is full, break the loop
             break;
@@ -1265,7 +1304,7 @@ void debugGetMd5(void *endianness)
     // Copy MD5 string byte by byte to mb_frame starting from index 3
     const char md5[] = PROGRAM_MD5;
     int md5_len = 0;
-    for (md5_len = 0; md5[md5_len] != '\0'; md5_len++) 
+    for (md5_len = 0; md5[md5_len] != '\0'; md5_len++)
     {
         mb_frame[md5_len + 3] = md5[md5_len];
     }
@@ -1274,7 +1313,7 @@ void debugGetMd5(void *endianness)
     mb_frame_len = md5_len + 3;
 }
 
-uint16_t calcCrc() 
+uint16_t calcCrc()
 {
     uint8_t CRCHi = 0xFF, CRCLo = 0x0FF, Index;
 
@@ -1294,3 +1333,5 @@ uint16_t calcCrc()
 
     return ((uint16_t)CRCHi << 8) | (uint16_t)CRCLo;
 }
+
+
