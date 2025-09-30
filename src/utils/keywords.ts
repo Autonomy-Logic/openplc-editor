@@ -1,25 +1,35 @@
-// TODO: split these into granular types, for exampe D# DT# and TOD# match different types which monaco wouldn't care about
-const timeLiterals = /[TDTODD]#[0-9:\-_shmydSMHDY]+/
-const dateLiterals = /D#[0-9-]+|DT#[0-9\-_:]+|TOD#[0-9:]+/
+const booleanTypes = ['BOOL']
+const unsignedIntegerTypes = ['ANY_NUM', 'USINT', 'UINT', 'UDINT', 'ULINT', 'BYTE', 'WORD', 'DWORD', 'LWORD']
+const integerTypes = ['SINT', 'INT', 'DINT', 'LINT', ...unsignedIntegerTypes]
+const floatTypes = ['ANY_NUM', 'REAL', 'LREAL']
 
 export const literals = [
+  // Boolean Literals
+  { pattern: /^TRUE|FALSE|0|1$/, types: booleanTypes },
   // Number literals
-  { pattern: /\b2#[01_]+\b/, label: 'number.binary' },
-  { pattern: /\b8#[0-7_]+\b/, label: 'number.octal' },
-  { pattern: /\b16#[0-9A-Fa-f_]+\b/, label: 'number.hex' },
-  { pattern: /\b[0-9_]+\.[0-9_]+([eE][-+]?[0-9_]+)?\b/, label: 'number.float' },
-  { pattern: /\b[0-9_]+([eE][-+]?[0-9_]+)?\b/, label: 'number' },
-
+  { pattern: /^2#[01_]+$/, types: integerTypes },
+  { pattern: /^8#[0-7_]+$/, types: integerTypes },
+  { pattern: /^16#[0-9A-Fa-f_]+$/, types: integerTypes },
+  { pattern: /^-?[0-9]+\.?[0-9]*$/, types: floatTypes },
+  { pattern: /^-?[0-9]+$/, types: integerTypes },
   // Time literals
-  { pattern: timeLiterals, label: 'number.time' },
-  { pattern: dateLiterals, label: 'number.date' },
+  { pattern: /^T#[0-9:\-_shmydSMHDY]+$/, types: ['TIME'] },
+  { pattern: /^D#[0-9:\-_shmydSMHDY]+$/, types: ['DATE'] },
+  { pattern: /^TOD#[0-9:\-_shmydSMHDY]+$/, types: ['TOD'] },
+  { pattern: /^DT#[0-9:\-_shmydSMHDY]+$/, types: ['DT'] },
+  // String literals
+  { pattern: /^'.*'$/, types: ['STRING'] },
 ]
 
 export function getLiteralType(name: string) {
   const result = literals.find((x) => x.pattern.test(name))
   if (result) {
-    return result.label
+    return ['ANY', ...result.types]
   }
+}
+
+export function isLiteral(name: string) {
+  return getLiteralType(name) !== undefined
 }
 
 export const keywords = [

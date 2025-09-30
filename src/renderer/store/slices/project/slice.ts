@@ -7,7 +7,7 @@ import {
   PLCTask,
   PLCVariable,
 } from '@root/types/PLC/open-plc'
-import { /*builtinFunctions, keywords,*/ getLiteralType, protectedWords } from '@root/utils/keywords'
+import { /*builtinFunctions, keywords,*/ isLiteral, protectedWords } from '@root/utils/keywords'
 import { produce } from 'immer'
 import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
@@ -197,8 +197,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }
         return response
       }
-      const nameLiteral = getLiteralType(variableToBeCreated.data.name)
-      if (nameLiteral) {
+      if (isLiteral(variableToBeCreated.data.name)) {
         console.error(`'${variableToBeCreated.data.name}' is a reserved literal`)
         response = {
           ok: false,

@@ -2,6 +2,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { getLiteralType } from '@root/utils/keywords'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -197,6 +198,7 @@ const VariableElement = (block: VariableProps) => {
    * Handle with the variable input onBlur event
    */
   const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
+    console.log('-------here-------')
     const variableNameToSubmit = variableName || variableValue
 
     const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
@@ -209,12 +211,23 @@ const VariableElement = (block: VariableProps) => {
       pou.data.variables as PLCVariable[],
       variableNameToSubmit,
     )
-    if (!variable) {
+    const literalTypes = getLiteralType(variableNameToSubmit)
+    if (variable) {
+      setIsAVariable(true)
+      setInputError(false)
+    } else if (literalTypes) {
+      console.log('-----isLiteral-----')
+      console.log(data.block.variableType.type.value)
       setIsAVariable(false)
+      setInputError(false)
       variable = { name: variableNameToSubmit }
     } else {
+      console.log('-----isInvalid-----')
       setIsAVariable(true)
+      setInputError(true)
+      variable = { name: variableNameToSubmit }
     }
+    console.log(variable)
 
     updateNode({
       editorName: editor.meta.name,
@@ -230,7 +243,6 @@ const VariableElement = (block: VariableProps) => {
     })
 
     updateRelatedNode(rung, variableNode, variable as PLCVariable)
-    setInputError(false)
   }
 
   const onChangeHandler = () => {
