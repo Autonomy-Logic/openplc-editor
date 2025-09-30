@@ -1,5 +1,5 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { PlusIcon } from '@root/renderer/assets'
+import { CloseIcon, PlusIcon } from '@root/renderer/assets'
 import { cn } from '@root/utils'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -79,6 +79,8 @@ export const GenericComboboxCell = ({
         : item.value === inputValue.trim(),
     )
 
+  const isClearButtonDisabled = !value.trim()
+
   const handleOnOpenChange = (open: boolean) => {
     setSelectIsOpen(open)
     if (open) setInputValue('')
@@ -153,12 +155,14 @@ export const GenericComboboxCell = ({
     } else if (showButton && highlightedIndex === flatFilteredOptions.length && customButtonRef.current) {
       customButtonRef.current.scrollIntoView({ block: 'nearest' })
     }
+    // Note: Clear location button doesn't need explicit scroll handling as it's always at the bottom
   }, [highlightedIndex, selectIsOpen, flatFilteredOptions.length, canAddACustomOption, isButtonDisabled])
 
   // Keyboard navigation handler
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const showButton = canAddACustomOption && !isButtonDisabled
-    const totalOptions = flatFilteredOptions.length + (showButton ? 1 : 0)
+    const showClearButton = canAddACustomOption && !isClearButtonDisabled
+    const totalOptions = flatFilteredOptions.length + (canAddACustomOption ? 2 : 0) // Two buttons now: Add custom value + Clear location
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setHighlightedIndex((prev) => {
@@ -180,6 +184,14 @@ export const GenericComboboxCell = ({
         handleOnValueChange(flatFilteredOptions[highlightedIndex].value)
         setSelectIsOpen(false)
       } else if (showButton && highlightedIndex === flatFilteredOptions.length) {
+        handleOnValueChange(inputValue.trim())
+        handleOnOpenChange(false)
+      } else if (showClearButton && highlightedIndex === flatFilteredOptions.length + 1) {
+        handleOnValueChange('')
+        handleOnOpenChange(false)
+      } else if (!isButtonDisabled && inputValue.trim()) {
+        // Default behavior: if user has typed something and Add custom value button is available,
+        // activate it even if not explicitly highlighted
         handleOnValueChange(inputValue.trim())
         handleOnOpenChange(false)
       }
@@ -288,32 +300,58 @@ export const GenericComboboxCell = ({
           <ScrollAreaComponent.ScrollBar />
         </ScrollAreaComponent.Root>
         {canAddACustomOption && (
-          <div
-            ref={customButtonRef}
-            className={cn(
-              'flex h-fit min-h-8 w-full cursor-pointer flex-row items-center justify-center border-t border-neutral-200 p-1 dark:border-neutral-800',
-              'hover:bg-neutral-600 dark:hover:bg-neutral-900',
-              'bg-white dark:bg-neutral-950',
-              'rounded-b-lg',
-              isButtonDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : '',
-              !isButtonDisabled && highlightedIndex === flatFilteredOptions.length
-                ? 'bg-neutral-100 dark:bg-neutral-900'
-                : '',
-            )}
-            tabIndex={0}
-            role='button'
-            aria-disabled={isButtonDisabled}
-            onMouseEnter={() => !isButtonDisabled && setHighlightedIndex(flatFilteredOptions.length)}
-            onClick={() => {
-              if (!isButtonDisabled) {
-                handleOnValueChange(inputValue.trim())
-                handleOnOpenChange(false)
-              }
-            }}
-          >
-            <PlusIcon className='h-3 w-3 stroke-brand' />
-            <div className='ml-2'>Add custom value</div>
-          </div>
+          <>
+            <div
+              ref={customButtonRef}
+              className={cn(
+                'flex h-fit min-h-8 w-full cursor-pointer flex-row items-center justify-center border-t border-neutral-200 p-1 dark:border-neutral-800',
+                'hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                'bg-white dark:bg-neutral-950',
+                isButtonDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : '',
+                !isButtonDisabled && highlightedIndex === flatFilteredOptions.length
+                  ? 'bg-neutral-100 dark:bg-neutral-900'
+                  : '',
+              )}
+              tabIndex={0}
+              role='button'
+              aria-disabled={isButtonDisabled}
+              onMouseEnter={() => !isButtonDisabled && setHighlightedIndex(flatFilteredOptions.length)}
+              onClick={() => {
+                if (!isButtonDisabled) {
+                  handleOnValueChange(inputValue.trim())
+                  handleOnOpenChange(false)
+                }
+              }}
+            >
+              <PlusIcon className='h-3 w-3 stroke-brand' />
+              <div className='ml-2'>Add custom value</div>
+            </div>
+            <div
+              className={cn(
+                'flex h-fit min-h-8 w-full cursor-pointer flex-row items-center justify-center border-t border-neutral-200 p-1 dark:border-neutral-800',
+                'hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                'bg-white dark:bg-neutral-950',
+                'rounded-b-lg',
+                isClearButtonDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : '',
+                !isClearButtonDisabled && highlightedIndex === flatFilteredOptions.length + 1
+                  ? 'bg-neutral-100 dark:bg-neutral-900'
+                  : '',
+              )}
+              tabIndex={0}
+              role='button'
+              aria-disabled={isClearButtonDisabled}
+              onMouseEnter={() => !isClearButtonDisabled && setHighlightedIndex(flatFilteredOptions.length + 1)}
+              onClick={() => {
+                if (!isClearButtonDisabled) {
+                  handleOnValueChange('')
+                  handleOnOpenChange(false)
+                }
+              }}
+            >
+              <CloseIcon className='h-3 w-3 stroke-red-500' />
+              <div className='ml-2'>Clear location</div>
+            </div>
+          </>
         )}
       </PrimitiveDropdown.Content>
     </PrimitiveDropdown.Root>
