@@ -95,7 +95,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     name: LadderBlockVariant.name === '???' ? '' : LadderBlockVariant.name,
     inputs:
       LadderBlockVariant?.variables
-        .filter((variable) => variable.class === 'input' || (variable.class === 'inOut' && variable.name !== 'EN'))
+        .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
         .length.toString() || '0',
     executionOrder: selectedNode.data.executionOrder.toString(),
     executionControl: selectedNode.data.executionControl,
@@ -133,6 +133,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         const pou = pous.find((pou) => pou.data.name === selectedFile?.name)
         if (!pou) return
         const variables = pou.data.variables.map((variable) => ({
+          id: variable.id,
           name: variable.name,
           class: variable.class,
           type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
@@ -140,6 +141,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         if (pou.type === 'function') {
           const variable = getVariableRestrictionType(pou.data.returnType)
           variables.push({
+            id: 'OUT',
             name: 'OUT',
             class: 'output',
             type: {
@@ -179,7 +181,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       const newNodeDataVariant = newNode.data.variant as LadderBlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
-        .filter((variable) => variable.class === 'input' || (variable.class === 'inOut' && variable.name !== 'EN'))
+        .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
         .length.toString()
 
       setFormState((prevState) => ({
@@ -209,12 +211,16 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleInputsIncrement = () => {
+    if (Number(formState.inputs) >= maxInputs) return
     setFormState((prevState) => ({
       ...prevState,
-      inputs: String(Math.min(Number(prevState.inputs) + 1, maxInputs)),
+      inputs: String(Number(prevState.inputs) + 1),
     }))
 
-    const defaultInputType = LadderBlockVariant.variables[0].type
+    const firstInput = LadderBlockVariant.variables.find(
+      (variable) => variable.class === 'input' && variable.name !== 'EN',
+    )
+    const defaultInputType = (firstInput || LadderBlockVariant.variables[0]).type
     const blockVariables = [
       ...LadderBlockVariant.variables,
       {
@@ -250,25 +256,31 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleInputsDecrement = () => {
-    const newInputsNumber = Math.max(
-      Number(formState.inputs) - 1,
-      selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ??
-        2,
-    )
+    const minInputs = 2
+
+    const inputVariables = [...LadderBlockVariant.variables]
+      .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
+      .slice(0, -1) // negative one excludes the final element
+
+    if (inputVariables.length < minInputs) return
 
     setFormState((prevState) => ({
       ...prevState,
-      inputs: String(newInputsNumber),
+      inputs: String(inputVariables.length),
     }))
 
-    const blockVariables = [...LadderBlockVariant.variables]
-      .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-      .slice(0, newInputsNumber)
+    const blockVariables = [...LadderBlockVariant.variables].filter((variable) => variable.name === 'EN')
 
-    const outputVariable = [...LadderBlockVariant.variables].filter(
+    const outputVariables = [...LadderBlockVariant.variables].filter(
       (variable) => variable.class === 'output' || variable.class === 'inOut',
     )
-    outputVariable.forEach((variable) => {
+
+    // blockVariables already has EN if it exists, inputVariables lacks EN
+    inputVariables.forEach((variable) => {
+      blockVariables.push(variable)
+    })
+    // outputVariables includes ENO if it exists
+    outputVariables.forEach((variable) => {
       blockVariables.push(variable)
     })
 

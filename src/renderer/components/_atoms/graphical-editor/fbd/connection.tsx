@@ -49,6 +49,14 @@ const ConnectionElement = (block: ConnectionProps) => {
     }
   >(null)
 
+  const autocompleteRef = useRef<
+    HTMLDivElement & {
+      focus: () => void
+      isFocused: boolean
+      selectedVariable: { positionInArray: number; variableName: string }
+    }
+  >(null)
+
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
@@ -200,6 +208,9 @@ const ConnectionElement = (block: ConnectionProps) => {
               onFocus={onChangeHandler}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+                if (e.key === 'Enter' && autocompleteRef.current?.selectedVariable.positionInArray !== -1) {
+                  inputConnectionRef.current?.blur({ submit: false })
+                }
                 setKeyPressedAtTextarea(e.key)
               }}
               onKeyUp={() => setKeyPressedAtTextarea('')}
@@ -209,6 +220,7 @@ const ConnectionElement = (block: ConnectionProps) => {
         {openAutocomplete && (
           <div className='absolute -bottom-1 left-1/2'>
             <FBDBlockAutoComplete
+              ref={autocompleteRef}
               block={block}
               valueToSearch={connectionValue}
               isOpen={openAutocomplete}

@@ -68,7 +68,7 @@ export const parseIecStringToVariables = (iecString: string): PLCVariable[] => {
     }
 
     const parsedType = type.trim()
-    const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
+    const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
 
     variables.push({
       id: uuidv4(),

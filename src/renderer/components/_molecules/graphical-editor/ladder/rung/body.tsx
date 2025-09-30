@@ -175,6 +175,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
         const pou = pous.find((pou) => pou.data.name === library?.name)
         if (!pou) return
         const variables = pou.data.variables.map((variable) => ({
+          id: variable.id,
           name: variable.name,
           class: variable.class,
           type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
@@ -182,6 +183,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
         if (pou.type === 'function') {
           const variable = getVariableRestrictionType(pou.data.returnType)
           variables.push({
+            id: 'OUT',
             name: 'OUT',
             class: 'output',
             type: {

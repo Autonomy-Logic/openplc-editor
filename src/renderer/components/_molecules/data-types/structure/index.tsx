@@ -102,7 +102,6 @@ const StructureDataType = () => {
           {
             name: getNextVariableName(baseName),
             type: { definition: 'base-type', value: 'dint' },
-            initialValue: { simpleValue: { value: '' } },
           },
         ],
       })
@@ -116,7 +115,6 @@ const StructureDataType = () => {
 
     const newVariable = {
       name: getNextVariableName(baseName),
-      initialValue: { simpleValue: { value: '' } },
       type: structureVariable.type,
     }
 
