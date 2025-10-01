@@ -149,11 +149,12 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
                   }
                   return rung
                 })
+              } else {
+                editor.graphical.openedRungs.push({
+                  rungId,
+                  open,
+                })
               }
-              editor.graphical.openedRungs.push({
-                rungId,
-                open,
-              })
             }
           }
         }),
@@ -164,7 +165,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         const rung = editor.graphical.openedRungs.find((rung) => rung.rungId === rungId)
         if (rung) return rung.open
       }
-      return false
+      return true // Default to open instead of closed
     },
 
     updateModelFBD: ({ hoveringElement, canEditorZoom, canEditorPan }) =>

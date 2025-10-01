@@ -1,5 +1,0 @@
-# HAL configuration
-# Format :
-# Board type, FQBN
-
-CONTROLLINO MICRO, controllino_rp2:rp2040:controllino_micro

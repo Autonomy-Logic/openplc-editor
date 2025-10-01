@@ -143,6 +143,12 @@ const sharedSelectors = {
     useOpenPLCStore((state) => state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState),
 }
 
+// ===================== Ladder selectors. =====================
+const ladderSelectors = {
+  useGetIsRungOpen: () => useOpenPLCStore((state) => state.editorActions.getIsRungOpen),
+  useUpdateModelLadder: () => useOpenPLCStore((state) => state.editorActions.updateModelLadder),
+}
+
 export {
   boardSelectors,
   communicationSelectors,
@@ -152,6 +158,7 @@ export {
   deviceSelectors,
   editorSelectors,
   fileSelectors,
+  ladderSelectors,
   pinSelectors,
   pouSelectors,
   projectSelectors,

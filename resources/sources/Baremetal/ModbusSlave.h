@@ -26,7 +26,24 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 //Platform specific defines and includes
 #ifdef MBTCP_ETHERNET
 #include <SPI.h>
-#include <Ethernet.h>
+#ifdef BOARD_ESP32
+    // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
+    #define ETH_PHY_ADDR 0                      // DEFAULT VALUE IS 0 YOU CAN OMIT IT
+    // Type of the Ethernet PHY (LAN8720 or TLK110)
+    #define ETH_PHY_TYPE ETH_PHY_LAN8720        // DEFAULT VALUE YOU CAN OMIT IT
+    // Pin# of the enable signal for the external crystal oscillator (-1 to disable for internal APLL source)
+    #define ETH_PHY_POWER -1                    // DEFAULT VALUE YOU CAN OMIT IT
+    // Pin# of the I²C clock signal for the Ethernet PHY
+    #define ETH_PHY_MDC 23                      // DEFAULT VALUE YOU CAN OMIT IT
+    // Pin# of the I²C IO signal for the Ethernet PHY
+    #define ETH_PHY_MDIO 18                     // DEFAULT VALUE YOU CAN OMIT IT
+    // External clock from crystal oscillator
+    #define ETH_CLK_MODE ETH_CLOCK_GPIO0_IN     // DEFAULT VALUE YOU CAN OMIT IT
+    #include <ETH.h>
+    #include <WiFi.h>
+#else
+    #include <Ethernet.h>
+#endif
 #endif
 
 #ifdef MBTCP_WIFI
@@ -112,8 +129,13 @@ extern Stream* mb_serialport;
 extern int8_t mb_txpin;
 extern uint16_t mb_t15; // inter character time out
 extern uint16_t mb_t35; // frame delay
+
 #ifdef MBTCP_ETHERNET
+#ifdef BOARD_ESP32
+    extern WiFiServer mb_server;
+#else
     extern EthernetServer mb_server;
+#endif
     extern uint8_t mb_mbap[MBAP_SIZE];
 #ifdef BOARD_PORTENTA
     extern EthernetClient mb_serverClients[MAX_SRV_CLIENTS];

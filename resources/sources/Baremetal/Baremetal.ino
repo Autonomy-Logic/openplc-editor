@@ -18,6 +18,7 @@ uint32_t __tick = 0;
 
 unsigned long scan_cycle;
 unsigned long last_run = 0;
+bool first_cycle = false;
 
 #include "arduino_libs.h"
 
@@ -33,7 +34,7 @@ extern uint8_t pinMask_AOUT[];
 /*
 extern "C" int availableMemory(char *);
 
-int availableMemory(char *msg) 
+int availableMemory(char *msg)
 {
   int size = 8192; // Use 2048 with ATmega328
   byte *buf;
@@ -52,7 +53,7 @@ void setupCycleDelay(unsigned long long cycle_time)
     last_run = micros();
 }
 
-void setup() 
+void setup()
 {
     //Turn off WiFi radio on ESP32 and ESP8266 boards if we're not using WiFi
     #ifndef MBTCP
@@ -94,18 +95,18 @@ void setup()
                 MBSERIAL_IFACE.begin(MBSERIAL_BAUD); //Initialize serial interface
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);;
             #endif
-	
+
 	        //Set the Slave ID
 	        modbus.slaveid = MBSERIAL_SLAVE;
         #endif
-    
+
         #ifdef MBTCP
         uint8_t mac[] = { MBTCP_MAC };
         uint8_t ip[] = { MBTCP_IP };
         uint8_t dns[] = { MBTCP_DNS };
         uint8_t gateway[] = { MBTCP_GATEWAY };
         uint8_t subnet[] = { MBTCP_SUBNET };
-        
+
         if (sizeof(ip)/sizeof(uint8_t) < 4)
             mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
         else if (sizeof(dns)/sizeof(uint8_t) < 4)
@@ -117,7 +118,7 @@ void setup()
         else
             mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
         #endif
-        
+
         //Add all modbus registers
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
@@ -191,7 +192,7 @@ void mapEmptyBuffers()
 
 void modbusTask()
 {
-    //Sync OpenPLC Buffers with Modbus Buffers	
+    //Sync OpenPLC Buffers with Modbus Buffers
     for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
     {
         if (bool_output[i/8][i%8] != NULL)
@@ -243,10 +244,10 @@ void modbusTask()
             }
         }
     #endif
-    
+
     //Read changes from clients
     mbtask();
-    
+
     //Write changes back to OpenPLC Buffers
     for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
     {
@@ -309,9 +310,16 @@ void scheduler()
     #ifdef MODBUS_ENABLED
         modbusTask();
     #endif
+
+    if (!first_cycle)
+    {
+        first_cycle = true;
+        // Recalculate last_run to avoid time drift on the first cycle
+        last_run = micros() - scan_cycle;
+    }
 }
 
-void loop() 
+void loop()
 {
     // ignore until next scan cycle (run lower priority tasks if time permits)
     // always rely on the difference between now (aka micros() ) and the last_run,
