@@ -20,7 +20,7 @@ const AboutModal = () => {
     setModalOpen('aboutOpenPlc', false)
   }
   const title = 'OpenPLC Editor 4.0.6-beta'
-  const releaseDate = 'Release: 2025-09-30'
+  const releaseDate = 'Release: 2025-10-01'
   const description = 'Open Source IDE for the OpenPLC Runtime, compliant with the IEC 61131-3 international standard.'
   const copyright = '© 2025 Autonomy Logic'
   const linkUrl = 'https://autonomylogic.com/'
