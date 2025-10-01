@@ -555,6 +555,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce(({ project }: ProjectSlice) => {
           const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name)
           if (datatypeToUpdateIndex === -1) return
+          if (dataToUpdate?.derivation === 'structure' && dataToUpdate.variable) {
+            dataToUpdate.variable = dataToUpdate.variable.map((variable) => {
+              if (!variable.initialValue) {
+                delete variable.initialValue
+              }
+              return variable
+            })
+          }
           Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate)
         }),
       )
