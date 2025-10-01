@@ -161,10 +161,12 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
     getIsRungOpen: ({ rungId }) => {
       const { editor } = getState()
       if (editor.type === 'plc-graphical' && editor.graphical.language === 'ld') {
-        const rung = editor.graphical.openedRungs.find((rung) => rung.rungId === rungId)
+        const rung = editor.graphical.openedRungs.find((rung) => {
+          return rung.rungId === rungId
+        })
         if (rung) return rung.open
       }
-      return false
+      return null
     },
 
     updateModelFBD: ({ hoveringElement, canEditorZoom, canEditorPan }) =>
