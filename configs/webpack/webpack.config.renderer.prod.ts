@@ -112,12 +112,6 @@ const configuration: webpack.Configuration = {
     minimizer: [new TerserPlugin(), new CssMinimizerPlugin()],
   },
 
-  resolve: {
-    alias: {
-      'monaco-editor': 'monaco-editor-core',
-    }
-  },
-
   plugins: [
     /**
      * Create global constants which can be configured at compile time.
@@ -157,7 +151,7 @@ const configuration: webpack.Configuration = {
       'process.type': '"renderer"',
     }),
 
-    new MonacoEditorWebpackPlugin({languages:['python']}),
+    new MonacoEditorWebpackPlugin(),
   ],
 }
 

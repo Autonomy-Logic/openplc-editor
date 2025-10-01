@@ -27,11 +27,6 @@ const configuration: webpack.Configuration = {
 
   externals: ['fsevents', 'crypto-browserify'],
 
-  resolve: {
-    alias: {
-      'monaco-editor': 'monaco-editor-core',
-    }
-  },
   /**
    * Use `module` from `webpack.config.renderer.dev.js`
    */
