@@ -227,7 +227,7 @@ const _editorActionsSchema = z.object({
   getIsRungOpen: z
     .function()
     .args(z.object({ rungId: z.string() }))
-    .returns(z.boolean().or(z.null())),
+    .returns(z.boolean()),
   updateModelFBD: z
     .function()
     .args(

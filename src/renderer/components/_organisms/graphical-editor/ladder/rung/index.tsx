@@ -41,14 +41,6 @@ export const Rung = ({ className, index, id, rung, nodeDivergences }: RungProps)
     transform: CSS.Translate.toString(transform),
     transition,
   }
-  const handleRungIsOpen = () => {
-    const isOpen = getIsRungOpen({ rungId: rung.id })
-    if (isOpen === null) {
-      updateModelLadder({ openRung: { rungId: rung.id, open: true } })
-      return true
-    }
-    return isOpen
-  }
 
   return (
     <div
@@ -64,7 +56,7 @@ export const Rung = ({ className, index, id, rung, nodeDivergences }: RungProps)
     >
       <RungHeader
         onClick={handleOpenSection}
-        isOpen={handleRungIsOpen()}
+        isOpen={getIsRungOpen({ rungId: rung.id })}
         rung={rung}
         draggableHandleProps={listeners}
         className={cn('border border-transparent', {
