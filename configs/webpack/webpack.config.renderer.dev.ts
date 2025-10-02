@@ -143,7 +143,6 @@ const configuration: ICustomConfiguration = {
   resolve: {
     extensions: ['.ts', '.js'],
   },
-
   plugins: [
     ...(skipDLLs
       ? []

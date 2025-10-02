@@ -30,7 +30,7 @@ const configuration: webpack.Configuration = {
   /**
    * Use `module` from `webpack.config.renderer.dev.js`
    */
-
+   
   module: require('./webpack.config.renderer.dev').default.module,
 
   entry: {

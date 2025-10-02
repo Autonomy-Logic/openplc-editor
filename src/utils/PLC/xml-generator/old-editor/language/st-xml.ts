@@ -3,14 +3,14 @@ import { StXML } from '@root/types/PLC/xml-data/old-editor/pous/languages/st-dia
 const convertComments = (value: string) => {
   let stringContext = '' // either empty for non-string or " || ' to signal type of string
   let commentContext = '' // either empty for non-comment or // || (* || /*
-  return value
+  let outValue = value
     .split('')
     .map((iChar, i, original) => {
       // matiec does not support // or /* ... */ comments, so wrap those in (* ... *) during this conversion step
       /* CONTEXTUALIZE STRINGS */
       if (stringContext) {
-        if (i > 1 && original[i - 1] == '$') {
-          // check for escape char w/ underflow protection, doesn't matter what current char is
+        if (original[i - 1] === '$') {
+          // check for escape char, doesn't matter what current (char is, note Array[-1] is just undefined
           return iChar
         } else if (iChar == stringContext) {
           stringContext = ''
@@ -59,6 +59,10 @@ const convertComments = (value: string) => {
       return iChar
     })
     .join('')
+  if (commentContext) {
+    outValue += '*)'
+  }
+  return outValue
 }
 
 const stToXML = (value: string) => {
