@@ -21,6 +21,7 @@ import { ContactNode } from '@root/renderer/components/_atoms/graphical-editor/l
 import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
 import { CreateRung } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/graphical-editor/ladder/rung'
+import { ladderSelectors } from '@root/renderer/hooks'
 import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState, zodLadderFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
@@ -49,6 +50,8 @@ export default function LadderEditor() {
     snapshotActions: { addSnapshot },
     libraries: { user: userLibraries },
   } = useOpenPLCStore()
+
+  const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
@@ -105,12 +108,15 @@ export default function LadderEditor() {
 
     const defaultViewport: [number, number] = [300, 100]
 
+    const rungIdToBeAdded = `rung_${editor.meta.name}_${uuidv4()}`
+
     ladderFlowActions.startLadderRung({
       editorName: editor.meta.name,
-      rungId: `rung_${editor.meta.name}_${uuidv4()}`,
+      rungId: rungIdToBeAdded,
       defaultBounds: defaultViewport,
       reactFlowViewport: defaultViewport,
     })
+    updateModelLadder({ openRung: { rungId: rungIdToBeAdded, open: true } })
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
