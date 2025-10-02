@@ -37,6 +37,12 @@ const configuration: webpack.Configuration = {
     renderer: Object.keys(dependencies || {}),
   },
 
+  resolve: {
+    alias: {
+			'monaco-editor': 'monaco-editor-core',
+		}
+  },
+
   output: {
     path: dist,
     filename: '[name].dev.dll.js',
