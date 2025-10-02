@@ -40,12 +40,6 @@ const configuration: webpack.Configuration = {
     },
   },
 
-  resolve: {
-    alias: {
-			'monaco-editor': 'monaco-editor-core',
-		}
-  },
-
   module: {
     rules: [
       {

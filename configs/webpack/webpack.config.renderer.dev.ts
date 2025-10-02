@@ -142,9 +142,6 @@ const configuration: ICustomConfiguration = {
 
   resolve: {
     extensions: ['.ts', '.js'],
-    alias: {
-			'monaco-editor': 'monaco-editor-core',
-		}
   },
 
   plugins: [
