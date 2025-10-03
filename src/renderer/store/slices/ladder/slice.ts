@@ -71,7 +71,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const { powerRail } = defaultCustomNodesStyles
           const railNodes = [
             nodesBuilder.powerRail({
-              id: 'left-rail',
+              id: `left-rail-${rungId}`,
               posX: 0,
               posY: defaultBounds[1] / 2 - powerRail.height / 2,
               connector: 'right',
@@ -79,7 +79,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               handleY: defaultBounds[1] / 2,
             }),
             nodesBuilder.powerRail({
-              id: 'right-rail',
+              id: `right-rail-${rungId}`,
               posX: defaultBounds[0],
               posY: defaultBounds[1] / 2 - powerRail.height / 2,
               connector: 'left',
@@ -124,8 +124,8 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
                 rung.id &&
                 Array.isArray(rung.nodes) &&
                 Array.isArray(rung.edges) &&
-                rung.nodes.some((node) => node.id === 'left-rail') &&
-                rung.nodes.some((node) => node.id === 'right-rail'),
+                rung.nodes.some((node) => node.id.startsWith('left-rail')) &&
+                rung.nodes.some((node) => node.id.startsWith('right-rail')),
             )
           )
             return
