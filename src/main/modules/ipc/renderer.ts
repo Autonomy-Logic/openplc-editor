@@ -206,5 +206,21 @@ const rendererProcessBridge = {
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
   log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
+
+  // ===================== RUNTIME API METHODS =====================
+  runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-users-info', ipAddress),
+  runtimeCreateUser: (
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:create-user', ipAddress, username, password),
+  runtimeLogin: (
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<{ success: boolean; accessToken?: string; error?: string }> =>
+    ipcRenderer.invoke('runtime:login', ipAddress, username, password),
 }
 export default rendererProcessBridge

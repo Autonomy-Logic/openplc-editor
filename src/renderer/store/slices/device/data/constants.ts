@@ -4,6 +4,7 @@ import { DeviceConfiguration } from '@root/types/PLC/devices'
 export const defaultDeviceConfiguration: DeviceConfiguration = {
   deviceBoard: 'OpenPLC Runtime',
   communicationPort: '',
+  runtimeIpAddress: '',
   communicationConfiguration: {
     modbusRTU: {
       rtuInterface: 'Serial',

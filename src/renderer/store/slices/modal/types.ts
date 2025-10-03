@@ -9,6 +9,8 @@ const modalTypes = z.enum([
   'save-changes-project',
   'confirm-delete-element',
   'quit-application',
+  'runtime-create-user',
+  'runtime-login',
 ])
 type ModalTypes = z.infer<typeof modalTypes>
 
