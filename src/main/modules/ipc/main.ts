@@ -63,14 +63,17 @@ class MainProcessBridge implements MainIpcModule {
             rejectUnauthorized: false,
           },
           (res: IncomingMessage) => {
-            res.on('data', (_chunk: Buffer) => {})
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
             res.on('end', () => {
               if (res.statusCode === 404) {
                 resolve({ hasUsers: false })
               } else if (res.statusCode === 200) {
                 resolve({ hasUsers: true })
               } else {
-                resolve({ hasUsers: false, error: `Unexpected status: ${res.statusCode}` })
+                resolve({ hasUsers: false, error: data || `Unexpected status: ${res.statusCode}` })
               }
             })
           },
