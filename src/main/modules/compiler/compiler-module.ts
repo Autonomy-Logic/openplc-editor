@@ -1315,7 +1315,7 @@ class CompilerModule {
             `Content-Type: application/zip\r\n\r\n`,
         )
         const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
-        const body = Buffer.concat([header, zipBuffer, footer])
+        const body = Buffer.concat([header, zipBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
 
         await new Promise<void>((resolve, reject) => {
           const req = https.request(
