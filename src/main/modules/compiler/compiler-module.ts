@@ -1,6 +1,10 @@
 import { exec, spawn } from 'node:child_process'
+import { promises as fs } from 'node:fs'
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import type { IncomingMessage } from 'node:http'
+import https from 'node:https'
 import os from 'node:os'
+import path from 'node:path'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -10,6 +14,7 @@ import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
+import JSZip from 'jszip'
 
 import type { ArduinoCoreControl, HalsFile } from './compiler-types'
 import { FormatMacAddress } from './utils/formatters'
@@ -1014,6 +1019,31 @@ class CompilerModule {
 
   // ++ ========================= Compiler builder ============================ ++
 
+  async compressSourceFolder(sourceFolderPath: string): Promise<Buffer> {
+    const zip = new JSZip()
+
+    async function addFilesToZip(currentPath: string, zipFolder: JSZip, relativePath: string = ''): Promise<void> {
+      const entries = await fs.readdir(currentPath, { withFileTypes: true })
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name)
+        const zipPath = relativePath ? path.join(relativePath, entry.name) : entry.name
+
+        if (entry.isDirectory()) {
+          await addFilesToZip(fullPath, zipFolder, zipPath)
+        } else {
+          const fileContent = await fs.readFile(fullPath)
+          zipFolder.file(zipPath, fileContent)
+        }
+      }
+    }
+
+    await addFilesToZip(sourceFolderPath, zip)
+
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
+    return zipBuffer
+  }
+
   /**
    * This will be the main entry point for the compiler module.
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
@@ -1030,12 +1060,14 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting compilation process...' })
     // INFO: We assume the first argument is the project path,
     // INFO: the second argument is the board target, and the third argument is the project data.
-    const [projectPath, boardTarget, boardCore, compileOnly, projectData] = args as [
+    const [projectPath, boardTarget, boardCore, compileOnly, projectData, runtimeIpAddress, runtimeJwtToken] = args as [
       string,
       string,
       string | null,
       boolean,
       ProjectState['data'],
+      string | null,
+      string | null,
     ]
 
     const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
@@ -1225,8 +1257,131 @@ class CompilerModule {
     if (boardRuntime === 'openplc-compiler') {
       _mainProcessPort.postMessage({
         logLevel: 'info',
-        message: 'OpenPLC runtime detected, stopping compilation process.',
+        message: 'OpenPLC runtime detected.',
       })
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'Source files generated successfully at: ' + sourceTargetFolderPath,
+      })
+
+      if (compileOnly) {
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'Compile only mode - skipping upload to runtime.',
+        })
+        _mainProcessPort.postMessage({
+          message:
+            '-------------------------------------------------------------------------------------------------------------\n',
+        })
+        _mainProcessPort.close()
+        return
+      }
+
+      if (!runtimeIpAddress || !runtimeJwtToken) {
+        _mainProcessPort.postMessage({
+          logLevel: 'warning',
+          message: 'Runtime not configured or not logged in. Skipping upload to runtime.',
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'To upload the program, configure the runtime IP address and login in the device configuration.',
+        })
+        _mainProcessPort.postMessage({
+          message:
+            '-------------------------------------------------------------------------------------------------------------\n',
+        })
+        _mainProcessPort.close()
+        return
+      }
+
+      try {
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'Compressing source files...',
+        })
+
+        const zipBuffer = await this.compressSourceFolder(sourceTargetFolderPath)
+
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: `Uploading program to runtime at ${runtimeIpAddress}...`,
+        })
+
+        const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
+
+        const header = Buffer.from(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="program.zip"\r\n` +
+            `Content-Type: application/zip\r\n\r\n`,
+        )
+        const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
+        const body = Buffer.concat([header, zipBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
+
+        await new Promise<void>((resolve, reject) => {
+          const req = https.request(
+            {
+              hostname: runtimeIpAddress,
+              port: 8443,
+              path: '/api/upload-file',
+              method: 'POST',
+              headers: {
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Content-Length': body.length,
+                Authorization: `Bearer ${runtimeJwtToken}`,
+              },
+              rejectUnauthorized: false,
+            },
+            (res: IncomingMessage) => {
+              let data = ''
+              res.on('data', (chunk: Buffer) => {
+                data += chunk.toString()
+              })
+              res.on('end', () => {
+                if (res.statusCode === 200) {
+                  _mainProcessPort.postMessage({
+                    logLevel: 'info',
+                    message: 'Program uploaded successfully to runtime.',
+                  })
+                  try {
+                    const response = JSON.parse(data) as { CompilationStatus?: string }
+                    _mainProcessPort.postMessage({
+                      logLevel: 'info',
+                      message: `Runtime compilation status: ${response.CompilationStatus || 'Started'}`,
+                    })
+                  } catch (_parseError) {
+                    _mainProcessPort.postMessage({
+                      logLevel: 'warning',
+                      message: 'Could not parse runtime response',
+                    })
+                  }
+                  resolve()
+                } else {
+                  _mainProcessPort.postMessage({
+                    logLevel: 'error',
+                    message: `Upload failed: ${data || 'HTTP ' + res.statusCode}`,
+                  })
+                  reject(new Error(`Upload failed with status ${res.statusCode}`))
+                }
+              })
+            },
+          )
+          req.on('error', (error: Error) => {
+            _mainProcessPort.postMessage({
+              logLevel: 'error',
+              message: `Upload error: ${error.message}`,
+            })
+            reject(error)
+          })
+          req.write(body)
+          req.end()
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Failed to upload to runtime: ${error instanceof Error ? error.message : String(error)}`,
+        })
+      }
+
       _mainProcessPort.postMessage({
         message:
           '-------------------------------------------------------------------------------------------------------------\n',

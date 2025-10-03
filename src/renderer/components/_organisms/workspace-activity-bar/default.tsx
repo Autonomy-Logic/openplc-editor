@@ -37,8 +37,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const handleRequest = () => {
     const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
+    const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
+    const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
     window.bridge.runCompileProgram(
-      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, compileOnly, projectData],
+      [
+        projectMeta.path,
+        deviceDefinitions.configuration.deviceBoard,
+        boardCore,
+        compileOnly,
+        projectData,
+        runtimeIpAddress,
+        runtimeJwtToken,
+      ],
       (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
         setIsCompiling(true)
         if (typeof data.message === 'string') {
