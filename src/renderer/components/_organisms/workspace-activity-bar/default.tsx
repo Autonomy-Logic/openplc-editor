@@ -47,7 +47,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         variables: pou.data.variables,
       }))
   }
-  
+
   const compileOnly = compileOnlySelectors.useCompileOnly()
 
   const handleRequest = () => {

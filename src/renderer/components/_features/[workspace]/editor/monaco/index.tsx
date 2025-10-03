@@ -129,7 +129,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [name])
 
-useEffect(() => {
+  useEffect(() => {
     if (language === 'st' && dataTypes.length > 0) {
       updateDataTypeVariablesInTokenizer(dataTypes)
       updateEnumValuesInTokenizer(dataTypes)
