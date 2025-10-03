@@ -53,7 +53,7 @@ const RuntimeLoginModal = () => {
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => modalActions.onOpenChange('runtime-login', open)}>
-      <ModalContent className='flex h-[350px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
+      <ModalContent className='flex min-h-[380px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
         <ModalTitle className='mb-4 text-xl font-semibold'>Login to OpenPLC Runtime</ModalTitle>
 
         <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>
@@ -70,7 +70,8 @@ const RuntimeLoginModal = () => {
               type='text'
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900'
+              placeholder='Enter username'
+              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
               disabled={isLoading}
             />
           </div>
@@ -85,7 +86,8 @@ const RuntimeLoginModal = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void handleLogin()}
-              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900'
+              placeholder='Enter password'
+              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
               disabled={isLoading}
             />
           </div>

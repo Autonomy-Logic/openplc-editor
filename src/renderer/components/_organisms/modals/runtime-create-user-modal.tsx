@@ -66,7 +66,7 @@ const RuntimeCreateUserModal = () => {
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => modalActions.onOpenChange('runtime-create-user', open)}>
-      <ModalContent className='flex h-[400px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
+      <ModalContent className='flex min-h-[480px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
         <ModalTitle className='mb-4 text-xl font-semibold'>Create First User</ModalTitle>
 
         <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>
@@ -83,7 +83,8 @@ const RuntimeCreateUserModal = () => {
               type='text'
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900'
+              placeholder='Enter username'
+              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
               disabled={isLoading}
             />
           </div>
@@ -97,7 +98,8 @@ const RuntimeCreateUserModal = () => {
               type='password'
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900'
+              placeholder='Enter password'
+              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
               disabled={isLoading}
             />
           </div>
@@ -111,7 +113,8 @@ const RuntimeCreateUserModal = () => {
               type='password'
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900'
+              placeholder='Confirm password'
+              className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
               disabled={isLoading}
             />
           </div>

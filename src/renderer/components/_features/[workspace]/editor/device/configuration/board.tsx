@@ -34,6 +34,7 @@ const Board = memo(function () {
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
+  const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
 
   const [isPressed, setIsPressed] = useState(false)
@@ -118,6 +119,12 @@ const Board = memo(function () {
   const memoizedCompileOnly = useMemo(() => compileOnly, [compileOnly])
 
   const handleConnectToRuntime = useCallback(async () => {
+    if (connectionStatus === 'connected') {
+      setRuntimeJwtToken(null)
+      setRuntimeConnectionStatus('disconnected')
+      return
+    }
+
     if (!runtimeIpAddress) {
       return
     }
@@ -140,7 +147,7 @@ const Board = memo(function () {
     } catch (_error) {
       setRuntimeConnectionStatus('error')
     }
-  }, [runtimeIpAddress, setRuntimeConnectionStatus, openModal])
+  }, [runtimeIpAddress, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, openModal])
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
@@ -231,7 +238,7 @@ const Board = memo(function () {
                   {connectionStatus === 'connecting'
                     ? 'Connecting...'
                     : connectionStatus === 'connected'
-                      ? 'Connected'
+                      ? 'Disconnect'
                       : 'Connect'}
                 </button>
                 {connectionStatus === 'connected' && (
