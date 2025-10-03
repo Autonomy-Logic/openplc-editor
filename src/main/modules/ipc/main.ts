@@ -50,9 +50,11 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   // ===================== RUNTIME API HANDLERS =====================
+  private readonly RUNTIME_API_PORT = 8443
+
   handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
-      const url = `https://${ipAddress}:8443/api/get-users-info`
+      const url = `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get-users-info`
 
       return new Promise((resolve) => {
         const req = https.get(
@@ -96,7 +98,7 @@ class MainProcessBridge implements MainIpcModule {
         const req = https.request(
           {
             hostname: ipAddress,
-            port: 8443,
+            port: this.RUNTIME_API_PORT,
             path: '/api/create-user',
             method: 'POST',
             headers: {
@@ -138,7 +140,7 @@ class MainProcessBridge implements MainIpcModule {
         const req = https.request(
           {
             hostname: ipAddress,
-            port: 8443,
+            port: this.RUNTIME_API_PORT,
             path: '/api/login',
             method: 'POST',
             headers: {
