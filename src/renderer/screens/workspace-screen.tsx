@@ -16,6 +16,7 @@ import AboutModal from '../components/_organisms/about-modal'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
+import { RuntimeCreateUserModal, RuntimeLoginModal } from '../components/_organisms/modals'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
 import { VariablesEditor } from '../components/_organisms/variables-editor'
@@ -101,6 +102,8 @@ const WorkspaceScreen = () => {
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
+      <RuntimeCreateUserModal />
+      <RuntimeLoginModal />
       <WorkspaceSideContent>
         <WorkspaceActivityBar
           defaultActivityBar={{

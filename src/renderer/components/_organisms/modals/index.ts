@@ -1,3 +1,5 @@
 export * from './delete-confirmation-modal'
 export * from './quit-application-modal'
+export { RuntimeCreateUserModal } from './runtime-create-user-modal'
+export { RuntimeLoginModal } from './runtime-login-modal'
 export * from './save-changes-modal'

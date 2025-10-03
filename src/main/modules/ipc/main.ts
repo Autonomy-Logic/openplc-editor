@@ -3,6 +3,8 @@ import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
+import type { IncomingMessage } from 'http'
+import https from 'https'
 import { join } from 'path'
 import { platform } from 'process'
 
@@ -45,6 +47,134 @@ class MainProcessBridge implements MainIpcModule {
     this.menuBuilder = menuBuilder
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
+  }
+
+  // ===================== RUNTIME API HANDLERS =====================
+  handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
+    try {
+      const url = `https://${ipAddress}:8443/api/get-users-info`
+
+      return new Promise((resolve) => {
+        const req = https.get(
+          url,
+          {
+            rejectUnauthorized: false,
+          },
+          (res: IncomingMessage) => {
+            res.on('data', (_chunk: Buffer) => {})
+            res.on('end', () => {
+              if (res.statusCode === 404) {
+                resolve({ hasUsers: false })
+              } else if (res.statusCode === 200) {
+                resolve({ hasUsers: true })
+              } else {
+                resolve({ hasUsers: false, error: `Unexpected status: ${res.statusCode}` })
+              }
+            })
+          },
+        )
+        req.on('error', (error: Error) => {
+          resolve({ hasUsers: false, error: error.message })
+        })
+        req.end()
+      })
+    } catch (error) {
+      return { hasUsers: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeCreateUser = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    username: string,
+    password: string,
+  ) => {
+    try {
+      const postData = JSON.stringify({ username, password, role: 'user' })
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: 8443,
+            path: '/api/create-user',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+            },
+            rejectUnauthorized: false,
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 201) {
+                resolve({ success: true })
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
+    try {
+      const postData = JSON.stringify({ username, password })
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: 8443,
+            path: '/api/login',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+            },
+            rejectUnauthorized: false,
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const response = JSON.parse(data) as { access_token: string }
+                  resolve({ success: true, accessToken: response.access_token })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -98,6 +228,11 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== UTILITIES =====================
     this.ipcMain.handle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
+
+    // ===================== RUNTIME API =====================
+    this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
+    this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
+    this.ipcMain.handle('runtime:login', this.handleRuntimeLogin)
   }
 
   // ===================== HANDLER METHODS =====================
