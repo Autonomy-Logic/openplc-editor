@@ -182,6 +182,116 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return new Promise((resolve) => {
+        const req = https.get(
+          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get?argument=status`,
+          {
+            headers: {
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            rejectUnauthorized: false,
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const response = JSON.parse(data) as { status: string }
+                  resolve({ success: true, status: response.status })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return new Promise((resolve) => {
+        const req = https.get(
+          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get?argument=start-plc`,
+          {
+            headers: {
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            rejectUnauthorized: false,
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                resolve({ success: true })
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return new Promise((resolve) => {
+        const req = https.get(
+          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get?argument=stop-plc`,
+          {
+            headers: {
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            rejectUnauthorized: false,
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                resolve({ success: true })
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -238,6 +348,9 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
     this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
     this.ipcMain.handle('runtime:login', this.handleRuntimeLogin)
+    this.ipcMain.handle('runtime:get-status', this.handleRuntimeGetStatus)
+    this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
+    this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
   }
 
   // ===================== HANDLER METHODS =====================

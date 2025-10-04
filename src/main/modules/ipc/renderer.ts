@@ -222,5 +222,14 @@ const rendererProcessBridge = {
     password: string,
   ): Promise<{ success: boolean; accessToken?: string; error?: string }> =>
     ipcRenderer.invoke('runtime:login', ipAddress, username, password),
+  runtimeGetStatus: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; status?: string; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken),
+  runtimeStartPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:start-plc', ipAddress, jwtToken),
+  runtimeStopPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:stop-plc', ipAddress, jwtToken),
 }
 export default rendererProcessBridge
