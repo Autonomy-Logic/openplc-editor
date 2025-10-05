@@ -186,7 +186,7 @@ class MainProcessBridge implements MainIpcModule {
     try {
       return new Promise((resolve) => {
         const req = https.get(
-          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get?argument=status`,
+          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/status`,
           {
             headers: {
               Authorization: `Bearer ${jwtToken}`,
@@ -226,7 +226,7 @@ class MainProcessBridge implements MainIpcModule {
     try {
       return new Promise((resolve) => {
         const req = https.get(
-          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get?argument=start-plc`,
+          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/start-plc`,
           {
             headers: {
               Authorization: `Bearer ${jwtToken}`,
@@ -261,7 +261,7 @@ class MainProcessBridge implements MainIpcModule {
     try {
       return new Promise((resolve) => {
         const req = https.get(
-          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get?argument=stop-plc`,
+          `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/stop-plc`,
           {
             headers: {
               Authorization: `Bearer ${jwtToken}`,
