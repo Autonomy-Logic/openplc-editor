@@ -260,6 +260,23 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  handleRuntimeGetCompilationStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      const result = await this._makeRuntimeApiRequest<{ status: string; logs: string[]; exit_code: number | null }>(
+        ipAddress,
+        jwtToken,
+        '/api/compilation-status',
+        (data: string) => {
+          const response = JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
+          return response
+        },
+      )
+      return result
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -319,6 +336,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-status', this.handleRuntimeGetStatus)
     this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
     this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
+    this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
   }
 
   // ===================== HANDLER METHODS =====================

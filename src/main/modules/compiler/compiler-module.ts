@@ -1346,7 +1346,7 @@ class CompilerModule {
                     const response = JSON.parse(data) as { CompilationStatus?: string }
                     _mainProcessPort.postMessage({
                       logLevel: 'info',
-                      message: `Runtime compilation status: ${response.CompilationStatus || 'Started'}`,
+                      message: `Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`,
                     })
                   } catch (_parseError) {
                     _mainProcessPort.postMessage({
@@ -1354,6 +1354,95 @@ class CompilerModule {
                       message: 'Could not parse runtime response',
                     })
                   }
+
+                  const pollCompilationStatus = async () => {
+                    let lastLogCount = 0
+                    const startTime = Date.now()
+                    const timeout = 5 * 60 * 1000
+                    const pollInterval = 1000
+
+                    while (true) {
+                      if (Date.now() - startTime > timeout) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'error',
+                          message: 'Compilation status polling timed out after 5 minutes.',
+                        })
+                        break
+                      }
+
+                      await new Promise((resolve) => setTimeout(resolve, pollInterval))
+
+                      try {
+                        const { default: rendererProcessBridge } = await import('../ipc/renderer')
+                        const statusResult = await rendererProcessBridge.runtimeGetCompilationStatus(
+                          runtimeIpAddress,
+                          runtimeJwtToken,
+                        )
+
+                        if (!statusResult.success || !statusResult.data) {
+                          _mainProcessPort.postMessage({
+                            logLevel: 'warning',
+                            message: `Failed to get compilation status: ${statusResult.error || 'Unknown error'}`,
+                          })
+                          continue
+                        }
+
+                        const { status, logs, exit_code } = statusResult.data
+
+                        if (logs.length > lastLogCount) {
+                          const newLogs = logs.slice(lastLogCount)
+                          newLogs.forEach((log) => {
+                            _mainProcessPort.postMessage({
+                              logLevel: 'info',
+                              message: log,
+                            })
+                          })
+                          lastLogCount = logs.length
+                        }
+
+                        if (status === 'SUCCESS') {
+                          _mainProcessPort.postMessage({
+                            logLevel: 'info',
+                            message: `Compilation completed successfully (exit code: ${exit_code ?? 0}).`,
+                          })
+                          break
+                        } else if (status === 'FAILED') {
+                          _mainProcessPort.postMessage({
+                            logLevel: 'error',
+                            message: `Compilation failed (exit code: ${exit_code ?? 1}).`,
+                          })
+                          break
+                        }
+                      } catch (pollError) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'error',
+                          message: `Error polling compilation status: ${pollError instanceof Error ? pollError.message : String(pollError)}`,
+                        })
+                        break
+                      }
+                    }
+                  }
+
+                  pollCompilationStatus()
+                    .then(() => {
+                      _mainProcessPort.postMessage({
+                        message:
+                          '-------------------------------------------------------------------------------------------------------------\n',
+                      })
+                      _mainProcessPort.close()
+                    })
+                    .catch((error) => {
+                      _mainProcessPort.postMessage({
+                        logLevel: 'error',
+                        message: `Unexpected error in compilation polling: ${error instanceof Error ? error.message : String(error)}`,
+                      })
+                      _mainProcessPort.postMessage({
+                        message:
+                          '-------------------------------------------------------------------------------------------------------------\n',
+                      })
+                      _mainProcessPort.close()
+                    })
+
                   resolve()
                 } else {
                   _mainProcessPort.postMessage({
@@ -1380,13 +1469,12 @@ class CompilerModule {
           logLevel: 'error',
           message: `Failed to upload to runtime: ${error instanceof Error ? error.message : String(error)}`,
         })
+        _mainProcessPort.postMessage({
+          message:
+            '-------------------------------------------------------------------------------------------------------------\n',
+        })
+        _mainProcessPort.close()
       }
-
-      _mainProcessPort.postMessage({
-        message:
-          '-------------------------------------------------------------------------------------------------------------\n',
-      })
-      _mainProcessPort.close()
       return
     }
 
