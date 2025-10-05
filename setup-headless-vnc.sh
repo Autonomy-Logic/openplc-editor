@@ -53,64 +53,98 @@ EOF
     exit 1
 }
 
-check_dependency() {
+install_apt_package() {
+    local package=$1
+    local cmd=$2
+    
+    print_info "Installing $package..."
+    if sudo apt-get update -qq && sudo apt-get install -y "$package" > /dev/null 2>&1; then
+        print_success "$package installed successfully"
+        return 0
+    else
+        print_error "Failed to install $package"
+        return 1
+    fi
+}
+
+check_and_install_dependency() {
     local cmd=$1
     local package=$2
-    local install_hint=$3
     
     if command -v "$cmd" &> /dev/null; then
         print_success "$cmd is installed"
         return 0
     else
-        print_error "$cmd is not installed"
-        if [ -n "$install_hint" ]; then
-            print_info "Install with: $install_hint"
-        fi
-        return 1
+        print_warning "$cmd is not installed, attempting to install..."
+        install_apt_package "$package" "$cmd"
+        return $?
     fi
 }
 
 check_dependencies() {
-    print_info "Checking dependencies..."
+    print_info "Checking and installing dependencies..."
     echo ""
     
     local all_deps_ok=true
     
-    check_dependency "Xvfb" "xvfb" "sudo apt-get install -y xvfb" || all_deps_ok=false
-    check_dependency "x11vnc" "x11vnc" "sudo apt-get install -y x11vnc" || all_deps_ok=false
-    check_dependency "fluxbox" "fluxbox" "sudo apt-get install -y fluxbox" || all_deps_ok=false
-    check_dependency "scrot" "scrot" "sudo apt-get install -y scrot" || all_deps_ok=false
-    check_dependency "python3" "python3" "sudo apt-get install -y python3" || all_deps_ok=false
-    check_dependency "node" "nodejs" "Install Node.js via nvm or package manager" || all_deps_ok=false
-    check_dependency "npm" "npm" "Install npm via nvm or package manager" || all_deps_ok=false
+    check_and_install_dependency "Xvfb" "xvfb" || all_deps_ok=false
+    check_and_install_dependency "x11vnc" "x11vnc" || all_deps_ok=false
+    check_and_install_dependency "fluxbox" "fluxbox" || all_deps_ok=false
+    check_and_install_dependency "scrot" "scrot" || all_deps_ok=false
+    check_and_install_dependency "python3" "python3" || all_deps_ok=false
     
     if dpkg -l | grep -q libfuse2; then
         print_success "libfuse2 is installed"
     else
-        print_error "libfuse2 is not installed"
-        print_info "Install with: sudo apt-get install -y libfuse2"
+        print_warning "libfuse2 is not installed, attempting to install..."
+        install_apt_package "libfuse2" || all_deps_ok=false
+    fi
+    
+    if command -v node &> /dev/null; then
+        print_success "node is installed ($(node --version))"
+    else
+        print_error "node is not installed"
+        print_info "Node.js must be installed via nvm or your system's package manager"
+        print_info "This script cannot automatically install Node.js"
+        all_deps_ok=false
+    fi
+    
+    if command -v npm &> /dev/null; then
+        print_success "npm is installed ($(npm --version))"
+    else
+        print_error "npm is not installed"
+        print_info "npm must be installed via nvm or your system's package manager"
+        print_info "This script cannot automatically install npm"
         all_deps_ok=false
     fi
     
     if [ -d "$HOME/noVNC" ]; then
         print_success "noVNC is installed at $HOME/noVNC"
     else
-        print_error "noVNC is not installed"
-        print_info "Clone with: git clone https://github.com/novnc/noVNC.git ~/noVNC"
-        all_deps_ok=false
+        print_warning "noVNC is not installed, attempting to clone..."
+        if git clone https://github.com/novnc/noVNC.git "$HOME/noVNC" > /dev/null 2>&1; then
+            print_success "noVNC cloned successfully"
+        else
+            print_error "Failed to clone noVNC"
+            all_deps_ok=false
+        fi
     fi
     
     if [ -d "$HOME/noVNC/utils/websockify" ]; then
         print_success "websockify is installed"
     else
-        print_error "websockify is not installed"
-        print_info "Clone with: git clone https://github.com/novnc/websockify ~/noVNC/utils/websockify"
-        all_deps_ok=false
+        print_warning "websockify is not installed, attempting to clone..."
+        if git clone https://github.com/novnc/websockify "$HOME/noVNC/utils/websockify" > /dev/null 2>&1; then
+            print_success "websockify cloned successfully"
+        else
+            print_error "Failed to clone websockify"
+            all_deps_ok=false
+        fi
     fi
     
     echo ""
     if [ "$all_deps_ok" = false ]; then
-        print_error "Some dependencies are missing. Please install them before continuing."
+        print_error "Some dependencies could not be installed. Please resolve the issues above."
         exit 1
     fi
     
