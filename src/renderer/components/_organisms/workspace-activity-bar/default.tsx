@@ -1,6 +1,7 @@
 import { StopIcon } from '@root/renderer/assets'
 import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { BufferToStringArray, cn } from '@root/utils'
 import { useState } from 'react'
 
@@ -36,7 +37,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const compileOnly = compileOnlySelectors.useCompileOnly()
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
-  const plcStatus = useOpenPLCStore((state) => state.runtimeConnection.plcStatus)
+  const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress)
 
@@ -93,7 +94,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
   }
 
-  const handlePlcControl = async () => {
+  const handlePlcControl = async (): Promise<void> => {
     if (!runtimeIpAddress || !jwtToken || connectionStatus !== 'connected') {
       return
     }
@@ -105,7 +106,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({
             id: crypto.randomUUID(),
             level: 'error',
-            message: `Failed to stop PLC: ${result.error || 'Unknown error'}`,
+            message: `Failed to stop PLC: ${(result.error as string) || 'Unknown error'}`,
           })
         }
       } else {
@@ -114,7 +115,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({
             id: crypto.randomUUID(),
             level: 'error',
-            message: `Failed to start PLC: ${result.error || 'Unknown error'}`,
+            message: `Failed to start PLC: ${(result.error as string) || 'Unknown error'}`,
           })
         }
       }

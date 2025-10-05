@@ -5,6 +5,7 @@ import { Checkbox, Label, Select, SelectContent, SelectItem, SelectTrigger } fro
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { cn } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -36,8 +37,10 @@ const Board = memo(function () {
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
-  const plcStatus = useOpenPLCStore((state) => state.runtimeConnection.plcStatus)
-  const setPlcRuntimeStatus = useOpenPLCStore((state) => state.deviceActions.setPlcRuntimeStatus)
+  const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  const setPlcRuntimeStatus = useOpenPLCStore(
+    (state): DeviceActions['setPlcRuntimeStatus'] => state.deviceActions.setPlcRuntimeStatus,
+  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -154,7 +157,7 @@ const Board = memo(function () {
   useEffect(() => {
     let statusInterval: NodeJS.Timeout | null = null
 
-    const pollStatus = async () => {
+    const pollStatus = async (): Promise<void> => {
       if (
         connectionStatus === 'connected' &&
         runtimeIpAddress &&
