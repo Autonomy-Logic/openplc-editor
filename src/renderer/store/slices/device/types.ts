@@ -21,6 +21,7 @@ type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 const runtimeConnectionSchema = z.object({
   jwtToken: z.string().nullable(),
   connectionStatus: z.enum(['disconnected', 'connecting', 'connected', 'error']),
+  plcStatus: z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable(),
 })
 
 type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>
@@ -145,6 +146,10 @@ const deviceActionSchema = z.object({
   setRuntimeConnectionStatus: z
     .function()
     .args(z.enum(['disconnected', 'connecting', 'connected', 'error']))
+    .returns(z.void()),
+  setPlcRuntimeStatus: z
+    .function()
+    .args(z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable())
     .returns(z.void()),
 })
 

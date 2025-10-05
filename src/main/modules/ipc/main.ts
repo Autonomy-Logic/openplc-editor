@@ -182,6 +182,84 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  private _makeRuntimeApiRequest<T = void>(
+    ipAddress: string,
+    jwtToken: string,
+    endpoint: string,
+    responseParser?: (data: string) => T,
+  ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
+    return new Promise((resolve) => {
+      const req = https.get(
+        `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`,
+        {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+          rejectUnauthorized: false,
+        },
+        (res: IncomingMessage) => {
+          let data = ''
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString()
+          })
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              if (responseParser) {
+                try {
+                  const parsedData = responseParser(data)
+                  resolve({ success: true, data: parsedData })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                resolve({ success: true })
+              }
+            } else {
+              resolve({ success: false, error: data })
+            }
+          })
+        },
+      )
+      req.on('error', (error: Error) => {
+        resolve({ success: false, error: error.message })
+      })
+      req.end()
+    })
+  }
+
+  handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      const result = await this._makeRuntimeApiRequest(ipAddress, jwtToken, '/api/status', (data: string) => {
+        const response = JSON.parse(data) as { status: string }
+        return response.status
+      })
+
+      if (result.success) {
+        return { success: true, status: result.data }
+      } else {
+        return { success: false, error: result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return await this._makeRuntimeApiRequest(ipAddress, jwtToken, '/api/start-plc')
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return await this._makeRuntimeApiRequest(ipAddress, jwtToken, '/api/stop-plc')
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -238,6 +316,9 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
     this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
     this.ipcMain.handle('runtime:login', this.handleRuntimeLogin)
+    this.ipcMain.handle('runtime:get-status', this.handleRuntimeGetStatus)
+    this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
+    this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
   }
 
   // ===================== HANDLER METHODS =====================

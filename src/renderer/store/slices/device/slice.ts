@@ -34,6 +34,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
   runtimeConnection: {
     jwtToken: null,
     connectionStatus: 'disconnected',
+    plcStatus: null,
   },
 
   deviceActions: {
@@ -459,6 +460,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
           runtimeConnection.connectionStatus = status
+        }),
+      )
+    },
+    setPlcRuntimeStatus: (status: 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'UNKNOWN' | null): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.plcStatus = status
         }),
       )
     },

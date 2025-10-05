@@ -5,6 +5,7 @@ import { Checkbox, Label, Select, SelectContent, SelectItem, SelectTrigger } fro
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { cn } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -36,6 +37,10 @@ const Board = memo(function () {
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
+  const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  const setPlcRuntimeStatus = useOpenPLCStore(
+    (state): DeviceActions['setPlcRuntimeStatus'] => state.deviceActions.setPlcRuntimeStatus,
+  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -149,6 +154,49 @@ const Board = memo(function () {
     }
   }, [runtimeIpAddress, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, openModal])
 
+  useEffect(() => {
+    let statusInterval: NodeJS.Timeout | null = null
+
+    const pollStatus = async (): Promise<void> => {
+      if (
+        connectionStatus === 'connected' &&
+        runtimeIpAddress &&
+        useOpenPLCStore.getState().runtimeConnection.jwtToken
+      ) {
+        try {
+          const result = await window.bridge.runtimeGetStatus(
+            runtimeIpAddress,
+            useOpenPLCStore.getState().runtimeConnection.jwtToken!,
+          )
+          if (result.success && result.status) {
+            const statusValue = result.status.replace('STATUS:', '').replace('\n', '').trim()
+            const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
+            if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
+              setPlcRuntimeStatus(statusValue as (typeof validStatuses)[number])
+            } else {
+              setPlcRuntimeStatus('UNKNOWN')
+            }
+          } else {
+            setPlcRuntimeStatus('UNKNOWN')
+          }
+        } catch (_error) {
+          setPlcRuntimeStatus('UNKNOWN')
+        }
+      }
+    }
+
+    if (connectionStatus === 'connected') {
+      void pollStatus()
+      statusInterval = setInterval(() => void pollStatus(), 2500)
+    } else {
+      setPlcRuntimeStatus(null)
+    }
+
+    return () => {
+      if (statusInterval) clearInterval(statusInterval)
+    }
+  }, [connectionStatus, runtimeIpAddress, setPlcRuntimeStatus])
+
   return (
     <DeviceEditorSlot heading='Board Settings'>
       <div id='compile-only-container' className='flex select-none items-center gap-2'>
@@ -242,7 +290,12 @@ const Board = memo(function () {
                       : 'Connect'}
                 </button>
                 {connectionStatus === 'connected' && (
-                  <span className='ml-2 text-xs text-green-600 dark:text-green-400'>● Connected</span>
+                  <div className='ml-2 flex items-center gap-2'>
+                    <span className='text-xs text-green-600 dark:text-green-400'>● Connected</span>
+                    {plcStatus && (
+                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>| PLC: {plcStatus}</span>
+                    )}
+                  </div>
                 )}
                 {connectionStatus === 'error' && (
                   <span className='ml-2 text-xs text-red-600 dark:text-red-400'>● Connection failed</span>
