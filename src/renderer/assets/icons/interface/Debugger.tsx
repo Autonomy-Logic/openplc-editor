@@ -19,7 +19,7 @@ const VariantClasses = {
 export const DebuggerIcon = ({ className, variant = 'default', size = 'sm', ...res }: IDebuggerIconProps) => {
   return (
     <svg
-      viewBox='0 0 23 23'
+      viewBox='0 0 22 22'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
       className={cn(`${SizeClasses[size]}`, className)}
