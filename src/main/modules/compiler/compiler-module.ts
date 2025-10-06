@@ -1369,17 +1369,19 @@ class CompilerModule {
 
                   const pollCompilationStatus = async () => {
                     let lastLogCount = 0
+                    let shouldContinuePolling = true
                     const startTime = Date.now()
                     const timeout = CompilerModule.COMPILATION_STATUS_TIMEOUT_MS
                     const pollInterval = CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS
 
-                    while (true) {
+                    while (shouldContinuePolling) {
                       if (Date.now() - startTime > timeout) {
                         _mainProcessPort.postMessage({
                           logLevel: 'error',
                           message: 'Compilation status polling timed out after 5 minutes.',
                         })
-                        break
+                        shouldContinuePolling = false
+                        continue
                       }
 
                       await new Promise((resolve) => setTimeout(resolve, pollInterval))
@@ -1398,7 +1400,8 @@ class CompilerModule {
                             logLevel: 'error',
                             message: `Error polling compilation status: ${result.error}`,
                           })
-                          break
+                          shouldContinuePolling = false
+                          continue
                         }
 
                         const { status, logs, exit_code } = result.data!
@@ -1419,20 +1422,20 @@ class CompilerModule {
                             logLevel: 'info',
                             message: `Compilation completed successfully (exit code: ${exit_code ?? 0}).`,
                           })
-                          break
+                          shouldContinuePolling = false
                         } else if (status === 'FAILED') {
                           _mainProcessPort.postMessage({
                             logLevel: 'error',
                             message: `Compilation failed (exit code: ${exit_code ?? 1}).`,
                           })
-                          break
+                          shouldContinuePolling = false
                         }
                       } catch (pollError) {
                         _mainProcessPort.postMessage({
                           logLevel: 'error',
                           message: `Error polling compilation status: ${pollError instanceof Error ? pollError.message : String(pollError)}`,
                         })
-                        break
+                        shouldContinuePolling = false
                       }
                     }
                   }
