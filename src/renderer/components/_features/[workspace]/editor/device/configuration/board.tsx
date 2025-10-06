@@ -12,6 +12,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
+  // Auto-disconnect after 3 consecutive status poll failures (7.5 seconds)
+  const MAX_CONSECUTIVE_FAILURES = 3
+
   const {
     deviceDefinitions: { compileOnly },
     deviceAvailableOptions: { availableBoards },
@@ -51,6 +54,7 @@ const Board = memo(function () {
 
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
+  const consecutiveFailuresRef = useRef<number>(0)
 
   const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
     if (!selectIsOpen) return
@@ -125,6 +129,7 @@ const Board = memo(function () {
 
   const handleConnectToRuntime = useCallback(async () => {
     if (connectionStatus === 'connected') {
+      consecutiveFailuresRef.current = 0
       setRuntimeJwtToken(null)
       setRuntimeConnectionStatus('disconnected')
       return
@@ -163,12 +168,24 @@ const Board = memo(function () {
         runtimeIpAddress &&
         useOpenPLCStore.getState().runtimeConnection.jwtToken
       ) {
+        const handlePollFailure = () => {
+          consecutiveFailuresRef.current += 1
+          if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+            setRuntimeJwtToken(null)
+            setRuntimeConnectionStatus('disconnected')
+            setPlcRuntimeStatus(null)
+          } else {
+            setPlcRuntimeStatus('UNKNOWN')
+          }
+        }
+
         try {
           const result = await window.bridge.runtimeGetStatus(
             runtimeIpAddress,
             useOpenPLCStore.getState().runtimeConnection.jwtToken!,
           )
           if (result.success && result.status) {
+            consecutiveFailuresRef.current = 0
             const statusValue = result.status.replace('STATUS:', '').replace('\n', '').trim()
             const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
             if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
@@ -177,10 +194,10 @@ const Board = memo(function () {
               setPlcRuntimeStatus('UNKNOWN')
             }
           } else {
-            setPlcRuntimeStatus('UNKNOWN')
+            handlePollFailure()
           }
         } catch (_error) {
-          setPlcRuntimeStatus('UNKNOWN')
+          handlePollFailure()
         }
       }
     }
