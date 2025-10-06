@@ -111,9 +111,10 @@ class CompilerModule {
 
     if (logLevelMatch) {
       const level = logLevelMatch[1].toLowerCase() as 'info' | 'warning' | 'error'
+      const cleanedMessage = message.replace(/^\[(INFO|WARNING|ERROR)\]\s*/, '')
       return {
         level,
-        cleanedMessage: message,
+        cleanedMessage,
       }
     }
 
