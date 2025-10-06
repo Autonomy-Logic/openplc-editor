@@ -182,7 +182,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  private _makeRuntimeApiRequest<T = void>(
+  makeRuntimeApiRequest<T = void>(
     ipAddress: string,
     jwtToken: string,
     endpoint: string,
@@ -229,7 +229,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
     try {
-      const result = await this._makeRuntimeApiRequest(ipAddress, jwtToken, '/api/status', (data: string) => {
+      const result = await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/status', (data: string) => {
         const response = JSON.parse(data) as { status: string }
         return response.status
       })
@@ -246,7 +246,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
     try {
-      return await this._makeRuntimeApiRequest(ipAddress, jwtToken, '/api/start-plc')
+      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/start-plc')
     } catch (error) {
       return { success: false, error: String(error) }
     }
@@ -254,7 +254,24 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
     try {
-      return await this._makeRuntimeApiRequest(ipAddress, jwtToken, '/api/stop-plc')
+      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/stop-plc')
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeGetCompilationStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      const result = await this.makeRuntimeApiRequest<{ status: string; logs: string[]; exit_code: number | null }>(
+        ipAddress,
+        jwtToken,
+        '/api/compilation-status',
+        (data: string) => {
+          const response = JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
+          return response
+        },
+      )
+      return result
     } catch (error) {
       return { success: false, error: String(error) }
     }
@@ -319,6 +336,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-status', this.handleRuntimeGetStatus)
     this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
     this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
+    this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -409,7 +427,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileProgram(args, mainProcessPort)
+    void this.compilerModule.compileProgram(args, mainProcessPort, this)
   }
 
   // TODO: These handlers are outdated and should be removed.
