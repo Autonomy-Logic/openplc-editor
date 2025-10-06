@@ -106,6 +106,23 @@ class CompilerModule {
   // =========================== Private methods ================================
   // ############################################################################
 
+  private parseLogLevel(message: string): { level: 'info' | 'warning' | 'error'; cleanedMessage: string } {
+    const logLevelMatch = message.match(/^\[(INFO|WARNING|ERROR)\]\s*/)
+
+    if (logLevelMatch) {
+      const level = logLevelMatch[1].toLowerCase() as 'info' | 'warning' | 'error'
+      return {
+        level,
+        cleanedMessage: message,
+      }
+    }
+
+    return {
+      level: 'info',
+      cleanedMessage: message,
+    }
+  }
+
   // Initialize paths based on the environment
   #constructBinaryDirectoryPath(): string {
     if (CompilerModule.HOST_ARCHITECTURE !== 'x64' && CompilerModule.HOST_ARCHITECTURE !== 'arm64') return ''
@@ -1409,9 +1426,10 @@ class CompilerModule {
                         if (logs.length > lastLogCount) {
                           const newLogs = logs.slice(lastLogCount)
                           newLogs.forEach((log) => {
+                            const { level, cleanedMessage } = this.parseLogLevel(log)
                             _mainProcessPort.postMessage({
-                              logLevel: 'info',
-                              message: log,
+                              logLevel: level,
+                              message: cleanedMessage,
                             })
                           })
                           lastLogCount = logs.length
