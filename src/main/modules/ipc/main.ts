@@ -51,6 +51,7 @@ class MainProcessBridge implements MainIpcModule {
 
   // ===================== RUNTIME API HANDLERS =====================
   private readonly RUNTIME_API_PORT = 8443
+  private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
 
   handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
@@ -78,6 +79,10 @@ class MainProcessBridge implements MainIpcModule {
             })
           },
         )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ hasUsers: false, error: 'Connection timeout' })
+        })
         req.on('error', (error: Error) => {
           resolve({ hasUsers: false, error: error.message })
         })
@@ -124,6 +129,10 @@ class MainProcessBridge implements MainIpcModule {
             })
           },
         )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
         req.on('error', (error: Error) => {
           resolve({ success: false, error: error.message })
         })
@@ -171,6 +180,10 @@ class MainProcessBridge implements MainIpcModule {
             })
           },
         )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
         req.on('error', (error: Error) => {
           resolve({ success: false, error: error.message })
         })
@@ -220,6 +233,10 @@ class MainProcessBridge implements MainIpcModule {
           })
         },
       )
+      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+        req.destroy()
+        resolve({ success: false, error: 'Connection timeout' })
+      })
       req.on('error', (error: Error) => {
         resolve({ success: false, error: error.message })
       })
