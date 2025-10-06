@@ -1373,21 +1373,56 @@ class CompilerModule {
                       await new Promise((resolve) => setTimeout(resolve, pollInterval))
 
                       try {
-                        const { default: rendererProcessBridge } = await import('../ipc/renderer')
-                        const statusResult = await rendererProcessBridge.runtimeGetCompilationStatus(
-                          runtimeIpAddress,
-                          runtimeJwtToken,
-                        )
-
-                        if (!statusResult.success || !statusResult.data) {
-                          _mainProcessPort.postMessage({
-                            logLevel: 'warning',
-                            message: `Failed to get compilation status: ${statusResult.error || 'Unknown error'}`,
+                        const statusData = await new Promise<{
+                          status: string
+                          logs: string[]
+                          exit_code: number | null
+                        }>((resolve, reject) => {
+                          const req = https.request(
+                            {
+                              hostname: runtimeIpAddress,
+                              port: 8443,
+                              path: '/api/compilation-status',
+                              method: 'GET',
+                              headers: {
+                                Authorization: `Bearer ${runtimeJwtToken}`,
+                              },
+                              rejectUnauthorized: false,
+                            },
+                            (res: IncomingMessage) => {
+                              let data = ''
+                              res.on('data', (chunk: Buffer) => {
+                                data += chunk.toString()
+                              })
+                              res.on('end', () => {
+                                if (res.statusCode === 200) {
+                                  try {
+                                    const parsed = JSON.parse(data) as {
+                                      status: string
+                                      logs: string[]
+                                      exit_code: number | null
+                                    }
+                                    resolve(parsed)
+                                  } catch (parseError) {
+                                    reject(
+                                      new Error(
+                                        `Failed to parse compilation status response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                                      ),
+                                    )
+                                  }
+                                } else {
+                                  reject(new Error(`HTTP ${res.statusCode}: ${data}`))
+                                }
+                              })
+                            },
+                          )
+                          req.on('error', (error: Error) => {
+                            reject(error)
                           })
-                          continue
-                        }
+                          req.end()
+                        })
 
-                        const { status, logs, exit_code } = statusResult.data
+                        const { status, logs, exit_code } = statusData
 
                         if (logs.length > lastLogCount) {
                           const newLogs = logs.slice(lastLogCount)
