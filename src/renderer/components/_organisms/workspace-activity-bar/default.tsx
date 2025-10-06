@@ -123,6 +123,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             level: 'error',
             message: `Failed to stop PLC: ${(result.error as string) || 'Unknown error'}`,
           })
+          return
         }
       } else {
         const result = await window.bridge.runtimeStartPlc(runtimeIpAddress, jwtToken)
@@ -132,6 +133,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             level: 'error',
             message: `Failed to start PLC: ${(result.error as string) || 'Unknown error'}`,
           })
+          return
+        }
+      }
+
+      const statusResult = await window.bridge.runtimeGetStatus(runtimeIpAddress, jwtToken)
+      if (statusResult.success && statusResult.status) {
+        const statusValue = statusResult.status.replace('STATUS:', '').replace('\n', '').trim()
+        const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
+        if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
+          useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(statusValue as (typeof validStatuses)[number])
         }
       }
     } catch (error) {
