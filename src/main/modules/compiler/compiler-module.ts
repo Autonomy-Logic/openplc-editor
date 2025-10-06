@@ -78,7 +78,6 @@ class CompilerModule {
   // Runtime API polling configuration (important-comment)
   static readonly COMPILATION_STATUS_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes (important-comment)
   static readonly COMPILATION_STATUS_POLL_INTERVAL_MS = 1000 // 1 second (important-comment)
-  static readonly RUNTIME_API_PORT = 8443
 
   constructor() {
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
@@ -106,49 +105,6 @@ class CompilerModule {
   // ############################################################################
   // =========================== Private methods ================================
   // ############################################################################
-
-  private _makeRuntimeApiGetRequest<T>(ipAddress: string, jwtToken: string, endpoint: string): Promise<T> {
-    return new Promise((resolve, reject) => {
-      const req = https.request(
-        {
-          hostname: ipAddress,
-          port: CompilerModule.RUNTIME_API_PORT,
-          path: endpoint,
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${jwtToken}`,
-          },
-          rejectUnauthorized: false,
-        },
-        (res: IncomingMessage) => {
-          let data = ''
-          res.on('data', (chunk: Buffer) => {
-            data += chunk.toString()
-          })
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              try {
-                const parsed = JSON.parse(data) as T
-                resolve(parsed)
-              } catch (parseError) {
-                reject(
-                  new Error(
-                    `Failed to parse API response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-                  ),
-                )
-              }
-            } else {
-              reject(new Error(`HTTP ${res.statusCode}: ${data}`))
-            }
-          })
-        },
-      )
-      req.on('error', (error: Error) => {
-        reject(error)
-      })
-      req.end()
-    })
-  }
 
   // Initialize paths based on the environment
   #constructBinaryDirectoryPath(): string {
@@ -1100,6 +1056,14 @@ class CompilerModule {
   async compileProgram(
     args: Array<string | null | ProjectState['data']>,
     _mainProcessPort: MessagePortMain,
+    mainProcessBridge: {
+      makeRuntimeApiRequest: <T = void>(
+        ipAddress: string,
+        jwtToken: string,
+        endpoint: string,
+        responseParser?: (data: string) => T,
+      ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+    },
   ): Promise<void> {
     // Start the main process port to communicate with the renderer process.
     // INFO: This is necessary to send messages back to the renderer process.
@@ -1421,13 +1385,23 @@ class CompilerModule {
                       await new Promise((resolve) => setTimeout(resolve, pollInterval))
 
                       try {
-                        const statusData = await this._makeRuntimeApiGetRequest<{
+                        const result = await mainProcessBridge.makeRuntimeApiRequest<{
                           status: string
                           logs: string[]
                           exit_code: number | null
-                        }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status')
+                        }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status', (data: string) => {
+                          return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
+                        })
 
-                        const { status, logs, exit_code } = statusData
+                        if (!result.success) {
+                          _mainProcessPort.postMessage({
+                            logLevel: 'error',
+                            message: `Error polling compilation status: ${result.error}`,
+                          })
+                          break
+                        }
+
+                        const { status, logs, exit_code } = result.data!
 
                         if (logs.length > lastLogCount) {
                           const newLogs = logs.slice(lastLogCount)
