@@ -168,6 +168,17 @@ const Board = memo(function () {
         runtimeIpAddress &&
         useOpenPLCStore.getState().runtimeConnection.jwtToken
       ) {
+        const handlePollFailure = () => {
+          consecutiveFailuresRef.current += 1
+          if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+            setRuntimeJwtToken(null)
+            setRuntimeConnectionStatus('disconnected')
+            setPlcRuntimeStatus(null)
+          } else {
+            setPlcRuntimeStatus('UNKNOWN')
+          }
+        }
+
         try {
           const result = await window.bridge.runtimeGetStatus(
             runtimeIpAddress,
@@ -183,24 +194,10 @@ const Board = memo(function () {
               setPlcRuntimeStatus('UNKNOWN')
             }
           } else {
-            consecutiveFailuresRef.current += 1
-            if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
-              setRuntimeJwtToken(null)
-              setRuntimeConnectionStatus('disconnected')
-              setPlcRuntimeStatus(null)
-            } else {
-              setPlcRuntimeStatus('UNKNOWN')
-            }
+            handlePollFailure()
           }
         } catch (_error) {
-          consecutiveFailuresRef.current += 1
-          if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
-            setRuntimeJwtToken(null)
-            setRuntimeConnectionStatus('disconnected')
-            setPlcRuntimeStatus(null)
-          } else {
-            setPlcRuntimeStatus('UNKNOWN')
-          }
+          handlePollFailure()
         }
       }
     }
