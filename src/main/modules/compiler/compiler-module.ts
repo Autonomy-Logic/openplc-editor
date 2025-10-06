@@ -75,6 +75,11 @@ class CompilerModule {
     'WiFiNINA',
   ]
 
+  // Runtime API polling configuration (important-comment)
+  static readonly COMPILATION_STATUS_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes (important-comment)
+  static readonly COMPILATION_STATUS_POLL_INTERVAL_MS = 1000 // 1 second (important-comment)
+  static readonly RUNTIME_API_PORT = 8443
+
   constructor() {
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
@@ -101,6 +106,49 @@ class CompilerModule {
   // ############################################################################
   // =========================== Private methods ================================
   // ############################################################################
+
+  private _makeRuntimeApiGetRequest<T>(ipAddress: string, jwtToken: string, endpoint: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: ipAddress,
+          port: CompilerModule.RUNTIME_API_PORT,
+          path: endpoint,
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+          rejectUnauthorized: false,
+        },
+        (res: IncomingMessage) => {
+          let data = ''
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString()
+          })
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              try {
+                const parsed = JSON.parse(data) as T
+                resolve(parsed)
+              } catch (parseError) {
+                reject(
+                  new Error(
+                    `Failed to parse API response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                  ),
+                )
+              }
+            } else {
+              reject(new Error(`HTTP ${res.statusCode}: ${data}`))
+            }
+          })
+        },
+      )
+      req.on('error', (error: Error) => {
+        reject(error)
+      })
+      req.end()
+    })
+  }
 
   // Initialize paths based on the environment
   #constructBinaryDirectoryPath(): string {
@@ -1358,8 +1406,8 @@ class CompilerModule {
                   const pollCompilationStatus = async () => {
                     let lastLogCount = 0
                     const startTime = Date.now()
-                    const timeout = 5 * 60 * 1000
-                    const pollInterval = 1000
+                    const timeout = CompilerModule.COMPILATION_STATUS_TIMEOUT_MS
+                    const pollInterval = CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS
 
                     while (true) {
                       if (Date.now() - startTime > timeout) {
@@ -1373,54 +1421,11 @@ class CompilerModule {
                       await new Promise((resolve) => setTimeout(resolve, pollInterval))
 
                       try {
-                        const statusData = await new Promise<{
+                        const statusData = await this._makeRuntimeApiGetRequest<{
                           status: string
                           logs: string[]
                           exit_code: number | null
-                        }>((resolve, reject) => {
-                          const req = https.request(
-                            {
-                              hostname: runtimeIpAddress,
-                              port: 8443,
-                              path: '/api/compilation-status',
-                              method: 'GET',
-                              headers: {
-                                Authorization: `Bearer ${runtimeJwtToken}`,
-                              },
-                              rejectUnauthorized: false,
-                            },
-                            (res: IncomingMessage) => {
-                              let data = ''
-                              res.on('data', (chunk: Buffer) => {
-                                data += chunk.toString()
-                              })
-                              res.on('end', () => {
-                                if (res.statusCode === 200) {
-                                  try {
-                                    const parsed = JSON.parse(data) as {
-                                      status: string
-                                      logs: string[]
-                                      exit_code: number | null
-                                    }
-                                    resolve(parsed)
-                                  } catch (parseError) {
-                                    reject(
-                                      new Error(
-                                        `Failed to parse compilation status response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-                                      ),
-                                    )
-                                  }
-                                } else {
-                                  reject(new Error(`HTTP ${res.statusCode}: ${data}`))
-                                }
-                              })
-                            },
-                          )
-                          req.on('error', (error: Error) => {
-                            reject(error)
-                          })
-                          req.end()
-                        })
+                        }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status')
 
                         const { status, logs, exit_code } = statusData
 
