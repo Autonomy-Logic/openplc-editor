@@ -1460,7 +1460,29 @@ class CompilerModule {
                   }
 
                   pollCompilationStatus()
-                    .then(() => {
+                    .then(async () => {
+                      if (runtimeIpAddress && runtimeJwtToken) {
+                        try {
+                          const statusResult = await mainProcessBridge.makeRuntimeApiRequest<string>(
+                            runtimeIpAddress,
+                            runtimeJwtToken,
+                            '/api/status',
+                            (data: string) => {
+                              const response = JSON.parse(data) as { status: string }
+                              return response.status
+                            },
+                          )
+
+                          if (statusResult.success && statusResult.data) {
+                            _mainProcessPort.postMessage({
+                              plcStatus: statusResult.data.replace('STATUS:', '').replace('\n', '').trim(),
+                            })
+                          }
+                        } catch (_statusError) {
+                          // Silently ignore status check errors - this is a best-effort update
+                        }
+                      }
+
                       _mainProcessPort.postMessage({
                         message:
                           '-------------------------------------------------------------------------------------------------------------\n',

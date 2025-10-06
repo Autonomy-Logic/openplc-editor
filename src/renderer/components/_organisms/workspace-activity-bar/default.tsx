@@ -55,8 +55,23 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         runtimeIpAddress,
         runtimeJwtToken,
       ],
-      (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
+      (data: {
+        logLevel?: 'info' | 'error' | 'warning'
+        message: string | Buffer
+        plcStatus?: string
+        closePort?: boolean
+      }) => {
         setIsCompiling(true)
+
+        if (data.plcStatus) {
+          const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
+          if (validStatuses.includes(data.plcStatus as (typeof validStatuses)[number])) {
+            useOpenPLCStore
+              .getState()
+              .deviceActions.setPlcRuntimeStatus(data.plcStatus as (typeof validStatuses)[number])
+          }
+        }
+
         if (typeof data.message === 'string') {
           data.message
             .trim()
