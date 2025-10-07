@@ -1338,6 +1338,13 @@ class CompilerModule {
             message: 'Preparing program.st file for OpenPLC Runtime v3...',
           })
           const programStPath = join(sourceTargetFolderPath, 'program.st')
+
+          try {
+            await fs.access(programStPath)
+          } catch {
+            throw new Error(`Required file not found: ${programStPath}. Cannot upload to OpenPLC Runtime v3.`)
+          }
+
           fileBuffer = await fs.readFile(programStPath)
           filename = 'program.st'
           contentType = 'text/plain'
