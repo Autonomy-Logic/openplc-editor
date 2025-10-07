@@ -198,7 +198,6 @@ const VariableElement = (block: VariableProps) => {
    * Handle with the variable input onBlur event
    */
   const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
-    console.log('-------here-------')
     const variableNameToSubmit = variableName || variableValue
 
     const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
@@ -216,13 +215,10 @@ const VariableElement = (block: VariableProps) => {
       setIsAVariable(true)
       setInputError(false)
     } else if (literalTypes) {
-      console.log('-----isLiteral-----')
-      console.log(data.block.variableType.type.value)
       setIsAVariable(false)
       setInputError(false)
       variable = { name: variableNameToSubmit }
     } else {
-      console.log('-----isInvalid-----')
       setIsAVariable(true)
       setInputError(true)
       variable = { name: variableNameToSubmit }
