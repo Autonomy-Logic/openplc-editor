@@ -1326,12 +1326,37 @@ class CompilerModule {
       }
 
       try {
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: 'Compressing source files...',
-        })
+        const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
 
-        const zipBuffer = await this.compressSourceFolder(sourceTargetFolderPath)
+        let fileBuffer: Buffer
+        let filename: string
+        let contentType: string
+
+        if (isRuntimeV3) {
+          _mainProcessPort.postMessage({
+            logLevel: 'info',
+            message: 'Preparing program.st file for OpenPLC Runtime v3...',
+          })
+          const programStPath = join(sourceTargetFolderPath, 'program.st')
+
+          try {
+            await fs.access(programStPath)
+          } catch {
+            throw new Error(`Required file not found: ${programStPath}. Cannot upload to OpenPLC Runtime v3.`)
+          }
+
+          fileBuffer = await fs.readFile(programStPath)
+          filename = 'program.st'
+          contentType = 'text/plain'
+        } else {
+          _mainProcessPort.postMessage({
+            logLevel: 'info',
+            message: 'Compressing source files for OpenPLC Runtime v4...',
+          })
+          fileBuffer = await this.compressSourceFolder(sourceTargetFolderPath)
+          filename = 'program.zip'
+          contentType = 'application/zip'
+        }
 
         _mainProcessPort.postMessage({
           logLevel: 'info',
@@ -1342,11 +1367,11 @@ class CompilerModule {
 
         const header = Buffer.from(
           `--${boundary}\r\n` +
-            `Content-Disposition: form-data; name="file"; filename="program.zip"\r\n` +
-            `Content-Type: application/zip\r\n\r\n`,
+            `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
+            `Content-Type: ${contentType}\r\n\r\n`,
         )
         const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
-        const body = Buffer.concat([header, zipBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
+        const body = Buffer.concat([header, fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
 
         await new Promise<void>((resolve, reject) => {
           const req = https.request(
