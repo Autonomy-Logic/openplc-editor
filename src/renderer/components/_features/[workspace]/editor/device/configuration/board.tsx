@@ -6,7 +6,7 @@ import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { cn } from '@root/utils'
+import { cn, validateIpAddress } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -55,6 +55,10 @@ const Board = memo(function () {
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
   const consecutiveFailuresRef = useRef<number>(0)
+
+  const isIpAddressValid = useMemo(() => {
+    return validateIpAddress(runtimeIpAddress).valid
+  }, [runtimeIpAddress])
 
   const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
     if (!selectIsOpen) return
@@ -310,7 +314,9 @@ const Board = memo(function () {
                 <button
                   type='button'
                   onClick={handleConnectToRuntime}
-                  disabled={connectionStatus === 'connecting'}
+                  disabled={
+                    connectionStatus === 'connecting' || (connectionStatus !== 'connected' && !isIpAddressValid)
+                  }
                   className='h-[30px] rounded-md bg-brand px-4 py-1 font-caption text-cp-sm font-medium text-white hover:bg-brand-medium-dark disabled:opacity-50'
                 >
                   {connectionStatus === 'connecting'
