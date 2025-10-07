@@ -3,6 +3,7 @@ import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { BufferToStringArray, cn } from '@root/utils'
+import { parsePlcStatus } from '@root/utils/plc-status'
 import { useState } from 'react'
 
 import {
@@ -64,11 +65,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         setIsCompiling(true)
 
         if (data.plcStatus) {
-          const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
-          if (validStatuses.includes(data.plcStatus as (typeof validStatuses)[number])) {
-            useOpenPLCStore
-              .getState()
-              .deviceActions.setPlcRuntimeStatus(data.plcStatus as (typeof validStatuses)[number])
+          const status = parsePlcStatus(data.plcStatus)
+          if (status) {
+            useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(status)
           }
         }
 
@@ -139,10 +138,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       const statusResult = await window.bridge.runtimeGetStatus(runtimeIpAddress, jwtToken)
       if (statusResult.success && statusResult.status) {
-        const statusValue = statusResult.status.replace('STATUS:', '').replace('\n', '').trim()
-        const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
-        if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
-          useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(statusValue as (typeof validStatuses)[number])
+        const status = parsePlcStatus(statusResult.status)
+        if (status) {
+          useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(status)
         }
       }
     } catch (error) {

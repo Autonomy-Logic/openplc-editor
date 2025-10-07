@@ -12,6 +12,7 @@ import { CreateXMLFile } from '@root/main/utils'
 import { ProjectState } from '@root/renderer/store/slices'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
+import { parsePlcStatus } from '@root/utils/plc-status'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
@@ -1474,9 +1475,12 @@ class CompilerModule {
                           )
 
                           if (statusResult.success && statusResult.data) {
-                            _mainProcessPort.postMessage({
-                              plcStatus: statusResult.data.replace('STATUS:', '').replace('\n', '').trim(),
-                            })
+                            const status = parsePlcStatus(statusResult.data)
+                            if (status) {
+                              _mainProcessPort.postMessage({
+                                plcStatus: status,
+                              })
+                            }
                           }
                         } catch (_statusError) {
                           // Silently ignore status check errors - this is a best-effort update
