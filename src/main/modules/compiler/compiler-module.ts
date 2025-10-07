@@ -12,6 +12,7 @@ import { CreateXMLFile } from '@root/main/utils'
 import { ProjectState } from '@root/renderer/store/slices'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
+import { parsePlcStatus } from '@root/utils/plc-status'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
@@ -105,6 +106,24 @@ class CompilerModule {
   // ############################################################################
   // =========================== Private methods ================================
   // ############################################################################
+
+  private parseLogLevel(message: string): { level: 'info' | 'warning' | 'error'; cleanedMessage: string } {
+    const logLevelMatch = message.match(/^\[(INFO|WARNING|ERROR)\]\s*/)
+
+    if (logLevelMatch) {
+      const level = logLevelMatch[1].toLowerCase() as 'info' | 'warning' | 'error'
+      const cleanedMessage = message.replace(/^\[(INFO|WARNING|ERROR)\]\s*/, '')
+      return {
+        level,
+        cleanedMessage,
+      }
+    }
+
+    return {
+      level: 'info',
+      cleanedMessage: message,
+    }
+  }
 
   // Initialize paths based on the environment
   #constructBinaryDirectoryPath(): string {
@@ -1409,9 +1428,10 @@ class CompilerModule {
                         if (logs.length > lastLogCount) {
                           const newLogs = logs.slice(lastLogCount)
                           newLogs.forEach((log) => {
+                            const { level, cleanedMessage } = this.parseLogLevel(log)
                             _mainProcessPort.postMessage({
-                              logLevel: 'info',
-                              message: log,
+                              logLevel: level,
+                              message: cleanedMessage,
                             })
                           })
                           lastLogCount = logs.length
@@ -1441,7 +1461,32 @@ class CompilerModule {
                   }
 
                   pollCompilationStatus()
-                    .then(() => {
+                    .then(async () => {
+                      if (runtimeIpAddress && runtimeJwtToken) {
+                        try {
+                          const statusResult = await mainProcessBridge.makeRuntimeApiRequest<string>(
+                            runtimeIpAddress,
+                            runtimeJwtToken,
+                            '/api/status',
+                            (data: string) => {
+                              const response = JSON.parse(data) as { status: string }
+                              return response.status
+                            },
+                          )
+
+                          if (statusResult.success && statusResult.data) {
+                            const status = parsePlcStatus(statusResult.data)
+                            if (status) {
+                              _mainProcessPort.postMessage({
+                                plcStatus: status,
+                              })
+                            }
+                          }
+                        } catch (_statusError) {
+                          // Silently ignore status check errors - this is a best-effort update
+                        }
+                      }
+
                       _mainProcessPort.postMessage({
                         message:
                           '-------------------------------------------------------------------------------------------------------------\n',

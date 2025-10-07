@@ -3,6 +3,7 @@ import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { BufferToStringArray, cn } from '@root/utils'
+import { parsePlcStatus } from '@root/utils/plc-status'
 import { useState } from 'react'
 
 import {
@@ -55,8 +56,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         runtimeIpAddress,
         runtimeJwtToken,
       ],
-      (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
+      (data: {
+        logLevel?: 'info' | 'error' | 'warning'
+        message: string | Buffer
+        plcStatus?: string
+        closePort?: boolean
+      }) => {
         setIsCompiling(true)
+
+        if (data.plcStatus) {
+          const status = parsePlcStatus(data.plcStatus)
+          if (status) {
+            useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(status)
+          }
+        }
+
         if (typeof data.message === 'string') {
           data.message
             .trim()
@@ -108,6 +122,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             level: 'error',
             message: `Failed to stop PLC: ${(result.error as string) || 'Unknown error'}`,
           })
+          return
         }
       } else {
         const result = await window.bridge.runtimeStartPlc(runtimeIpAddress, jwtToken)
@@ -117,6 +132,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             level: 'error',
             message: `Failed to start PLC: ${(result.error as string) || 'Unknown error'}`,
           })
+          return
+        }
+      }
+
+      const statusResult = await window.bridge.runtimeGetStatus(runtimeIpAddress, jwtToken)
+      if (statusResult.success && statusResult.status) {
+        const status = parsePlcStatus(statusResult.status)
+        if (status) {
+          useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(status)
         }
       }
     } catch (error) {
