@@ -8,6 +8,7 @@ const modalTypes = z.enum([
   'create-project',
   'save-changes-project',
   'confirm-delete-element',
+  'confirm-device-switch',
   'quit-application',
   'runtime-create-user',
   'runtime-login',
