@@ -1,4 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
+import { validateIpAddress } from '@root/utils'
 import { useState } from 'react'
 
 import { Label } from '../../_atoms'
@@ -29,6 +30,13 @@ const RuntimeCreateUserModal = () => {
 
     setIsLoading(true)
     const ipAddress = deviceDefinitions.configuration.runtimeIpAddress || ''
+
+    const ipValidation = validateIpAddress(ipAddress)
+    if (!ipValidation.valid) {
+      setError('Runtime IP address not configured: ' + (ipValidation.message || 'Invalid IP address'))
+      setIsLoading(false)
+      return
+    }
 
     try {
       const result = await window.bridge.runtimeCreateUser(ipAddress, username, password)

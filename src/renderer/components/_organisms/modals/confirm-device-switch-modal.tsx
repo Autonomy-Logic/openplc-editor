@@ -22,7 +22,9 @@ const ConfirmDeviceSwitchModal = () => {
     deviceActions.setRuntimeConnectionStatus('disconnected')
     deviceActions.setPlcRuntimeStatus(null)
 
-    modalData.onConfirm()
+    if (modalData.onConfirm) {
+      modalData.onConfirm()
+    }
 
     modalActions.closeModal()
   }

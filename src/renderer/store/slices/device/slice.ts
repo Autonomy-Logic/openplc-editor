@@ -1,4 +1,5 @@
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { validateIpAddress } from '@root/utils/validate-ip-address'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -442,6 +443,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       )
     },
     setRuntimeIpAddress: (ipAddress): void => {
+      const validation = validateIpAddress(ipAddress)
+      if (!validation.valid && ipAddress.trim() !== '') {
+        console.warn(`Invalid runtime IP address: ${validation.message}`)
+        return
+      }
+
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true

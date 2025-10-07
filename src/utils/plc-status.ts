@@ -14,6 +14,9 @@ import { isValidPlcStatus } from '@root/types/plc-status'
  * parsePlcStatus("INVALID") // returns null
  */
 export function parsePlcStatus(rawStatus: string): PlcStatus | null {
-  const cleaned = rawStatus.replace('STATUS:', '').replace('\n', '').trim()
+  const cleaned = rawStatus
+    .replace(/^STATUS:\s*/, '')
+    .replace(/[\r\n]+/g, '')
+    .trim()
   return isValidPlcStatus(cleaned) ? cleaned : null
 }

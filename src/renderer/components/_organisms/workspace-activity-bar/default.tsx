@@ -120,7 +120,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({
             id: crypto.randomUUID(),
             level: 'error',
-            message: `Failed to stop PLC: ${(result.error as string) || 'Unknown error'}`,
+            message: `Failed to stop PLC: ${String(result.error) || 'Unknown error'}`,
           })
           return
         }
@@ -130,7 +130,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({
             id: crypto.randomUUID(),
             level: 'error',
-            message: `Failed to start PLC: ${(result.error as string) || 'Unknown error'}`,
+            message: `Failed to start PLC: ${String(result.error) || 'Unknown error'}`,
           })
           return
         }

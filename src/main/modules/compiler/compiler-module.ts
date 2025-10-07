@@ -13,6 +13,7 @@ import { ProjectState } from '@root/renderer/store/slices'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { parsePlcStatus } from '@root/utils/plc-status'
+import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
@@ -1385,7 +1386,7 @@ class CompilerModule {
                 'Content-Length': body.length,
                 Authorization: `Bearer ${runtimeJwtToken}`,
               },
-              rejectUnauthorized: false,
+              ...getRuntimeHttpsOptions(),
             },
             (res: IncomingMessage) => {
               let data = ''
@@ -1541,6 +1542,14 @@ class CompilerModule {
               })
             },
           )
+          req.setTimeout(300000, () => {
+            req.destroy()
+            _mainProcessPort.postMessage({
+              logLevel: 'error',
+              message: 'Upload request timed out after 5 minutes.',
+            })
+            reject(new Error('Upload timeout'))
+          })
           req.on('error', (error: Error) => {
             _mainProcessPort.postMessage({
               logLevel: 'error',

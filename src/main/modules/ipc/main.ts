@@ -1,6 +1,7 @@
 import { getProjectPath } from '@root/main/utils'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
 import type { IncomingMessage } from 'http'
@@ -61,7 +62,7 @@ class MainProcessBridge implements MainIpcModule {
         const req = https.get(
           url,
           {
-            rejectUnauthorized: false,
+            ...getRuntimeHttpsOptions(),
           },
           (res: IncomingMessage) => {
             let data = ''
@@ -86,7 +87,6 @@ class MainProcessBridge implements MainIpcModule {
         req.on('error', (error: Error) => {
           resolve({ hasUsers: false, error: error.message })
         })
-        req.end()
       })
     } catch (error) {
       return { hasUsers: false, error: String(error) }
@@ -113,7 +113,7 @@ class MainProcessBridge implements MainIpcModule {
               'Content-Type': 'application/json',
               'Content-Length': Buffer.byteLength(postData),
             },
-            rejectUnauthorized: false,
+            ...getRuntimeHttpsOptions(),
           },
           (res: IncomingMessage) => {
             let data = ''
@@ -159,7 +159,7 @@ class MainProcessBridge implements MainIpcModule {
               'Content-Type': 'application/json',
               'Content-Length': Buffer.byteLength(postData),
             },
-            rejectUnauthorized: false,
+            ...getRuntimeHttpsOptions(),
           },
           (res: IncomingMessage) => {
             let data = ''
@@ -208,7 +208,7 @@ class MainProcessBridge implements MainIpcModule {
           headers: {
             Authorization: `Bearer ${jwtToken}`,
           },
-          rejectUnauthorized: false,
+          ...getRuntimeHttpsOptions(),
         },
         (res: IncomingMessage) => {
           let data = ''
@@ -240,7 +240,6 @@ class MainProcessBridge implements MainIpcModule {
       req.on('error', (error: Error) => {
         resolve({ success: false, error: error.message })
       })
-      req.end()
     })
   }
 
