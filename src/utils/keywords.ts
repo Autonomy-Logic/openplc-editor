@@ -5,7 +5,8 @@ const floatTypes = ['ANY_NUM', 'REAL', 'LREAL']
 
 export const literals = [
   // Boolean Literals
-  { pattern: /^TRUE|FALSE|0|1$/, types: booleanTypes },
+  { pattern: /^(TRUE|FALSE)$/, types: booleanTypes },
+  { pattern: /^(0|1)$/, types: [...booleanTypes, ...integerTypes] },
   // Number literals
   { pattern: /^2#[01_]+$/, types: integerTypes },
   { pattern: /^8#[0-7_]+$/, types: integerTypes },

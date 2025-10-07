@@ -223,7 +223,6 @@ const VariableElement = (block: VariableProps) => {
       setInputError(true)
       variable = { name: variableNameToSubmit }
     }
-    console.log(variable)
 
     updateNode({
       editorName: editor.meta.name,
