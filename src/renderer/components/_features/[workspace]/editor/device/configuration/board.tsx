@@ -114,11 +114,24 @@ const Board = memo(function () {
 
   const handleSetDeviceBoard = useCallback(
     (board: string) => {
-      setFormattedBoardState(board)
       const normalizedBoard = board.split('[')[0].trim()
+
+      if (connectionStatus === 'connected' && normalizedBoard !== deviceBoard) {
+        openModal('confirm-device-switch', {
+          newBoard: normalizedBoard,
+          formattedNewBoard: board,
+          onConfirm: () => {
+            setFormattedBoardState(board)
+            setDeviceBoard(normalizedBoard)
+          },
+        })
+        return
+      }
+
+      setFormattedBoardState(board)
       setDeviceBoard(normalizedBoard)
     },
-    [setDeviceBoard],
+    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal],
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
