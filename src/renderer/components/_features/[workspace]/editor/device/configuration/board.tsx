@@ -276,7 +276,7 @@ const Board = memo(function () {
               </SelectContent>
             </Select>
           </div>
-          {deviceBoard === 'OpenPLC Runtime' ? (
+          {deviceBoard === 'OpenPLC Runtime v3' || deviceBoard === 'OpenPLC Runtime v4' ? (
             <>
               <div id='runtime-ip-address-field' className='flex w-full items-center justify-start gap-1'>
                 <Label
