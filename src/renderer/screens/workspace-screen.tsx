@@ -102,10 +102,16 @@ const WorkspaceScreen = () => {
           const indexMap = new Map<string, number>()
 
           const instances = useOpenPLCStore.getState().project.data.configuration.resource.instances
-          const currentInstance = instances[0]?.name || 'instance0'
+          const currentPouName = editor.meta.name
+          const currentInstance = instances.find((inst) => inst.program === currentPouName)
+
+          if (!currentInstance) {
+            console.log(`No instance found running program '${currentPouName}'`)
+            return
+          }
 
           debugVariables.forEach((v) => {
-            const index = matchVariableWithDebugEntry(v.name, currentInstance, parsed.variables)
+            const index = matchVariableWithDebugEntry(v.name, currentInstance.name, parsed.variables)
             if (index !== null) {
               indexMap.set(v.name, index)
             }
@@ -121,7 +127,7 @@ const WorkspaceScreen = () => {
       .catch((err: unknown) => {
         console.error('Error reading debug.c:', err)
       })
-  }, [activeTab, debugVariables])
+  }, [activeTab, debugVariables, editor.meta.name])
 
   const togglePanel = () => {
     if (panelRef.current) {
