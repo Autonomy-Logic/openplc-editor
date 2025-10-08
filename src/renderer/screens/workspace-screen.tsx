@@ -56,13 +56,11 @@ const WorkspaceScreen = () => {
       type: typeValue,
     }
   })
+
+  const debugVariables = variables.filter((v) => pouVariables.find((pv) => pv.name === v.name && pv.debug === true))
+
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
-
-  useEffect(() => {
-    const debugVariables = pouVariables.filter((v) => v.debug === true).map((v) => v.name)
-    setGraphList(debugVariables)
-  }, [pouVariables])
 
   type PanelMethods = {
     collapse: () => void
@@ -317,7 +315,11 @@ const WorkspaceScreen = () => {
                         </ResizablePanel>
                         <ResizableHandle className='w-2 bg-transparent' />
                         <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
-                          <VariablesPanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
+                          <VariablesPanel
+                            variables={debugVariables}
+                            graphList={graphList}
+                            setGraphList={setGraphList}
+                          />
                         </ResizablePanel>
                       </ResizablePanelGroup>
                     </Tabs.Content>
