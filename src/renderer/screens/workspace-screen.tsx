@@ -95,7 +95,7 @@ const WorkspaceScreen = () => {
 
     window.bridge
       .readDebugFile(projectPath, boardTarget)
-      .then((response) => {
+      .then((response: { success: boolean; content?: string; error?: string }) => {
         if (response.success && response.content) {
           const parsed = parseDebugFile(response.content)
 
@@ -118,7 +118,7 @@ const WorkspaceScreen = () => {
           )
         }
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error('Error reading debug.c:', err)
       })
   }, [activeTab, debugVariables])
