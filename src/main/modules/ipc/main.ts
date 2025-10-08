@@ -1,8 +1,11 @@
 import { getProjectPath } from '@root/main/utils'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
+import type { IncomingMessage } from 'http'
+import https from 'https'
 import { join } from 'path'
 import { platform } from 'process'
 
@@ -45,6 +48,249 @@ class MainProcessBridge implements MainIpcModule {
     this.menuBuilder = menuBuilder
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
+  }
+
+  // ===================== RUNTIME API HANDLERS =====================
+  private readonly RUNTIME_API_PORT = 8443
+  private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
+
+  handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
+    try {
+      const url = `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get-users-info`
+
+      return new Promise((resolve) => {
+        const req = https.get(
+          url,
+          {
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 404) {
+                resolve({ hasUsers: false })
+              } else if (res.statusCode === 200) {
+                resolve({ hasUsers: true })
+              } else {
+                resolve({ hasUsers: false, error: data || `Unexpected status: ${res.statusCode}` })
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ hasUsers: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ hasUsers: false, error: error.message })
+        })
+      })
+    } catch (error) {
+      return { hasUsers: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeCreateUser = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    username: string,
+    password: string,
+  ) => {
+    try {
+      const postData = JSON.stringify({ username, password, role: 'user' })
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: '/api/create-user',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 201) {
+                resolve({ success: true })
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
+    try {
+      const postData = JSON.stringify({ username, password })
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: '/api/login',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const response = JSON.parse(data) as { access_token: string }
+                  resolve({ success: true, accessToken: response.access_token })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  makeRuntimeApiRequest<T = void>(
+    ipAddress: string,
+    jwtToken: string,
+    endpoint: string,
+    responseParser?: (data: string) => T,
+  ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
+    return new Promise((resolve) => {
+      const req = https.get(
+        `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`,
+        {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+          ...getRuntimeHttpsOptions(),
+        },
+        (res: IncomingMessage) => {
+          let data = ''
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString()
+          })
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              if (responseParser) {
+                try {
+                  const parsedData = responseParser(data)
+                  resolve({ success: true, data: parsedData })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                resolve({ success: true })
+              }
+            } else {
+              resolve({ success: false, error: data })
+            }
+          })
+        },
+      )
+      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+        req.destroy()
+        resolve({ success: false, error: 'Connection timeout' })
+      })
+      req.on('error', (error: Error) => {
+        resolve({ success: false, error: error.message })
+      })
+    })
+  }
+
+  handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      const result = await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/status', (data: string) => {
+        const response = JSON.parse(data) as { status: string }
+        return response.status
+      })
+
+      if (result.success) {
+        return { success: true, status: result.data }
+      } else {
+        return { success: false, error: result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/start-plc')
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/stop-plc')
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeGetCompilationStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      const result = await this.makeRuntimeApiRequest<{ status: string; logs: string[]; exit_code: number | null }>(
+        ipAddress,
+        jwtToken,
+        '/api/compilation-status',
+        (data: string) => {
+          const response = JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
+          return response
+        },
+      )
+      return result
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -98,6 +344,15 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== UTILITIES =====================
     this.ipcMain.handle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
+
+    // ===================== RUNTIME API =====================
+    this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
+    this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
+    this.ipcMain.handle('runtime:login', this.handleRuntimeLogin)
+    this.ipcMain.handle('runtime:get-status', this.handleRuntimeGetStatus)
+    this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
+    this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
+    this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -188,7 +443,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileProgram(args, mainProcessPort)
+    void this.compilerModule.compileProgram(args, mainProcessPort, this)
   }
 
   // TODO: These handlers are outdated and should be removed.

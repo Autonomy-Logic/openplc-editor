@@ -206,5 +206,38 @@ const rendererProcessBridge = {
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
   log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
+
+  // ===================== RUNTIME API METHODS =====================
+  runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-users-info', ipAddress),
+  runtimeCreateUser: (
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:create-user', ipAddress, username, password),
+  runtimeLogin: (
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<{ success: boolean; accessToken?: string; error?: string }> =>
+    ipcRenderer.invoke('runtime:login', ipAddress, username, password),
+  runtimeGetStatus: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; status?: string; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken),
+  runtimeStartPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:start-plc', ipAddress, jwtToken),
+  runtimeStopPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:stop-plc', ipAddress, jwtToken),
+  runtimeGetCompilationStatus: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{
+    success: boolean
+    data?: { status: string; logs: string[]; exit_code: number | null }
+    error?: string
+  }> => ipcRenderer.invoke('runtime:get-compilation-status', ipAddress, jwtToken),
 }
 export default rendererProcessBridge

@@ -9,7 +9,7 @@ import { ModbusRTUComponent } from './components/modbus-rtu'
 import { ModbusTCPComponent } from './components/modbus-tcp'
 
 const Communication = () => {
-  const onlyCompileBoards = ['OpenPLC Runtime', 'Raspberry Pi']
+  const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
   const {
     deviceDefinitions: {
       configuration: {
