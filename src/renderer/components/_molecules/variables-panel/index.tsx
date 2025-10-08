@@ -40,10 +40,8 @@ const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelPro
               />
               <p className='text-neutral-1000 dark:text-white '>{variable.name}</p>
             </div>
-            <div className='flex items-center gap-2'>
-              <p className='uppercase text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
-              <p className='text-neutral-1000 dark:text-white'>{variable.value || '0'}</p>
-            </div>
+            <p className='uppercase text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
+            <p className='text-neutral-1000 dark:text-white'>{variable.value || '0'}</p>
           </div>
         ))}
       </div>
