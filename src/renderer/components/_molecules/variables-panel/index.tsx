@@ -31,17 +31,17 @@ const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelPro
       <div className='flex h-full flex-col gap-2 overflow-auto whitespace-nowrap'>
         {variables.map((variable) => (
           <div key={variable.name} className='flex h-auto w-full items-center justify-between gap-2'>
-            <div className='flex items-center gap-2'>
+            <div className='flex min-w-0 flex-shrink items-center gap-2'>
               <ViewIcon
                 type='button'
-                className='cursor-pointer'
+                className='flex-shrink-0 cursor-pointer'
                 stroke={graphList?.includes(variable.name) ? '' : '#B4D0FE'}
                 onClick={() => toggleGraphVisibility(variable.name)}
               />
-              <p className='text-neutral-1000 dark:text-white '>{variable.name}</p>
+              <p className='truncate text-neutral-1000 dark:text-white'>{variable.name}</p>
             </div>
-            <p className='uppercase text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
-            <p className='text-neutral-1000 dark:text-white'>{variable.value || '0'}</p>
+            <p className='flex-shrink-0 uppercase text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
+            <p className='flex-shrink-0 text-neutral-1000 dark:text-white'>{variable.value || '0'}</p>
           </div>
         ))}
       </div>
