@@ -188,6 +188,7 @@ const Board = memo(function () {
         const handlePollFailure = () => {
           consecutiveFailuresRef.current += 1
           if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+            consecutiveFailuresRef.current = 0
             setRuntimeJwtToken(null)
             setRuntimeConnectionStatus('disconnected')
             setPlcRuntimeStatus(null)
