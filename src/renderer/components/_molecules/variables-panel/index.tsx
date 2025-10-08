@@ -30,8 +30,8 @@ const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelPro
       </div>
       <div className='flex h-full flex-col gap-2 overflow-auto whitespace-nowrap'>
         {variables.map((variable) => (
-          <div key={variable.name} className='flex h-auto w-full items-center justify-between gap-2'>
-            <div className='flex min-w-0 flex-shrink items-center gap-2'>
+          <div key={variable.name} className='grid h-auto w-full grid-cols-[1fr_auto_auto] items-center gap-2'>
+            <div className='flex min-w-0 items-center gap-2'>
               <ViewIcon
                 type='button'
                 className='flex-shrink-0 cursor-pointer'
@@ -40,8 +40,8 @@ const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelPro
               />
               <p className='truncate text-neutral-1000 dark:text-white'>{variable.name}</p>
             </div>
-            <p className='flex-shrink-0 uppercase text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
-            <p className='flex-shrink-0 text-neutral-1000 dark:text-white'>{variable.value || '0'}</p>
+            <p className='uppercase text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
+            <p className='text-neutral-1000 dark:text-white'>{variable.value || '0'}</p>
           </div>
         ))}
       </div>
