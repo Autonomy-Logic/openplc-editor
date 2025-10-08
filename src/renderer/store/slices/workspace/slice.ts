@@ -16,6 +16,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     isCollapsed: false,
     isModalOpen: [],
     discardChanges: false,
+    isDebuggerVisible: false,
+    debugVariableIndexes: new Map(),
     close: {
       window: false,
       app: false,
@@ -105,6 +107,20 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           } else {
             workspace.isModalOpen.push({ modalName, modalState })
           }
+        }),
+      )
+    },
+    setDebuggerVisible: (isVisible): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isDebuggerVisible = isVisible
+        }),
+      )
+    },
+    setDebugVariableIndexes: (indexes: Map<string, number>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableIndexes = indexes
         }),
       )
     },
