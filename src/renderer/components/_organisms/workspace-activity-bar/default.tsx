@@ -79,7 +79,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             .forEach((line) => {
               addLog({
                 id: crypto.randomUUID(),
-                level: data.logLevel,
+                level: data.logLevel ?? 'info',
                 message: line,
               })
             })
@@ -88,7 +88,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           BufferToStringArray(data.message).forEach((message) => {
             addLog({
               id: crypto.randomUUID(),
-              level: data.logLevel,
+              level: data.logLevel ?? 'info',
               message,
             })
           })
@@ -184,7 +184,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             .forEach((line) => {
               consoleActions.addLog({
                 id: crypto.randomUUID(),
-                level: data.logLevel,
+                level: data.logLevel ?? 'info',
                 message: line,
               })
             })
@@ -193,7 +193,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           BufferToStringArray(data.message).forEach((message) => {
             consoleActions.addLog({
               id: crypto.randomUUID(),
-              level: data.logLevel,
+              level: data.logLevel ?? 'info',
               message,
             })
           })

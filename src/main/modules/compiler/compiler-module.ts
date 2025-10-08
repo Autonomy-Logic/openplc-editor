@@ -1718,7 +1718,9 @@ class CompilerModule {
     })
 
     // INFO: This step is under development.
-    _mainProcessPort.close()
+    setTimeout(() => {
+      _mainProcessPort.close()
+    }, 25)
   }
 
   async compileForDebugger(
@@ -1871,7 +1873,9 @@ class CompilerModule {
       message:
         '-------------------------------------------------------------------------------------------------------------\n',
     })
-    _mainProcessPort.close()
+    setTimeout(() => {
+      _mainProcessPort.close()
+    }, 25)
   }
 }
 export { CompilerModule }
