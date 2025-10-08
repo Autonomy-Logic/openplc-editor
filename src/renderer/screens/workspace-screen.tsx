@@ -32,14 +32,34 @@ const WorkspaceScreen = () => {
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
     searchResults,
+    project: {
+      data: { pous },
+    },
   } = useOpenPLCStore()
 
-  const variables = [
-    { name: 'a', type: 'false' },
-    { name: 'b', type: 'false' },
-    { name: 'c', type: 'false' },
-    { name: 'd', type: 'false' },
-  ]
+  const currentPou = pous.find((p) => p.data.name === editor.meta.name)
+  const pouVariables = currentPou?.data.variables || []
+
+  const variables = pouVariables.map((v) => {
+    let typeValue = ''
+    if (v.type.definition === 'base-type') {
+      typeValue = v.type.value
+    } else if (v.type.definition === 'user-data-type') {
+      typeValue = v.type.value
+    } else if (v.type.definition === 'array') {
+      typeValue = v.type.value
+    } else if (v.type.definition === 'derived') {
+      typeValue = v.type.value
+    }
+    return {
+      name: v.name,
+      type: typeValue,
+      value: '0',
+    }
+  })
+
+  const debugVariables = variables.filter((v) => pouVariables.find((pv) => pv.name === v.name && pv.debug === true))
+
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
 
@@ -264,13 +284,12 @@ const WorkspaceScreen = () => {
                       >
                         Console
                       </Tabs.Trigger>
-                      {/** TODO: Need to be implemented */}
-                      {/* <Tabs.Trigger
+                      <Tabs.Trigger
                         value='debug'
                         className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
                       >
                         Debugger
-                      </Tabs.Trigger> */}
+                      </Tabs.Trigger>
                       {hasSearchResults && (
                         <Tabs.Trigger
                           value='search'
@@ -292,12 +311,16 @@ const WorkspaceScreen = () => {
                       className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
                     >
                       <ResizablePanelGroup direction='horizontal' className='flex h-full w-full '>
-                        <ResizablePanel minSize={20} defaultSize={100} className='h-full w-full'>
-                          <Debugger graphList={graphList} />
+                        <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
+                          <VariablesPanel
+                            variables={debugVariables}
+                            graphList={graphList}
+                            setGraphList={setGraphList}
+                          />
                         </ResizablePanel>
                         <ResizableHandle className='w-2 bg-transparent' />
-                        <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
-                          <VariablesPanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
+                        <ResizablePanel minSize={20} defaultSize={80} className='h-full w-full'>
+                          <Debugger graphList={graphList} />
                         </ResizablePanel>
                       </ResizablePanelGroup>
                     </Tabs.Content>
