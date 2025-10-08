@@ -32,16 +32,37 @@ const WorkspaceScreen = () => {
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
     searchResults,
+    project: {
+      data: { pous },
+    },
   } = useOpenPLCStore()
 
-  const variables = [
-    { name: 'a', type: 'false' },
-    { name: 'b', type: 'false' },
-    { name: 'c', type: 'false' },
-    { name: 'd', type: 'false' },
-  ]
+  const currentPou = pous.find((p) => p.data.name === editor.meta.name)
+  const pouVariables = currentPou?.data.variables || []
+
+  const variables = pouVariables.map((v) => {
+    let typeValue = ''
+    if (v.type.definition === 'base-type') {
+      typeValue = v.type.value
+    } else if (v.type.definition === 'user-data-type') {
+      typeValue = v.type.value
+    } else if (v.type.definition === 'array') {
+      typeValue = v.type.value
+    } else if (v.type.definition === 'derived') {
+      typeValue = v.type.value
+    }
+    return {
+      name: v.name,
+      type: typeValue,
+    }
+  })
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
+
+  useEffect(() => {
+    const debugVariables = pouVariables.filter((v) => v.debug === true).map((v) => v.name)
+    setGraphList(debugVariables)
+  }, [pouVariables])
 
   type PanelMethods = {
     collapse: () => void
@@ -264,13 +285,12 @@ const WorkspaceScreen = () => {
                       >
                         Console
                       </Tabs.Trigger>
-                      {/** TODO: Need to be implemented */}
-                      {/* <Tabs.Trigger
+                      <Tabs.Trigger
                         value='debug'
                         className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
                       >
                         Debugger
-                      </Tabs.Trigger> */}
+                      </Tabs.Trigger>
                       {hasSearchResults && (
                         <Tabs.Trigger
                           value='search'
