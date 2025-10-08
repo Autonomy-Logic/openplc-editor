@@ -37,33 +37,47 @@ const WorkspaceScreen = () => {
     },
   } = useOpenPLCStore()
 
-  const currentPou = pous.find((p) => p.data.name === editor.meta.name)
-  const pouVariables = currentPou?.data.variables || []
+  const allDebugVariables = pous.flatMap((pou) => {
+    return pou.data.variables
+      .filter((v) => v.debug === true)
+      .map((v) => {
+        let typeValue = ''
+        if (v.type.definition === 'base-type') {
+          typeValue = v.type.value
+        } else if (v.type.definition === 'user-data-type') {
+          typeValue = v.type.value
+        } else if (v.type.definition === 'array') {
+          typeValue = v.type.value
+        } else if (v.type.definition === 'derived') {
+          typeValue = v.type.value
+        }
 
-  const variables = pouVariables.map((v) => {
-    let typeValue = ''
-    if (v.type.definition === 'base-type') {
-      typeValue = v.type.value
-    } else if (v.type.definition === 'user-data-type') {
-      typeValue = v.type.value
-    } else if (v.type.definition === 'array') {
-      typeValue = v.type.value
-    } else if (v.type.definition === 'derived') {
-      typeValue = v.type.value
-    }
+        const compositeKey = `${pou.data.name}:${v.name}`
+        const variableIndex = debugVariableIndexes.get(compositeKey)
+        const displayValue = variableIndex !== undefined ? String(variableIndex) : '0'
 
-    const compositeKey = `${editor.meta.name}:${v.name}`
-    const variableIndex = debugVariableIndexes.get(compositeKey)
-    const displayValue = variableIndex !== undefined ? String(variableIndex) : '0'
-
-    return {
-      name: v.name,
-      type: typeValue,
-      value: displayValue,
-    }
+        return {
+          pouName: pou.data.name,
+          name: v.name,
+          type: typeValue,
+          value: displayValue,
+        }
+      })
   })
 
-  const debugVariables = variables.filter((v) => pouVariables.find((pv) => pv.name === v.name && pv.debug === true))
+  const nameOccurrences = new Map<string, number>()
+  allDebugVariables.forEach((v) => {
+    nameOccurrences.set(v.name, (nameOccurrences.get(v.name) || 0) + 1)
+  })
+
+  const debugVariables = allDebugVariables.map((v) => {
+    const hasConflict = nameOccurrences.get(v.name)! > 1
+    return {
+      name: hasConflict ? `[${v.pouName}] ${v.name}` : v.name,
+      type: v.type,
+      value: v.value,
+    }
+  })
 
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
