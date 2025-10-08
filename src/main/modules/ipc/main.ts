@@ -344,6 +344,7 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== UTILITIES =====================
     this.ipcMain.handle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
+    this.ipcMain.handle('util:read-debug-file', this.handleReadDebugFile)
 
     // ===================== RUNTIME API =====================
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -499,6 +500,23 @@ class MainProcessBridge implements MainIpcModule {
     this.hardwareModule.getBoardImagePreview(image)
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
+  }
+  handleReadDebugFile = async (_event: IpcMainInvokeEvent, projectPath: string, boardTarget: string) => {
+    try {
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      const baseProjectPath = projectPath.replace('/project.json', '')
+      const debugFilePath = path.join(baseProjectPath, 'build', boardTarget, 'src', 'debug.c')
+
+      const content = await fs.readFile(debugFilePath, 'utf-8')
+      return { success: true, content }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read debug.c file',
+      }
+    }
   }
 
   // ===================== EVENT HANDLERS =====================

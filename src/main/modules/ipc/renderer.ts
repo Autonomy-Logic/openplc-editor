@@ -206,6 +206,11 @@ const rendererProcessBridge = {
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
   log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
+  readDebugFile: (
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> =>
+    ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
 
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>

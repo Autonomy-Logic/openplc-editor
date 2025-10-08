@@ -23,6 +23,7 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
+import { matchVariableWithDebugEntry, parseDebugFile } from '../utils/parse-debug-file'
 
 const WorkspaceScreen = () => {
   const {
@@ -40,6 +41,8 @@ const WorkspaceScreen = () => {
   const currentPou = pous.find((p) => p.data.name === editor.meta.name)
   const pouVariables = currentPou?.data.variables || []
 
+  const [debugVariableIndexes, setDebugVariableIndexes] = useState<Map<string, number>>(new Map())
+
   const variables = pouVariables.map((v) => {
     let typeValue = ''
     if (v.type.definition === 'base-type') {
@@ -51,10 +54,14 @@ const WorkspaceScreen = () => {
     } else if (v.type.definition === 'derived') {
       typeValue = v.type.value
     }
+
+    const variableIndex = debugVariableIndexes.get(v.name)
+    const displayValue = variableIndex !== undefined ? String(variableIndex) : '0'
+
     return {
       name: v.name,
       type: typeValue,
-      value: '0',
+      value: displayValue,
     }
   })
 
@@ -62,6 +69,7 @@ const WorkspaceScreen = () => {
 
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
+  const [activeTab, setActiveTab] = useState('console')
 
   type PanelMethods = {
     collapse: () => void
@@ -72,8 +80,48 @@ const WorkspaceScreen = () => {
   const explorerPanelRef = useRef<PanelMethods | null>(null)
   const workspacePanelRef = useRef<PanelMethods | null>(null)
   const consolePanelRef = useRef<PanelMethods | null>(null)
-  const [activeTab, setActiveTab] = useState('console')
   const hasSearchResults = searchResults.length > 0
+
+  useEffect(() => {
+    if (activeTab !== 'debug') return
+
+    const projectPath = useOpenPLCStore.getState().project.meta.path
+    const boardTarget = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
+
+    if (!projectPath || !boardTarget) {
+      console.log('Debug.c parsing skipped: project path or board target not available')
+      return
+    }
+
+    window.bridge
+      .readDebugFile(projectPath, boardTarget)
+      .then((response) => {
+        if (response.success && response.content) {
+          const parsed = parseDebugFile(response.content)
+
+          const indexMap = new Map<string, number>()
+
+          const instances = useOpenPLCStore.getState().project.data.configuration.resource.instances
+          const currentInstance = instances[0]?.name || 'instance0'
+
+          debugVariables.forEach((v) => {
+            const index = matchVariableWithDebugEntry(v.name, currentInstance, parsed.variables)
+            if (index !== null) {
+              indexMap.set(v.name, index)
+            }
+          })
+
+          setDebugVariableIndexes(indexMap)
+        } else {
+          console.log(
+            'Debug.c file not found or could not be read. This is expected if the project has not been compiled yet.',
+          )
+        }
+      })
+      .catch((err) => {
+        console.error('Error reading debug.c:', err)
+      })
+  }, [activeTab, debugVariables])
 
   const togglePanel = () => {
     if (panelRef.current) {
