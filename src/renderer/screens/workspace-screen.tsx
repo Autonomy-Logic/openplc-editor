@@ -23,12 +23,11 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
-import { matchVariableWithDebugEntry, parseDebugFile } from '../utils/parse-debug-file'
 
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { isCollapsed },
+    workspace: { isCollapsed, isDebuggerVisible, debugVariableIndexes },
     editor,
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
@@ -40,8 +39,6 @@ const WorkspaceScreen = () => {
 
   const currentPou = pous.find((p) => p.data.name === editor.meta.name)
   const pouVariables = currentPou?.data.variables || []
-
-  const [debugVariableIndexes, setDebugVariableIndexes] = useState<Map<string, number>>(new Map())
 
   const variables = pouVariables.map((v) => {
     let typeValue = ''
@@ -81,53 +78,6 @@ const WorkspaceScreen = () => {
   const workspacePanelRef = useRef<PanelMethods | null>(null)
   const consolePanelRef = useRef<PanelMethods | null>(null)
   const hasSearchResults = searchResults.length > 0
-
-  useEffect(() => {
-    if (activeTab !== 'debug') return
-
-    const projectPath = useOpenPLCStore.getState().project.meta.path
-    const boardTarget = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
-
-    if (!projectPath || !boardTarget) {
-      console.log('Debug.c parsing skipped: project path or board target not available')
-      return
-    }
-
-    window.bridge
-      .readDebugFile(projectPath, boardTarget)
-      .then((response: { success: boolean; content?: string; error?: string }) => {
-        if (response.success && response.content) {
-          const parsed = parseDebugFile(response.content)
-
-          const indexMap = new Map<string, number>()
-
-          const instances = useOpenPLCStore.getState().project.data.configuration.resource.instances
-          const currentPouName = editor.meta.name
-          const currentInstance = instances.find((inst) => inst.program === currentPouName)
-
-          if (!currentInstance) {
-            console.log(`No instance found running program '${currentPouName}'`)
-            return
-          }
-
-          debugVariables.forEach((v) => {
-            const index = matchVariableWithDebugEntry(v.name, currentInstance.name, parsed.variables)
-            if (index !== null) {
-              indexMap.set(v.name, index)
-            }
-          })
-
-          setDebugVariableIndexes(indexMap)
-        } else {
-          console.log(
-            'Debug.c file not found or could not be read. This is expected if the project has not been compiled yet.',
-          )
-        }
-      })
-      .catch((err: unknown) => {
-        console.error('Error reading debug.c:', err)
-      })
-  }, [activeTab, debugVariables, editor.meta.name])
 
   const togglePanel = () => {
     if (panelRef.current) {
@@ -338,12 +288,14 @@ const WorkspaceScreen = () => {
                       >
                         Console
                       </Tabs.Trigger>
-                      <Tabs.Trigger
-                        value='debug'
-                        className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
-                      >
-                        Debugger
-                      </Tabs.Trigger>
+                      {isDebuggerVisible && (
+                        <Tabs.Trigger
+                          value='debug'
+                          className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
+                        >
+                          Debugger
+                        </Tabs.Trigger>
+                      )}
                       {hasSearchResults && (
                         <Tabs.Trigger
                           value='search'
@@ -360,24 +312,26 @@ const WorkspaceScreen = () => {
                     >
                       <ConsoleComponent />
                     </Tabs.Content>
-                    <Tabs.Content
-                      value='debug'
-                      className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
-                    >
-                      <ResizablePanelGroup direction='horizontal' className='flex h-full w-full '>
-                        <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
-                          <VariablesPanel
-                            variables={debugVariables}
-                            graphList={graphList}
-                            setGraphList={setGraphList}
-                          />
-                        </ResizablePanel>
-                        <ResizableHandle className='w-2 bg-transparent' />
-                        <ResizablePanel minSize={20} defaultSize={80} className='h-full w-full'>
-                          <Debugger graphList={graphList} />
-                        </ResizablePanel>
-                      </ResizablePanelGroup>
-                    </Tabs.Content>
+                    {isDebuggerVisible && (
+                      <Tabs.Content
+                        value='debug'
+                        className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
+                      >
+                        <ResizablePanelGroup direction='horizontal' className='flex h-full w-full '>
+                          <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
+                            <VariablesPanel
+                              variables={debugVariables}
+                              graphList={graphList}
+                              setGraphList={setGraphList}
+                            />
+                          </ResizablePanel>
+                          <ResizableHandle className='w-2 bg-transparent' />
+                          <ResizablePanel minSize={20} defaultSize={80} className='h-full w-full'>
+                            <Debugger graphList={graphList} />
+                          </ResizablePanel>
+                        </ResizablePanelGroup>
+                      </Tabs.Content>
+                    )}
                     {hasSearchResults && (
                       <Tabs.Content
                         value='search'

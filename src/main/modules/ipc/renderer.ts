@@ -139,6 +139,17 @@ const rendererProcessBridge = {
     // Set up the renderer process port to listen for messages from the main process
   },
 
+  runDebugCompilation: (compileArgs: Array<string | ProjectState['data']>, callback: (args: any) => void) => {
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    ipcRenderer.postMessage('compiler:run-debug-compilation', compileArgs, [mainProcessPort])
+    rendererProcessPort.onmessage = (event) => callback(event.data)
+    rendererProcessPort.addEventListener('close', () =>
+      callback({
+        closePort: true,
+      }),
+    )
+  },
+
   // !! Deprecated: These methods are an outdated implementation and should be removed.
   compileRequest: (xmlPath: string, callback: (args: any) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
