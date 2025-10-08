@@ -317,7 +317,6 @@ class MainProcessBridge implements MainIpcModule {
     // TODO: This handle should be refactored to use MessagePortMain for better performance.
     this.ipcMain.handle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
-    this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
 
     // +++ !! Deprecated: These handlers are outdated and should be removed. +++
 
@@ -446,11 +445,6 @@ class MainProcessBridge implements MainIpcModule {
   handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileProgram(args, mainProcessPort, this)
-  }
-
-  handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
-    const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileForDebugger(args, mainProcessPort)
   }
 
   // TODO: These handlers are outdated and should be removed.
