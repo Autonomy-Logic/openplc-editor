@@ -17,6 +17,35 @@ import {
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 import { saveProjectRequest } from '../../_templates'
 
+const showDebuggerMessage = (
+  type: 'info' | 'warning' | 'error' | 'question',
+  title: string,
+  message: string,
+  buttons: string[],
+): Promise<number> => {
+  return new Promise((resolve) => {
+    useOpenPLCStore.getState().modalActions.openModal('debugger-message', {
+      type,
+      title,
+      message,
+      buttons,
+      onResponse: (buttonIndex: number) => resolve(buttonIndex),
+    })
+  })
+}
+
+const showDebuggerIpInput = (title: string, message: string, defaultValue: string): Promise<string | null> => {
+  return new Promise((resolve) => {
+    useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
+      title,
+      message,
+      defaultValue,
+      onSubmit: (value: string) => resolve(value),
+      onCancel: () => resolve(null),
+    })
+  })
+}
+
 type DefaultWorkspaceActivityBarProps = {
   zoom?: {
     onClick: () => void
@@ -186,12 +215,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress
 
         if (connectionStatus !== 'connected' || !runtimeIpAddress) {
-          await window.bridge.dialogShowMessageBox({
-            type: 'warning',
-            title: 'Connection Required',
-            message: 'You need to connect to the target before starting a debugger session.',
-            buttons: ['OK'],
-          })
+          await showDebuggerMessage(
+            'warning',
+            'Connection Required',
+            'You need to connect to the target before starting a debugger session.',
+            ['OK'],
+          )
           setIsDebuggerProcessing(false)
           return
         }
@@ -203,12 +232,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         const tcpEnabled = communicationPreferences.enabledTCP
 
         if (!rtuEnabled && !tcpEnabled) {
-          await window.bridge.dialogShowMessageBox({
-            type: 'warning',
-            title: 'Modbus Required',
-            message: 'Modbus must be enabled on the target to start a debugger session.',
-            buttons: ['OK'],
-          })
+          await showDebuggerMessage(
+            'warning',
+            'Modbus Required',
+            'Modbus must be enabled on the target to start a debugger session.',
+            ['OK'],
+          )
           setIsDebuggerProcessing(false)
           return
         }
@@ -216,14 +245,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         let useModbusTcp = false
 
         if (rtuEnabled && tcpEnabled) {
-          const response = await window.bridge.dialogShowMessageBox({
-            type: 'question',
-            title: 'Select Modbus Protocol',
-            message: 'Both Modbus RTU and Modbus TCP are enabled. Which would you like to use?',
-            buttons: ['Modbus RTU (Serial)', 'Modbus TCP'],
-            defaultId: 1,
-          })
-          useModbusTcp = response.response === 1
+          const response = await showDebuggerMessage(
+            'question',
+            'Select Modbus Protocol',
+            'Both Modbus RTU and Modbus TCP are enabled. Which would you like to use?',
+            ['Modbus RTU (Serial)', 'Modbus TCP'],
+          )
+          useModbusTcp = response === 1
         } else {
           useModbusTcp = tcpEnabled
         }
@@ -233,18 +261,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
           if (dhcpEnabled) {
             const previousIp = deviceDefinitions.temporaryDhcpIp || ''
-            const result = await window.bridge.dialogShowInputBox({
-              title: 'Target IP Address',
-              message: 'Enter the IP address of the target device:',
-              defaultValue: previousIp,
-            })
+            const result = await showDebuggerIpInput(
+              'Target IP Address',
+              'Enter the IP address of the target device:',
+              previousIp,
+            )
 
-            if (result.cancelled) {
+            if (result === null) {
               setIsDebuggerProcessing(false)
               return
             }
 
-            targetIpAddress = result.value?.trim()
+            targetIpAddress = result
             if (!targetIpAddress) {
               setIsDebuggerProcessing(false)
               return
@@ -255,12 +283,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             targetIpAddress = modbusTCP.tcpStaticHostConfiguration.ipAddress || undefined
 
             if (!targetIpAddress) {
-              await window.bridge.dialogShowMessageBox({
-                type: 'error',
-                title: 'Configuration Error',
-                message: 'No IP address configured for Modbus TCP.',
-                buttons: ['OK'],
-              })
+              await showDebuggerMessage('error', 'Configuration Error', 'No IP address configured for Modbus TCP.', [
+                'OK',
+              ])
               setIsDebuggerProcessing(false)
               return
             }
@@ -273,12 +298,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           })
 
           if (!tcpEnabled) {
-            await window.bridge.dialogShowMessageBox({
-              type: 'info',
-              title: 'Not Implemented',
-              message: 'Modbus RTU debugger support is coming soon. Please enable Modbus TCP for now.',
-              buttons: ['OK'],
-            })
+            await showDebuggerMessage(
+              'info',
+              'Not Implemented',
+              'Modbus RTU debugger support is coming soon. Please enable Modbus TCP for now.',
+              ['OK'],
+            )
             setIsDebuggerProcessing(false)
             return
           }
@@ -287,18 +312,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
           if (dhcpEnabled) {
             const previousIp = deviceDefinitions.temporaryDhcpIp || ''
-            const result = await window.bridge.dialogShowInputBox({
-              title: 'Target IP Address',
-              message: 'Enter the IP address of the target device:',
-              defaultValue: previousIp,
-            })
+            const result = await showDebuggerIpInput(
+              'Target IP Address',
+              'Enter the IP address of the target device:',
+              previousIp,
+            )
 
-            if (result.cancelled) {
+            if (result === null) {
               setIsDebuggerProcessing(false)
               return
             }
 
-            targetIpAddress = result.value?.trim()
+            targetIpAddress = result
             if (!targetIpAddress) {
               setIsDebuggerProcessing(false)
               return
@@ -309,12 +334,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             targetIpAddress = modbusTCP.tcpStaticHostConfiguration.ipAddress || undefined
 
             if (!targetIpAddress) {
-              await window.bridge.dialogShowMessageBox({
-                type: 'error',
-                title: 'Configuration Error',
-                message: 'No IP address configured for Modbus TCP.',
-                buttons: ['OK'],
-              })
+              await showDebuggerMessage('error', 'Configuration Error', 'No IP address configured for Modbus TCP.', [
+                'OK',
+              ])
               setIsDebuggerProcessing(false)
               return
             }
@@ -354,7 +376,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
 
           if (data.closePort) {
-            void handleMd5Verification(projectPath, boardTarget, targetIpAddress)
+            void handleMd5Verification(projectPath, boardTarget, targetIpAddress, isRuntimeTarget)
           }
         },
       )
@@ -368,10 +390,71 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
   }
 
-  const handleMd5Verification = async (projectPath: string, boardTarget: string, targetIpAddress: string) => {
-    const { consoleActions, workspaceActions } = useOpenPLCStore.getState()
+  const handleMd5Verification = async (
+    projectPath: string,
+    boardTarget: string,
+    targetIpAddress: string,
+    isRuntimeTarget: boolean,
+  ) => {
+    const { consoleActions, workspaceActions, runtimeConnection, deviceActions } = useOpenPLCStore.getState()
 
     try {
+      if (isRuntimeTarget) {
+        const plcStatus = runtimeConnection.plcStatus
+        const jwtToken = runtimeConnection.jwtToken
+
+        if (plcStatus === 'STOPPED' && jwtToken) {
+          const response = await showDebuggerMessage(
+            'question',
+            'PLC Stopped',
+            'The PLC is currently stopped. The debugger requires the PLC to be running. Would you like to start the PLC now?',
+            ['Yes', 'No'],
+          )
+
+          if (response === 1) {
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'info',
+              message: 'Debugger session cancelled.',
+            })
+            setIsDebuggerProcessing(false)
+            return
+          }
+
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: 'Starting PLC...',
+          })
+
+          const startResult = await window.bridge.runtimeStartPlc(targetIpAddress, jwtToken)
+          if (!startResult.success) {
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'error',
+              message: `Failed to start PLC: ${startResult.error || 'Unknown error'}`,
+            })
+            await showDebuggerMessage(
+              'error',
+              'Start PLC Failed',
+              `Could not start the PLC: ${startResult.error || 'Unknown error'}`,
+              ['OK'],
+            )
+            setIsDebuggerProcessing(false)
+            return
+          }
+
+          deviceActions.setPlcRuntimeStatus('RUNNING')
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: 'PLC started successfully. Waiting 2 seconds...',
+          })
+
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+        }
+      }
+
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'info',
@@ -387,12 +470,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           message: `Failed to extract MD5: ${programStResult.error || 'Unknown error'}`,
         })
 
-        await window.bridge.dialogShowMessageBox({
-          type: 'error',
-          title: 'MD5 Extraction Failed',
-          message: programStResult.error || 'Could not extract MD5 from program.st',
-          buttons: ['OK'],
-        })
+        await showDebuggerMessage(
+          'error',
+          'MD5 Extraction Failed',
+          programStResult.error || 'Could not extract MD5 from program.st',
+          ['OK'],
+        )
         setIsDebuggerProcessing(false)
         return
       }
@@ -419,12 +502,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           message: `MD5 verification failed: ${verifyResult.error || 'Unknown error'}`,
         })
 
-        await window.bridge.dialogShowMessageBox({
-          type: 'error',
-          title: 'Connection Error',
-          message: `Could not verify MD5 with target: ${verifyResult.error || 'Unknown error'}`,
-          buttons: ['OK'],
-        })
+        await showDebuggerMessage(
+          'error',
+          'Connection Error',
+          `Could not verify MD5 with target: ${verifyResult.error || 'Unknown error'}`,
+          ['OK'],
+        )
         setIsDebuggerProcessing(false)
         return
       }
@@ -492,16 +575,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${expectedMd5}`,
         })
 
-        const response = await window.bridge.dialogShowMessageBox({
-          type: 'warning',
-          title: 'Program Mismatch',
-          message:
-            'The program running on the target does not match the program opened in the editor. Would you like to upload the current project to the target?',
-          buttons: ['Yes', 'No'],
-          defaultId: 0,
-        })
+        const response = await showDebuggerMessage(
+          'warning',
+          'Program Mismatch',
+          'The program running on the target does not match the program opened in the editor. Would you like to upload the current project to the target?',
+          ['Yes', 'No'],
+        )
 
-        if (response.response === 0) {
+        if (response === 0) {
           consoleActions.addLog({
             id: crypto.randomUUID(),
             level: 'info',
@@ -549,7 +630,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 })
 
                 setTimeout(() => {
-                  void handleMd5Verification(projectPath, boardTarget, targetIpAddress)
+                  void handleMd5Verification(projectPath, boardTarget, targetIpAddress, isRuntimeTarget)
                 }, 2000)
               }
             },

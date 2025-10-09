@@ -50,6 +50,14 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
+    'debugger-message': {
+      open: false,
+      data: null,
+    },
+    'debugger-ip-input': {
+      open: false,
+      data: null,
+    },
   },
 
   modalActions: {

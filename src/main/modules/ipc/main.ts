@@ -352,10 +352,6 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
     this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
 
-    // ===================== DIALOGS =====================
-    this.ipcMain.handle('dialog:show-message-box', this.handleDialogShowMessageBox)
-    this.ipcMain.handle('dialog:show-input-box', this.handleDialogShowInputBox)
-
     // ===================== RUNTIME API =====================
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
     this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
@@ -594,121 +590,6 @@ class MainProcessBridge implements MainIpcModule {
         error: error instanceof Error ? error.message : 'Failed to read program.st file',
       }
     }
-  }
-
-  handleDialogShowMessageBox = async (
-    _event: IpcMainInvokeEvent,
-    options: {
-      type: 'info' | 'warning' | 'error' | 'question'
-      title: string
-      message: string
-      buttons: string[]
-      defaultId?: number
-    },
-  ): Promise<{ response: number }> => {
-    const { dialog } = await import('electron')
-    const result = await dialog.showMessageBox(this.mainWindow!, {
-      type: options.type,
-      title: options.title,
-      message: options.message,
-      buttons: options.buttons,
-      defaultId: options.defaultId,
-    })
-    return { response: result.response }
-  }
-
-  handleDialogShowInputBox = async (
-    _event: IpcMainInvokeEvent,
-    options: {
-      title: string
-      message: string
-      defaultValue?: string
-    },
-  ): Promise<{ cancelled: boolean; value?: string }> => {
-    const { BrowserWindow } = await import('electron')
-
-    const inputWindow = new BrowserWindow({
-      parent: this.mainWindow!,
-      modal: true,
-      width: 400,
-      height: 200,
-      show: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    })
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: system-ui; padding: 20px; }
-            h3 { margin-top: 0; }
-            input { width: 100%; padding: 8px; margin: 10px 0; box-sizing: border-box; }
-            .buttons { text-align: right; margin-top: 20px; }
-            button { padding: 8px 16px; margin-left: 8px; cursor: pointer; }
-          </style>
-        </head>
-        <body>
-          <h3>${options.title}</h3>
-          <p>${options.message}</p>
-          <input type="text" id="inputValue" value="${options.defaultValue || ''}" autofocus />
-          <div class="buttons">
-            <button onclick="window.close()">Cancel</button>
-            <button onclick="submitValue()">OK</button>
-          </div>
-          <script>
-            const input = document.getElementById('inputValue');
-            input.select();
-            input.addEventListener('keypress', (e) => {
-              if (e.key === 'Enter') submitValue();
-              if (e.key === 'Escape') window.close();
-            });
-            function submitValue() {
-              const value = input.value;
-              window.dispatchEvent(new CustomEvent('submit', { detail: value }));
-            }
-          </script>
-        </body>
-      </html>
-    `
-
-    await inputWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`)
-
-    return new Promise((resolve) => {
-      let resolved = false
-
-      inputWindow.webContents.on('dom-ready', () => {
-        void inputWindow.webContents.executeJavaScript(`
-          window.addEventListener('submit', (e) => {
-            require('electron').ipcRenderer.send('input-submit', e.detail);
-          });
-        `)
-      })
-
-      const submitHandler = (_event: IpcMainEvent, value: string) => {
-        if (!resolved) {
-          resolved = true
-          resolve({ cancelled: false, value })
-          inputWindow.close()
-          this.ipcMain.removeListener('input-submit', submitHandler)
-        }
-      }
-
-      this.ipcMain.on('input-submit', submitHandler)
-
-      inputWindow.on('closed', () => {
-        if (!resolved) {
-          resolved = true
-          resolve({ cancelled: true })
-          this.ipcMain.removeListener('input-submit', submitHandler)
-        }
-      })
-
-      inputWindow.show()
-    })
   }
 
   // ===================== EVENT HANDLERS =====================

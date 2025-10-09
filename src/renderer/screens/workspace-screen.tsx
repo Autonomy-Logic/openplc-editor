@@ -16,7 +16,13 @@ import AboutModal from '../components/_organisms/about-modal'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
-import { ConfirmDeviceSwitchModal, RuntimeCreateUserModal, RuntimeLoginModal } from '../components/_organisms/modals'
+import {
+  ConfirmDeviceSwitchModal,
+  DebuggerIpInputModal,
+  DebuggerMessageModal,
+  RuntimeCreateUserModal,
+  RuntimeLoginModal,
+} from '../components/_organisms/modals'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
 import { VariablesEditor } from '../components/_organisms/variables-editor'
@@ -144,6 +150,8 @@ const WorkspaceScreen = () => {
       <ConfirmDeviceSwitchModal />
       <RuntimeCreateUserModal />
       <RuntimeLoginModal />
+      <DebuggerMessageModal />
+      <DebuggerIpInputModal />
       <WorkspaceSideContent>
         <WorkspaceActivityBar
           defaultActivityBar={{

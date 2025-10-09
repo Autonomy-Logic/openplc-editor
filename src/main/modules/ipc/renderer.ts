@@ -235,21 +235,6 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; md5?: string; error?: string }> =>
     ipcRenderer.invoke('debugger:read-program-st-md5', projectPath, boardTarget),
 
-  // ===================== DIALOG METHODS =====================
-  dialogShowMessageBox: (options: {
-    type: 'info' | 'warning' | 'error' | 'question'
-    title: string
-    message: string
-    buttons: string[]
-    defaultId?: number
-  }): Promise<{ response: number }> => ipcRenderer.invoke('dialog:show-message-box', options),
-
-  dialogShowInputBox: (options: {
-    title: string
-    message: string
-    defaultValue?: string
-  }): Promise<{ cancelled: boolean; value?: string }> => ipcRenderer.invoke('dialog:show-input-box', options),
-
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),

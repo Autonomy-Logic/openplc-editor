@@ -1,4 +1,6 @@
 export * from './confirm-device-switch-modal'
+export { DebuggerIpInputModal } from './debugger-ip-input-modal'
+export { DebuggerMessageModal } from './debugger-message-modal'
 export * from './delete-confirmation-modal'
 export * from './quit-application-modal'
 export { RuntimeCreateUserModal } from './runtime-create-user-modal'
