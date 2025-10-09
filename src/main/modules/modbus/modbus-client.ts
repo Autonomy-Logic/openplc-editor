@@ -77,13 +77,15 @@ export class ModbusTcpClient {
     const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
     const endiannessCheck = 0xdead
 
-    const request = Buffer.alloc(10)
+    const request = Buffer.alloc(12)
     request.writeUInt16BE(transactionId, 0)
     request.writeUInt16BE(protocolId, 2)
-    request.writeUInt16BE(4, 4)
+    request.writeUInt16BE(6, 4)
     request.writeUInt8(unitId, 6)
     request.writeUInt8(functionCode, 7)
     request.writeUInt16BE(endiannessCheck, 8)
+    request.writeUInt8(0, 10)
+    request.writeUInt8(0, 11)
 
     return new Promise((resolve, reject) => {
       const timeoutHandle = setTimeout(() => {
