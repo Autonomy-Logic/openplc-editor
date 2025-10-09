@@ -110,7 +110,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setDebuggerVisible: (isVisible): void => {
+    setDebuggerVisible: (isVisible: boolean): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.isDebuggerVisible = isVisible
