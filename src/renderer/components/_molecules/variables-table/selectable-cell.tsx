@@ -104,6 +104,10 @@ const SelectableTypeCell = ({
   const getBlockExpectedType = (node: Node): string => {
     const variant = (node.data as { variant?: { name?: string } }).variant
 
+    if (node.type === 'contact' || node.type === 'coil') {
+      return 'BOOL'
+    }
+
     if (variant && typeof variant.name === 'string') {
       return variant.name.trim().toUpperCase()
     }
