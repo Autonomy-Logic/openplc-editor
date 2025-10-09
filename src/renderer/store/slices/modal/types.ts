@@ -12,6 +12,8 @@ const modalTypes = z.enum([
   'quit-application',
   'runtime-create-user',
   'runtime-login',
+  'debugger-message',
+  'debugger-ip-input',
 ])
 type ModalTypes = z.infer<typeof modalTypes>
 

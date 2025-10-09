@@ -13,6 +13,7 @@ import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
+import { ModbusTcpClient } from '../modbus/modbus-client'
 
 type IDataToWrite = {
   projectPath: string
@@ -347,6 +348,10 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('util:log', this.handleUtilLog)
     this.ipcMain.handle('util:read-debug-file', this.handleReadDebugFile)
 
+    // ===================== DEBUGGER =====================
+    this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
+    this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
+
     // ===================== RUNTIME API =====================
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
     this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
@@ -521,6 +526,68 @@ class MainProcessBridge implements MainIpcModule {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to read debug.c file',
+      }
+    }
+  }
+
+  handleDebuggerVerifyMd5 = async (
+    _event: IpcMainInvokeEvent,
+    targetIpAddress: string,
+    expectedMd5: string,
+  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
+    let client: ModbusTcpClient | null = null
+    try {
+      client = new ModbusTcpClient({
+        host: targetIpAddress,
+        port: 502,
+        timeout: 5000,
+      })
+
+      await client.connect()
+      const targetMd5 = await client.getMd5Hash()
+
+      client.disconnect()
+
+      const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+      return { success: true, match, targetMd5 }
+    } catch (error) {
+      client?.disconnect()
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
+      }
+    }
+  }
+
+  handleReadProgramStMd5 = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; md5?: string; error?: string }> => {
+    try {
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      const baseProjectPath = projectPath.replace('/project.json', '')
+      const programStPath = path.join(baseProjectPath, 'build', boardTarget, 'src', 'program.st')
+
+      const content = await fs.readFile(programStPath, 'utf-8')
+
+      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
+      const match = content.match(md5Pattern)
+
+      if (!match || !match[1]) {
+        return {
+          success: false,
+          error: 'Could not find MD5 hash in program.st file',
+        }
+      }
+
+      return { success: true, md5: match[1] }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read program.st file',
       }
     }
   }
