@@ -1197,34 +1197,6 @@ class CompilerModule {
       return
     }
 
-    try {
-      const fs = await import('fs/promises')
-      const programStPath = join(sourceTargetFolderPath, 'program.st')
-      const programStContent = await fs.readFile(programStPath, 'utf-8')
-      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
-      const match = programStContent.match(md5Pattern)
-
-      if (match && match[1]) {
-        buildMD5Hash = match[1]
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: `Extracted MD5 hash from program.st: ${buildMD5Hash}`,
-        })
-      } else {
-        _mainProcessPort.postMessage({
-          logLevel: 'warn',
-          message: 'Could not extract MD5 from program.st, continuing without MD5',
-        })
-        buildMD5Hash = null
-      }
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error extracting MD5 from program.st: ${error as string}`,
-      })
-      buildMD5Hash = null
-    }
-
     // -- Copy static files --
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Copying static files...' })
     try {
@@ -1274,6 +1246,34 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    try {
+      const fs = await import('fs/promises')
+      const programStPath = join(sourceTargetFolderPath, 'program.st')
+      const programStContent = await fs.readFile(programStPath, 'utf-8')
+      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
+      const match = programStContent.match(md5Pattern)
+
+      if (match && match[1]) {
+        buildMD5Hash = match[1]
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: `Extracted MD5 hash from program.st: ${buildMD5Hash}`,
+        })
+      } else {
+        _mainProcessPort.postMessage({
+          logLevel: 'warn',
+          message: 'Could not extract MD5 from program.st, continuing without MD5',
+        })
+        buildMD5Hash = null
+      }
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error extracting MD5 from program.st: ${error as string}`,
+      })
+      buildMD5Hash = null
     }
 
     // Step 6: Generate glue vars
