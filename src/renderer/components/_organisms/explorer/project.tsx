@@ -19,6 +19,7 @@ const Project = () => {
     editorActions: { setEditor, addModel, getEditorFromEditors },
     searchQuery,
   } = useOpenPLCStore()
+
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
     const tabToBeCreated = { name, path, elementType }
     updateTabs(tabToBeCreated)
@@ -33,6 +34,7 @@ const Project = () => {
     addModel(editor)
     setEditor(editor)
   }
+
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState<string>(name)
 

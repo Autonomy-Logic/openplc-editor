@@ -5,12 +5,16 @@ import { Checkbox, Label, Select, SelectContent, SelectItem, SelectTrigger } fro
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { cn } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
+  // Auto-disconnect after 3 consecutive status poll failures (7.5 seconds)
+  const MAX_CONSECUTIVE_FAILURES = 3
+
   const {
     deviceDefinitions: { compileOnly },
     deviceAvailableOptions: { availableBoards },
@@ -30,6 +34,17 @@ const Board = memo(function () {
   const createNewPin = pinSelectors.useCreateNewPin()
   const removePin = pinSelectors.useRemovePin()
 
+  const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
+  const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
+  const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
+  const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
+  const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
+  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
+  const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  const setPlcRuntimeStatus = useOpenPLCStore(
+    (state): DeviceActions['setPlcRuntimeStatus'] => state.deviceActions.setPlcRuntimeStatus,
+  )
+
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
   const [formattedBoardState, setFormattedBoardState] = useState('')
@@ -39,6 +54,7 @@ const Board = memo(function () {
 
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
+  const consecutiveFailuresRef = useRef<number>(0)
 
   const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
     if (!selectIsOpen) return
@@ -98,11 +114,24 @@ const Board = memo(function () {
 
   const handleSetDeviceBoard = useCallback(
     (board: string) => {
-      setFormattedBoardState(board)
       const normalizedBoard = board.split('[')[0].trim()
+
+      if (connectionStatus === 'connected' && normalizedBoard !== deviceBoard) {
+        openModal('confirm-device-switch', {
+          newBoard: normalizedBoard,
+          formattedNewBoard: board,
+          onConfirm: () => {
+            setFormattedBoardState(board)
+            setDeviceBoard(normalizedBoard)
+          },
+        })
+        return
+      }
+
+      setFormattedBoardState(board)
       setDeviceBoard(normalizedBoard)
     },
-    [setDeviceBoard],
+    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal],
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
@@ -110,6 +139,94 @@ const Board = memo(function () {
     setCompileOnly(!memoizedCompileOnly)
   }
   const memoizedCompileOnly = useMemo(() => compileOnly, [compileOnly])
+
+  const handleConnectToRuntime = useCallback(async () => {
+    if (connectionStatus === 'connected') {
+      consecutiveFailuresRef.current = 0
+      setRuntimeJwtToken(null)
+      setRuntimeConnectionStatus('disconnected')
+      return
+    }
+
+    if (!runtimeIpAddress) {
+      return
+    }
+
+    setRuntimeConnectionStatus('connecting')
+
+    try {
+      const result = await window.bridge.runtimeGetUsersInfo(runtimeIpAddress)
+
+      if (result.error) {
+        setRuntimeConnectionStatus('error')
+        return
+      }
+
+      if (result.hasUsers) {
+        openModal('runtime-login', null)
+      } else {
+        openModal('runtime-create-user', null)
+      }
+    } catch (_error) {
+      setRuntimeConnectionStatus('error')
+    }
+  }, [runtimeIpAddress, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, openModal])
+
+  useEffect(() => {
+    let statusInterval: NodeJS.Timeout | null = null
+
+    const pollStatus = async (): Promise<void> => {
+      if (
+        connectionStatus === 'connected' &&
+        runtimeIpAddress &&
+        useOpenPLCStore.getState().runtimeConnection.jwtToken
+      ) {
+        const handlePollFailure = () => {
+          consecutiveFailuresRef.current += 1
+          if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+            consecutiveFailuresRef.current = 0
+            setRuntimeJwtToken(null)
+            setRuntimeConnectionStatus('disconnected')
+            setPlcRuntimeStatus(null)
+          } else {
+            setPlcRuntimeStatus('UNKNOWN')
+          }
+        }
+
+        try {
+          const result = await window.bridge.runtimeGetStatus(
+            runtimeIpAddress,
+            useOpenPLCStore.getState().runtimeConnection.jwtToken!,
+          )
+          if (result.success && result.status) {
+            consecutiveFailuresRef.current = 0
+            const statusValue = result.status.replace('STATUS:', '').replace('\n', '').trim()
+            const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
+            if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
+              setPlcRuntimeStatus(statusValue as (typeof validStatuses)[number])
+            } else {
+              setPlcRuntimeStatus('UNKNOWN')
+            }
+          } else {
+            handlePollFailure()
+          }
+        } catch (_error) {
+          handlePollFailure()
+        }
+      }
+    }
+
+    if (connectionStatus === 'connected') {
+      void pollStatus()
+      statusInterval = setInterval(() => void pollStatus(), 2500)
+    } else {
+      setPlcRuntimeStatus(null)
+    }
+
+    return () => {
+      if (statusInterval) clearInterval(statusInterval)
+    }
+  }, [connectionStatus, runtimeIpAddress, setPlcRuntimeStatus])
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
@@ -173,59 +290,104 @@ const Board = memo(function () {
               </SelectContent>
             </Select>
           </div>
-          <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
-            <Label
-              id='communication-ports-selector-label'
-              className='whitespace-pre text-xs text-neutral-950 dark:text-white'
-            >
-              Communication Port
-            </Label>
-            <Select
-              value={communicationPort}
-              onValueChange={setCommunicationPort}
-              onOpenChange={setCommunicationSelectIsOpen}
-            >
-              <SelectTrigger
-                aria-label='Communication port selection'
-                placeholder='Select a communication port'
-                withIndicator
-                className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-              />
-              <SelectContent
-                className='h-fit max-h-[250px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                sideOffset={5}
-                alignOffset={5}
-                position='popper'
-                align='center'
-                side='bottom'
-                viewportRef={communicationSelectRef}
-              >
-                {availableCommunicationPorts.map((port) => (
-                  <SelectItem
-                    key={port}
-                    className={cn(
-                      'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                      'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+          {deviceBoard === 'OpenPLC Runtime v3' || deviceBoard === 'OpenPLC Runtime v4' ? (
+            <>
+              <div id='runtime-ip-address-field' className='flex w-full items-center justify-start gap-1'>
+                <Label
+                  id='runtime-ip-address-label'
+                  className='whitespace-pre text-xs text-neutral-950 dark:text-white'
+                >
+                  IP Address
+                </Label>
+                <input
+                  type='text'
+                  value={runtimeIpAddress}
+                  onChange={(e) => setRuntimeIpAddress(e.target.value)}
+                  placeholder='127.0.0.1 or localhost'
+                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+              </div>
+              <div id='runtime-connect-button-container' className='flex w-full items-center justify-start'>
+                <button
+                  type='button'
+                  onClick={handleConnectToRuntime}
+                  disabled={connectionStatus === 'connecting'}
+                  className='h-[30px] rounded-md bg-brand px-4 py-1 font-caption text-cp-sm font-medium text-white hover:bg-brand-medium-dark disabled:opacity-50'
+                >
+                  {connectionStatus === 'connecting'
+                    ? 'Connecting...'
+                    : connectionStatus === 'connected'
+                      ? 'Disconnect'
+                      : 'Connect'}
+                </button>
+                {connectionStatus === 'connected' && (
+                  <div className='ml-2 flex items-center gap-2'>
+                    <span className='text-xs text-green-600 dark:text-green-400'>● Connected</span>
+                    {plcStatus && (
+                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>| PLC: {plcStatus}</span>
                     )}
-                    value={port}
-                  >
-                    <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                      {port}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <button
-              type='button'
-              onClick={refreshCommunicationPorts}
-              className='group'
-              aria-pressed={isPressed}
-              aria-label='Refresh communication ports'
-            >
-              <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
-            </button>
-          </div>
+                  </div>
+                )}
+                {connectionStatus === 'error' && (
+                  <span className='ml-2 text-xs text-red-600 dark:text-red-400'>● Connection failed</span>
+                )}
+              </div>
+            </>
+          ) : (
+            <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
+              <Label
+                id='communication-ports-selector-label'
+                className='whitespace-pre text-xs text-neutral-950 dark:text-white'
+              >
+                Communication Port
+              </Label>
+              <Select
+                value={communicationPort}
+                onValueChange={setCommunicationPort}
+                onOpenChange={setCommunicationSelectIsOpen}
+              >
+                <SelectTrigger
+                  aria-label='Communication port selection'
+                  placeholder='Select a communication port'
+                  withIndicator
+                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+                <SelectContent
+                  className='h-fit max-h-[250px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                  sideOffset={5}
+                  alignOffset={5}
+                  position='popper'
+                  align='center'
+                  side='bottom'
+                  viewportRef={communicationSelectRef}
+                >
+                  {availableCommunicationPorts.map((port) => (
+                    <SelectItem
+                      key={port}
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                      )}
+                      value={port}
+                    >
+                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                        {port}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                type='button'
+                onClick={refreshCommunicationPorts}
+                className='group'
+                aria-pressed={isPressed}
+                aria-label='Refresh communication ports'
+              >
+                <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
+              </button>
+            </div>
+          )}
           <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
             <Label id='board-specs-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Specs

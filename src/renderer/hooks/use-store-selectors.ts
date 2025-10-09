@@ -106,6 +106,12 @@ const consoleSelectors = {
   useClearLogs: () => useOpenPLCStore((state) => state.consoleActions.clearLogs),
 }
 
+// ===================== Ladder selectors. =====================
+const ladderSelectors = {
+  useGetIsRungOpen: () => useOpenPLCStore((state) => state.editorActions.getIsRungOpen),
+  useUpdateModelLadder: () => useOpenPLCStore((state) => state.editorActions.updateModelLadder),
+}
+
 export {
   boardSelectors,
   communicationSelectors,
@@ -113,6 +119,7 @@ export {
   consoleSelectors,
   deviceSelectors,
   editorSelectors,
+  ladderSelectors,
   pinSelectors,
   rtuSelectors,
   searchSelectors,

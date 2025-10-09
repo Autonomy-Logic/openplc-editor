@@ -1,6 +1,10 @@
 import { exec, spawn } from 'node:child_process'
+import { promises as fs } from 'node:fs'
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import type { IncomingMessage } from 'node:http'
+import https from 'node:https'
 import os from 'node:os'
+import path from 'node:path'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -8,8 +12,11 @@ import { CreateXMLFile } from '@root/main/utils'
 import { ProjectState } from '@root/renderer/store/slices'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
+import { parsePlcStatus } from '@root/utils/plc-status'
+import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
+import JSZip from 'jszip'
 
 import type { ArduinoCoreControl, HalsFile } from './compiler-types'
 import { FormatMacAddress } from './utils/formatters'
@@ -70,6 +77,10 @@ class CompilerModule {
     'WiFiNINA',
   ]
 
+  // Runtime API polling configuration (important-comment)
+  static readonly COMPILATION_STATUS_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes (important-comment)
+  static readonly COMPILATION_STATUS_POLL_INTERVAL_MS = 1000 // 1 second (important-comment)
+
   constructor() {
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
@@ -96,6 +107,24 @@ class CompilerModule {
   // ############################################################################
   // =========================== Private methods ================================
   // ############################################################################
+
+  private parseLogLevel(message: string): { level: 'info' | 'warning' | 'error'; cleanedMessage: string } {
+    const logLevelMatch = message.match(/^\[(INFO|WARNING|ERROR)\]\s*/)
+
+    if (logLevelMatch) {
+      const level = logLevelMatch[1].toLowerCase() as 'info' | 'warning' | 'error'
+      const cleanedMessage = message.replace(/^\[(INFO|WARNING|ERROR)\]\s*/, '')
+      return {
+        level,
+        cleanedMessage,
+      }
+    }
+
+    return {
+      level: 'info',
+      cleanedMessage: message,
+    }
+  }
 
   // Initialize paths based on the environment
   #constructBinaryDirectoryPath(): string {
@@ -1014,6 +1043,31 @@ class CompilerModule {
 
   // ++ ========================= Compiler builder ============================ ++
 
+  async compressSourceFolder(sourceFolderPath: string): Promise<Buffer> {
+    const zip = new JSZip()
+
+    async function addFilesToZip(currentPath: string, zipFolder: JSZip, relativePath: string = ''): Promise<void> {
+      const entries = await fs.readdir(currentPath, { withFileTypes: true })
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name)
+        const zipPath = relativePath ? path.join(relativePath, entry.name) : entry.name
+
+        if (entry.isDirectory()) {
+          await addFilesToZip(fullPath, zipFolder, zipPath)
+        } else {
+          const fileContent = await fs.readFile(fullPath)
+          zipFolder.file(zipPath, fileContent)
+        }
+      }
+    }
+
+    await addFilesToZip(sourceFolderPath, zip)
+
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
+    return zipBuffer
+  }
+
   /**
    * This will be the main entry point for the compiler module.
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
@@ -1022,6 +1076,14 @@ class CompilerModule {
   async compileProgram(
     args: Array<string | null | ProjectState['data']>,
     _mainProcessPort: MessagePortMain,
+    mainProcessBridge: {
+      makeRuntimeApiRequest: <T = void>(
+        ipAddress: string,
+        jwtToken: string,
+        endpoint: string,
+        responseParser?: (data: string) => T,
+      ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+    },
   ): Promise<void> {
     // Start the main process port to communicate with the renderer process.
     // INFO: This is necessary to send messages back to the renderer process.
@@ -1030,12 +1092,14 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting compilation process...' })
     // INFO: We assume the first argument is the project path,
     // INFO: the second argument is the board target, and the third argument is the project data.
-    const [projectPath, boardTarget, boardCore, compileOnly, projectData] = args as [
+    const [projectPath, boardTarget, boardCore, compileOnly, projectData, runtimeIpAddress, runtimeJwtToken] = args as [
       string,
       string,
       string | null,
       boolean,
       ProjectState['data'],
+      string | null,
+      string | null,
     ]
 
     const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
@@ -1225,13 +1289,288 @@ class CompilerModule {
     if (boardRuntime === 'openplc-compiler') {
       _mainProcessPort.postMessage({
         logLevel: 'info',
-        message: 'OpenPLC runtime detected, stopping compilation process.',
+        message: 'OpenPLC runtime detected.',
       })
       _mainProcessPort.postMessage({
-        message:
-          '-------------------------------------------------------------------------------------------------------------\n',
+        logLevel: 'info',
+        message: 'Source files generated successfully at: ' + sourceTargetFolderPath,
       })
-      _mainProcessPort.close()
+
+      if (compileOnly) {
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'Compile only mode - skipping upload to runtime.',
+        })
+        _mainProcessPort.postMessage({
+          message:
+            '-------------------------------------------------------------------------------------------------------------\n',
+        })
+        _mainProcessPort.close()
+        return
+      }
+
+      if (!runtimeIpAddress || !runtimeJwtToken) {
+        _mainProcessPort.postMessage({
+          logLevel: 'warning',
+          message: 'Runtime not configured or not logged in. Skipping upload to runtime.',
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'To upload the program, configure the runtime IP address and login in the device configuration.',
+        })
+        _mainProcessPort.postMessage({
+          message:
+            '-------------------------------------------------------------------------------------------------------------\n',
+        })
+        _mainProcessPort.close()
+        return
+      }
+
+      try {
+        const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
+
+        let fileBuffer: Buffer
+        let filename: string
+        let contentType: string
+
+        if (isRuntimeV3) {
+          _mainProcessPort.postMessage({
+            logLevel: 'info',
+            message: 'Preparing program.st file for OpenPLC Runtime v3...',
+          })
+          const programStPath = join(sourceTargetFolderPath, 'program.st')
+
+          try {
+            await fs.access(programStPath)
+          } catch {
+            throw new Error(`Required file not found: ${programStPath}. Cannot upload to OpenPLC Runtime v3.`)
+          }
+
+          fileBuffer = await fs.readFile(programStPath)
+          filename = 'program.st'
+          contentType = 'text/plain'
+        } else {
+          _mainProcessPort.postMessage({
+            logLevel: 'info',
+            message: 'Compressing source files for OpenPLC Runtime v4...',
+          })
+          fileBuffer = await this.compressSourceFolder(sourceTargetFolderPath)
+          filename = 'program.zip'
+          contentType = 'application/zip'
+        }
+
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: `Uploading program to runtime at ${runtimeIpAddress}...`,
+        })
+
+        const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
+
+        const header = Buffer.from(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
+            `Content-Type: ${contentType}\r\n\r\n`,
+        )
+        const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
+        const body = Buffer.concat([header, fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
+
+        await new Promise<void>((resolve, reject) => {
+          const req = https.request(
+            {
+              hostname: runtimeIpAddress,
+              port: 8443,
+              path: '/api/upload-file',
+              method: 'POST',
+              headers: {
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Content-Length': body.length,
+                Authorization: `Bearer ${runtimeJwtToken}`,
+              },
+              ...getRuntimeHttpsOptions(),
+            },
+            (res: IncomingMessage) => {
+              let data = ''
+              res.on('data', (chunk: Buffer) => {
+                data += chunk.toString()
+              })
+              res.on('end', () => {
+                if (res.statusCode === 200) {
+                  _mainProcessPort.postMessage({
+                    logLevel: 'info',
+                    message: 'Program uploaded successfully to runtime.',
+                  })
+                  try {
+                    const response = JSON.parse(data) as { CompilationStatus?: string }
+                    _mainProcessPort.postMessage({
+                      logLevel: 'info',
+                      message: `Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`,
+                    })
+                  } catch (_parseError) {
+                    _mainProcessPort.postMessage({
+                      logLevel: 'warning',
+                      message: 'Could not parse runtime response',
+                    })
+                  }
+
+                  const pollCompilationStatus = async () => {
+                    let lastLogCount = 0
+                    let shouldContinuePolling = true
+                    const startTime = Date.now()
+                    const timeout = CompilerModule.COMPILATION_STATUS_TIMEOUT_MS
+                    const pollInterval = CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS
+
+                    while (shouldContinuePolling) {
+                      if (Date.now() - startTime > timeout) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'error',
+                          message: 'Compilation status polling timed out after 5 minutes.',
+                        })
+                        shouldContinuePolling = false
+                        continue
+                      }
+
+                      await new Promise((resolve) => setTimeout(resolve, pollInterval))
+
+                      try {
+                        const result = await mainProcessBridge.makeRuntimeApiRequest<{
+                          status: string
+                          logs: string[]
+                          exit_code: number | null
+                        }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status', (data: string) => {
+                          return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
+                        })
+
+                        if (!result.success) {
+                          _mainProcessPort.postMessage({
+                            logLevel: 'error',
+                            message: `Error polling compilation status: ${result.error}`,
+                          })
+                          shouldContinuePolling = false
+                          continue
+                        }
+
+                        const { status, logs, exit_code } = result.data!
+
+                        if (logs.length > lastLogCount) {
+                          const newLogs = logs.slice(lastLogCount)
+                          newLogs.forEach((log) => {
+                            const { level, cleanedMessage } = this.parseLogLevel(log)
+                            _mainProcessPort.postMessage({
+                              logLevel: level,
+                              message: cleanedMessage,
+                            })
+                          })
+                          lastLogCount = logs.length
+                        }
+
+                        if (status === 'SUCCESS') {
+                          _mainProcessPort.postMessage({
+                            logLevel: 'info',
+                            message: `Compilation completed successfully (exit code: ${exit_code ?? 0}).`,
+                          })
+                          shouldContinuePolling = false
+                        } else if (status === 'FAILED') {
+                          _mainProcessPort.postMessage({
+                            logLevel: 'error',
+                            message: `Compilation failed (exit code: ${exit_code ?? 1}).`,
+                          })
+                          shouldContinuePolling = false
+                        }
+                      } catch (pollError) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'error',
+                          message: `Error polling compilation status: ${pollError instanceof Error ? pollError.message : String(pollError)}`,
+                        })
+                        shouldContinuePolling = false
+                      }
+                    }
+                  }
+
+                  pollCompilationStatus()
+                    .then(async () => {
+                      if (runtimeIpAddress && runtimeJwtToken) {
+                        try {
+                          const statusResult = await mainProcessBridge.makeRuntimeApiRequest<string>(
+                            runtimeIpAddress,
+                            runtimeJwtToken,
+                            '/api/status',
+                            (data: string) => {
+                              const response = JSON.parse(data) as { status: string }
+                              return response.status
+                            },
+                          )
+
+                          if (statusResult.success && statusResult.data) {
+                            const status = parsePlcStatus(statusResult.data)
+                            if (status) {
+                              _mainProcessPort.postMessage({
+                                plcStatus: status,
+                              })
+                            }
+                          }
+                        } catch (_statusError) {
+                          // Silently ignore status check errors - this is a best-effort update
+                        }
+                      }
+
+                      _mainProcessPort.postMessage({
+                        message:
+                          '-------------------------------------------------------------------------------------------------------------\n',
+                      })
+                      _mainProcessPort.close()
+                    })
+                    .catch((error) => {
+                      _mainProcessPort.postMessage({
+                        logLevel: 'error',
+                        message: `Unexpected error in compilation polling: ${error instanceof Error ? error.message : String(error)}`,
+                      })
+                      _mainProcessPort.postMessage({
+                        message:
+                          '-------------------------------------------------------------------------------------------------------------\n',
+                      })
+                      _mainProcessPort.close()
+                    })
+
+                  resolve()
+                } else {
+                  _mainProcessPort.postMessage({
+                    logLevel: 'error',
+                    message: `Upload failed: ${data || 'HTTP ' + res.statusCode}`,
+                  })
+                  reject(new Error(`Upload failed with status ${res.statusCode}`))
+                }
+              })
+            },
+          )
+          req.setTimeout(300000, () => {
+            req.destroy()
+            _mainProcessPort.postMessage({
+              logLevel: 'error',
+              message: 'Upload request timed out after 5 minutes.',
+            })
+            reject(new Error('Upload timeout'))
+          })
+          req.on('error', (error: Error) => {
+            _mainProcessPort.postMessage({
+              logLevel: 'error',
+              message: `Upload error: ${error.message}`,
+            })
+            reject(error)
+          })
+          req.write(body)
+          req.end()
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Failed to upload to runtime: ${error instanceof Error ? error.message : String(error)}`,
+        })
+        _mainProcessPort.postMessage({
+          message:
+            '-------------------------------------------------------------------------------------------------------------\n',
+        })
+        _mainProcessPort.close()
+      }
       return
     }
 

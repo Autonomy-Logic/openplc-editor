@@ -26,7 +26,11 @@ uint8_t mqtt_send(char *topic, char *message)
 //Reference: https://www.hivemq.com/blog/mqtt-client-library-encyclopedia-arduino-pubsubclient/
 
 #ifdef MBTCP_ETHERNET
+#ifdef BOARD_ESP32
+    WiFiClient wifiClient;
+#else
     EthernetClient wifiClient;
+#endif
 #else
     WiFiClient wifiClient;
 #endif

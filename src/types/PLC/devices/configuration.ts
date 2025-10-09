@@ -16,8 +16,9 @@ const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A
 const BYTE_MAC_ADDRESS_REGEX = /^(?:0x[0-9a-f]{2}\s*,\s*){5}0x[0-9a-f]{2}$/i
 
 const deviceConfigurationSchema = z.object({
-  deviceBoard: z.string(), // Can be one from the list of boards in the hals file.
+  deviceBoard: z.string(),
   communicationPort: z.string(),
+  runtimeIpAddress: z.string().optional(),
   communicationConfiguration: z.object({
     modbusRTU: z.object({
       rtuInterface: z.enum(interfaceOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.

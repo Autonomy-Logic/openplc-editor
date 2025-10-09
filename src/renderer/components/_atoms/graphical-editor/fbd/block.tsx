@@ -807,7 +807,7 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  let variantVariables = (variant as BlockVariant)?.variables ?? []
+  let variantVariables = [...((variant as BlockVariant)?.variables ?? [])]
   const outIndex = variantVariables.findIndex((v) => v.name === 'OUT')
   if (outIndex > 0) {
     const [outVar] = variantVariables.splice(outIndex, 1)

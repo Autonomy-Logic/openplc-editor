@@ -90,7 +90,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     name: blockVariant.name === '???' ? '' : blockVariant.name,
     inputs:
       blockVariant?.variables
-        .filter((variable) => variable.class === 'input' || (variable.class === 'inOut' && variable.name !== 'EN'))
+        .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
         .length.toString() || '0',
     executionOrder: selectedNode.data.executionOrder.toString(),
     executionControl: selectedNode.data.executionControl,
@@ -176,7 +176,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       const newNodeDataVariant = newNode.data.variant as BlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
-        .filter((variable) => variable.class === 'input' || (variable.class === 'inOut' && variable.name !== 'EN'))
+        .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
         .length.toString()
 
       setFormState((prevState) => ({
@@ -206,12 +206,14 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleInputsIncrement = () => {
+    if (Number(formState.inputs) >= maxInputs) return
     setFormState((prevState) => ({
       ...prevState,
-      inputs: String(Math.min(Number(prevState.inputs) + 1, maxInputs)),
+      inputs: String(Number(prevState.inputs) + 1),
     }))
 
-    const defaultInputType = blockVariant.variables[0].type
+    const firstInput = blockVariant.variables.find((variable) => variable.class === 'input' && variable.name !== 'EN')
+    const defaultInputType = (firstInput || blockVariant.variables[0]).type
     const blockVariables = [
       ...blockVariant.variables,
       {
@@ -245,25 +247,28 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleInputsDecrement = () => {
-    const newInputsNumber = Math.max(
-      Number(formState.inputs) - 1,
-      selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ??
-        2,
-    )
+    const minInputs = 2
+
+    const inputVariables = [...blockVariant.variables]
+      .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
+      .slice(0, -1) // negative one excludes the final element
+
+    if (inputVariables.length < minInputs) return
 
     setFormState((prevState) => ({
       ...prevState,
-      inputs: String(newInputsNumber),
+      inputs: String(inputVariables.length),
     }))
 
-    const blockVariables = [...blockVariant.variables]
-      .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-      .slice(0, newInputsNumber)
+    const blockVariables = [...blockVariant.variables].filter((variable) => variable.name === 'EN')
 
-    const outputVariable = [...blockVariant.variables].filter(
+    const outputVariables = [...blockVariant.variables].filter(
       (variable) => variable.class === 'output' || variable.class === 'inOut',
     )
-    outputVariable.forEach((variable) => {
+    inputVariables.forEach((variable) => {
+      blockVariables.push(variable)
+    })
+    outputVariables.forEach((variable) => {
       blockVariables.push(variable)
     })
 
