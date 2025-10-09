@@ -467,13 +467,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         consoleActions.addLog({
           id: crypto.randomUUID(),
           level: 'error',
-          message: `Failed to extract MD5: ${programStResult.error || 'Unknown error'}`,
+          message: `Failed to extract MD5: ${programStResult.error ?? 'Unknown error'}`,
         })
 
         await showDebuggerMessage(
           'error',
           'MD5 Extraction Failed',
-          programStResult.error || 'Could not extract MD5 from program.st',
+          programStResult.error ?? 'Could not extract MD5 from program.st',
           ['OK'],
         )
         setIsDebuggerProcessing(false)
@@ -499,13 +499,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         consoleActions.addLog({
           id: crypto.randomUUID(),
           level: 'error',
-          message: `MD5 verification failed: ${verifyResult.error || 'Unknown error'}`,
+          message: `MD5 verification failed: ${verifyResult.error ?? 'Unknown error'}`,
         })
 
         await showDebuggerMessage(
           'error',
           'Connection Error',
-          `Could not verify MD5 with target: ${verifyResult.error || 'Unknown error'}`,
+          `Could not verify MD5 with target: ${verifyResult.error ?? 'Unknown error'}`,
           ['OK'],
         )
         setIsDebuggerProcessing(false)
