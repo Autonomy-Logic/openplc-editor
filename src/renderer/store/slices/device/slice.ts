@@ -470,6 +470,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    setTemporaryDhcpIp: (ipAddress: string | undefined): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          deviceDefinitions.temporaryDhcpIp = ipAddress
+        }),
+      )
+    },
   },
 })
 

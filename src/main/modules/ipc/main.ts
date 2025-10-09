@@ -13,6 +13,7 @@ import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
+import { ModbusTcpClient } from '../modbus/modbus-client'
 
 type IDataToWrite = {
   projectPath: string
@@ -347,6 +348,14 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('util:log', this.handleUtilLog)
     this.ipcMain.handle('util:read-debug-file', this.handleReadDebugFile)
 
+    // ===================== DEBUGGER =====================
+    this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
+    this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
+
+    // ===================== DIALOGS =====================
+    this.ipcMain.handle('dialog:show-message-box', this.handleDialogShowMessageBox)
+    this.ipcMain.handle('dialog:show-input-box', this.handleDialogShowInputBox)
+
     // ===================== RUNTIME API =====================
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
     this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
@@ -523,6 +532,183 @@ class MainProcessBridge implements MainIpcModule {
         error: error instanceof Error ? error.message : 'Failed to read debug.c file',
       }
     }
+  }
+
+  handleDebuggerVerifyMd5 = async (
+    _event: IpcMainInvokeEvent,
+    targetIpAddress: string,
+    expectedMd5: string,
+  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
+    let client: ModbusTcpClient | null = null
+    try {
+      client = new ModbusTcpClient({
+        host: targetIpAddress,
+        port: 502,
+        timeout: 5000,
+      })
+
+      await client.connect()
+      const targetMd5 = await client.getMd5Hash()
+
+      client.disconnect()
+
+      const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+      return { success: true, match, targetMd5 }
+    } catch (error) {
+      client?.disconnect()
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
+      }
+    }
+  }
+
+  handleReadProgramStMd5 = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; md5?: string; error?: string }> => {
+    try {
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      const baseProjectPath = projectPath.replace('/project.json', '')
+      const programStPath = path.join(baseProjectPath, 'build', boardTarget, 'src', 'program.st')
+
+      const content = await fs.readFile(programStPath, 'utf-8')
+
+      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
+      const match = content.match(md5Pattern)
+
+      if (!match || !match[1]) {
+        return {
+          success: false,
+          error: 'Could not find MD5 hash in program.st file',
+        }
+      }
+
+      return { success: true, md5: match[1] }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read program.st file',
+      }
+    }
+  }
+
+  handleDialogShowMessageBox = async (
+    _event: IpcMainInvokeEvent,
+    options: {
+      type: 'info' | 'warning' | 'error' | 'question'
+      title: string
+      message: string
+      buttons: string[]
+      defaultId?: number
+    },
+  ): Promise<{ response: number }> => {
+    const { dialog } = await import('electron')
+    const result = await dialog.showMessageBox(this.mainWindow!, {
+      type: options.type,
+      title: options.title,
+      message: options.message,
+      buttons: options.buttons,
+      defaultId: options.defaultId,
+    })
+    return { response: result.response }
+  }
+
+  handleDialogShowInputBox = async (
+    _event: IpcMainInvokeEvent,
+    options: {
+      title: string
+      message: string
+      defaultValue?: string
+    },
+  ): Promise<{ cancelled: boolean; value?: string }> => {
+    const { BrowserWindow } = await import('electron')
+
+    const inputWindow = new BrowserWindow({
+      parent: this.mainWindow!,
+      modal: true,
+      width: 400,
+      height: 200,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    })
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: system-ui; padding: 20px; }
+            h3 { margin-top: 0; }
+            input { width: 100%; padding: 8px; margin: 10px 0; box-sizing: border-box; }
+            .buttons { text-align: right; margin-top: 20px; }
+            button { padding: 8px 16px; margin-left: 8px; cursor: pointer; }
+          </style>
+        </head>
+        <body>
+          <h3>${options.title}</h3>
+          <p>${options.message}</p>
+          <input type="text" id="inputValue" value="${options.defaultValue || ''}" autofocus />
+          <div class="buttons">
+            <button onclick="window.close()">Cancel</button>
+            <button onclick="submitValue()">OK</button>
+          </div>
+          <script>
+            const input = document.getElementById('inputValue');
+            input.select();
+            input.addEventListener('keypress', (e) => {
+              if (e.key === 'Enter') submitValue();
+              if (e.key === 'Escape') window.close();
+            });
+            function submitValue() {
+              const value = input.value;
+              window.dispatchEvent(new CustomEvent('submit', { detail: value }));
+            }
+          </script>
+        </body>
+      </html>
+    `
+
+    await inputWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`)
+
+    return new Promise((resolve) => {
+      let resolved = false
+
+      inputWindow.webContents.on('dom-ready', () => {
+        void inputWindow.webContents.executeJavaScript(`
+          window.addEventListener('submit', (e) => {
+            require('electron').ipcRenderer.send('input-submit', e.detail);
+          });
+        `)
+      })
+
+      const submitHandler = (_event: IpcMainEvent, value: string) => {
+        if (!resolved) {
+          resolved = true
+          resolve({ cancelled: false, value })
+          inputWindow.close()
+          this.ipcMain.removeListener('input-submit', submitHandler)
+        }
+      }
+
+      this.ipcMain.on('input-submit', submitHandler)
+
+      inputWindow.on('closed', () => {
+        if (!resolved) {
+          resolved = true
+          resolve({ cancelled: true })
+          this.ipcMain.removeListener('input-submit', submitHandler)
+        }
+      })
+
+      inputWindow.show()
+    })
   }
 
   // ===================== EVENT HANDLERS =====================

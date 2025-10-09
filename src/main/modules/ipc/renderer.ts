@@ -223,6 +223,33 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; content?: string; error?: string }> =>
     ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
 
+  debuggerVerifyMd5: (
+    targetIpAddress: string,
+    expectedMd5: string,
+  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
+    ipcRenderer.invoke('debugger:verify-md5', targetIpAddress, expectedMd5),
+
+  debuggerReadProgramStMd5: (
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; md5?: string; error?: string }> =>
+    ipcRenderer.invoke('debugger:read-program-st-md5', projectPath, boardTarget),
+
+  // ===================== DIALOG METHODS =====================
+  dialogShowMessageBox: (options: {
+    type: 'info' | 'warning' | 'error' | 'question'
+    title: string
+    message: string
+    buttons: string[]
+    defaultId?: number
+  }): Promise<{ response: number }> => ipcRenderer.invoke('dialog:show-message-box', options),
+
+  dialogShowInputBox: (options: {
+    title: string
+    message: string
+    defaultValue?: string
+  }): Promise<{ cancelled: boolean; value?: string }> => ipcRenderer.invoke('dialog:show-input-box', options),
+
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),
