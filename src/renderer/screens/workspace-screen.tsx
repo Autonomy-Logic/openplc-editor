@@ -54,7 +54,7 @@ const WorkspaceScreen = () => {
 
         const compositeKey = `${pou.data.name}:${v.name}`
         const variableIndex = debugVariableIndexes.get(compositeKey)
-        const displayValue = variableIndex !== undefined ? String(variableIndex) : '0'
+        const displayValue = variableIndex !== undefined ? String(variableIndex) : '-'
 
         return {
           pouName: pou.data.name,
