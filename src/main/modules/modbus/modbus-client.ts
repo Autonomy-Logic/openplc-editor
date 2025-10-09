@@ -136,7 +136,7 @@ export class ModbusTcpClient {
 
       this.socket!.once('data', onData)
       this.socket!.once('error', onError)
-      this.socket!.write(request)
+      this.socket!.write(request as unknown as Uint8Array)
     })
   }
 }
