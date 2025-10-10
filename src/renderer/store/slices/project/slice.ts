@@ -7,7 +7,7 @@ import {
   PLCTask,
   PLCVariable,
 } from '@root/types/PLC/open-plc'
-import { /*builtinFunctions, keywords,*/ isLiteral, protectedWords } from '@root/utils/keywords'
+import { isLegalIdentifier } from '@root/utils/keywords'
 import { produce } from 'immer'
 import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
@@ -186,23 +186,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
      */
     createVariable: (variableToBeCreated): ProjectResponse => {
       let response: ProjectResponse = { ok: true }
-      // validate variable
-      const nameIsKeyword = protectedWords.includes(variableToBeCreated.data.name)
-      if (nameIsKeyword) {
-        console.error(`'${variableToBeCreated.data.name}' is a reserved word`)
+      // validate variable name
+      const [isNameLegal, reason] = isLegalIdentifier(variableToBeCreated.data.name)
+      if (isNameLegal === false) {
+        console.error(`'${variableToBeCreated.data.name}' ${reason}`)
         response = {
           ok: false,
           title: 'Illegal Variable Name',
-          message: `'${variableToBeCreated.data.name}' is a reserved word`,
-        }
-        return response
-      }
-      if (isLiteral(variableToBeCreated.data.name)) {
-        console.error(`'${variableToBeCreated.data.name}' is a reserved literal`)
-        response = {
-          ok: false,
-          title: 'Illegal Variable Name',
-          message: `'${variableToBeCreated.data.name}' is a reserved literal`,
+          message: `'${variableToBeCreated.data.name}' ${reason}`,
         }
         return response
       }

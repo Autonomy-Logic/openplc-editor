@@ -3,7 +3,7 @@ const unsignedIntegerTypes = ['ANY_NUM', 'USINT', 'UINT', 'UDINT', 'ULINT', 'BYT
 const integerTypes = ['SINT', 'INT', 'DINT', 'LINT', ...unsignedIntegerTypes]
 const floatTypes = ['ANY_NUM', 'REAL', 'LREAL']
 
-export const literals = [
+const literals = [
   // Boolean Literals
   { pattern: /^(TRUE|FALSE)$/, types: booleanTypes },
   { pattern: /^(0|1)$/, types: [...booleanTypes, ...integerTypes] },
@@ -22,18 +22,7 @@ export const literals = [
   { pattern: /^'.*'$/, types: ['STRING'] },
 ]
 
-export function getLiteralType(name: string) {
-  const result = literals.find((x) => x.pattern.test(name))
-  if (result) {
-    return ['ANY', ...result.types]
-  }
-}
-
-export function isLiteral(name: string) {
-  return getLiteralType(name) !== undefined
-}
-
-export const keywords = [
+const keywords = [
   // Structural declarations
   'PROGRAM',
   'BEGIN',
@@ -318,4 +307,22 @@ export const builtinFunctions = [
   '__DELETE',
 ]
 
-export const protectedWords = [...keywords, ...builtinFunctions]
+const protectedWords = [...keywords, ...builtinFunctions]
+
+export function getLiteralType(name: string): string[] | undefined {
+  const result = literals.find((x) => x.pattern.test(name))
+  if (result) {
+    return ['ANY', ...result.types]
+  }
+}
+
+function isLiteral(name: string): boolean {
+  return getLiteralType(name) !== undefined
+}
+
+export function isLegalIdentifier(name: string): [boolean, string] {
+  if (isLiteral(name)) return [false, 'is a literal']
+  if (protectedWords.includes(name.toUpperCase())) return [false, 'is a reserved word']
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) return [false, 'contains illegal characters']
+  return [true, '']
+}

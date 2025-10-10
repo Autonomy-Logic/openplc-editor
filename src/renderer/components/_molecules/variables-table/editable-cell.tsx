@@ -7,7 +7,7 @@ import { ProjectResponse } from '@root/renderer/store/slices/project'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
-import { protectedWords } from '@root/utils/keywords'
+import { isLegalIdentifier } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -127,7 +127,9 @@ const EditableNameCell = ({
     const oldName = initialValue
     const newName = cellValue
 
-    if (protectedWords.includes(newName)) {
+    const [isNameLegal, reason] = isLegalIdentifier(newName)
+    if (isNameLegal === false) {
+      toast({ title: 'Error', description: `'${newName}' ${reason}`, variant: 'fail' })
       setCellValue(oldName)
       return
     }
