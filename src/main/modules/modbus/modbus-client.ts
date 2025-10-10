@@ -173,6 +173,16 @@ export class ModbusTcpClient {
       request.writeUInt16BE(variableIndexes[i], 10 + i * 2)
     }
 
+    console.log('[DEBUG] Modbus DEBUG_GET_LIST request:', {
+      variableIndexes,
+      numIndexes,
+      length: request.length,
+      hex: request.toString('hex'),
+      bytes: Array.from(request)
+        .map((b) => `0x${b.toString(16).padStart(2, '0')}`)
+        .join(' '),
+    })
+
     return new Promise((resolve) => {
       const timeoutHandle = setTimeout(() => {
         resolve({ success: false, error: 'Request timeout' })
