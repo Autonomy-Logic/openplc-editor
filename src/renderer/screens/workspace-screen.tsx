@@ -107,7 +107,6 @@ const WorkspaceScreen = () => {
       workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues },
       deviceDefinitions,
       workspaceActions,
-      project,
       runtimeConnection: { connectionStatus, ipAddress: targetIpAddress },
     } = useOpenPLCStore.getState()
 
@@ -135,12 +134,14 @@ const WorkspaceScreen = () => {
     const pollVariables = async () => {
       if (!isMountedRef.current) return
 
+      const { project: currentProject } = useOpenPLCStore.getState()
+
       const variableInfoMap = new Map<
         number,
-        { pouName: string; variable: (typeof project.data.pous)[0]['data']['variables'][0] }
+        { pouName: string; variable: (typeof currentProject.data.pous)[0]['data']['variables'][0] }
       >()
 
-      project.data.pous.forEach((pou) => {
+      currentProject.data.pous.forEach((pou) => {
         if (pou.type !== 'program') return
 
         pou.data.variables
