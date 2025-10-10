@@ -102,6 +102,13 @@ const WorkspaceScreen = () => {
     }
   }, [])
 
+  type VariableInfo = {
+    pouName: string
+    variable: (typeof pous)[0]['data']['variables'][0]
+  }
+  const variableInfoMapRef = useRef<Map<number, VariableInfo> | null>(null)
+  const debugVariablesSignatureRef = useRef<string>('')
+
   useEffect(() => {
     const {
       workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues },
@@ -115,6 +122,8 @@ const WorkspaceScreen = () => {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
+      variableInfoMapRef.current = null
+      debugVariablesSignatureRef.current = ''
       return
     }
 
@@ -136,27 +145,48 @@ const WorkspaceScreen = () => {
 
       const { project: currentProject } = useOpenPLCStore.getState()
 
-      const variableInfoMap = new Map<
-        number,
-        { pouName: string; variable: (typeof currentProject.data.pous)[0]['data']['variables'][0] }
-      >()
-
+      const debugVariableKeys: string[] = []
       currentProject.data.pous.forEach((pou) => {
         if (pou.type !== 'program') return
-
         pou.data.variables
           .filter((v) => v.debug === true)
           .forEach((v) => {
-            const compositeKey = `${pou.data.name}:${v.name}`
-            const index = debugVariableIndexes.get(compositeKey)
-            if (index !== undefined) {
-              variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
-            }
+            debugVariableKeys.push(`${pou.data.name}:${v.name}`)
           })
       })
+      const currentSignature = debugVariableKeys.sort().join('|')
+
+      if (currentSignature !== debugVariablesSignatureRef.current || !variableInfoMapRef.current) {
+        debugVariablesSignatureRef.current = currentSignature
+
+        const variableInfoMap = new Map<
+          number,
+          { pouName: string; variable: (typeof currentProject.data.pous)[0]['data']['variables'][0] }
+        >()
+
+        currentProject.data.pous.forEach((pou) => {
+          if (pou.type !== 'program') return
+
+          pou.data.variables
+            .filter((v) => v.debug === true)
+            .forEach((v) => {
+              const compositeKey = `${pou.data.name}:${v.name}`
+              const index = debugVariableIndexes.get(compositeKey)
+              if (index !== undefined) {
+                variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
+              }
+            })
+        })
+
+        variableInfoMapRef.current = variableInfoMap
+      }
+
+      if (!variableInfoMapRef.current) {
+        return
+      }
 
       try {
-        const allIndexes = Array.from(variableInfoMap.keys()).sort((a, b) => a - b)
+        const allIndexes = Array.from(variableInfoMapRef.current.keys()).sort((a, b) => a - b)
 
         if (allIndexes.length === 0) {
           return
@@ -214,7 +244,7 @@ const WorkspaceScreen = () => {
           let bufferOffset = 0
 
           for (const index of batch) {
-            const varInfo = variableInfoMap.get(index)
+            const varInfo = variableInfoMapRef.current?.get(index)
             if (!varInfo) continue
 
             const { pouName, variable } = varInfo
@@ -267,7 +297,16 @@ const WorkspaceScreen = () => {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
-      void window.bridge.debuggerDisconnect().catch(() => {})
+      void window.bridge.debuggerDisconnect().catch((error) => {
+        const { consoleActions } = useOpenPLCStore.getState()
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Failed to disconnect debugger: ${String(error)}`,
+        })
+      })
+      variableInfoMapRef.current = null
+      debugVariablesSignatureRef.current = ''
     }
   }, [isDebuggerVisible])
 
