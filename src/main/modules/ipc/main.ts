@@ -32,6 +32,9 @@ class MainProcessBridge implements MainIpcModule {
   menuBuilder
   compilerModule
   hardwareModule
+  private debuggerModbusClient: ModbusTcpClient | null = null
+  private debuggerTargetIp: string | null = null
+  private debuggerReconnecting: boolean = false
 
   constructor({
     ipcMain,
@@ -352,6 +355,8 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
     this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
     this.ipcMain.handle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
+    this.ipcMain.handle('debugger:connect', this.handleDebuggerConnect)
+    this.ipcMain.handle('debugger:disconnect', this.handleDebuggerDisconnect)
 
     // ===================== RUNTIME API =====================
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -597,17 +602,39 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     targetIpAddress: string,
     variableIndexes: number[],
-  ): Promise<{ success: boolean; tick?: number; lastIndex?: number; data?: number[]; error?: string }> => {
-    const client = new ModbusTcpClient({
-      host: targetIpAddress,
-      port: 502,
-      timeout: 5000,
-    })
+  ): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => {
+    if (!this.debuggerModbusClient) {
+      if (this.debuggerReconnecting) {
+        return { success: false, error: 'Reconnection in progress', needsReconnect: true }
+      }
+
+      this.debuggerReconnecting = true
+      try {
+        this.debuggerModbusClient = new ModbusTcpClient({
+          host: targetIpAddress,
+          port: 502,
+          timeout: 5000,
+        })
+        await this.debuggerModbusClient.connect()
+        this.debuggerTargetIp = targetIpAddress
+        this.debuggerReconnecting = false
+      } catch (error) {
+        this.debuggerModbusClient = null
+        this.debuggerTargetIp = null
+        this.debuggerReconnecting = false
+        return { success: false, error: `Failed to reconnect: ${String(error)}`, needsReconnect: true }
+      }
+    }
 
     try {
-      await client.connect()
-      const result = await client.getVariablesList(variableIndexes)
-      client.disconnect()
+      const result = await this.debuggerModbusClient.getVariablesList(variableIndexes)
 
       if (result.success && result.data) {
         return {
@@ -620,9 +647,51 @@ class MainProcessBridge implements MainIpcModule {
 
       return { success: false, error: result.error }
     } catch (error) {
-      client.disconnect()
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+        this.debuggerTargetIp = null
+      }
+      return { success: false, error: String(error), needsReconnect: true }
+    }
+  }
+
+  handleDebuggerConnect = async (
+    _event: IpcMainInvokeEvent,
+    targetIpAddress: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+      }
+
+      this.debuggerModbusClient = new ModbusTcpClient({
+        host: targetIpAddress,
+        port: 502,
+        timeout: 5000,
+      })
+
+      await this.debuggerModbusClient.connect()
+      this.debuggerTargetIp = targetIpAddress
+      this.debuggerReconnecting = false
+
+      return { success: true }
+    } catch (error) {
+      this.debuggerModbusClient = null
+      this.debuggerTargetIp = null
       return { success: false, error: String(error) }
     }
+  }
+
+  handleDebuggerDisconnect = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    if (this.debuggerModbusClient) {
+      this.debuggerModbusClient.disconnect()
+      this.debuggerModbusClient = null
+      this.debuggerTargetIp = null
+      this.debuggerReconnecting = false
+    }
+    return Promise.resolve({ success: true })
   }
 
   // ===================== EVENT HANDLERS =====================

@@ -174,6 +174,25 @@ const WorkspaceScreen = () => {
           const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
 
           if (!result.success) {
+            if (result.needsReconnect) {
+              const { consoleActions, workspaceActions } = useOpenPLCStore.getState()
+              consoleActions.addLog({
+                id: crypto.randomUUID(),
+                level: 'error',
+                message: `Debugger connection lost: ${result.error || 'Unknown error'}. Attempting to reconnect...`,
+              })
+
+              if (result.error?.includes('Failed to reconnect')) {
+                workspaceActions.setDebuggerVisible(false)
+                consoleActions.addLog({
+                  id: crypto.randomUUID(),
+                  level: 'error',
+                  message: 'Debugger session closed due to connection failure.',
+                })
+                return
+              }
+            }
+
             if (result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > 2) {
               currentBatchSize = Math.max(2, Math.floor(currentBatchSize / 2))
               continue
@@ -247,6 +266,7 @@ const WorkspaceScreen = () => {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
+      void window.bridge.debuggerDisconnect()
     }
   }, [isDebuggerVisible])
 

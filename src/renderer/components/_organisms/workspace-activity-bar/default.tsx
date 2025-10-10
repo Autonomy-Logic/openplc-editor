@@ -188,6 +188,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       useOpenPLCStore.getState()
 
     if (workspace.isDebuggerVisible) {
+      await window.bridge.debuggerDisconnect()
       workspaceActions.setDebuggerVisible(false)
       return
     }
@@ -542,9 +543,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               return
             }
 
-            const debugVariables = pou.data.variables.filter((v) => v.debug === true)
+            const allVariables = pou.data.variables
 
-            debugVariables.forEach((v) => {
+            allVariables.forEach((v) => {
               const index = matchVariableWithDebugEntry(v.name, instance.name, parsed.variables)
               if (index !== null) {
                 const compositeKey = `${pou.data.name}:${v.name}`
@@ -552,6 +553,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               }
             })
           })
+
+          const connectResult = await window.bridge.debuggerConnect(targetIpAddress)
+          if (!connectResult.success) {
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'error',
+              message: `Failed to establish debugger connection: ${connectResult.error || 'Unknown error'}`,
+            })
+            setIsDebuggerProcessing(false)
+            return
+          }
 
           workspaceActions.setDebugVariableIndexes(indexMap)
           workspaceActions.setDebuggerVisible(true)
