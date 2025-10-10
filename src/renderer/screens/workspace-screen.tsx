@@ -266,7 +266,7 @@ const WorkspaceScreen = () => {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
-      void window.bridge.debuggerDisconnect()
+      void window.bridge.debuggerDisconnect().catch(() => {})
     }
   }, [isDebuggerVisible])
 

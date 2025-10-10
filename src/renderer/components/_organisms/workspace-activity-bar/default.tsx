@@ -188,7 +188,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       useOpenPLCStore.getState()
 
     if (workspace.isDebuggerVisible) {
-      await window.bridge.debuggerDisconnect()
+      const _disconnectResult: { success: boolean } = await window.bridge.debuggerDisconnect()
       workspaceActions.setDebuggerVisible(false)
       return
     }
@@ -554,7 +554,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             })
           })
 
-          const connectResult = await window.bridge.debuggerConnect(targetIpAddress)
+          const connectResult: { success: boolean; error?: string } =
+            await window.bridge.debuggerConnect(targetIpAddress)
           if (!connectResult.success) {
             consoleActions.addLog({
               id: crypto.randomUUID(),
