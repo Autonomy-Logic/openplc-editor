@@ -132,27 +132,27 @@ const WorkspaceScreen = () => {
       batchSize = 20
     }
 
-    const variableInfoMap = new Map<
-      number,
-      { pouName: string; variable: (typeof project.data.pous)[0]['data']['variables'][0] }
-    >()
-
-    project.data.pous.forEach((pou) => {
-      if (pou.type !== 'program') return
-
-      pou.data.variables
-        .filter((v) => v.debug === true)
-        .forEach((v) => {
-          const compositeKey = `${pou.data.name}:${v.name}`
-          const index = debugVariableIndexes.get(compositeKey)
-          if (index !== undefined) {
-            variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
-          }
-        })
-    })
-
     const pollVariables = async () => {
       if (!isMountedRef.current) return
+
+      const variableInfoMap = new Map<
+        number,
+        { pouName: string; variable: (typeof project.data.pous)[0]['data']['variables'][0] }
+      >()
+
+      project.data.pous.forEach((pou) => {
+        if (pou.type !== 'program') return
+
+        pou.data.variables
+          .filter((v) => v.debug === true)
+          .forEach((v) => {
+            const compositeKey = `${pou.data.name}:${v.name}`
+            const index = debugVariableIndexes.get(compositeKey)
+            if (index !== undefined) {
+              variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
+            }
+          })
+      })
 
       try {
         const allIndexes = Array.from(variableInfoMap.keys()).sort((a, b) => a - b)
