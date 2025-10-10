@@ -35,6 +35,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     jwtToken: null,
     connectionStatus: 'disconnected',
     plcStatus: null,
+    ipAddress: null,
   },
 
   deviceActions: {
@@ -443,9 +444,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setRuntimeIpAddress: (ipAddress): void => {
       setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          deviceDefinitions.configuration.runtimeIpAddress = ipAddress
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.ipAddress = ipAddress
         }),
       )
     },

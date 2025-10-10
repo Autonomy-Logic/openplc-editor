@@ -29,11 +29,12 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
+import { getVariableSize, parseVariableValue } from '../utils/variable-sizes'
 
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { isCollapsed, isDebuggerVisible, debugVariableIndexes },
+    workspace: { isCollapsed, isDebuggerVisible, debugVariableValues },
     editor,
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
@@ -59,8 +60,8 @@ const WorkspaceScreen = () => {
         }
 
         const compositeKey = `${pou.data.name}:${v.name}`
-        const variableIndex = debugVariableIndexes.get(compositeKey)
-        const displayValue = variableIndex !== undefined ? String(variableIndex) : '-'
+        const variableValue = debugVariableValues.get(compositeKey)
+        const displayValue = variableValue !== undefined ? variableValue : '-'
 
         return {
           pouName: pou.data.name,
@@ -88,6 +89,156 @@ const WorkspaceScreen = () => {
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState('console')
+
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const {
+      workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues },
+      deviceDefinitions,
+      workspaceActions,
+      project,
+      runtimeConnection: { connectionStatus, ipAddress: targetIpAddress },
+    } = useOpenPLCStore.getState()
+
+    if (!isDebuggerVisible || connectionStatus !== 'connected') {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+      return
+    }
+
+    if (!targetIpAddress) {
+      console.warn('No runtime IP address configured')
+      return
+    }
+
+    const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
+    const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
+    let batchSize = 60
+
+    if (isRTU && !isTCP) {
+      batchSize = 20
+    }
+
+    const variableInfoMap = new Map<
+      number,
+      { pouName: string; variable: (typeof project.data.pous)[0]['data']['variables'][0] }
+    >()
+
+    project.data.pous.forEach((pou) => {
+      if (pou.type !== 'program') return
+
+      pou.data.variables
+        .filter((v) => v.debug === true)
+        .forEach((v) => {
+          const compositeKey = `${pou.data.name}:${v.name}`
+          const index = debugVariableIndexes.get(compositeKey)
+          if (index !== undefined) {
+            variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
+          }
+        })
+    })
+
+    const pollVariables = async () => {
+      if (!isMountedRef.current) return
+
+      try {
+        const allIndexes = Array.from(variableInfoMap.keys()).sort((a, b) => a - b)
+
+        if (allIndexes.length === 0) {
+          return
+        }
+
+        const newValues = new Map<string, string>(debugVariableValues)
+        let currentBatchSize = batchSize
+        let processedCount = 0
+
+        while (processedCount < allIndexes.length) {
+          const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
+
+          const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
+
+          if (!result.success) {
+            if (result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > 2) {
+              currentBatchSize = Math.max(2, Math.floor(currentBatchSize / 2))
+              console.warn(`Reduced batch size to ${currentBatchSize} due to memory error`)
+              continue
+            } else {
+              console.error('Failed to get variables list:', result.error)
+              break
+            }
+          }
+
+          if (!result.data || result.lastIndex === undefined) {
+            console.error('Invalid response from target')
+            break
+          }
+
+          const responseBuffer = Buffer.from(result.data)
+          let bufferOffset = 0
+
+          for (const index of batch) {
+            const varInfo = variableInfoMap.get(index)
+            if (!varInfo) continue
+
+            const { pouName, variable } = varInfo
+            const compositeKey = `${pouName}:${variable.name}`
+
+            if (bufferOffset >= responseBuffer.length) {
+              break
+            }
+
+            try {
+              const { value, bytesRead } = parseVariableValue(responseBuffer, bufferOffset, variable)
+              newValues.set(compositeKey, value)
+              bufferOffset += bytesRead
+            } catch (error) {
+              console.error(`Error parsing variable ${compositeKey}:`, error)
+              newValues.set(compositeKey, 'ERR')
+              bufferOffset += getVariableSize(variable)
+            }
+
+            if (index === result.lastIndex) {
+              processedCount = batch.indexOf(index) + processedCount + 1
+              break
+            }
+          }
+
+          if (result.lastIndex === batch[batch.length - 1]) {
+            processedCount += batch.length
+          }
+        }
+
+        if (isMountedRef.current) {
+          workspaceActions.setDebugVariableValues(newValues)
+        }
+      } catch (error) {
+        console.error('Error in polling loop:', error)
+      }
+    }
+
+    void pollVariables()
+    pollingIntervalRef.current = setInterval(() => {
+      void pollVariables()
+    }, 333)
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+  }, [isDebuggerVisible])
 
   type PanelMethods = {
     collapse: () => void

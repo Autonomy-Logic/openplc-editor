@@ -22,6 +22,7 @@ const runtimeConnectionSchema = z.object({
   jwtToken: z.string().nullable(),
   connectionStatus: z.enum(['disconnected', 'connecting', 'connected', 'error']),
   plcStatus: z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable(),
+  ipAddress: z.string().nullable(),
 })
 
 type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>

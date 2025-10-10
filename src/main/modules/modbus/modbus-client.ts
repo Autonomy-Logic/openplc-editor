@@ -141,4 +141,109 @@ export class ModbusTcpClient {
       this.socket!.write(request as unknown as Uint8Array)
     })
   }
+
+  async getVariablesList(variableIndexes: number[]): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: Buffer
+    error?: string
+  }> {
+    if (!this.socket) {
+      return { success: false, error: 'Not connected to target' }
+    }
+
+    const transactionId = this.incrementTransactionId()
+    const protocolId = 0x0000
+    const unitId = 0x00
+    const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
+    const numIndexes = variableIndexes.length
+
+    const pduLength = 3 + 2 * numIndexes
+    const request = Buffer.alloc(6 + pduLength)
+
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(protocolId, 2)
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(unitId, 6)
+    request.writeUInt8(functionCode, 7)
+    request.writeUInt16BE(numIndexes, 8)
+
+    for (let i = 0; i < numIndexes; i++) {
+      request.writeUInt16BE(variableIndexes[i], 10 + i * 2)
+    }
+
+    return new Promise((resolve) => {
+      const timeoutHandle = setTimeout(() => {
+        resolve({ success: false, error: 'Request timeout' })
+      }, this.timeout)
+
+      const onData = (data: Buffer) => {
+        clearTimeout(timeoutHandle)
+        this.socket?.removeListener('data', onData)
+        this.socket?.removeListener('error', onError)
+
+        try {
+          if (data.length < 17) {
+            resolve({ success: false, error: 'Invalid response: too short' })
+            return
+          }
+
+          const responseTransactionId = data.readUInt16BE(0)
+          const responseFunctionCode = data.readUInt8(7)
+          const statusCode = data.readUInt8(8)
+
+          if (responseTransactionId !== transactionId) {
+            resolve({ success: false, error: 'Transaction ID mismatch' })
+            return
+          }
+
+          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
+            resolve({ success: false, error: 'Function code mismatch' })
+            return
+          }
+
+          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
+            resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
+            return
+          }
+
+          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
+            resolve({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
+            return
+          }
+
+          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+            resolve({ success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` })
+            return
+          }
+
+          const lastIndex = data.readUInt16BE(9)
+          const tick = data.readUInt32BE(11)
+          const responseSize = data.readUInt16BE(15)
+          const variableData = data.slice(17, 17 + responseSize)
+
+          resolve({
+            success: true,
+            tick,
+            lastIndex,
+            data: variableData,
+          })
+        } catch (error) {
+          resolve({ success: false, error: String(error) })
+        }
+      }
+
+      const onError = (error: Error) => {
+        clearTimeout(timeoutHandle)
+        this.socket?.removeListener('data', onData)
+        this.socket?.removeListener('error', onError)
+        resolve({ success: false, error: error.message })
+      }
+
+      this.socket!.once('data', onData)
+      this.socket!.once('error', onError)
+      this.socket!.write(request as unknown as Uint8Array)
+    })
+  }
 }

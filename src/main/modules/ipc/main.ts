@@ -351,6 +351,7 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== DEBUGGER =====================
     this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
     this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
+    this.ipcMain.handle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
 
     // ===================== RUNTIME API =====================
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -589,6 +590,38 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to read program.st file',
       }
+    }
+  }
+
+  handleDebuggerGetVariablesList = async (
+    _event: IpcMainInvokeEvent,
+    targetIpAddress: string,
+    variableIndexes: number[],
+  ): Promise<{ success: boolean; tick?: number; lastIndex?: number; data?: number[]; error?: string }> => {
+    const client = new ModbusTcpClient({
+      host: targetIpAddress,
+      port: 502,
+      timeout: 5000,
+    })
+
+    try {
+      await client.connect()
+      const result = await client.getVariablesList(variableIndexes)
+      client.disconnect()
+
+      if (result.success && result.data) {
+        return {
+          success: true,
+          tick: result.tick,
+          lastIndex: result.lastIndex,
+          data: Array.from(result.data),
+        }
+      }
+
+      return { success: false, error: result.error }
+    } catch (error) {
+      client.disconnect()
+      return { success: false, error: String(error) }
     }
   }
 
