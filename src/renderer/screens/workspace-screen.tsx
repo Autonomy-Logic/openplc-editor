@@ -175,6 +175,33 @@ const WorkspaceScreen = () => {
             })
         })
 
+        const { editor, ladderFlows } = useOpenPLCStore.getState()
+        const currentPou = currentProject.data.pous.find((pou) => pou.data.name === editor.meta.name)
+        if (currentPou && currentPou.data.body.language === 'ld') {
+          const currentLadderFlow = ladderFlows.find((flow) => flow.name === editor.meta.name)
+          if (currentLadderFlow) {
+            currentLadderFlow.rungs.forEach((rung) => {
+              rung.nodes.forEach((node) => {
+                if (node.type === 'contact' || node.type === 'coil') {
+                  const nodeData = node.data as {
+                    variable?: { name?: string; type?: { definition?: string; value?: string } }
+                  }
+                  const variableName = nodeData.variable?.name
+
+                  if (
+                    variableName &&
+                    nodeData.variable?.type?.definition === 'base-type' &&
+                    nodeData.variable?.type?.value?.toUpperCase() === 'BOOL'
+                  ) {
+                    const compositeKey = `${currentPou.data.name}:${variableName}`
+                    debugVariableKeys.add(compositeKey)
+                  }
+                }
+              })
+            })
+          }
+        }
+
         const allIndexes = Array.from(variableInfoMapRef.current.entries())
           .filter(([_, varInfo]) => {
             const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
