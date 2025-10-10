@@ -171,6 +171,14 @@ const WorkspaceScreen = () => {
 
           const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
 
+          console.log('[DEBUG] Poll result:', {
+            success: result.success,
+            error: result.error,
+            dataLength: result.data?.length,
+            lastIndex: result.lastIndex,
+            tick: result.tick,
+          })
+
           if (!result.success) {
             if (result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > 2) {
               currentBatchSize = Math.max(2, Math.floor(currentBatchSize / 2))
@@ -193,6 +201,11 @@ const WorkspaceScreen = () => {
           }
 
           const responseBuffer = Buffer.from(result.data)
+          console.log('[DEBUG] Response buffer created:', {
+            length: responseBuffer.length,
+            batchSize: batch.length,
+            indexes: batch,
+          })
           let bufferOffset = 0
 
           for (const index of batch) {
@@ -207,11 +220,27 @@ const WorkspaceScreen = () => {
             }
 
             try {
+              console.log('[DEBUG] Parsing variable:', {
+                compositeKey,
+                index,
+                bufferOffset,
+                bufferLength: responseBuffer.length,
+                variableType: variable.type.value,
+                expectedSize: getVariableSize(variable),
+              })
+
               const { value, bytesRead } = parseVariableValue(responseBuffer, bufferOffset, variable)
               newValues.set(compositeKey, value)
               bufferOffset += bytesRead
+
+              console.log('[DEBUG] Parsed variable:', {
+                compositeKey,
+                value,
+                bytesRead,
+                newOffset: bufferOffset,
+              })
             } catch (error) {
-              console.error(`Error parsing variable ${compositeKey}:`, error)
+              console.error(`[DEBUG] Error parsing variable ${compositeKey}:`, error)
               newValues.set(compositeKey, 'ERR')
               bufferOffset += getVariableSize(variable)
             }

@@ -184,14 +184,30 @@ export class ModbusTcpClient {
         this.socket?.removeListener('error', onError)
 
         try {
-          if (data.length < 17) {
-            resolve({ success: false, error: 'Invalid response: too short' })
+          console.log('[DEBUG] Modbus DEBUG_GET_LIST response received:', {
+            length: data.length,
+            hex: data.toString('hex'),
+            bytes: Array.from(data)
+              .map((b) => `0x${b.toString(16).padStart(2, '0')}`)
+              .join(' '),
+          })
+
+          if (data.length < 9) {
+            console.error('[DEBUG] Response too short for minimum valid response:', data.length, 'bytes')
+            resolve({ success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` })
             return
           }
 
           const responseTransactionId = data.readUInt16BE(0)
           const responseFunctionCode = data.readUInt8(7)
           const statusCode = data.readUInt8(8)
+
+          console.log('[DEBUG] Parsed response header:', {
+            transactionId: responseTransactionId,
+            expectedTransactionId: transactionId,
+            functionCode: `0x${responseFunctionCode.toString(16)}`,
+            statusCode: `0x${statusCode.toString(16)}`,
+          })
 
           if (responseTransactionId !== transactionId) {
             resolve({ success: false, error: 'Transaction ID mismatch' })
@@ -204,24 +220,57 @@ export class ModbusTcpClient {
           }
 
           if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
+            console.log('[DEBUG] Target returned ERROR_OUT_OF_BOUNDS')
             resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
             return
           }
 
           if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
+            console.log('[DEBUG] Target returned ERROR_OUT_OF_MEMORY')
             resolve({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
             return
           }
 
           if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+            console.error('[DEBUG] Unknown status code:', `0x${statusCode.toString(16)}`)
             resolve({ success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` })
             return
           }
 
+          if (data.length < 17) {
+            console.error('[DEBUG] Success response too short:', data.length, 'bytes, expected at least 17')
+            resolve({
+              success: false,
+              error: `Incomplete success response (${data.length} bytes, expected at least 17)`,
+            })
+            return
+          }
+
+          console.log('[DEBUG] About to parse success response fields...')
           const lastIndex = data.readUInt16BE(9)
+          console.log('[DEBUG] lastIndex:', lastIndex)
           const tick = data.readUInt32BE(11)
+          console.log('[DEBUG] tick:', tick)
           const responseSize = data.readUInt16BE(15)
+          console.log('[DEBUG] responseSize:', responseSize)
+
+          if (data.length < 17 + responseSize) {
+            console.error('[DEBUG] Incomplete variable data:', {
+              expected: responseSize,
+              available: data.length - 17,
+            })
+            resolve({
+              success: false,
+              error: `Incomplete variable data (expected ${responseSize} bytes, got ${data.length - 17})`,
+            })
+            return
+          }
+
           const variableData = data.slice(17, 17 + responseSize)
+          console.log('[DEBUG] Variable data extracted:', {
+            length: variableData.length,
+            hex: variableData.toString('hex'),
+          })
 
           resolve({
             success: true,
@@ -230,6 +279,7 @@ export class ModbusTcpClient {
             data: variableData,
           })
         } catch (error) {
+          console.error('[DEBUG] Exception in Modbus response parsing:', error)
           resolve({ success: false, error: String(error) })
         }
       }
