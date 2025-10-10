@@ -205,7 +205,7 @@ const WorkspaceScreen = () => {
             break
           }
 
-          const responseBuffer = Buffer.from(result.data)
+          const responseBuffer = new Uint8Array(result.data)
           console.log('[DEBUG] Response buffer created:', {
             length: responseBuffer.length,
             batchSize: batch.length,

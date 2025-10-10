@@ -1,5 +1,51 @@
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 
+function readInt8(data: Uint8Array, offset: number): number {
+  const value = data[offset]
+  return value > 127 ? value - 256 : value
+}
+
+function readUInt8(data: Uint8Array, offset: number): number {
+  return data[offset]
+}
+
+function readInt16LE(data: Uint8Array, offset: number): number {
+  const value = data[offset] | (data[offset + 1] << 8)
+  return value > 32767 ? value - 65536 : value
+}
+
+function readUInt16LE(data: Uint8Array, offset: number): number {
+  return data[offset] | (data[offset + 1] << 8)
+}
+
+function readInt32LE(data: Uint8Array, offset: number): number {
+  return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24)
+}
+
+function readUInt32LE(data: Uint8Array, offset: number): number {
+  return (data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24)) >>> 0
+}
+
+function readFloatLE(data: Uint8Array, offset: number): number {
+  const view = new DataView(data.buffer, data.byteOffset + offset, 4)
+  return view.getFloat32(0, true)
+}
+
+function readDoubleLE(data: Uint8Array, offset: number): number {
+  const view = new DataView(data.buffer, data.byteOffset + offset, 8)
+  return view.getFloat64(0, true)
+}
+
+function readBigInt64LE(data: Uint8Array, offset: number): bigint {
+  const view = new DataView(data.buffer, data.byteOffset + offset, 8)
+  return view.getBigInt64(0, true)
+}
+
+function readBigUInt64LE(data: Uint8Array, offset: number): bigint {
+  const view = new DataView(data.buffer, data.byteOffset + offset, 8)
+  return view.getBigUint64(0, true)
+}
+
 export function getVariableSize(variable: PLCVariable): number {
   if (variable.type.definition === 'base-type') {
     const baseType = variable.type.value.toLowerCase()
@@ -46,7 +92,7 @@ export function getVariableSize(variable: PLCVariable): number {
 }
 
 export function parseVariableValue(
-  buffer: Buffer,
+  data: Uint8Array,
   offset: number,
   variable: PLCVariable,
 ): { value: string; bytesRead: number } {
@@ -55,50 +101,51 @@ export function parseVariableValue(
 
     switch (baseType) {
       case 'bool':
-        return { value: buffer.readUInt8(offset) !== 0 ? 'TRUE' : 'FALSE', bytesRead: 1 }
+        return { value: readUInt8(data, offset) !== 0 ? 'TRUE' : 'FALSE', bytesRead: 1 }
 
       case 'sint':
-        return { value: buffer.readInt8(offset).toString(), bytesRead: 1 }
+        return { value: readInt8(data, offset).toString(), bytesRead: 1 }
 
       case 'usint':
       case 'byte':
-        return { value: buffer.readUInt8(offset).toString(), bytesRead: 1 }
+        return { value: readUInt8(data, offset).toString(), bytesRead: 1 }
 
       case 'int':
-        return { value: buffer.readInt16LE(offset).toString(), bytesRead: 2 }
+        return { value: readInt16LE(data, offset).toString(), bytesRead: 2 }
 
       case 'uint':
       case 'word':
-        return { value: buffer.readUInt16LE(offset).toString(), bytesRead: 2 }
+        return { value: readUInt16LE(data, offset).toString(), bytesRead: 2 }
 
       case 'dint':
       case 'time':
-        return { value: buffer.readInt32LE(offset).toString(), bytesRead: 4 }
+        return { value: readInt32LE(data, offset).toString(), bytesRead: 4 }
 
       case 'udint':
       case 'dword':
       case 'date':
       case 'tod':
-        return { value: buffer.readUInt32LE(offset).toString(), bytesRead: 4 }
+        return { value: readUInt32LE(data, offset).toString(), bytesRead: 4 }
 
       case 'real':
-        return { value: buffer.readFloatLE(offset).toFixed(6), bytesRead: 4 }
+        return { value: readFloatLE(data, offset).toFixed(6), bytesRead: 4 }
 
       case 'lint':
-        return { value: buffer.readBigInt64LE(offset).toString(), bytesRead: 8 }
+        return { value: readBigInt64LE(data, offset).toString(), bytesRead: 8 }
 
       case 'ulint':
       case 'lword':
       case 'dt':
-        return { value: buffer.readBigUInt64LE(offset).toString(), bytesRead: 8 }
+        return { value: readBigUInt64LE(data, offset).toString(), bytesRead: 8 }
 
       case 'lreal':
-        return { value: buffer.readDoubleLE(offset).toFixed(12), bytesRead: 8 }
+        return { value: readDoubleLE(data, offset).toFixed(12), bytesRead: 8 }
 
       case 'string': {
-        const stringData = buffer.slice(offset, offset + 81)
+        const stringData = data.slice(offset, offset + 81)
         const nullIndex = stringData.indexOf(0)
-        const str = stringData.slice(0, nullIndex !== -1 ? nullIndex : 80).toString('utf-8')
+        const decoder = new TextDecoder('utf-8')
+        const str = decoder.decode(stringData.slice(0, nullIndex !== -1 ? nullIndex : 80))
         return { value: `"${str}"`, bytesRead: 81 }
       }
 
