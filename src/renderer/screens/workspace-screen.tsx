@@ -144,15 +144,13 @@ const WorkspaceScreen = () => {
     project.data.pous.forEach((pou) => {
       if (pou.type !== 'program') return
 
-      pou.data.variables
-        .filter((v) => v.debug === true)
-        .forEach((v) => {
-          const compositeKey = `${pou.data.name}:${v.name}`
-          const index = debugVariableIndexes.get(compositeKey)
-          if (index !== undefined) {
-            variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
-          }
-        })
+      pou.data.variables.forEach((v) => {
+        const compositeKey = `${pou.data.name}:${v.name}`
+        const index = debugVariableIndexes.get(compositeKey)
+        if (index !== undefined) {
+          variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
+        }
+      })
     })
 
     variableInfoMapRef.current = variableInfoMap
@@ -165,7 +163,25 @@ const WorkspaceScreen = () => {
       }
 
       try {
-        const allIndexes = Array.from(variableInfoMapRef.current.keys()).sort((a, b) => a - b)
+        const { project: currentProject } = useOpenPLCStore.getState()
+
+        const debugVariableKeys = new Set<string>()
+        currentProject.data.pous.forEach((pou) => {
+          if (pou.type !== 'program') return
+          pou.data.variables
+            .filter((v) => v.debug === true)
+            .forEach((v) => {
+              debugVariableKeys.add(`${pou.data.name}:${v.name}`)
+            })
+        })
+
+        const allIndexes = Array.from(variableInfoMapRef.current.entries())
+          .filter(([_, varInfo]) => {
+            const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+            return debugVariableKeys.has(compositeKey)
+          })
+          .map(([index, _]) => index)
+          .sort((a, b) => a - b)
 
         if (allIndexes.length === 0) {
           return
