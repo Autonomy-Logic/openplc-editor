@@ -159,7 +159,10 @@ const WorkspaceScreen = () => {
           return
         }
 
-        const newValues = new Map<string, string>(debugVariableValues)
+        const newValues = new Map<string, string>()
+        debugVariableValues.forEach((value, key) => {
+          newValues.set(key, value)
+        })
         let currentBatchSize = batchSize
         let processedCount = 0
 
@@ -181,6 +184,11 @@ const WorkspaceScreen = () => {
 
           if (!result.data || result.lastIndex === undefined) {
             console.error('Invalid response from target')
+            break
+          }
+
+          if (!Array.isArray(result.data)) {
+            console.error('Invalid response data type')
             break
           }
 
