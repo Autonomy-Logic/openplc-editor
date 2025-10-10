@@ -160,7 +160,7 @@ const WorkspaceScreen = () => {
         }
 
         const newValues = new Map<string, string>()
-        debugVariableValues.forEach((value, key) => {
+        debugVariableValues.forEach((value: string, key: string) => {
           newValues.set(key, value)
         })
         let currentBatchSize = batchSize
