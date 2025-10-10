@@ -152,8 +152,11 @@ const WorkspaceScreen = () => {
     const pollVariables = async () => {
       if (!isMountedRef.current) return
 
+      console.log('[DEBUG] Starting pollVariables')
+
       try {
         const allIndexes = Array.from(variableInfoMap.keys()).sort((a, b) => a - b)
+        console.log('[DEBUG] All variable indexes:', allIndexes)
 
         if (allIndexes.length === 0) {
           return
@@ -168,8 +171,10 @@ const WorkspaceScreen = () => {
 
         while (processedCount < allIndexes.length) {
           const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
+          console.log('[DEBUG] Processing batch:', { batch, processedCount, currentBatchSize })
 
           const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
+          console.log('[DEBUG] Received result from bridge')
 
           console.log('[DEBUG] Poll result:', {
             success: result.success,
@@ -260,7 +265,10 @@ const WorkspaceScreen = () => {
           workspaceActions.setDebugVariableValues(newValues)
         }
       } catch (error) {
-        console.error('Error in polling loop:', error)
+        console.error('[DEBUG] Error in polling loop:', error)
+        if (error instanceof Error) {
+          console.error('[DEBUG] Error stack:', error.stack)
+        }
       }
     }
 

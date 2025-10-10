@@ -159,7 +159,7 @@ export class ModbusTcpClient {
     const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
     const numIndexes = variableIndexes.length
 
-    const pduLength = 3 + 2 * numIndexes
+    const pduLength = 4 + 2 * numIndexes
     const request = Buffer.alloc(6 + pduLength)
 
     request.writeUInt16BE(transactionId, 0)
