@@ -31,6 +31,8 @@ import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templ
 import { useOpenPLCStore } from '../store'
 import { getVariableSize, parseVariableValue } from '../utils/variable-sizes'
 
+const DEBUGGER_POLL_INTERVAL_MS = 200
+
 const WorkspaceScreen = () => {
   const {
     tabs,
@@ -225,15 +227,20 @@ const WorkspaceScreen = () => {
         if (isMountedRef.current) {
           workspaceActions.setDebugVariableValues(newValues)
         }
-      } catch {
-        // Silently ignore errors to keep polling loop running
+      } catch (error) {
+        const { consoleActions } = useOpenPLCStore.getState()
+        consoleActions.addLog({
+          id: `debugger-poll-error-${Date.now()}`,
+          level: 'error',
+          message: `Debugger polling error: ${String(error)}`,
+        })
       }
     }
 
     void pollVariables()
     pollingIntervalRef.current = setInterval(() => {
       void pollVariables()
-    }, 333)
+    }, DEBUGGER_POLL_INTERVAL_MS)
 
     return () => {
       if (pollingIntervalRef.current) {
