@@ -152,11 +152,8 @@ const WorkspaceScreen = () => {
     const pollVariables = async () => {
       if (!isMountedRef.current) return
 
-      console.log('[DEBUG] Starting pollVariables')
-
       try {
         const allIndexes = Array.from(variableInfoMap.keys()).sort((a, b) => a - b)
-        console.log('[DEBUG] All variable indexes:', allIndexes)
 
         if (allIndexes.length === 0) {
           return
@@ -171,46 +168,27 @@ const WorkspaceScreen = () => {
 
         while (processedCount < allIndexes.length) {
           const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
-          console.log('[DEBUG] Processing batch:', { batch, processedCount, currentBatchSize })
 
           const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
-          console.log('[DEBUG] Received result from bridge')
-
-          console.log('[DEBUG] Poll result:', {
-            success: result.success,
-            error: result.error,
-            dataLength: result.data?.length,
-            lastIndex: result.lastIndex,
-            tick: result.tick,
-          })
 
           if (!result.success) {
             if (result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > 2) {
               currentBatchSize = Math.max(2, Math.floor(currentBatchSize / 2))
-              console.warn(`Reduced batch size to ${currentBatchSize} due to memory error`)
               continue
             } else {
-              console.error('Failed to get variables list:', result.error)
               break
             }
           }
 
           if (!result.data || result.lastIndex === undefined) {
-            console.error('Invalid response from target')
             break
           }
 
           if (!Array.isArray(result.data)) {
-            console.error('Invalid response data type')
             break
           }
 
           const responseBuffer = new Uint8Array(result.data)
-          console.log('[DEBUG] Response buffer created:', {
-            length: responseBuffer.length,
-            batchSize: batch.length,
-            indexes: batch,
-          })
           let bufferOffset = 0
 
           for (const index of batch) {
@@ -225,27 +203,10 @@ const WorkspaceScreen = () => {
             }
 
             try {
-              console.log('[DEBUG] Parsing variable:', {
-                compositeKey,
-                index,
-                bufferOffset,
-                bufferLength: responseBuffer.length,
-                variableType: variable.type.value,
-                expectedSize: getVariableSize(variable),
-              })
-
               const { value, bytesRead } = parseVariableValue(responseBuffer, bufferOffset, variable)
               newValues.set(compositeKey, value)
               bufferOffset += bytesRead
-
-              console.log('[DEBUG] Parsed variable:', {
-                compositeKey,
-                value,
-                bytesRead,
-                newOffset: bufferOffset,
-              })
-            } catch (error) {
-              console.error(`[DEBUG] Error parsing variable ${compositeKey}:`, error)
+            } catch {
               newValues.set(compositeKey, 'ERR')
               bufferOffset += getVariableSize(variable)
             }
@@ -264,11 +225,8 @@ const WorkspaceScreen = () => {
         if (isMountedRef.current) {
           workspaceActions.setDebugVariableValues(newValues)
         }
-      } catch (error) {
-        console.error('[DEBUG] Error in polling loop:', error)
-        if (error instanceof Error) {
-          console.error('[DEBUG] Error stack:', error.stack)
-        }
+      } catch {
+        // Silently ignore errors to keep polling loop running
       }
     }
 
