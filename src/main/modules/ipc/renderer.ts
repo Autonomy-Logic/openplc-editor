@@ -235,6 +235,12 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; md5?: string; error?: string }> =>
     ipcRenderer.invoke('debugger:read-program-st-md5', projectPath, boardTarget),
 
+  debuggerGetVariablesList: (
+    targetIpAddress: string,
+    variableIndexes: number[],
+  ): Promise<{ success: boolean; tick?: number; lastIndex?: number; data?: number[]; error?: string }> =>
+    ipcRenderer.invoke('debugger:get-variables-list', targetIpAddress, variableIndexes),
+
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),

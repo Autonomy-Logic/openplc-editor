@@ -18,6 +18,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     discardChanges: false,
     isDebuggerVisible: false,
     debugVariableIndexes: new Map(),
+    debugVariableValues: new Map(),
     close: {
       window: false,
       app: false,
@@ -121,6 +122,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugVariableIndexes = indexes
+        }),
+      )
+    },
+    setDebugVariableValues: (values: Map<string, string>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableValues = values
         }),
       )
     },
