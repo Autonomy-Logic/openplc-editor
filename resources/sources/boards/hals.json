@@ -1175,7 +1175,11 @@
       "Ethernet": "No"
     }
   },
-  "OpenPLC Runtime": {
+  "OpenPLC Runtime v4": {
+    "compiler": "openplc-compiler",
+    "preview": "generic.png"
+  },
+  "OpenPLC Runtime v3": {
     "compiler": "openplc-compiler",
     "preview": "generic.png"
   },
