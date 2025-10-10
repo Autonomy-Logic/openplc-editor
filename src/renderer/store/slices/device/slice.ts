@@ -444,7 +444,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setRuntimeIpAddress: (ipAddress): void => {
       setState(
-        produce(({ runtimeConnection }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
+          deviceDefinitions.configuration.runtimeIpAddress = ipAddress
           runtimeConnection.ipAddress = ipAddress
         }),
       )
