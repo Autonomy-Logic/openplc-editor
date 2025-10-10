@@ -102,6 +102,12 @@ const WorkspaceScreen = () => {
     }
   }, [])
 
+  type VariableInfo = {
+    pouName: string
+    variable: (typeof pous)[0]['data']['variables'][0]
+  }
+  const variableInfoMapRef = useRef<Map<number, VariableInfo> | null>(null)
+
   useEffect(() => {
     const {
       workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues },
@@ -116,6 +122,7 @@ const WorkspaceScreen = () => {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
+      variableInfoMapRef.current = null
       return
     }
 
@@ -132,30 +139,49 @@ const WorkspaceScreen = () => {
       batchSize = 20
     }
 
-    const variableInfoMap = new Map<
-      number,
-      { pouName: string; variable: (typeof project.data.pous)[0]['data']['variables'][0] }
-    >()
+    const variableInfoMap = new Map<number, VariableInfo>()
 
     project.data.pous.forEach((pou) => {
       if (pou.type !== 'program') return
 
-      pou.data.variables
-        .filter((v) => v.debug === true)
-        .forEach((v) => {
-          const compositeKey = `${pou.data.name}:${v.name}`
-          const index = debugVariableIndexes.get(compositeKey)
-          if (index !== undefined) {
-            variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
-          }
-        })
+      pou.data.variables.forEach((v) => {
+        const compositeKey = `${pou.data.name}:${v.name}`
+        const index = debugVariableIndexes.get(compositeKey)
+        if (index !== undefined) {
+          variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
+        }
+      })
     })
+
+    variableInfoMapRef.current = variableInfoMap
 
     const pollVariables = async () => {
       if (!isMountedRef.current) return
 
+      if (!variableInfoMapRef.current) {
+        return
+      }
+
       try {
-        const allIndexes = Array.from(variableInfoMap.keys()).sort((a, b) => a - b)
+        const { project: currentProject } = useOpenPLCStore.getState()
+
+        const debugVariableKeys = new Set<string>()
+        currentProject.data.pous.forEach((pou) => {
+          if (pou.type !== 'program') return
+          pou.data.variables
+            .filter((v) => v.debug === true)
+            .forEach((v) => {
+              debugVariableKeys.add(`${pou.data.name}:${v.name}`)
+            })
+        })
+
+        const allIndexes = Array.from(variableInfoMapRef.current.entries())
+          .filter(([_, varInfo]) => {
+            const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+            return debugVariableKeys.has(compositeKey)
+          })
+          .map(([index, _]) => index)
+          .sort((a, b) => a - b)
 
         if (allIndexes.length === 0) {
           return
@@ -174,6 +200,25 @@ const WorkspaceScreen = () => {
           const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
 
           if (!result.success) {
+            if (result.needsReconnect) {
+              const { consoleActions, workspaceActions } = useOpenPLCStore.getState()
+              consoleActions.addLog({
+                id: crypto.randomUUID(),
+                level: 'error',
+                message: `Debugger connection lost: ${result.error || 'Unknown error'}. Attempting to reconnect...`,
+              })
+
+              if (result.error?.includes('Failed to reconnect')) {
+                workspaceActions.setDebuggerVisible(false)
+                consoleActions.addLog({
+                  id: crypto.randomUUID(),
+                  level: 'error',
+                  message: 'Debugger session closed due to connection failure.',
+                })
+                return
+              }
+            }
+
             if (result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > 2) {
               currentBatchSize = Math.max(2, Math.floor(currentBatchSize / 2))
               continue
@@ -194,7 +239,7 @@ const WorkspaceScreen = () => {
           let bufferOffset = 0
 
           for (const index of batch) {
-            const varInfo = variableInfoMap.get(index)
+            const varInfo = variableInfoMapRef.current?.get(index)
             if (!varInfo) continue
 
             const { pouName, variable } = varInfo
@@ -247,6 +292,14 @@ const WorkspaceScreen = () => {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
+      void window.bridge.debuggerDisconnect().catch((error) => {
+        const { consoleActions } = useOpenPLCStore.getState()
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Failed to disconnect debugger: ${String(error)}`,
+        })
+      })
     }
   }, [isDebuggerVisible])
 

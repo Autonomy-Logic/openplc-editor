@@ -238,8 +238,19 @@ const rendererProcessBridge = {
   debuggerGetVariablesList: (
     targetIpAddress: string,
     variableIndexes: number[],
-  ): Promise<{ success: boolean; tick?: number; lastIndex?: number; data?: number[]; error?: string }> =>
-    ipcRenderer.invoke('debugger:get-variables-list', targetIpAddress, variableIndexes),
+  ): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => ipcRenderer.invoke('debugger:get-variables-list', targetIpAddress, variableIndexes),
+
+  debuggerConnect: (targetIpAddress: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('debugger:connect', targetIpAddress),
+
+  debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>
