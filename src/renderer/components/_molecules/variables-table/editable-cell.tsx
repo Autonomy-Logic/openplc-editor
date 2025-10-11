@@ -7,7 +7,7 @@ import { ProjectResponse } from '@root/renderer/store/slices/project'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
-import { isLegalIdentifier } from '@root/utils/keywords'
+import { isLegalIdentifier, sanitizeVariableInput } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -119,7 +119,6 @@ const EditableNameCell = ({
   }
 
   const onBlur = async () => {
-    // maybe validate here?
     const language = 'language' in editor.meta ? editor.meta.language : undefined
 
     if (cellValue === initialValue) return setIsEditing(false)
@@ -131,6 +130,7 @@ const EditableNameCell = ({
     if (isNameLegal === false) {
       toast({ title: 'Error', description: `'${newName}' ${reason}`, variant: 'fail' })
       setCellValue(oldName)
+      setIsEditing(false)
       return
     }
 
@@ -334,7 +334,7 @@ const EditableNameCell = ({
           value={cellValue}
           onChange={(e) => setCellValue(e.target.value)}
           onBlur={onBlur}
-          onInput={(e) => sanitize(e.currentTarget)}
+          onInput={(e) => sanitizeVariableInput(e.currentTarget)}
           className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
         />
       ) : (
@@ -861,24 +861,6 @@ const EditableDocumentationCell = ({
       </PrimitivePopover.Portal>
     </PrimitivePopover.Root>
   )
-}
-
-function sanitize(e: HTMLInputElement) {
-  // const el = e
-  const originalValue = e.value
-  const originalCursorPosition = e.selectionStart || 0
-  let workingValue = originalValue
-  // numbers at the beginning are invalid, so help the user by preceding with an underscore
-  workingValue = workingValue.replace(/^([0-9])/, '_$1')
-  // substitute whitespace and hyphens with underscores
-  workingValue = workingValue.replaceAll(/[\s-]/g, '_')
-  // remove any invalid characters remaining
-  workingValue = workingValue.replaceAll(/[^a-zA-Z0-9_]/g, '')
-  e.value = workingValue
-  // need to adjust the cursor position, by default the cursor will go to the end when changing el.value
-  const cursorOffset = workingValue.length - originalValue.length
-  e.selectionStart = originalCursorPosition + cursorOffset
-  e.selectionEnd = e.selectionStart
 }
 
 export { EditableDocumentationCell, EditableInitialValueCell, EditableLocationCell, EditableNameCell }

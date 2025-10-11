@@ -326,3 +326,21 @@ export function isLegalIdentifier(name: string): [boolean, string] {
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) return [false, 'contains illegal characters']
   return [true, '']
 }
+
+export function sanitizeVariableInput(e: HTMLInputElement) {
+  // const el = e
+  const originalValue = e.value
+  const originalCursorPosition = e.selectionStart || 0
+  let workingValue = originalValue
+  // numbers at the beginning are invalid, so help the user by preceding with an underscore
+  workingValue = workingValue.replace(/^([0-9])/, '_$1')
+  // substitute whitespace and hyphens with underscores
+  workingValue = workingValue.replaceAll(/[\s-]/g, '_')
+  // remove any invalid characters remaining
+  workingValue = workingValue.replaceAll(/[^a-zA-Z0-9_]/g, '')
+  e.value = workingValue
+  // need to adjust the cursor position, by default the cursor will go to the end when changing el.value
+  const cursorOffset = workingValue.length - originalValue.length
+  e.selectionStart = originalCursorPosition + cursorOffset
+  e.selectionEnd = e.selectionStart
+}

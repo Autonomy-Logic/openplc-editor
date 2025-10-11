@@ -4,6 +4,7 @@ import { ProjectResponse } from '@root/renderer/store/slices/project'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
+import { isLegalIdentifier, sanitizeVariableInput } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
@@ -30,6 +31,18 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
 
   const onBlur = () => {
     if (cellValue === initialValue) return setIsEditing(false)
+
+    const oldName = initialValue
+    const newName = cellValue
+
+    const [isNameLegal, reason] = isLegalIdentifier(newName)
+    if (isNameLegal === false) {
+      toast({ title: 'Error', description: `'${newName}' ${reason}`, variant: 'fail' })
+      setCellValue(oldName)
+      setIsEditing(false)
+      return
+    }
+
     const res = table.options.meta?.updateData(index, id, cellValue)
     if (res?.ok) return setIsEditing(false)
     setCellValue(initialValue)
@@ -52,6 +65,10 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
+      onInput={(e) => sanitizeVariableInput(e.currentTarget)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
       })}
