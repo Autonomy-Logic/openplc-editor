@@ -112,7 +112,8 @@ export const Contact = (block: ContactProps) => {
     }
 
     const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-    return isTrue ? '#00FF00' : '#0464FB'
+    const displayState = data.variant === 'negated' ? !isTrue : isTrue
+    return displayState ? '#00FF00' : '#0464FB'
   }
 
   const debuggerStrokeColor = getDebuggerStrokeColor()
