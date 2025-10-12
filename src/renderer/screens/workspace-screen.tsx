@@ -202,6 +202,65 @@ const WorkspaceScreen = () => {
           }
         }
 
+        if (currentPou && currentPou.data.body.language === 'ld') {
+          const currentLadderFlow = ladderFlows.find((flow) => flow.name === editor.meta.name)
+          const instances = currentProject.data.configuration.resource.instances
+          const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
+
+          if (currentLadderFlow && programInstance) {
+            currentLadderFlow.rungs.forEach((rung) => {
+              rung.nodes.forEach((node) => {
+                if (node.type === 'block') {
+                  const blockData = node.data as {
+                    variant?: {
+                      name?: string
+                      type?: string
+                      variables?: Array<{ name: string; class: string; type: { definition: string; value: string } }>
+                    }
+                    variable?: { name?: string }
+                  }
+
+                  const blockInstanceName = blockData.variable?.name
+                  const blockVariant = blockData.variant
+
+                  if (!blockInstanceName || !blockVariant?.variables) return
+
+                  blockVariant.variables
+                    .filter(
+                      (v) =>
+                        (v.class === 'output' || v.class === 'inOut') &&
+                        v.type.definition === 'base-type' &&
+                        v.type.value.toUpperCase() === 'BOOL',
+                    )
+                    .forEach((outputVar) => {
+                      const debugPath = `RES0__${programInstance.name.toUpperCase()}.${blockInstanceName.toUpperCase()}.${outputVar.name.toUpperCase()}`
+                      const index = debugVariableIndexes.get(debugPath)
+
+                      if (index !== undefined) {
+                        const compositeKey = `${programInstance.name}.${blockInstanceName}.${outputVar.name}`
+                        debugVariableKeys.add(compositeKey)
+
+                        if (!variableInfoMapRef.current?.has(index)) {
+                          variableInfoMapRef.current?.set(index, {
+                            pouName: compositeKey,
+                            variable: {
+                              name: compositeKey,
+                              type: { definition: 'base-type', value: 'bool' },
+                              class: 'local',
+                              location: '',
+                              documentation: '',
+                              debug: false,
+                            },
+                          })
+                        }
+                      }
+                    })
+                }
+              })
+            })
+          }
+        }
+
         const allIndexes = Array.from(variableInfoMapRef.current.entries())
           .filter(([_, varInfo]) => {
             const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
@@ -283,6 +342,15 @@ const WorkspaceScreen = () => {
             } catch {
               newValues.set(compositeKey, 'ERR')
               bufferOffset += getVariableSize(variable)
+            }
+
+            if (compositeKey.includes('.') && compositeKey.split('.').length === 3) {
+              const { consoleActions } = useOpenPLCStore.getState()
+              consoleActions.addLog({
+                id: crypto.randomUUID(),
+                level: 'info',
+                message: `${compositeKey}, ${index}, ${newValues.get(compositeKey)}`,
+              })
             }
 
             if (index === result.lastIndex) {

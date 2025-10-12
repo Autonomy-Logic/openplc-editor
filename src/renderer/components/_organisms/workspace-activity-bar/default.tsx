@@ -554,6 +554,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             })
           })
 
+          parsed.variables.forEach((debugVar) => {
+            if (!indexMap.has(debugVar.name)) {
+              indexMap.set(debugVar.name, debugVar.index)
+            }
+          })
+
           const connectResult: { success: boolean; error?: string } =
             await window.bridge.debuggerConnect(targetIpAddress)
           if (!connectResult.success) {
