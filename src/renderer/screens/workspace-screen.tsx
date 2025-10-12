@@ -207,6 +207,20 @@ const WorkspaceScreen = () => {
           const instances = currentProject.data.configuration.resource.instances
           const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
 
+          console.log('[BLOCK DEBUG] currentPou.data.name:', currentPou.data.name)
+          console.log(
+            '[BLOCK DEBUG] currentLadderFlow:',
+            currentLadderFlow ? `found, ${currentLadderFlow.rungs.length} rungs` : 'NOT FOUND',
+          )
+          console.log(
+            '[BLOCK DEBUG] instances:',
+            instances.map((i) => ({ name: i.name, program: i.program })),
+          )
+          console.log(
+            '[BLOCK DEBUG] programInstance:',
+            programInstance ? `found: ${programInstance.name}` : 'NOT FOUND',
+          )
+
           if (currentLadderFlow && programInstance) {
             currentLadderFlow.rungs.forEach((rung) => {
               rung.nodes.forEach((node) => {
@@ -237,14 +251,15 @@ const WorkspaceScreen = () => {
                       const index = debugVariableIndexes.get(debugPath)
 
                       if (index !== undefined) {
-                        const compositeKey = `${programInstance.name}.${blockInstanceName}.${outputVar.name}`
+                        const blockVarName = `${blockInstanceName}.${outputVar.name}`
+                        const compositeKey = `${programInstance.name}:${blockVarName}`
                         debugVariableKeys.add(compositeKey)
 
                         if (!variableInfoMapRef.current?.has(index)) {
                           variableInfoMapRef.current?.set(index, {
-                            pouName: compositeKey,
+                            pouName: programInstance.name,
                             variable: {
-                              name: compositeKey,
+                              name: blockVarName,
                               type: { definition: 'base-type', value: 'bool' },
                               class: 'local',
                               location: '',
@@ -344,12 +359,13 @@ const WorkspaceScreen = () => {
               bufferOffset += getVariableSize(variable)
             }
 
-            if (compositeKey.includes('.') && compositeKey.split('.').length === 3) {
+            if (variable.name.includes('.') && variable.name.split('.').length === 2) {
+              const displayKey = `${pouName}.${variable.name}`
               const { consoleActions } = useOpenPLCStore.getState()
               consoleActions.addLog({
                 id: crypto.randomUUID(),
                 level: 'info',
-                message: `${compositeKey}, ${index}, ${newValues.get(compositeKey)}`,
+                message: `${displayKey}, ${index}, ${newValues.get(compositeKey)}`,
               })
             }
 
