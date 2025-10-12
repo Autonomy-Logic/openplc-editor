@@ -234,42 +234,79 @@ const WorkspaceScreen = () => {
                     variable?: { name?: string }
                   }
 
+                  console.log('[BLOCK DEBUG] Found block node:', {
+                    hasVariant: !!blockData.variant,
+                    variantName: blockData.variant?.name,
+                    variantType: blockData.variant?.type,
+                    hasVariables: !!blockData.variant?.variables,
+                    variablesCount: blockData.variant?.variables?.length,
+                    blockInstanceName: blockData.variable?.name,
+                  })
+
                   const blockInstanceName = blockData.variable?.name
                   const blockVariant = blockData.variant
 
-                  if (!blockInstanceName || !blockVariant?.variables) return
-
-                  blockVariant.variables
-                    .filter(
-                      (v) =>
-                        (v.class === 'output' || v.class === 'inOut') &&
-                        v.type.definition === 'base-type' &&
-                        v.type.value.toUpperCase() === 'BOOL',
-                    )
-                    .forEach((outputVar) => {
-                      const debugPath = `RES0__${programInstance.name.toUpperCase()}.${blockInstanceName.toUpperCase()}.${outputVar.name.toUpperCase()}`
-                      const index = debugVariableIndexes.get(debugPath)
-
-                      if (index !== undefined) {
-                        const blockVarName = `${blockInstanceName}.${outputVar.name}`
-                        const compositeKey = `${programInstance.name}:${blockVarName}`
-                        debugVariableKeys.add(compositeKey)
-
-                        if (!variableInfoMapRef.current?.has(index)) {
-                          variableInfoMapRef.current?.set(index, {
-                            pouName: programInstance.name,
-                            variable: {
-                              name: blockVarName,
-                              type: { definition: 'base-type', value: 'bool' },
-                              class: 'local',
-                              location: '',
-                              documentation: '',
-                              debug: false,
-                            },
-                          })
-                        }
-                      }
+                  if (!blockInstanceName || !blockVariant?.variables) {
+                    console.log('[BLOCK DEBUG] Skipping block - missing data:', {
+                      hasInstanceName: !!blockInstanceName,
+                      hasVariantVariables: !!blockVariant?.variables,
                     })
+                    return
+                  }
+
+                  console.log(
+                    '[BLOCK DEBUG] Block variables:',
+                    blockVariant.variables.map((v) => ({
+                      name: v.name,
+                      class: v.class,
+                      type: v.type,
+                    })),
+                  )
+
+                  const filteredOutputs = blockVariant.variables.filter(
+                    (v) =>
+                      (v.class === 'output' || v.class === 'inOut') &&
+                      v.type.definition === 'base-type' &&
+                      v.type.value.toUpperCase() === 'BOOL',
+                  )
+
+                  console.log(
+                    '[BLOCK DEBUG] Filtered BOOL outputs:',
+                    filteredOutputs.map((v) => v.name),
+                  )
+
+                  filteredOutputs.forEach((outputVar) => {
+                    const debugPath = `RES0__${programInstance.name.toUpperCase()}.${blockInstanceName.toUpperCase()}.${outputVar.name.toUpperCase()}`
+                    const index = debugVariableIndexes.get(debugPath)
+
+                    console.log('[BLOCK DEBUG] Looking up:', {
+                      debugPath,
+                      foundIndex: index,
+                      hasIndex: index !== undefined,
+                    })
+
+                    if (index !== undefined) {
+                      const blockVarName = `${blockInstanceName}.${outputVar.name}`
+                      const compositeKey = `${programInstance.name}:${blockVarName}`
+                      debugVariableKeys.add(compositeKey)
+
+                      console.log('[BLOCK DEBUG] Added to poll:', { compositeKey, index })
+
+                      if (!variableInfoMapRef.current?.has(index)) {
+                        variableInfoMapRef.current?.set(index, {
+                          pouName: programInstance.name,
+                          variable: {
+                            name: blockVarName,
+                            type: { definition: 'base-type', value: 'bool' },
+                            class: 'local',
+                            location: '',
+                            documentation: '',
+                            debug: false,
+                          },
+                        })
+                      }
+                    }
+                  })
                 }
               })
             })
