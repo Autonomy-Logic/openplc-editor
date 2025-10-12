@@ -28,6 +28,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../compone
 import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
+import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import { useOpenPLCStore } from '../store'
 import { getVariableSize, parseVariableValue } from '../utils/variable-sizes'
 
@@ -203,112 +204,72 @@ const WorkspaceScreen = () => {
         }
 
         if (currentPou && currentPou.data.body.language === 'ld') {
-          const currentLadderFlow = ladderFlows.find((flow) => flow.name === editor.meta.name)
           const instances = currentProject.data.configuration.resource.instances
           const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
 
-          console.log('[BLOCK DEBUG] currentPou.data.name:', currentPou.data.name)
-          console.log(
-            '[BLOCK DEBUG] currentLadderFlow:',
-            currentLadderFlow ? `found, ${currentLadderFlow.rungs.length} rungs` : 'NOT FOUND',
-          )
-          console.log(
-            '[BLOCK DEBUG] instances:',
-            instances.map((i) => ({ name: i.name, program: i.program })),
-          )
-          console.log(
-            '[BLOCK DEBUG] programInstance:',
-            programInstance ? `found: ${programInstance.name}` : 'NOT FOUND',
-          )
+          if (programInstance) {
+            const functionBlockInstances = currentPou.data.variables.filter(
+              (variable) => variable.type.definition === 'derived',
+            )
 
-          if (currentLadderFlow && programInstance) {
-            currentLadderFlow.rungs.forEach((rung) => {
-              rung.nodes.forEach((node) => {
-                if (node.type === 'block') {
-                  const blockData = node.data as {
-                    variant?: {
-                      name?: string
-                      type?: string
-                      variables?: Array<{ name: string; class: string; type: { definition: string; value: string } }>
-                    }
-                    variable?: { name?: string }
-                  }
+            functionBlockInstances.forEach((fbInstance) => {
+              const fbTypeName = fbInstance.type.value.toUpperCase()
 
-                  console.log('[BLOCK DEBUG] Found block node:', {
-                    hasVariant: !!blockData.variant,
-                    variantName: blockData.variant?.name,
-                    variantType: blockData.variant?.type,
-                    hasVariables: !!blockData.variant?.variables,
-                    variablesCount: blockData.variant?.variables?.length,
-                    blockInstanceName: blockData.variable?.name,
-                  })
+              let fbVariables:
+                | Array<{ name: string; class: string; type: { definition: string; value: string } }>
+                | undefined
 
-                  const blockInstanceName = blockData.variable?.name
-                  const blockVariant = blockData.variant
-
-                  if (!blockInstanceName || !blockVariant?.variables) {
-                    console.log('[BLOCK DEBUG] Skipping block - missing data:', {
-                      hasInstanceName: !!blockInstanceName,
-                      hasVariantVariables: !!blockVariant?.variables,
-                    })
-                    return
-                  }
-
-                  console.log(
-                    '[BLOCK DEBUG] Block variables:',
-                    blockVariant.variables.map((v) => ({
-                      name: v.name,
-                      class: v.class,
-                      type: v.type,
-                    })),
-                  )
-
-                  const filteredOutputs = blockVariant.variables.filter(
-                    (v) =>
-                      (v.class === 'output' || v.class === 'inOut') &&
-                      v.type.definition === 'base-type' &&
-                      v.type.value.toUpperCase() === 'BOOL',
-                  )
-
-                  console.log(
-                    '[BLOCK DEBUG] Filtered BOOL outputs:',
-                    filteredOutputs.map((v) => v.name),
-                  )
-
-                  filteredOutputs.forEach((outputVar) => {
-                    const debugPath = `RES0__${programInstance.name.toUpperCase()}.${blockInstanceName.toUpperCase()}.${outputVar.name.toUpperCase()}`
-                    const index = debugVariableIndexes.get(debugPath)
-
-                    console.log('[BLOCK DEBUG] Looking up:', {
-                      debugPath,
-                      foundIndex: index,
-                      hasIndex: index !== undefined,
-                    })
-
-                    if (index !== undefined) {
-                      const blockVarName = `${blockInstanceName}.${outputVar.name}`
-                      const compositeKey = `${programInstance.name}:${blockVarName}`
-                      debugVariableKeys.add(compositeKey)
-
-                      console.log('[BLOCK DEBUG] Added to poll:', { compositeKey, index })
-
-                      if (!variableInfoMapRef.current?.has(index)) {
-                        variableInfoMapRef.current?.set(index, {
-                          pouName: programInstance.name,
-                          variable: {
-                            name: blockVarName,
-                            type: { definition: 'base-type', value: 'bool' },
-                            class: 'local',
-                            location: '',
-                            documentation: '',
-                            debug: false,
-                          },
-                        })
-                      }
-                    }
-                  })
+              const standardFB = StandardFunctionBlocks.pous.find(
+                (fb: { name: string }) => fb.name.toUpperCase() === fbTypeName,
+              )
+              if (standardFB) {
+                fbVariables = standardFB.variables
+              } else {
+                const customFB = currentProject.data.pous.find(
+                  (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === fbTypeName,
+                )
+                if (customFB && customFB.type === 'function-block') {
+                  fbVariables = customFB.data.variables as Array<{
+                    name: string
+                    class: string
+                    type: { definition: string; value: string }
+                  }>
                 }
-              })
+              }
+
+              if (fbVariables) {
+                const boolOutputs = fbVariables.filter(
+                  (v) =>
+                    (v.class === 'output' || v.class === 'inOut') &&
+                    v.type.definition === 'base-type' &&
+                    v.type.value.toUpperCase() === 'BOOL',
+                )
+
+                boolOutputs.forEach((outputVar) => {
+                  const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}.${outputVar.name.toUpperCase()}`
+                  const index = debugVariableIndexes.get(debugPath)
+
+                  if (index !== undefined) {
+                    const blockVarName = `${fbInstance.name}.${outputVar.name}`
+                    const compositeKey = `${programInstance.name}:${blockVarName}`
+                    debugVariableKeys.add(compositeKey)
+
+                    if (!variableInfoMapRef.current?.has(index)) {
+                      variableInfoMapRef.current?.set(index, {
+                        pouName: programInstance.name,
+                        variable: {
+                          name: blockVarName,
+                          type: { definition: 'base-type', value: 'bool' },
+                          class: 'local',
+                          location: '',
+                          documentation: '',
+                          debug: false,
+                        },
+                      })
+                    }
+                  }
+                })
+              }
             })
           }
         }
