@@ -216,7 +216,8 @@ const VariableElement = (block: VariableProps) => {
       setInputError(false)
     } else if (literalTypes) {
       setIsAVariable(false)
-      setInputError(false)
+      const mismatchType = !literalTypes.includes(data.block.variableType.type.value)
+      setInputError(mismatchType)
       variable = { name: variableNameToSubmit }
     } else {
       setIsAVariable(true)

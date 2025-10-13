@@ -221,7 +221,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             case 'local': {
               if (variableToBeCreated.data.name.startsWith('T#')) {
                 const message = `Variable name ${variableToBeCreated.data.name} is invalid`
-                console.error(message)
                 response = { ok: false, title: 'Invalid Name', message }
                 break
               }
