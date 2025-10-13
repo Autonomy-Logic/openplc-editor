@@ -1,6 +1,7 @@
 import * as Select from '@radix-ui/react-select'
 import { ArrowIcon, PauseIcon, PlayIcon } from '@root/renderer/assets'
-import { useState } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '../../_atoms'
 import { LineChart } from '../../_molecules/charts/line-chart'
@@ -9,9 +10,95 @@ type DebuggerData = {
   graphList: string[]
 }
 
+type Point = { t: number; y: number }
+type SeriesEntry = { points: Point[]; isBool: boolean; compositeKey: string }
+
 const Debugger = ({ graphList }: DebuggerData) => {
   const [isPaused, setIsPaused] = useState(false)
   const [range, setRange] = useState(10)
+  const historiesRef = useRef<Map<string, SeriesEntry>>(new Map())
+
+  const {
+    project: {
+      data: { pous },
+    },
+    workspace: { debugVariableValues },
+  } = useOpenPLCStore()
+
+  const resolveVariable = (displayName: string): { compositeKey: string | null; isBool: boolean } => {
+    let pouName: string | null = null
+    let varName = displayName
+    const m = /^\[(?<pou>[^\]]+)\]\s+(?<name>.+)$/.exec(displayName)
+    if (m?.groups?.pou && m?.groups?.name) {
+      pouName = m.groups.pou
+      varName = m.groups.name
+    }
+
+    let foundPou = pouName
+    if (!foundPou) {
+      const matches = pous
+        .filter((p) => p.type === 'program')
+        .filter((p) => p.data.variables.some((v) => v.name === varName))
+      if (matches.length === 1) foundPou = matches[0].data.name
+    }
+
+    if (!foundPou) return { compositeKey: null, isBool: false }
+
+    const pou = pous.find((p) => p.type === 'program' && p.data.name === foundPou)
+    const variable = pou?.data.variables.find((v) => v.name === varName)
+    const isBool = variable?.type.definition === 'base-type' && variable.type.value.toLowerCase() === 'bool'
+
+    return { compositeKey: `${foundPou}:${varName}`, isBool: Boolean(isBool) }
+  }
+
+  useEffect(() => {
+    const set = historiesRef.current
+    for (const key of Array.from(set.keys())) {
+      if (!graphList.includes(key)) set.delete(key)
+    }
+    for (const name of graphList) {
+      if (!set.has(name)) {
+        const { compositeKey, isBool } = resolveVariable(name)
+        if (compositeKey) {
+          set.set(name, { points: [], isBool, compositeKey })
+        }
+      }
+    }
+  }, [graphList, pous])
+
+  useEffect(() => {
+    if (isPaused) return
+    const now = Date.now()
+    const set = historiesRef.current
+    for (const [, entry] of set) {
+      const raw = entry.compositeKey ? debugVariableValues.get(entry.compositeKey) : undefined
+      if (raw === undefined) continue
+      let y: number | null = null
+      if (entry.isBool) {
+        const up = String(raw).toUpperCase()
+        y = up === 'TRUE' ? 1 : up === 'FALSE' ? 0 : Number(up)
+        if (Number.isNaN(y)) y = null
+      } else {
+        const n = Number(raw)
+        y = Number.isNaN(n) ? null : n
+      }
+      if (y !== null) {
+        entry.points.push({ t: now, y })
+        const cutoff = now - range * 1000
+        while (entry.points.length && entry.points[0].t < cutoff) entry.points.shift()
+      }
+    }
+  }, [debugVariableValues, isPaused, range])
+
+  const renderSeries = useMemo(() => {
+    const now = Date.now()
+    const cutoff = now - range * 1000
+    return graphList.map((name) => {
+      const entry = historiesRef.current.get(name)
+      const points = entry ? entry.points.filter((p) => p.t >= cutoff) : []
+      return { name, points, isBool: entry?.isBool ?? false }
+    })
+  }, [graphList, range, debugVariableValues])
 
   const updateRange = (value: number) => {
     if (value > 100) {
@@ -84,14 +171,8 @@ const Debugger = ({ graphList }: DebuggerData) => {
           </div>
         </div>
         <div className='chart-content flex h-auto w-full flex-col gap-2 overflow-y-auto overflow-x-hidden'>
-          {graphList.map((variableName) => (
-            <LineChart
-              key={variableName}
-              isPaused={isPaused}
-              range={range}
-              // value={data}
-              // setData={setData}
-            />
+          {renderSeries.map(({ name, points, isBool }) => (
+            <LineChart key={name} data={points} isBool={isBool} />
           ))}
         </div>
       </div>

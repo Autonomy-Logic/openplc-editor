@@ -1,89 +1,102 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import type { Props as ChartOptions } from 'react-apexcharts'
 import Chart from 'react-apexcharts'
+
+type Point = { t: number; y: number }
+
 type ChartProps = {
-  range?: number
-  isPaused: boolean
+  data: Point[]
+  isBool: boolean
 }
 
-const LineChart = ({ range, isPaused }: ChartProps) => {
-  const [history, setHistory] = useState<boolean[]>([false])
-  const [data, setData] = useState<boolean>(false)
-  const [chartInterval, setChartInterval] = useState<number[]>([0])
-  const [graphColors, setGraphColors] = useState<{ stroke: string; row: string; border: string }>({
-    stroke: '',
-    row: '',
-    border: '',
-  })
+const formatCategory = (t: number, now: number) => {
+  const msAgo = now - t
+  const s = msAgo / 1000
+  return s.toFixed(1)
+}
+
+const LineChart = ({ data, isBool }: ChartProps) => {
   const {
     workspace: {
       systemConfigs: { shouldUseDarkMode },
     },
   } = useOpenPLCStore()
 
-  useEffect(() => {
-    if (shouldUseDarkMode) {
-      setGraphColors({
+  const graphColors = shouldUseDarkMode
+    ? {
         stroke: '#B4D0FE',
         row: '#2E3038',
         border: '#b1b9c8',
-      })
-    } else {
-      setGraphColors({
+      }
+    : {
         stroke: '#0464FB',
         row: '#F5F7F8',
         border: '#DDE2E8',
-      })
-    }
-  }, [shouldUseDarkMode])
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isPaused) {
-        setChartInterval((prevData) => [...prevData, prevData.length])
-        setData((prevData) => !prevData)
-        setHistory((prevHistory) => [...prevHistory, !prevHistory[prevHistory.length - 1]])
       }
-    }, 1000)
 
-    return () => clearInterval(interval)
-  }, [isPaused, setData])
+  const now = Date.now()
+  const categories = useMemo(() => data.map((p) => formatCategory(p.t, now)), [data, now])
+  const seriesData = useMemo(() => data.map((p) => (isBool ? (p.y ? 1 : 0) : p.y)), [data, isBool])
+
+  const yMinMax = useMemo(() => {
+    if (isBool) return { min: 0, max: 1 }
+    if (seriesData.length === 0) return { min: 0, max: 1 }
+    let min = Math.min(...seriesData)
+    let max = Math.max(...seriesData)
+    if (min === max) {
+      min = min - 1
+      max = max + 1
+    } else {
+      min = Math.floor(min) - 1
+      max = Math.ceil(max) + 1
+    }
+    return { min, max }
+  }, [seriesData, isBool])
 
   const chartData: ChartOptions = {
     series: [
       {
-        data: history.map((val) => (val ? 1 : 0)),
+        data: seriesData,
       },
     ],
     options: {
       chart: {
+        id: 'realtime',
         type: 'line',
-        offsetX: 0,
         toolbar: {
           show: false,
         },
+        animations: {
+          enabled: true,
+        },
       },
       xaxis: {
-        range: range,
-        categories: chartInterval.map((i) => i.toString()), // -> Tick
+        categories,
         labels: {
+          formatter: (value: string) => {
+            return `${value}s`
+          },
           style: {
             cssClass: 'apexcharts-xaxis-label',
           },
         },
       },
       yaxis: {
-        min: 0,
-        max: 1,
-        tickAmount: 3,
+        min: yMinMax.min,
+        max: yMinMax.max,
+        tickAmount: isBool ? 2 : 4,
         labels: {
+          formatter: (value: number) => {
+            return value.toFixed(0)
+          },
           style: {
             cssClass: 'apexcharts-yaxis-label',
           },
         },
       },
       stroke: {
-        curve: 'stepline',
+        curve: isBool ? 'stepline' : 'straight',
         width: 2,
         colors: [graphColors.stroke],
       },
@@ -111,19 +124,6 @@ const LineChart = ({ range, isPaused }: ChartProps) => {
   return (
     <div className='w-full'>
       <Chart width={'100%'} options={chartData.options} series={chartData.series} height={115} type='line' />
-      <div className='text-cp-base font-semibold text-black dark:text-neutral-50'>
-        {data ? (
-          <div className='flex items-center justify-end gap-1'>
-            <p className='h-1 w-1 rounded-full bg-red-500' />
-            False
-          </div>
-        ) : (
-          <div className='flex items-center justify-end gap-1'>
-            <p className='h-1 w-1 rounded-full bg-green-500' />
-            True
-          </div>
-        )}
-      </div>
     </div>
   )
 }
