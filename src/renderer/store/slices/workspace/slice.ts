@@ -19,6 +19,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     isDebuggerVisible: false,
     debugVariableIndexes: new Map(),
     debugVariableValues: new Map(),
+    debugVariableHistory: new Map(),
     close: {
       window: false,
       app: false,
@@ -129,6 +130,27 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugVariableValues = values
+        }),
+      )
+    },
+    addDebugVariableDataPoint: (variableKey: string, tick: number, value: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const history = workspace.debugVariableHistory.get(variableKey) || []
+          history.push({ tick, value })
+
+          if (history.length > MAX_HISTORY_POINTS) {
+            history.splice(0, history.length - MAX_HISTORY_POINTS)
+          }
+
+          workspace.debugVariableHistory.set(variableKey, history)
+        }),
+      )
+    },
+    clearDebugVariableHistory: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableHistory.clear()
         }),
       )
     },

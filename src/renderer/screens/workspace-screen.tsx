@@ -124,6 +124,7 @@ const WorkspaceScreen = () => {
         pollingIntervalRef.current = null
       }
       variableInfoMapRef.current = null
+      workspaceActions.clearDebugVariableHistory()
       return
     }
 
@@ -326,7 +327,7 @@ const WorkspaceScreen = () => {
             }
           }
 
-          if (!result.data || result.lastIndex === undefined) {
+          if (!result.data || result.lastIndex === undefined || result.tick === undefined) {
             break
           }
 
@@ -335,6 +336,7 @@ const WorkspaceScreen = () => {
           }
 
           const responseBuffer = new Uint8Array(result.data)
+          const tickValue = result.tick
           let bufferOffset = 0
 
           for (const index of batch) {
@@ -351,6 +353,9 @@ const WorkspaceScreen = () => {
             try {
               const { value, bytesRead } = parseVariableValue(responseBuffer, bufferOffset, variable)
               newValues.set(compositeKey, value)
+
+              workspaceActions.addDebugVariableDataPoint(compositeKey, tickValue, value)
+
               bufferOffset += bytesRead
             } catch {
               newValues.set(compositeKey, 'ERR')

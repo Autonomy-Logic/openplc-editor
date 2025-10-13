@@ -1,6 +1,8 @@
 import * as Select from '@radix-ui/react-select'
 import { ArrowIcon, PauseIcon, PlayIcon } from '@root/renderer/assets'
-import { useState } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { calculateCommonTickTime } from '@root/utils/task-interval-utils'
+import { useMemo, useState } from 'react'
 
 import { Button } from '../../_atoms'
 import { LineChart } from '../../_molecules/charts/line-chart'
@@ -12,6 +14,18 @@ type DebuggerData = {
 const Debugger = ({ graphList }: DebuggerData) => {
   const [isPaused, setIsPaused] = useState(false)
   const [range, setRange] = useState(10)
+
+  const {
+    project: {
+      data: {
+        configuration: {
+          resource: { tasks },
+        },
+      },
+    },
+  } = useOpenPLCStore()
+
+  const commonTickTime = useMemo(() => calculateCommonTickTime(tasks), [tasks])
 
   const updateRange = (value: number) => {
     if (value > 100) {
@@ -87,10 +101,10 @@ const Debugger = ({ graphList }: DebuggerData) => {
           {graphList.map((variableName) => (
             <LineChart
               key={variableName}
+              variableName={variableName}
               isPaused={isPaused}
               range={range}
-              // value={data}
-              // setData={setData}
+              commonTickTime={commonTickTime}
             />
           ))}
         </div>
