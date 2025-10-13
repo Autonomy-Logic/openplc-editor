@@ -10,11 +10,6 @@ type ChartProps = {
   isBool: boolean
 }
 
-const formatCategory = (t: number, oldestTime: number) => {
-  const secondsSinceStart = (t - oldestTime) / 1000
-  return secondsSinceStart.toFixed(1)
-}
-
 const LineChart = ({ data, isBool }: ChartProps) => {
   const {
     workspace: {
@@ -35,14 +30,22 @@ const LineChart = ({ data, isBool }: ChartProps) => {
       }
 
   const oldestTime = data.length > 0 ? data[0].t : Date.now()
-  const categories = useMemo(() => data.map((p) => formatCategory(p.t, oldestTime)), [data, oldestTime])
-  const seriesData = useMemo(() => data.map((p) => (isBool ? (p.y ? 1 : 0) : p.y)), [data, isBool])
+
+  const seriesData = useMemo(
+    () =>
+      data.map((p) => ({
+        x: (p.t - oldestTime) / 1000,
+        y: isBool ? (p.y ? 1 : 0) : p.y,
+      })),
+    [data, oldestTime, isBool],
+  )
 
   const yMinMax = useMemo(() => {
     if (isBool) return { min: 0, max: 1 }
     if (seriesData.length === 0) return { min: 0, max: 1 }
-    let min = Math.min(...seriesData)
-    let max = Math.max(...seriesData)
+    const yValues = seriesData.map((p) => p.y)
+    let min = Math.min(...yValues)
+    let max = Math.max(...yValues)
     if (min === max) {
       min = min - 1
       max = max + 1
@@ -67,11 +70,11 @@ const LineChart = ({ data, isBool }: ChartProps) => {
           show: false,
         },
         animations: {
-          enabled: true,
+          enabled: false,
         },
       },
       xaxis: {
-        categories,
+        type: 'numeric',
         labels: {
           show: false,
         },
@@ -79,7 +82,7 @@ const LineChart = ({ data, isBool }: ChartProps) => {
       yaxis: {
         min: yMinMax.min,
         max: yMinMax.max,
-        tickAmount: isBool ? 2 : 4,
+        tickAmount: isBool ? 1 : 4,
         labels: {
           formatter: (value: number) => {
             return value.toFixed(0)
