@@ -219,11 +219,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               break
             }
             case 'local': {
-              if (variableToBeCreated.data.name.startsWith('T#')) {
-                const message = `Variable name ${variableToBeCreated.data.name} is invalid`
-                response = { ok: false, title: 'Invalid Name', message }
-                break
-              }
               const pou = variableToBeCreated.associatedPou
                 ? project.data.pous.find((pou) => pou.data.name === variableToBeCreated.associatedPou)
                 : undefined
