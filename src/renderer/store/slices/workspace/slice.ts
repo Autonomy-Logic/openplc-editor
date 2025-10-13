@@ -1,3 +1,4 @@
+import type { DebugVariableNode } from '@root/renderer/utils/parse-debug-file'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -19,6 +20,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     isDebuggerVisible: false,
     debugVariableIndexes: new Map(),
     debugVariableValues: new Map(),
+    debugVariableHierarchy: new Map(),
     close: {
       window: false,
       app: false,
@@ -129,6 +131,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugVariableValues = values
+        }),
+      )
+    },
+    setDebugVariableHierarchy: (hierarchy: Map<string, DebugVariableNode[]>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableHierarchy = hierarchy
         }),
       )
     },

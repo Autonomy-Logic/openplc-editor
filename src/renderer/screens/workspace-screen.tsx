@@ -1,5 +1,6 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
+import type { DebugVariableNode } from '@root/renderer/utils/parse-debug-file'
 import { cn } from '@root/utils'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -37,59 +38,18 @@ const DEBUGGER_POLL_INTERVAL_MS = 200
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { isCollapsed, isDebuggerVisible, debugVariableValues },
+    workspace: { isCollapsed, isDebuggerVisible, debugVariableValues, debugVariableHierarchy },
     editor,
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
     searchResults,
     project: {
-      data: { pous },
+      data: { pous: _pous },
     },
   } = useOpenPLCStore()
 
-  const allDebugVariables = pous.flatMap((pou) => {
-    return pou.data.variables
-      .filter((v) => v.debug === true)
-      .map((v) => {
-        let typeValue = ''
-        if (v.type.definition === 'base-type') {
-          typeValue = v.type.value
-        } else if (v.type.definition === 'user-data-type') {
-          typeValue = v.type.value
-        } else if (v.type.definition === 'array') {
-          typeValue = v.type.value
-        } else if (v.type.definition === 'derived') {
-          typeValue = v.type.value
-        }
-
-        const compositeKey = `${pou.data.name}:${v.name}`
-        const variableValue = debugVariableValues.get(compositeKey)
-        const displayValue = variableValue !== undefined ? variableValue : '-'
-
-        return {
-          pouName: pou.data.name,
-          name: v.name,
-          type: typeValue,
-          value: displayValue,
-        }
-      })
-  })
-
-  const nameOccurrences = new Map<string, number>()
-  allDebugVariables.forEach((v) => {
-    nameOccurrences.set(v.name, (nameOccurrences.get(v.name) || 0) + 1)
-  })
-
-  const debugVariables = allDebugVariables.map((v) => {
-    const hasConflict = nameOccurrences.get(v.name)! > 1
-    return {
-      name: hasConflict ? `[${v.pouName}] ${v.name}` : v.name,
-      type: v.type,
-      value: v.value,
-    }
-  })
-
   const [graphList, setGraphList] = useState<string[]>([])
+  const [expandedBlockPaths, setExpandedBlockPaths] = useState<Set<string>>(new Set())
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState('console')
 
@@ -105,7 +65,7 @@ const WorkspaceScreen = () => {
 
   type VariableInfo = {
     pouName: string
-    variable: (typeof pous)[0]['data']['variables'][0]
+    variable: (typeof _pous)[0]['data']['variables'][0]
   }
   const variableInfoMapRef = useRef<Map<number, VariableInfo> | null>(null)
 
@@ -173,6 +133,26 @@ const WorkspaceScreen = () => {
             .filter((v) => v.debug === true)
             .forEach((v) => {
               debugVariableKeys.add(`${pou.data.name}:${v.name}`)
+
+              if (v.type.definition === 'derived') {
+                const hierarchy = debugVariableHierarchy.get(pou.data.name)
+                if (hierarchy) {
+                  const blockNode = hierarchy.find((n) => n.name.toUpperCase() === v.name.toUpperCase())
+                  if (blockNode && expandedBlockPaths.has(blockNode.fullPath)) {
+                    const addChildren = (node: DebugVariableNode): void => {
+                      node.children.forEach((child: DebugVariableNode) => {
+                        const childKey = `${pou.data.name}:${child.name}`
+                        debugVariableKeys.add(childKey)
+
+                        if (child.isBlock && expandedBlockPaths.has(child.fullPath)) {
+                          addChildren(child)
+                        }
+                      })
+                    }
+                    addChildren(blockNode)
+                  }
+                }
+              }
             })
         })
 
@@ -656,9 +636,13 @@ const WorkspaceScreen = () => {
                         <ResizablePanelGroup direction='horizontal' className='flex h-full w-full '>
                           <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
                             <VariablesPanel
-                              variables={debugVariables}
+                              variableHierarchy={debugVariableHierarchy}
+                              debugVariableValues={debugVariableValues}
                               graphList={graphList}
                               setGraphList={setGraphList}
+                              onExpandedChange={(expanded) => {
+                                setExpandedBlockPaths(expanded)
+                              }}
                             />
                           </ResizablePanel>
                           <ResizableHandle className='w-2 bg-transparent' />

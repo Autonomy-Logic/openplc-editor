@@ -2,7 +2,11 @@ import { StopIcon } from '@root/renderer/assets'
 import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { matchVariableWithDebugEntry, parseDebugFile } from '@root/renderer/utils/parse-debug-file'
+import {
+  buildVariableHierarchy,
+  matchVariableWithDebugEntry,
+  parseDebugFile,
+} from '@root/renderer/utils/parse-debug-file'
 import { BufferToStringArray, cn } from '@root/utils'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { useState } from 'react'
@@ -560,6 +564,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
           })
 
+          const variableHierarchy = buildVariableHierarchy(
+            parsed.variables,
+            project.data.pous,
+            project.data.configuration.resource.instances,
+          )
+
           const connectResult: { success: boolean; error?: string } =
             await window.bridge.debuggerConnect(targetIpAddress)
           if (!connectResult.success) {
@@ -573,6 +583,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
 
           workspaceActions.setDebugVariableIndexes(indexMap)
+          workspaceActions.setDebugVariableHierarchy(variableHierarchy)
           workspaceActions.setDebuggerVisible(true)
           consoleActions.addLog({
             id: crypto.randomUUID(),

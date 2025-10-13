@@ -1,3 +1,4 @@
+import type { DebugVariableNode } from '@root/renderer/utils/parse-debug-file'
 import { z } from 'zod'
 
 const systemConfigsSchema = z.object({
@@ -19,6 +20,7 @@ const workspaceStateSchema = z.object({
     isDebuggerVisible: z.boolean(),
     debugVariableIndexes: z.custom<Map<string, number>>((val) => val instanceof Map),
     debugVariableValues: z.custom<Map<string, string>>((val) => val instanceof Map),
+    debugVariableHierarchy: z.custom<Map<string, DebugVariableNode[]>>((val) => val instanceof Map),
     close: z.object({
       window: z.boolean(),
       app: z.boolean(),
@@ -49,6 +51,10 @@ const workspaceActionsSchema = z.object({
   setDebuggerVisible: z.function().args(z.boolean()).returns(z.void()),
   setDebugVariableIndexes: z.function().args(z.map(z.string(), z.number())).returns(z.void()),
   setDebugVariableValues: z.function().args(z.map(z.string(), z.string())).returns(z.void()),
+  setDebugVariableHierarchy: z
+    .function()
+    .args(z.custom<Map<string, DebugVariableNode[]>>((val) => val instanceof Map))
+    .returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 
