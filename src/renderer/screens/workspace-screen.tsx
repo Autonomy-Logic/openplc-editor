@@ -337,14 +337,6 @@ const WorkspaceScreen = () => {
           const responseBuffer = new Uint8Array(result.data)
           let bufferOffset = 0
 
-          console.log(
-            '[BLOCK DEBUG] Polling batch:',
-            batch.map((idx) => {
-              const vi = variableInfoMapRef.current?.get(idx)
-              return { index: idx, pouName: vi?.pouName, varName: vi?.variable.name }
-            }),
-          )
-
           for (const index of batch) {
             const varInfo = variableInfoMapRef.current?.get(index)
             if (!varInfo) continue
@@ -363,16 +355,6 @@ const WorkspaceScreen = () => {
             } catch {
               newValues.set(compositeKey, 'ERR')
               bufferOffset += getVariableSize(variable)
-            }
-
-            if (variable.name.includes('.') && variable.name.split('.').length === 2) {
-              const displayKey = `${pouName}.${variable.name}`
-              const { consoleActions } = useOpenPLCStore.getState()
-              consoleActions.addLog({
-                id: crypto.randomUUID(),
-                level: 'info',
-                message: `${displayKey}, ${index}, ${newValues.get(compositeKey)}`,
-              })
             }
 
             if (index === result.lastIndex) {

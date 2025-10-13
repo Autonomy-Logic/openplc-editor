@@ -21,6 +21,8 @@ import {
 } from './ladder-utils/elements/placeholder'
 import { findNode } from './ladder-utils/nodes'
 
+const EDGE_COLOR_TRUE = '#00FF00'
+
 type RungBodyProps = {
   rung: RungLadderState
   className?: string
@@ -33,17 +35,16 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
     libraries,
     editor,
     editorActions: { updateModelVariables },
-    project: {
-      data: { pous },
-    },
+    project,
     projectActions: { deleteVariable },
     modalActions: { openModal },
     searchQuery,
     searchActions: { setSearchNodePosition },
     snapshotActions: { addSnapshot },
+    workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
 
-  const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
+  const pouRef = project.data.pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<RungLadderState>(rung)
@@ -51,6 +52,89 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
+
+  const getNodeOutputState = (nodeId: string, sourceHandle: string | null | undefined): boolean | undefined => {
+    if (!isDebuggerVisible) return undefined
+
+    const node = rungLocal.nodes.find((n) => n.id === nodeId)
+    if (!node) return undefined
+
+    if (node.type === 'powerRail') {
+      return (node.data as { variant: 'left' | 'right' }).variant === 'left'
+    }
+
+    if (node.type === 'parallel') {
+      return true
+    }
+
+    if (node.type === 'contact') {
+      const contactData = node.data as { variable?: { name: string }; variant: 'open' | 'negated' }
+      const variableName = contactData.variable?.name
+      if (!variableName) return undefined
+
+      const compositeKey = `${editor.meta.name}:${variableName}`
+      const value = debugVariableValues.get(compositeKey)
+      if (value === undefined) return undefined
+
+      const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+      return (node.data as { variant: 'open' | 'negated' }).variant === 'negated' ? !isTrue : isTrue
+    }
+
+    if (node.type === 'coil') {
+      const coilData = node.data as { variable?: { name: string }; variant: 'normal' | 'negated' | 'set' | 'reset' }
+      const variableName = coilData.variable?.name
+      if (!variableName) return undefined
+
+      const compositeKey = `${editor.meta.name}:${variableName}`
+      const value = debugVariableValues.get(compositeKey)
+      if (value === undefined) return undefined
+
+      const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+      return (node.data as { variant: 'normal' | 'negated' | 'set' | 'reset' }).variant === 'negated' ? !isTrue : isTrue
+    }
+
+    if (node.type === 'block') {
+      const blockData = node.data as { variable?: { name: string } }
+      if (!sourceHandle) return undefined
+
+      const blockVariableName = blockData.variable?.name
+      if (!blockVariableName) return undefined
+
+      const instances = project.data.configuration.resource.instances
+      const programInstance = instances.find((inst) => inst.program === editor.meta.name)
+      if (!programInstance) return undefined
+
+      const outputVariableName = `${blockVariableName}.${sourceHandle}`
+      const compositeKey = `${programInstance.name}:${outputVariableName}`
+      const value = debugVariableValues.get(compositeKey)
+
+      if (value === undefined) return undefined
+
+      const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+      return isTrue
+    }
+
+    return undefined
+  }
+
+  const styledEdges = useMemo(() => {
+    if (!isDebuggerVisible) {
+      return rungLocal.edges
+    }
+
+    return rungLocal.edges.map((edge) => {
+      const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
+
+      if (sourceOutputState === true) {
+        return {
+          ...edge,
+          style: { stroke: EDGE_COLOR_TRUE, strokeWidth: 2 },
+        }
+      }
+
+      return edge
+    })
+  }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, editor.meta.name, project])
 
   /**
    * -- Which means, by default, the flow panel extent is:
@@ -172,7 +256,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
 
       if (blockLibraryType === 'user') {
         const library = libraries.user.find((library) => library.name === blockLibrary)
-        const pou = pous.find((pou) => pou.data.name === library?.name)
+        const pou = project.data.pous.find((pou) => pou.data.name === library?.name)
         if (!pou) return
         const variables = pou.data.variables.map((variable) => ({
           id: variable.id,
@@ -522,7 +606,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
             viewportConfig={{
               nodeTypes: nodeTypes,
               nodes: rungLocal.nodes,
-              edges: rungLocal.edges,
+              edges: styledEdges,
               nodesFocusable: false,
               edgesFocusable: false,
               defaultEdgeOptions: {
