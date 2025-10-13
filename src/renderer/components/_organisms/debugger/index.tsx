@@ -85,7 +85,12 @@ const Debugger = ({ graphList }: DebuggerData) => {
       if (y !== null) {
         entry.points.push({ t: now, y })
         const cutoff = now - range * 1000
-        while (entry.points.length && entry.points[0].t < cutoff) entry.points.shift()
+        const validStartIndex = entry.points.findIndex((p) => p.t >= cutoff)
+        if (validStartIndex === -1) {
+          entry.points.length = 0
+        } else if (validStartIndex > 0) {
+          entry.points.splice(0, validStartIndex)
+        }
       }
     }
   }, [debugVariableValues, isPaused, range])
