@@ -5,6 +5,11 @@ import Chart from 'react-apexcharts'
 
 const DEBUGGER_POLL_INTERVAL_MS = 200
 
+type HistoryDataPoint = {
+  tick: number
+  value: string
+}
+
 type ChartProps = {
   variableName: string
   range: number
@@ -43,10 +48,10 @@ const LineChart = ({ variableName, range, isPaused, commonTickTime }: ChartProps
   }, [shouldUseDarkMode])
 
   const { filteredData, currentValue } = useMemo(() => {
-    const history = debugVariableHistory.get(variableName) || []
+    const history = (debugVariableHistory.get(variableName) || []) as HistoryDataPoint[]
 
     if (history.length === 0) {
-      return { filteredData: [], currentValue: null }
+      return { filteredData: [] as HistoryDataPoint[], currentValue: null as string | null }
     }
 
     const latestTick = history[history.length - 1].tick
@@ -66,7 +71,7 @@ const LineChart = ({ variableName, range, isPaused, commonTickTime }: ChartProps
   }, [debugVariableHistory, variableName, range, commonTickTime])
 
   const chartData: ChartOptions = useMemo(() => {
-    const seriesData = filteredData.map((point) => {
+    const seriesData = filteredData.map((point: HistoryDataPoint) => {
       const value = point.value.toUpperCase()
 
       if (value === 'TRUE' || value === '1') return 1
@@ -78,7 +83,7 @@ const LineChart = ({ variableName, range, isPaused, commonTickTime }: ChartProps
       return 0
     })
 
-    const tickValues = filteredData.map((point) => point.tick)
+    const tickValues = filteredData.map((point: HistoryDataPoint) => point.tick)
 
     let yMin: number | undefined
     let yMax: number | undefined
@@ -113,7 +118,7 @@ const LineChart = ({ variableName, range, isPaused, commonTickTime }: ChartProps
           },
         },
         xaxis: {
-          categories: tickValues.map((tick) => tick.toString()),
+          categories: tickValues.map((tick: number) => tick.toString()),
           labels: {
             style: {
               cssClass: 'apexcharts-xaxis-label',
