@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { Props as ChartOptions } from 'react-apexcharts'
 import Chart from 'react-apexcharts'
 
@@ -56,6 +56,10 @@ const LineChart = ({ data, isBool }: ChartProps) => {
     return { min, max }
   }, [seriesData, isBool])
 
+  const yAxisFormatter = useCallback((value: number) => {
+    return value.toFixed(0)
+  }, [])
+
   const chartData: ChartOptions = {
     series: [
       {
@@ -84,9 +88,7 @@ const LineChart = ({ data, isBool }: ChartProps) => {
         max: yMinMax.max,
         tickAmount: isBool ? 1 : 4,
         labels: {
-          formatter: (value: number) => {
-            return value.toFixed(0)
-          },
+          formatter: yAxisFormatter,
           style: {
             cssClass: 'apexcharts-yaxis-label',
           },
