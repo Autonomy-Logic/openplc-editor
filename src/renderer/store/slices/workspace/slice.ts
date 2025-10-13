@@ -3,6 +3,8 @@ import { StateCreator } from 'zustand'
 
 import type { WorkspaceSlice } from './types'
 
+const MAX_HISTORY_POINTS = 400
+
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
     editingState: 'initial-state',
