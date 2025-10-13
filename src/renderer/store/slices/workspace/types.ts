@@ -1,5 +1,12 @@
 import { z } from 'zod'
 
+export type HistoryDataPoint = {
+  tick: number
+  value: string
+}
+
+export type DebugVariableHistoryMap = Map<string, HistoryDataPoint[]>
+
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
   arch: z.enum(['x64', 'arm', '']),

@@ -1,4 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { DebugVariableHistoryMap } from '@root/renderer/store/slices/workspace/types'
 import { useEffect, useMemo, useState } from 'react'
 import type { Props as ChartOptions } from 'react-apexcharts'
 import Chart from 'react-apexcharts'
@@ -48,7 +49,8 @@ const LineChart = ({ variableName, range, isPaused, commonTickTime }: ChartProps
   }, [shouldUseDarkMode])
 
   const { filteredData, currentValue } = useMemo(() => {
-    const history = (debugVariableHistory.get(variableName) || []) as HistoryDataPoint[]
+    const historyMap = debugVariableHistory as DebugVariableHistoryMap
+    const history = historyMap.get(variableName) || []
 
     if (history.length === 0) {
       return { filteredData: [] as HistoryDataPoint[], currentValue: null as string | null }

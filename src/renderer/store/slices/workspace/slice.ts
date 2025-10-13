@@ -1,7 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { WorkspaceSlice } from './types'
+import type { DebugVariableHistoryMap, HistoryDataPoint, WorkspaceSlice } from './types'
 
 const MAX_HISTORY_POINTS = 400
 
@@ -138,21 +138,23 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     addDebugVariableDataPoint: (variableKey: string, tick: number, value: string): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          const history = workspace.debugVariableHistory.get(variableKey) || []
+          const historyMap = workspace.debugVariableHistory as DebugVariableHistoryMap
+          const history: HistoryDataPoint[] = historyMap.get(variableKey) || []
           history.push({ tick, value })
 
           if (history.length > MAX_HISTORY_POINTS) {
             history.splice(0, history.length - MAX_HISTORY_POINTS)
           }
 
-          workspace.debugVariableHistory.set(variableKey, history)
+          historyMap.set(variableKey, history)
         }),
       )
     },
     clearDebugVariableHistory: (): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          workspace.debugVariableHistory.clear()
+          const historyMap = workspace.debugVariableHistory as DebugVariableHistoryMap
+          historyMap.clear()
         }),
       )
     },

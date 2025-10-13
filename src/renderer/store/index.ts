@@ -1,6 +1,9 @@
 import { createSelectorHooks } from 'auto-zustand-selectors-hook'
+import { enableMapSet } from 'immer'
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
+
+enableMapSet()
 
 import type {
   ConsoleSlice,
