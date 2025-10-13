@@ -28,6 +28,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../compone
 import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
+import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import { useOpenPLCStore } from '../store'
 import { getVariableSize, parseVariableValue } from '../utils/variable-sizes'
 
@@ -198,6 +199,77 @@ const WorkspaceScreen = () => {
                   }
                 }
               })
+            })
+          }
+        }
+
+        if (currentPou && currentPou.data.body.language === 'ld') {
+          const instances = currentProject.data.configuration.resource.instances
+          const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
+
+          if (programInstance) {
+            const functionBlockInstances = currentPou.data.variables.filter(
+              (variable) => variable.type.definition === 'derived',
+            )
+
+            functionBlockInstances.forEach((fbInstance) => {
+              const fbTypeName = fbInstance.type.value.toUpperCase()
+
+              let fbVariables:
+                | Array<{ name: string; class: string; type: { definition: string; value: string } }>
+                | undefined
+
+              const standardFB = StandardFunctionBlocks.pous.find(
+                (fb: { name: string }) => fb.name.toUpperCase() === fbTypeName,
+              )
+              if (standardFB) {
+                fbVariables = standardFB.variables
+              } else {
+                const customFB = currentProject.data.pous.find(
+                  (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === fbTypeName,
+                )
+                if (customFB && customFB.type === 'function-block') {
+                  fbVariables = customFB.data.variables as Array<{
+                    name: string
+                    class: string
+                    type: { definition: string; value: string }
+                  }>
+                }
+              }
+
+              if (fbVariables) {
+                const boolOutputs = fbVariables.filter(
+                  (v) =>
+                    (v.class === 'output' || v.class === 'inOut') &&
+                    v.type.definition === 'base-type' &&
+                    v.type.value.toUpperCase() === 'BOOL',
+                )
+
+                boolOutputs.forEach((outputVar) => {
+                  const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}.${outputVar.name.toUpperCase()}`
+                  const index = debugVariableIndexes.get(debugPath)
+
+                  if (index !== undefined) {
+                    const blockVarName = `${fbInstance.name}.${outputVar.name}`
+                    const compositeKey = `${programInstance.name}:${blockVarName}`
+                    debugVariableKeys.add(compositeKey)
+
+                    if (!variableInfoMapRef.current?.has(index)) {
+                      variableInfoMapRef.current?.set(index, {
+                        pouName: programInstance.name,
+                        variable: {
+                          name: blockVarName,
+                          type: { definition: 'base-type', value: 'bool' },
+                          class: 'local',
+                          location: '',
+                          documentation: '',
+                          debug: false,
+                        },
+                      })
+                    }
+                  }
+                })
+              }
             })
           }
         }
