@@ -10,10 +10,9 @@ type ChartProps = {
   isBool: boolean
 }
 
-const formatCategory = (t: number, now: number) => {
-  const msAgo = now - t
-  const s = msAgo / 1000
-  return s.toFixed(1)
+const formatCategory = (t: number, oldestTime: number) => {
+  const secondsSinceStart = (t - oldestTime) / 1000
+  return secondsSinceStart.toFixed(1)
 }
 
 const LineChart = ({ data, isBool }: ChartProps) => {
@@ -27,7 +26,7 @@ const LineChart = ({ data, isBool }: ChartProps) => {
     ? {
         stroke: '#B4D0FE',
         row: '#2E3038',
-        border: '#b1b9c8',
+        border: '#3A3F4A',
       }
     : {
         stroke: '#0464FB',
@@ -35,8 +34,8 @@ const LineChart = ({ data, isBool }: ChartProps) => {
         border: '#DDE2E8',
       }
 
-  const now = Date.now()
-  const categories = useMemo(() => data.map((p) => formatCategory(p.t, now)), [data, now])
+  const oldestTime = data.length > 0 ? data[0].t : Date.now()
+  const categories = useMemo(() => data.map((p) => formatCategory(p.t, oldestTime)), [data, oldestTime])
   const seriesData = useMemo(() => data.map((p) => (isBool ? (p.y ? 1 : 0) : p.y)), [data, isBool])
 
   const yMinMax = useMemo(() => {
@@ -74,12 +73,7 @@ const LineChart = ({ data, isBool }: ChartProps) => {
       xaxis: {
         categories,
         labels: {
-          formatter: (value: string) => {
-            return `${value}s`
-          },
-          style: {
-            cssClass: 'apexcharts-xaxis-label',
-          },
+          show: false,
         },
       },
       yaxis: {
