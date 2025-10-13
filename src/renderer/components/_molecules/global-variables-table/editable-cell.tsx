@@ -66,9 +66,6 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
       onInput={(e) => sanitizeVariableInput(e.currentTarget)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur()
-      }}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
       })}
