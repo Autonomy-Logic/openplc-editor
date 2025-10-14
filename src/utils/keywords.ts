@@ -11,7 +11,7 @@ const literals = [
   { pattern: /^2#[01_]+$/, types: integerTypes },
   { pattern: /^8#[0-7_]+$/, types: integerTypes },
   { pattern: /^16#[0-9A-Fa-f_]+$/, types: integerTypes },
-  { pattern: /^-?[0-9]+\.?[0-9]*$/, types: floatTypes },
+  { pattern: /^-?[0-9]+(\.[0-9]+)?$/, types: floatTypes },
   { pattern: /^-?[0-9]+$/, types: integerTypes },
   // Time literals
   { pattern: /^T#[0-9:\-_shmydSMHDY]+$/, types: ['TIME'] },
@@ -285,10 +285,10 @@ export const builtinFunctions = [
   'SHR',
   'ROL',
   'ROR',
-  'AND',
-  'OR',
-  'XOR',
-  'NOT',
+  // 'AND', // already included above
+  // 'OR',
+  // 'XOR',
+  // 'NOT',
 
   // Memory and pointers
   'ADR',
@@ -300,7 +300,6 @@ export const builtinFunctions = [
 
   // System functions
   'NOW',
-  'TIME',
   'RTC',
   'SEMA',
   '__NEW',
