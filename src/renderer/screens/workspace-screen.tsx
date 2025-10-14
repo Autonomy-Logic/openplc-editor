@@ -130,6 +130,8 @@ const WorkspaceScreen = () => {
     const boardTarget = deviceDefinitions.configuration.deviceBoard
     const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
     const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
+    const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
+    const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
 
     if (isRuntimeTarget) {
       if (connectionStatus !== 'connected') {
@@ -146,14 +148,16 @@ const WorkspaceScreen = () => {
         return
       }
     } else {
-      if (!debuggerTargetIp) {
+      if (isTCP && !debuggerTargetIp) {
         console.warn('No debugger target IP address configured')
         return
       }
-    }
 
-    const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
-    const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
+      if (!isTCP && !isRTU) {
+        console.warn('No Modbus connection configured (neither TCP nor RTU)')
+        return
+      }
+    }
     let batchSize = 60
 
     if (isRTU && !isTCP) {
