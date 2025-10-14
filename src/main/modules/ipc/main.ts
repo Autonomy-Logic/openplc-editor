@@ -579,10 +579,10 @@ class MainProcessBridge implements MainIpcModule {
       const path = await import('path')
 
       const baseProjectPath = path.dirname(projectPath)
-+     if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
-+       return { success: false, error: 'Invalid board target' }
-+     }
-+     const programStPath = path.resolve(baseProjectPath, 'build', boardTarget, 'src', 'program.st')
+      if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
+        return { success: false, error: 'Invalid board target' }
+      }
+      const programStPath = path.resolve(baseProjectPath, 'build', boardTarget, 'src', 'program.st')
 
       const content = await fs.readFile(programStPath, 'utf-8')
 
