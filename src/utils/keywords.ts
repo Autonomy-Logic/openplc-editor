@@ -6,13 +6,13 @@ const floatTypes = ['ANY_NUM', 'REAL', 'LREAL']
 const literals = [
   // Boolean Literals
   { pattern: /^(TRUE|FALSE)$/, types: booleanTypes },
-  { pattern: /^(0|1)$/, types: [...booleanTypes, ...integerTypes] },
+  { pattern: /^(0|1)$/, types: [...booleanTypes, ...integerTypes, ...floatTypes] },
   // Number literals
   { pattern: /^2#[01_]+$/, types: integerTypes },
   { pattern: /^8#[0-7_]+$/, types: integerTypes },
   { pattern: /^16#[0-9A-Fa-f_]+$/, types: integerTypes },
-  { pattern: /^-?[0-9]+(\.[0-9]+)?$/, types: floatTypes },
-  { pattern: /^-?[0-9]+$/, types: integerTypes },
+  { pattern: /^-?[0-9]+$/, types: [...integerTypes, ...floatTypes] },
+  { pattern: /^-?[0-9]+\.[0-9]+?$/, types: floatTypes },
   // Time literals
   { pattern: /^T#[0-9:\-_shmydSMHDY]+$/, types: ['TIME'] },
   { pattern: /^D#[0-9:\-_shmydSMHDY]+$/, types: ['DATE'] },
