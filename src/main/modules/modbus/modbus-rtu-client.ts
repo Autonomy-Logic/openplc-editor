@@ -2,7 +2,7 @@
 // @ts-ignore - serialport types are not available at build time but will be at runtime
 import { SerialPort } from 'serialport'
 
-import type { ModbusDebugResponse, ModbusFunctionCode } from './modbus-client'
+import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-client'
 
 interface ModbusRtuClientOptions {
   port: string
@@ -77,11 +77,11 @@ export class ModbusRtuClient {
     const frameWithoutCrc = Buffer.alloc(2 + data.length)
     frameWithoutCrc.writeUInt8(this.slaveId, 0)
     frameWithoutCrc.writeUInt8(functionCode, 1)
-    data.copy(frameWithoutCrc, 2)
+    data.copy(frameWithoutCrc as unknown as Uint8Array, 2)
 
     const crc = this.calculateCrc(frameWithoutCrc)
     const request = Buffer.alloc(frameWithoutCrc.length + 2)
-    frameWithoutCrc.copy(request, 0)
+    frameWithoutCrc.copy(request as unknown as Uint8Array, 0)
     request.writeUInt16BE(crc, frameWithoutCrc.length)
 
     return request
@@ -102,7 +102,7 @@ export class ModbusRtuClient {
           resolve()
         })
 
-        this.serialPort.on('error', (error) => {
+        this.serialPort.on('error', (error: unknown) => {
           reject(error instanceof Error ? error : new Error(String(error)))
         })
       } catch (error) {
@@ -131,7 +131,7 @@ export class ModbusRtuClient {
       let responseBuffer = Buffer.alloc(0)
 
       const onData = (data: Buffer) => {
-        responseBuffer = Buffer.concat([responseBuffer, data])
+        responseBuffer = Buffer.concat([responseBuffer, data] as unknown as Uint8Array[])
 
         if (responseBuffer.length >= 5) {
           clearTimeout(timeoutHandle)
@@ -149,7 +149,7 @@ export class ModbusRtuClient {
           const responseWithoutCrc = responseBuffer.slice(0, responseBuffer.length - 2)
           const paddedResponse = Buffer.alloc(6 + responseWithoutCrc.length)
           paddedResponse.fill(0, 0, 6)
-          responseWithoutCrc.copy(paddedResponse, 6)
+          responseWithoutCrc.copy(paddedResponse as unknown as Uint8Array, 6)
 
           resolve(paddedResponse)
         }
@@ -164,12 +164,18 @@ export class ModbusRtuClient {
 
       this.serialPort!.on('data', onData)
       this.serialPort!.once('error', onError)
-      this.serialPort!.write(request, (error) => {
+      this.serialPort!.write(request as unknown as Uint8Array, (error: unknown) => {
         if (error) {
           clearTimeout(timeoutHandle)
           this.serialPort?.removeListener('data', onData)
           this.serialPort?.removeListener('error', onError)
-          reject(error instanceof Error ? error : new Error(String(error)))
+          const errorMessage =
+            typeof error === 'string'
+              ? error
+              : typeof error === 'object' && error !== null
+                ? JSON.stringify(error)
+                : 'Unknown error'
+          reject(error instanceof Error ? error : new Error(errorMessage))
         }
       })
     })

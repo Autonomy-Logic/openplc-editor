@@ -712,7 +712,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
           workspaceActions.setDebugVariableIndexes(indexMap)
           if (!isRuntimeTarget) {
-            workspaceActions.setDebuggerTargetIp(targetIpAddress)
+            workspaceActions.setDebuggerTargetIp(targetIpAddress ?? null)
           }
           workspaceActions.setDebuggerVisible(true)
           consoleActions.addLog({
@@ -753,7 +753,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
 
           window.bridge.runCompileProgram(
-            [projectPath, boardTarget, boardCore, false, projectData, targetIpAddress, runtimeJwtToken],
+            [projectPath, boardTarget, boardCore, false, projectData, targetIpAddress ?? '', runtimeJwtToken],
             (data: {
               logLevel?: 'info' | 'error' | 'warning'
               message: string | Buffer
