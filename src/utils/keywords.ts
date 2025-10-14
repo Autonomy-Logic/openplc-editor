@@ -328,7 +328,6 @@ export function isLegalIdentifier(name: string): [boolean, string] {
 }
 
 export function sanitizeVariableInput(e: HTMLInputElement) {
-  // const el = e
   const originalValue = e.value
   const originalCursorPosition = e.selectionStart || 0
   let workingValue = originalValue
