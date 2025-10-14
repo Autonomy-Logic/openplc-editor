@@ -1,7 +1,10 @@
+import { StopIcon } from '@root/renderer/assets'
 import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn } from '@root/utils'
+import { parsePlcStatus } from '@root/utils/plc-status'
 import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '@root/utils/python/generateSTCode'
 import { injectPythonCode } from '@root/utils/python/injectPythonCode'
@@ -49,6 +52,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }
 
   const compileOnly = compileOnlySelectors.useCompileOnly()
+  const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
+  const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
+  const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress)
 
   const handleRequest = () => {
     const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
@@ -112,10 +119,33 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     console.log('processado:', processedProjectData)
     console.log('original:', projectData)
 
+    const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
+    const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
     window.bridge.runCompileProgram(
-      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, compileOnly, processedProjectData],
-      (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
+      [
+        projectMeta.path,
+        deviceDefinitions.configuration.deviceBoard,
+        boardCore,
+        compileOnly,
+        processedProjectData,
+        runtimeIpAddress,
+        runtimeJwtToken,
+      ],
+      (data: {
+        logLevel?: 'info' | 'error' | 'warning'
+        message: string | Buffer
+        plcStatus?: string
+        closePort?: boolean
+      }) => {
         setIsCompiling(true)
+
+        if (data.plcStatus) {
+          const status = parsePlcStatus(data.plcStatus)
+          if (status) {
+            useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(status)
+          }
+        }
+
         if (typeof data.message === 'string') {
           data.message
             .trim()
@@ -156,6 +186,50 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       handleRequest()
     }
   }
+
+  const handlePlcControl = async (): Promise<void> => {
+    if (!runtimeIpAddress || !jwtToken || connectionStatus !== 'connected') {
+      return
+    }
+
+    try {
+      if (plcStatus === 'RUNNING') {
+        const result = await window.bridge.runtimeStopPlc(runtimeIpAddress, jwtToken)
+        if (!result.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Failed to stop PLC: ${String(result.error) || 'Unknown error'}`,
+          })
+          return
+        }
+      } else {
+        const result = await window.bridge.runtimeStartPlc(runtimeIpAddress, jwtToken)
+        if (!result.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Failed to start PLC: ${String(result.error) || 'Unknown error'}`,
+          })
+          return
+        }
+      }
+
+      const statusResult = await window.bridge.runtimeGetStatus(runtimeIpAddress, jwtToken)
+      if (statusResult.success && statusResult.status) {
+        const status = parsePlcStatus(statusResult.status)
+        if (status) {
+          useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(status)
+        }
+      }
+    } catch (error) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `PLC control error: ${String(error)}`,
+      })
+    }
+  }
   return (
     <>
       <TooltipSidebarWrapperButton tooltipContent='Search'>
@@ -172,9 +246,22 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           onClick={() => verifyAndCompile()}
         />
       </TooltipSidebarWrapperButton>
-      {/** TODO: Need to be implemented */}
-      <TooltipSidebarWrapperButton tooltipContent='Not implemented yet'>
-        <PlayButton className={cn(disabledButtonClass)} />
+      <TooltipSidebarWrapperButton
+        tooltipContent={
+          connectionStatus !== 'connected'
+            ? 'Connect to runtime first'
+            : plcStatus === 'RUNNING'
+              ? 'Stop PLC'
+              : 'Start PLC'
+        }
+      >
+        <PlayButton
+          onClick={() => void handlePlcControl()}
+          disabled={connectionStatus !== 'connected'}
+          className={cn(connectionStatus !== 'connected' ? disabledButtonClass : '')}
+        >
+          {plcStatus === 'RUNNING' ? <StopIcon /> : null}
+        </PlayButton>
       </TooltipSidebarWrapperButton>
       {/** TODO: Need to be implemented */}
       <TooltipSidebarWrapperButton tooltipContent='Not implemented yet'>

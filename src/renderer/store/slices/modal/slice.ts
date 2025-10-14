@@ -46,6 +46,14 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
+    'runtime-create-user': {
+      open: false,
+      data: null,
+    },
+    'runtime-login': {
+      open: false,
+      data: null,
+    },
   },
 
   modalActions: {
