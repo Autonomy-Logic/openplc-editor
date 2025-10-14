@@ -29,51 +29,55 @@ export const DEFAULT_CONTACT_CONNECTOR_Y = DEFAULT_CONTACT_BLOCK_HEIGHT / 2
 
 type ContactType = {
   [key in ContactNode['data']['variant']]: {
-    svg: (wrongVariable: boolean) => ReactNode
+    svg: (wrongVariable: boolean, debuggerColor?: string) => ReactNode
   }
 }
 export const DEFAULT_CONTACT_TYPES: ContactType = {
   default: {
-    svg: (wrongVariable): ReactNode => (
+    svg: (wrongVariable, debuggerColor): ReactNode => (
       <DefaultContact
         width={DEFAULT_CONTACT_BLOCK_WIDTH}
         height={DEFAULT_CONTACT_BLOCK_HEIGHT}
         strokeClassName={cn('stroke-neutral-1000 dark:stroke-neutral-100', {
           'stroke-red-500 dark:stroke-red-500': wrongVariable,
         })}
+        strokeColor={debuggerColor}
       />
     ),
   },
   negated: {
-    svg: (wrongVariable): ReactNode => (
+    svg: (wrongVariable, debuggerColor): ReactNode => (
       <NegatedContact
         width={DEFAULT_CONTACT_BLOCK_WIDTH}
         height={DEFAULT_CONTACT_BLOCK_HEIGHT}
         strokeClassName={cn('stroke-neutral-1000 dark:stroke-neutral-100', {
           'stroke-red-500 dark:stroke-red-500': wrongVariable,
         })}
+        strokeColor={debuggerColor}
       />
     ),
   },
   risingEdge: {
-    svg: (wrongVariable): ReactNode => (
+    svg: (wrongVariable, debuggerColor): ReactNode => (
       <RisingEdgeContact
         width={DEFAULT_CONTACT_BLOCK_WIDTH}
         height={DEFAULT_CONTACT_BLOCK_HEIGHT}
         strokeClassName={cn('stroke-neutral-1000 dark:stroke-neutral-100', {
           'stroke-red-500 dark:stroke-red-500': wrongVariable,
         })}
+        strokeColor={debuggerColor}
       />
     ),
   },
   fallingEdge: {
-    svg: (wrongVariable): ReactNode => (
+    svg: (wrongVariable, debuggerColor): ReactNode => (
       <FallingEdgeContact
         width={DEFAULT_CONTACT_BLOCK_WIDTH}
         height={DEFAULT_CONTACT_BLOCK_HEIGHT}
         strokeClassName={cn('stroke-neutral-1000 dark:stroke-neutral-100', {
           'stroke-red-500 dark:stroke-red-500': wrongVariable,
         })}
+        strokeColor={debuggerColor}
       />
     ),
   },
@@ -88,11 +92,31 @@ export const Contact = (block: ContactProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
+    workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
   const [contactVariableValue, setContactVariableValue] = useState<string>(data.variable.name)
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
+
+  const getDebuggerStrokeColor = (): string | undefined => {
+    if (!isDebuggerVisible || !data.variable.name || wrongVariable) {
+      return undefined
+    }
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const value = debugVariableValues.get(compositeKey)
+
+    if (value === undefined) {
+      return undefined
+    }
+
+    const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+    const displayState = data.variant === 'negated' ? !isTrue : isTrue
+    return displayState ? '#00FF00' : '#0464FB'
+  }
+
+  const debuggerStrokeColor = getDebuggerStrokeColor()
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<
@@ -268,7 +292,7 @@ export const Contact = (block: ContactProps) => {
         )}
         style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
       >
-        {contact.svg(wrongVariable)}
+        {contact.svg(wrongVariable, debuggerStrokeColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
           <HighlightedTextArea
             textAreaValue={contactVariableValue}

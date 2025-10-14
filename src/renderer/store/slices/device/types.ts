@@ -22,6 +22,7 @@ const runtimeConnectionSchema = z.object({
   jwtToken: z.string().nullable(),
   connectionStatus: z.enum(['disconnected', 'connecting', 'connected', 'error']),
   plcStatus: z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable(),
+  ipAddress: z.string().nullable(),
 })
 
 type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>
@@ -67,6 +68,7 @@ const deviceStateSchema = z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
     compileOnly: z.boolean().default(true),
+    temporaryDhcpIp: z.string().optional(),
   }),
   deviceUpdated: z.object({
     updated: z.boolean(),
@@ -151,6 +153,7 @@ const deviceActionSchema = z.object({
     .function()
     .args(z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable())
     .returns(z.void()),
+  setTemporaryDhcpIp: z.function().args(z.string().optional()).returns(z.void()),
 })
 
 type DeviceActions = z.infer<typeof deviceActionSchema>

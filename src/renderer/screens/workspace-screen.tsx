@@ -16,32 +16,391 @@ import AboutModal from '../components/_organisms/about-modal'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
-import { ConfirmDeviceSwitchModal, RuntimeCreateUserModal, RuntimeLoginModal } from '../components/_organisms/modals'
+import {
+  ConfirmDeviceSwitchModal,
+  DebuggerIpInputModal,
+  DebuggerMessageModal,
+  RuntimeCreateUserModal,
+  RuntimeLoginModal,
+} from '../components/_organisms/modals'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
 import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
+import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import { useOpenPLCStore } from '../store'
+import { getVariableSize, parseVariableValue } from '../utils/variable-sizes'
+
+const DEBUGGER_POLL_INTERVAL_MS = 200
 
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { isCollapsed },
+    workspace: { isCollapsed, isDebuggerVisible, debugVariableValues },
     editor,
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
     searchResults,
+    project: {
+      data: { pous },
+    },
   } = useOpenPLCStore()
 
-  const variables = [
-    { name: 'a', type: 'false' },
-    { name: 'b', type: 'false' },
-    { name: 'c', type: 'false' },
-    { name: 'd', type: 'false' },
-  ]
+  const allDebugVariables = pous.flatMap((pou) => {
+    return pou.data.variables
+      .filter((v) => v.debug === true)
+      .map((v) => {
+        let typeValue = ''
+        if (v.type.definition === 'base-type') {
+          typeValue = v.type.value
+        } else if (v.type.definition === 'user-data-type') {
+          typeValue = v.type.value
+        } else if (v.type.definition === 'array') {
+          typeValue = v.type.value
+        } else if (v.type.definition === 'derived') {
+          typeValue = v.type.value
+        }
+
+        const compositeKey = `${pou.data.name}:${v.name}`
+        const variableValue = debugVariableValues.get(compositeKey)
+        const displayValue = variableValue !== undefined ? variableValue : '-'
+
+        return {
+          pouName: pou.data.name,
+          name: v.name,
+          type: typeValue,
+          value: displayValue,
+        }
+      })
+  })
+
+  const nameOccurrences = new Map<string, number>()
+  allDebugVariables.forEach((v) => {
+    nameOccurrences.set(v.name, (nameOccurrences.get(v.name) || 0) + 1)
+  })
+
+  const debugVariables = allDebugVariables.map((v) => {
+    const hasConflict = nameOccurrences.get(v.name)! > 1
+    return {
+      name: hasConflict ? `[${v.pouName}] ${v.name}` : v.name,
+      type: v.type,
+      value: v.value,
+    }
+  })
+
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
+  const [activeTab, setActiveTab] = useState('console')
+
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  type VariableInfo = {
+    pouName: string
+    variable: (typeof pous)[0]['data']['variables'][0]
+  }
+  const variableInfoMapRef = useRef<Map<number, VariableInfo> | null>(null)
+
+  useEffect(() => {
+    const {
+      workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues },
+      deviceDefinitions,
+      workspaceActions,
+      project,
+      runtimeConnection: { connectionStatus, ipAddress: targetIpAddress },
+    } = useOpenPLCStore.getState()
+
+    if (!isDebuggerVisible || connectionStatus !== 'connected') {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+      variableInfoMapRef.current = null
+      return
+    }
+
+    if (!targetIpAddress) {
+      console.warn('No runtime IP address configured')
+      return
+    }
+
+    const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
+    const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
+    let batchSize = 60
+
+    if (isRTU && !isTCP) {
+      batchSize = 20
+    }
+
+    const variableInfoMap = new Map<number, VariableInfo>()
+
+    project.data.pous.forEach((pou) => {
+      if (pou.type !== 'program') return
+
+      pou.data.variables.forEach((v) => {
+        const compositeKey = `${pou.data.name}:${v.name}`
+        const index = debugVariableIndexes.get(compositeKey)
+        if (index !== undefined) {
+          variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
+        }
+      })
+    })
+
+    variableInfoMapRef.current = variableInfoMap
+
+    const pollVariables = async () => {
+      if (!isMountedRef.current) return
+
+      if (!variableInfoMapRef.current) {
+        return
+      }
+
+      try {
+        const { project: currentProject } = useOpenPLCStore.getState()
+
+        const debugVariableKeys = new Set<string>()
+        currentProject.data.pous.forEach((pou) => {
+          if (pou.type !== 'program') return
+          pou.data.variables
+            .filter((v) => v.debug === true)
+            .forEach((v) => {
+              debugVariableKeys.add(`${pou.data.name}:${v.name}`)
+            })
+        })
+
+        const { editor, ladderFlows } = useOpenPLCStore.getState()
+        const currentPou = currentProject.data.pous.find((pou) => pou.data.name === editor.meta.name)
+        if (currentPou && currentPou.data.body.language === 'ld') {
+          const currentLadderFlow = ladderFlows.find((flow) => flow.name === editor.meta.name)
+          if (currentLadderFlow) {
+            currentLadderFlow.rungs.forEach((rung) => {
+              rung.nodes.forEach((node) => {
+                if (node.type === 'contact' || node.type === 'coil') {
+                  const nodeData = node.data as {
+                    variable?: { name?: string; type?: { definition?: string; value?: string } }
+                  }
+                  const variableName = nodeData.variable?.name
+
+                  if (
+                    variableName &&
+                    nodeData.variable?.type?.definition === 'base-type' &&
+                    nodeData.variable?.type?.value?.toUpperCase() === 'BOOL'
+                  ) {
+                    const compositeKey = `${currentPou.data.name}:${variableName}`
+                    debugVariableKeys.add(compositeKey)
+                  }
+                }
+              })
+            })
+          }
+        }
+
+        if (currentPou && currentPou.data.body.language === 'ld') {
+          const instances = currentProject.data.configuration.resource.instances
+          const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
+
+          if (programInstance) {
+            const functionBlockInstances = currentPou.data.variables.filter(
+              (variable) => variable.type.definition === 'derived',
+            )
+
+            functionBlockInstances.forEach((fbInstance) => {
+              const fbTypeName = fbInstance.type.value.toUpperCase()
+
+              let fbVariables:
+                | Array<{ name: string; class: string; type: { definition: string; value: string } }>
+                | undefined
+
+              const standardFB = StandardFunctionBlocks.pous.find(
+                (fb: { name: string }) => fb.name.toUpperCase() === fbTypeName,
+              )
+              if (standardFB) {
+                fbVariables = standardFB.variables
+              } else {
+                const customFB = currentProject.data.pous.find(
+                  (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === fbTypeName,
+                )
+                if (customFB && customFB.type === 'function-block') {
+                  fbVariables = customFB.data.variables as Array<{
+                    name: string
+                    class: string
+                    type: { definition: string; value: string }
+                  }>
+                }
+              }
+
+              if (fbVariables) {
+                const boolOutputs = fbVariables.filter(
+                  (v) =>
+                    (v.class === 'output' || v.class === 'inOut') &&
+                    v.type.definition === 'base-type' &&
+                    v.type.value.toUpperCase() === 'BOOL',
+                )
+
+                boolOutputs.forEach((outputVar) => {
+                  const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}.${outputVar.name.toUpperCase()}`
+                  const index = debugVariableIndexes.get(debugPath)
+
+                  if (index !== undefined) {
+                    const blockVarName = `${fbInstance.name}.${outputVar.name}`
+                    const compositeKey = `${programInstance.name}:${blockVarName}`
+                    debugVariableKeys.add(compositeKey)
+
+                    if (!variableInfoMapRef.current?.has(index)) {
+                      variableInfoMapRef.current?.set(index, {
+                        pouName: programInstance.name,
+                        variable: {
+                          name: blockVarName,
+                          type: { definition: 'base-type', value: 'bool' },
+                          class: 'local',
+                          location: '',
+                          documentation: '',
+                          debug: false,
+                        },
+                      })
+                    }
+                  }
+                })
+              }
+            })
+          }
+        }
+
+        const allIndexes = Array.from(variableInfoMapRef.current.entries())
+          .filter(([_, varInfo]) => {
+            const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+            return debugVariableKeys.has(compositeKey)
+          })
+          .map(([index, _]) => index)
+          .sort((a, b) => a - b)
+
+        if (allIndexes.length === 0) {
+          return
+        }
+
+        const newValues = new Map<string, string>()
+        debugVariableValues.forEach((value: string, key: string) => {
+          newValues.set(key, value)
+        })
+        let currentBatchSize = batchSize
+        let processedCount = 0
+
+        while (processedCount < allIndexes.length) {
+          const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
+
+          const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
+
+          if (!result.success) {
+            if (result.needsReconnect) {
+              const { consoleActions, workspaceActions } = useOpenPLCStore.getState()
+              consoleActions.addLog({
+                id: crypto.randomUUID(),
+                level: 'error',
+                message: `Debugger connection lost: ${result.error || 'Unknown error'}. Attempting to reconnect...`,
+              })
+
+              if (result.error?.includes('Failed to reconnect')) {
+                workspaceActions.setDebuggerVisible(false)
+                consoleActions.addLog({
+                  id: crypto.randomUUID(),
+                  level: 'error',
+                  message: 'Debugger session closed due to connection failure.',
+                })
+                return
+              }
+            }
+
+            if (result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > 2) {
+              currentBatchSize = Math.max(2, Math.floor(currentBatchSize / 2))
+              continue
+            } else {
+              break
+            }
+          }
+
+          if (!result.data || result.lastIndex === undefined) {
+            break
+          }
+
+          if (!Array.isArray(result.data)) {
+            break
+          }
+
+          const responseBuffer = new Uint8Array(result.data)
+          let bufferOffset = 0
+
+          for (const index of batch) {
+            const varInfo = variableInfoMapRef.current?.get(index)
+            if (!varInfo) continue
+
+            const { pouName, variable } = varInfo
+            const compositeKey = `${pouName}:${variable.name}`
+
+            if (bufferOffset >= responseBuffer.length) {
+              break
+            }
+
+            try {
+              const { value, bytesRead } = parseVariableValue(responseBuffer, bufferOffset, variable)
+              newValues.set(compositeKey, value)
+              bufferOffset += bytesRead
+            } catch {
+              newValues.set(compositeKey, 'ERR')
+              bufferOffset += getVariableSize(variable)
+            }
+
+            if (index === result.lastIndex) {
+              processedCount = batch.indexOf(index) + processedCount + 1
+              break
+            }
+          }
+
+          if (result.lastIndex === batch[batch.length - 1]) {
+            processedCount += batch.length
+          }
+        }
+
+        if (isMountedRef.current) {
+          workspaceActions.setDebugVariableValues(newValues)
+        }
+      } catch (error) {
+        const { consoleActions } = useOpenPLCStore.getState()
+        consoleActions.addLog({
+          id: `debugger-poll-error-${Date.now()}`,
+          level: 'error',
+          message: `Debugger polling error: ${String(error)}`,
+        })
+      }
+    }
+
+    void pollVariables()
+    pollingIntervalRef.current = setInterval(() => {
+      void pollVariables()
+    }, DEBUGGER_POLL_INTERVAL_MS)
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+      void window.bridge.debuggerDisconnect().catch((error) => {
+        const { consoleActions } = useOpenPLCStore.getState()
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Failed to disconnect debugger: ${String(error)}`,
+        })
+      })
+    }
+  }, [isDebuggerVisible])
 
   type PanelMethods = {
     collapse: () => void
@@ -52,7 +411,6 @@ const WorkspaceScreen = () => {
   const explorerPanelRef = useRef<PanelMethods | null>(null)
   const workspacePanelRef = useRef<PanelMethods | null>(null)
   const consolePanelRef = useRef<PanelMethods | null>(null)
-  const [activeTab, setActiveTab] = useState('console')
   const hasSearchResults = searchResults.length > 0
 
   const togglePanel = () => {
@@ -105,6 +463,8 @@ const WorkspaceScreen = () => {
       <ConfirmDeviceSwitchModal />
       <RuntimeCreateUserModal />
       <RuntimeLoginModal />
+      <DebuggerMessageModal />
+      <DebuggerIpInputModal />
       <WorkspaceSideContent>
         <WorkspaceActivityBar
           defaultActivityBar={{
@@ -264,13 +624,14 @@ const WorkspaceScreen = () => {
                       >
                         Console
                       </Tabs.Trigger>
-                      {/** TODO: Need to be implemented */}
-                      {/* <Tabs.Trigger
-                        value='debug'
-                        className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
-                      >
-                        Debugger
-                      </Tabs.Trigger> */}
+                      {isDebuggerVisible && (
+                        <Tabs.Trigger
+                          value='debug'
+                          className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
+                        >
+                          Debugger
+                        </Tabs.Trigger>
+                      )}
                       {hasSearchResults && (
                         <Tabs.Trigger
                           value='search'
@@ -287,20 +648,26 @@ const WorkspaceScreen = () => {
                     >
                       <ConsoleComponent />
                     </Tabs.Content>
-                    <Tabs.Content
-                      value='debug'
-                      className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
-                    >
-                      <ResizablePanelGroup direction='horizontal' className='flex h-full w-full '>
-                        <ResizablePanel minSize={20} defaultSize={100} className='h-full w-full'>
-                          <Debugger graphList={graphList} />
-                        </ResizablePanel>
-                        <ResizableHandle className='w-2 bg-transparent' />
-                        <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
-                          <VariablesPanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
-                        </ResizablePanel>
-                      </ResizablePanelGroup>
-                    </Tabs.Content>
+                    {isDebuggerVisible && (
+                      <Tabs.Content
+                        value='debug'
+                        className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
+                      >
+                        <ResizablePanelGroup direction='horizontal' className='flex h-full w-full '>
+                          <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
+                            <VariablesPanel
+                              variables={debugVariables}
+                              graphList={graphList}
+                              setGraphList={setGraphList}
+                            />
+                          </ResizablePanel>
+                          <ResizableHandle className='w-2 bg-transparent' />
+                          <ResizablePanel minSize={20} defaultSize={80} className='h-full w-full'>
+                            <Debugger graphList={graphList} />
+                          </ResizablePanel>
+                        </ResizablePanelGroup>
+                      </Tabs.Content>
+                    )}
                     {hasSearchResults && (
                       <Tabs.Content
                         value='search'
