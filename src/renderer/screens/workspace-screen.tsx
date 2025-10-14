@@ -111,14 +111,14 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const {
-      workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues },
+      workspace: { isDebuggerVisible, debuggerTargetIp, debugVariableIndexes, debugVariableValues },
       deviceDefinitions,
       workspaceActions,
       project,
-      runtimeConnection: { connectionStatus, ipAddress: targetIpAddress },
+      runtimeConnection: { connectionStatus, ipAddress: runtimeIpAddress },
     } = useOpenPLCStore.getState()
 
-    if (!isDebuggerVisible || connectionStatus !== 'connected') {
+    if (!isDebuggerVisible) {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
@@ -127,10 +127,40 @@ const WorkspaceScreen = () => {
       return
     }
 
-    if (!targetIpAddress) {
-      console.warn('No runtime IP address configured')
-      return
+    const boardTarget = deviceDefinitions.configuration.deviceBoard
+    const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
+    const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
+
+    let targetIpAddress: string | undefined
+
+    if (isRuntimeTarget) {
+      if (connectionStatus !== 'connected') {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        variableInfoMapRef.current = null
+        return
+      }
+
+      if (!runtimeIpAddress) {
+        console.warn('No runtime IP address configured')
+        return
+      }
+
+      targetIpAddress = runtimeIpAddress
+    } else {
+      if (!debuggerTargetIp) {
+        console.warn('No debugger target IP address configured')
+        return
+      }
+
+      targetIpAddress = debuggerTargetIp
     }
+
+    console.log(
+      `[Debugger Polling] Target: ${boardTarget}, isRuntimeTarget: ${isRuntimeTarget}, IP: ${targetIpAddress}`,
+    )
 
     const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
     const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
@@ -283,8 +313,11 @@ const WorkspaceScreen = () => {
           .sort((a, b) => a - b)
 
         if (allIndexes.length === 0) {
+          console.log('[Debugger Polling] No variables to poll')
           return
         }
+
+        console.log(`[Debugger Polling] Polling ${allIndexes.length} variable(s): indexes [${allIndexes.join(', ')}]`)
 
         const newValues = new Map<string, string>()
         debugVariableValues.forEach((value: string, key: string) => {
@@ -296,7 +329,11 @@ const WorkspaceScreen = () => {
         while (processedCount < allIndexes.length) {
           const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
 
+          console.log(`[Debugger Polling] Requesting batch of ${batch.length} variables to ${targetIpAddress}`)
+
           const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
+
+          console.log(`[Debugger Polling] Result: success=${result.success}, error=${result.error || 'none'}`)
 
           if (!result.success) {
             if (result.needsReconnect) {

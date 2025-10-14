@@ -17,6 +17,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     isModalOpen: [],
     discardChanges: false,
     isDebuggerVisible: false,
+    debuggerTargetIp: null,
     debugVariableIndexes: new Map(),
     debugVariableValues: new Map(),
     close: {
@@ -137,6 +138,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.isDebuggerVisible = isVisible
+        }),
+      )
+    },
+    setDebuggerTargetIp: (targetIp: string | null): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debuggerTargetIp = targetIp
         }),
       )
     },

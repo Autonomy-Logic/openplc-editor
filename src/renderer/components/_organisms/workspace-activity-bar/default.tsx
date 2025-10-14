@@ -269,6 +269,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     if (workspace.isDebuggerVisible) {
       const _disconnectResult: { success: boolean } = await window.bridge.debuggerDisconnect()
       workspaceActions.setDebuggerVisible(false)
+      workspaceActions.setDebuggerTargetIp(null)
       return
     }
 
@@ -652,6 +653,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
 
           workspaceActions.setDebugVariableIndexes(indexMap)
+          if (!isRuntimeTarget) {
+            workspaceActions.setDebuggerTargetIp(targetIpAddress)
+          }
           workspaceActions.setDebuggerVisible(true)
           consoleActions.addLog({
             id: crypto.randomUUID(),
