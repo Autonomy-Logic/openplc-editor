@@ -12,6 +12,7 @@ export type ParallelNode = Node<
     parallelOpenReference: string | undefined
     parallelCloseReference: string | undefined
     type: 'open' | 'close'
+    isFlowActive?: boolean
   }
 >
 type ParallelProps = NodeProps<ParallelNode>
@@ -25,6 +26,8 @@ export const GAP = 20
 export const DEFAULT_PARALLEL_CONNECTOR_Y = DEFAULT_PARALLEL_HEIGHT / 2
 
 export const Parallel = ({ selected, data }: ParallelProps) => {
+  const strokeColor = data.isFlowActive ? '#00FF00' : undefined
+
   return (
     <>
       <div
@@ -47,6 +50,7 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
             height={DEFAULT_PARALLEL_HEIGHT}
             className='stroke-[--xy-edge-stroke-default]'
             fill='none'
+            style={strokeColor ? { stroke: strokeColor, strokeWidth: 2 } : undefined}
           />
         </svg>
       </div>
