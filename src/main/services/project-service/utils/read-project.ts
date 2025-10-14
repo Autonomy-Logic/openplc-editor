@@ -1,12 +1,16 @@
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
-import { projectDefaultDirectoriesValidation, projectDefaultFilesMapSchema } from '@root/types/IPC/project-service'
+import {
+  projectDefaultDirectoriesValidation,
+  projectDefaultFilesMapSchema,
+  projectPouDirectories,
+} from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCProject } from '@root/types/PLC/open-plc'
+import { PLCPou, PLCPouSchema, PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { readdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
+import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { basename, dirname, join } from 'path'
 import { ZodTypeAny } from 'zod'
 
 /**
@@ -42,10 +46,15 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
     }
   }
 
-  const entries = readdirSync(basePath, { withFileTypes: true })
+  const entries = readdirSync(basePath, { withFileTypes: true, recursive: true })
   let isValidProject = true
   let hasProjectFile = false
   for (const entry of entries) {
+    // Skip any entries that are not relevant to the project structure
+    if (entry.path.startsWith(join(basePath, 'pous')) || entry.path.startsWith(join(basePath, 'build'))) {
+      continue
+    }
+
     // If any entry is a file, it should be one of the expected project files
     if (entry.isFile()) {
       if (entry.name === 'project.json') {
@@ -59,7 +68,7 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
 
     // If any entry is a directory, it should be one of the expected directories
     if (entry.isDirectory()) {
-      if (!projectDefaultDirectoriesValidation.includes(entry.name)) {
+      if (!projectDefaultDirectoriesValidation.some((dir) => dir.includes(entry.name))) {
         return {
           success: false,
           error: {
@@ -89,8 +98,17 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
   }
 }
 
-function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchema>(fileName: K, data: unknown) {
-  const result = projectDefaultFilesMapSchema[fileName].safeParse(data)
+function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchema>(
+  fileName: K,
+  data: unknown,
+  schema?: ZodTypeAny,
+) {
+  if (!Object.keys(projectDefaultFilesMapSchema).includes(fileName) && !schema) {
+    throw new Error(`File ${fileName} is not a valid project file or schema is not provided.`)
+  }
+
+  const fileSchema = projectDefaultFilesMapSchema[fileName] || schema
+  const result = fileSchema.safeParse(data)
 
   /**
    * TODO: Handle the case where the file does not match the expected schema
@@ -106,7 +124,7 @@ function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchem
   return result.data
 }
 
-function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string) {
+function readAndParseFile(filePath: string, fileName: string, schema: ZodTypeAny) {
   let file: string | undefined
   // File does not exist, create with default value from schema
   if (!fileOrDirectoryExists(filePath)) {
@@ -134,7 +152,7 @@ function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string
       file = JSON.stringify(defaultValue)
     }
   }
-  return safeParseProjectFile(fileName as keyof typeof projectDefaultFilesMapSchema, JSON.parse(file))
+  return safeParseProjectFile(fileName as keyof typeof projectDefaultFilesMapSchema, JSON.parse(file), schema)
 }
 
 /**
@@ -144,36 +162,38 @@ function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string
  * where we might want to read all files in a directory structure and validate them against schemas.
  * For example: this might be used to read all the pous in a project directory
  */
-function _readDirectoryRecursive(
-  baseDir: string,
-  schema: ZodTypeAny,
-  baseFileName: string,
-  projectFiles: Record<string, unknown>,
-) {
+function readDirectoryRecursive(baseDir: string, baseFileName: string, projectFiles: Record<string, unknown>) {
   const entries = readdirSync(baseDir, { withFileTypes: true })
+
   for (const entry of entries) {
     const entryPath = join(baseDir, entry.name)
     const entryKey = join(baseFileName, entry.name)
 
     // If the entry is a file, read and parse it
     if (entry.isFile()) {
-      projectFiles[entryKey] = readAndParseFile(entryPath, schema, entryKey)
+      const schema = projectPouDirectories.some((pouDir) => baseDir.includes(pouDir)) ? PLCPouSchema : undefined
+      if (!schema) {
+        throw new Error(`No schema found for file: ${entryPath}`)
+      }
+
+      projectFiles[entryKey] = readAndParseFile(entryPath, entryKey, schema)
     }
 
     // If the entry is a directory, recursively read its contents
     else if (entry.isDirectory()) {
-      _readDirectoryRecursive(entryPath, schema, entryKey, projectFiles)
+      readDirectoryRecursive(entryPath, entryKey, projectFiles)
     }
   }
 }
 
-export function readProjectFiles(basePath: string): IProjectServiceReadFilesResponse {
+export async function readProjectFiles(basePath: string): Promise<IProjectServiceReadFilesResponse> {
   const isValidProjectDirectory = checkIfDirectoryIsAValidProjectDirectory(basePath)
   if (!isValidProjectDirectory.success) {
     return isValidProjectDirectory
   }
 
   const projectFiles: Record<string, unknown> = {}
+  const pouFiles: Record<string, unknown> = {}
 
   /**
    * Read the default project files from the project directory.
@@ -184,7 +204,7 @@ export function readProjectFiles(basePath: string): IProjectServiceReadFilesResp
   for (const [fileName, schema] of Object.entries(projectDefaultFilesMapSchema)) {
     const filePath = join(basePath, fileName)
     try {
-      projectFiles[fileName] = readAndParseFile(filePath, schema, fileName)
+      projectFiles[fileName] = readAndParseFile(filePath, fileName, schema)
     } catch (error) {
       return {
         success: false,
@@ -200,11 +220,51 @@ export function readProjectFiles(basePath: string): IProjectServiceReadFilesResp
   }
 
   /**
-   * TODO: Read the POU files at pou directory from the project directory.
+   * Read pou files from the project directory.
    */
+  for (const pouDirectory of projectPouDirectories) {
+    const pouDirPath = join(basePath, pouDirectory)
+    if (fileOrDirectoryExists(pouDirPath)) {
+      readDirectoryRecursive(pouDirPath, pouDirectory, pouFiles)
+    }
+  }
+
+  // Create pou files based on the project file's POU data
+  if (projectFiles['project.json']) {
+    const project = projectFiles['project.json'] as PLCProject
+    await Promise.all(
+      project.data.pous.map(async (pou) => {
+        const pouType = pou.type.toLowerCase() + 's' // Convert type to lowercase and append 's'
+        const pouFilePath = join(basePath, 'pous', pouType, `${pou.data.name}.json`)
+        try {
+          if (!fileOrDirectoryExists(pouFilePath)) {
+            await promises.mkdir(dirname(pouFilePath), { recursive: true })
+            await promises.writeFile(pouFilePath, JSON.stringify(pou, null, 2), 'utf-8')
+          }
+          pouFiles[join('pous', pouType, `${pou.data.name}.json`)] = pou
+        } catch (error) {
+          console.error(`Failed to create POU file ${pouFilePath}:`, error)
+          throw new Error(`Failed to create POU file for ${pou.data.name}`)
+        }
+      }),
+    )
+  }
+
+  /**
+   * Get pou name by extracting the file name from the path.
+   */
+  Object.keys(pouFiles).forEach((key) => {
+    const pouFile = pouFiles[key] as PLCPou
+    const pouName = basename(key, '.json')
+    if (pouName) {
+      pouFile.data.name = pouName
+      pouFiles[key] = pouFile
+    }
+  })
 
   const returnData: IProjectServiceReadFilesResponse['data'] = {
     project: projectFiles['project.json'] as PLCProject,
+    pous: Object.values(pouFiles).map((pou) => pou as PLCPou),
     deviceConfiguration: projectFiles['devices/configuration.json'] as DeviceConfiguration,
     devicePinMapping: projectFiles['devices/pin-mapping.json'] as DevicePin[],
   }

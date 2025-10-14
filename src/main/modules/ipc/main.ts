@@ -1,4 +1,5 @@
 import { getProjectPath } from '@root/main/utils'
+import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
@@ -10,7 +11,7 @@ import { join } from 'path'
 import { platform } from 'process'
 
 import { ProjectState } from '../../../renderer/store/slices'
-import { PLCProject } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
 import { ModbusTcpClient } from '../modbus/modbus-client'
@@ -18,6 +19,7 @@ import { ModbusTcpClient } from '../modbus/modbus-client'
 type IDataToWrite = {
   projectPath: string
   content: {
+    pous: PLCPou[]
     projectData: PLCProject
     deviceConfiguration: DeviceConfiguration
     devicePinMapping: DevicePin[]
@@ -30,6 +32,7 @@ class MainProcessBridge implements MainIpcModule {
   projectService
   store
   menuBuilder
+  pouService
   compilerModule
   hardwareModule
   private debuggerModbusClient: ModbusTcpClient | null = null
@@ -42,6 +45,7 @@ class MainProcessBridge implements MainIpcModule {
     projectService,
     store,
     menuBuilder,
+    pouService,
     compilerModule,
     hardwareModule,
   }: MainIpcModuleConstructor) {
@@ -50,6 +54,7 @@ class MainProcessBridge implements MainIpcModule {
     this.projectService = projectService
     this.store = store
     this.menuBuilder = menuBuilder
+    this.pouService = pouService
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
   }
@@ -304,7 +309,13 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:open', this.handleProjectOpen)
     this.ipcMain.handle('project:path-picker', this.handleProjectPathPicker)
     this.ipcMain.handle('project:save', this.handleProjectSave)
+    this.ipcMain.handle('project:save-file', this.handleFileSave)
     this.ipcMain.handle('project:open-by-path', this.handleProjectOpenByPath)
+
+    // Pou-related handlers
+    this.ipcMain.handle('pou:create', this.handleCreatePouFile)
+    this.ipcMain.handle('pou:delete', this.handleDeletePouFile)
+    this.ipcMain.handle('pou:rename', this.handleRenamePouFile)
 
     // App and system handlers
     this.ipcMain.handle('open-external-link', this.handleOpenExternalLink)
@@ -385,11 +396,13 @@ class MainProcessBridge implements MainIpcModule {
         const res = await getProjectPath(windowManager)
         return res
       }
-      console.log('Window object not defined')
+      console.error('Window object not defined')
     } catch (error) {
       console.error('Error getting project path:', error)
     }
   }
+  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) =>
+    await this.projectService.saveFile(filePath, content)
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
@@ -407,9 +420,65 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  // Pou-related handlers
+  handleCreatePouFile = async (_event: IpcMainInvokeEvent, props: CreatePouFileProps) => {
+    try {
+      const response = await this.pouService.createPouFile(props)
+      return response
+    } catch (error) {
+      console.error('Error creating POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error creating POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
+    }
+  }
+  handleDeletePouFile = async (_event: IpcMainInvokeEvent, filePath: string) => {
+    try {
+      const response = await this.pouService.deletePouFile(filePath)
+      return response
+    } catch (error) {
+      console.error('Error deleting POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error deleting POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
+    }
+  }
+  handleRenamePouFile = async (
+    _event: IpcMainInvokeEvent,
+    data: {
+      filePath: string
+      newFileName: string
+      fileContent?: unknown
+    },
+  ) => {
+    try {
+      const response = await this.pouService.renamePouFile(data)
+      return response
+    } catch (error) {
+      console.error('Error renaming POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error renaming POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
+    }
+  }
+
   // App and system handlers
   handleOpenExternalLink = async (_event: IpcMainInvokeEvent, url: string) => {
-    console.log('Opening external link:', url)
     try {
       await shell.openExternal(url)
       return { success: true }

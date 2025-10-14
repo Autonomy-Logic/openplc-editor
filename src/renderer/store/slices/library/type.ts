@@ -55,6 +55,7 @@ const libraryActionsSchema = z.object({
     .function()
     .args(z.string(), z.enum(['function', 'function-block']))
     .returns(z.void()),
+  updateLibraryName: z.function().args(z.string(), z.string()).returns(z.void()),
   clearUserLibraries: z.function().args().returns(z.void()),
   removeUserLibrary: z.function().args(z.string()).returns(z.void()),
 })

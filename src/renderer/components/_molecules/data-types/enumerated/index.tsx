@@ -15,6 +15,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
     editor,
     projectActions: { updateDatatype },
     snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const ROWS_NOT_SELECTED = -1
@@ -39,6 +40,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
       ...data,
       initialValue: value,
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const addNewRow = () => {
@@ -51,6 +53,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
         values: newRows.map((row) => ({ description: row?.description })),
         initialValue: data.initialValue,
       } as PLCEnumeratedDatatype)
+      handleFileAndWorkspaceSavedState(editor.meta.name)
+
       return newRows
     })
   }
@@ -69,6 +73,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           values: newRows.map((row) => ({ description: row?.description })),
           initialValue: data.initialValue,
         } as PLCEnumeratedDatatype)
+        handleFileAndWorkspaceSavedState(editor.meta.name)
 
         return newRows
       }
@@ -93,6 +98,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           values: newRows.map((row) => ({ description: row?.description })),
           initialValue: data.initialValue,
         } as PLCEnumeratedDatatype)
+        handleFileAndWorkspaceSavedState(editor.meta.name)
 
         prevRows = newRows
       }
@@ -117,6 +123,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           values: newRows.map((row) => ({ description: row?.description })),
           initialValue: data.initialValue,
         } as PLCEnumeratedDatatype)
+        handleFileAndWorkspaceSavedState(editor.meta.name)
 
         prevRows = newRows
       }

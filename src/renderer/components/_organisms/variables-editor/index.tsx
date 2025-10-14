@@ -1,7 +1,7 @@
-// import * as PrimitiveSwitch from '@radix-ui/react-switch'
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import {
   FBDFlowActions,
@@ -51,6 +51,8 @@ const VariablesEditor = () => {
     },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
+  const handleFileAndWorkspaceSavedState = sharedSelectors.useHandleFileAndWorkspaceSavedState()
 
   /**
    * Table data and column filters states to keep track of the table data and column filters
@@ -192,6 +194,7 @@ const VariablesEditor = () => {
         display: 'table',
         selectedRow: 0,
       })
+      handleFileAndWorkspaceSavedState(editor.meta.name)
       return
     }
 
@@ -212,6 +215,7 @@ const VariablesEditor = () => {
         display: 'table',
         selectedRow: variables.length,
       })
+      handleFileAndWorkspaceSavedState(editor.meta.name)
       return
     }
     createVariable({
@@ -228,6 +232,7 @@ const VariablesEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleRemoveVariable = () => {
@@ -246,6 +251,7 @@ const VariablesEditor = () => {
         selectedRow: selectedRow - 1,
       })
     }
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleFilterChange = (value: FilterOptionsType) => {
@@ -269,6 +275,7 @@ const VariablesEditor = () => {
 
   const handleReturnTypeChange = (value: BaseType) => {
     updatePouReturnType(editor.meta.name, value)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   // const forbiddenVariableToBeRemoved =
@@ -280,6 +287,7 @@ const VariablesEditor = () => {
     event.preventDefault()
     event.stopPropagation()
     updatePouDocumentation(editor.meta.name, event.target.value)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleDescriptionValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,6 +332,7 @@ const VariablesEditor = () => {
         })
       }),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const unlinkRenamedVariablesByName = (
@@ -360,6 +369,7 @@ const VariablesEditor = () => {
         }),
       ),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const relinkVariablesByName = (
@@ -412,6 +422,7 @@ const VariablesEditor = () => {
         }),
       ),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const relinkVariablesByNameFBD = (
@@ -461,6 +472,7 @@ const VariablesEditor = () => {
         })
       }),
     )
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const getBlockExpectedType = (node: Node): string => {
@@ -626,6 +638,7 @@ const VariablesEditor = () => {
         })
       })
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const syncNodesWithVariablesFBD = (
@@ -683,6 +696,7 @@ const VariablesEditor = () => {
         applyVariableToNodeFBD(selectedVariable, node.id, flow.name, fbdFlows, updateNode)
       })
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const commitCode = async (): Promise<boolean> => {
@@ -783,6 +797,8 @@ const VariablesEditor = () => {
 
       toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
+      handleFileAndWorkspaceSavedState(editor.meta.name)
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'

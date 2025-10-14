@@ -7,6 +7,7 @@ const modalTypes = z.enum([
   'block-fbd-element',
   'create-project',
   'save-changes-project',
+  'save-changes-file',
   'confirm-delete-element',
   'confirm-device-switch',
   'quit-application',

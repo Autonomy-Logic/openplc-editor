@@ -34,6 +34,10 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
+    'save-changes-file': {
+      open: false,
+      data: null,
+    },
     'confirm-delete-element': {
       open: false,
       data: null,

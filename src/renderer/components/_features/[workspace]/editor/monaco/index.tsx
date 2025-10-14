@@ -4,10 +4,9 @@ import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
-import { baseTypeSchema } from '@root/types/PLC/open-plc'
+import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
@@ -29,7 +28,7 @@ import { parsePouToStText } from './drag-and-drop/st'
 type monacoEditorProps = {
   path: string
   name: string
-  language: 'il' | 'st'
+  language: 'il' | 'st' | 'python'
 }
 
 type PouToText = {
@@ -62,7 +61,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     sensitiveCase,
     regularExpression,
     workspace: {
-      editingState,
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
@@ -77,7 +75,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     libraries: sliceLibraries,
     editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
@@ -93,6 +91,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
     setLocalText(typeof pou?.data.body.value === 'string' ? pou.data.body.value : '')
   }, [name, language])
+
+  const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
 
   const pou = pous.find((pou) => pou.data.name === name)
 
@@ -111,6 +111,23 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       updateLocalVariablesInTokenizer(variableNames)
     }
   }, [pou?.data.variables, language])
+
+  useEffect(() => {
+    // Handle template injection when POU changes (for already mounted editors)
+    if (language === 'python' && editorRef.current && pou) {
+      injectPythonTemplateIfNeeded(editorRef.current, pou, name)
+    }
+  }, [pou])
+
+  useEffect(() => {
+    return () => {
+      setTemplatesInjected((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(name)
+        return newSet
+      })
+    }
+  }, [name])
 
   useEffect(() => {
     if (language === 'st' && dataTypes.length > 0) {
@@ -217,7 +234,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     (range: monaco.IRange) => {
       const allSuggestions = keywordsCompletion({
         range,
-        language,
+        language: language as 'st' | 'il',
       }).suggestions
 
       let filteredSuggestions = allSuggestions
@@ -264,7 +281,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     (range: monaco.IRange) => {
       const suggestions = snippetsSTCompletion({
         range,
-        language,
+        language: language as 'st' | 'il',
       }).suggestions
       const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
       const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
@@ -371,14 +388,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
-    // here is the editor instance
-    // you can store it in `useRef` for further usage
     editorRef.current = editorInstance
-
-    // here is another way to get monaco instance
-    // you can also store it in `useRef` for further usage
     monacoRef.current = monacoInstance
 
+    if (!editorInstance) return
+
+    // Existing functionality for other languages
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
 
@@ -396,19 +411,79 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    if (!editorInstance) return
-
-    if (editor.cursorPosition) {
+    // Restore cursor and scroll position for non-Python languages
+    if (editor.cursorPosition && language !== 'python') {
       editorInstance.setPosition(editor.cursorPosition)
       editorInstance.revealPositionInCenter(editor.cursorPosition)
     }
 
-    if (editor.scrollPosition) {
+    if (editor.scrollPosition && language !== 'python') {
       editorInstance.setScrollTop(editor.scrollPosition.top)
       editorInstance.setScrollLeft(editor.scrollPosition.left)
     }
 
+    if (language === 'python' && pou) {
+      injectPythonTemplateIfNeeded(editorInstance, pou, name)
+    }
+
     editorInstance.focus()
+  }
+
+  function injectPythonTemplateIfNeeded(editor: monaco.editor.IStandaloneCodeEditor, pou: PLCPou, pouName: string) {
+    const editorModel = editor.getModel()
+    if (!editorModel) return
+
+    const stateValue = pou.data.body.value as string
+    const editorValue = editorModel.getValue()
+
+    const stateIsEmpty = !stateValue || stateValue.trim() === ''
+    const editorIsEmpty = !editorValue || editorValue.trim() === ''
+    const alreadyInjected = templatesInjected.has(pouName)
+
+    const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
+
+    if (shouldInjectTemplate) {
+      const pythonTemplate = `# ================================================================
+# DISCLAIMER: Python Function Block Execution
+#
+# This block runs asynchronously from the main PLC runtime.
+# ---------------------------------------------------------------
+# - All variables are shared with the runtime through shared memory.
+# - The block_init() function is called once when the block starts.
+# - The block_loop() function is called periodically (~100ms).
+# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
+#   It is NOT guaranteed that block_loop() will execute once per scan.
+#
+# Use this block for non-time-critical tasks. For logic that must
+# match the PLC scan cycle, use standard IEC 61131-3 function blocks.
+# ================================================================
+
+from multiprocessing import shared_memory
+import struct
+import time
+import os
+
+def block_init():
+    print('Block was initialized')
+
+def block_loop():
+    print('Block has run the loop function')
+`
+
+      editor.setValue(pythonTemplate)
+      handleWriteInPou(pythonTemplate)
+
+      // Position cursor at the end
+      const lineCount = editorModel.getLineCount()
+      const lastLineContent = editorModel.getLineContent(lineCount)
+      const position = {
+        lineNumber: lineCount,
+        column: lastLineContent.length + 1,
+      }
+      editor.setPosition(position)
+
+      setTemplatesInjected((prev) => new Set(prev).add(pouName))
+    }
   }
 
   function moveToMatch(
@@ -432,16 +507,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }
 
   function handleWriteInPou(value: string | undefined) {
-    if (!value) {
-      return
-    }
+    if (value === undefined) return
 
     setLocalText(value)
-
-    if (editingState !== 'unsaved') {
-      setEditingState('unsaved')
-    }
-
+    handleFileAndWorkspaceSavedState(name)
     updatePou({ name, content: { language, value } })
   }
 
@@ -536,7 +605,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const res = createVariable({
       data: {
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         name: uniqueName,
         type: {
           definition: 'derived',

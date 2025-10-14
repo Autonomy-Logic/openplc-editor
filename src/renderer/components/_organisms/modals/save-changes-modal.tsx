@@ -5,7 +5,6 @@ import { IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ComponentPropsWithoutRef } from 'react'
 
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
-import { saveProjectRequest } from '../../_templates'
 
 export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
@@ -19,7 +18,7 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
     deviceDefinitions,
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
-    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject, openRecentProject },
+    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject, openRecentProject, saveProject },
   } = useOpenPLCStore()
 
   const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
@@ -32,7 +31,7 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
     closeModal()
 
     if (operation === 'save') {
-      const { success } = await saveProjectRequest(project, deviceDefinitions, setEditingState)
+      const { success } = await saveProject(project, deviceDefinitions)
       if (!success) {
         return
       }
@@ -74,12 +73,12 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
   return (
     <Modal open={isOpen} onOpenChange={(open) => onOpenChange('save-changes-project', open)} {...rest}>
       <ModalContent className='flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
-        <ModalTitle className='hidden'>Save changes</ModalTitle>
+        <ModalTitle className='hidden'>Save project changes</ModalTitle>
         <div className='flex h-[350px] select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
           <div>
             <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
-              There are unsaved changes in your project. Do you want to save before closing?
+              There are unsaved changes in your <strong>project</strong>. Do you want to save before closing?
             </p>
           </div>
 

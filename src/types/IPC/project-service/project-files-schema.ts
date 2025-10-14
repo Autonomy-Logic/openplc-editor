@@ -9,6 +9,7 @@ export const projectDefaultFilesMapSchema = {
 export type ProjectDefaultFilesMapKeys = keyof typeof projectDefaultFilesMapSchema
 export type ProjectDefaultFilesMapValues = (typeof projectDefaultFilesMapSchema)[ProjectDefaultFilesMapKeys]
 
-export const projectDefaultDirectories = ['devices'] as const
+export const projectPouDirectories = ['pous/functions', 'pous/function-blocks', 'pous/programs'] as const
+export const projectDefaultDirectories = ['devices', ...projectPouDirectories] as const
 export const projectDefaultDirectoriesValidation = [...projectDefaultDirectories, 'build'] as readonly string[]
 export type ProjectDefaultDirectories = (typeof projectDefaultDirectories)[number]
