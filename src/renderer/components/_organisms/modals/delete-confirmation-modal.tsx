@@ -35,16 +35,17 @@ export type ConfirmDeleteModalProps = {
 }
 
 const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModalProps) => {
+  const store = useOpenPLCStore()
   const {
     editor,
     projectActions: { deleteVariable },
     ladderFlowActions: { removeRung },
     editorActions: { updateModelVariables },
     modalActions: { onOpenChange, closeModal },
-    pouActions: { delete: deletePouAction },
-    datatypeActions: { delete: deleteDatatypeAction },
     sharedWorkspaceActions: { closeFile },
-  } = useOpenPLCStore()
+  } = store
+  const deletePouAction = store.pouActions.delete
+  const deleteDatatypeAction = store.datatypeActions.delete
 
   const handleDeleteLadderRung = (data: DeleteLadderRung) => {
     const { pou, rung } = data
