@@ -518,6 +518,8 @@ class MainProcessBridge implements MainIpcModule {
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
   }
+  handleReadDebugFile = async (_event: IpcMainInvokeEvent, projectPath: string, boardTarget: string) => {
+    try {
       const fs = await import('fs/promises')
       const path = await import('path')
 
@@ -530,6 +532,13 @@ class MainProcessBridge implements MainIpcModule {
 
       const content = await fs.readFile(debugFilePath, 'utf-8')
       return { success: true, content }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read debug.c file',
+      }
+    }
+  }
 
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
