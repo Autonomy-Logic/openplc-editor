@@ -111,14 +111,14 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const {
-      workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues },
+      workspace: { isDebuggerVisible, debuggerTargetIp, debugVariableIndexes, debugVariableValues },
       deviceDefinitions,
       workspaceActions,
       project,
-      runtimeConnection: { connectionStatus, ipAddress: targetIpAddress },
+      runtimeConnection: { connectionStatus, ipAddress: runtimeIpAddress },
     } = useOpenPLCStore.getState()
 
-    if (!isDebuggerVisible || connectionStatus !== 'connected') {
+    if (!isDebuggerVisible) {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
@@ -127,9 +127,35 @@ const WorkspaceScreen = () => {
       return
     }
 
-    if (!targetIpAddress) {
-      console.warn('No runtime IP address configured')
-      return
+    const boardTarget = deviceDefinitions.configuration.deviceBoard
+    const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
+    const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
+
+    let targetIpAddress: string | undefined
+
+    if (isRuntimeTarget) {
+      if (connectionStatus !== 'connected') {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        variableInfoMapRef.current = null
+        return
+      }
+
+      if (!runtimeIpAddress) {
+        console.warn('No runtime IP address configured')
+        return
+      }
+
+      targetIpAddress = runtimeIpAddress
+    } else {
+      if (!debuggerTargetIp) {
+        console.warn('No debugger target IP address configured')
+        return
+      }
+
+      targetIpAddress = debuggerTargetIp
     }
 
     const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU

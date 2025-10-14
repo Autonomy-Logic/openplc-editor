@@ -22,6 +22,7 @@ const workspaceStateSchema = z.object({
     isModalOpen: z.array(z.object({ modalName: z.string(), modalState: z.boolean() })),
     discardChanges: z.boolean(),
     isDebuggerVisible: z.boolean(),
+    debuggerTargetIp: z.string().nullable(),
     debugVariableIndexes: z.custom<Map<string, number>>((val) => val instanceof Map),
     debugVariableValues: z.custom<Map<string, string>>((val) => val instanceof Map),
     close: z.object({
@@ -66,6 +67,7 @@ const workspaceActionsSchema = z.object({
     .returns(z.void()),
   clearWorkspace: z.function().returns(z.void()),
   setDebuggerVisible: z.function().args(z.boolean()).returns(z.void()),
+  setDebuggerTargetIp: z.function().args(z.string().nullable()).returns(z.void()),
   setDebugVariableIndexes: z.function().args(z.map(z.string(), z.number())).returns(z.void()),
   setDebugVariableValues: z.function().args(z.map(z.string(), z.string())).returns(z.void()),
   toggleDiscardChanges: z.function().returns(z.void()),
