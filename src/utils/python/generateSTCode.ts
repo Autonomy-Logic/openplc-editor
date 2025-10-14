@@ -61,8 +61,7 @@ const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): 
 const generateInputCopyCode = (inputVars: PLCVariable[]): string => {
   if (inputVars.length === 0) return ''
 
-  let code = '        // Write input variables\n'
-  code += '        shm_data_in_t data_in;\n'
+  let code = '        shm_data_in_t data_in;\n'
 
   inputVars.forEach((variable) => {
     const isString = variable.type?.definition === 'base-type' && variable.type?.value === 'string'
@@ -83,8 +82,7 @@ const generateInputCopyCode = (inputVars: PLCVariable[]): string => {
 const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
   if (outputVars.length === 0) return ''
 
-  let code = '        // Read output variables\n'
-  code += '        shm_data_out_t data_out;\n'
+  let code = '        shm_data_out_t data_out;\n'
   code += '        memcpy(&data_out, shm_out_ptr, sizeof(data_out));\n'
 
   outputVars.forEach((variable) => {
@@ -162,7 +160,6 @@ if first_run = false then
             return;
         }
 
-        // Store shm_in_ptr and shm_out_ptr in block persistent data
         data__->SHM_IN_PTR.value = (uint64_t)shm_in_ptr;
         data__->SHM_OUT_PTR.value = (uint64_t)shm_out_ptr;
     }}
