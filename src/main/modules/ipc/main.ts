@@ -518,23 +518,18 @@ class MainProcessBridge implements MainIpcModule {
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
   }
-  handleReadDebugFile = async (_event: IpcMainInvokeEvent, projectPath: string, boardTarget: string) => {
-    try {
       const fs = await import('fs/promises')
       const path = await import('path')
 
-      const baseProjectPath = projectPath.replace('/project.json', '')
-      const debugFilePath = path.join(baseProjectPath, 'build', boardTarget, 'src', 'debug.c')
+      const baseProjectPath = path.dirname(projectPath)
+      // Guard against traversal/absolute input in boardTarget
+      if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
+        return { success: false, error: 'Invalid board target' }
+      }
+      const debugFilePath = path.resolve(baseProjectPath, 'build', boardTarget, 'src', 'debug.c')
 
       const content = await fs.readFile(debugFilePath, 'utf-8')
       return { success: true, content }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to read debug.c file',
-      }
-    }
-  }
 
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
