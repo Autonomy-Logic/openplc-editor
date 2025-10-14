@@ -135,10 +135,12 @@ const WorkspaceScreen = () => {
               debugVariableKeys.add(`${pou.data.name}:${v.name}`)
 
               if (v.type.definition === 'derived') {
-                const hierarchy = debugVariableHierarchy.get(pou.data.name)
-                if (hierarchy) {
-                  const blockNode = hierarchy.find((n) => n.name.toUpperCase() === v.name.toUpperCase())
-                  if (blockNode && expandedBlockPaths.has(blockNode.fullPath)) {
+                const hierarchy: DebugVariableNode[] | undefined = debugVariableHierarchy.get(pou.data.name)
+                if (hierarchy !== undefined) {
+                  const blockNode: DebugVariableNode | undefined = hierarchy.find(
+                    (n: DebugVariableNode) => n.name.toUpperCase() === v.name.toUpperCase(),
+                  )
+                  if (blockNode !== undefined && expandedBlockPaths.has(blockNode.fullPath)) {
                     const addChildren = (node: DebugVariableNode): void => {
                       node.children.forEach((child: DebugVariableNode) => {
                         const childKey = `${pou.data.name}:${child.name}`
@@ -640,7 +642,7 @@ const WorkspaceScreen = () => {
                               debugVariableValues={debugVariableValues}
                               graphList={graphList}
                               setGraphList={setGraphList}
-                              onExpandedChange={(expanded) => {
+                              onExpandedChange={(expanded: Set<string>) => {
                                 setExpandedBlockPaths(expanded)
                               }}
                             />

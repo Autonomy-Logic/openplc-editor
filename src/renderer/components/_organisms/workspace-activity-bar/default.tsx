@@ -4,6 +4,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import {
   buildVariableHierarchy,
+  type DebugVariableNode,
   matchVariableWithDebugEntry,
   parseDebugFile,
 } from '@root/renderer/utils/parse-debug-file'
@@ -564,7 +565,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
           })
 
-          const variableHierarchy = buildVariableHierarchy(
+          const variableHierarchy: Map<string, DebugVariableNode[]> = buildVariableHierarchy(
             parsed.variables,
             project.data.pous,
             project.data.configuration.resource.instances,
