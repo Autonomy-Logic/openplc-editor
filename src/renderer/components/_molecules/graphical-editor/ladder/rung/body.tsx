@@ -53,7 +53,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
-  const getNodeOutputState = (nodeId: string, sourceHandle: string | null | undefined): boolean | undefined => {
+  const getNodeOutputState = (
+    nodeId: string,
+    sourceHandle: string | null | undefined,
+    isInputGreen: boolean,
+  ): boolean | undefined => {
     if (!isDebuggerVisible) return undefined
 
     const node = rungLocal.nodes.find((n) => n.id === nodeId)
@@ -64,7 +68,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
     }
 
     if (node.type === 'parallel') {
-      return true
+      return isInputGreen
     }
 
     if (node.type === 'contact') {
@@ -77,7 +81,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
       if (value === undefined) return undefined
 
       const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-      return (node.data as { variant: 'open' | 'negated' }).variant === 'negated' ? !isTrue : isTrue
+      const contactState = (node.data as { variant: 'open' | 'negated' }).variant === 'negated' ? !isTrue : isTrue
+
+      return isInputGreen && contactState
     }
 
     if (node.type === 'coil') {
@@ -90,7 +96,10 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
       if (value === undefined) return undefined
 
       const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-      return (node.data as { variant: 'normal' | 'negated' | 'set' | 'reset' }).variant === 'negated' ? !isTrue : isTrue
+      const coilState =
+        (node.data as { variant: 'normal' | 'negated' | 'set' | 'reset' }).variant === 'negated' ? !isTrue : isTrue
+
+      return isInputGreen && coilState
     }
 
     if (node.type === 'block') {
@@ -122,10 +131,44 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
       return rungLocal.edges
     }
 
-    return rungLocal.edges.map((edge) => {
-      const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
+    const edgeStateMap = new Map<string, boolean>()
 
-      if (sourceOutputState === true) {
+    const determineEdgeState = (edgeId: string): boolean => {
+      // Check if we've already computed this edge's state
+      if (edgeStateMap.has(edgeId)) {
+        return edgeStateMap.get(edgeId)!
+      }
+
+      const edge = rungLocal.edges.find((e) => e.id === edgeId)
+      if (!edge) return false
+
+      const incomingEdges = rungLocal.edges.filter((e) => e.target === edge.source)
+
+      let isInputGreen = false
+      if (incomingEdges.length === 0) {
+        // Check if the source is the left power rail
+        const sourceNode = rungLocal.nodes.find((n) => n.id === edge.source)
+        isInputGreen = sourceNode?.type === 'powerRail' && (sourceNode.data as { variant: string }).variant === 'left'
+      } else {
+        // Check if any incoming edge is green
+        isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id))
+      }
+
+      const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle, isInputGreen)
+
+      const isGreen = sourceOutputState === true
+      edgeStateMap.set(edgeId, isGreen)
+      return isGreen
+    }
+
+    rungLocal.edges.forEach((edge) => {
+      determineEdgeState(edge.id)
+    })
+
+    return rungLocal.edges.map((edge) => {
+      const isGreen = edgeStateMap.get(edge.id)
+
+      if (isGreen === true) {
         return {
           ...edge,
           style: { stroke: EDGE_COLOR_TRUE, strokeWidth: 2 },
@@ -133,6 +176,62 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
       }
 
       return edge
+    })
+  }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, editor.meta.name, project])
+
+  const styledNodes = useMemo(() => {
+    if (!isDebuggerVisible) {
+      return rungLocal.nodes
+    }
+
+    const nodeInputStateMap = new Map<string, boolean>()
+
+    const determineNodeInputState = (nodeId: string): boolean => {
+      if (nodeInputStateMap.has(nodeId)) {
+        return nodeInputStateMap.get(nodeId)!
+      }
+
+      const node = rungLocal.nodes.find((n) => n.id === nodeId)
+      if (!node) return false
+
+      if (node.type === 'powerRail' && (node.data as { variant: string }).variant === 'left') {
+        nodeInputStateMap.set(nodeId, true)
+        return true
+      }
+
+      const incomingEdges = rungLocal.edges.filter((e) => e.target === nodeId)
+
+      if (incomingEdges.length === 0) {
+        nodeInputStateMap.set(nodeId, false)
+        return false
+      }
+
+      const hasGreenInput = incomingEdges.some((incomingEdge) => {
+        const sourceInputGreen = determineNodeInputState(incomingEdge.source)
+        const sourceOutputGreen = getNodeOutputState(incomingEdge.source, incomingEdge.sourceHandle, sourceInputGreen)
+        return sourceOutputGreen === true
+      })
+
+      nodeInputStateMap.set(nodeId, hasGreenInput)
+      return hasGreenInput
+    }
+
+    rungLocal.nodes.forEach((node) => {
+      determineNodeInputState(node.id)
+    })
+
+    return rungLocal.nodes.map((node) => {
+      if (node.type === 'parallel') {
+        const isFlowActive = nodeInputStateMap.get(node.id) || false
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isFlowActive,
+          },
+        }
+      }
+      return node
     })
   }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, editor.meta.name, project])
 
@@ -605,7 +704,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
           <ReactFlowPanel
             viewportConfig={{
               nodeTypes: nodeTypes,
-              nodes: rungLocal.nodes,
+              nodes: styledNodes,
               edges: styledEdges,
               nodesFocusable: false,
               edgesFocusable: false,
