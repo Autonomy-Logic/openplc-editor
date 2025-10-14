@@ -523,12 +523,12 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const path = await import('path')
 
-      const baseProjectPath = path.dirname(projectPath)
+      // projectPath is already the project directory, not a file path
       // Guard against traversal/absolute input in boardTarget
       if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
         return { success: false, error: 'Invalid board target' }
       }
-      const debugFilePath = path.resolve(baseProjectPath, 'build', boardTarget, 'src', 'debug.c')
+      const debugFilePath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug.c')
 
       const content = await fs.readFile(debugFilePath, 'utf-8')
       return { success: true, content }
@@ -578,11 +578,12 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const path = await import('path')
 
-      const baseProjectPath = path.dirname(projectPath)
+      // projectPath is already the project directory, not a file path
+      // Guard against traversal/absolute input in boardTarget
       if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
         return { success: false, error: 'Invalid board target' }
       }
-      const programStPath = path.resolve(baseProjectPath, 'build', boardTarget, 'src', 'program.st')
+      const programStPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'program.st')
 
       const content = await fs.readFile(programStPath, 'utf-8')
 
