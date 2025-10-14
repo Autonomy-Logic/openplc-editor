@@ -290,6 +290,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
 
       let targetIpAddress: string | undefined
+      let connectionType: 'tcp' | 'rtu' = 'tcp'
+      let rtuPort: string | undefined
+      let rtuBaudRate: number | undefined
+      let rtuSlaveId: number | undefined
 
       if (isRuntimeTarget) {
         const connectionStatus = useOpenPLCStore.getState().runtimeConnection.connectionStatus
@@ -372,56 +376,35 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
           }
         } else {
-          consoleActions.addLog({
-            id: crypto.randomUUID(),
-            level: 'info',
-            message: 'Modbus RTU debugger support is not yet implemented. Using Modbus TCP as fallback if available.',
-          })
+          const { modbusRTU } = deviceDefinitions.configuration.communicationConfiguration
+          connectionType = 'rtu'
 
-          if (!tcpEnabled) {
+          rtuPort = deviceDefinitions.configuration.communicationPort
+          rtuBaudRate = parseInt(modbusRTU.rtuBaudRate, 10)
+          rtuSlaveId = modbusRTU.rtuSlaveId ?? undefined
+
+          if (!rtuPort) {
             await showDebuggerMessage(
-              'info',
-              'Not Implemented',
-              'Modbus RTU debugger support is coming soon. Please enable Modbus TCP for now.',
+              'error',
+              'Configuration Error',
+              'No communication port selected for Modbus RTU.',
               ['OK'],
             )
             setIsDebuggerProcessing(false)
             return
           }
 
-          const dhcpEnabled = communicationPreferences.enabledDHCP
-
-          if (dhcpEnabled) {
-            const previousIp = deviceDefinitions.temporaryDhcpIp || ''
-            const result = await showDebuggerIpInput(
-              'Target IP Address',
-              'Enter the IP address of the target device:',
-              previousIp,
-            )
-
-            if (result === null) {
-              setIsDebuggerProcessing(false)
-              return
-            }
-
-            targetIpAddress = result
-            if (!targetIpAddress) {
-              setIsDebuggerProcessing(false)
-              return
-            }
-
-            deviceActions.setTemporaryDhcpIp(targetIpAddress)
-          } else {
-            targetIpAddress = modbusTCP.tcpStaticHostConfiguration.ipAddress || undefined
-
-            if (!targetIpAddress) {
-              await showDebuggerMessage('error', 'Configuration Error', 'No IP address configured for Modbus TCP.', [
-                'OK',
-              ])
-              setIsDebuggerProcessing(false)
-              return
-            }
+          if (!rtuSlaveId) {
+            await showDebuggerMessage('error', 'Configuration Error', 'No slave ID configured for Modbus RTU.', ['OK'])
+            setIsDebuggerProcessing(false)
+            return
           }
+
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Using Modbus RTU: Port=${rtuPort}, Baud=${rtuBaudRate}, SlaveID=${rtuSlaveId}`,
+          })
         }
       }
 
@@ -510,7 +493,19 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
 
           if (data.closePort) {
-            void handleMd5Verification(projectPath, boardTarget, targetIpAddress, isRuntimeTarget)
+            void handleMd5Verification(
+              projectPath,
+              boardTarget,
+              connectionType,
+              {
+                ipAddress: targetIpAddress,
+                port: rtuPort,
+                baudRate: rtuBaudRate,
+                slaveId: rtuSlaveId,
+              },
+              targetIpAddress,
+              isRuntimeTarget,
+            )
           }
         },
       )
@@ -527,7 +522,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleMd5Verification = async (
     projectPath: string,
     boardTarget: string,
-    targetIpAddress: string,
+    connectionType: 'tcp' | 'rtu',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+    },
+    targetIpAddress: string | undefined,
     isRuntimeTarget: boolean,
   ) => {
     const { consoleActions, workspaceActions, runtimeConnection, deviceActions } = useOpenPLCStore.getState()
@@ -561,7 +563,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             message: 'Starting PLC...',
           })
 
-          const startResult = await window.bridge.runtimeStartPlc(targetIpAddress, jwtToken)
+          const startResult = await window.bridge.runtimeStartPlc(targetIpAddress!, jwtToken)
           if (!startResult.success) {
             consoleActions.addLog({
               id: crypto.randomUUID(),
@@ -621,13 +623,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: `Program MD5: ${expectedMd5}`,
       })
 
+      const targetDisplay = connectionType === 'tcp' ? targetIpAddress : connectionParams.port
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'info',
-        message: `Requesting MD5 from target at ${targetIpAddress}...`,
+        message: `Requesting MD5 from target at ${targetDisplay}...`,
       })
 
-      const verifyResult = await window.bridge.debuggerVerifyMd5(targetIpAddress, expectedMd5)
+      const verifyResult = await window.bridge.debuggerVerifyMd5(connectionType, connectionParams, expectedMd5)
 
       if (!verifyResult.success) {
         consoleActions.addLog({
@@ -693,8 +696,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
           })
 
-          const connectResult: { success: boolean; error?: string } =
-            await window.bridge.debuggerConnect(targetIpAddress)
+          const connectResult: { success: boolean; error?: string } = await window.bridge.debuggerConnect(
+            connectionType,
+            connectionParams,
+          )
           if (!connectResult.success) {
             consoleActions.addLog({
               id: crypto.randomUUID(),
@@ -785,7 +790,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 })
 
                 setTimeout(() => {
-                  void handleMd5Verification(projectPath, boardTarget, targetIpAddress, isRuntimeTarget)
+                  void handleMd5Verification(
+                    projectPath,
+                    boardTarget,
+                    connectionType,
+                    connectionParams,
+                    targetIpAddress,
+                    isRuntimeTarget,
+                  )
                 }, 2000)
               }
             },

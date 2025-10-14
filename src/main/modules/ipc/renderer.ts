@@ -239,10 +239,16 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
 
   debuggerVerifyMd5: (
-    targetIpAddress: string,
+    connectionType: 'tcp' | 'rtu',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+    },
     expectedMd5: string,
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
-    ipcRenderer.invoke('debugger:verify-md5', targetIpAddress, expectedMd5),
+    ipcRenderer.invoke('debugger:verify-md5', connectionType, connectionParams, expectedMd5),
 
   debuggerReadProgramStMd5: (
     projectPath: string,
@@ -251,7 +257,6 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('debugger:read-program-st-md5', projectPath, boardTarget),
 
   debuggerGetVariablesList: (
-    targetIpAddress: string,
     variableIndexes: number[],
   ): Promise<{
     success: boolean
@@ -260,10 +265,18 @@ const rendererProcessBridge = {
     data?: number[]
     error?: string
     needsReconnect?: boolean
-  }> => ipcRenderer.invoke('debugger:get-variables-list', targetIpAddress, variableIndexes),
+  }> => ipcRenderer.invoke('debugger:get-variables-list', variableIndexes),
 
-  debuggerConnect: (targetIpAddress: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('debugger:connect', targetIpAddress),
+  debuggerConnect: (
+    connectionType: 'tcp' | 'rtu',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+    },
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('debugger:connect', connectionType, connectionParams),
 
   debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 

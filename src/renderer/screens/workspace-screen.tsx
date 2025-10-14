@@ -131,8 +131,6 @@ const WorkspaceScreen = () => {
     const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
     const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
 
-    let targetIpAddress: string | undefined
-
     if (isRuntimeTarget) {
       if (connectionStatus !== 'connected') {
         if (pollingIntervalRef.current) {
@@ -147,15 +145,11 @@ const WorkspaceScreen = () => {
         console.warn('No runtime IP address configured')
         return
       }
-
-      targetIpAddress = runtimeIpAddress
     } else {
       if (!debuggerTargetIp) {
         console.warn('No debugger target IP address configured')
         return
       }
-
-      targetIpAddress = debuggerTargetIp
     }
 
     const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
@@ -322,7 +316,7 @@ const WorkspaceScreen = () => {
         while (processedCount < allIndexes.length) {
           const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
 
-          const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
+          const result = await window.bridge.debuggerGetVariablesList(batch)
 
           if (!result.success) {
             if (result.needsReconnect) {
