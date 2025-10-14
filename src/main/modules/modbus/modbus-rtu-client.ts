@@ -130,10 +130,21 @@ export class ModbusRtuClient {
 
       let responseBuffer = Buffer.alloc(0)
 
+      let frameCompleteTimeout: NodeJS.Timeout | null = null
+
       const onData = (data: Buffer) => {
         responseBuffer = Buffer.concat([responseBuffer, data] as unknown as Uint8Array[])
 
-        if (responseBuffer.length >= 5) {
+        if (frameCompleteTimeout) {
+          clearTimeout(frameCompleteTimeout)
+        }
+
+        frameCompleteTimeout = setTimeout(() => {
+          if (responseBuffer.length < 5) {
+            reject(new Error('Response too short'))
+            return
+          }
+
           clearTimeout(timeoutHandle)
           this.serialPort?.removeListener('data', onData)
           this.serialPort?.removeListener('error', onError)
@@ -152,11 +163,14 @@ export class ModbusRtuClient {
           responseWithoutCrc.copy(paddedResponse as unknown as Uint8Array, 6)
 
           resolve(paddedResponse)
-        }
+        }, 10)
       }
 
       const onError = (error: Error) => {
         clearTimeout(timeoutHandle)
+        if (frameCompleteTimeout) {
+          clearTimeout(frameCompleteTimeout)
+        }
         this.serialPort?.removeListener('data', onData)
         this.serialPort?.removeListener('error', onError)
         reject(error)
