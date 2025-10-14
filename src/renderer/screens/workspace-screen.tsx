@@ -158,10 +158,6 @@ const WorkspaceScreen = () => {
       targetIpAddress = debuggerTargetIp
     }
 
-    console.log(
-      `[Debugger Polling] Target: ${boardTarget}, isRuntimeTarget: ${isRuntimeTarget}, IP: ${targetIpAddress}`,
-    )
-
     const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
     const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
     let batchSize = 60
@@ -313,11 +309,8 @@ const WorkspaceScreen = () => {
           .sort((a, b) => a - b)
 
         if (allIndexes.length === 0) {
-          console.log('[Debugger Polling] No variables to poll')
           return
         }
-
-        console.log(`[Debugger Polling] Polling ${allIndexes.length} variable(s): indexes [${allIndexes.join(', ')}]`)
 
         const newValues = new Map<string, string>()
         debugVariableValues.forEach((value: string, key: string) => {
@@ -329,11 +322,7 @@ const WorkspaceScreen = () => {
         while (processedCount < allIndexes.length) {
           const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
 
-          console.log(`[Debugger Polling] Requesting batch of ${batch.length} variables to ${targetIpAddress}`)
-
           const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
-
-          console.log(`[Debugger Polling] Result: success=${result.success}, error=${result.error || 'none'}`)
 
           if (!result.success) {
             if (result.needsReconnect) {
