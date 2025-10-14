@@ -431,8 +431,61 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: 'Starting debug compilation...',
       })
 
+      const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.data.body.language === 'python')
+      let processedProjectData: PLCProjectData = projectData
+
+      if (hasPythonCode) {
+        const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'python')
+
+        pythonPous.forEach((pou) => {
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Found Python POU: "${pou.data.name}" (${pou.type})`,
+          })
+        })
+
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: `Processing ${pythonPous.length} Python POU(s)...`,
+        })
+
+        processedProjectData = addPythonLocalVariables(projectData)
+
+        const pythonData = extractPythonData(processedProjectData.pous)
+        const processedPythonCodes = injectPythonCode(pythonData)
+
+        let pythonIndex = 0
+        processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
+          if (pou.data.body.language === 'python') {
+            if (processedPythonCodes[pythonIndex]) {
+              const stCode = generateSTCode({
+                pouName: pou.data.name,
+                allVariables: pou.data.variables,
+                processedPythonCode: processedPythonCodes[pythonIndex],
+              })
+
+              pou.data.body = {
+                language: 'st',
+                value: stCode,
+              }
+
+              pythonIndex++
+            }
+          }
+          return pou
+        })
+
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: `Successfully processed ${processedPythonCodes.length} Python POU(s)`,
+        })
+      }
+
       window.bridge.runDebugCompilation(
-        [projectPath, boardTarget, projectData],
+        [projectPath, boardTarget, processedProjectData],
         (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
           if (typeof data.message === 'string') {
             data.message
