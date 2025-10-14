@@ -62,8 +62,12 @@ const Tabs = () => {
   useEffect(() => {}, [tabs])
 
   useEffect(() => {
-    window.bridge.closeTabAccelerator((_event) => handleRemoveTab(selectedTab))
-    window.bridge.deletePouAccelerator((_event) => handleDeletePou())
+    window.bridge.closeTabAccelerator((_event) => {
+      handleRemoveTab(selectedTab)
+    })
+    window.bridge.deletePouAccelerator((_event) => {
+      handleDeletePou()
+    })
     return () => {
       void window.bridge.removeCloseTabListener()
       void window.bridge.removeDeletePouListener()
