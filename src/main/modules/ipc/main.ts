@@ -14,6 +14,7 @@ import { ProjectState } from '../../../renderer/store/slices'
 import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
+import { ModbusTcpClient } from '../modbus/modbus-client'
 
 type IDataToWrite = {
   projectPath: string
@@ -34,6 +35,9 @@ class MainProcessBridge implements MainIpcModule {
   pouService
   compilerModule
   hardwareModule
+  private debuggerModbusClient: ModbusTcpClient | null = null
+  private debuggerTargetIp: string | null = null
+  private debuggerReconnecting: boolean = false
 
   constructor({
     ipcMain,
@@ -328,6 +332,7 @@ class MainProcessBridge implements MainIpcModule {
     // TODO: This handle should be refactored to use MessagePortMain for better performance.
     this.ipcMain.handle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
+    this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
 
     // +++ !! Deprecated: These handlers are outdated and should be removed. +++
 
@@ -355,6 +360,14 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== UTILITIES =====================
     this.ipcMain.handle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
+    this.ipcMain.handle('util:read-debug-file', this.handleReadDebugFile)
+
+    // ===================== DEBUGGER =====================
+    this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
+    this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
+    this.ipcMain.handle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
+    this.ipcMain.handle('debugger:connect', this.handleDebuggerConnect)
+    this.ipcMain.handle('debugger:disconnect', this.handleDebuggerDisconnect)
 
     // ===================== RUNTIME API =====================
     this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -515,6 +528,11 @@ class MainProcessBridge implements MainIpcModule {
     void this.compilerModule.compileProgram(args, mainProcessPort, this)
   }
 
+  handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
+    const mainProcessPort = event.ports[0]
+    void this.compilerModule.compileForDebugger(args, mainProcessPort)
+  }
+
   // TODO: These handlers are outdated and should be removed.
   // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
   //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
@@ -568,6 +586,181 @@ class MainProcessBridge implements MainIpcModule {
     this.hardwareModule.getBoardImagePreview(image)
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
+  }
+  handleReadDebugFile = async (_event: IpcMainInvokeEvent, projectPath: string, boardTarget: string) => {
+    try {
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      const baseProjectPath = projectPath.replace('/project.json', '')
+      const debugFilePath = path.join(baseProjectPath, 'build', boardTarget, 'src', 'debug.c')
+
+      const content = await fs.readFile(debugFilePath, 'utf-8')
+      return { success: true, content }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read debug.c file',
+      }
+    }
+  }
+
+  handleDebuggerVerifyMd5 = async (
+    _event: IpcMainInvokeEvent,
+    targetIpAddress: string,
+    expectedMd5: string,
+  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
+    let client: ModbusTcpClient | null = null
+    try {
+      client = new ModbusTcpClient({
+        host: targetIpAddress,
+        port: 502,
+        timeout: 5000,
+      })
+
+      await client.connect()
+      const targetMd5 = await client.getMd5Hash()
+
+      client.disconnect()
+
+      const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+      return { success: true, match, targetMd5 }
+    } catch (error) {
+      client?.disconnect()
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
+      }
+    }
+  }
+
+  handleReadProgramStMd5 = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; md5?: string; error?: string }> => {
+    try {
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      const baseProjectPath = projectPath.replace('/project.json', '')
+      const programStPath = path.join(baseProjectPath, 'build', boardTarget, 'src', 'program.st')
+
+      const content = await fs.readFile(programStPath, 'utf-8')
+
+      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
+      const match = content.match(md5Pattern)
+
+      if (!match || !match[1]) {
+        return {
+          success: false,
+          error: 'Could not find MD5 hash in program.st file',
+        }
+      }
+
+      return { success: true, md5: match[1] }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read program.st file',
+      }
+    }
+  }
+
+  handleDebuggerGetVariablesList = async (
+    _event: IpcMainInvokeEvent,
+    targetIpAddress: string,
+    variableIndexes: number[],
+  ): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => {
+    if (!this.debuggerModbusClient) {
+      if (this.debuggerReconnecting) {
+        return { success: false, error: 'Reconnection in progress', needsReconnect: true }
+      }
+
+      this.debuggerReconnecting = true
+      try {
+        this.debuggerModbusClient = new ModbusTcpClient({
+          host: targetIpAddress,
+          port: 502,
+          timeout: 5000,
+        })
+        await this.debuggerModbusClient.connect()
+        this.debuggerTargetIp = targetIpAddress
+        this.debuggerReconnecting = false
+      } catch (error) {
+        this.debuggerModbusClient = null
+        this.debuggerTargetIp = null
+        this.debuggerReconnecting = false
+        return { success: false, error: `Failed to reconnect: ${String(error)}`, needsReconnect: true }
+      }
+    }
+
+    try {
+      const result = await this.debuggerModbusClient.getVariablesList(variableIndexes)
+
+      if (result.success && result.data) {
+        return {
+          success: true,
+          tick: result.tick,
+          lastIndex: result.lastIndex,
+          data: Array.from(result.data),
+        }
+      }
+
+      return { success: false, error: result.error }
+    } catch (error) {
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+        this.debuggerTargetIp = null
+      }
+      return { success: false, error: String(error), needsReconnect: true }
+    }
+  }
+
+  handleDebuggerConnect = async (
+    _event: IpcMainInvokeEvent,
+    targetIpAddress: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+      }
+
+      this.debuggerModbusClient = new ModbusTcpClient({
+        host: targetIpAddress,
+        port: 502,
+        timeout: 5000,
+      })
+
+      await this.debuggerModbusClient.connect()
+      this.debuggerTargetIp = targetIpAddress
+      this.debuggerReconnecting = false
+
+      return { success: true }
+    } catch (error) {
+      this.debuggerModbusClient = null
+      this.debuggerTargetIp = null
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleDebuggerDisconnect = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    if (this.debuggerModbusClient) {
+      this.debuggerModbusClient.disconnect()
+      this.debuggerModbusClient = null
+      this.debuggerTargetIp = null
+      this.debuggerReconnecting = false
+    }
+    return Promise.resolve({ success: true })
   }
 
   // ===================== EVENT HANDLERS =====================

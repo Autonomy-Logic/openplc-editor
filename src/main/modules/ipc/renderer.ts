@@ -154,6 +154,17 @@ const rendererProcessBridge = {
     // Set up the renderer process port to listen for messages from the main process
   },
 
+  runDebugCompilation: (compileArgs: Array<string | ProjectState['data']>, callback: (args: any) => void) => {
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    ipcRenderer.postMessage('compiler:run-debug-compilation', compileArgs, [mainProcessPort])
+    rendererProcessPort.onmessage = (event) => callback(event.data)
+    rendererProcessPort.addEventListener('close', () =>
+      callback({
+        closePort: true,
+      }),
+    )
+  },
+
   // !! Deprecated: These methods are an outdated implementation and should be removed.
   compileRequest: (xmlPath: string, callback: (args: any) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
@@ -221,6 +232,40 @@ const rendererProcessBridge = {
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
   log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
+  readDebugFile: (
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> =>
+    ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
+
+  debuggerVerifyMd5: (
+    targetIpAddress: string,
+    expectedMd5: string,
+  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
+    ipcRenderer.invoke('debugger:verify-md5', targetIpAddress, expectedMd5),
+
+  debuggerReadProgramStMd5: (
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; md5?: string; error?: string }> =>
+    ipcRenderer.invoke('debugger:read-program-st-md5', projectPath, boardTarget),
+
+  debuggerGetVariablesList: (
+    targetIpAddress: string,
+    variableIndexes: number[],
+  ): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => ipcRenderer.invoke('debugger:get-variables-list', targetIpAddress, variableIndexes),
+
+  debuggerConnect: (targetIpAddress: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('debugger:connect', targetIpAddress),
+
+  debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>

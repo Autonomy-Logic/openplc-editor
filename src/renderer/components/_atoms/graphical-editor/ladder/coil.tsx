@@ -37,73 +37,79 @@ export const DEFAULT_COIL_CONNECTOR_Y = DEFAULT_COIL_BLOCK_HEIGHT / 2
 
 type CoilType = {
   [key in CoilNode['data']['variant']]: {
-    svg: (wrongVariable: boolean) => ReactNode
+    svg: (wrongVariable: boolean, debuggerColor?: string) => ReactNode
   }
 }
 export const DEFAULT_COIL_TYPES: CoilType = {
   default: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <DefaultCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   negated: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <NegatedCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   risingEdge: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <RisingEdgeCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   fallingEdge: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <FallingEdgeCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   set: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <SetCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   reset: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <ResetCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
@@ -119,11 +125,31 @@ export const Coil = (block: CoilProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
+    workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
   const [coilVariableValue, setCoilVariableValue] = useState<string>(data.variable.name)
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
+
+  const getDebuggerFillColor = (): string | undefined => {
+    if (!isDebuggerVisible || !data.variable.name || wrongVariable) {
+      return undefined
+    }
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const value = debugVariableValues.get(compositeKey)
+
+    if (value === undefined) {
+      return undefined
+    }
+
+    const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+    const displayState = data.variant === 'negated' ? !isTrue : isTrue
+    return displayState ? '#00FF00' : '#0464FB'
+  }
+
+  const debuggerFillColor = getDebuggerFillColor()
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<
@@ -299,7 +325,7 @@ export const Coil = (block: CoilProps) => {
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
-        {coil.svg(wrongVariable)}
+        {coil.svg(wrongVariable, debuggerFillColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
           <HighlightedTextArea
             textAreaValue={coilVariableValue}

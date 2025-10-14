@@ -1182,23 +1182,6 @@ class CompilerModule {
       return
     }
 
-    // Step 2.1: Generate MD5 hash of the XML file
-    try {
-      const xmlContentToGenerateHash = generateXMLResult.data?.xmlContent
-      if (xmlContentToGenerateHash) {
-        buildMD5Hash = await this.createMD5Hash(xmlContentToGenerateHash)
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: `Build MD5 hash: ${buildMD5Hash}`,
-        })
-      }
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error generating MD5 hash of the XML file: ${error as string}\n`,
-      })
-    }
-
     // Step 3: Transpile XML to ST
     const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml') // Assuming the XML file is named 'plc.xml'
     try {
@@ -1263,6 +1246,34 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    try {
+      const fs = await import('fs/promises')
+      const programStPath = join(sourceTargetFolderPath, 'program.st')
+      const programStContent = await fs.readFile(programStPath, 'utf-8')
+      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
+      const match = programStContent.match(md5Pattern)
+
+      if (match && match[1]) {
+        buildMD5Hash = match[1]
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: `Extracted MD5 hash from program.st: ${buildMD5Hash}`,
+        })
+      } else {
+        _mainProcessPort.postMessage({
+          logLevel: 'warn',
+          message: 'Could not extract MD5 from program.st, continuing without MD5',
+        })
+        buildMD5Hash = null
+      }
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error extracting MD5 from program.st: ${error as string}`,
+      })
+      buildMD5Hash = null
     }
 
     // Step 6: Generate glue vars
@@ -1718,7 +1729,164 @@ class CompilerModule {
     })
 
     // INFO: This step is under development.
-    _mainProcessPort.close()
+    setTimeout(() => {
+      _mainProcessPort.close()
+    }, 25)
+  }
+
+  async compileForDebugger(
+    args: Array<string | null | ProjectState['data']>,
+    _mainProcessPort: MessagePortMain,
+  ): Promise<void> {
+    _mainProcessPort.start()
+
+    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting debug compilation process...' })
+
+    const [projectPath, boardTarget, projectData] = args as [string, string, ProjectState['data']]
+
+    const boardRuntime = await this.#getBoardRuntime(boardTarget)
+    const normalizedProjectPath = projectPath.replace('project.json', '')
+    const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
+    const sourceTargetFolderPath = join(compilationPath, 'src')
+
+    _mainProcessPort.postMessage({
+      logLevel: 'info',
+      message: `Compiling for debugger - project: ${projectPath}, board: ${boardTarget}`,
+    })
+
+    try {
+      const iec2cCheckResult = await this.checkIec2cAvailability()
+      _mainProcessPort.postMessage({
+        message: `IEC2C available at version ${iec2cCheckResult.data}`,
+      })
+    } catch (_error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${String(_error)}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      await this.createBasicDirectories(normalizedProjectPath, boardTarget)
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'Directories for compilation source files created.',
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${String(error)}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error generating XML from JSON: ${error as string}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml')
+    try {
+      await this.handleTranspileXMLtoST(generatedXMLFilePath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error transpiling XML to ST: ${error as string}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      await this.copyStaticFiles(compilationPath, boardRuntime)
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error copying static files: ${error as string}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st')
+    try {
+      await this.handleTranspileSTtoC(generatedSTFilePath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping debug compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      await this.handleGenerateDebugFiles(sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping debug compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      await this.handleGenerateGlueVars(sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping debug compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    _mainProcessPort.postMessage({
+      logLevel: 'info',
+      message: 'Debug compilation completed successfully.',
+    })
+    _mainProcessPort.postMessage({
+      message:
+        '-------------------------------------------------------------------------------------------------------------\n',
+    })
+    setTimeout(() => {
+      _mainProcessPort.close()
+    }, 25)
   }
 }
 export { CompilerModule }
