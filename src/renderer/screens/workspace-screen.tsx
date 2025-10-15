@@ -178,6 +178,8 @@ const WorkspaceScreen = () => {
       })
     })
 
+    const { ladderFlows } = useOpenPLCStore.getState()
+
     project.data.pous.forEach((pou) => {
       if (pou.type !== 'program') return
 
@@ -187,8 +189,26 @@ const WorkspaceScreen = () => {
       if (programInstance) {
         const functionBlockInstances = pou.data.variables.filter((variable) => variable.type.definition === 'derived')
 
+        const blockExecutionControlMap = new Map<string, boolean>()
+        if (pou.data.body.language === 'ld') {
+          const currentLadderFlow = ladderFlows.find((flow) => flow.name === pou.data.name)
+          if (currentLadderFlow) {
+            currentLadderFlow.rungs.forEach((rung) => {
+              rung.nodes.forEach((node) => {
+                if (node.type === 'block') {
+                  const blockData = node.data as { variable?: { name: string }; executionControl?: boolean }
+                  if (blockData.variable?.name && blockData.executionControl) {
+                    blockExecutionControlMap.set(blockData.variable.name, true)
+                  }
+                }
+              })
+            })
+          }
+        }
+
         functionBlockInstances.forEach((fbInstance) => {
           const fbTypeName = fbInstance.type.value.toUpperCase()
+          const hasExecutionControl = blockExecutionControlMap.get(fbInstance.name) || false
 
           let fbVariables:
             | Array<{ name: string; class: string; type: { definition: string; value: string } }>
@@ -213,12 +233,22 @@ const WorkspaceScreen = () => {
           }
 
           if (fbVariables) {
-            const boolOutputs = fbVariables.filter(
+            let boolOutputs = fbVariables.filter(
               (v) =>
                 (v.class === 'output' || v.class === 'inOut') &&
                 v.type.definition === 'base-type' &&
                 v.type.value.toUpperCase() === 'BOOL',
             )
+
+            if (hasExecutionControl) {
+              const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+              if (!hasENO) {
+                boolOutputs = [
+                  ...boolOutputs,
+                  { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+                ]
+              }
+            }
 
             boolOutputs.forEach((outputVar) => {
               const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}.${outputVar.name.toUpperCase()}`
