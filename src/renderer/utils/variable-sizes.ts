@@ -47,22 +47,39 @@ function readBigUInt64LE(data: Uint8Array, offset: number): bigint {
 }
 
 function formatTimeValue(seconds: number, nanoseconds: number): string {
-  const totalNs = seconds * 1_000_000_000 + nanoseconds
+  let sec = seconds
+  let nsec = nanoseconds
 
-  const NS_PER_DAY = 86_400_000_000_000
-  const NS_PER_HOUR = 3_600_000_000_000
-  const NS_PER_MINUTE = 60_000_000_000
-  const NS_PER_SECOND = 1_000_000_000
-  const NS_PER_MS = 1_000_000
-  const NS_PER_US = 1_000
+  if (nsec >= 1_000_000_000 || nsec <= -1_000_000_000) {
+    sec += Math.trunc(nsec / 1_000_000_000)
+    nsec = nsec % 1_000_000_000
+  }
+  if (sec > 0 && nsec < 0) {
+    sec -= 1
+    nsec += 1_000_000_000
+  } else if (sec < 0 && nsec > 0) {
+    sec += 1
+    nsec -= 1_000_000_000
+  }
 
-  const days = Math.floor(totalNs / NS_PER_DAY)
-  const hours = Math.floor((totalNs % NS_PER_DAY) / NS_PER_HOUR)
-  const minutes = Math.floor((totalNs % NS_PER_HOUR) / NS_PER_MINUTE)
-  const secs = Math.floor((totalNs % NS_PER_MINUTE) / NS_PER_SECOND)
-  const ms = Math.floor((totalNs % NS_PER_SECOND) / NS_PER_MS)
-  const us = Math.floor((totalNs % NS_PER_MS) / NS_PER_US)
-  const ns = totalNs % NS_PER_US
+  const isNegative = sec < 0 || (sec === 0 && nsec < 0)
+  const totalNsBigInt = BigInt(sec) * 1_000_000_000n + BigInt(nsec)
+  const absTotalNs = isNegative ? -totalNsBigInt : totalNsBigInt
+
+  const NS_PER_DAY = 86_400_000_000_000n
+  const NS_PER_HOUR = 3_600_000_000_000n
+  const NS_PER_MINUTE = 60_000_000_000n
+  const NS_PER_SECOND = 1_000_000_000n
+  const NS_PER_MS = 1_000_000n
+  const NS_PER_US = 1_000n
+
+  const days = Number(absTotalNs / NS_PER_DAY)
+  const hours = Number((absTotalNs % NS_PER_DAY) / NS_PER_HOUR)
+  const minutes = Number((absTotalNs % NS_PER_HOUR) / NS_PER_MINUTE)
+  const secs = Number((absTotalNs % NS_PER_MINUTE) / NS_PER_SECOND)
+  const ms = Number((absTotalNs % NS_PER_SECOND) / NS_PER_MS)
+  const us = Number((absTotalNs % NS_PER_MS) / NS_PER_US)
+  const ns = Number(absTotalNs % NS_PER_US)
 
   const components: string[] = []
   if (days > 0) components.push(`${days}d`)
@@ -75,11 +92,10 @@ function formatTimeValue(seconds: number, nanoseconds: number): string {
 
   if (components.length === 0) {
     return '0s'
-  } else if (components.length === 1) {
-    return components[0]
-  } else {
-    return components.slice(0, 2).join('')
   }
+
+  const formatted = components.length === 1 ? components[0] : components.slice(0, 2).join('')
+  return isNegative ? `-${formatted}` : formatted
 }
 
 export function getVariableSize(variable: PLCVariable): number {
