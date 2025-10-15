@@ -130,8 +130,8 @@ const WorkspaceScreen = () => {
     const boardTarget = deviceDefinitions.configuration.deviceBoard
     const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
     const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
-
-    let targetIpAddress: string | undefined
+    const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
+    const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
 
     if (isRuntimeTarget) {
       if (connectionStatus !== 'connected') {
@@ -147,19 +147,17 @@ const WorkspaceScreen = () => {
         console.warn('No runtime IP address configured')
         return
       }
-
-      targetIpAddress = runtimeIpAddress
     } else {
-      if (!debuggerTargetIp) {
+      if (isTCP && !debuggerTargetIp) {
         console.warn('No debugger target IP address configured')
         return
       }
 
-      targetIpAddress = debuggerTargetIp
+      if (!isTCP && !isRTU) {
+        console.warn('No Modbus connection configured (neither TCP nor RTU)')
+        return
+      }
     }
-
-    const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
-    const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
     let batchSize = 60
 
     if (isRTU && !isTCP) {
@@ -338,7 +336,7 @@ const WorkspaceScreen = () => {
         while (processedCount < allIndexes.length) {
           const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
 
-          const result = await window.bridge.debuggerGetVariablesList(targetIpAddress, batch)
+          const result = await window.bridge.debuggerGetVariablesList(batch)
 
           if (!result.success) {
             if (result.needsReconnect) {

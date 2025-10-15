@@ -15,6 +15,7 @@ import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
 import { ModbusTcpClient } from '../modbus/modbus-client'
+import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
 
 type IDataToWrite = {
   projectPath: string
@@ -35,9 +36,13 @@ class MainProcessBridge implements MainIpcModule {
   pouService
   compilerModule
   hardwareModule
-  private debuggerModbusClient: ModbusTcpClient | null = null
+  private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
   private debuggerTargetIp: string | null = null
   private debuggerReconnecting: boolean = false
+  private debuggerConnectionType: 'tcp' | 'rtu' | null = null
+  private debuggerRtuPort: string | null = null
+  private debuggerRtuBaudRate: number | null = null
+  private debuggerRtuSlaveId: number | null = null
 
   constructor({
     ipcMain,
@@ -611,16 +616,37 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
-    targetIpAddress: string,
+    connectionType: 'tcp' | 'rtu',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+    },
     expectedMd5: string,
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
-    let client: ModbusTcpClient | null = null
+    let client: ModbusTcpClient | ModbusRtuClient | null = null
     try {
-      client = new ModbusTcpClient({
-        host: targetIpAddress,
-        port: 502,
-        timeout: 5000,
-      })
+      if (connectionType === 'tcp') {
+        if (!connectionParams.ipAddress) {
+          return { success: false, error: 'IP address is required for TCP connection' }
+        }
+        client = new ModbusTcpClient({
+          host: connectionParams.ipAddress,
+          port: 502,
+          timeout: 5000,
+        })
+      } else {
+        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
+          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
+        }
+        client = new ModbusRtuClient({
+          port: connectionParams.port,
+          baudRate: connectionParams.baudRate,
+          slaveId: connectionParams.slaveId,
+          timeout: 5000,
+        })
+      }
 
       await client.connect()
       const targetMd5 = await client.getMd5Hash()
@@ -677,7 +703,6 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerGetVariablesList = async (
     _event: IpcMainInvokeEvent,
-    targetIpAddress: string,
     variableIndexes: number[],
   ): Promise<{
     success: boolean
@@ -694,17 +719,36 @@ class MainProcessBridge implements MainIpcModule {
 
       this.debuggerReconnecting = true
       try {
-        this.debuggerModbusClient = new ModbusTcpClient({
-          host: targetIpAddress,
-          port: 502,
-          timeout: 5000,
-        })
+        if (this.debuggerConnectionType === 'tcp') {
+          if (!this.debuggerTargetIp) {
+            this.debuggerReconnecting = false
+            return { success: false, error: 'No target IP address stored', needsReconnect: true }
+          }
+          this.debuggerModbusClient = new ModbusTcpClient({
+            host: this.debuggerTargetIp,
+            port: 502,
+            timeout: 5000,
+          })
+        } else if (this.debuggerConnectionType === 'rtu') {
+          if (!this.debuggerRtuPort || !this.debuggerRtuBaudRate || this.debuggerRtuSlaveId === null) {
+            this.debuggerReconnecting = false
+            return { success: false, error: 'No RTU connection parameters stored', needsReconnect: true }
+          }
+          this.debuggerModbusClient = new ModbusRtuClient({
+            port: this.debuggerRtuPort,
+            baudRate: this.debuggerRtuBaudRate,
+            slaveId: this.debuggerRtuSlaveId,
+            timeout: 5000,
+          })
+        } else {
+          this.debuggerReconnecting = false
+          return { success: false, error: 'No connection type stored', needsReconnect: true }
+        }
+
         await this.debuggerModbusClient.connect()
-        this.debuggerTargetIp = targetIpAddress
         this.debuggerReconnecting = false
       } catch (error) {
         this.debuggerModbusClient = null
-        this.debuggerTargetIp = null
         this.debuggerReconnecting = false
         return { success: false, error: `Failed to reconnect: ${String(error)}`, needsReconnect: true }
       }
@@ -727,7 +771,6 @@ class MainProcessBridge implements MainIpcModule {
       if (this.debuggerModbusClient) {
         this.debuggerModbusClient.disconnect()
         this.debuggerModbusClient = null
-        this.debuggerTargetIp = null
       }
       return { success: false, error: String(error), needsReconnect: true }
     }
@@ -735,7 +778,13 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerConnect = async (
     _event: IpcMainInvokeEvent,
-    targetIpAddress: string,
+    connectionType: 'tcp' | 'rtu',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+    },
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       if (this.debuggerModbusClient) {
@@ -743,20 +792,43 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerModbusClient = null
       }
 
-      this.debuggerModbusClient = new ModbusTcpClient({
-        host: targetIpAddress,
-        port: 502,
-        timeout: 5000,
-      })
+      if (connectionType === 'tcp') {
+        if (!connectionParams.ipAddress) {
+          return { success: false, error: 'IP address is required for TCP connection' }
+        }
+        this.debuggerModbusClient = new ModbusTcpClient({
+          host: connectionParams.ipAddress,
+          port: 502,
+          timeout: 5000,
+        })
+        this.debuggerTargetIp = connectionParams.ipAddress
+      } else {
+        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
+          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
+        }
+        this.debuggerModbusClient = new ModbusRtuClient({
+          port: connectionParams.port,
+          baudRate: connectionParams.baudRate,
+          slaveId: connectionParams.slaveId,
+          timeout: 5000,
+        })
+        this.debuggerRtuPort = connectionParams.port
+        this.debuggerRtuBaudRate = connectionParams.baudRate
+        this.debuggerRtuSlaveId = connectionParams.slaveId
+      }
 
       await this.debuggerModbusClient.connect()
-      this.debuggerTargetIp = targetIpAddress
+      this.debuggerConnectionType = connectionType
       this.debuggerReconnecting = false
 
       return { success: true }
     } catch (error) {
       this.debuggerModbusClient = null
       this.debuggerTargetIp = null
+      this.debuggerConnectionType = null
+      this.debuggerRtuPort = null
+      this.debuggerRtuBaudRate = null
+      this.debuggerRtuSlaveId = null
       return { success: false, error: String(error) }
     }
   }
@@ -766,6 +838,10 @@ class MainProcessBridge implements MainIpcModule {
       this.debuggerModbusClient.disconnect()
       this.debuggerModbusClient = null
       this.debuggerTargetIp = null
+      this.debuggerConnectionType = null
+      this.debuggerRtuPort = null
+      this.debuggerRtuBaudRate = null
+      this.debuggerRtuSlaveId = null
       this.debuggerReconnecting = false
     }
     return Promise.resolve({ success: true })
