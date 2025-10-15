@@ -216,7 +216,7 @@ const WorkspaceScreen = () => {
             const boolOutputs = fbVariables.filter(
               (v) =>
                 (v.class === 'output' || v.class === 'inOut') &&
-                v.type.definition === 'base-type' &&
+                (v.type.definition === 'base-type' || v.type.definition === 'generic-type') &&
                 v.type.value.toUpperCase() === 'BOOL',
             )
 
