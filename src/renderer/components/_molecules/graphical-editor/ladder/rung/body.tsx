@@ -103,24 +103,45 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
     }
 
     if (node.type === 'block') {
-      const blockData = node.data as { variable?: { name: string } }
+      const blockData = node.data as {
+        variable?: { name: string }
+        variant?: { name: string; type: string }
+        numericId?: string
+      }
       if (!sourceHandle) return undefined
-
-      const blockVariableName = blockData.variable?.name
-      if (!blockVariableName) return undefined
 
       const instances = project.data.configuration.resource.instances
       const programInstance = instances.find((inst) => inst.program === editor.meta.name)
       if (!programInstance) return undefined
 
-      const outputVariableName = `${blockVariableName}.${sourceHandle}`
-      const compositeKey = `${programInstance.name}:${outputVariableName}`
-      const value = debugVariableValues.get(compositeKey)
+      if (blockData.variant?.type === 'function-block') {
+        const blockVariableName = blockData.variable?.name
+        if (!blockVariableName) return undefined
 
-      if (value === undefined) return undefined
+        const outputVariableName = `${blockVariableName}.${sourceHandle}`
+        const compositeKey = `${programInstance.name}:${outputVariableName}`
+        const value = debugVariableValues.get(compositeKey)
 
-      const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-      return isTrue
+        if (value === undefined) return undefined
+
+        const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+        return isTrue
+      } else if (blockData.variant?.type === 'function') {
+        const blockName = blockData.variant.name.toUpperCase()
+        const numericId = blockData.numericId
+        if (!numericId) return undefined
+
+        const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
+        const compositeKey = `${programInstance.name}:${tempVarName}`
+        const value = debugVariableValues.get(compositeKey)
+
+        if (value === undefined) return undefined
+
+        const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+        return isTrue
+      }
+
+      return undefined
     }
 
     return undefined

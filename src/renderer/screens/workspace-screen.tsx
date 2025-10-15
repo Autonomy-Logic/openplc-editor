@@ -271,6 +271,72 @@ const WorkspaceScreen = () => {
             })
           }
         })
+
+        if (pou.data.body.language === 'ld') {
+          const currentLadderFlow = ladderFlows.find((flow) => flow.name === pou.data.name)
+          if (currentLadderFlow) {
+            currentLadderFlow.rungs.forEach((rung) => {
+              rung.nodes.forEach((node) => {
+                if (node.type === 'block') {
+                  const blockData = node.data as {
+                    variable?: { name: string }
+                    variant?: {
+                      name: string
+                      type: string
+                      variables: Array<{ name: string; class: string; type: { definition: string; value: string } }>
+                    }
+                    numericId?: string
+                    executionControl?: boolean
+                  }
+
+                  if (!blockData.variant || blockData.variant.type !== 'function') continue
+
+                  const blockName = blockData.variant.name.toUpperCase()
+                  const numericId = blockData.numericId
+                  if (!numericId) continue
+
+                  let boolOutputs = blockData.variant.variables.filter(
+                    (v) =>
+                      (v.class === 'output' || v.class === 'inOut') &&
+                      v.type.definition === 'base-type' &&
+                      v.type.value.toUpperCase() === 'BOOL',
+                  )
+
+                  const hasExecutionControl = blockData.executionControl || false
+                  if (hasExecutionControl) {
+                    const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+                    if (!hasENO) {
+                      boolOutputs = [
+                        ...boolOutputs,
+                        { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+                      ]
+                    }
+                  }
+
+                  boolOutputs.forEach((outputVar) => {
+                    const debugPath = `RES0__${programInstance.name.toUpperCase()}._TMP_${blockName}${numericId}_${outputVar.name.toUpperCase()}`
+                    const index = debugVariableIndexes.get(debugPath)
+
+                    if (index !== undefined) {
+                      const tempVarName = `_TMP_${blockName}${numericId}_${outputVar.name}`
+                      variableInfoMap.set(index, {
+                        pouName: programInstance.name,
+                        variable: {
+                          name: tempVarName,
+                          type: { definition: 'base-type', value: 'bool' },
+                          class: 'local',
+                          location: '',
+                          documentation: '',
+                          debug: false,
+                        },
+                      })
+                    }
+                  })
+                }
+              })
+            })
+          }
+        }
       }
     })
 
@@ -341,6 +407,31 @@ const WorkspaceScreen = () => {
                 }
               })
             })
+
+            if (currentLadderFlow) {
+              currentLadderFlow.rungs.forEach((rung) => {
+                rung.nodes.forEach((node) => {
+                  if (node.type === 'block') {
+                    const blockData = node.data as {
+                      variant?: { type: string }
+                      numericId?: string
+                    }
+
+                    if (blockData.variant?.type === 'function' && blockData.numericId) {
+                      Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                        if (
+                          varInfo.pouName === programInstance.name &&
+                          varInfo.variable.name.includes(blockData.numericId!)
+                        ) {
+                          const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                          debugVariableKeys.add(compositeKey)
+                        }
+                      })
+                    }
+                  }
+                })
+              })
+            }
           }
         }
 
