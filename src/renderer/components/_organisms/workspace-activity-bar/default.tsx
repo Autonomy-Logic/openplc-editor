@@ -394,7 +394,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             return
           }
 
-          if (!rtuSlaveId) {
+          if (rtuSlaveId === undefined) {
             await showDebuggerMessage('error', 'Configuration Error', 'No slave ID configured for Modbus RTU.', ['OK'])
             setIsDebuggerProcessing(false)
             return
