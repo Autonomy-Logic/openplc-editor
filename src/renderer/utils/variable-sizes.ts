@@ -46,6 +46,42 @@ function readBigUInt64LE(data: Uint8Array, offset: number): bigint {
   return view.getBigUint64(0, true)
 }
 
+function formatTimeValue(seconds: number, nanoseconds: number): string {
+  const totalNs = seconds * 1_000_000_000 + nanoseconds
+
+  const NS_PER_DAY = 86_400_000_000_000
+  const NS_PER_HOUR = 3_600_000_000_000
+  const NS_PER_MINUTE = 60_000_000_000
+  const NS_PER_SECOND = 1_000_000_000
+  const NS_PER_MS = 1_000_000
+  const NS_PER_US = 1_000
+
+  const days = Math.floor(totalNs / NS_PER_DAY)
+  const hours = Math.floor((totalNs % NS_PER_DAY) / NS_PER_HOUR)
+  const minutes = Math.floor((totalNs % NS_PER_HOUR) / NS_PER_MINUTE)
+  const secs = Math.floor((totalNs % NS_PER_MINUTE) / NS_PER_SECOND)
+  const ms = Math.floor((totalNs % NS_PER_SECOND) / NS_PER_MS)
+  const us = Math.floor((totalNs % NS_PER_MS) / NS_PER_US)
+  const ns = totalNs % NS_PER_US
+
+  const components: string[] = []
+  if (days > 0) components.push(`${days}d`)
+  if (hours > 0) components.push(`${hours}h`)
+  if (minutes > 0) components.push(`${minutes}m`)
+  if (secs > 0) components.push(`${secs}s`)
+  if (ms > 0) components.push(`${ms}ms`)
+  if (us > 0) components.push(`${us}us`)
+  if (ns > 0) components.push(`${ns}ns`)
+
+  if (components.length === 0) {
+    return '0s'
+  } else if (components.length === 1) {
+    return components[0]
+  } else {
+    return components.slice(0, 2).join('')
+  }
+}
+
 export function getVariableSize(variable: PLCVariable): number {
   if (variable.type.definition === 'base-type') {
     const baseType = variable.type.value.toLowerCase()
@@ -66,10 +102,12 @@ export function getVariableSize(variable: PLCVariable): number {
       case 'udint':
       case 'dword':
       case 'real':
+        return 4
+
       case 'time':
       case 'date':
       case 'tod':
-        return 4
+        return 8
 
       case 'lint':
       case 'ulint':
@@ -79,7 +117,7 @@ export function getVariableSize(variable: PLCVariable): number {
         return 8
 
       case 'string':
-        return 81
+        return 127
 
       default:
         console.warn(`Unknown base type: ${baseType}, defaulting to 4 bytes`)
@@ -118,13 +156,18 @@ export function parseVariableValue(
         return { value: readUInt16LE(data, offset).toString(), bytesRead: 2 }
 
       case 'dint':
-      case 'time':
         return { value: readInt32LE(data, offset).toString(), bytesRead: 4 }
+
+      case 'time':
+      case 'date':
+      case 'tod': {
+        const tv_sec = readInt32LE(data, offset)
+        const tv_nsec = readInt32LE(data, offset + 4)
+        return { value: formatTimeValue(tv_sec, tv_nsec), bytesRead: 8 }
+      }
 
       case 'udint':
       case 'dword':
-      case 'date':
-      case 'tod':
         return { value: readUInt32LE(data, offset).toString(), bytesRead: 4 }
 
       case 'real':
@@ -142,11 +185,11 @@ export function parseVariableValue(
         return { value: readDoubleLE(data, offset).toFixed(12), bytesRead: 8 }
 
       case 'string': {
-        const stringData = data.slice(offset, offset + 81)
-        const nullIndex = stringData.indexOf(0)
+        const length = readUInt8(data, offset)
+        const stringData = data.slice(offset + 1, offset + 1 + Math.min(length, 126))
         const decoder = new TextDecoder('utf-8')
-        const str = decoder.decode(stringData.slice(0, nullIndex !== -1 ? nullIndex : 80))
-        return { value: `"${str}"`, bytesRead: 81 }
+        const str = decoder.decode(stringData)
+        return { value: `"${str}"`, bytesRead: 127 }
       }
 
       default:
