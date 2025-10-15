@@ -114,14 +114,8 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
       if (!programInstance) return undefined
 
       const outputVariableName = `${blockVariableName}.${sourceHandle}`
-
       const compositeKey = `${programInstance.name}:${outputVariableName}`
-      let value = debugVariableValues.get(compositeKey)
-
-      if (value === undefined) {
-        const debugPath = `RES0__${programInstance.name.toUpperCase()}.${outputVariableName.toUpperCase()}`
-        value = debugVariableValues.get(debugPath)
-      }
+      const value = debugVariableValues.get(compositeKey)
 
       if (value === undefined) return undefined
 

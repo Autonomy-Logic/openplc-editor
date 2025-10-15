@@ -254,10 +254,6 @@ const WorkspaceScreen = () => {
               const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}.${outputVar.name.toUpperCase()}`
               const index = debugVariableIndexes.get(debugPath)
 
-              console.log(
-                `[Debugger Init] Extracting block output: ${debugPath}, Index: ${index !== undefined ? index : 'NOT FOUND'}, ExecutionControl: ${hasExecutionControl}`,
-              )
-
               if (index !== undefined) {
                 const blockVarName = `${fbInstance.name}.${outputVar.name}`
                 variableInfoMap.set(index, {
@@ -271,9 +267,6 @@ const WorkspaceScreen = () => {
                     debug: false,
                   },
                 })
-                console.log(
-                  `[Debugger Init] Added to variableInfoMap: ${programInstance.name}:${blockVarName} at index ${index}`,
-                )
               }
             })
           }
@@ -373,8 +366,6 @@ const WorkspaceScreen = () => {
         while (processedCount < allIndexes.length) {
           const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
 
-          console.log(`[Debugger Poll] Querying batch of ${batch.length} variables, indexes: ${batch.join(', ')}`)
-
           const result = await window.bridge.debuggerGetVariablesList(batch)
 
           if (!result.success) {
@@ -430,11 +421,9 @@ const WorkspaceScreen = () => {
             try {
               const { value, bytesRead } = parseVariableValue(responseBuffer, bufferOffset, variable)
               newValues.set(compositeKey, value)
-              console.log(`[Debugger Poll] ${compositeKey}, Index: ${index}, Value: ${value}`)
               bufferOffset += bytesRead
             } catch {
               newValues.set(compositeKey, 'ERR')
-              console.log(`[Debugger Poll] ${compositeKey}, Index: ${index}, Value: ERR`)
               bufferOffset += getVariableSize(variable)
             }
 
