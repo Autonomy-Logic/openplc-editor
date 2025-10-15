@@ -236,7 +236,7 @@ const WorkspaceScreen = () => {
             let boolOutputs = fbVariables.filter(
               (v) =>
                 (v.class === 'output' || v.class === 'inOut') &&
-                (v.type.definition === 'base-type' || v.type.definition === 'generic-type') &&
+                v.type.definition === 'base-type' &&
                 v.type.value.toUpperCase() === 'BOOL',
             )
 
@@ -245,7 +245,7 @@ const WorkspaceScreen = () => {
               if (!hasENO) {
                 boolOutputs = [
                   ...boolOutputs,
-                  { name: 'ENO', class: 'output', type: { definition: 'generic-type', value: 'BOOL' } },
+                  { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
                 ]
               }
             }
