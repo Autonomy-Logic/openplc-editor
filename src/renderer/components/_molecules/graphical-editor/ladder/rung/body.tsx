@@ -87,19 +87,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProp
     }
 
     if (node.type === 'coil') {
-      const coilData = node.data as { variable?: { name: string }; variant: 'normal' | 'negated' | 'set' | 'reset' }
-      const variableName = coilData.variable?.name
-      if (!variableName) return undefined
-
-      const compositeKey = `${editor.meta.name}:${variableName}`
-      const value = debugVariableValues.get(compositeKey)
-      if (value === undefined) return undefined
-
-      const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-      const coilState =
-        (node.data as { variant: 'normal' | 'negated' | 'set' | 'reset' }).variant === 'negated' ? !isTrue : isTrue
-
-      return isInputGreen && coilState
+      return isInputGreen
     }
 
     if (node.type === 'block') {
