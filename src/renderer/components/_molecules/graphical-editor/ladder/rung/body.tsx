@@ -45,8 +45,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
 
-  console.log('RungBody render - isDebuggerActive:', isDebuggerActive, 'isDebuggerVisible:', isDebuggerVisible)
-
   const pouRef = project.data.pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
@@ -556,8 +554,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   /**
    * Handle the single click of a node during debugging
    */
-  const handleNodeClick = (_event: React.MouseEvent, node: FlowNode) => {
-    console.log('handleNodeClick called for node type:', node.type, 'isDebuggerActive:', isDebuggerActive)
+  const handleNodeClick = (_event: React.MouseEvent, _node: FlowNode) => {
     if (!isDebuggerActive) return
   }
 
