@@ -24,6 +24,7 @@ import {
   updateLocalVariablesInTokenizer,
 } from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
+import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
 
 type monacoEditorProps = {
   path: string
@@ -126,8 +127,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         newSet.delete(name)
         return newSet
       })
+
+      if (language === 'python') {
+        cleanupPythonLSP()
+      }
     }
-  }, [name])
+  }, [name, language])
 
   useEffect(() => {
     if (language === 'st' && dataTypes.length > 0) {
@@ -295,8 +300,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   /**
    * Update the auto-completion feature of the monaco editor.
+   * Note: Python uses its own LSP-based completion provider
    */
   useEffect(() => {
+    if (language === 'python') {
+      return
+    }
+
     const disposable = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
@@ -384,14 +394,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => disposable.dispose()
   }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
 
-  function handleEditorDidMount(
+  async function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
     editorRef.current = editorInstance
     monacoRef.current = monacoInstance
 
-    if (!editorInstance) return
+    if (!editorInstance || !monacoInstance) return
 
     // Existing functionality for other languages
     focusDisposables.current.onFocus?.dispose()
@@ -424,6 +434,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     if (language === 'python' && pou) {
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
+
+      await initPythonLSP(monacoInstance)
+      await setupPythonLSPForEditor(editorInstance)
     }
 
     editorInstance.focus()
