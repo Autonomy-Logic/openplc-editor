@@ -13,6 +13,8 @@
     "link-modules": "node -r ts-node/register ../../scripts/link-modules.ts"
   },
   "dependencies": {
-    "serialport": "^12.0.0"
+    "monaco-pyright-lsp": "^0.1.7",
+    "serialport": "^12.0.0",
+    "vscode-languageserver": "^9.0.1"
   }
 }
