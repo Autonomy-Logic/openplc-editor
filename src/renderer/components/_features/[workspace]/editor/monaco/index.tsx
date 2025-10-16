@@ -18,6 +18,7 @@ import {
 } from './completion'
 import { dataTypeCompletion } from './completion/datatype.completion'
 import { fbCompletion } from './completion/fb.completion'
+import { providePythonCompletions } from './completion/python.completion'
 import {
   updateDataTypeVariablesInTokenizer,
   updateEnumValuesInTokenizer,
@@ -298,14 +299,18 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   /**
    * Update the auto-completion feature of the monaco editor.
-   * Note: Python uses Monaco's built-in language server for IntelliSense.
    */
   useEffect(() => {
     console.log('[MonacoEditor] Completion provider effect running for language:', language)
 
     if (language === 'python') {
-      console.log('[MonacoEditor] Skipping custom completion provider for Python')
-      return
+      console.log('[MonacoEditor] Registering Python completion provider')
+      const pythonDisposable = monaco.languages.registerCompletionItemProvider('python', {
+        provideCompletionItems: (model, position) => {
+          return providePythonCompletions(model, position)
+        },
+      })
+      return () => pythonDisposable.dispose()
     }
 
     console.log('[MonacoEditor] Registering custom ST completion provider for:', language)
