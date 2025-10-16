@@ -21,6 +21,7 @@ const TaskEditor = () => {
     editor,
     workspace: {
       systemConfigs: { shouldUseDarkMode },
+      isDebuggerVisible,
     },
     project: {
       data: {
@@ -254,13 +255,14 @@ const TaskEditor = () => {
                   {
                     ariaLabel: 'Add Tasks table row button',
                     onClick: handleCreateTask,
+                    disabled: isDebuggerVisible,
                     icon: <PlusIcon className='!stroke-brand' />,
                     id: 'add-task-button',
                   },
                   {
                     ariaLabel: 'Remove Tasks table row button',
                     onClick: handleDeleteTask,
-                    disabled: parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED,
+                    disabled: isDebuggerVisible || parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED,
                     icon: <MinusIcon />,
                     id: 'remove-task-button',
                   },
@@ -268,6 +270,7 @@ const TaskEditor = () => {
                     ariaLabel: 'Move Tasks table row up button',
                     onClick: () => handleRearrangeTasks(-1),
                     disabled:
+                      isDebuggerVisible ||
                       parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
                       parseInt(editorTasks.selectedRow) === 0,
                     icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
@@ -277,6 +280,7 @@ const TaskEditor = () => {
                     ariaLabel: 'Move Tasks table row down button',
                     onClick: () => handleRearrangeTasks(1),
                     disabled:
+                      isDebuggerVisible ||
                       parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
                       parseInt(editorTasks.selectedRow) === taskData.length - 1,
                     icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,

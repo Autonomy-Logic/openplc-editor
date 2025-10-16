@@ -278,7 +278,7 @@ const VariableElement = (block: VariableProps) => {
     setForceValue('')
   }
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent) => {
     if (!isDebuggerVisible) return
     e.preventDefault()
     e.stopPropagation()
@@ -290,7 +290,7 @@ const VariableElement = (block: VariableProps) => {
 
   return (
     <>
-      <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }} onContextMenu={handleContextMenu}>
+      <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
         <HighlightedTextArea
           textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-yellow-500': !isAVariable,
@@ -344,7 +344,7 @@ const VariableElement = (block: VariableProps) => {
         {isDebuggerVisible && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
             <Popover.Trigger asChild>
-              <div className='absolute inset-0' />
+              <div className='absolute inset-0 cursor-pointer' onClick={handleClick} />
             </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content

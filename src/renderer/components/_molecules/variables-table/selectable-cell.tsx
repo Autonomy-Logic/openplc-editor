@@ -30,6 +30,7 @@ const SelectableTypeCell = ({
     ladderFlowActions: { updateNode },
     fbdFlowActions: { updateNode: updateFBDNode },
     libraries: sliceLibraries,
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
 
   const language = 'language' in editor.meta ? editor.meta.language : null
@@ -291,12 +292,14 @@ const SelectableTypeCell = ({
     <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
       <PrimitiveDropdown.Trigger
         asChild
+        disabled={isDebuggerVisible}
         // disabled={pou?.data.language !== 'st' && pou?.data.language !== 'il' && definition === 'derived'}
       >
         <div
           className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
-            'pointer-events-none': !selected,
+            'pointer-events-none': !selected || isDebuggerVisible,
             'cursor-default': !selected || definition === 'derived',
+            'cursor-not-allowed': isDebuggerVisible,
           })}
         >
           <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
@@ -451,7 +454,10 @@ const SelectableClassCell = ({
   table,
   selected = true,
 }: ISelectableCellProps) => {
-  const { editor } = useOpenPLCStore()
+  const {
+    editor,
+    workspace: { isDebuggerVisible },
+  } = useOpenPLCStore()
 
   const language = 'language' in editor.meta ? editor.meta.language : null
   const getVariableClasses = () => {
@@ -507,12 +513,15 @@ const SelectableClassCell = ({
   }, [currentValue, language, index, id, table])
 
   return (
-    <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)}>
+    <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)} disabled={isDebuggerVisible}>
       <SelectTrigger
         placeholder={cellValue as string}
         className={cn(
           'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
-          { 'pointer-events-none': !selected },
+          {
+            'pointer-events-none': !selected || isDebuggerVisible,
+            'cursor-not-allowed': isDebuggerVisible,
+          },
         )}
       />
       <SelectContent

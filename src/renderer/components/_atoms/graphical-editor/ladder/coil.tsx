@@ -322,7 +322,7 @@ export const Coil = (block: CoilProps) => {
     setIsContextMenuOpen(false)
   }
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent) => {
     if (!isDebuggerVisible) return
     e.preventDefault()
     e.stopPropagation()
@@ -343,7 +343,6 @@ export const Coil = (block: CoilProps) => {
           },
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
-        onContextMenu={handleContextMenu}
       >
         {coil.svg(wrongVariable, debuggerFillColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
@@ -421,7 +420,7 @@ export const Coil = (block: CoilProps) => {
         {isDebuggerVisible && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
             <Popover.Trigger asChild>
-              <div className='absolute inset-0' />
+              <div className='absolute inset-0 cursor-pointer' onClick={handleClick} />
             </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content

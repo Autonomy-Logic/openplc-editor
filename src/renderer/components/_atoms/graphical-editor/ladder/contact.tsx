@@ -289,7 +289,7 @@ export const Contact = (block: ContactProps) => {
     setIsContextMenuOpen(false)
   }
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent) => {
     if (!isDebuggerVisible) return
     e.preventDefault()
     e.stopPropagation()
@@ -310,7 +310,6 @@ export const Contact = (block: ContactProps) => {
           },
         )}
         style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
-        onContextMenu={handleContextMenu}
       >
         {contact.svg(wrongVariable, debuggerStrokeColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
@@ -388,7 +387,7 @@ export const Contact = (block: ContactProps) => {
         {isDebuggerVisible && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
             <Popover.Trigger asChild>
-              <div className='absolute inset-0' />
+              <div className='absolute inset-0 cursor-pointer' onClick={handleClick} />
             </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content
