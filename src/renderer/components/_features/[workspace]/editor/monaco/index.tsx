@@ -295,8 +295,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   /**
    * Update the auto-completion feature of the monaco editor.
+   * Note: Python uses Monaco's built-in language server for IntelliSense.
    */
   useEffect(() => {
+    if (language === 'python') {
+      return
+    }
+
     const disposable = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
