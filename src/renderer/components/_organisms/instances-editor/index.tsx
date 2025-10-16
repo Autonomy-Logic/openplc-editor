@@ -21,6 +21,7 @@ const InstancesEditor = () => {
     editor,
     workspace: {
       systemConfigs: { shouldUseDarkMode },
+      isDebuggerVisible,
     },
     project: {
       data: {
@@ -251,13 +252,14 @@ const InstancesEditor = () => {
                   {
                     ariaLabel: 'Add instances table row button',
                     onClick: handleCreateInstance,
+                    disabled: isDebuggerVisible,
                     icon: <PlusIcon className='!stroke-brand' />,
                     id: 'add-instance-button',
                   },
                   {
                     ariaLabel: 'Remove instances table row button',
                     onClick: handleDeleteInstance,
-                    disabled: parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED,
+                    disabled: isDebuggerVisible || parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED,
                     icon: <MinusIcon />,
                     id: 'remove-instance-button',
                   },
@@ -265,6 +267,7 @@ const InstancesEditor = () => {
                     ariaLabel: 'Move instances table row up button',
                     onClick: () => handleRearrangeInstances(-1),
                     disabled:
+                      isDebuggerVisible ||
                       parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED ||
                       parseInt(editorInstances.selectedRow) === 0,
                     icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
@@ -274,6 +277,7 @@ const InstancesEditor = () => {
                     ariaLabel: 'Move instances table row down button',
                     onClick: () => handleRearrangeInstances(1),
                     disabled:
+                      isDebuggerVisible ||
                       parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED ||
                       parseInt(editorInstances.selectedRow) === instanceData.length - 1,
                     icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,

@@ -48,6 +48,7 @@ const EditableNameCell = ({
     project: {
       data: { pous },
     },
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -57,6 +58,8 @@ const EditableNameCell = ({
   const confirmResolveRef = useRef<(v: boolean) => void>()
 
   const isCellEditable = () => {
+    if (isDebuggerVisible) return false
+
     if (id !== 'location' && id !== 'initialValue') return true
 
     // if (variable?.type.definition === 'derived') return false
@@ -74,7 +77,7 @@ const EditableNameCell = ({
     return true
   }
 
-  const isEditable = useCallback(isCellEditable, [id, variable])
+  const isEditable = useCallback(isCellEditable, [id, variable, isDebuggerVisible])
 
   const askRenameBlocks = () =>
     new Promise<boolean>((resolve) => {
@@ -367,6 +370,7 @@ const EditableInitialValueCell = ({
     project: {
       data: { pous },
     },
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -376,6 +380,8 @@ const EditableInitialValueCell = ({
   const confirmResolveRef = useRef<(v: boolean) => void>()
 
   const isCellEditable = () => {
+    if (isDebuggerVisible) return false
+
     if (id !== 'location' && id !== 'initialValue') return true
 
     // if (variable?.type.definition === 'derived') return false
@@ -393,7 +399,7 @@ const EditableInitialValueCell = ({
     return true
   }
 
-  const isEditable = useCallback(isCellEditable, [id, variable])
+  const isEditable = useCallback(isCellEditable, [id, variable, isDebuggerVisible])
 
   const askRenameBlocks = () =>
     new Promise<boolean>((resolve) => {
@@ -688,6 +694,7 @@ const EditableLocationCell = ({
     editor,
     searchQuery,
     projectActions: { getVariable },
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
   const existingPins = pinSelectors.usePins()
 
@@ -697,6 +704,8 @@ const EditableLocationCell = ({
   const [variable, setVariable] = useState<PLCVariable | undefined>(undefined)
 
   const isCellEditable = () => {
+    if (isDebuggerVisible) return false
+
     const disallowedLocationClasses = ['input', 'output', 'inOut', 'external', 'temp']
     if (id === 'location' && disallowedLocationClasses.includes(variable?.class || '')) {
       return false
@@ -705,7 +714,7 @@ const EditableLocationCell = ({
     return true
   }
 
-  const isEditable = useCallback(isCellEditable, [id, variable])
+  const isEditable = useCallback(isCellEditable, [id, variable, isDebuggerVisible])
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = (value: string) => {
@@ -810,6 +819,9 @@ const EditableDocumentationCell = ({
   selected = true,
 }: IEditableCellProps) => {
   const initialValue = getValue<string | undefined>()
+  const {
+    workspace: { isDebuggerVisible },
+  } = useOpenPLCStore()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue ?? '')
 
@@ -824,10 +836,11 @@ const EditableDocumentationCell = ({
 
   return (
     <PrimitivePopover.Root>
-      <PrimitivePopover.Trigger asChild>
+      <PrimitivePopover.Trigger asChild disabled={isDebuggerVisible}>
         <div
           className={cn('flex h-full w-full cursor-text items-center justify-center p-2', {
-            'pointer-events-none': !selected,
+            'pointer-events-none': !selected || isDebuggerVisible,
+            'cursor-not-allowed': isDebuggerVisible,
           })}
         >
           <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>{cellValue}</p>

@@ -16,9 +16,10 @@ type RungProps = {
   id: string
   rung: RungLadderState
   nodeDivergences?: string[]
+  isDebuggerActive?: boolean
 }
 
-export const Rung = ({ className, index, id, rung, nodeDivergences }: RungProps) => {
+export const Rung = ({ className, index, id, rung, nodeDivergences, isDebuggerActive = false }: RungProps) => {
   const {
     ladderFlows,
     editorActions: { getIsRungOpen },
@@ -58,7 +59,7 @@ export const Rung = ({ className, index, id, rung, nodeDivergences }: RungProps)
         onClick={handleOpenSection}
         isOpen={getIsRungOpen({ rungId: rung.id })}
         rung={rung}
-        draggableHandleProps={listeners}
+        draggableHandleProps={isDebuggerActive ? undefined : listeners}
         className={cn('border border-transparent', {
           'rounded-t-lg': index === 0,
           'rounded-b-lg': index === flow.rungs.length - 1 && !getIsRungOpen({ rungId: rung.id }),
@@ -71,6 +72,7 @@ export const Rung = ({ className, index, id, rung, nodeDivergences }: RungProps)
             'rounded-b-lg': index === flow.rungs.length - 1,
           })}
           nodeDivergences={nodeDivergences}
+          isDebuggerActive={isDebuggerActive}
         />
       )}
     </div>

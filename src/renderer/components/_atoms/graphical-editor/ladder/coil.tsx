@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import {
   DefaultCoil,
   FallingEdgeCoil,
@@ -168,6 +169,8 @@ export const Coil = (block: CoilProps) => {
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState<boolean>(false)
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
@@ -310,6 +313,26 @@ export const Coil = (block: CoilProps) => {
     }
   }
 
+  const handleForceTrue = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsContextMenuOpen(false)
+  }
+
+  const handleForceFalse = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsContextMenuOpen(false)
+  }
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isDebuggerVisible) return
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenuPosition({ x: e.clientX, y: e.clientY })
+    setIsContextMenuOpen(true)
+  }
+
   return (
     <div
       className={cn({
@@ -324,6 +347,7 @@ export const Coil = (block: CoilProps) => {
           },
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
+        onClick={isDebuggerVisible ? handleClick : undefined}
       >
         {coil.svg(wrongVariable, debuggerFillColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
@@ -338,6 +362,8 @@ export const Coil = (block: CoilProps) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
+            disabled={isDebuggerVisible}
+            readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
@@ -397,6 +423,42 @@ export const Coil = (block: CoilProps) => {
             </div>
           )}
         </div>
+
+        {isDebuggerVisible && contextMenuPosition && (
+          <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+            <Popover.Portal>
+              <Popover.Content
+                align='start'
+                side='bottom'
+                sideOffset={5}
+                className={cn(
+                  'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                  'focus:outline-none focus-visible:outline-none',
+                  'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+                )}
+                style={{
+                  position: 'fixed',
+                  left: `${contextMenuPosition.x}px`,
+                  top: `${contextMenuPosition.y}px`,
+                }}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+              >
+                <div
+                  className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  onClick={handleForceTrue}
+                >
+                  <p>Force True</p>
+                </div>
+                <div
+                  className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  onClick={handleForceFalse}
+                >
+                  <p>Force False</p>
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

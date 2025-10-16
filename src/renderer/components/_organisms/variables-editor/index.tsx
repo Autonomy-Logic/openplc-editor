@@ -36,6 +36,7 @@ const VariablesEditor = () => {
     fbdFlowActions: { updateNode: updateFBDNode },
     workspace: {
       systemConfigs: { shouldUseDarkMode },
+      isDebuggerVisible,
     },
     project: {
       data: { pous, dataTypes },
@@ -966,13 +967,14 @@ const VariablesEditor = () => {
                     {
                       ariaLabel: 'Add table row button',
                       onClick: handleCreateVariable,
+                      disabled: isDebuggerVisible,
                       icon: <PlusIcon className='!stroke-brand' />,
                       id: 'add-variable-button',
                     },
                     {
                       ariaLabel: 'Remove table row button',
                       onClick: handleRemoveVariable,
-                      disabled: parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
+                      disabled: isDebuggerVisible || parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
                       icon: <MinusIcon />,
                       id: 'remove-variable-button',
                     },
@@ -980,6 +982,7 @@ const VariablesEditor = () => {
                       ariaLabel: 'Move table row up button',
                       onClick: () => handleRearrangeVariables(-1),
                       disabled:
+                        isDebuggerVisible ||
                         parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
                         parseInt(editorVariables.selectedRow) === 0,
                       icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
@@ -989,6 +992,7 @@ const VariablesEditor = () => {
                       ariaLabel: 'Move table row down button',
                       onClick: () => handleRearrangeVariables(1),
                       disabled:
+                        isDebuggerVisible ||
                         parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
                         parseInt(editorVariables.selectedRow) === tableData.length - 1,
                       icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,

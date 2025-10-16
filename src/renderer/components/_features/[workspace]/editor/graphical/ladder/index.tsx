@@ -49,6 +49,7 @@ export default function LadderEditor() {
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { addSnapshot },
     libraries: { user: userLibraries },
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
@@ -126,12 +127,16 @@ export default function LadderEditor() {
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (isDebuggerVisible) return
+
     const { active } = event
     setActiveId(active.id)
     setActiveItem(rungs.find((rung) => rung.id === active.id) || null)
   }
 
   const handleAddNewRung = () => {
+    if (isDebuggerVisible) return
+
     addSnapshot(editor.meta.name)
 
     const defaultViewport: [number, number] = [300, 100]
@@ -148,6 +153,12 @@ export default function LadderEditor() {
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (isDebuggerVisible) {
+      setActiveId(null)
+      setActiveItem(null)
+      return
+    }
+
     const { active, over } = event
 
     setActiveId(null)
@@ -310,6 +321,7 @@ export default function LadderEditor() {
                     'opacity-35': activeId === rung.id,
                   })}
                   nodeDivergences={nodeDivergences}
+                  isDebuggerActive={isDebuggerVisible}
                 />
               ))}
             </SortableContext>

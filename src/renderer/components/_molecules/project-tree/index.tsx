@@ -245,7 +245,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     editor: {
       meta: { name },
     },
-    workspace: { selectedProjectTreeLeaf },
+    workspace: { selectedProjectTreeLeaf, isDebuggerVisible },
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
@@ -458,17 +458,21 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
             'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             name === label && 'font-medium text-neutral-1000 dark:text-white',
           )}
-          onDoubleClick={() => setIsEditing(true)}
+          onDoubleClick={() => !isDebuggerVisible && setIsEditing(true)}
           dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
         />
       )}
 
       {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (
-        <Popover.Root open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+        <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
           <Popover.Trigger
+            disabled={isDebuggerVisible}
             className={cn(
               'mr-2 flex h-5 w-5 items-center justify-center rounded-md opacity-0 hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-850',
-              { 'bg-neutral-200 opacity-100 dark:bg-neutral-850': isPopoverOpen },
+              {
+                'bg-neutral-200 opacity-100 dark:bg-neutral-850': isPopoverOpen,
+                'cursor-not-allowed': isDebuggerVisible,
+              },
             )}
             onClick={(e) => {
               e.stopPropagation()
