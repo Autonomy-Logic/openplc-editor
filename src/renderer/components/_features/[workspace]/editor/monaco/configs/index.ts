@@ -1,4 +1,5 @@
 import './languages/il/il.register'
+import './languages/python/python.register'
 import './languages/st/st.register'
 import './themes/openplc/openplc.register'
 
