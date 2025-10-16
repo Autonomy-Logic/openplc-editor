@@ -51,6 +51,9 @@ type SnippetController = {
 
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name } = props
+
+  console.log('[MonacoEditor] Instantiated with:', { language, path, name })
+
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
@@ -298,10 +301,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
    * Note: Python uses Monaco's built-in language server for IntelliSense.
    */
   useEffect(() => {
+    console.log('[MonacoEditor] Completion provider effect running for language:', language)
+
     if (language === 'python') {
+      console.log('[MonacoEditor] Skipping custom completion provider for Python')
       return
     }
 
+    console.log('[MonacoEditor] Registering custom ST completion provider for:', language)
     const disposable = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
@@ -393,6 +400,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
+    console.log('[MonacoEditor] handleEditorDidMount called for:', { language, name })
+
     editorRef.current = editorInstance
     monacoRef.current = monacoInstance
 
