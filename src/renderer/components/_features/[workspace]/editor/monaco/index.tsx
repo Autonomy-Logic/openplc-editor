@@ -24,6 +24,7 @@ import {
   updateLocalVariablesInTokenizer,
 } from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
+import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
 
 type monacoEditorProps = {
   path: string
@@ -126,8 +127,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         newSet.delete(name)
         return newSet
       })
+
+      if (language === 'python') {
+        cleanupPythonLSP()
+      }
     }
-  }, [name])
+  }, [name, language])
 
   useEffect(() => {
     if (language === 'st' && dataTypes.length > 0) {
@@ -295,8 +300,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   /**
    * Update the auto-completion feature of the monaco editor.
+   * Note: Python uses its own LSP-based completion provider
    */
   useEffect(() => {
+    if (language === 'python') {
+      return
+    }
+
     const disposable = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
@@ -391,9 +401,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorRef.current = editorInstance
     monacoRef.current = monacoInstance
 
-    if (!editorInstance) return
+    if (!editorInstance || !monacoInstance) return
 
-    // Existing functionality for other languages
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
 
@@ -411,7 +420,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    // Restore cursor and scroll position for non-Python languages
     if (editor.cursorPosition && language !== 'python') {
       editorInstance.setPosition(editor.cursorPosition)
       editorInstance.revealPositionInCenter(editor.cursorPosition)
@@ -424,6 +432,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     if (language === 'python' && pou) {
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
+      void initPythonLSP(monacoInstance).then(() => setupPythonLSPForEditor(editorInstance))
     }
 
     editorInstance.focus()
