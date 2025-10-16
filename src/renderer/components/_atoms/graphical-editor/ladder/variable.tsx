@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
@@ -49,6 +50,7 @@ const VariableElement = (block: VariableProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
 
   const inputVariableRef = useRef<
@@ -68,6 +70,9 @@ const VariableElement = (block: VariableProps) => {
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState<boolean>(false)
+  const [forceValueModalOpen, setForceValueModalOpen] = useState<boolean>(false)
+  const [forceValue, setForceValue] = useState<string>('')
 
   const [variableValue, setVariableValue] = useState(data.variable.name)
   const [inputError, setInputError] = useState<boolean>(false)
@@ -239,9 +244,53 @@ const VariableElement = (block: VariableProps) => {
     }
   }
 
+  const getVariableType = (): string | undefined => {
+    if (!data.variable || !('id' in data.variable)) return undefined
+    const { pou } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId: id })
+    if (!pou) return undefined
+    const variable = pou.data.variables.find((v) => v.id === data.variable.id)
+    return variable?.type.value
+  }
+
+  const handleForceTrue = () => {
+    console.log('Force True:', data.variable.name)
+    setIsContextMenuOpen(false)
+  }
+
+  const handleForceFalse = () => {
+    console.log('Force False:', data.variable.name)
+    setIsContextMenuOpen(false)
+  }
+
+  const handleForceValue = () => {
+    setIsContextMenuOpen(false)
+    setForceValueModalOpen(true)
+  }
+
+  const handleForceValueConfirm = () => {
+    console.log('Force Value:', data.variable.name, '=', forceValue)
+    setForceValueModalOpen(false)
+    setForceValue('')
+  }
+
+  const handleForceValueCancel = () => {
+    setForceValueModalOpen(false)
+    setForceValue('')
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!isDebuggerVisible) return
+    e.preventDefault()
+    e.stopPropagation()
+    setIsContextMenuOpen(true)
+  }
+
+  const variableType = getVariableType()
+  const isBoolVariable = variableType?.toUpperCase() === 'BOOL'
+
   return (
     <>
-      <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
+      <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }} onContextMenu={handleContextMenu}>
         <HighlightedTextArea
           textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-yellow-500': !isAVariable,
@@ -291,7 +340,84 @@ const VariableElement = (block: VariableProps) => {
             </div>
           </div>
         )}
+
+        {isDebuggerVisible && (
+          <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+            <Popover.Trigger asChild>
+              <div className='absolute inset-0' />
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align='start'
+                side='right'
+                sideOffset={5}
+                className={cn(
+                  'z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                  'focus:outline-none focus-visible:outline-none',
+                  'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+                  'border border-neutral-200 dark:border-neutral-800',
+                )}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+              >
+                {isBoolVariable ? (
+                  <>
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceTrue}
+                    >
+                      <p>Force True</p>
+                    </div>
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceFalse}
+                    >
+                      <p>Force False</p>
+                    </div>
+                  </>
+                ) : (
+                  <div
+                    className='flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                    onClick={handleForceValue}
+                  >
+                    <p>Force value...</p>
+                  </div>
+                )}
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        )}
       </div>
+
+      {forceValueModalOpen && (
+        <div className='fixed inset-0 z-[200] flex items-center justify-center bg-black/50'>
+          <div className='flex min-w-[300px] flex-col gap-4 rounded-lg bg-white p-6 dark:bg-neutral-900'>
+            <h3 className='text-base font-semibold text-neutral-1000 dark:text-neutral-50'>Force Value</h3>
+            <input
+              type='text'
+              value={forceValue}
+              onChange={(e) => setForceValue(e.target.value)}
+              placeholder='Enter value'
+              className='rounded-md border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-brand dark:border-neutral-800 dark:bg-neutral-950'
+              autoFocus
+            />
+            <div className='flex justify-end gap-2'>
+              <button
+                onClick={handleForceValueCancel}
+                className='rounded-md px-4 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForceValueConfirm}
+                className='hover:bg-brand/90 rounded-md bg-brand px-4 py-2 text-sm text-white'
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}

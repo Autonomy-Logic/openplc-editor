@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import {
   DefaultCoil,
   FallingEdgeCoil,
@@ -168,6 +169,7 @@ export const Coil = (block: CoilProps) => {
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState<boolean>(false)
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
@@ -310,6 +312,23 @@ export const Coil = (block: CoilProps) => {
     }
   }
 
+  const handleForceTrue = () => {
+    console.log('Force True:', data.variable.name)
+    setIsContextMenuOpen(false)
+  }
+
+  const handleForceFalse = () => {
+    console.log('Force False:', data.variable.name)
+    setIsContextMenuOpen(false)
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!isDebuggerVisible) return
+    e.preventDefault()
+    e.stopPropagation()
+    setIsContextMenuOpen(true)
+  }
+
   return (
     <div
       className={cn({
@@ -324,6 +343,7 @@ export const Coil = (block: CoilProps) => {
           },
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
+        onContextMenu={handleContextMenu}
       >
         {coil.svg(wrongVariable, debuggerFillColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
@@ -397,6 +417,41 @@ export const Coil = (block: CoilProps) => {
             </div>
           )}
         </div>
+
+        {isDebuggerVisible && (
+          <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+            <Popover.Trigger asChild>
+              <div className='absolute inset-0' />
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align='start'
+                side='right'
+                sideOffset={5}
+                className={cn(
+                  'z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                  'focus:outline-none focus-visible:outline-none',
+                  'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+                  'border border-neutral-200 dark:border-neutral-800',
+                )}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+              >
+                <div
+                  className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  onClick={handleForceTrue}
+                >
+                  <p>Force True</p>
+                </div>
+                <div
+                  className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  onClick={handleForceFalse}
+                >
+                  <p>Force False</p>
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
