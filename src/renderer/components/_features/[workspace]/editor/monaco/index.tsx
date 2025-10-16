@@ -52,6 +52,7 @@ type SnippetController = {
 
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name } = props
+  console.log('[MonacoEditor] Initialized with:', { language, path, name })
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
@@ -398,10 +399,17 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
+    console.log('[handleEditorDidMount] Called with language:', language, 'pou:', pou?.data.name)
     editorRef.current = editorInstance
     monacoRef.current = monacoInstance
 
-    if (!editorInstance || !monacoInstance) return
+    if (!editorInstance || !monacoInstance) {
+      console.log('[handleEditorDidMount] Missing editor or monaco instance')
+      return
+    }
+
+    const model = editorInstance.getModel()
+    console.log('[handleEditorDidMount] Editor model language ID:', model?.getLanguageId())
 
     // Existing functionality for other languages
     focusDisposables.current.onFocus?.dispose()
@@ -433,9 +441,22 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     if (language === 'python' && pou) {
+      console.log('[handleEditorDidMount] Initializing Python LSP for:', name)
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
 
-      void initPythonLSP(monacoInstance).then(() => setupPythonLSPForEditor(editorInstance))
+      void initPythonLSP(monacoInstance)
+        .then(() => {
+          console.log('[handleEditorDidMount] Python LSP initialized, setting up editor')
+          return setupPythonLSPForEditor(editorInstance)
+        })
+        .then(() => {
+          console.log('[handleEditorDidMount] Python LSP setup complete')
+        })
+        .catch((error) => {
+          console.error('[handleEditorDidMount] Failed to setup Python LSP:', error)
+        })
+    } else {
+      console.log('[handleEditorDidMount] Not initializing Python LSP. language:', language, 'pou:', !!pou)
     }
 
     editorInstance.focus()

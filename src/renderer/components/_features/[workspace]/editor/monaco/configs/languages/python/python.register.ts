@@ -1,6 +1,7 @@
 import { registerLanguage } from '../_.register'
 import { conf, language } from './python'
 
+console.log('[Python Language] Registering Python language with Monaco')
 registerLanguage({
   def: {
     id: 'python',
@@ -11,3 +12,4 @@ registerLanguage({
   conf,
   language,
 })
+console.log('[Python Language] Python language registered successfully')
