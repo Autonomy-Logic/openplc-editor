@@ -313,11 +313,15 @@ export const Coil = (block: CoilProps) => {
     }
   }
 
-  const handleForceTrue = () => {
+  const handleForceTrue = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     setIsContextMenuOpen(false)
   }
 
-  const handleForceFalse = () => {
+  const handleForceFalse = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     setIsContextMenuOpen(false)
   }
 

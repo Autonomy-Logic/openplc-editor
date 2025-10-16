@@ -6,7 +6,9 @@ import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
+import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { Label } from '../../label'
 import { getVariableByName, validateVariableType } from '../utils'
 import { VariablesBlockAutoComplete } from './autocomplete'
 import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables } from './block'
@@ -253,15 +255,21 @@ const VariableElement = (block: VariableProps) => {
     return variable?.type.value
   }
 
-  const handleForceTrue = () => {
+  const handleForceTrue = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     setIsContextMenuOpen(false)
   }
 
-  const handleForceFalse = () => {
+  const handleForceFalse = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     setIsContextMenuOpen(false)
   }
 
-  const handleForceValue = () => {
+  const handleForceValue = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     setIsContextMenuOpen(false)
     setForceValueModalOpen(true)
   }
@@ -393,35 +401,48 @@ const VariableElement = (block: VariableProps) => {
         )}
       </div>
 
-      {forceValueModalOpen && (
-        <div className='fixed inset-0 z-[200] flex items-center justify-center bg-black/50'>
-          <div className='flex min-w-[300px] flex-col gap-4 rounded-lg bg-white p-6 dark:bg-neutral-900'>
-            <h3 className='text-base font-semibold text-neutral-1000 dark:text-neutral-50'>Force Value</h3>
-            <input
-              type='text'
-              value={forceValue}
-              onChange={(e) => setForceValue(e.target.value)}
-              placeholder='Enter value'
-              className='rounded-md border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-brand dark:border-neutral-800 dark:bg-neutral-950'
-              autoFocus
-            />
-            <div className='flex justify-end gap-2'>
-              <button
-                onClick={handleForceValueCancel}
-                className='rounded-md px-4 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800'
-              >
-                Cancel
-              </button>
+      <Modal open={forceValueModalOpen} onOpenChange={setForceValueModalOpen}>
+        <ModalContent className='flex h-auto w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
+          <ModalTitle className='mb-4 text-lg font-semibold'>Force Value</ModalTitle>
+
+          <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>
+            Enter the value to force for {data.variable?.name || 'this variable'}
+          </p>
+
+          <div className='flex w-full flex-col gap-4'>
+            <div>
+              <Label htmlFor='force-value-input' className='mb-2 block text-sm'>
+                Value
+              </Label>
+              <input
+                id='force-value-input'
+                type='text'
+                value={forceValue}
+                onChange={(e) => setForceValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleForceValueConfirm()}
+                placeholder='Enter value'
+                className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
+                autoFocus
+              />
+            </div>
+
+            <div className='mt-4 flex gap-3'>
               <button
                 onClick={handleForceValueConfirm}
-                className='hover:bg-brand/90 rounded-md bg-brand px-4 py-2 text-sm text-white'
+                className='flex-1 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark'
               >
                 OK
               </button>
+              <button
+                onClick={handleForceValueCancel}
+                className='flex-1 rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100'
+              >
+                Cancel
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        </ModalContent>
+      </Modal>
 
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
