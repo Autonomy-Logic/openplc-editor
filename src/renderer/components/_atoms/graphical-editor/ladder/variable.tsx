@@ -290,7 +290,10 @@ const VariableElement = (block: VariableProps) => {
 
   return (
     <>
-      <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
+      <div
+        style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
+        onClick={isDebuggerVisible ? handleClick : undefined}
+      >
         <HighlightedTextArea
           textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-yellow-500': !isAVariable,
@@ -315,6 +318,7 @@ const VariableElement = (block: VariableProps) => {
             scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
           }}
           ref={inputVariableRef}
+          disabled={isDebuggerVisible}
           onChange={onChangeHandler}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
@@ -343,9 +347,6 @@ const VariableElement = (block: VariableProps) => {
 
         {isDebuggerVisible && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
-            <Popover.Trigger asChild>
-              <div className='absolute inset-0 cursor-pointer' onClick={handleClick} />
-            </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content
                 align='start'

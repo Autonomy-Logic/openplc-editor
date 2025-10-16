@@ -343,6 +343,7 @@ export const Coil = (block: CoilProps) => {
           },
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
+        onClick={isDebuggerVisible ? handleClick : undefined}
       >
         {coil.svg(wrongVariable, debuggerFillColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
@@ -357,6 +358,7 @@ export const Coil = (block: CoilProps) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
+            disabled={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
@@ -419,9 +421,6 @@ export const Coil = (block: CoilProps) => {
 
         {isDebuggerVisible && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
-            <Popover.Trigger asChild>
-              <div className='absolute inset-0 cursor-pointer' onClick={handleClick} />
-            </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content
                 align='start'
