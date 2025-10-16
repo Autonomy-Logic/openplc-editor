@@ -45,6 +45,8 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
 
+  console.log('RungBody render - isDebuggerActive:', isDebuggerActive, 'isDebuggerVisible:', isDebuggerVisible)
+
   const pouRef = project.data.pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
@@ -552,6 +554,14 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   }
 
   /**
+   * Handle the single click of a node during debugging
+   */
+  const handleNodeClick = (_event: React.MouseEvent, node: FlowNode) => {
+    console.log('handleNodeClick called for node type:', node.type, 'isDebuggerActive:', isDebuggerActive)
+    if (!isDebuggerActive) return
+  }
+
+  /**
    * Handle the double click of a node
    */ //
   const handleNodeDoubleClick = (node: FlowNode) => {
@@ -745,6 +755,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
               edges: styledEdges,
               nodesFocusable: false,
               edgesFocusable: false,
+              nodesDraggable: !isDebuggerActive,
+              nodesConnectable: !isDebuggerActive,
+              elementsSelectable: true,
               defaultEdgeOptions: {
                 deletable: false,
                 selectable: false,
@@ -754,6 +767,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
               onInit: setReactFlowInstance,
 
               onNodesChange: onNodesChange,
+              onNodeClick: isDebuggerActive ? handleNodeClick : undefined,
               onNodesDelete: isDebuggerActive
                 ? undefined
                 : (nodes) => {

@@ -290,9 +290,11 @@ export const Contact = (block: ContactProps) => {
   }
 
   const handleClick = (e: React.MouseEvent) => {
+    console.log('Contact handleClick called, isDebuggerVisible:', isDebuggerVisible)
     if (!isDebuggerVisible) return
     e.preventDefault()
     e.stopPropagation()
+    console.log('Opening context menu for contact:', data.variable.name)
     setIsContextMenuOpen(true)
   }
 
