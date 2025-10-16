@@ -323,9 +323,11 @@ export const Coil = (block: CoilProps) => {
   }
 
   const handleClick = (e: React.MouseEvent) => {
+    console.log('Coil handleClick called, isDebuggerVisible:', isDebuggerVisible)
     if (!isDebuggerVisible) return
     e.preventDefault()
     e.stopPropagation()
+    console.log('Opening context menu for coil:', data.variable.name)
     setIsContextMenuOpen(true)
   }
 
@@ -421,16 +423,20 @@ export const Coil = (block: CoilProps) => {
 
         {isDebuggerVisible && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+            <Popover.Anchor asChild>
+              <div className='pointer-events-none absolute inset-0' />
+            </Popover.Anchor>
             <Popover.Portal>
               <Popover.Content
                 align='start'
                 side='right'
                 sideOffset={5}
                 className={cn(
-                  'z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                  'z-[200] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
                   'focus:outline-none focus-visible:outline-none',
                   'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
                   'border border-neutral-200 dark:border-neutral-800',
+                  'shadow-lg',
                 )}
                 onOpenAutoFocus={(e) => e.preventDefault()}
               >

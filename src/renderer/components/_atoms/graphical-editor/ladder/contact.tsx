@@ -139,6 +139,10 @@ export const Contact = (block: ContactProps) => {
   const [isContextMenuOpen, setIsContextMenuOpen] = useState<boolean>(false)
 
   useEffect(() => {
+    console.log('Contact context menu state changed:', isContextMenuOpen)
+  }, [isContextMenuOpen])
+
+  useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
       // top
       inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-24px' : '-20px'
@@ -390,16 +394,20 @@ export const Contact = (block: ContactProps) => {
 
         {isDebuggerVisible && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+            <Popover.Anchor asChild>
+              <div className='pointer-events-none absolute inset-0' />
+            </Popover.Anchor>
             <Popover.Portal>
               <Popover.Content
                 align='start'
                 side='right'
                 sideOffset={5}
                 className={cn(
-                  'z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                  'z-[200] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
                   'focus:outline-none focus-visible:outline-none',
                   'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
                   'border border-neutral-200 dark:border-neutral-800',
+                  'shadow-lg',
                 )}
                 onOpenAutoFocus={(e) => e.preventDefault()}
               >
