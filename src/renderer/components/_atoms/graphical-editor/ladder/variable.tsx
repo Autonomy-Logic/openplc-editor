@@ -402,7 +402,7 @@ const VariableElement = (block: VariableProps) => {
       </div>
 
       <Modal open={forceValueModalOpen} onOpenChange={setForceValueModalOpen}>
-        <ModalContent className='flex h-auto w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
+        <ModalContent className='flex h-fit min-h-0 w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
           <ModalTitle className='mb-4 text-lg font-semibold'>Force Value</ModalTitle>
 
           <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>
