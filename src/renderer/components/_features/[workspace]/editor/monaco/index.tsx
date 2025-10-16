@@ -394,7 +394,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => disposable.dispose()
   }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
 
-  async function handleEditorDidMount(
+  function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
@@ -435,8 +435,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (language === 'python' && pou) {
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
 
-      await initPythonLSP(monacoInstance)
-      await setupPythonLSPForEditor(editorInstance)
+      void initPythonLSP(monacoInstance).then(() => setupPythonLSPForEditor(editorInstance))
     }
 
     editorInstance.focus()
