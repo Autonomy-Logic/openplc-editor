@@ -430,24 +430,22 @@ export const Coil = (block: CoilProps) => {
               <Popover.Content
                 align='start'
                 side='right'
-                sideOffset={5}
+                sideOffset={2}
                 className={cn(
-                  'z-[200] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                  'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
                   'focus:outline-none focus-visible:outline-none',
                   'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
-                  'border border-neutral-200 dark:border-neutral-800',
-                  'shadow-lg',
                 )}
                 onOpenAutoFocus={(e) => e.preventDefault()}
               >
                 <div
-                  className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
                   onClick={handleForceTrue}
                 >
                   <p>Force True</p>
                 </div>
                 <div
-                  className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
                   onClick={handleForceFalse}
                 >
                   <p>Force False</p>
