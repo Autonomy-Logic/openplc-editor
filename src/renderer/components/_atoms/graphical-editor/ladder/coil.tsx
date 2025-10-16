@@ -170,6 +170,7 @@ export const Coil = (block: CoilProps) => {
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
   const [isContextMenuOpen, setIsContextMenuOpen] = useState<boolean>(false)
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
@@ -328,6 +329,7 @@ export const Coil = (block: CoilProps) => {
     e.preventDefault()
     e.stopPropagation()
     console.log('Opening context menu for coil:', data.variable.name)
+    setContextMenuPosition({ x: e.clientX, y: e.clientY })
     setIsContextMenuOpen(true)
   }
 
@@ -361,6 +363,7 @@ export const Coil = (block: CoilProps) => {
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
             disabled={isDebuggerVisible}
+            readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
@@ -421,21 +424,23 @@ export const Coil = (block: CoilProps) => {
           )}
         </div>
 
-        {isDebuggerVisible && (
+        {isDebuggerVisible && contextMenuPosition && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
-            <Popover.Anchor asChild>
-              <div className='pointer-events-none absolute inset-0' />
-            </Popover.Anchor>
             <Popover.Portal>
               <Popover.Content
                 align='start'
-                side='right'
-                sideOffset={2}
+                side='bottom'
+                sideOffset={5}
                 className={cn(
                   'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
                   'focus:outline-none focus-visible:outline-none',
                   'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
                 )}
+                style={{
+                  position: 'fixed',
+                  left: `${contextMenuPosition.x}px`,
+                  top: `${contextMenuPosition.y}px`,
+                }}
                 onOpenAutoFocus={(e) => e.preventDefault()}
               >
                 <div
