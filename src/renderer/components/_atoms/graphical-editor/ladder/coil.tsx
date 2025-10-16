@@ -314,21 +314,17 @@ export const Coil = (block: CoilProps) => {
   }
 
   const handleForceTrue = () => {
-    console.log('Force True:', data.variable.name)
     setIsContextMenuOpen(false)
   }
 
   const handleForceFalse = () => {
-    console.log('Force False:', data.variable.name)
     setIsContextMenuOpen(false)
   }
 
   const handleClick = (e: React.MouseEvent) => {
-    console.log('Coil handleClick called, isDebuggerVisible:', isDebuggerVisible)
     if (!isDebuggerVisible) return
     e.preventDefault()
     e.stopPropagation()
-    console.log('Opening context menu for coil:', data.variable.name)
     setContextMenuPosition({ x: e.clientX, y: e.clientY })
     setIsContextMenuOpen(true)
   }

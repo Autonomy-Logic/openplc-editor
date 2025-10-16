@@ -140,10 +140,6 @@ export const Contact = (block: ContactProps) => {
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
-    console.log('Contact context menu state changed:', isContextMenuOpen)
-  }, [isContextMenuOpen])
-
-  useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
       // top
       inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-24px' : '-20px'
@@ -285,21 +281,17 @@ export const Contact = (block: ContactProps) => {
   }
 
   const handleForceTrue = () => {
-    console.log('Force True:', data.variable.name)
     setIsContextMenuOpen(false)
   }
 
   const handleForceFalse = () => {
-    console.log('Force False:', data.variable.name)
     setIsContextMenuOpen(false)
   }
 
   const handleClick = (e: React.MouseEvent) => {
-    console.log('Contact handleClick called, isDebuggerVisible:', isDebuggerVisible)
     if (!isDebuggerVisible) return
     e.preventDefault()
     e.stopPropagation()
-    console.log('Opening context menu for contact:', data.variable.name)
     setContextMenuPosition({ x: e.clientX, y: e.clientY })
     setIsContextMenuOpen(true)
   }

@@ -254,12 +254,10 @@ const VariableElement = (block: VariableProps) => {
   }
 
   const handleForceTrue = () => {
-    console.log('Force True:', data.variable.name)
     setIsContextMenuOpen(false)
   }
 
   const handleForceFalse = () => {
-    console.log('Force False:', data.variable.name)
     setIsContextMenuOpen(false)
   }
 
@@ -269,7 +267,6 @@ const VariableElement = (block: VariableProps) => {
   }
 
   const handleForceValueConfirm = () => {
-    console.log('Force Value:', data.variable.name, '=', forceValue)
     setForceValueModalOpen(false)
     setForceValue('')
   }
@@ -280,11 +277,9 @@ const VariableElement = (block: VariableProps) => {
   }
 
   const handleClick = (e: React.MouseEvent) => {
-    console.log('Variable handleClick called, isDebuggerVisible:', isDebuggerVisible, 'isAVariable:', isAVariable)
     if (!isDebuggerVisible || !isAVariable) return
     e.preventDefault()
     e.stopPropagation()
-    console.log('Opening context menu for variable:', data.variable?.name)
     setContextMenuPosition({ x: e.clientX, y: e.clientY })
     setIsContextMenuOpen(true)
   }
