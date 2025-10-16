@@ -284,6 +284,13 @@ const VariableElement = (block: VariableProps) => {
     setForceValue('')
   }
 
+  const handleForceValueModalChange = (open: boolean) => {
+    setForceValueModalOpen(open)
+    if (!open) {
+      setForceValue('')
+    }
+  }
+
   const handleClick = (e: React.MouseEvent) => {
     if (!isDebuggerVisible || !isAVariable) return
     e.preventDefault()
@@ -401,7 +408,7 @@ const VariableElement = (block: VariableProps) => {
         )}
       </div>
 
-      <Modal open={forceValueModalOpen} onOpenChange={setForceValueModalOpen}>
+      <Modal open={forceValueModalOpen} onOpenChange={handleForceValueModalChange}>
         <ModalContent className='flex h-fit min-h-0 w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
           <ModalTitle className='mb-4 text-lg font-semibold'>Force Value</ModalTitle>
 
