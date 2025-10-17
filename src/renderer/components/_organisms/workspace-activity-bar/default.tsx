@@ -642,7 +642,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: `Program MD5: ${expectedMd5}`,
       })
 
-      const targetDisplay = connectionType === 'tcp' ? targetIpAddress : connectionParams.port
+      const targetDisplay =
+        connectionType === 'tcp' || connectionType === 'websocket' ? targetIpAddress : connectionParams.port
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'info',
