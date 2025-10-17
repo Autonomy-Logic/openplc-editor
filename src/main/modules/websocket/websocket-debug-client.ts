@@ -124,14 +124,20 @@ export class WebSocketDebugClient {
             return
           }
 
-          const statusCode = responseBuffer.readUInt8(0)
+          const responseFunctionCode = responseBuffer.readUInt8(0)
+          const statusCode = responseBuffer.readUInt8(1)
+
+          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
+            reject(new Error('Function code mismatch'))
+            return
+          }
 
           if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
             reject(new Error(`Target returned error code: 0x${statusCode.toString(16)}`))
             return
           }
 
-          const md5String = responseBuffer.slice(1).toString('utf-8').trim()
+          const md5String = responseBuffer.slice(2).toString('utf-8').trim()
           resolve(md5String)
         } catch (error) {
           reject(error instanceof Error ? error : new Error(String(error)))
@@ -197,7 +203,13 @@ export class WebSocketDebugClient {
             return
           }
 
-          const statusCode = responseBuffer.readUInt8(0)
+          const responseFunctionCode = responseBuffer.readUInt8(0)
+          const statusCode = responseBuffer.readUInt8(1)
+
+          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
+            resolve({ success: false, error: 'Function code mismatch' })
+            return
+          }
 
           if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
             resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
@@ -222,19 +234,19 @@ export class WebSocketDebugClient {
             return
           }
 
-          const lastIndex = responseBuffer.readUInt16BE(1)
-          const tick = responseBuffer.readUInt32BE(3)
-          const responseSize = responseBuffer.readUInt16BE(7)
+          const lastIndex = responseBuffer.readUInt16BE(2)
+          const tick = responseBuffer.readUInt32BE(4)
+          const responseSize = responseBuffer.readUInt16BE(8)
 
-          if (responseBuffer.length < 9 + responseSize) {
+          if (responseBuffer.length < 10 + responseSize) {
             resolve({
               success: false,
-              error: `Incomplete variable data (expected ${responseSize} bytes, got ${responseBuffer.length - 9})`,
+              error: `Incomplete variable data (expected ${responseSize} bytes, got ${responseBuffer.length - 10})`,
             })
             return
           }
 
-          const variableData = responseBuffer.slice(9, 9 + responseSize)
+          const variableData = responseBuffer.slice(10, 10 + responseSize)
 
           resolve({
             success: true,
