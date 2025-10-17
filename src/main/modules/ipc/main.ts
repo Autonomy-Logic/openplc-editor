@@ -636,17 +636,29 @@ class MainProcessBridge implements MainIpcModule {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
-        wsClient = new WebSocketDebugClient({
-          host: connectionParams.ipAddress,
-          port: 8443,
-          token: connectionParams.jwtToken,
-          rejectUnauthorized: false,
-        })
-        await wsClient.connect()
+        if (!this.debuggerWebSocketClient) {
+          wsClient = new WebSocketDebugClient({
+            host: connectionParams.ipAddress,
+            port: 8443,
+            token: connectionParams.jwtToken,
+            rejectUnauthorized: false,
+          })
+          await wsClient.connect()
+        } else {
+          wsClient = this.debuggerWebSocketClient
+        }
+
         const targetMd5 = await wsClient.getMd5Hash()
-        wsClient.disconnect()
 
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+
+        if (!this.debuggerWebSocketClient) {
+          this.debuggerWebSocketClient = wsClient
+          this.debuggerTargetIp = connectionParams.ipAddress
+          this.debuggerJwtToken = connectionParams.jwtToken
+          this.debuggerConnectionType = 'websocket'
+        }
+
         return { success: true, match, targetMd5 }
       } else if (connectionType === 'tcp') {
         if (!connectionParams.ipAddress) {
@@ -863,22 +875,27 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerModbusClient.disconnect()
         this.debuggerModbusClient = null
       }
-      if (this.debuggerWebSocketClient) {
-        this.debuggerWebSocketClient.disconnect()
-        this.debuggerWebSocketClient = null
-      }
 
       if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
-        this.debuggerWebSocketClient = new WebSocketDebugClient({
-          host: connectionParams.ipAddress,
-          port: 8443,
-          token: connectionParams.jwtToken,
-          rejectUnauthorized: false,
-        })
-        await this.debuggerWebSocketClient.connect()
+
+        if (!this.debuggerWebSocketClient || this.debuggerConnectionType !== 'websocket') {
+          if (this.debuggerWebSocketClient) {
+            this.debuggerWebSocketClient.disconnect()
+            this.debuggerWebSocketClient = null
+          }
+
+          this.debuggerWebSocketClient = new WebSocketDebugClient({
+            host: connectionParams.ipAddress,
+            port: 8443,
+            token: connectionParams.jwtToken,
+            rejectUnauthorized: false,
+          })
+          await this.debuggerWebSocketClient.connect()
+        }
+
         this.debuggerTargetIp = connectionParams.ipAddress
         this.debuggerJwtToken = connectionParams.jwtToken
       } else if (connectionType === 'tcp') {
