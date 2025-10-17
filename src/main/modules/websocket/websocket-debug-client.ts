@@ -25,10 +25,9 @@ export class WebSocketDebugClient {
 
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const url = `https://${this.host}:${this.port}`
+      const url = `https://${this.host}:${this.port}/api/debug`
 
       this.socket = io(url, {
-        path: '/api/debug/socket.io',
         transports: ['websocket'],
         auth: {
           token: this.token,
