@@ -43,12 +43,12 @@ export class WebSocketDebugClient {
         reject(new Error('Connection timeout'))
       }, 5000)
 
-      this.socket.on('connect_error', (error) => {
+      this.socket.on('connect_error', (error: Error) => {
         clearTimeout(timeoutHandle)
         reject(error)
       })
 
-      this.socket.io.on('error', (error) => {
+      this.socket.io.on('error', (error: Error) => {
         clearTimeout(timeoutHandle)
         reject(error)
       })
