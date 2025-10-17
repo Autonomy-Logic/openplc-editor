@@ -140,7 +140,7 @@ export class WebSocketDebugClient {
       }
 
       this.socket!.on('debug_response', responseHandler)
-      this.socket!.emit('debug_command', { command: commandHex }, '/api/debug')
+      this.socket!.emit('debug_command', { command: commandHex })
     })
   }
 
@@ -249,7 +249,7 @@ export class WebSocketDebugClient {
       }
 
       this.socket!.on('debug_response', responseHandler)
-      this.socket!.emit('debug_command', { command: commandHex }, '/api/debug')
+      this.socket!.emit('debug_command', { command: commandHex })
     })
   }
 }
