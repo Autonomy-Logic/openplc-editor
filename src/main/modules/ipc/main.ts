@@ -774,9 +774,13 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       try {
+        console.log(`[Main IPC] Requesting ${variableIndexes.length} variables: [${variableIndexes.join(', ')}]`)
         const result = await this.debuggerWebSocketClient.getVariablesList(variableIndexes)
 
         if (result.success && result.data) {
+          console.log(
+            `[Main IPC] Success: lastIndex=${result.lastIndex}, tick=${result.tick}, dataBytes=${result.data.length}`,
+          )
           return {
             success: true,
             tick: result.tick,
@@ -785,8 +789,10 @@ class MainProcessBridge implements MainIpcModule {
           }
         }
 
+        console.error(`[Main IPC] Failed: ${result.error}`)
         return { success: false, error: result.error }
       } catch (error) {
+        console.error(`[Main IPC] Exception: ${String(error)}`)
         if (this.debuggerWebSocketClient) {
           this.debuggerWebSocketClient.disconnect()
           this.debuggerWebSocketClient = null
