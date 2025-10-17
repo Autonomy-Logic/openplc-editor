@@ -16,6 +16,7 @@ import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/m
 import { logger } from '../../services'
 import { ModbusTcpClient } from '../modbus/modbus-client'
 import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
+import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
 
 type IDataToWrite = {
   projectPath: string
@@ -37,12 +38,14 @@ class MainProcessBridge implements MainIpcModule {
   compilerModule
   hardwareModule
   private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
+  private debuggerWebSocketClient: WebSocketDebugClient | null = null
   private debuggerTargetIp: string | null = null
   private debuggerReconnecting: boolean = false
-  private debuggerConnectionType: 'tcp' | 'rtu' | null = null
+  private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | null = null
   private debuggerRtuPort: string | null = null
   private debuggerRtuBaudRate: number | null = null
   private debuggerRtuSlaveId: number | null = null
+  private debuggerJwtToken: string | null = null
 
   constructor({
     ipcMain,
@@ -616,18 +619,36 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu',
+    connectionType: 'tcp' | 'rtu' | 'websocket',
     connectionParams: {
       ipAddress?: string
       port?: string
       baudRate?: number
       slaveId?: number
+      jwtToken?: string
     },
     expectedMd5: string,
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
+    let wsClient: WebSocketDebugClient | null = null
     try {
-      if (connectionType === 'tcp') {
+      if (connectionType === 'websocket') {
+        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
+          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
+        }
+        wsClient = new WebSocketDebugClient({
+          host: connectionParams.ipAddress,
+          port: 8443,
+          token: connectionParams.jwtToken,
+          rejectUnauthorized: false,
+        })
+        await wsClient.connect()
+        const targetMd5 = await wsClient.getMd5Hash()
+        wsClient.disconnect()
+
+        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+        return { success: true, match, targetMd5 }
+      } else if (connectionType === 'tcp') {
         if (!connectionParams.ipAddress) {
           return { success: false, error: 'IP address is required for TCP connection' }
         }
@@ -657,6 +678,7 @@ class MainProcessBridge implements MainIpcModule {
       return { success: true, match, targetMd5 }
     } catch (error) {
       client?.disconnect()
+      wsClient?.disconnect()
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
@@ -712,6 +734,55 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
     needsReconnect?: boolean
   }> => {
+    if (this.debuggerConnectionType === 'websocket') {
+      if (!this.debuggerWebSocketClient) {
+        if (this.debuggerReconnecting) {
+          return { success: false, error: 'Reconnection in progress', needsReconnect: true }
+        }
+
+        this.debuggerReconnecting = true
+        try {
+          if (!this.debuggerTargetIp || !this.debuggerJwtToken) {
+            this.debuggerReconnecting = false
+            return { success: false, error: 'No target IP or JWT token stored', needsReconnect: true }
+          }
+          this.debuggerWebSocketClient = new WebSocketDebugClient({
+            host: this.debuggerTargetIp,
+            port: 8443,
+            token: this.debuggerJwtToken,
+            rejectUnauthorized: false,
+          })
+          await this.debuggerWebSocketClient.connect()
+          this.debuggerReconnecting = false
+        } catch (error) {
+          this.debuggerWebSocketClient = null
+          this.debuggerReconnecting = false
+          return { success: false, error: `Failed to reconnect: ${String(error)}`, needsReconnect: true }
+        }
+      }
+
+      try {
+        const result = await this.debuggerWebSocketClient.getVariablesList(variableIndexes)
+
+        if (result.success && result.data) {
+          return {
+            success: true,
+            tick: result.tick,
+            lastIndex: result.lastIndex,
+            data: Array.from(result.data),
+          }
+        }
+
+        return { success: false, error: result.error }
+      } catch (error) {
+        if (this.debuggerWebSocketClient) {
+          this.debuggerWebSocketClient.disconnect()
+          this.debuggerWebSocketClient = null
+        }
+        return { success: false, error: String(error), needsReconnect: true }
+      }
+    }
+
     if (!this.debuggerModbusClient) {
       if (this.debuggerReconnecting) {
         return { success: false, error: 'Reconnection in progress', needsReconnect: true }
@@ -778,12 +849,13 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerConnect = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu',
+    connectionType: 'tcp' | 'rtu' | 'websocket',
     connectionParams: {
       ipAddress?: string
       port?: string
       baudRate?: number
       slaveId?: number
+      jwtToken?: string
     },
   ): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -791,8 +863,25 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerModbusClient.disconnect()
         this.debuggerModbusClient = null
       }
+      if (this.debuggerWebSocketClient) {
+        this.debuggerWebSocketClient.disconnect()
+        this.debuggerWebSocketClient = null
+      }
 
-      if (connectionType === 'tcp') {
+      if (connectionType === 'websocket') {
+        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
+          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
+        }
+        this.debuggerWebSocketClient = new WebSocketDebugClient({
+          host: connectionParams.ipAddress,
+          port: 8443,
+          token: connectionParams.jwtToken,
+          rejectUnauthorized: false,
+        })
+        await this.debuggerWebSocketClient.connect()
+        this.debuggerTargetIp = connectionParams.ipAddress
+        this.debuggerJwtToken = connectionParams.jwtToken
+      } else if (connectionType === 'tcp') {
         if (!connectionParams.ipAddress) {
           return { success: false, error: 'IP address is required for TCP connection' }
         }
@@ -801,6 +890,7 @@ class MainProcessBridge implements MainIpcModule {
           port: 502,
           timeout: 5000,
         })
+        await this.debuggerModbusClient.connect()
         this.debuggerTargetIp = connectionParams.ipAddress
       } else {
         if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
@@ -812,23 +902,25 @@ class MainProcessBridge implements MainIpcModule {
           slaveId: connectionParams.slaveId,
           timeout: 5000,
         })
+        await this.debuggerModbusClient.connect()
         this.debuggerRtuPort = connectionParams.port
         this.debuggerRtuBaudRate = connectionParams.baudRate
         this.debuggerRtuSlaveId = connectionParams.slaveId
       }
 
-      await this.debuggerModbusClient.connect()
       this.debuggerConnectionType = connectionType
       this.debuggerReconnecting = false
 
       return { success: true }
     } catch (error) {
       this.debuggerModbusClient = null
+      this.debuggerWebSocketClient = null
       this.debuggerTargetIp = null
       this.debuggerConnectionType = null
       this.debuggerRtuPort = null
       this.debuggerRtuBaudRate = null
       this.debuggerRtuSlaveId = null
+      this.debuggerJwtToken = null
       return { success: false, error: String(error) }
     }
   }
@@ -837,13 +929,18 @@ class MainProcessBridge implements MainIpcModule {
     if (this.debuggerModbusClient) {
       this.debuggerModbusClient.disconnect()
       this.debuggerModbusClient = null
-      this.debuggerTargetIp = null
-      this.debuggerConnectionType = null
-      this.debuggerRtuPort = null
-      this.debuggerRtuBaudRate = null
-      this.debuggerRtuSlaveId = null
-      this.debuggerReconnecting = false
     }
+    if (this.debuggerWebSocketClient) {
+      this.debuggerWebSocketClient.disconnect()
+      this.debuggerWebSocketClient = null
+    }
+    this.debuggerTargetIp = null
+    this.debuggerConnectionType = null
+    this.debuggerRtuPort = null
+    this.debuggerRtuBaudRate = null
+    this.debuggerRtuSlaveId = null
+    this.debuggerJwtToken = null
+    this.debuggerReconnecting = false
     return Promise.resolve({ success: true })
   }
 

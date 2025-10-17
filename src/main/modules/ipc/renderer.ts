@@ -239,12 +239,13 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
 
   debuggerVerifyMd5: (
-    connectionType: 'tcp' | 'rtu',
+    connectionType: 'tcp' | 'rtu' | 'websocket',
     connectionParams: {
       ipAddress?: string
       port?: string
       baudRate?: number
       slaveId?: number
+      jwtToken?: string
     },
     expectedMd5: string,
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
@@ -268,12 +269,13 @@ const rendererProcessBridge = {
   }> => ipcRenderer.invoke('debugger:get-variables-list', variableIndexes),
 
   debuggerConnect: (
-    connectionType: 'tcp' | 'rtu',
+    connectionType: 'tcp' | 'rtu' | 'websocket',
     connectionParams: {
       ipAddress?: string
       port?: string
       baudRate?: number
       slaveId?: number
+      jwtToken?: string
     },
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('debugger:connect', connectionType, connectionParams),
