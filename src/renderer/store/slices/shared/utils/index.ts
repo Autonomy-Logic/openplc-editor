@@ -7,7 +7,7 @@ import type { PouDTO } from '../../project/types'
 type PouProps = {
   type: 'program' | 'function' | 'function-block'
   name: string
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 }
 
 const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
@@ -139,7 +139,7 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
 type ICreatedTabObject = {
   type: 'program' | 'function' | 'function-block'
   name: string
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 }
 
 const CreateTabObject = ({ name, language, type }: PouProps): ICreatedTabObject => {

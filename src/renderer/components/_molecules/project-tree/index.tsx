@@ -2,6 +2,7 @@ import * as Popover from '@radix-ui/react-popover'
 import {
   ArrayIcon,
   ArrowIcon,
+  CExtIcon,
   CloseIcon,
   ConfigIcon,
   DataTypeIcon,
@@ -221,7 +222,20 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
 }
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
-  leafLang: 'il' | 'st' | 'python' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res' | 'devConfig' | 'devPin'
+  leafLang:
+    | 'il'
+    | 'st'
+    | 'python'
+    | 'cpp'
+    | 'fbd'
+    | 'sfc'
+    | 'ld'
+    | 'arr'
+    | 'enum'
+    | 'str'
+    | 'res'
+    | 'devConfig'
+    | 'devPin'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
 }
@@ -233,6 +247,7 @@ const LeafSources = {
   sfc: { LeafIcon: SFCIcon },
   ld: { LeafIcon: LDIcon },
   python: { LeafIcon: PythonIcon },
+  cpp: { LeafIcon: CExtIcon },
   arr: { LeafIcon: ArrayIcon },
   enum: { LeafIcon: EnumIcon },
   str: { LeafIcon: StructureIcon },

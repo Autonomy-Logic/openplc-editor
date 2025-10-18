@@ -1,7 +1,7 @@
 import z from 'zod'
 
 const pousLanguageSchema = z.object({
-  textual: z.enum(['il', 'st', 'python']),
+  textual: z.enum(['il', 'st', 'python', 'cpp']),
   graphical: z.enum(['ld', 'sfc', 'fbd']),
 })
 type PousLanguage = z.infer<typeof pousLanguageSchema>

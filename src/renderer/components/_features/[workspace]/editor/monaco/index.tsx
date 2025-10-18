@@ -29,7 +29,7 @@ import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './pyth
 type monacoEditorProps = {
   path: string
   name: string
-  language: 'il' | 'st' | 'python'
+  language: 'il' | 'st' | 'python' | 'cpp'
 }
 
 type PouToText = {
@@ -300,10 +300,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   /**
    * Update the auto-completion feature of the monaco editor.
-   * Note: Python uses its own LSP-based completion provider
+   * Note: Python uses its own LSP-based completion provider (pyright).
+   * C/C++ uses Monaco's built-in language support. A full LSP (like clangd-wasm)
+   * can be added in the future when a mature web-based solution is available.
    */
   useEffect(() => {
-    if (language === 'python') {
+    if (language === 'python' || language === 'cpp') {
       return
     }
 
@@ -420,12 +422,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    if (editor.cursorPosition && language !== 'python') {
+    if (editor.cursorPosition && language !== 'python' && language !== 'cpp') {
       editorInstance.setPosition(editor.cursorPosition)
       editorInstance.revealPositionInCenter(editor.cursorPosition)
     }
 
-    if (editor.scrollPosition && language !== 'python') {
+    if (editor.scrollPosition && language !== 'python' && language !== 'cpp') {
       editorInstance.setScrollTop(editor.scrollPosition.top)
       editorInstance.setScrollLeft(editor.scrollPosition.left)
     }

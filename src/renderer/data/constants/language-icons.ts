@@ -1,4 +1,4 @@
-import { FBDIcon, ILIcon, LDIcon, PythonIcon, SFCIcon, STIcon } from '@process:renderer/assets'
+import { CExtIcon, FBDIcon, ILIcon, LDIcon, PythonIcon, SFCIcon, STIcon } from '@process:renderer/assets'
 
 export const LanguageIcon = {
   st: STIcon,
@@ -7,6 +7,7 @@ export const LanguageIcon = {
   fbd: FBDIcon,
   sfc: SFCIcon,
   python: PythonIcon,
+  cpp: CExtIcon,
 }
 
 export type LanguageIconType = typeof LanguageIcon
