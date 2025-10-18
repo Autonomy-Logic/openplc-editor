@@ -10,6 +10,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
+  cppSnippetsCompletion,
+  cppStandardLibraryCompletion,
   keywordsCompletion,
   libraryCompletion,
   snippetsSTCompletion,
@@ -395,6 +397,37 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     })
     return () => disposable.dispose()
   }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
+
+  /**
+   * C/C++ completion provider
+   * Provides autocomplete for standard library functions and code snippets
+   */
+  useEffect(() => {
+    if (language !== 'cpp') {
+      return
+    }
+
+    const disposable = monaco.languages.registerCompletionItemProvider('cpp', {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position)
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        }
+
+        const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
+        const snippetSuggestions = cppSnippetsCompletion({ range }).suggestions
+
+        const suggestions = [...stdLibSuggestions, ...snippetSuggestions]
+
+        return { suggestions }
+      },
+    })
+
+    return () => disposable.dispose()
+  }, [language])
 
   function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
