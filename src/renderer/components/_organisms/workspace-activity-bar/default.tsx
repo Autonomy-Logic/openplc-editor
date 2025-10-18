@@ -288,12 +288,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const projectPath = project.meta.path
       const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
       const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
+      const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
 
       let targetIpAddress: string | undefined
-      let connectionType: 'tcp' | 'rtu' = 'tcp'
+      let connectionType: 'tcp' | 'rtu' | 'websocket' = 'tcp'
       let rtuPort: string | undefined
       let rtuBaudRate: number | undefined
       let rtuSlaveId: number | undefined
+      let jwtToken: string | undefined
 
       if (isRuntimeTarget) {
         const connectionStatus = useOpenPLCStore.getState().runtimeConnection.connectionStatus
@@ -311,6 +313,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
 
         targetIpAddress = runtimeIpAddress
+
+        if (isRuntimeV4) {
+          connectionType = 'websocket'
+          jwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || undefined
+          if (!jwtToken) {
+            await showDebuggerMessage(
+              'error',
+              'Authentication Required',
+              'JWT token is missing. Please reconnect to the runtime.',
+              ['OK'],
+            )
+            setIsDebuggerProcessing(false)
+            return
+          }
+        }
       } else {
         const { modbusTCP, communicationPreferences } = deviceDefinitions.configuration.communicationConfiguration
         const rtuEnabled = communicationPreferences.enabledRTU
@@ -502,6 +519,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 port: rtuPort,
                 baudRate: rtuBaudRate,
                 slaveId: rtuSlaveId,
+                jwtToken,
               },
               targetIpAddress,
               isRuntimeTarget,
@@ -522,12 +540,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleMd5Verification = async (
     projectPath: string,
     boardTarget: string,
-    connectionType: 'tcp' | 'rtu',
+    connectionType: 'tcp' | 'rtu' | 'websocket',
     connectionParams: {
       ipAddress?: string
       port?: string
       baudRate?: number
       slaveId?: number
+      jwtToken?: string
     },
     targetIpAddress: string | undefined,
     isRuntimeTarget: boolean,
@@ -623,7 +642,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: `Program MD5: ${expectedMd5}`,
       })
 
-      const targetDisplay = connectionType === 'tcp' ? targetIpAddress : connectionParams.port
+      const targetDisplay =
+        connectionType === 'tcp' || connectionType === 'websocket' ? targetIpAddress : connectionParams.port
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'info',
