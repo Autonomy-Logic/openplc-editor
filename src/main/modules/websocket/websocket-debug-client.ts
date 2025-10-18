@@ -106,28 +106,18 @@ export class WebSocketDebugClient {
         clearTimeout(timeoutHandle)
         this.socket?.off('debug_response', responseHandler)
 
-        console.log('[WebSocket Debug] getMd5Hash response:', response)
-
         if (!response.success) {
-          console.error('[WebSocket Debug] getMd5Hash failed:', response.error)
           reject(new Error(response.error || 'Unknown error'))
           return
         }
 
         if (!response.data) {
-          console.error('[WebSocket Debug] getMd5Hash no data in response')
           reject(new Error('No data in response'))
           return
         }
 
         try {
           const responseBuffer = this.hexStringToBuffer(response.data)
-          console.log(
-            '[WebSocket Debug] getMd5Hash response buffer length:',
-            responseBuffer.length,
-            'hex:',
-            response.data,
-          )
 
           if (responseBuffer.length < 2) {
             reject(new Error('Invalid response: too short'))
@@ -136,12 +126,6 @@ export class WebSocketDebugClient {
 
           const responseFunctionCode = responseBuffer.readUInt8(0)
           const statusCode = responseBuffer.readUInt8(1)
-          console.log(
-            '[WebSocket Debug] getMd5Hash fcode:',
-            `0x${responseFunctionCode.toString(16)}`,
-            'status:',
-            `0x${statusCode.toString(16)}`,
-          )
 
           if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
             reject(new Error('Function code mismatch'))
@@ -154,15 +138,12 @@ export class WebSocketDebugClient {
           }
 
           const md5String = responseBuffer.slice(2).toString('utf-8').trim()
-          console.log('[WebSocket Debug] getMd5Hash success:', md5String)
           resolve(md5String)
         } catch (error) {
-          console.error('[WebSocket Debug] getMd5Hash parse error:', error)
           reject(error instanceof Error ? error : new Error(String(error)))
         }
       }
 
-      console.log('[WebSocket Debug] getMd5Hash sending command:', commandHex)
       this.socket!.on('debug_response', responseHandler)
       this.socket!.emit('debug_command', { command: commandHex })
     })
@@ -201,28 +182,18 @@ export class WebSocketDebugClient {
         clearTimeout(timeoutHandle)
         this.socket?.off('debug_response', responseHandler)
 
-        console.log('[WebSocket Debug] getVariablesList response:', response)
-
         if (!response.success) {
-          console.error('[WebSocket Debug] getVariablesList failed:', response.error)
           resolve({ success: false, error: response.error || 'Unknown error' })
           return
         }
 
         if (!response.data) {
-          console.error('[WebSocket Debug] getVariablesList no data in response')
           resolve({ success: false, error: 'No data in response' })
           return
         }
 
         try {
           const responseBuffer = this.hexStringToBuffer(response.data)
-          console.log(
-            '[WebSocket Debug] getVariablesList response buffer length:',
-            responseBuffer.length,
-            'hex:',
-            response.data.substring(0, 100),
-          )
 
           if (responseBuffer.length < 2) {
             resolve({
@@ -234,36 +205,23 @@ export class WebSocketDebugClient {
 
           const responseFunctionCode = responseBuffer.readUInt8(0)
           const statusCode = responseBuffer.readUInt8(1)
-          console.log(
-            '[WebSocket Debug] getVariablesList fcode:',
-            `0x${responseFunctionCode.toString(16)}`,
-            'status:',
-            `0x${statusCode.toString(16)}`,
-          )
 
           if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
-            console.error(
-              '[WebSocket Debug] getVariablesList function code mismatch, expected 0x44, got:',
-              `0x${responseFunctionCode.toString(16)}`,
-            )
             resolve({ success: false, error: 'Function code mismatch' })
             return
           }
 
           if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-            console.error('[WebSocket Debug] getVariablesList ERROR_OUT_OF_BOUNDS')
             resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
             return
           }
 
           if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-            console.error('[WebSocket Debug] getVariablesList ERROR_OUT_OF_MEMORY')
             resolve({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
             return
           }
 
           if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-            console.error('[WebSocket Debug] getVariablesList unknown error code:', `0x${statusCode.toString(16)}`)
             resolve({ success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` })
             return
           }
@@ -279,14 +237,6 @@ export class WebSocketDebugClient {
           const lastIndex = responseBuffer.readUInt16BE(2)
           const tick = responseBuffer.readUInt32BE(4)
           const responseSize = responseBuffer.readUInt16BE(8)
-          console.log(
-            '[WebSocket Debug] getVariablesList lastIndex:',
-            lastIndex,
-            'tick:',
-            tick,
-            'responseSize:',
-            responseSize,
-          )
 
           if (responseBuffer.length < 10 + responseSize) {
             resolve({
@@ -297,7 +247,6 @@ export class WebSocketDebugClient {
           }
 
           const variableData = responseBuffer.slice(10, 10 + responseSize)
-          console.log('[WebSocket Debug] getVariablesList success, data bytes:', variableData.length)
 
           resolve({
             success: true,
@@ -306,19 +255,10 @@ export class WebSocketDebugClient {
             data: variableData,
           })
         } catch (error) {
-          console.error('[WebSocket Debug] getVariablesList parse error:', error)
           resolve({ success: false, error: String(error) })
         }
       }
 
-      console.log(
-        '[WebSocket Debug] getVariablesList sending command for',
-        numIndexes,
-        'variables, indexes:',
-        variableIndexes,
-        'hex:',
-        commandHex,
-      )
       this.socket!.on('debug_response', responseHandler)
       this.socket!.emit('debug_command', { command: commandHex })
     })
