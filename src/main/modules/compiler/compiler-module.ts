@@ -12,6 +12,8 @@ import { CreateXMLFile } from '@root/main/utils'
 import { ProjectState } from '@root/renderer/store/slices'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
+import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/utils/cpp/generateCBlocksCode'
+import { type CppPouData as CppPouDataHeader, generateCBlocksHeader } from '@root/utils/cpp/generateCBlocksHeader'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import { app as electronApp, dialog } from 'electron'
@@ -895,6 +897,60 @@ class CompilerModule {
     return result
   }
 
+  async handleGenerateCBlocksHeader(
+    projectData: ProjectState['data'] & { originalCppPous?: CppPouDataCode[] },
+    sourceTargetFolderPath: string,
+    handleOutputData: HandleOutputDataCallback,
+  ) {
+    const originalCppPous = projectData.originalCppPous || []
+
+    if (originalCppPous.length === 0) {
+      handleOutputData('No C/C++ blocks found, skipping c_blocks.h generation', 'info')
+      return
+    }
+
+    const cppPous = originalCppPous.map((pou) => ({
+      name: pou.name,
+      variables: pou.variables,
+    })) as CppPouDataHeader[]
+
+    const headerContent = generateCBlocksHeader(cppPous)
+    const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
+
+    try {
+      await writeFile(headerFilePath, headerContent, { encoding: 'utf8' })
+      handleOutputData(`C blocks header file populated at: ${headerFilePath}`, 'info')
+    } catch (error) {
+      throw new Error(`Error writing c_blocks.h file: ${(error as Error).message}`)
+    }
+  }
+
+  async handleGenerateCBlocksCode(
+    projectData: ProjectState['data'] & { originalCppPous?: CppPouDataCode[] },
+    compilationPath: string,
+    handleOutputData: HandleOutputDataCallback,
+  ) {
+    const originalCppPous = projectData.originalCppPous || []
+
+    if (originalCppPous.length === 0) {
+      handleOutputData('No C/C++ blocks found, skipping c_blocks_code.cpp generation', 'info')
+      return
+    }
+
+    const cppPous = originalCppPous
+    const codeContent = generateCBlocksCode(cppPous)
+    const codeFilePath = join(compilationPath, 'examples', 'Baremetal', 'c_blocks_code.cpp')
+
+    try {
+      const existingContent = await readFile(codeFilePath, { encoding: 'utf8' })
+      const updatedContent = existingContent + '\n' + codeContent
+      await writeFile(codeFilePath, updatedContent, { encoding: 'utf8' })
+      handleOutputData(`C blocks code file populated at: ${codeFilePath}`, 'info')
+    } catch (error) {
+      throw new Error(`Error writing c_blocks_code.cpp file: ${(error as Error).message}`)
+    }
+  }
+
   async handleCompileArduinoProgram({
     boardHalsContent,
     compilationPath,
@@ -1292,6 +1348,44 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    // Step 7: Generate C/C++ blocks header file
+    if (boardRuntime !== 'openplc-compiler') {
+      try {
+        await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
+
+      // Step 8: Generate C/C++ blocks code file
+      try {
+        await this.handleGenerateCBlocksCode(projectData, compilationPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
     }
 
     // -- Verify if the runtime target is Arduino or OpenPLC --
@@ -1874,6 +1968,44 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    // Generate C/C++ blocks header file
+    if (boardRuntime !== 'openplc-compiler') {
+      try {
+        await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping debug compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
+
+      // Generate C/C++ blocks code file
+      try {
+        await this.handleGenerateCBlocksCode(projectData, compilationPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping debug compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
     }
 
     _mainProcessPort.postMessage({
