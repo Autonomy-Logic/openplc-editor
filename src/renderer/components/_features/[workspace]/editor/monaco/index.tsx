@@ -566,20 +566,20 @@ def block_loop():
     const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
 
     if (shouldInjectTemplate) {
-      const cppTemplate = `/* ================================================================ (important-comment)
- *  C/C++ FUNCTION BLOCK (important-comment)
- * (important-comment)
- *  --------------------------------------------------------------- (important-comment)
- *  - This function block runs **in sync** with the PLC runtime. (important-comment)
- *  - The \`setup()\` function is called once when the block initializes. (important-comment)
- *  - The \`loop()\` function is called at every PLC scan cycle. (important-comment)
- *  - Block input and output variables declared in the variable table (important-comment)
- *    can be accessed directly by name in this C/C++ code. (important-comment)
- * (important-comment)
- *  This block executes as part of the main PLC process and follows (important-comment)
- *  the configured scan time in the Resources. Use it for real-time (important-comment)
- *  control logic, fast I/O operations, or any C-based algorithms. (important-comment)
- * ================================================================ */ (important-comment)
+      const cppTemplate = `/* ================================================================
+ *  C/C++ FUNCTION BLOCK
+ *
+ *  ---------------------------------------------------------------
+ *  - This function block runs **in sync** with the PLC runtime.
+ *  - The \`setup()\` function is called once when the block initializes.
+ *  - The \`loop()\` function is called at every PLC scan cycle.
+ *  - Block input and output variables declared in the variable table
+ *    can be accessed directly by name in this C/C++ code.
+ *
+ *  This block executes as part of the main PLC process and follows
+ *  the configured scan time in the Resources. Use it for real-time
+ *  control logic, fast I/O operations, or any C-based algorithms.
+ * ================================================================ */
 
 #include <stdio.h>
 #include <stdint.h>

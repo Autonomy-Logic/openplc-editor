@@ -378,7 +378,7 @@ const SelectableTypeCell = ({
             )
           })}
 
-          {language !== 'python' && (
+          {language !== 'python' && language !== 'cpp' && (
             <PrimitiveDropdown.Item asChild>
               <ArrayModal
                 variableName={variableName}
