@@ -951,6 +951,10 @@ export const cppStandardLibraryCompletion = ({ range }: { range: monaco.IRange }
       kind: monaco.languages.CompletionItemKind.Function,
       insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
       range,
+      command: {
+        id: 'editor.action.triggerParameterHints',
+        title: 'Trigger Parameter Hints',
+      },
     }
   })
 
@@ -1664,6 +1668,10 @@ export const arduinoApiCompletion = ({ range }: { range: monaco.IRange }) => {
       kind: monaco.languages.CompletionItemKind.Function,
       insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
       range,
+      command: {
+        id: 'editor.action.triggerParameterHints',
+        title: 'Trigger Parameter Hints',
+      },
     }
   })
 
