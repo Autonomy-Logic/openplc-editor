@@ -503,13 +503,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!editorModel) return
 
     const stateValue = pou.data.body.value as string
-    const editorValue = editorModel.getValue()
-
     const stateIsEmpty = !stateValue || stateValue.trim() === ''
-    const editorIsEmpty = !editorValue || editorValue.trim() === ''
     const alreadyInjected = templatesInjected.has(pouName)
 
-    const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
+    const shouldInjectTemplate = stateIsEmpty && !alreadyInjected
 
     if (shouldInjectTemplate) {
       const pythonTemplate = `# ================================================================
@@ -560,13 +557,10 @@ def block_loop():
     if (!editorModel) return
 
     const stateValue = pou.data.body.value as string
-    const editorValue = editorModel.getValue()
-
     const stateIsEmpty = !stateValue || stateValue.trim() === ''
-    const editorIsEmpty = !editorValue || editorValue.trim() === ''
     const alreadyInjected = templatesInjected.has(pouName)
 
-    const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
+    const shouldInjectTemplate = stateIsEmpty && !alreadyInjected
 
     if (shouldInjectTemplate) {
       const cppTemplate = `/* ================================================================
