@@ -961,7 +961,7 @@ export const cppStandardLibraryCompletion = ({ range }: { range: monaco.IRange }
  * C/C++ signature help provider
  * Provides parameter hints when typing function calls
  */
-export const cppSignatureHelp = () => {
+export const cppSignatureHelp = (): monaco.languages.SignatureHelpProvider => {
   return {
     provideSignatureHelp: (
       model: monaco.editor.ITextModel,
