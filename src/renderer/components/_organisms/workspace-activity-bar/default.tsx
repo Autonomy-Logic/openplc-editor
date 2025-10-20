@@ -4,7 +4,6 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { matchVariableWithDebugEntry, parseDebugFile } from '@root/renderer/utils/parse-debug-file'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
-import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { BufferToStringArray, cn } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
@@ -13,7 +12,7 @@ import { validateCppCode } from '@root/utils/cpp/validateCppCode'
 type CppPouData = {
   name: string
   code: string
-  variables: PLCVariable[]
+  variables: unknown[]
 }
 
 type ProjectDataWithCpp = PLCProjectData & {
