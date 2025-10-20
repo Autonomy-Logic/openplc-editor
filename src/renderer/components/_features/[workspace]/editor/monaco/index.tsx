@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
+  cppSignatureHelp,
   cppSnippetsCompletion,
   cppStandardLibraryCompletion,
   keywordsCompletion,
@@ -407,7 +408,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       return
     }
 
-    const disposable = monaco.languages.registerCompletionItemProvider('cpp', {
+    const completionDisposable = monaco.languages.registerCompletionItemProvider('cpp', {
       provideCompletionItems: (model, position) => {
         const word = model.getWordUntilPosition(position)
         const range = {
@@ -426,7 +427,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     })
 
-    return () => disposable.dispose()
+    const signatureHelpDisposable = monaco.languages.registerSignatureHelpProvider('cpp', cppSignatureHelp())
+
+    return () => {
+      completionDisposable.dispose()
+      signatureHelpDisposable.dispose()
+    }
   }, [language])
 
   function handleEditorDidMount(

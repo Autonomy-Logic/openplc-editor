@@ -7,7 +7,7 @@ import { pythonSnippets } from '../configs/languages/python/python.snippets'
 import { stSnippets } from '../configs/languages/st/st.snippets'
 import { parsePouToStText } from '../drag-and-drop/st'
 
-export { cppSnippetsCompletion, cppStandardLibraryCompletion } from './cpp.completion'
+export { cppSignatureHelp, cppSnippetsCompletion, cppStandardLibraryCompletion } from './cpp.completion'
 
 interface SnippetItem {
   label: string
