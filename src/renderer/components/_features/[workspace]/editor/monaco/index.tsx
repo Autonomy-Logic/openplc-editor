@@ -125,6 +125,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (language === 'python' && editorRef.current && pou) {
       injectPythonTemplateIfNeeded(editorRef.current, pou, name)
     }
+    if (language === 'cpp' && editorRef.current && pou) {
+      injectCppTemplateIfNeeded(editorRef.current, pou, name)
+    }
   }, [pou])
 
   useEffect(() => {
