@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
+  arduinoApiCompletion,
   cppSignatureHelp,
   cppSnippetsCompletion,
   cppStandardLibraryCompletion,
@@ -75,6 +76,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         },
         dataTypes,
       },
+    },
+    deviceDefinitions: {
+      configuration: { deviceBoard },
     },
     libraries: sliceLibraries,
     editorActions: { saveEditorViewState },
@@ -402,6 +406,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   /**
    * C/C++ completion provider
    * Provides autocomplete for standard library functions and code snippets
+   * Conditionally includes Arduino API functions when an Arduino board is selected
    */
   useEffect(() => {
     if (language !== 'cpp') {
@@ -421,7 +426,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
         const snippetSuggestions = cppSnippetsCompletion({ range }).suggestions
 
-        const suggestions = [...stdLibSuggestions, ...snippetSuggestions]
+        const isArduinoTarget = deviceBoard && !deviceBoard.includes('OpenPLC Runtime')
+
+        const suggestions = isArduinoTarget
+          ? [...stdLibSuggestions, ...snippetSuggestions, ...arduinoApiCompletion({ range }).suggestions]
+          : [...stdLibSuggestions, ...snippetSuggestions]
 
         return { suggestions }
       },
@@ -433,7 +442,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       completionDisposable.dispose()
       signatureHelpDisposable.dispose()
     }
-  }, [language])
+  }, [language, deviceBoard])
 
   function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,

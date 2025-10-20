@@ -958,6 +958,719 @@ export const cppStandardLibraryCompletion = ({ range }: { range: monaco.IRange }
 }
 
 /**
+ * Arduino API functions completion provider
+ * Comprehensive Arduino standard library functions
+ */
+export const arduinoApiCompletion = ({ range }: { range: monaco.IRange }) => {
+  const arduinoCoreFunctions: FunctionDef[] = [
+    {
+      name: 'pinMode',
+      signature: 'void pinMode(uint8_t pin, uint8_t mode)',
+      description: 'Configure a pin as input or output',
+      returnValue: 'void',
+      params: [
+        { name: 'pin', type: 'uint8_t', description: 'Pin number' },
+        { name: 'mode', type: 'uint8_t', description: 'INPUT, OUTPUT, or INPUT_PULLUP' },
+      ],
+    },
+    {
+      name: 'digitalWrite',
+      signature: 'void digitalWrite(uint8_t pin, uint8_t value)',
+      description: 'Write a HIGH or LOW value to a digital pin',
+      returnValue: 'void',
+      params: [
+        { name: 'pin', type: 'uint8_t', description: 'Pin number' },
+        { name: 'value', type: 'uint8_t', description: 'HIGH or LOW' },
+      ],
+    },
+    {
+      name: 'digitalRead',
+      signature: 'int digitalRead(uint8_t pin)',
+      description: 'Read the value from a digital pin',
+      returnValue: 'HIGH or LOW',
+      params: [{ name: 'pin', type: 'uint8_t', description: 'Pin number' }],
+    },
+    {
+      name: 'analogRead',
+      signature: 'int analogRead(uint8_t pin)',
+      description: 'Read the value from an analog pin',
+      returnValue: '0 to 1023 (10-bit resolution)',
+      params: [{ name: 'pin', type: 'uint8_t', description: 'Analog pin number' }],
+    },
+    {
+      name: 'analogWrite',
+      signature: 'void analogWrite(uint8_t pin, int value)',
+      description: 'Write an analog value (PWM wave) to a pin',
+      returnValue: 'void',
+      params: [
+        { name: 'pin', type: 'uint8_t', description: 'Pin number' },
+        { name: 'value', type: 'int', description: 'Duty cycle: 0 (off) to 255 (fully on)' },
+      ],
+    },
+    {
+      name: 'analogReference',
+      signature: 'void analogReference(uint8_t mode)',
+      description: 'Configure the reference voltage for analog input',
+      returnValue: 'void',
+      params: [{ name: 'mode', type: 'uint8_t', description: 'DEFAULT, INTERNAL, EXTERNAL' }],
+    },
+    {
+      name: 'millis',
+      signature: 'unsigned long millis(void)',
+      description: 'Returns milliseconds since program started',
+      returnValue: 'Number of milliseconds',
+      params: [],
+    },
+    {
+      name: 'micros',
+      signature: 'unsigned long micros(void)',
+      description: 'Returns microseconds since program started',
+      returnValue: 'Number of microseconds',
+      params: [],
+    },
+    {
+      name: 'delay',
+      signature: 'void delay(unsigned long ms)',
+      description: 'Pause the program for specified milliseconds',
+      returnValue: 'void',
+      params: [{ name: 'ms', type: 'unsigned long', description: 'Milliseconds to pause' }],
+    },
+    {
+      name: 'delayMicroseconds',
+      signature: 'void delayMicroseconds(unsigned int us)',
+      description: 'Pause the program for specified microseconds',
+      returnValue: 'void',
+      params: [{ name: 'us', type: 'unsigned int', description: 'Microseconds to pause' }],
+    },
+    {
+      name: 'map',
+      signature: 'long map(long value, long fromLow, long fromHigh, long toLow, long toHigh)',
+      description: 'Re-map a number from one range to another',
+      returnValue: 'Mapped value',
+      params: [
+        { name: 'value', type: 'long', description: 'Value to map' },
+        { name: 'fromLow', type: 'long', description: 'Lower bound of input range' },
+        { name: 'fromHigh', type: 'long', description: 'Upper bound of input range' },
+        { name: 'toLow', type: 'long', description: 'Lower bound of output range' },
+        { name: 'toHigh', type: 'long', description: 'Upper bound of output range' },
+      ],
+    },
+    {
+      name: 'constrain',
+      signature: 'long constrain(long x, long a, long b)',
+      description: 'Constrain a number to be within a range',
+      returnValue: 'Constrained value',
+      params: [
+        { name: 'x', type: 'long', description: 'Value to constrain' },
+        { name: 'a', type: 'long', description: 'Lower bound' },
+        { name: 'b', type: 'long', description: 'Upper bound' },
+      ],
+    },
+    {
+      name: 'min',
+      signature: 'long min(long a, long b)',
+      description: 'Return the smaller of two numbers',
+      returnValue: 'Minimum value',
+      params: [
+        { name: 'a', type: 'long', description: 'First value' },
+        { name: 'b', type: 'long', description: 'Second value' },
+      ],
+    },
+    {
+      name: 'max',
+      signature: 'long max(long a, long b)',
+      description: 'Return the larger of two numbers',
+      returnValue: 'Maximum value',
+      params: [
+        { name: 'a', type: 'long', description: 'First value' },
+        { name: 'b', type: 'long', description: 'Second value' },
+      ],
+    },
+    {
+      name: 'sq',
+      signature: 'long sq(long x)',
+      description: 'Calculate the square of a number',
+      returnValue: 'Square of x',
+      params: [{ name: 'x', type: 'long', description: 'Value to square' }],
+    },
+    {
+      name: 'random',
+      signature: 'long random(long max)',
+      description: 'Generate a random number',
+      returnValue: 'Random number from 0 to max-1',
+      params: [{ name: 'max', type: 'long', description: 'Upper bound (exclusive)' }],
+    },
+    {
+      name: 'randomSeed',
+      signature: 'void randomSeed(unsigned long seed)',
+      description: 'Initialize the random number generator',
+      returnValue: 'void',
+      params: [{ name: 'seed', type: 'unsigned long', description: 'Seed value' }],
+    },
+    {
+      name: 'bit',
+      signature: 'uint8_t bit(uint8_t n)',
+      description: 'Compute the value of the specified bit',
+      returnValue: 'Value of bit n',
+      params: [{ name: 'n', type: 'uint8_t', description: 'Bit position (0-7)' }],
+    },
+    {
+      name: 'bitRead',
+      signature: 'uint8_t bitRead(uint8_t value, uint8_t bit)',
+      description: 'Read a bit of a number',
+      returnValue: '0 or 1',
+      params: [
+        { name: 'value', type: 'uint8_t', description: 'Number to read from' },
+        { name: 'bit', type: 'uint8_t', description: 'Bit position to read' },
+      ],
+    },
+    {
+      name: 'bitWrite',
+      signature: 'void bitWrite(uint8_t &value, uint8_t bit, uint8_t bitvalue)',
+      description: 'Write a bit of a numeric variable',
+      returnValue: 'void',
+      params: [
+        { name: 'value', type: 'uint8_t &', description: 'Number to modify' },
+        { name: 'bit', type: 'uint8_t', description: 'Bit position to write' },
+        { name: 'bitvalue', type: 'uint8_t', description: 'Value to write (0 or 1)' },
+      ],
+    },
+    {
+      name: 'bitSet',
+      signature: 'void bitSet(uint8_t &value, uint8_t bit)',
+      description: 'Set (write 1 to) a bit of a numeric variable',
+      returnValue: 'void',
+      params: [
+        { name: 'value', type: 'uint8_t &', description: 'Number to modify' },
+        { name: 'bit', type: 'uint8_t', description: 'Bit position to set' },
+      ],
+    },
+    {
+      name: 'bitClear',
+      signature: 'void bitClear(uint8_t &value, uint8_t bit)',
+      description: 'Clear (write 0 to) a bit of a numeric variable',
+      returnValue: 'void',
+      params: [
+        { name: 'value', type: 'uint8_t &', description: 'Number to modify' },
+        { name: 'bit', type: 'uint8_t', description: 'Bit position to clear' },
+      ],
+    },
+    {
+      name: 'lowByte',
+      signature: 'uint8_t lowByte(uint16_t value)',
+      description: 'Extract the low-order byte of a word',
+      returnValue: 'Low byte',
+      params: [{ name: 'value', type: 'uint16_t', description: 'Word value' }],
+    },
+    {
+      name: 'highByte',
+      signature: 'uint8_t highByte(uint16_t value)',
+      description: 'Extract the high-order byte of a word',
+      returnValue: 'High byte',
+      params: [{ name: 'value', type: 'uint16_t', description: 'Word value' }],
+    },
+    {
+      name: 'attachInterrupt',
+      signature: 'void attachInterrupt(uint8_t interrupt, void (*ISR)(void), int mode)',
+      description: 'Attach an interrupt handler to a pin',
+      returnValue: 'void',
+      params: [
+        { name: 'interrupt', type: 'uint8_t', description: 'Interrupt number' },
+        { name: 'ISR', type: 'function pointer', description: 'Interrupt service routine' },
+        { name: 'mode', type: 'int', description: 'RISING, FALLING, CHANGE, LOW' },
+      ],
+    },
+    {
+      name: 'detachInterrupt',
+      signature: 'void detachInterrupt(uint8_t interrupt)',
+      description: 'Detach an interrupt handler',
+      returnValue: 'void',
+      params: [{ name: 'interrupt', type: 'uint8_t', description: 'Interrupt number' }],
+    },
+    {
+      name: 'interrupts',
+      signature: 'void interrupts(void)',
+      description: 'Re-enable interrupts',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'noInterrupts',
+      signature: 'void noInterrupts(void)',
+      description: 'Disable interrupts',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'tone',
+      signature: 'void tone(uint8_t pin, unsigned int frequency)',
+      description: 'Generate a square wave of specified frequency on a pin',
+      returnValue: 'void',
+      params: [
+        { name: 'pin', type: 'uint8_t', description: 'Pin number' },
+        { name: 'frequency', type: 'unsigned int', description: 'Frequency in Hz' },
+      ],
+    },
+    {
+      name: 'noTone',
+      signature: 'void noTone(uint8_t pin)',
+      description: 'Stop tone generation on a pin',
+      returnValue: 'void',
+      params: [{ name: 'pin', type: 'uint8_t', description: 'Pin number' }],
+    },
+    {
+      name: 'pulseIn',
+      signature: 'unsigned long pulseIn(uint8_t pin, uint8_t state)',
+      description: 'Read a pulse duration on a pin',
+      returnValue: 'Pulse duration in microseconds',
+      params: [
+        { name: 'pin', type: 'uint8_t', description: 'Pin number' },
+        { name: 'state', type: 'uint8_t', description: 'HIGH or LOW' },
+      ],
+    },
+    {
+      name: 'shiftOut',
+      signature: 'void shiftOut(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder, uint8_t value)',
+      description: 'Shift out a byte of data one bit at a time',
+      returnValue: 'void',
+      params: [
+        { name: 'dataPin', type: 'uint8_t', description: 'Data pin' },
+        { name: 'clockPin', type: 'uint8_t', description: 'Clock pin' },
+        { name: 'bitOrder', type: 'uint8_t', description: 'MSBFIRST or LSBFIRST' },
+        { name: 'value', type: 'uint8_t', description: 'Byte to shift out' },
+      ],
+    },
+    {
+      name: 'shiftIn',
+      signature: 'uint8_t shiftIn(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder)',
+      description: 'Shift in a byte of data one bit at a time',
+      returnValue: 'Byte value',
+      params: [
+        { name: 'dataPin', type: 'uint8_t', description: 'Data pin' },
+        { name: 'clockPin', type: 'uint8_t', description: 'Clock pin' },
+        { name: 'bitOrder', type: 'uint8_t', description: 'MSBFIRST or LSBFIRST' },
+      ],
+    },
+  ]
+
+  const arduinoSerialFunctions: FunctionDef[] = [
+    {
+      name: 'Serial.begin',
+      signature: 'void Serial.begin(unsigned long baud)',
+      description: 'Initialize serial communication',
+      returnValue: 'void',
+      params: [{ name: 'baud', type: 'unsigned long', description: 'Baud rate (e.g., 9600, 115200)' }],
+    },
+    {
+      name: 'Serial.end',
+      signature: 'void Serial.end(void)',
+      description: 'Disable serial communication',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'Serial.available',
+      signature: 'int Serial.available(void)',
+      description: 'Get number of bytes available for reading',
+      returnValue: 'Number of bytes available',
+      params: [],
+    },
+    {
+      name: 'Serial.read',
+      signature: 'int Serial.read(void)',
+      description: 'Read a byte from serial buffer',
+      returnValue: 'First byte of incoming data, or -1 if none available',
+      params: [],
+    },
+    {
+      name: 'Serial.peek',
+      signature: 'int Serial.peek(void)',
+      description: 'Read a byte without removing it from buffer',
+      returnValue: 'First byte of incoming data, or -1 if none available',
+      params: [],
+    },
+    {
+      name: 'Serial.write',
+      signature: 'size_t Serial.write(uint8_t val)',
+      description: 'Write binary data to serial port',
+      returnValue: 'Number of bytes written',
+      params: [{ name: 'val', type: 'uint8_t', description: 'Byte to write' }],
+    },
+    {
+      name: 'Serial.print',
+      signature: 'size_t Serial.print(const char *str)',
+      description: 'Print data to serial port as human-readable ASCII text',
+      returnValue: 'Number of bytes written',
+      params: [{ name: 'str', type: 'const char *', description: 'Data to print' }],
+    },
+    {
+      name: 'Serial.println',
+      signature: 'size_t Serial.println(const char *str)',
+      description: 'Print data to serial port followed by newline',
+      returnValue: 'Number of bytes written',
+      params: [{ name: 'str', type: 'const char *', description: 'Data to print' }],
+    },
+    {
+      name: 'Serial.flush',
+      signature: 'void Serial.flush(void)',
+      description: 'Wait for transmission of outgoing serial data to complete',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'Serial.readString',
+      signature: 'String Serial.readString(void)',
+      description: 'Read characters from serial buffer into a String',
+      returnValue: 'String object',
+      params: [],
+    },
+    {
+      name: 'Serial.readStringUntil',
+      signature: 'String Serial.readStringUntil(char terminator)',
+      description: 'Read characters until terminator character',
+      returnValue: 'String object',
+      params: [{ name: 'terminator', type: 'char', description: 'Terminator character' }],
+    },
+    {
+      name: 'Serial.parseInt',
+      signature: 'long Serial.parseInt(void)',
+      description: 'Parse integer from serial buffer',
+      returnValue: 'Parsed integer value',
+      params: [],
+    },
+    {
+      name: 'Serial.parseFloat',
+      signature: 'float Serial.parseFloat(void)',
+      description: 'Parse float from serial buffer',
+      returnValue: 'Parsed float value',
+      params: [],
+    },
+  ]
+
+  const arduinoWireFunctions: FunctionDef[] = [
+    {
+      name: 'Wire.begin',
+      signature: 'void Wire.begin(void)',
+      description: 'Initialize I2C communication as master',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'Wire.beginTransmission',
+      signature: 'void Wire.beginTransmission(uint8_t address)',
+      description: 'Begin transmission to I2C slave device',
+      returnValue: 'void',
+      params: [{ name: 'address', type: 'uint8_t', description: '7-bit I2C address' }],
+    },
+    {
+      name: 'Wire.endTransmission',
+      signature: 'uint8_t Wire.endTransmission(void)',
+      description: 'End transmission to I2C slave device',
+      returnValue: '0: success, 1-4: various errors',
+      params: [],
+    },
+    {
+      name: 'Wire.requestFrom',
+      signature: 'uint8_t Wire.requestFrom(uint8_t address, uint8_t quantity)',
+      description: 'Request bytes from I2C slave device',
+      returnValue: 'Number of bytes returned',
+      params: [
+        { name: 'address', type: 'uint8_t', description: '7-bit I2C address' },
+        { name: 'quantity', type: 'uint8_t', description: 'Number of bytes to request' },
+      ],
+    },
+    {
+      name: 'Wire.write',
+      signature: 'size_t Wire.write(uint8_t data)',
+      description: 'Write data to I2C slave device',
+      returnValue: 'Number of bytes written',
+      params: [{ name: 'data', type: 'uint8_t', description: 'Byte to write' }],
+    },
+    {
+      name: 'Wire.available',
+      signature: 'int Wire.available(void)',
+      description: 'Get number of bytes available for reading',
+      returnValue: 'Number of bytes available',
+      params: [],
+    },
+    {
+      name: 'Wire.read',
+      signature: 'int Wire.read(void)',
+      description: 'Read a byte from I2C',
+      returnValue: 'Byte read, or -1 if none available',
+      params: [],
+    },
+  ]
+
+  const arduinoSpiFunctions: FunctionDef[] = [
+    {
+      name: 'SPI.begin',
+      signature: 'void SPI.begin(void)',
+      description: 'Initialize SPI bus',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'SPI.end',
+      signature: 'void SPI.end(void)',
+      description: 'Disable SPI bus',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'SPI.transfer',
+      signature: 'uint8_t SPI.transfer(uint8_t data)',
+      description: 'Transfer one byte over SPI',
+      returnValue: 'Byte received',
+      params: [{ name: 'data', type: 'uint8_t', description: 'Byte to send' }],
+    },
+    {
+      name: 'SPI.beginTransaction',
+      signature: 'void SPI.beginTransaction(SPISettings settings)',
+      description: 'Initialize SPI transaction',
+      returnValue: 'void',
+      params: [{ name: 'settings', type: 'SPISettings', description: 'SPI settings object' }],
+    },
+    {
+      name: 'SPI.endTransaction',
+      signature: 'void SPI.endTransaction(void)',
+      description: 'End SPI transaction',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'SPI.setBitOrder',
+      signature: 'void SPI.setBitOrder(uint8_t bitOrder)',
+      description: 'Set bit order for SPI',
+      returnValue: 'void',
+      params: [{ name: 'bitOrder', type: 'uint8_t', description: 'MSBFIRST or LSBFIRST' }],
+    },
+    {
+      name: 'SPI.setDataMode',
+      signature: 'void SPI.setDataMode(uint8_t mode)',
+      description: 'Set SPI data mode',
+      returnValue: 'void',
+      params: [{ name: 'mode', type: 'uint8_t', description: 'SPI_MODE0, SPI_MODE1, SPI_MODE2, or SPI_MODE3' }],
+    },
+    {
+      name: 'SPI.setClockDivider',
+      signature: 'void SPI.setClockDivider(uint8_t divider)',
+      description: 'Set SPI clock divider',
+      returnValue: 'void',
+      params: [{ name: 'divider', type: 'uint8_t', description: 'Clock divider value' }],
+    },
+  ]
+
+  const arduinoEepromFunctions: FunctionDef[] = [
+    {
+      name: 'EEPROM.read',
+      signature: 'uint8_t EEPROM.read(int address)',
+      description: 'Read a byte from EEPROM',
+      returnValue: 'Byte value',
+      params: [{ name: 'address', type: 'int', description: 'EEPROM address' }],
+    },
+    {
+      name: 'EEPROM.write',
+      signature: 'void EEPROM.write(int address, uint8_t value)',
+      description: 'Write a byte to EEPROM',
+      returnValue: 'void',
+      params: [
+        { name: 'address', type: 'int', description: 'EEPROM address' },
+        { name: 'value', type: 'uint8_t', description: 'Byte to write' },
+      ],
+    },
+    {
+      name: 'EEPROM.update',
+      signature: 'void EEPROM.update(int address, uint8_t value)',
+      description: 'Write a byte to EEPROM only if different',
+      returnValue: 'void',
+      params: [
+        { name: 'address', type: 'int', description: 'EEPROM address' },
+        { name: 'value', type: 'uint8_t', description: 'Byte to write' },
+      ],
+    },
+    {
+      name: 'EEPROM.get',
+      signature: 'T& EEPROM.get(int address, T &data)',
+      description: 'Read any data type from EEPROM',
+      returnValue: 'Reference to data',
+      params: [
+        { name: 'address', type: 'int', description: 'EEPROM address' },
+        { name: 'data', type: 'T &', description: 'Variable to store data' },
+      ],
+    },
+    {
+      name: 'EEPROM.put',
+      signature: 'const T& EEPROM.put(int address, const T &data)',
+      description: 'Write any data type to EEPROM',
+      returnValue: 'Reference to data',
+      params: [
+        { name: 'address', type: 'int', description: 'EEPROM address' },
+        { name: 'data', type: 'const T &', description: 'Data to write' },
+      ],
+    },
+    {
+      name: 'EEPROM.length',
+      signature: 'int EEPROM.length(void)',
+      description: 'Get EEPROM size',
+      returnValue: 'EEPROM size in bytes',
+      params: [],
+    },
+  ]
+
+  const arduinoWifiFunctions: FunctionDef[] = [
+    {
+      name: 'WiFi.begin',
+      signature: 'int WiFi.begin(const char *ssid, const char *password)',
+      description: 'Connect to WiFi network',
+      returnValue: 'Connection status',
+      params: [
+        { name: 'ssid', type: 'const char *', description: 'Network SSID' },
+        { name: 'password', type: 'const char *', description: 'Network password' },
+      ],
+    },
+    {
+      name: 'WiFi.disconnect',
+      signature: 'void WiFi.disconnect(void)',
+      description: 'Disconnect from WiFi network',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'WiFi.status',
+      signature: 'uint8_t WiFi.status(void)',
+      description: 'Get WiFi connection status',
+      returnValue: 'WL_CONNECTED, WL_DISCONNECTED, etc.',
+      params: [],
+    },
+    {
+      name: 'WiFi.localIP',
+      signature: 'IPAddress WiFi.localIP(void)',
+      description: 'Get local IP address',
+      returnValue: 'IPAddress object',
+      params: [],
+    },
+    {
+      name: 'WiFi.macAddress',
+      signature: 'uint8_t* WiFi.macAddress(uint8_t *mac)',
+      description: 'Get MAC address',
+      returnValue: 'Pointer to MAC address array',
+      params: [{ name: 'mac', type: 'uint8_t *', description: '6-byte array to store MAC' }],
+    },
+    {
+      name: 'WiFi.SSID',
+      signature: 'String WiFi.SSID(void)',
+      description: 'Get current network SSID',
+      returnValue: 'SSID string',
+      params: [],
+    },
+    {
+      name: 'WiFi.RSSI',
+      signature: 'long WiFi.RSSI(void)',
+      description: 'Get signal strength',
+      returnValue: 'Signal strength in dBm',
+      params: [],
+    },
+  ]
+
+  const arduinoEthernetFunctions: FunctionDef[] = [
+    {
+      name: 'Ethernet.begin',
+      signature: 'int Ethernet.begin(uint8_t *mac)',
+      description: 'Initialize Ethernet with DHCP',
+      returnValue: '1 on success, 0 on failure',
+      params: [{ name: 'mac', type: 'uint8_t *', description: 'MAC address (6 bytes)' }],
+    },
+    {
+      name: 'Ethernet.localIP',
+      signature: 'IPAddress Ethernet.localIP(void)',
+      description: 'Get local IP address',
+      returnValue: 'IPAddress object',
+      params: [],
+    },
+    {
+      name: 'Ethernet.linkStatus',
+      signature: 'uint8_t Ethernet.linkStatus(void)',
+      description: 'Get link status',
+      returnValue: 'LinkON, LinkOFF, or Unknown',
+      params: [],
+    },
+  ]
+
+  const arduinoServomotorFunctions: FunctionDef[] = [
+    {
+      name: 'Servo.attach',
+      signature: 'uint8_t Servo.attach(int pin)',
+      description: 'Attach servo to a pin',
+      returnValue: 'Servo index',
+      params: [{ name: 'pin', type: 'int', description: 'Pin number' }],
+    },
+    {
+      name: 'Servo.detach',
+      signature: 'void Servo.detach(void)',
+      description: 'Detach servo from pin',
+      returnValue: 'void',
+      params: [],
+    },
+    {
+      name: 'Servo.write',
+      signature: 'void Servo.write(int angle)',
+      description: 'Set servo angle',
+      returnValue: 'void',
+      params: [{ name: 'angle', type: 'int', description: 'Angle in degrees (0-180)' }],
+    },
+    {
+      name: 'Servo.writeMicroseconds',
+      signature: 'void Servo.writeMicroseconds(int us)',
+      description: 'Set servo pulse width',
+      returnValue: 'void',
+      params: [{ name: 'us', type: 'int', description: 'Pulse width in microseconds' }],
+    },
+    {
+      name: 'Servo.read',
+      signature: 'int Servo.read(void)',
+      description: 'Read current servo angle',
+      returnValue: 'Current angle in degrees',
+      params: [],
+    },
+    {
+      name: 'Servo.attached',
+      signature: 'bool Servo.attached(void)',
+      description: 'Check if servo is attached',
+      returnValue: 'true if attached, false otherwise',
+      params: [],
+    },
+  ]
+
+  const allArduinoFunctions = [
+    ...arduinoCoreFunctions,
+    ...arduinoSerialFunctions,
+    ...arduinoWireFunctions,
+    ...arduinoSpiFunctions,
+    ...arduinoEepromFunctions,
+    ...arduinoWifiFunctions,
+    ...arduinoEthernetFunctions,
+    ...arduinoServomotorFunctions,
+  ]
+
+  const suggestions = allArduinoFunctions.map((func) => {
+    const paramDocs = func.params.map((p) => `  ${p.name} (${p.type}): ${p.description}`).join('\n')
+    const documentation = `${func.description}\n\n${func.signature}\n\nParameters:\n${paramDocs || '  (none)'}\n\nReturns: ${func.returnValue}`
+
+    return {
+      label: func.name,
+      insertText: `${func.name}(\${1})`,
+      documentation,
+      kind: monaco.languages.CompletionItemKind.Function,
+      insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+      range,
+    }
+  })
+
+  return { suggestions, allFunctions: allArduinoFunctions }
+}
+
+/**
  * C/C++ signature help provider
  * Provides parameter hints when typing function calls
  */
@@ -966,7 +1679,9 @@ export const cppSignatureHelp: monaco.languages.SignatureHelpProvider = {
     model: monaco.editor.ITextModel,
     position: monaco.Position,
   ): monaco.languages.ProviderResult<monaco.languages.SignatureHelpResult> => {
-    const { allFunctions } = cppStandardLibraryCompletion({ range: new monaco.Range(0, 0, 0, 0) })
+    const { allFunctions: stdFunctions } = cppStandardLibraryCompletion({ range: new monaco.Range(0, 0, 0, 0) })
+    const { allFunctions: arduinoFunctions } = arduinoApiCompletion({ range: new monaco.Range(0, 0, 0, 0) })
+    const allFunctions = [...stdFunctions, ...arduinoFunctions]
 
     const textUntilPosition = model.getValueInRange({
       startLineNumber: 1,
