@@ -411,6 +411,44 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
    * Provides autocomplete for standard library functions and code snippets
    * Conditionally includes Arduino API functions when an Arduino board is selected
    */
+  const parseCppVariables = (code: string, range: monaco.IRange): monaco.languages.CompletionItem[] => {
+    const variables = new Set<string>()
+
+    const declarationPattern =
+      /\b(?:const\s+)?(?:unsigned\s+|signed\s+)?(?:int|float|double|char|bool|long|short|void|auto|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t|String)\s*\*?\s+(\w+)(?:\s*=|\s*;|\s*\[|\s*\()/g
+
+    const paramPattern = /\(([^)]*)\)/g
+
+    let match
+    while ((match = declarationPattern.exec(code)) !== null) {
+      const varName = match[1]
+      if (varName && !['if', 'while', 'for', 'switch', 'return'].includes(varName)) {
+        variables.add(varName)
+      }
+    }
+
+    while ((match = paramPattern.exec(code)) !== null) {
+      const params = match[1]
+      if (params) {
+        const paramList = params.split(',')
+        paramList.forEach((param) => {
+          const paramMatch = param.trim().match(/\b(\w+)\s*$/)
+          if (paramMatch && paramMatch[1]) {
+            variables.add(paramMatch[1])
+          }
+        })
+      }
+    }
+
+    return Array.from(variables).map((varName) => ({
+      label: varName,
+      kind: monaco.languages.CompletionItemKind.Variable,
+      detail: 'Local variable',
+      insertText: varName,
+      range,
+    }))
+  }
+
   useEffect(() => {
     if (language !== 'cpp') {
       return
@@ -432,10 +470,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         const isArduinoTarget = deviceBoard && !deviceBoard.includes('OpenPLC Runtime')
         const arduinoSuggestions = isArduinoTarget ? arduinoApiCompletion({ range }).suggestions : []
 
+        const code = model.getValue()
+        const variableSuggestions = parseCppVariables(code, range)
+
         const suggestions: monaco.languages.CompletionItem[] = [
           ...stdLibSuggestions,
           ...snippetSuggestions,
           ...arduinoSuggestions,
+          ...variableSuggestions,
         ]
 
         return { suggestions }
