@@ -3,6 +3,7 @@ import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { matchVariableWithDebugEntry, parseDebugFile } from '@root/renderer/utils/parse-debug-file'
+import { callSimulatorFunction, loadSimulator } from '@root/renderer/utils/simulator/wasm-loader'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn } from '@root/utils'
 import { parsePlcStatus } from '@root/utils/plc-status'
@@ -200,6 +201,49 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
         if (data.closePort) {
           setIsCompiling(false)
+
+          const board = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
+          if (board === 'OpenPLC Simulator') {
+            try {
+              const projectJsonPath = useOpenPLCStore.getState().project.meta.path
+              const projectDir = projectJsonPath.endsWith('project.json')
+                ? projectJsonPath.slice(0, -'project.json'.length)
+                : projectJsonPath
+              const basePath = `${projectDir}build/${board}/src`
+              const jsPathFs = `${basePath}/simulator.js`
+              const wasmPathFs = `${basePath}/simulator.wasm`
+              const jsUrl = `file://${jsPathFs}`
+              const wasmUrl = `file://${wasmPathFs}`
+
+              addLog({ id: crypto.randomUUID(), level: 'info', message: 'Loading WebAssembly simulator...' })
+              void loadSimulator(wasmUrl, jsUrl)
+                .then(() => {
+                  addLog({
+                    id: crypto.randomUUID(),
+                    level: 'info',
+                    message: 'Simulator loaded. Running hello_world...',
+                  })
+                  try {
+                    callSimulatorFunction('hello_world', 'void', [], [])
+                  } catch (err) {
+                    addLog({
+                      id: crypto.randomUUID(),
+                      level: 'error',
+                      message: `Simulator call failed: ${String(err)}`,
+                    })
+                  }
+                })
+                .catch((err) => {
+                  addLog({
+                    id: crypto.randomUUID(),
+                    level: 'error',
+                    message: `Failed to load simulator: ${String(err)}`,
+                  })
+                })
+            } catch (err) {
+              addLog({ id: crypto.randomUUID(), level: 'error', message: `WASM load error: ${String(err)}` })
+            }
+          }
         }
       },
     )

@@ -1175,6 +1175,21 @@
       "Ethernet": "No"
     }
   },
+  "OpenPLC Simulator": {
+    "compiler": "emscripten",
+    "preview": "generic.png",
+    "specs": {
+      "CPU": "WebAssembly Virtual",
+      "RAM": "N/A",
+      "Flash": "N/A",
+      "DigitalPins": "Virtual",
+      "AnalogPins": "Virtual",
+      "PWMPins": "Virtual",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
+  },
   "OpenPLC Runtime v4": {
     "compiler": "openplc-compiler",
     "preview": "generic.png"

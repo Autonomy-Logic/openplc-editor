@@ -1005,6 +1005,69 @@ class CompilerModule {
     })
   }
 
+  async handleCompileWasm(
+    sourceTargetFolderPath: string,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<MethodsResult<string>> {
+    return new Promise<MethodsResult<string>>((resolve, reject) => {
+      const helloWorldPath = join(this.sourceDirectoryPath, 'simulator', 'hello_world.c')
+      const outputJsPath = join(sourceTargetFolderPath, 'simulator.js')
+      const outputWasmPath = join(sourceTargetFolderPath, 'simulator.wasm')
+
+      const emccCommand = CompilerModule.HOST_PLATFORM === 'win32' ? 'emcc.bat' : 'emcc'
+
+      const compileArgs = [
+        helloWorldPath,
+        '-o',
+        outputJsPath,
+        '-O2',
+        '-s',
+        'WASM=1',
+        '-s',
+        'EXPORTED_FUNCTIONS=["_hello_world","_get_version","_main"]',
+        '-s',
+        'EXPORTED_RUNTIME_METHODS=["ccall","cwrap"]',
+        '-s',
+        'MODULARIZE=1',
+        '-s',
+        'EXPORT_NAME="createSimulatorModule"',
+      ]
+
+      handleOutputData('Compiling WebAssembly simulator...', 'info')
+      handleOutputData(`Command: ${emccCommand} ${compileArgs.join(' ')}`, 'info')
+
+      const child = spawn(emccCommand, compileArgs)
+      let stderrData = ''
+
+      child.stdout?.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+
+      child.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+        handleOutputData(data, 'error')
+      })
+
+      child.on('error', (error) => {
+        reject(
+          new Error(
+            `Failed to start Emscripten compiler. Make sure Emscripten is installed and 'emcc' is in your PATH.\nError: ${error.message}`,
+          ),
+        )
+      })
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          handleOutputData(`WASM compiled successfully: ${outputWasmPath}`, 'info')
+          handleOutputData(`JS glue code generated: ${outputJsPath}`, 'info')
+          resolve({ success: true, data: outputWasmPath })
+        } else {
+          reject(new Error(`Emscripten compilation failed with code ${code}\n${stderrData}`))
+        }
+      })
+    })
+  }
+
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
@@ -1294,8 +1357,47 @@ class CompilerModule {
       return
     }
 
-    // -- Verify if the runtime target is Arduino or OpenPLC --
-    // INFO: If the runtime target is Arduino, we will continue the compilation process.
+    // -- Verify if the runtime target is Arduino, OpenPLC, or Emscripten (WASM Simulator) --
+    // INFO: If the runtime target is Emscripten, we compile to WebAssembly
+    if (boardRuntime === 'emscripten') {
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'OpenPLC Simulator (WebAssembly) detected.',
+      })
+
+      try {
+        await this.handleCompileWasm(sourceTargetFolderPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'WebAssembly compilation completed successfully!',
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'WASM files generated at: ' + sourceTargetFolderPath,
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
+
+      _mainProcessPort.postMessage({
+        message:
+          '-------------------------------------------------------------------------------------------------------------\n',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
     // INFO: If the runtime target is OpenPLC we will finish the process here.
     if (boardRuntime === 'openplc-compiler') {
       _mainProcessPort.postMessage({
