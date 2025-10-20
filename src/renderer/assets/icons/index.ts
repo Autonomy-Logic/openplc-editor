@@ -6,6 +6,7 @@ export * from './library/OpenFolder'
 /** Reexport all icons from project folder */
 export * from './project/Array'
 export * from './project/CExt'
+export * from './project/Cpp'
 export * from './project/DataType'
 export * from './project/Device'
 export * from './project/Enum'

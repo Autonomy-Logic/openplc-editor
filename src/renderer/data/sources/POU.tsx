@@ -1,4 +1,5 @@
 import {
+  CppIcon,
   DataTypeIcon,
   FBDIcon,
   FunctionBlockIcon,
@@ -31,6 +32,10 @@ const PouLanguageSources = [
   {
     icon: <PythonIcon />,
     value: 'Python',
+  },
+  {
+    icon: <CppIcon />,
+    value: 'C/C++',
   },
   {
     icon: <SFCIcon />,

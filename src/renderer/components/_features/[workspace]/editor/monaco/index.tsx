@@ -10,6 +10,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
+  arduinoApiCompletion,
+  cppSignatureHelp,
+  cppSnippetsCompletion,
+  cppStandardLibraryCompletion,
   keywordsCompletion,
   libraryCompletion,
   snippetsSTCompletion,
@@ -29,7 +33,7 @@ import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './pyth
 type monacoEditorProps = {
   path: string
   name: string
-  language: 'il' | 'st' | 'python'
+  language: 'il' | 'st' | 'python' | 'cpp'
 }
 
 type PouToText = {
@@ -72,6 +76,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         },
         dataTypes,
       },
+    },
+    deviceDefinitions: {
+      configuration: { deviceBoard },
     },
     libraries: sliceLibraries,
     editorActions: { saveEditorViewState },
@@ -117,6 +124,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // Handle template injection when POU changes (for already mounted editors)
     if (language === 'python' && editorRef.current && pou) {
       injectPythonTemplateIfNeeded(editorRef.current, pou, name)
+    }
+    if (language === 'cpp' && editorRef.current && pou) {
+      injectCppTemplateIfNeeded(editorRef.current, pou, name)
     }
   }, [pou])
 
@@ -300,10 +310,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   /**
    * Update the auto-completion feature of the monaco editor.
-   * Note: Python uses its own LSP-based completion provider
+   * Note: Python uses its own LSP-based completion provider (pyright).
+   * C/C++ uses Monaco's built-in language support. A full LSP (like clangd-wasm)
+   * can be added in the future when a mature web-based solution is available.
    */
   useEffect(() => {
-    if (language === 'python') {
+    if (language === 'python' || language === 'cpp') {
       return
     }
 
@@ -394,6 +406,92 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => disposable.dispose()
   }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
 
+  /**
+   * C/C++ completion provider
+   * Provides autocomplete for standard library functions and code snippets
+   * Conditionally includes Arduino API functions when an Arduino board is selected
+   */
+  const parseCppVariables = (code: string, range: monaco.IRange): monaco.languages.CompletionItem[] => {
+    const variables = new Set<string>()
+
+    const declarationPattern =
+      /\b(?:const\s+)?(?:unsigned\s+|signed\s+)?(?:int|float|double|char|bool|long|short|void|auto|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t|String)\s*\*?\s+(\w+)(?:\s*=|\s*;|\s*\[|\s*\()/g
+
+    const paramPattern = /\(([^)]*)\)/g
+
+    let match
+    while ((match = declarationPattern.exec(code)) !== null) {
+      const varName = match[1]
+      if (varName && !['if', 'while', 'for', 'switch', 'return'].includes(varName)) {
+        variables.add(varName)
+      }
+    }
+
+    while ((match = paramPattern.exec(code)) !== null) {
+      const params = match[1]
+      if (params) {
+        const paramList = params.split(',')
+        paramList.forEach((param) => {
+          const paramMatch = param.trim().match(/\b(\w+)\s*$/)
+          if (paramMatch && paramMatch[1]) {
+            variables.add(paramMatch[1])
+          }
+        })
+      }
+    }
+
+    return Array.from(variables).map((varName) => ({
+      label: varName,
+      kind: monaco.languages.CompletionItemKind.Variable,
+      detail: 'Local variable',
+      insertText: varName,
+      range,
+    }))
+  }
+
+  useEffect(() => {
+    if (language !== 'cpp') {
+      return
+    }
+
+    const completionDisposable = monaco.languages.registerCompletionItemProvider('cpp', {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position)
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        }
+
+        const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
+        const snippetSuggestions = cppSnippetsCompletion({ range }).suggestions
+
+        const isArduinoTarget = deviceBoard && !deviceBoard.includes('OpenPLC Runtime')
+        const arduinoSuggestions = isArduinoTarget ? arduinoApiCompletion({ range }).suggestions : []
+
+        const code = model.getValue()
+        const variableSuggestions = parseCppVariables(code, range)
+
+        const suggestions: monaco.languages.CompletionItem[] = [
+          ...stdLibSuggestions,
+          ...snippetSuggestions,
+          ...arduinoSuggestions,
+          ...variableSuggestions,
+        ]
+
+        return { suggestions }
+      },
+    })
+
+    const signatureHelpDisposable = monaco.languages.registerSignatureHelpProvider('cpp', cppSignatureHelp)
+
+    return () => {
+      completionDisposable.dispose()
+      signatureHelpDisposable.dispose()
+    }
+  }, [language, deviceBoard])
+
   function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
@@ -420,12 +518,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    if (editor.cursorPosition && language !== 'python') {
+    if (editor.cursorPosition && language !== 'python' && language !== 'cpp') {
       editorInstance.setPosition(editor.cursorPosition)
       editorInstance.revealPositionInCenter(editor.cursorPosition)
     }
 
-    if (editor.scrollPosition && language !== 'python') {
+    if (editor.scrollPosition && language !== 'python' && language !== 'cpp') {
       editorInstance.setScrollTop(editor.scrollPosition.top)
       editorInstance.setScrollLeft(editor.scrollPosition.left)
     }
@@ -433,6 +531,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (language === 'python' && pou) {
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
       void initPythonLSP(monacoInstance).then(() => setupPythonLSPForEditor(editorInstance))
+    }
+
+    if (language === 'cpp' && pou) {
+      injectCppTemplateIfNeeded(editorInstance, pou, name)
     }
 
     editorInstance.focus()
@@ -443,13 +545,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!editorModel) return
 
     const stateValue = pou.data.body.value as string
-    const editorValue = editorModel.getValue()
-
     const stateIsEmpty = !stateValue || stateValue.trim() === ''
-    const editorIsEmpty = !editorValue || editorValue.trim() === ''
     const alreadyInjected = templatesInjected.has(pouName)
 
-    const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
+    const shouldInjectTemplate = stateIsEmpty && !alreadyInjected
 
     if (shouldInjectTemplate) {
       const pythonTemplate = `# ================================================================
@@ -481,6 +580,65 @@ def block_loop():
 
       editor.setValue(pythonTemplate)
       handleWriteInPou(pythonTemplate)
+
+      // Position cursor at the end
+      const lineCount = editorModel.getLineCount()
+      const lastLineContent = editorModel.getLineContent(lineCount)
+      const position = {
+        lineNumber: lineCount,
+        column: lastLineContent.length + 1,
+      }
+      editor.setPosition(position)
+
+      setTemplatesInjected((prev) => new Set(prev).add(pouName))
+    }
+  }
+
+  function injectCppTemplateIfNeeded(editor: monaco.editor.IStandaloneCodeEditor, pou: PLCPou, pouName: string) {
+    const editorModel = editor.getModel()
+    if (!editorModel) return
+
+    const stateValue = pou.data.body.value as string
+    const stateIsEmpty = !stateValue || stateValue.trim() === ''
+    const alreadyInjected = templatesInjected.has(pouName)
+
+    const shouldInjectTemplate = stateIsEmpty && !alreadyInjected
+
+    if (shouldInjectTemplate) {
+      const cppTemplate = `/* ================================================================
+ *  C/C++ FUNCTION BLOCK
+ *
+ *  ---------------------------------------------------------------
+ *  - This function block runs **in sync** with the PLC runtime.
+ *  - The \`setup()\` function is called once when the block initializes.
+ *  - The \`loop()\` function is called at every PLC scan cycle.
+ *  - Block input and output variables declared in the variable table
+ *    can be accessed directly by name in this C/C++ code.
+ *
+ *  This block executes as part of the main PLC process and follows
+ *  the configured scan time in the Resources. Use it for real-time
+ *  control logic, fast I/O operations, or any C-based algorithms.
+ * ================================================================ */
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+// Called once when the block is initialized
+void setup()
+{
+
+}
+
+// Called at every PLC scan cycle
+void loop()
+{
+
+}
+`
+
+      editor.setValue(cppTemplate)
+      handleWriteInPou(cppTemplate)
 
       // Position cursor at the end
       const lineCount = editorModel.getLineCount()

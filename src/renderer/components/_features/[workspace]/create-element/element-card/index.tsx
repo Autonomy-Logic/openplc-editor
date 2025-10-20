@@ -22,7 +22,7 @@ type ElementCardProps = {
 type CreatePouFormProps = {
   type: 'function' | 'function-block' | 'program'
   name: string
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 }
 
 type CreateDataTypeFormProps = {
@@ -42,6 +42,7 @@ const BlockedLanguagesStyles = {
   'Structured Text': '',
   'Instruction List': '',
   Python: '',
+  'C/C++': '',
 } as const
 
 const ElementCard = (props: ElementCardProps): ReactNode => {
@@ -349,7 +350,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                               >
                                 {PouLanguageSources.filter((lang) => {
                                   if (target === 'function-block') return true
-                                  return lang.value !== 'Python'
+                                  return lang.value !== 'Python' && lang.value !== 'C/C++'
                                 }).map((lang) => {
                                   return (
                                     <SelectItem

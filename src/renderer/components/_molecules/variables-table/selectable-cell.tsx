@@ -71,13 +71,13 @@ const SelectableTypeCell = ({
 
   // Filter available types based on language
   const getAvailableTypes = () => {
-    if (language === 'python') {
-      const excludedPythonTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
+    if (language === 'python' || language === 'cpp') {
+      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
 
-      // Only show Base Type for Python and filter out specific types
+      // Only show Base Type for Python/C++ and filter out specific types
       const availableTypes = VariableTypes.filter((type) => type.definition === 'base-type').map((type) => ({
         ...type,
-        values: type.values.filter((value) => !excludedPythonTypes.includes(value.toUpperCase())),
+        values: type.values.filter((value) => !excludedTypes.includes(value.toUpperCase())),
       }))
 
       return availableTypes
@@ -86,8 +86,8 @@ const SelectableTypeCell = ({
   }
 
   const getAvailableLibraryTypes = () => {
-    if (language === 'python') {
-      // No library types for Python
+    if (language === 'python' || language === 'cpp') {
+      // No library types for Python/C++
       return []
     }
     return LibraryTypes
@@ -378,7 +378,7 @@ const SelectableTypeCell = ({
             )
           })}
 
-          {language !== 'python' && (
+          {language !== 'python' && language !== 'cpp' && (
             <PrimitiveDropdown.Item asChild>
               <ArrayModal
                 variableName={variableName}
@@ -461,7 +461,7 @@ const SelectableClassCell = ({
 
   const language = 'language' in editor.meta ? editor.meta.language : null
   const getVariableClasses = () => {
-    if (language === 'python') {
+    if (language === 'python' || language === 'cpp') {
       return ['input', 'output']
     }
     return ['input', 'output', 'inOut', 'external', 'local', 'temp']
@@ -472,9 +472,9 @@ const SelectableClassCell = ({
   // Get the current value from the table
   const currentValue = getValue()
 
-  // Determine initial value: use "input" for Python if current value is empty/undefined
+  // Determine initial value: use "input" for Python/C++ if current value is empty/undefined
   const getInitialValue = () => {
-    if (language === 'python' && currentValue === 'local') {
+    if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
       return 'input'
     }
     return currentValue
@@ -500,10 +500,10 @@ const SelectableClassCell = ({
     }
   }
 
-  // Effect to handle language changes and set default value for Python
+  // Effect to handle language changes and set default value for Python/C++
   useEffect(() => {
-    if (language === 'python' && currentValue === 'local') {
-      // Set default value to "input" for Python and update the table
+    if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
+      // Set default value to "input" for Python/C++ and update the table
       setCellValue('input')
       table.options.meta?.updateData(index, id, 'input')
     } else {

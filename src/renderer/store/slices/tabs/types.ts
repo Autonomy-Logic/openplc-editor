@@ -7,15 +7,15 @@ const tabsPropsSchema = z.object({
   elementType: z.discriminatedUnion('type', [
     z.object({
       type: z.literal('program'),
-      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python']),
+      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
     }),
     z.object({
       type: z.literal('function'),
-      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python']),
+      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
     }),
     z.object({
       type: z.literal('function-block'),
-      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python']),
+      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
     }),
     z.object({
       type: z.literal('data-type'),

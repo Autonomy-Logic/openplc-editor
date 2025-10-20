@@ -56,7 +56,7 @@ const CreatePLCGraphicalObject = (
 
 const CreateEditorModelObject = (
   name: string,
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | null,
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp' | null,
   pouType: 'program' | 'function' | 'function-block' | null,
   derivation?: 'enumerated' | 'structure' | 'array',
 ): EditorModel => {
