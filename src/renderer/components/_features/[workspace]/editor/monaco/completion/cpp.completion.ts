@@ -1690,7 +1690,7 @@ export const cppSignatureHelp: monaco.languages.SignatureHelpProvider = {
       endColumn: position.column,
     })
 
-    const functionCallMatch = textUntilPosition.match(/(\w+)\s*\([^)]*$/)
+    const functionCallMatch = textUntilPosition.match(/(\w+(?:\.\w+)*)\s*\([^)]*$/)
     if (!functionCallMatch) {
       return null
     }
