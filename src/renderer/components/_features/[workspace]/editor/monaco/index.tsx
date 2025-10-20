@@ -427,10 +427,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         const snippetSuggestions = cppSnippetsCompletion({ range }).suggestions
 
         const isArduinoTarget = deviceBoard && !deviceBoard.includes('OpenPLC Runtime')
+        const arduinoSuggestions = isArduinoTarget ? arduinoApiCompletion({ range }).suggestions : []
 
-        const suggestions = isArduinoTarget
-          ? [...stdLibSuggestions, ...snippetSuggestions, ...arduinoApiCompletion({ range }).suggestions]
-          : [...stdLibSuggestions, ...snippetSuggestions]
+        const suggestions: monaco.languages.CompletionItem[] = [
+          ...stdLibSuggestions,
+          ...snippetSuggestions,
+          ...arduinoSuggestions,
+        ]
 
         return { suggestions }
       },
