@@ -1013,6 +1013,189 @@ class CompilerModule {
     })
   }
 
+  async checkEmscriptenAvailability(): Promise<MethodsResult<string>> {
+    const executeCommand = promisify(exec)
+
+    try {
+      const emccCommand = CompilerModule.HOST_PLATFORM === 'win32' ? 'emcc.bat' : 'emcc'
+      const { stdout, stderr } = await executeCommand(`${emccCommand} --version`)
+
+      if (stderr && !stdout) {
+        return { success: false }
+      }
+
+      const firstLine = stdout.split('\n')[0]
+      const versionMatch = firstLine.match(/(\d+\.\d+\.\d+)/)
+      const version = versionMatch ? versionMatch[1] : 'unknown'
+
+      return { success: true, data: version }
+    } catch (_error) {
+      return { success: false }
+    }
+  }
+
+  async installEmscripten(statusCallback: (status: string) => void): Promise<MethodsResult<string>> {
+    return new Promise<MethodsResult<string>>((resolve, reject) => {
+      const homeDir = os.homedir()
+      const emsdkPath = join(homeDir, 'emsdk')
+
+      statusCallback('Checking if emsdk directory exists...')
+
+      fs.access(emsdkPath)
+        .then(() => {
+          statusCallback('emsdk directory found. Updating...')
+          return this.#updateEmscripten(emsdkPath, statusCallback)
+        })
+        .catch(() => {
+          statusCallback('Downloading emsdk...')
+          return this.#downloadAndInstallEmscripten(homeDir, statusCallback)
+        })
+        .then(() => {
+          statusCallback('Emscripten installation completed successfully!')
+          resolve({ success: true, data: emsdkPath })
+        })
+        .catch((error: unknown) => {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          reject(new Error(`Emscripten installation failed: ${errorMessage}`))
+        })
+    })
+  }
+
+  async #downloadAndInstallEmscripten(homeDir: string, statusCallback: (status: string) => void): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const emsdkPath = join(homeDir, 'emsdk')
+
+      statusCallback('Cloning emsdk repository...')
+      const gitClone = spawn('git', ['clone', 'https://github.com/emscripten-core/emsdk.git', emsdkPath])
+
+      let stderrData = ''
+
+      gitClone.stdout?.on('data', (data: Buffer) => {
+        statusCallback(`Git: ${data.toString().trim()}`)
+      })
+
+      gitClone.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+
+      gitClone.on('error', (error) => {
+        reject(new Error(`Failed to clone emsdk: ${error.message}`))
+      })
+
+      gitClone.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Git clone failed with code ${code}\n${stderrData}`))
+          return
+        }
+
+        this.#installEmsdkVersion(emsdkPath, 'latest', statusCallback)
+          .then(() => resolve())
+          .catch((error: unknown) => {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            reject(new Error(errorMessage))
+          })
+      })
+    })
+  }
+
+  async #updateEmscripten(emsdkPath: string, statusCallback: (status: string) => void): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      statusCallback('Updating emsdk repository...')
+      const gitPull = spawn('git', ['pull'], { cwd: emsdkPath })
+
+      let stderrData = ''
+
+      gitPull.stdout?.on('data', (data: Buffer) => {
+        statusCallback(`Git: ${data.toString().trim()}`)
+      })
+
+      gitPull.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+
+      gitPull.on('error', (error) => {
+        reject(new Error(`Failed to update emsdk: ${error.message}`))
+      })
+
+      gitPull.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Git pull failed with code ${code}\n${stderrData}`))
+          return
+        }
+
+        this.#installEmsdkVersion(emsdkPath, 'latest', statusCallback)
+          .then(() => resolve())
+          .catch((error: unknown) => {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            reject(new Error(errorMessage))
+          })
+      })
+    })
+  }
+
+  async #installEmsdkVersion(
+    emsdkPath: string,
+    version: string,
+    statusCallback: (status: string) => void,
+  ): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const emsdkCommand = CompilerModule.HOST_PLATFORM === 'win32' ? 'emsdk.bat' : './emsdk'
+
+      // Step 1: Install
+      statusCallback(`Installing Emscripten ${version}...`)
+      const install = spawn(emsdkCommand, ['install', version], { cwd: emsdkPath, shell: true })
+
+      let installStderr = ''
+
+      install.stdout?.on('data', (data: Buffer) => {
+        statusCallback(`Install: ${data.toString().trim()}`)
+      })
+
+      install.stderr?.on('data', (data: Buffer) => {
+        installStderr += data.toString()
+      })
+
+      install.on('error', (error) => {
+        reject(new Error(`Failed to run emsdk install: ${error.message}`))
+      })
+
+      install.on('close', (installCode) => {
+        if (installCode !== 0) {
+          reject(new Error(`emsdk install failed with code ${installCode}\n${installStderr}`))
+          return
+        }
+
+        // Step 2: Activate
+        statusCallback(`Activating Emscripten ${version}...`)
+        const activate = spawn(emsdkCommand, ['activate', version], { cwd: emsdkPath, shell: true })
+
+        let activateStderr = ''
+
+        activate.stdout?.on('data', (data: Buffer) => {
+          statusCallback(`Activate: ${data.toString().trim()}`)
+        })
+
+        activate.stderr?.on('data', (data: Buffer) => {
+          activateStderr += data.toString()
+        })
+
+        activate.on('error', (error) => {
+          reject(new Error(`Failed to run emsdk activate: ${error.message}`))
+        })
+
+        activate.on('close', (activateCode) => {
+          if (activateCode !== 0) {
+            reject(new Error(`emsdk activate failed with code ${activateCode}\n${activateStderr}`))
+            return
+          }
+
+          statusCallback('Emscripten activated successfully!')
+          resolve()
+        })
+      })
+    })
+  }
+
   async handleCompileWasm(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1371,6 +1554,35 @@ class CompilerModule {
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'OpenPLC Simulator (WebAssembly) detected.',
+      })
+
+      // Check if Emscripten is installed
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'Checking Emscripten availability...',
+      })
+
+      const emscriptenCheck = await this.checkEmscriptenAvailability()
+      if (!emscriptenCheck.success) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Emscripten is not installed. Please install Emscripten to compile for the OpenPLC Simulator.',
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'A dialog will appear to help you install Emscripten automatically.',
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
+
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: `Emscripten version ${emscriptenCheck.data} detected.`,
       })
 
       try {

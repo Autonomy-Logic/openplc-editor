@@ -62,6 +62,10 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
+    'emscripten-install': {
+      open: false,
+      data: null,
+    },
   },
 
   modalActions: {

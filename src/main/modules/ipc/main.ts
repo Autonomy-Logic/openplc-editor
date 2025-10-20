@@ -385,6 +385,10 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
     this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
     this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
+
+    // ===================== EMSCRIPTEN =====================
+    this.ipcMain.handle('emscripten:check-availability', this.handleEmscriptenCheckAvailability)
+    this.ipcMain.handle('emscripten:install', this.handleEmscriptenInstall)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -959,6 +963,26 @@ class MainProcessBridge implements MainIpcModule {
     this.debuggerJwtToken = null
     this.debuggerReconnecting = false
     return Promise.resolve({ success: true })
+  }
+
+  // ===================== EMSCRIPTEN HANDLERS =====================
+  handleEmscriptenCheckAvailability = async () => {
+    try {
+      const result = await this.compilerModule.checkEmscriptenAvailability()
+      return result
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleEmscriptenInstall = async (_event: IpcMainInvokeEvent, statusCallback: (status: string) => void) => {
+    try {
+      const result = await this.compilerModule.installEmscripten(statusCallback)
+      return result
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      return { success: false, error: errorMessage }
+    }
   }
 
   // ===================== EVENT HANDLERS =====================

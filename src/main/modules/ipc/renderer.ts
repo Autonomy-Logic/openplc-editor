@@ -314,5 +314,13 @@ const rendererProcessBridge = {
     data?: { status: string; logs: string[]; exit_code: number | null }
     error?: string
   }> => ipcRenderer.invoke('runtime:get-compilation-status', ipAddress, jwtToken),
+
+  // ===================== EMSCRIPTEN METHODS =====================
+  checkEmscriptenAvailability: (): Promise<{ success: boolean; data?: string; error?: string }> =>
+    ipcRenderer.invoke('emscripten:check-availability'),
+  installEmscripten: (
+    statusCallback: (status: string) => void,
+  ): Promise<{ success: boolean; data?: string; error?: string }> =>
+    ipcRenderer.invoke('emscripten:install', statusCallback),
 }
 export default rendererProcessBridge

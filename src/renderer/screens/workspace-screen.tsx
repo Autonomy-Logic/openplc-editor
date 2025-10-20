@@ -20,6 +20,7 @@ import {
   ConfirmDeviceSwitchModal,
   DebuggerIpInputModal,
   DebuggerMessageModal,
+  EmscriptenInstallModal,
   RuntimeCreateUserModal,
   RuntimeLoginModal,
 } from '../components/_organisms/modals'
@@ -625,6 +626,7 @@ const WorkspaceScreen = () => {
       <RuntimeCreateUserModal />
       <RuntimeLoginModal />
       <DebuggerMessageModal />
+      <EmscriptenInstallModal />
       <DebuggerIpInputModal />
       <WorkspaceSideContent>
         <WorkspaceActivityBar

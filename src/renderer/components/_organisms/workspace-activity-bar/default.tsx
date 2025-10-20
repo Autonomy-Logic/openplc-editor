@@ -250,6 +250,33 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }
 
   const verifyAndCompile = async () => {
+    const boardTarget = deviceDefinitions.configuration.deviceBoard
+    if (boardTarget === 'OpenPLC Simulator') {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: 'Checking Emscripten availability for OpenPLC Simulator...',
+      })
+
+      const emscriptenCheck = await window.bridge.checkEmscriptenAvailability()
+      if (!emscriptenCheck.success) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: 'Emscripten is not installed. Opening installation dialog...',
+        })
+
+        useOpenPLCStore.getState().modalActions.openModal('emscripten-install', {})
+        return
+      }
+
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: `Emscripten version ${emscriptenCheck.data} detected.`,
+      })
+    }
+
     if (editingState === 'unsaved') {
       const res = await saveProject({ data: projectData, meta: projectMeta }, deviceDefinitions)
       if (!res.success) {
