@@ -1,5 +1,5 @@
 import {
-  CExtIcon,
+  CppIcon,
   DataTypeIcon,
   FBDIcon,
   FunctionBlockIcon,
@@ -34,7 +34,7 @@ const PouLanguageSources = [
     value: 'Python',
   },
   {
-    icon: <CExtIcon />,
+    icon: <CppIcon />,
     value: 'C/C++',
   },
   {
