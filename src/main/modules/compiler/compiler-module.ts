@@ -898,21 +898,21 @@ class CompilerModule {
   }
 
   async handleGenerateCBlocksHeader(
-    projectData: ProjectState['data'],
+    projectData: ProjectState['data'] & { originalCppPous?: CppPouDataCode[] },
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
-    const cppPous = projectData.pous
-      .filter((pou) => pou.data.body.language === 'cpp')
-      .map((pou) => ({
-        name: pou.data.name,
-        variables: pou.data.variables,
-      })) as CppPouDataHeader[]
+    const originalCppPous = projectData.originalCppPous || []
 
-    if (cppPous.length === 0) {
+    if (originalCppPous.length === 0) {
       handleOutputData('No C/C++ blocks found, skipping c_blocks.h generation', 'info')
       return
     }
+
+    const cppPous = originalCppPous.map((pou) => ({
+      name: pou.name,
+      variables: pou.variables,
+    })) as CppPouDataHeader[]
 
     const headerContent = generateCBlocksHeader(cppPous)
     const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
@@ -926,23 +926,18 @@ class CompilerModule {
   }
 
   async handleGenerateCBlocksCode(
-    projectData: ProjectState['data'],
+    projectData: ProjectState['data'] & { originalCppPous?: CppPouDataCode[] },
     compilationPath: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
-    const cppPous = projectData.pous
-      .filter((pou) => pou.data.body.language === 'cpp')
-      .map((pou) => ({
-        name: pou.data.name,
-        code: pou.data.body.language === 'cpp' ? (pou.data.body as { value: string }).value : '',
-        variables: pou.data.variables,
-      })) as CppPouDataCode[]
+    const originalCppPous = projectData.originalCppPous || []
 
-    if (cppPous.length === 0) {
+    if (originalCppPous.length === 0) {
       handleOutputData('No C/C++ blocks found, skipping c_blocks_code.cpp generation', 'info')
       return
     }
 
+    const cppPous = originalCppPous
     const codeContent = generateCBlocksCode(cppPous)
     const codeFilePath = join(compilationPath, 'examples', 'Baremetal', 'c_blocks_code.cpp')
 

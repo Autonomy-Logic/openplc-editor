@@ -8,6 +8,16 @@ import { BufferToStringArray, cn } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
 import { validateCppCode } from '@root/utils/cpp/validateCppCode'
+
+type CppPouData = {
+  name: string
+  code: string
+  variables: PLCVariable[]
+}
+
+type ProjectDataWithCpp = PLCProjectData & {
+  originalCppPous?: CppPouData[]
+}
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '@root/utils/python/generateSTCode'
@@ -190,6 +200,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       processedProjectData = addCppLocalVariables(processedProjectData)
 
+      const originalCppPousData = cppPous.map((pou) => ({
+        name: pou.data.name,
+        code: pou.data.body.language === 'cpp' ? (pou.data.body as { value: string }).value : '',
+        variables: pou.data.variables,
+      }))
+
       processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
         if (pou.data.body.language === 'cpp') {
           const stCode = generateCppSTCode({
@@ -204,6 +220,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
         return pou
       })
+
+      const projectDataWithCpp = processedProjectData as ProjectDataWithCpp
+      projectDataWithCpp.originalCppPous = originalCppPousData
 
       addLog({
         id: crypto.randomUUID(),
@@ -223,7 +242,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         deviceDefinitions.configuration.deviceBoard,
         boardCore,
         compileOnly,
-        processedProjectData,
+        processedProjectData as ProjectDataWithCpp,
         runtimeIpAddress,
         runtimeJwtToken,
       ],
@@ -589,6 +608,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
         processedProjectData = addCppLocalVariables(processedProjectData)
 
+        const originalCppPousData = cppPous.map((pou) => ({
+          name: pou.data.name,
+          code: pou.data.body.language === 'cpp' ? (pou.data.body as { value: string }).value : '',
+          variables: pou.data.variables,
+        }))
+
         processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
           if (pou.data.body.language === 'cpp') {
             const stCode = generateCppSTCode({
@@ -604,6 +629,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return pou
         })
 
+        const projectDataWithCpp = processedProjectData as ProjectDataWithCpp
+        projectDataWithCpp.originalCppPous = originalCppPousData
+
         consoleActions.addLog({
           id: crypto.randomUUID(),
           level: 'info',
@@ -612,7 +640,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
 
       window.bridge.runDebugCompilation(
-        [projectPath, boardTarget, processedProjectData],
+        [projectPath, boardTarget, processedProjectData as ProjectDataWithCpp],
         (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
           if (typeof data.message === 'string') {
             data.message
