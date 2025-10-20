@@ -961,63 +961,60 @@ export const cppStandardLibraryCompletion = ({ range }: { range: monaco.IRange }
  * C/C++ signature help provider
  * Provides parameter hints when typing function calls
  */
-export const cppSignatureHelp = (): monaco.languages.SignatureHelpProvider => {
-  return {
-    provideSignatureHelp: (
-      model: monaco.editor.ITextModel,
-      position: monaco.Position,
-    ): monaco.languages.ProviderResult<monaco.languages.SignatureHelpResult> => {
-      // Get all functions from the completion provider
-      const { allFunctions } = cppStandardLibraryCompletion({ range: new monaco.Range(0, 0, 0, 0) })
+export const cppSignatureHelp: monaco.languages.SignatureHelpProvider = {
+  provideSignatureHelp: (
+    model: monaco.editor.ITextModel,
+    position: monaco.Position,
+  ): monaco.languages.ProviderResult<monaco.languages.SignatureHelpResult> => {
+    const { allFunctions } = cppStandardLibraryCompletion({ range: new monaco.Range(0, 0, 0, 0) })
 
-      const textUntilPosition = model.getValueInRange({
-        startLineNumber: 1,
-        startColumn: 1,
-        endLineNumber: position.lineNumber,
-        endColumn: position.column,
-      })
+    const textUntilPosition = model.getValueInRange({
+      startLineNumber: 1,
+      startColumn: 1,
+      endLineNumber: position.lineNumber,
+      endColumn: position.column,
+    })
 
-      const functionCallMatch = textUntilPosition.match(/(\w+)\s*\([^)]*$/)
-      if (!functionCallMatch) {
-        return null
-      }
+    const functionCallMatch = textUntilPosition.match(/(\w+)\s*\([^)]*$/)
+    if (!functionCallMatch) {
+      return null
+    }
 
-      const functionName = functionCallMatch[1]
-      const func = allFunctions.find((f) => f.name === functionName)
+    const functionName = functionCallMatch[1]
+    const func = allFunctions.find((f) => f.name === functionName)
 
-      if (!func) {
-        return null
-      }
+    if (!func) {
+      return null
+    }
 
-      const textAfterFunctionName = textUntilPosition.substring(functionCallMatch.index! + functionCallMatch[0].length)
-      const commaCount = (textAfterFunctionName.match(/,/g) || []).length
-      const activeParameter = commaCount
+    const textAfterFunctionName = textUntilPosition.substring(functionCallMatch.index! + functionCallMatch[0].length)
+    const commaCount = (textAfterFunctionName.match(/,/g) || []).length
+    const activeParameter = commaCount
 
-      const parameters: monaco.languages.ParameterInformation[] = func.params.map((param) => ({
-        label: `${param.name}: ${param.type}`,
-        documentation: param.description,
-      }))
+    const parameters: monaco.languages.ParameterInformation[] = func.params.map((param) => ({
+      label: `${param.name}: ${param.type}`,
+      documentation: param.description,
+    }))
 
-      const signatureInfo: monaco.languages.SignatureInformation = {
-        label: func.signature,
-        documentation: {
-          value: `${func.description}\n\n**Returns:** ${func.returnValue}`,
-        },
-        parameters,
-      }
+    const signatureInfo: monaco.languages.SignatureInformation = {
+      label: func.signature,
+      documentation: {
+        value: `${func.description}\n\n**Returns:** ${func.returnValue}`,
+      },
+      parameters,
+    }
 
-      return {
-        value: {
-          signatures: [signatureInfo],
-          activeSignature: 0,
-          activeParameter: Math.min(activeParameter, parameters.length - 1),
-        },
-        dispose: () => {},
-      }
-    },
-    signatureHelpTriggerCharacters: ['(', ','],
-    signatureHelpRetriggerCharacters: [','],
-  }
+    return {
+      value: {
+        signatures: [signatureInfo],
+        activeSignature: 0,
+        activeParameter: Math.min(activeParameter, parameters.length - 1),
+      },
+      dispose: () => {},
+    }
+  },
+  signatureHelpTriggerCharacters: ['(', ','],
+  signatureHelpRetriggerCharacters: [','],
 }
 
 /**
