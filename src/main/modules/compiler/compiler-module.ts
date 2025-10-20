@@ -882,6 +882,9 @@ class CompilerModule {
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
 
     const boardSourceFile = halsFileContent[boardTarget]['source']
+    if (!boardSourceFile) {
+      throw new Error(`Board ${boardTarget} does not have a source file defined`)
+    }
 
     const boardSourceFilePath = join(this.sourceDirectoryPath, 'hal', boardSourceFile)
     const arduinoCppFilePath = join(projectPath, 'build', boardTarget, 'src', 'arduino.cpp')
@@ -920,17 +923,22 @@ class CompilerModule {
       ]
     }
 
+    const platform = boardHalsContent['platform']
+    if (!platform) {
+      throw new Error('Board platform is not defined')
+    }
+
     buildProjectFlags = [
       ...buildProjectFlags,
       '--library',
-      `${join(compilationPath, 'src')}`, // Basic libraries
+      `${join(compilationPath, 'src')}`,
       '--library',
-      `${join(compilationPath, 'src', 'lib')}`, // Arduino libraries
-      '--export-binaries', // Export binaries
+      `${join(compilationPath, 'src', 'lib')}`,
+      '--export-binaries',
       '-b',
-      boardHalsContent['platform'], // Board target
-      join(baremetalPath, 'Baremetal.ino'), // Arduino .ino file
-      ...this.arduinoCliBaseParameters, // Base parameters
+      platform,
+      join(baremetalPath, 'Baremetal.ino'),
+      ...this.arduinoCliBaseParameters,
     ]
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
@@ -1805,10 +1813,19 @@ class CompilerModule {
     // Step 13: Upload program to board if necessary
     if (!compileOnly) {
       _mainProcessPort.postMessage({ logLevel: 'info', message: 'Uploading program to board...' })
+      const arduinoPlatform = halsContent[boardTarget]['platform']
+      if (!arduinoPlatform) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Board platform is not defined, cannot upload',
+        })
+        _mainProcessPort.close()
+        return
+      }
       try {
         await this.handleUploadProgram({
           projectPath: normalizedProjectPath,
-          arduinoPlatform: halsContent[boardTarget]['platform'],
+          arduinoPlatform,
           compilationPath,
           handleOutputData: (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
