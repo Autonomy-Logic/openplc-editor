@@ -488,6 +488,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       void initPythonLSP(monacoInstance).then(() => setupPythonLSPForEditor(editorInstance))
     }
 
+    if (language === 'cpp' && pou) {
+      injectCppTemplateIfNeeded(editorInstance, pou, name)
+    }
+
     editorInstance.focus()
   }
 
@@ -534,6 +538,68 @@ def block_loop():
 
       editor.setValue(pythonTemplate)
       handleWriteInPou(pythonTemplate)
+
+      // Position cursor at the end
+      const lineCount = editorModel.getLineCount()
+      const lastLineContent = editorModel.getLineContent(lineCount)
+      const position = {
+        lineNumber: lineCount,
+        column: lastLineContent.length + 1,
+      }
+      editor.setPosition(position)
+
+      setTemplatesInjected((prev) => new Set(prev).add(pouName))
+    }
+  }
+
+  function injectCppTemplateIfNeeded(editor: monaco.editor.IStandaloneCodeEditor, pou: PLCPou, pouName: string) {
+    const editorModel = editor.getModel()
+    if (!editorModel) return
+
+    const stateValue = pou.data.body.value as string
+    const editorValue = editorModel.getValue()
+
+    const stateIsEmpty = !stateValue || stateValue.trim() === ''
+    const editorIsEmpty = !editorValue || editorValue.trim() === ''
+    const alreadyInjected = templatesInjected.has(pouName)
+
+    const shouldInjectTemplate = stateIsEmpty && editorIsEmpty && !alreadyInjected
+
+    if (shouldInjectTemplate) {
+      const cppTemplate = `/* ================================================================ (important-comment)
+ *  C/C++ FUNCTION BLOCK (important-comment)
+ * (important-comment)
+ *  --------------------------------------------------------------- (important-comment)
+ *  - This function block runs **in sync** with the PLC runtime. (important-comment)
+ *  - The \`setup()\` function is called once when the block initializes. (important-comment)
+ *  - The \`loop()\` function is called at every PLC scan cycle. (important-comment)
+ *  - Block input and output variables declared in the variable table (important-comment)
+ *    can be accessed directly by name in this C/C++ code. (important-comment)
+ * (important-comment)
+ *  This block executes as part of the main PLC process and follows (important-comment)
+ *  the configured scan time in the Resources. Use it for real-time (important-comment)
+ *  control logic, fast I/O operations, or any C-based algorithms. (important-comment)
+ * ================================================================ */ (important-comment)
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+// Called once when the block is initialized
+void setup()
+{
+
+}
+
+// Called at every PLC scan cycle
+void loop()
+{
+
+}
+`
+
+      editor.setValue(cppTemplate)
+      handleWriteInPou(cppTemplate)
 
       // Position cursor at the end
       const lineCount = editorModel.getLineCount()
