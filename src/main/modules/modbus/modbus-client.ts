@@ -263,4 +263,109 @@ export class ModbusTcpClient {
       this.socket!.write(request as unknown as Uint8Array)
     })
   }
+
+  async setVariable(
+    variableIndex: number,
+    force: boolean,
+    value?: number,
+  ): Promise<{
+    success: boolean
+    error?: string
+  }> {
+    if (!this.socket) {
+      return { success: false, error: 'Not connected to target' }
+    }
+
+    const transactionId = this.incrementTransactionId()
+    const protocolId = 0x0000
+    const unitId = 0x00
+    const functionCode = ModbusFunctionCode.DEBUG_SET
+
+    let dataPayload: Buffer
+    if (!force) {
+      dataPayload = Buffer.alloc(4)
+      dataPayload.writeUInt16BE(variableIndex, 0)
+      dataPayload.writeUInt8(0, 2)
+      dataPayload.writeUInt16BE(1, 3)
+    } else {
+      dataPayload = Buffer.alloc(6)
+      dataPayload.writeUInt16BE(variableIndex, 0)
+      dataPayload.writeUInt8(1, 2)
+      dataPayload.writeUInt16BE(1, 3)
+      dataPayload.writeUInt8(value ?? 0, 5)
+    }
+
+    const pduLength = 2 + dataPayload.length
+    const request = Buffer.alloc(6 + pduLength)
+
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(protocolId, 2)
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(unitId, 6)
+    request.writeUInt8(functionCode, 7)
+    dataPayload.copy(request, 8)
+
+    return new Promise((resolve) => {
+      const timeoutHandle = setTimeout(() => {
+        resolve({ success: false, error: 'Request timeout' })
+      }, this.timeout)
+
+      const onData = (data: Buffer) => {
+        clearTimeout(timeoutHandle)
+        this.socket?.removeListener('data', onData)
+        this.socket?.removeListener('error', onError)
+
+        try {
+          if (data.length < 9) {
+            resolve({ success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` })
+            return
+          }
+
+          const responseTransactionId = data.readUInt16BE(0)
+          const responseFunctionCode = data.readUInt8(7)
+          const statusCode = data.readUInt8(8)
+
+          if (responseTransactionId !== transactionId) {
+            resolve({ success: false, error: 'Transaction ID mismatch' })
+            return
+          }
+
+          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_SET as number)) {
+            resolve({ success: false, error: 'Function code mismatch' })
+            return
+          }
+
+          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
+            resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
+            return
+          }
+
+          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
+            resolve({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
+            return
+          }
+
+          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+            resolve({ success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` })
+            return
+          }
+
+          resolve({ success: true })
+        } catch (error) {
+          resolve({ success: false, error: String(error) })
+        }
+      }
+
+      const onError = (error: Error) => {
+        clearTimeout(timeoutHandle)
+        this.socket?.removeListener('data', onData)
+        this.socket?.removeListener('error', onError)
+        resolve({ success: false, error: error.message })
+      }
+
+      this.socket!.once('data', onData)
+      this.socket!.once('error', onError)
+      this.socket!.write(request as unknown as Uint8Array)
+    })
+  }
 }

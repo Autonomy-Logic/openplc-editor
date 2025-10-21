@@ -52,7 +52,8 @@ const VariableElement = (block: VariableProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: { isDebuggerVisible },
+    workspace: { isDebuggerVisible, debugVariableIndexes, debugForcedVariables },
+    workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
 
   const inputVariableRef = useRef<
@@ -255,16 +256,67 @@ const VariableElement = (block: VariableProps) => {
     return variable?.type.value
   }
 
-  const handleForceTrue = (e: React.MouseEvent) => {
+  const handleForceTrue = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
+
+    if (!data.variable.name) return
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const variableIndex = debugVariableIndexes.get(compositeKey)
+
+    if (variableIndex === undefined) return
+
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 1)
+
+    if (result.success) {
+      const newForcedVariables = new Map(debugForcedVariables)
+      newForcedVariables.set(compositeKey, true)
+      setDebugForcedVariables(newForcedVariables)
+    }
   }
 
-  const handleForceFalse = (e: React.MouseEvent) => {
+  const handleForceFalse = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
+
+    if (!data.variable.name) return
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const variableIndex = debugVariableIndexes.get(compositeKey)
+
+    if (variableIndex === undefined) return
+
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 0)
+
+    if (result.success) {
+      const newForcedVariables = new Map(debugForcedVariables)
+      newForcedVariables.set(compositeKey, false)
+      setDebugForcedVariables(newForcedVariables)
+    }
+  }
+
+  const handleReleaseForce = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsContextMenuOpen(false)
+
+    if (!data.variable.name) return
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const variableIndex = debugVariableIndexes.get(compositeKey)
+
+    if (variableIndex === undefined) return
+
+    const result = await window.bridge.debuggerSetVariable(variableIndex, false)
+
+    if (result.success) {
+      const newForcedVariables = new Map(debugForcedVariables)
+      newForcedVariables.delete(compositeKey)
+      setDebugForcedVariables(newForcedVariables)
+    }
   }
 
   const handleForceValue = (e: React.MouseEvent) => {
@@ -302,6 +354,10 @@ const VariableElement = (block: VariableProps) => {
   const variableType = getVariableType()
   const isBoolVariable = variableType?.toUpperCase() === 'BOOL'
 
+  const compositeKey = `${editor.meta.name}:${data.variable.name}`
+  const isForced = debugForcedVariables.has(compositeKey)
+  const forcedValue = debugForcedVariables.get(compositeKey)
+
   return (
     <>
       <div
@@ -314,6 +370,9 @@ const VariableElement = (block: VariableProps) => {
             'text-red-500': inputError,
             'text-left placeholder:text-left': data.variant === 'output',
             'text-right placeholder:text-right': data.variant === 'input',
+            'font-bold': isForced,
+            'text-[#FF8C00]': isForced && forcedValue,
+            'text-[#FF6B35]': isForced && !forcedValue,
           })}
           highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-left placeholder:text-left': data.variant === 'output',
@@ -380,20 +439,29 @@ const VariableElement = (block: VariableProps) => {
                 onOpenAutoFocus={(e) => e.preventDefault()}
               >
                 {isBoolVariable ? (
-                  <>
+                  isForced ? (
                     <div
-                      className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceTrue}
+                      className='flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleReleaseForce}
                     >
-                      <p>Force True</p>
+                      <p>Release Force</p>
                     </div>
-                    <div
-                      className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceFalse}
-                    >
-                      <p>Force False</p>
-                    </div>
-                  </>
+                  ) : (
+                    <>
+                      <div
+                        className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        onClick={handleForceTrue}
+                      >
+                        <p>Force True</p>
+                      </div>
+                      <div
+                        className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        onClick={handleForceFalse}
+                      >
+                        <p>Force False</p>
+                      </div>
+                    </>
+                  )
                 ) : (
                   <div
                     className='flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'

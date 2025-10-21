@@ -300,4 +300,61 @@ export class ModbusRtuClient {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
+
+  async setVariable(
+    variableIndex: number,
+    force: boolean,
+    value?: number,
+  ): Promise<{
+    success: boolean
+    error?: string
+  }> {
+    try {
+      const functionCode = ModbusFunctionCode.DEBUG_SET
+
+      let data: Buffer
+      if (!force) {
+        data = Buffer.alloc(4)
+        data.writeUInt16BE(variableIndex, 0)
+        data.writeUInt8(0, 2)
+        data.writeUInt16BE(1, 3)
+      } else {
+        data = Buffer.alloc(6)
+        data.writeUInt16BE(variableIndex, 0)
+        data.writeUInt8(1, 2)
+        data.writeUInt16BE(1, 3)
+        data.writeUInt8(value ?? 0, 5)
+      }
+
+      const request = this.assembleRequest(functionCode, data)
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const functionCodeResponse = response.readUInt8(7)
+      const statusCode = response.readUInt8(8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_SET as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+
+      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
+        return { success: false, error: 'ERROR_OUT_OF_BOUNDS' }
+      }
+
+      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
+        return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
+      }
+
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
 }

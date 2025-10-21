@@ -268,6 +268,13 @@ const rendererProcessBridge = {
     needsReconnect?: boolean
   }> => ipcRenderer.invoke('debugger:get-variables-list', variableIndexes),
 
+  debuggerSetVariable: (
+    variableIndex: number,
+    force: boolean,
+    value?: number,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('debugger:set-variable', variableIndex, force, value),
+
   debuggerConnect: (
     connectionType: 'tcp' | 'rtu' | 'websocket',
     connectionParams: {

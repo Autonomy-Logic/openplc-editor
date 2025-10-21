@@ -25,6 +25,7 @@ const workspaceStateSchema = z.object({
     debuggerTargetIp: z.string().nullable(),
     debugVariableIndexes: z.custom<Map<string, number>>((val) => val instanceof Map),
     debugVariableValues: z.custom<Map<string, string>>((val) => val instanceof Map),
+    debugForcedVariables: z.custom<Map<string, boolean>>((val) => val instanceof Map),
     close: z.object({
       window: z.boolean(),
       app: z.boolean(),
@@ -70,6 +71,7 @@ const workspaceActionsSchema = z.object({
   setDebuggerTargetIp: z.function().args(z.string().nullable()).returns(z.void()),
   setDebugVariableIndexes: z.function().args(z.map(z.string(), z.number())).returns(z.void()),
   setDebugVariableValues: z.function().args(z.map(z.string(), z.string())).returns(z.void()),
+  setDebugForcedVariables: z.function().args(z.map(z.string(), z.boolean())).returns(z.void()),
   toggleDiscardChanges: z.function().returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>

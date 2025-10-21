@@ -374,6 +374,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
     this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
     this.ipcMain.handle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
+    this.ipcMain.handle('debugger:set-variable', this.handleDebuggerSetVariable)
     this.ipcMain.handle('debugger:connect', this.handleDebuggerConnect)
     this.ipcMain.handle('debugger:disconnect', this.handleDebuggerDisconnect)
 
@@ -959,6 +960,37 @@ class MainProcessBridge implements MainIpcModule {
     this.debuggerJwtToken = null
     this.debuggerReconnecting = false
     return Promise.resolve({ success: true })
+  }
+
+  handleDebuggerSetVariable = async (
+    _event: IpcMainInvokeEvent,
+    variableIndex: number,
+    force: boolean,
+    value?: number,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (this.debuggerConnectionType === 'websocket') {
+      if (!this.debuggerWebSocketClient) {
+        return { success: false, error: 'Not connected to debugger' }
+      }
+
+      try {
+        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, value)
+        return result
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+
+    if (!this.debuggerModbusClient) {
+      return { success: false, error: 'Not connected to debugger' }
+    }
+
+    try {
+      const result = await this.debuggerModbusClient.setVariable(variableIndex, force, value)
+      return result
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   }
 
   // ===================== EVENT HANDLERS =====================
