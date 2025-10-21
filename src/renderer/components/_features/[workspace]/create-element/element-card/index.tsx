@@ -34,6 +34,9 @@ type CreateDataTypeFormProps = {
   /** TODO: Need to be implemented - Sequential Functional Chart and Functional Block Diagram */
 }
 
+const getBlockedLanguageStyle = (isBlocked: boolean) =>
+  isBlocked ? 'hover:bg-white dark:hover:bg-neutral-950 cursor-not-allowed pointer-events-none opacity-30' : ''
+
 const BlockedLanguagesStyles = {
   'Sequential Functional Chart':
     'hover:bg-white dark:hover:bg-neutral-950 cursor-not-allowed pointer-events-none opacity-30',
@@ -71,7 +74,10 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     pouActions: { create },
     datatypeActions: { create: createDatatype },
   } = useOpenPLCStore()
+  const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
   const [isOpen, setIsOpen] = useState(false)
+
+  const isArduinoTarget = deviceBoard !== 'OpenPLC Runtime v3' && deviceBoard !== 'OpenPLC Runtime v4'
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
     try {
@@ -352,11 +358,16 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   if (target === 'function-block') return true
                                   return lang.value !== 'Python' && lang.value !== 'C/C++'
                                 }).map((lang) => {
+                                  const isPythonBlockedForArduino = lang.value === 'Python' && isArduinoTarget
+                                  const isDisabled = !!BlockedLanguagesStyles[lang.value] || isPythonBlockedForArduino
+
                                   return (
                                     <SelectItem
                                       key={lang.value}
+                                      disabled={isDisabled}
                                       className={cn(
-                                        `${BlockedLanguagesStyles[lang.value]}`,
+                                        BlockedLanguagesStyles[lang.value],
+                                        getBlockedLanguageStyle(isPythonBlockedForArduino),
                                         'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900',
                                       )}
                                       value={ConvertToLangShortenedFormat(lang.value)}
