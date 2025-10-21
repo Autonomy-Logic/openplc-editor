@@ -105,7 +105,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
       meta: z.object({
         name: z.string(),
         path: z.string(),
-        language: z.enum(['il', 'st']),
+        language: z.enum(['il', 'st', 'python', 'cpp']),
         pouType: z.enum(['program', 'function', 'function-block']),
       }),
       variable: editorVariablesSchema,
@@ -253,6 +253,7 @@ const _editorActionsSchema = z.object({
     )
     .returns(z.void()),
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),
+  updateEditorName: z.function().args(z.string(), z.string()).returns(z.void()),
   setMonacoFocused: z.function().args(z.boolean()).returns(z.void()),
 })
 

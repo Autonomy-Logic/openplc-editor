@@ -25,25 +25,25 @@ void hardwareInit()
 {
     for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
     {
-		uint8_t pin = pinMask_DIN[i];
+        uint8_t pin = pinMask_DIN[i];
         pinMode(pin, INPUT);
     }
-    
+
     for (int i = 0; i < NUM_ANALOG_INPUT; i++)
     {
-		uint8_t pin = pinMask_AIN[i];
+        uint8_t pin = pinMask_AIN[i];
         pinMode(pin, INPUT);
     }
-    
+
     for (int i = 0; i < NUM_DISCRETE_OUTPUT; i++)
     {
-		uint8_t pin = pinMask_DOUT[i];
+        uint8_t pin = pinMask_DOUT[i];
         pinMode(pin, OUTPUT);
     }
 
     for (int i = 0; i < NUM_ANALOG_OUTPUT; i++)
     {
-		uint8_t pin = pinMask_AOUT[i];
+        uint8_t pin = pinMask_AOUT[i];
         pinMode(pin, OUTPUT);
     }
 }
@@ -53,10 +53,10 @@ void updateInputBuffers()
     for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
     {
         uint8_t pin = pinMask_DIN[i];
-        if (bool_input[i/8][i%8] != NULL) 
+        if (bool_input[i/8][i%8] != NULL)
             *bool_input[i/8][i%8] = digitalRead(pin);
     }
-    
+
     for (int i = 0; i < NUM_ANALOG_INPUT; i++)
     {
         uint8_t pin = pinMask_AIN[i];
@@ -70,13 +70,13 @@ void updateOutputBuffers()
     for (int i = 0; i < NUM_DISCRETE_OUTPUT; i++)
     {
         uint8_t pin = pinMask_DOUT[i];
-        if (bool_output[i/8][i%8] != NULL) 
+        if (bool_output[i/8][i%8] != NULL)
             digitalWrite(pin, *bool_output[i/8][i%8]);
     }
     for (int i = 0; i < NUM_ANALOG_OUTPUT; i++)
     {
         uint8_t pin = pinMask_AOUT[i];
-        if (int_output[i] != NULL) 
+        if (int_output[i] != NULL)
             analogWrite(pin, (*int_output[i] / 256));
     }
 }

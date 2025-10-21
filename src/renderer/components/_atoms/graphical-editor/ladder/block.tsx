@@ -7,9 +7,9 @@ import { checkVariableNameUnit } from '@root/renderer/store/slices/project/valid
 import { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { cn, generateNumericUUID } from '@root/utils'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { FocusEvent, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
@@ -280,7 +280,7 @@ export const BlockNodeElement = <T extends object>({
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
      */
     const newBlockNode = buildBlockNode({
-      id: `BLOCK_${uuidv4()}`,
+      id: newGraphicalEditorNodeID('BLOCK'),
       posX: node.position.x,
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
@@ -595,7 +595,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
         const creationResult = createVariable({
           data: {
-            id: uuidv4(),
+            id: crypto.randomUUID(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: blockType },
             class: 'local',
@@ -693,7 +693,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     const updatedNewNode = buildBlockNode({
-      id: `BLOCK_${uuidv4()}`,
+      id: newGraphicalEditorNodeID('BLOCK'),
       posX: node.position.x,
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
@@ -891,7 +891,7 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  let variantVariables = (variant as BlockVariant)?.variables ?? []
+  let variantVariables = [...((variant as BlockVariant)?.variables ?? [])]
   const outIndex = variantVariables.findIndex((v) => v.name === 'OUT')
   if (outIndex > 0) {
     const [outVar] = variantVariables.splice(outIndex, 1)

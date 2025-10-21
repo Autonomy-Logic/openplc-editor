@@ -3,6 +3,7 @@ import ZapIcon from '@root/renderer/assets/icons/interface/Zap'
 type Variable = {
   name: string
   type: string
+  value?: string
 }
 
 type VariablePanelProps = {
@@ -27,32 +28,22 @@ const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelPro
         <ZapIcon className='h-4 w-4' />
         <p>Variables</p>
       </div>
-      <div className='flex h-auto max-h-[60%] min-h-[50%] flex-col gap-2 overflow-auto whitespace-nowrap'>
+      <div className='flex h-full flex-col gap-2 overflow-auto whitespace-nowrap'>
         {variables.map((variable) => (
-          <div key={variable.name} className='flex h-4 w-full items-center justify-between gap-2'>
-            <div className='flex items-center gap-2'>
+          <div key={variable.name} className='grid h-auto w-full grid-cols-[1fr_auto_auto] items-center gap-2'>
+            <div className='flex min-w-0 items-center gap-2'>
               <ViewIcon
                 type='button'
-                className='cursor-pointer'
+                className='flex-shrink-0 cursor-pointer'
                 stroke={graphList?.includes(variable.name) ? '' : '#B4D0FE'}
                 onClick={() => toggleGraphVisibility(variable.name)}
               />
-              <p className='text-neutral-1000 dark:text-white '>{variable.name}</p>
+              <p className='truncate text-neutral-1000 dark:text-white'>{variable.name}</p>
             </div>
             <p className='uppercase text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
+            <p className='text-neutral-1000 dark:text-white'>{variable.value || '0'}</p>
           </div>
         ))}
-      </div>
-      <hr className='w-full stroke-neutral-200 stroke-[1.5px]' />
-      <div className='flex h-auto flex-col gap-2 overflow-auto whitespace-nowrap pb-2'>
-        <div className='flex justify-between'>
-          <p className='text-cp-sm font-medium text-neutral-1000 dark:text-white'>TON0</p>
-          <p className='text-cp-sm font-medium text-neutral-400 dark:text-neutral-700'>TON</p>
-        </div>
-        <div className='flex justify-between'>
-          <p className='text-cp-sm font-medium text-neutral-1000 dark:text-white'>TOF0</p>
-          <p className='text-cp-sm font-medium text-neutral-400 dark:text-neutral-700'>TOF</p>
-        </div>
       </div>
     </div>
   )

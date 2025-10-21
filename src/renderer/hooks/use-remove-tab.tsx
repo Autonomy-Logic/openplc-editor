@@ -6,14 +6,13 @@ import { useState } from 'react'
 const useHandleRemoveTab = () => {
   const {
     tabs,
-    editorActions: { setEditor, getEditorFromEditors, removeModel },
+    editorActions: { setEditor, getEditorFromEditors },
     tabsActions: { sortTabs },
   } = useOpenPLCStore()
   const [selectedTab, setSelectedTab] = useState('')
 
   const handleRemoveTab = (tabToRemove: string) => {
     const updatedTabs = tabs.filter((tab: TabsProps) => tab.name !== tabToRemove)
-    removeModel(tabToRemove)
 
     const nextTab = updatedTabs[updatedTabs.length - 1]
     if (!nextTab) {

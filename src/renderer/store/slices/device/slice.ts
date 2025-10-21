@@ -29,7 +29,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     compileOnly: true, // This flag indicates if the device is set to compile only (no deployment)
   },
   deviceUpdated: {
-    updated: false, // This flag is used to track if the device has been updated
+    updated: false,
+  },
+  runtimeConnection: {
+    jwtToken: null,
+    connectionStatus: 'disconnected',
+    plcStatus: null,
+    ipAddress: null,
   },
 
   deviceActions: {
@@ -431,8 +437,44 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setCompileOnly: (compileOnly): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Mark device as updated when setting compile only
+          deviceUpdated.updated = true
           deviceDefinitions.compileOnly = compileOnly
+        }),
+      )
+    },
+    setRuntimeIpAddress: (ipAddress): void => {
+      setState(
+        produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
+          deviceDefinitions.configuration.runtimeIpAddress = ipAddress
+          runtimeConnection.ipAddress = ipAddress
+        }),
+      )
+    },
+    setRuntimeJwtToken: (token): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.jwtToken = token
+        }),
+      )
+    },
+    setRuntimeConnectionStatus: (status): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.connectionStatus = status
+        }),
+      )
+    },
+    setPlcRuntimeStatus: (status: 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'UNKNOWN' | null): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.plcStatus = status
+        }),
+      )
+    },
+    setTemporaryDhcpIp: (ipAddress: string | undefined): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          deviceDefinitions.temporaryDhcpIp = ipAddress
         }),
       )
     },

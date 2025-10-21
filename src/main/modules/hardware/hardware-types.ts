@@ -48,7 +48,7 @@ const availableBoardsSchema = z.map(
       defaultDin: z.array(z.string()).optional(),
       defaultDout: z.array(z.string()).optional(),
     }),
-    ...BoardInfoSchema.pick({ core: true, preview: true, specs: true }),
+    ...BoardInfoSchema.pick({ compiler: true, core: true, preview: true, specs: true }),
   }),
 )
 
@@ -57,6 +57,7 @@ const availableBoardsSchema = z.map(
 type AvailableBoards = Map<
   string,
   {
+    compiler: string
     core: string
     preview: string
     specs: {

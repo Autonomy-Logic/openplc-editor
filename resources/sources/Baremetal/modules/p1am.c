@@ -11,10 +11,8 @@ uint8_t p1am_init()
     if (modules_initialized == 0)
     {
         modules_initialized = P1.init();
-        //P1.init takes a while, so we need to reset scan cycle timer
-        timer_us = micros() + scan_cycle;
     }
-    
+
     return modules_initialized;
 }
 

@@ -206,7 +206,7 @@ const Search = ({ items }: SearchProps) => {
                                 onClick={() => {
                                   handleCreateTab({
                                     name: 'resource',
-                                    path: `/data/configuration/resource`,
+                                    path: `/project.json`,
                                     elementType: { type: 'resource' },
                                   })
                                   setSearchQuery(item.searchQuery)
@@ -225,7 +225,7 @@ const Search = ({ items }: SearchProps) => {
                                 onClick={() => {
                                   handleCreateTab({
                                     name: 'resource',
-                                    path: `/data/configuration/resource`,
+                                    path: `/project.json`,
                                     elementType: { type: 'resource' },
                                   })
                                   setSearchQuery(item.searchQuery)
@@ -244,7 +244,7 @@ const Search = ({ items }: SearchProps) => {
                                 onClick={() => {
                                   handleCreateTab({
                                     name: 'resource',
-                                    path: `/data/configuration/resource`,
+                                    path: `/project.json`,
                                     elementType: { type: 'resource' },
                                   })
                                   setSearchQuery(item.searchQuery)

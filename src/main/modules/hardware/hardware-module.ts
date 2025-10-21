@@ -88,16 +88,17 @@ class HardwareModule {
 
   // ++ ============================= Getters ================================ ++
   async getAvailableSerialPorts(): Promise<string[]> {
+    let xml2stBinaryPath = join(
+      this.binaryDirectoryPath,
+      'xml2st',
+      HardwareModule.HOST_PLATFORM === 'darwin' ? 'xml2st' : '',
+    )
+    if (HardwareModule.HOST_PLATFORM === 'win32') {
+      xml2stBinaryPath += '.exe'
+    }
     const executeCommand = promisify(exec)
 
-    const listCommand =
-      HardwareModule.HOST_PLATFORM === 'win32'
-        ? 'mode'
-        : HardwareModule.HOST_PLATFORM === 'linux'
-          ? 'udevadm info -e | grep "DEVNAME=/dev/tty"'
-          : 'ls /dev/tty.*'
-
-    const { stdout, stderr } = await executeCommand(listCommand)
+    const { stdout, stderr } = await executeCommand(`"${xml2stBinaryPath}" --list-ports`)
 
     if (stderr) {
       console.error('Error while getting available serial ports:', stderr)
@@ -106,23 +107,14 @@ class HardwareModule {
 
     let normalizedOutputString = ['fallback']
 
-    if (HardwareModule.HOST_PLATFORM === 'win32') {
-      // Normalize Windows output
-      normalizedOutputString = stdout
-        .split('\n')
-        .filter((line) => line.includes('COM'))
-        .map((line) => line.split(' ')[0].trim())
-    } else {
-      // Normalize Unix output
-      normalizedOutputString = stdout
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map((port) => {
-          const portNameUnnormalized = port.match(/\/dev\/tty.*/)
-          if (portNameUnnormalized) return portNameUnnormalized.join('')
-          return port
-        })
+    if (stdout) {
+      const parsedOutput = JSON.parse(stdout) as {
+        ports: {
+          name: string
+          address: string
+        }[]
+      }
+      normalizedOutputString = parsedOutput.ports.map((port) => port.address)
     }
 
     return normalizedOutputString
@@ -148,6 +140,7 @@ class HardwareModule {
 
       availableBoards = produce(availableBoards, (draft) => {
         draft.set(board, {
+          compiler: boardData.compiler,
           core: boardData.core,
           preview: boardData.preview,
           specs: boardData.specs,

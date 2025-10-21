@@ -36,7 +36,7 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
       return
     }
 
-    if (node.id === 'left-rail') {
+    if (node.id.startsWith('left-rail')) {
       placeholders = [
         nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
@@ -50,7 +50,7 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
       return
     }
 
-    if (node.id === 'right-rail') {
+    if (node.id.startsWith('right-rail')) {
       placeholders = [
         nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,

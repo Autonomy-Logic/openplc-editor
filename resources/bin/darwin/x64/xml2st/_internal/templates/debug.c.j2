@@ -27,6 +27,8 @@
 #define SAME_ENDIANNESS      0
 #define REVERSE_ENDIANNESS   1
 
+char plc_program_md5[] = "{{ debug.md5 }}";
+
 uint8_t endianness;
 
 {% for v in debug.externs %}

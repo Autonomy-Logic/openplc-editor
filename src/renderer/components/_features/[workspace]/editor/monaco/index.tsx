@@ -4,13 +4,16 @@ import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
-import { baseTypeSchema } from '@root/types/PLC/open-plc'
+import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
+  arduinoApiCompletion,
+  cppSignatureHelp,
+  cppSnippetsCompletion,
+  cppStandardLibraryCompletion,
   keywordsCompletion,
   libraryCompletion,
   snippetsSTCompletion,
@@ -25,11 +28,12 @@ import {
   updateLocalVariablesInTokenizer,
 } from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
+import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
 
 type monacoEditorProps = {
   path: string
   name: string
-  language: 'il' | 'st'
+  language: 'il' | 'st' | 'python' | 'cpp'
 }
 
 type PouToText = {
@@ -62,7 +66,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     sensitiveCase,
     regularExpression,
     workspace: {
-      editingState,
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
@@ -74,10 +77,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         dataTypes,
       },
     },
+    deviceDefinitions: {
+      configuration: { deviceBoard },
+    },
     libraries: sliceLibraries,
     editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
@@ -93,6 +99,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
     setLocalText(typeof pou?.data.body.value === 'string' ? pou.data.body.value : '')
   }, [name, language])
+
+  const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
 
   const pou = pous.find((pou) => pou.data.name === name)
 
@@ -111,6 +119,30 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       updateLocalVariablesInTokenizer(variableNames)
     }
   }, [pou?.data.variables, language])
+
+  useEffect(() => {
+    // Handle template injection when POU changes (for already mounted editors)
+    if (language === 'python' && editorRef.current && pou) {
+      injectPythonTemplateIfNeeded(editorRef.current, pou, name)
+    }
+    if (language === 'cpp' && editorRef.current && pou) {
+      injectCppTemplateIfNeeded(editorRef.current, pou, name)
+    }
+  }, [pou])
+
+  useEffect(() => {
+    return () => {
+      setTemplatesInjected((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(name)
+        return newSet
+      })
+
+      if (language === 'python') {
+        cleanupPythonLSP()
+      }
+    }
+  }, [name, language])
 
   useEffect(() => {
     if (language === 'st' && dataTypes.length > 0) {
@@ -217,7 +249,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     (range: monaco.IRange) => {
       const allSuggestions = keywordsCompletion({
         range,
-        language,
+        language: language as 'st' | 'il',
       }).suggestions
 
       let filteredSuggestions = allSuggestions
@@ -264,7 +296,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     (range: monaco.IRange) => {
       const suggestions = snippetsSTCompletion({
         range,
-        language,
+        language: language as 'st' | 'il',
       }).suggestions
       const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
       const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
@@ -278,8 +310,15 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   /**
    * Update the auto-completion feature of the monaco editor.
+   * Note: Python uses its own LSP-based completion provider (pyright).
+   * C/C++ uses Monaco's built-in language support. A full LSP (like clangd-wasm)
+   * can be added in the future when a mature web-based solution is available.
    */
   useEffect(() => {
+    if (language === 'python' || language === 'cpp') {
+      return
+    }
+
     const disposable = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
@@ -367,17 +406,100 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => disposable.dispose()
   }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
 
+  /**
+   * C/C++ completion provider
+   * Provides autocomplete for standard library functions and code snippets
+   * Conditionally includes Arduino API functions when an Arduino board is selected
+   */
+  const parseCppVariables = (code: string, range: monaco.IRange): monaco.languages.CompletionItem[] => {
+    const variables = new Set<string>()
+
+    const declarationPattern =
+      /\b(?:const\s+)?(?:unsigned\s+|signed\s+)?(?:int|float|double|char|bool|long|short|void|auto|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t|String)\s*\*?\s+(\w+)(?:\s*=|\s*;|\s*\[|\s*\()/g
+
+    const paramPattern = /\(([^)]*)\)/g
+
+    let match
+    while ((match = declarationPattern.exec(code)) !== null) {
+      const varName = match[1]
+      if (varName && !['if', 'while', 'for', 'switch', 'return'].includes(varName)) {
+        variables.add(varName)
+      }
+    }
+
+    while ((match = paramPattern.exec(code)) !== null) {
+      const params = match[1]
+      if (params) {
+        const paramList = params.split(',')
+        paramList.forEach((param) => {
+          const paramMatch = param.trim().match(/\b(\w+)\s*$/)
+          if (paramMatch && paramMatch[1]) {
+            variables.add(paramMatch[1])
+          }
+        })
+      }
+    }
+
+    return Array.from(variables).map((varName) => ({
+      label: varName,
+      kind: monaco.languages.CompletionItemKind.Variable,
+      detail: 'Local variable',
+      insertText: varName,
+      range,
+    }))
+  }
+
+  useEffect(() => {
+    if (language !== 'cpp') {
+      return
+    }
+
+    const completionDisposable = monaco.languages.registerCompletionItemProvider('cpp', {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position)
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        }
+
+        const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
+        const snippetSuggestions = cppSnippetsCompletion({ range }).suggestions
+
+        const isArduinoTarget = deviceBoard && !deviceBoard.includes('OpenPLC Runtime')
+        const arduinoSuggestions = isArduinoTarget ? arduinoApiCompletion({ range }).suggestions : []
+
+        const code = model.getValue()
+        const variableSuggestions = parseCppVariables(code, range)
+
+        const suggestions: monaco.languages.CompletionItem[] = [
+          ...stdLibSuggestions,
+          ...snippetSuggestions,
+          ...arduinoSuggestions,
+          ...variableSuggestions,
+        ]
+
+        return { suggestions }
+      },
+    })
+
+    const signatureHelpDisposable = monaco.languages.registerSignatureHelpProvider('cpp', cppSignatureHelp)
+
+    return () => {
+      completionDisposable.dispose()
+      signatureHelpDisposable.dispose()
+    }
+  }, [language, deviceBoard])
+
   function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
-    // here is the editor instance
-    // you can store it in `useRef` for further usage
     editorRef.current = editorInstance
-
-    // here is another way to get monaco instance
-    // you can also store it in `useRef` for further usage
     monacoRef.current = monacoInstance
+
+    if (!editorInstance || !monacoInstance) return
 
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
@@ -396,19 +518,139 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    if (!editorInstance) return
-
-    if (editor.cursorPosition) {
+    if (editor.cursorPosition && language !== 'python' && language !== 'cpp') {
       editorInstance.setPosition(editor.cursorPosition)
       editorInstance.revealPositionInCenter(editor.cursorPosition)
     }
 
-    if (editor.scrollPosition) {
+    if (editor.scrollPosition && language !== 'python' && language !== 'cpp') {
       editorInstance.setScrollTop(editor.scrollPosition.top)
       editorInstance.setScrollLeft(editor.scrollPosition.left)
     }
 
+    if (language === 'python' && pou) {
+      injectPythonTemplateIfNeeded(editorInstance, pou, name)
+      void initPythonLSP(monacoInstance).then(() => setupPythonLSPForEditor(editorInstance))
+    }
+
+    if (language === 'cpp' && pou) {
+      injectCppTemplateIfNeeded(editorInstance, pou, name)
+    }
+
     editorInstance.focus()
+  }
+
+  function injectPythonTemplateIfNeeded(editor: monaco.editor.IStandaloneCodeEditor, pou: PLCPou, pouName: string) {
+    const editorModel = editor.getModel()
+    if (!editorModel) return
+
+    const stateValue = pou.data.body.value as string
+    const stateIsEmpty = !stateValue || stateValue.trim() === ''
+    const alreadyInjected = templatesInjected.has(pouName)
+
+    const shouldInjectTemplate = stateIsEmpty && !alreadyInjected
+
+    if (shouldInjectTemplate) {
+      const pythonTemplate = `# ================================================================
+# DISCLAIMER: Python Function Block Execution
+#
+# This block runs asynchronously from the main PLC runtime.
+# ---------------------------------------------------------------
+# - All variables are shared with the runtime through shared memory.
+# - The block_init() function is called once when the block starts.
+# - The block_loop() function is called periodically (~100ms).
+# - IMPORTANT: This periodic call DOES NOT follow the PLC scan cycle.
+#   It is NOT guaranteed that block_loop() will execute once per scan.
+#
+# Use this block for non-time-critical tasks. For logic that must
+# match the PLC scan cycle, use standard IEC 61131-3 function blocks.
+# ================================================================
+
+from multiprocessing import shared_memory
+import struct
+import time
+import os
+
+def block_init():
+    print('Block was initialized')
+
+def block_loop():
+    print('Block has run the loop function')
+`
+
+      editor.setValue(pythonTemplate)
+      handleWriteInPou(pythonTemplate)
+
+      // Position cursor at the end
+      const lineCount = editorModel.getLineCount()
+      const lastLineContent = editorModel.getLineContent(lineCount)
+      const position = {
+        lineNumber: lineCount,
+        column: lastLineContent.length + 1,
+      }
+      editor.setPosition(position)
+
+      setTemplatesInjected((prev) => new Set(prev).add(pouName))
+    }
+  }
+
+  function injectCppTemplateIfNeeded(editor: monaco.editor.IStandaloneCodeEditor, pou: PLCPou, pouName: string) {
+    const editorModel = editor.getModel()
+    if (!editorModel) return
+
+    const stateValue = pou.data.body.value as string
+    const stateIsEmpty = !stateValue || stateValue.trim() === ''
+    const alreadyInjected = templatesInjected.has(pouName)
+
+    const shouldInjectTemplate = stateIsEmpty && !alreadyInjected
+
+    if (shouldInjectTemplate) {
+      const cppTemplate = `/* ================================================================
+ *  C/C++ FUNCTION BLOCK
+ *
+ *  ---------------------------------------------------------------
+ *  - This function block runs **in sync** with the PLC runtime.
+ *  - The \`setup()\` function is called once when the block initializes.
+ *  - The \`loop()\` function is called at every PLC scan cycle.
+ *  - Block input and output variables declared in the variable table
+ *    can be accessed directly by name in this C/C++ code.
+ *
+ *  This block executes as part of the main PLC process and follows
+ *  the configured scan time in the Resources. Use it for real-time
+ *  control logic, fast I/O operations, or any C-based algorithms.
+ * ================================================================ */
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+// Called once when the block is initialized
+void setup()
+{
+
+}
+
+// Called at every PLC scan cycle
+void loop()
+{
+
+}
+`
+
+      editor.setValue(cppTemplate)
+      handleWriteInPou(cppTemplate)
+
+      // Position cursor at the end
+      const lineCount = editorModel.getLineCount()
+      const lastLineContent = editorModel.getLineContent(lineCount)
+      const position = {
+        lineNumber: lineCount,
+        column: lastLineContent.length + 1,
+      }
+      editor.setPosition(position)
+
+      setTemplatesInjected((prev) => new Set(prev).add(pouName))
+    }
   }
 
   function moveToMatch(
@@ -432,16 +674,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }
 
   function handleWriteInPou(value: string | undefined) {
-    if (!value) {
-      return
-    }
+    if (value === undefined) return
 
     setLocalText(value)
-
-    if (editingState !== 'unsaved') {
-      setEditingState('unsaved')
-    }
-
+    handleFileAndWorkspaceSavedState(name)
     updatePou({ name, content: { language, value } })
   }
 
@@ -536,7 +772,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const res = createVariable({
       data: {
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         name: uniqueName,
         type: {
           definition: 'derived',

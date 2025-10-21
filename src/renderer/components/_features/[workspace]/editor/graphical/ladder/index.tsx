@@ -21,6 +21,7 @@ import { ContactNode } from '@root/renderer/components/_atoms/graphical-editor/l
 import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
 import { CreateRung } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/graphical-editor/ladder/rung'
+import { ladderSelectors } from '@root/renderer/hooks'
 import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState, zodLadderFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
@@ -38,21 +39,25 @@ export default function LadderEditor() {
     editor,
     ladderFlowActions,
     searchNodePosition,
+    modals,
     project: {
       data: { pous },
     },
     projectActions: { updatePou },
-    workspaceActions: { setEditingState },
     editorActions: { saveEditorViewState },
-    modals,
     modalActions: { closeModal },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { addSnapshot },
     libraries: { user: userLibraries },
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
+
+  const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
-  const flowUpdated = flow?.updated
+  const flowUpdated = flow?.updated || false
+
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
   const nodeDivergences = getLibraryDivergences()
@@ -85,35 +90,75 @@ export default function LadderEditor() {
       },
     })
 
-    /**
-     * TODO: Verify if this is method is declared
-     */
     ladderFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
-    setEditingState('unsaved')
+
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }, [flowUpdated])
+
+  /**
+   * Editor state management for scroll position
+   */
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !scrollableRef.current) return
+        const scrollTop = scrollableRef.current.scrollTop
+        saveEditorViewState({
+          prevEditorName,
+          scrollPosition: { top: scrollTop, left: 0 },
+        })
+      },
+    )
+    return () => unsub()
+  }, [])
+  useEffect(() => {
+    const scrollable = scrollableRef.current
+    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
+
+    if (scrollable && scrollData) {
+      scrollable.scrollTop = scrollData.top
+      requestAnimationFrame(() => {
+        scrollable.scrollTop = scrollData.top
+      })
+    }
+  }, [scrollableRef.current, editor.meta.name])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (isDebuggerVisible) return
+
     const { active } = event
     setActiveId(active.id)
     setActiveItem(rungs.find((rung) => rung.id === active.id) || null)
   }
 
   const handleAddNewRung = () => {
+    if (isDebuggerVisible) return
+
     addSnapshot(editor.meta.name)
 
     const defaultViewport: [number, number] = [300, 100]
 
+    const rungIdToBeAdded = `rung_${editor.meta.name}_${uuidv4()}`
+
     ladderFlowActions.startLadderRung({
       editorName: editor.meta.name,
-      rungId: `rung_${editor.meta.name}_${uuidv4()}`,
+      rungId: rungIdToBeAdded,
       defaultBounds: defaultViewport,
       reactFlowViewport: defaultViewport,
     })
+    updateModelLadder({ openRung: { rungId: rungIdToBeAdded, open: true } })
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (isDebuggerVisible) {
+      setActiveId(null)
+      setActiveItem(null)
+      return
+    }
+
     const { active, over } = event
 
     setActiveId(null)
@@ -276,6 +321,7 @@ export default function LadderEditor() {
                     'opacity-35': activeId === rung.id,
                   })}
                   nodeDivergences={nodeDivergences}
+                  isDebuggerActive={isDebuggerVisible}
                 />
               ))}
             </SortableContext>

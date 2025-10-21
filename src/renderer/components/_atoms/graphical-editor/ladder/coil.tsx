@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import {
   DefaultCoil,
   FallingEdgeCoil,
@@ -37,73 +38,79 @@ export const DEFAULT_COIL_CONNECTOR_Y = DEFAULT_COIL_BLOCK_HEIGHT / 2
 
 type CoilType = {
   [key in CoilNode['data']['variant']]: {
-    svg: (wrongVariable: boolean) => ReactNode
+    svg: (wrongVariable: boolean, debuggerColor?: string) => ReactNode
   }
 }
 export const DEFAULT_COIL_TYPES: CoilType = {
   default: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <DefaultCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   negated: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <NegatedCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   risingEdge: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <RisingEdgeCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   fallingEdge: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <FallingEdgeCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   set: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <SetCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
   reset: {
-    svg: (wrongVariable) => (
+    svg: (wrongVariable, debuggerColor) => (
       <ResetCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
           'fill-red-500 dark:fill-red-500': wrongVariable,
         })}
+        parenthesesColor={debuggerColor}
       />
     ),
   },
@@ -119,11 +126,31 @@ export const Coil = (block: CoilProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
+    workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
   const [coilVariableValue, setCoilVariableValue] = useState<string>(data.variable.name)
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
+
+  const getDebuggerFillColor = (): string | undefined => {
+    if (!isDebuggerVisible || !data.variable.name || wrongVariable) {
+      return undefined
+    }
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const value = debugVariableValues.get(compositeKey)
+
+    if (value === undefined) {
+      return undefined
+    }
+
+    const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+    const displayState = data.variant === 'negated' ? !isTrue : isTrue
+    return displayState ? '#00FF00' : '#0464FB'
+  }
+
+  const debuggerFillColor = getDebuggerFillColor()
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<
@@ -142,6 +169,8 @@ export const Coil = (block: CoilProps) => {
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState<boolean>(false)
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
@@ -284,6 +313,26 @@ export const Coil = (block: CoilProps) => {
     }
   }
 
+  const handleForceTrue = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsContextMenuOpen(false)
+  }
+
+  const handleForceFalse = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsContextMenuOpen(false)
+  }
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isDebuggerVisible) return
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenuPosition({ x: e.clientX, y: e.clientY })
+    setIsContextMenuOpen(true)
+  }
+
   return (
     <div
       className={cn({
@@ -298,8 +347,9 @@ export const Coil = (block: CoilProps) => {
           },
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
+        onClick={isDebuggerVisible ? handleClick : undefined}
       >
-        {coil.svg(wrongVariable)}
+        {coil.svg(wrongVariable, debuggerFillColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
           <HighlightedTextArea
             textAreaValue={coilVariableValue}
@@ -312,6 +362,8 @@ export const Coil = (block: CoilProps) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
+            disabled={isDebuggerVisible}
+            readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
@@ -371,6 +423,42 @@ export const Coil = (block: CoilProps) => {
             </div>
           )}
         </div>
+
+        {isDebuggerVisible && contextMenuPosition && (
+          <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+            <Popover.Portal>
+              <Popover.Content
+                align='start'
+                side='bottom'
+                sideOffset={5}
+                className={cn(
+                  'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                  'focus:outline-none focus-visible:outline-none',
+                  'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+                )}
+                style={{
+                  position: 'fixed',
+                  left: `${contextMenuPosition.x}px`,
+                  top: `${contextMenuPosition.y}px`,
+                }}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+              >
+                <div
+                  className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  onClick={handleForceTrue}
+                >
+                  <p>Force True</p>
+                </div>
+                <div
+                  className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  onClick={handleForceFalse}
+                >
+                  <p>Force False</p>
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

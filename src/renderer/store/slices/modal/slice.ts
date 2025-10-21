@@ -34,11 +34,31 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
+    'save-changes-file': {
+      open: false,
+      data: null,
+    },
     'confirm-delete-element': {
       open: false,
       data: null,
     },
     'quit-application': {
+      open: false,
+      data: null,
+    },
+    'runtime-create-user': {
+      open: false,
+      data: null,
+    },
+    'runtime-login': {
+      open: false,
+      data: null,
+    },
+    'debugger-message': {
+      open: false,
+      data: null,
+    },
+    'debugger-ip-input': {
       open: false,
       data: null,
     },

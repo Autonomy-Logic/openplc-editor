@@ -12,6 +12,7 @@ export const customNodeTypes = {
   continuation: connectionNode.ConnectionElement,
   comment: commentNode.CommentElement,
 }
+export const CustomFBDNodeKeys = Object.keys(customNodeTypes)
 export type CustomFbdNodeTypes = keyof typeof customNodeTypes
 
 export const nodesBuilder = {

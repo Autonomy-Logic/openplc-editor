@@ -18,6 +18,7 @@ const StructureDataType = () => {
     editorActions: { updateModelStructure },
     projectActions: { updateDatatype, rearrangeStructureVariables },
     snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
@@ -101,19 +102,19 @@ const StructureDataType = () => {
           {
             name: getNextVariableName(baseName),
             type: { definition: 'base-type', value: 'dint' },
-            initialValue: { simpleValue: { value: '' } },
           },
         ],
       })
       updateModelStructure({
         selectedRow: structureVariables.length,
       })
+      handleFileAndWorkspaceSavedState(editor.meta.name)
+
       return
     }
 
     const newVariable = {
       name: getNextVariableName(baseName),
-      initialValue: { simpleValue: { value: '' } },
       type: structureVariable.type,
     }
 
@@ -140,6 +141,7 @@ const StructureDataType = () => {
         selectedRow: selectedRow + 1,
       })
     }
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleDeleteStructureVariable = () => {
@@ -170,6 +172,7 @@ const StructureDataType = () => {
     updateModelStructure({
       selectedRow: newSelectedRow,
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleRearrangeStructureVariables = (index: number, row?: number) => {
@@ -192,10 +195,9 @@ const StructureDataType = () => {
     >
       <div aria-label='Data type content actions container' className='flex h-8 w-full'>
         <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
-          <span className='select-none'>Structure</span>
           <div
             aria-label='Variables editor table actions container'
-            className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+            className='flex h-full w-28 flex-grow items-center justify-end *:rounded-md *:p-1'
           >
             <TableActions
               actions={[
@@ -231,8 +233,6 @@ const StructureDataType = () => {
             />
           </div>
         </div>
-        <div aria-label='structure base type container' className='flex w-1/2 flex-col gap-3'></div>
-        <div aria-label='structure initial value container' className='w-1/2'></div>
       </div>
 
       <div className='h-full w-full overflow-auto pr-1' style={{ scrollbarGutter: 'stable' }}>

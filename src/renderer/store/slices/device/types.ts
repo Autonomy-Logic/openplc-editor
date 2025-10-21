@@ -18,7 +18,17 @@ const devicePinMappingSchema = z.object({
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
+const runtimeConnectionSchema = z.object({
+  jwtToken: z.string().nullable(),
+  connectionStatus: z.enum(['disconnected', 'connecting', 'connected', 'error']),
+  plcStatus: z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable(),
+  ipAddress: z.string().nullable(),
+})
+
+type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>
+
 const availableBoardInfo = z.object({
+  compiler: z.enum(['arduino-cli', 'openplc-compiler']),
   core: z.string(),
   preview: z.string(),
   specs: z.object({
@@ -59,10 +69,12 @@ const deviceStateSchema = z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
     compileOnly: z.boolean().default(true),
+    temporaryDhcpIp: z.string().optional(),
   }),
   deviceUpdated: z.object({
     updated: z.boolean(),
   }),
+  runtimeConnection: runtimeConnectionSchema,
 })
 
 type DeviceState = z.infer<typeof deviceStateSchema>
@@ -132,6 +144,17 @@ const deviceActionSchema = z.object({
     .returns(z.void()),
   setStaticHostConfiguration: z.function().args(staticHostConfigurationSchema.partial()).returns(z.void()),
   setCompileOnly: z.function().args(z.boolean()).returns(z.void()),
+  setRuntimeIpAddress: z.function().args(z.string()).returns(z.void()),
+  setRuntimeJwtToken: z.function().args(z.string().nullable()).returns(z.void()),
+  setRuntimeConnectionStatus: z
+    .function()
+    .args(z.enum(['disconnected', 'connecting', 'connected', 'error']))
+    .returns(z.void()),
+  setPlcRuntimeStatus: z
+    .function()
+    .args(z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable())
+    .returns(z.void()),
+  setTemporaryDhcpIp: z.function().args(z.string().optional()).returns(z.void()),
 })
 
 type DeviceActions = z.infer<typeof deviceActionSchema>
@@ -140,7 +163,15 @@ type DeviceSlice = DeviceState & {
   deviceActions: DeviceActions
 }
 
-export type { AvailableBoardInfo, DeviceActions, DeviceAvailableOptions, DevicePinMapping, DeviceSlice, DeviceState }
+export type {
+  AvailableBoardInfo,
+  DeviceActions,
+  DeviceAvailableOptions,
+  DevicePinMapping,
+  DeviceSlice,
+  DeviceState,
+  RuntimeConnection,
+}
 export {
   baudRateOptions,
   deviceActionSchema,
@@ -150,4 +181,5 @@ export {
   devicePinSchema,
   deviceStateSchema,
   interfaceOptions,
+  runtimeConnectionSchema,
 }

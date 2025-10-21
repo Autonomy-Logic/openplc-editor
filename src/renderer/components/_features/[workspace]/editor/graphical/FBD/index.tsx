@@ -14,11 +14,12 @@ export default function FbdEditor() {
     },
     libraries: { user: userLibraries },
     fbdFlowActions,
-    workspaceActions: { setEditingState },
     projectActions: { updatePou },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
+
   const flow = fbdFlows.find((flow) => flow.name === editor.meta.name)
-  const flowUpdated = flow?.updated
+  const flowUpdated = flow?.updated || false
   const nodeDivergences = getLibraryDivergences()
 
   /**
@@ -38,11 +39,8 @@ export default function FbdEditor() {
       },
     })
 
-    /**
-     * TODO: Verify if this is method is declared
-     */
     fbdFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
-    setEditingState('unsaved')
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }, [flowUpdated])
 
   function getLibraryDivergences() {

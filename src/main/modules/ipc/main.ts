@@ -1,19 +1,27 @@
 import { getProjectPath } from '@root/main/utils'
+import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
+import type { IncomingMessage } from 'http'
+import https from 'https'
 import { join } from 'path'
 import { platform } from 'process'
 
 import { ProjectState } from '../../../renderer/store/slices'
-import { PLCProject } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
+import { ModbusTcpClient } from '../modbus/modbus-client'
+import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
+import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
 
 type IDataToWrite = {
   projectPath: string
   content: {
+    pous: PLCPou[]
     projectData: PLCProject
     deviceConfiguration: DeviceConfiguration
     devicePinMapping: DevicePin[]
@@ -26,8 +34,18 @@ class MainProcessBridge implements MainIpcModule {
   projectService
   store
   menuBuilder
+  pouService
   compilerModule
   hardwareModule
+  private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
+  private debuggerWebSocketClient: WebSocketDebugClient | null = null
+  private debuggerTargetIp: string | null = null
+  private debuggerReconnecting: boolean = false
+  private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | null = null
+  private debuggerRtuPort: string | null = null
+  private debuggerRtuBaudRate: number | null = null
+  private debuggerRtuSlaveId: number | null = null
+  private debuggerJwtToken: string | null = null
 
   constructor({
     ipcMain,
@@ -35,6 +53,7 @@ class MainProcessBridge implements MainIpcModule {
     projectService,
     store,
     menuBuilder,
+    pouService,
     compilerModule,
     hardwareModule,
   }: MainIpcModuleConstructor) {
@@ -43,8 +62,252 @@ class MainProcessBridge implements MainIpcModule {
     this.projectService = projectService
     this.store = store
     this.menuBuilder = menuBuilder
+    this.pouService = pouService
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
+  }
+
+  // ===================== RUNTIME API HANDLERS =====================
+  private readonly RUNTIME_API_PORT = 8443
+  private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
+
+  handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
+    try {
+      const url = `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get-users-info`
+
+      return new Promise((resolve) => {
+        const req = https.get(
+          url,
+          {
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 404) {
+                resolve({ hasUsers: false })
+              } else if (res.statusCode === 200) {
+                resolve({ hasUsers: true })
+              } else {
+                resolve({ hasUsers: false, error: data || `Unexpected status: ${res.statusCode}` })
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ hasUsers: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ hasUsers: false, error: error.message })
+        })
+      })
+    } catch (error) {
+      return { hasUsers: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeCreateUser = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    username: string,
+    password: string,
+  ) => {
+    try {
+      const postData = JSON.stringify({ username, password, role: 'user' })
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: '/api/create-user',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 201) {
+                resolve({ success: true })
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
+    try {
+      const postData = JSON.stringify({ username, password })
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: '/api/login',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const response = JSON.parse(data) as { access_token: string }
+                  resolve({ success: true, accessToken: response.access_token })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                resolve({ success: false, error: data })
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  makeRuntimeApiRequest<T = void>(
+    ipAddress: string,
+    jwtToken: string,
+    endpoint: string,
+    responseParser?: (data: string) => T,
+  ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
+    return new Promise((resolve) => {
+      const req = https.get(
+        `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`,
+        {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+          ...getRuntimeHttpsOptions(),
+        },
+        (res: IncomingMessage) => {
+          let data = ''
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString()
+          })
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              if (responseParser) {
+                try {
+                  const parsedData = responseParser(data)
+                  resolve({ success: true, data: parsedData })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                resolve({ success: true })
+              }
+            } else {
+              resolve({ success: false, error: data })
+            }
+          })
+        },
+      )
+      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+        req.destroy()
+        resolve({ success: false, error: 'Connection timeout' })
+      })
+      req.on('error', (error: Error) => {
+        resolve({ success: false, error: error.message })
+      })
+    })
+  }
+
+  handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      const result = await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/status', (data: string) => {
+        const response = JSON.parse(data) as { status: string }
+        return response.status
+      })
+
+      if (result.success) {
+        return { success: true, status: result.data }
+      } else {
+        return { success: false, error: result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/start-plc')
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/stop-plc')
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleRuntimeGetCompilationStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      const result = await this.makeRuntimeApiRequest<{ status: string; logs: string[]; exit_code: number | null }>(
+        ipAddress,
+        jwtToken,
+        '/api/compilation-status',
+        (data: string) => {
+          const response = JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
+          return response
+        },
+      )
+      return result
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -54,7 +317,13 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:open', this.handleProjectOpen)
     this.ipcMain.handle('project:path-picker', this.handleProjectPathPicker)
     this.ipcMain.handle('project:save', this.handleProjectSave)
+    this.ipcMain.handle('project:save-file', this.handleFileSave)
     this.ipcMain.handle('project:open-by-path', this.handleProjectOpenByPath)
+
+    // Pou-related handlers
+    this.ipcMain.handle('pou:create', this.handleCreatePouFile)
+    this.ipcMain.handle('pou:delete', this.handleDeletePouFile)
+    this.ipcMain.handle('pou:rename', this.handleRenamePouFile)
 
     // App and system handlers
     this.ipcMain.handle('open-external-link', this.handleOpenExternalLink)
@@ -71,6 +340,7 @@ class MainProcessBridge implements MainIpcModule {
     // TODO: This handle should be refactored to use MessagePortMain for better performance.
     this.ipcMain.handle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
+    this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
 
     // +++ !! Deprecated: These handlers are outdated and should be removed. +++
 
@@ -98,6 +368,23 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== UTILITIES =====================
     this.ipcMain.handle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
+    this.ipcMain.handle('util:read-debug-file', this.handleReadDebugFile)
+
+    // ===================== DEBUGGER =====================
+    this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
+    this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
+    this.ipcMain.handle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
+    this.ipcMain.handle('debugger:connect', this.handleDebuggerConnect)
+    this.ipcMain.handle('debugger:disconnect', this.handleDebuggerDisconnect)
+
+    // ===================== RUNTIME API =====================
+    this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
+    this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
+    this.ipcMain.handle('runtime:login', this.handleRuntimeLogin)
+    this.ipcMain.handle('runtime:get-status', this.handleRuntimeGetStatus)
+    this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
+    this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
+    this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -117,11 +404,13 @@ class MainProcessBridge implements MainIpcModule {
         const res = await getProjectPath(windowManager)
         return res
       }
-      console.log('Window object not defined')
+      console.error('Window object not defined')
     } catch (error) {
       console.error('Error getting project path:', error)
     }
   }
+  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) =>
+    await this.projectService.saveFile(filePath, content)
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
@@ -139,9 +428,65 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  // Pou-related handlers
+  handleCreatePouFile = async (_event: IpcMainInvokeEvent, props: CreatePouFileProps) => {
+    try {
+      const response = await this.pouService.createPouFile(props)
+      return response
+    } catch (error) {
+      console.error('Error creating POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error creating POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
+    }
+  }
+  handleDeletePouFile = async (_event: IpcMainInvokeEvent, filePath: string) => {
+    try {
+      const response = await this.pouService.deletePouFile(filePath)
+      return response
+    } catch (error) {
+      console.error('Error deleting POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error deleting POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
+    }
+  }
+  handleRenamePouFile = async (
+    _event: IpcMainInvokeEvent,
+    data: {
+      filePath: string
+      newFileName: string
+      fileContent?: unknown
+    },
+  ) => {
+    try {
+      const response = await this.pouService.renamePouFile(data)
+      return response
+    } catch (error) {
+      console.error('Error renaming POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error renaming POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
+    }
+  }
+
   // App and system handlers
   handleOpenExternalLink = async (_event: IpcMainInvokeEvent, url: string) => {
-    console.log('Opening external link:', url)
     try {
       await shell.openExternal(url)
       return { success: true }
@@ -188,7 +533,12 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileProgram(args, mainProcessPort)
+    void this.compilerModule.compileProgram(args, mainProcessPort, this)
+  }
+
+  handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
+    const mainProcessPort = event.ports[0]
+    void this.compilerModule.compileForDebugger(args, mainProcessPort)
   }
 
   // TODO: These handlers are outdated and should be removed.
@@ -244,6 +594,371 @@ class MainProcessBridge implements MainIpcModule {
     this.hardwareModule.getBoardImagePreview(image)
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
+  }
+  handleReadDebugFile = async (_event: IpcMainInvokeEvent, projectPath: string, boardTarget: string) => {
+    try {
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      // projectPath is already the project directory, not a file path
+      // Guard against traversal/absolute input in boardTarget
+      if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
+        return { success: false, error: 'Invalid board target' }
+      }
+      const debugFilePath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug.c')
+
+      const content = await fs.readFile(debugFilePath, 'utf-8')
+      return { success: true, content }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read debug.c file',
+      }
+    }
+  }
+
+  handleDebuggerVerifyMd5 = async (
+    _event: IpcMainInvokeEvent,
+    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+    expectedMd5: string,
+  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
+    let client: ModbusTcpClient | ModbusRtuClient | null = null
+    let wsClient: WebSocketDebugClient | null = null
+    try {
+      if (connectionType === 'websocket') {
+        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
+          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
+        }
+        if (!this.debuggerWebSocketClient) {
+          wsClient = new WebSocketDebugClient({
+            host: connectionParams.ipAddress,
+            port: 8443,
+            token: connectionParams.jwtToken,
+            rejectUnauthorized: false,
+          })
+          await wsClient.connect()
+        } else {
+          wsClient = this.debuggerWebSocketClient
+        }
+
+        const targetMd5 = await wsClient.getMd5Hash()
+
+        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+
+        if (!this.debuggerWebSocketClient) {
+          this.debuggerWebSocketClient = wsClient
+          this.debuggerTargetIp = connectionParams.ipAddress
+          this.debuggerJwtToken = connectionParams.jwtToken
+          this.debuggerConnectionType = 'websocket'
+        }
+
+        return { success: true, match, targetMd5 }
+      } else if (connectionType === 'tcp') {
+        if (!connectionParams.ipAddress) {
+          return { success: false, error: 'IP address is required for TCP connection' }
+        }
+        client = new ModbusTcpClient({
+          host: connectionParams.ipAddress,
+          port: 502,
+          timeout: 5000,
+        })
+      } else {
+        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
+          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
+        }
+        client = new ModbusRtuClient({
+          port: connectionParams.port,
+          baudRate: connectionParams.baudRate,
+          slaveId: connectionParams.slaveId,
+          timeout: 5000,
+        })
+      }
+
+      await client.connect()
+      const targetMd5 = await client.getMd5Hash()
+
+      client.disconnect()
+
+      const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+      return { success: true, match, targetMd5 }
+    } catch (error) {
+      client?.disconnect()
+      wsClient?.disconnect()
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
+      }
+    }
+  }
+
+  handleReadProgramStMd5 = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; md5?: string; error?: string }> => {
+    try {
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      // projectPath is already the project directory, not a file path
+      // Guard against traversal/absolute input in boardTarget
+      if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
+        return { success: false, error: 'Invalid board target' }
+      }
+      const programStPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'program.st')
+
+      const content = await fs.readFile(programStPath, 'utf-8')
+
+      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
+      const match = content.match(md5Pattern)
+
+      if (!match || !match[1]) {
+        return {
+          success: false,
+          error: 'Could not find MD5 hash in program.st file',
+        }
+      }
+
+      return { success: true, md5: match[1] }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read program.st file',
+      }
+    }
+  }
+
+  handleDebuggerGetVariablesList = async (
+    _event: IpcMainInvokeEvent,
+    variableIndexes: number[],
+  ): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => {
+    if (this.debuggerConnectionType === 'websocket') {
+      if (!this.debuggerWebSocketClient) {
+        if (this.debuggerReconnecting) {
+          return { success: false, error: 'Reconnection in progress', needsReconnect: true }
+        }
+
+        this.debuggerReconnecting = true
+        try {
+          if (!this.debuggerTargetIp || !this.debuggerJwtToken) {
+            this.debuggerReconnecting = false
+            return { success: false, error: 'No target IP or JWT token stored', needsReconnect: true }
+          }
+          this.debuggerWebSocketClient = new WebSocketDebugClient({
+            host: this.debuggerTargetIp,
+            port: 8443,
+            token: this.debuggerJwtToken,
+            rejectUnauthorized: false,
+          })
+          await this.debuggerWebSocketClient.connect()
+          this.debuggerReconnecting = false
+        } catch (error) {
+          this.debuggerWebSocketClient = null
+          this.debuggerReconnecting = false
+          return { success: false, error: `Failed to reconnect: ${String(error)}`, needsReconnect: true }
+        }
+      }
+
+      try {
+        const result = await this.debuggerWebSocketClient.getVariablesList(variableIndexes)
+
+        if (result.success && result.data) {
+          return {
+            success: true,
+            tick: result.tick,
+            lastIndex: result.lastIndex,
+            data: Array.from(result.data),
+          }
+        }
+
+        return { success: false, error: result.error }
+      } catch (error) {
+        if (this.debuggerWebSocketClient) {
+          this.debuggerWebSocketClient.disconnect()
+          this.debuggerWebSocketClient = null
+        }
+        return { success: false, error: String(error), needsReconnect: true }
+      }
+    }
+
+    if (!this.debuggerModbusClient) {
+      if (this.debuggerReconnecting) {
+        return { success: false, error: 'Reconnection in progress', needsReconnect: true }
+      }
+
+      this.debuggerReconnecting = true
+      try {
+        if (this.debuggerConnectionType === 'tcp') {
+          if (!this.debuggerTargetIp) {
+            this.debuggerReconnecting = false
+            return { success: false, error: 'No target IP address stored', needsReconnect: true }
+          }
+          this.debuggerModbusClient = new ModbusTcpClient({
+            host: this.debuggerTargetIp,
+            port: 502,
+            timeout: 5000,
+          })
+        } else if (this.debuggerConnectionType === 'rtu') {
+          if (!this.debuggerRtuPort || !this.debuggerRtuBaudRate || this.debuggerRtuSlaveId === null) {
+            this.debuggerReconnecting = false
+            return { success: false, error: 'No RTU connection parameters stored', needsReconnect: true }
+          }
+          this.debuggerModbusClient = new ModbusRtuClient({
+            port: this.debuggerRtuPort,
+            baudRate: this.debuggerRtuBaudRate,
+            slaveId: this.debuggerRtuSlaveId,
+            timeout: 5000,
+          })
+        } else {
+          this.debuggerReconnecting = false
+          return { success: false, error: 'No connection type stored', needsReconnect: true }
+        }
+
+        await this.debuggerModbusClient.connect()
+        this.debuggerReconnecting = false
+      } catch (error) {
+        this.debuggerModbusClient = null
+        this.debuggerReconnecting = false
+        return { success: false, error: `Failed to reconnect: ${String(error)}`, needsReconnect: true }
+      }
+    }
+
+    try {
+      const result = await this.debuggerModbusClient.getVariablesList(variableIndexes)
+
+      if (result.success && result.data) {
+        return {
+          success: true,
+          tick: result.tick,
+          lastIndex: result.lastIndex,
+          data: Array.from(result.data),
+        }
+      }
+
+      return { success: false, error: result.error }
+    } catch (error) {
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+      }
+      return { success: false, error: String(error), needsReconnect: true }
+    }
+  }
+
+  handleDebuggerConnect = async (
+    _event: IpcMainInvokeEvent,
+    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+      }
+
+      if (connectionType === 'websocket') {
+        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
+          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
+        }
+
+        if (!this.debuggerWebSocketClient || this.debuggerConnectionType !== 'websocket') {
+          if (this.debuggerWebSocketClient) {
+            this.debuggerWebSocketClient.disconnect()
+            this.debuggerWebSocketClient = null
+          }
+
+          this.debuggerWebSocketClient = new WebSocketDebugClient({
+            host: connectionParams.ipAddress,
+            port: 8443,
+            token: connectionParams.jwtToken,
+            rejectUnauthorized: false,
+          })
+          await this.debuggerWebSocketClient.connect()
+        }
+
+        this.debuggerTargetIp = connectionParams.ipAddress
+        this.debuggerJwtToken = connectionParams.jwtToken
+      } else if (connectionType === 'tcp') {
+        if (!connectionParams.ipAddress) {
+          return { success: false, error: 'IP address is required for TCP connection' }
+        }
+        this.debuggerModbusClient = new ModbusTcpClient({
+          host: connectionParams.ipAddress,
+          port: 502,
+          timeout: 5000,
+        })
+        await this.debuggerModbusClient.connect()
+        this.debuggerTargetIp = connectionParams.ipAddress
+      } else {
+        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
+          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
+        }
+        this.debuggerModbusClient = new ModbusRtuClient({
+          port: connectionParams.port,
+          baudRate: connectionParams.baudRate,
+          slaveId: connectionParams.slaveId,
+          timeout: 5000,
+        })
+        await this.debuggerModbusClient.connect()
+        this.debuggerRtuPort = connectionParams.port
+        this.debuggerRtuBaudRate = connectionParams.baudRate
+        this.debuggerRtuSlaveId = connectionParams.slaveId
+      }
+
+      this.debuggerConnectionType = connectionType
+      this.debuggerReconnecting = false
+
+      return { success: true }
+    } catch (error) {
+      this.debuggerModbusClient = null
+      this.debuggerWebSocketClient = null
+      this.debuggerTargetIp = null
+      this.debuggerConnectionType = null
+      this.debuggerRtuPort = null
+      this.debuggerRtuBaudRate = null
+      this.debuggerRtuSlaveId = null
+      this.debuggerJwtToken = null
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleDebuggerDisconnect = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    if (this.debuggerModbusClient) {
+      this.debuggerModbusClient.disconnect()
+      this.debuggerModbusClient = null
+    }
+    if (this.debuggerWebSocketClient) {
+      this.debuggerWebSocketClient.disconnect()
+      this.debuggerWebSocketClient = null
+    }
+    this.debuggerTargetIp = null
+    this.debuggerConnectionType = null
+    this.debuggerRtuPort = null
+    this.debuggerRtuBaudRate = null
+    this.debuggerRtuSlaveId = null
+    this.debuggerJwtToken = null
+    this.debuggerReconnecting = false
+    return Promise.resolve({ success: true })
   }
 
   // ===================== EVENT HANDLERS =====================
