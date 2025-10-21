@@ -3,10 +3,11 @@ import { boardSelectors, compileOnlySelectors, pinSelectors } from '@hooks/use-s
 import { MinusIcon, PlusIcon, RefreshIcon } from '@root/renderer/assets'
 import { Checkbox, Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
+import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { cn } from '@root/utils'
+import { cn, isArduinoTarget, isOpenPLCRuntimeTarget } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -18,6 +19,9 @@ const Board = memo(function () {
   const {
     deviceDefinitions: { compileOnly },
     deviceAvailableOptions: { availableBoards },
+    project: {
+      data: { pous },
+    },
   } = useOpenPLCStore()
   const availableCommunicationPorts = boardSelectors.useAvailableCommunicationPorts()
   const deviceBoard = boardSelectors.useDeviceBoard()
@@ -34,6 +38,8 @@ const Board = memo(function () {
   const createNewPin = pinSelectors.useCreateNewPin()
   const removePin = pinSelectors.useRemovePin()
 
+  const currentBoardInfo = availableBoards.get(deviceBoard)
+
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
@@ -48,6 +54,8 @@ const Board = memo(function () {
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
   const [formattedBoardState, setFormattedBoardState] = useState('')
+  const [showPythonWarning, setShowPythonWarning] = useState(false)
+  const [pendingBoardChange, setPendingBoardChange] = useState<{ board: string; formattedBoard: string } | null>(null)
 
   const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
   const deviceSelectRef = useRef<HTMLDivElement>(null)
@@ -128,10 +136,22 @@ const Board = memo(function () {
         return
       }
 
+      const targetBoardInfo = availableBoards.get(normalizedBoard)
+      const isArduino = isArduinoTarget(targetBoardInfo)
+      const hasPythonFunctionBlocks = pous.some(
+        (pou) => pou.type === 'function-block' && pou.data.language === 'python',
+      )
+
+      if (isArduino && hasPythonFunctionBlocks) {
+        setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
+        setShowPythonWarning(true)
+        return
+      }
+
       setFormattedBoardState(board)
       setDeviceBoard(normalizedBoard)
     },
-    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal],
+    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal, pous, availableBoards],
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
@@ -290,7 +310,7 @@ const Board = memo(function () {
               </SelectContent>
             </Select>
           </div>
-          {deviceBoard === 'OpenPLC Runtime v3' || deviceBoard === 'OpenPLC Runtime v4' ? (
+          {isOpenPLCRuntimeTarget(currentBoardInfo) ? (
             <>
               <div id='runtime-ip-address-field' className='flex w-full items-center justify-start gap-1'>
                 <Label
@@ -437,6 +457,49 @@ const Board = memo(function () {
         </div>
         <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
       </div>
+
+      <Modal open={showPythonWarning} onOpenChange={setShowPythonWarning}>
+        <ModalContent className='h-fit w-[500px]'>
+          <ModalHeader>
+            <ModalTitle>Python Function Blocks Not Supported</ModalTitle>
+          </ModalHeader>
+          <div className='flex flex-col gap-4'>
+            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+              The selected target ({pendingBoardChange?.formattedBoard}) does not support Python Function Blocks.
+            </p>
+            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+              Your project contains Python Function Blocks that will cause compilation to fail on this target. To use
+              this target, you must remove all Python Function Blocks from your project.
+            </p>
+          </div>
+          <ModalFooter className='flex justify-end gap-2'>
+            <button
+              type='button'
+              onClick={() => {
+                setShowPythonWarning(false)
+                setPendingBoardChange(null)
+              }}
+              className='h-8 rounded-md bg-neutral-100 px-4 font-caption text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-white dark:hover:bg-neutral-800'
+            >
+              Cancel
+            </button>
+            <button
+              type='button'
+              onClick={() => {
+                if (pendingBoardChange) {
+                  setFormattedBoardState(pendingBoardChange.formattedBoard)
+                  setDeviceBoard(pendingBoardChange.board)
+                }
+                setShowPythonWarning(false)
+                setPendingBoardChange(null)
+              }}
+              className='h-8 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white hover:bg-brand-medium-dark'
+            >
+              Continue Anyway
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </DeviceEditorSlot>
   )
 })

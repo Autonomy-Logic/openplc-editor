@@ -200,6 +200,7 @@ const rendererProcessBridge = {
     Map<
       string,
       {
+        compiler: 'arduino-cli' | 'openplc-compiler'
         core: string
         preview: string
         specs: {

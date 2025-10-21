@@ -140,6 +140,7 @@ class HardwareModule {
 
       availableBoards = produce(availableBoards, (draft) => {
         draft.set(board, {
+          compiler: boardData.compiler,
           core: boardData.core,
           preview: boardData.preview,
           specs: boardData.specs,
