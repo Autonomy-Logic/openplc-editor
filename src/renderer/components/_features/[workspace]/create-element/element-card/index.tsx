@@ -7,7 +7,7 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { DatatypeDerivationSources } from '@root/renderer/data/sources/data-type'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
-import { cn, ConvertToLangShortenedFormat } from '@root/utils'
+import { cn, ConvertToLangShortenedFormat, isArduinoTarget as checkIsArduinoTarget } from '@root/utils'
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
@@ -73,11 +73,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const {
     pouActions: { create },
     datatypeActions: { create: createDatatype },
+    deviceAvailableOptions: { availableBoards },
   } = useOpenPLCStore()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
   const [isOpen, setIsOpen] = useState(false)
 
-  const isArduinoTarget = deviceBoard !== 'OpenPLC Runtime v3' && deviceBoard !== 'OpenPLC Runtime v4'
+  const currentBoardInfo = availableBoards.get(deviceBoard)
+  const isArduinoTarget = checkIsArduinoTarget(currentBoardInfo)
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
     try {

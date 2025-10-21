@@ -7,7 +7,7 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { cn } from '@root/utils'
+import { cn, isArduinoTarget } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -134,12 +134,13 @@ const Board = memo(function () {
         return
       }
 
-      const isArduinoTarget = normalizedBoard !== 'OpenPLC Runtime v3' && normalizedBoard !== 'OpenPLC Runtime v4'
+      const targetBoardInfo = availableBoards.get(normalizedBoard)
+      const isArduino = isArduinoTarget(targetBoardInfo)
       const hasPythonFunctionBlocks = pous.some(
         (pou) => pou.type === 'function-block' && pou.data.language === 'python',
       )
 
-      if (isArduinoTarget && hasPythonFunctionBlocks) {
+      if (isArduino && hasPythonFunctionBlocks) {
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
         setShowPythonWarning(true)
         return
@@ -148,7 +149,7 @@ const Board = memo(function () {
       setFormattedBoardState(board)
       setDeviceBoard(normalizedBoard)
     },
-    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal, pous],
+    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal, pous, availableBoards],
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
