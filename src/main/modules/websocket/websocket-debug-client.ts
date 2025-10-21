@@ -280,7 +280,7 @@ export class WebSocketDebugClient {
 
     let request: Buffer
     if (!force) {
-      request = Buffer.alloc(5)
+      request = Buffer.alloc(6)
       request.writeUInt8(functionCode, 0)
       request.writeUInt16BE(variableIndex, 1)
       request.writeUInt8(0, 3)

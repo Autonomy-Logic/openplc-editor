@@ -314,7 +314,7 @@ export class ModbusRtuClient {
 
       let data: Buffer
       if (!force) {
-        data = Buffer.alloc(4)
+        data = Buffer.alloc(5)
         data.writeUInt16BE(variableIndex, 0)
         data.writeUInt8(0, 2)
         data.writeUInt16BE(1, 3)
