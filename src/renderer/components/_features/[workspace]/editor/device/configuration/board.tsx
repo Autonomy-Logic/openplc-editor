@@ -465,7 +465,7 @@ const Board = memo(function () {
           </ModalHeader>
           <div className='flex flex-col gap-4'>
             <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-              The selected target ({pendingBoardChange?.board}) does not support Python Function Blocks.
+              The selected target ({pendingBoardChange?.formattedBoard}) does not support Python Function Blocks.
             </p>
             <p className='text-sm text-neutral-700 dark:text-neutral-300'>
               Your project contains Python Function Blocks that will cause compilation to fail on this target. To use
