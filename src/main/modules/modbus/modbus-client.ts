@@ -281,21 +281,7 @@ export class ModbusTcpClient {
     const unitId = 0x00
     const functionCode = ModbusFunctionCode.DEBUG_SET
 
-    let dataPayload: Buffer
-    if (!force) {
-      dataPayload = Buffer.alloc(4)
-      dataPayload.writeUInt16BE(variableIndex, 0)
-      dataPayload.writeUInt8(0, 2)
-      dataPayload.writeUInt16BE(1, 3)
-    } else {
-      dataPayload = Buffer.alloc(6)
-      dataPayload.writeUInt16BE(variableIndex, 0)
-      dataPayload.writeUInt8(1, 2)
-      dataPayload.writeUInt16BE(1, 3)
-      dataPayload.writeUInt8(value ?? 0, 5)
-    }
-
-    const pduLength = 2 + dataPayload.length
+    const pduLength = !force ? 6 : 8
     const request = Buffer.alloc(6 + pduLength)
 
     request.writeUInt16BE(transactionId, 0)
@@ -303,7 +289,12 @@ export class ModbusTcpClient {
     request.writeUInt16BE(pduLength, 4)
     request.writeUInt8(unitId, 6)
     request.writeUInt8(functionCode, 7)
-    dataPayload.copy(request, 8)
+    request.writeUInt16BE(variableIndex, 8)
+    request.writeUInt8(force ? 1 : 0, 10)
+    request.writeUInt16BE(1, 11)
+    if (force) {
+      request.writeUInt8(value ?? 0, 13)
+    }
 
     return new Promise((resolve) => {
       const timeoutHandle = setTimeout(() => {
