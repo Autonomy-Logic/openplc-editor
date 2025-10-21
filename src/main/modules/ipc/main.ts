@@ -968,27 +968,40 @@ class MainProcessBridge implements MainIpcModule {
     force: boolean,
     value?: number,
   ): Promise<{ success: boolean; error?: string }> => {
+    console.log('[IPC Handler] debugger:set-variable called with:', {
+      variableIndex,
+      force,
+      value,
+      connectionType: this.debuggerConnectionType,
+    })
+
     if (this.debuggerConnectionType === 'websocket') {
       if (!this.debuggerWebSocketClient) {
+        console.log('[IPC Handler] WebSocket client not connected')
         return { success: false, error: 'Not connected to debugger' }
       }
 
       try {
         const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, value)
+        console.log('[IPC Handler] WebSocket setVariable result:', result)
         return result
       } catch (error) {
+        console.error('[IPC Handler] WebSocket setVariable error:', error)
         return { success: false, error: String(error) }
       }
     }
 
     if (!this.debuggerModbusClient) {
+      console.log('[IPC Handler] Modbus client not connected')
       return { success: false, error: 'Not connected to debugger' }
     }
 
     try {
       const result = await this.debuggerModbusClient.setVariable(variableIndex, force, value)
+      console.log('[IPC Handler] Modbus setVariable result:', result)
       return result
     } catch (error) {
+      console.error('[IPC Handler] Modbus setVariable error:', error)
       return { success: false, error: String(error) }
     }
   }
