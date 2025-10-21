@@ -1,6 +1,6 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
-import { cn } from '@root/utils'
+import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
@@ -116,6 +116,7 @@ const WorkspaceScreen = () => {
       workspaceActions,
       project,
       runtimeConnection: { connectionStatus, ipAddress: runtimeIpAddress },
+      deviceAvailableOptions: { availableBoards },
     } = useOpenPLCStore.getState()
 
     if (!isDebuggerVisible) {
@@ -128,8 +129,8 @@ const WorkspaceScreen = () => {
     }
 
     const boardTarget = deviceDefinitions.configuration.deviceBoard
-    const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
-    const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
+    const currentBoardInfo = availableBoards.get(boardTarget)
+    const isRuntimeTarget = isOpenPLCRuntimeTarget(currentBoardInfo)
     const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
     const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
 

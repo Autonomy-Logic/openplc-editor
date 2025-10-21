@@ -2,14 +2,13 @@ import { communicationSelectors } from '@hooks/use-store-selectors'
 import { Checkbox, Label } from '@root/renderer/components/_atoms'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { cn } from '@root/utils'
+import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import { useEffect, useMemo } from 'react'
 
 import { ModbusRTUComponent } from './components/modbus-rtu'
 import { ModbusTCPComponent } from './components/modbus-tcp'
 
 const Communication = () => {
-  const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
   const {
     deviceDefinitions: {
       configuration: {
@@ -17,7 +16,11 @@ const Communication = () => {
         communicationConfiguration: { communicationPreferences },
       },
     },
+    deviceAvailableOptions: { availableBoards },
   } = useOpenPLCStore()
+
+  const currentBoardInfo = availableBoards.get(deviceBoard)
+  const isRuntimeTarget = isOpenPLCRuntimeTarget(currentBoardInfo)
 
   const isRTUEnabled = communicationPreferences.enabledRTU
   const isTCPEnabled = communicationPreferences.enabledTCP
@@ -26,13 +29,13 @@ const Communication = () => {
 
   useEffect(() => {
     const updateModbusConfig = () => {
-      if (onlyCompileBoards.includes(deviceBoard)) {
+      if (isRuntimeTarget) {
         setCommunicationPreferences({ enableRTU: false })
         setCommunicationPreferences({ enableTCP: false })
       }
     }
     updateModbusConfig()
-  }, [deviceBoard])
+  }, [deviceBoard, isRuntimeTarget])
 
   const handleEnableModbusRTU = () => {
     setCommunicationPreferences({ enableRTU: !isRTUEnabled })
@@ -55,7 +58,7 @@ const Communication = () => {
             id='enable-modbus-rtu-checkbox'
             className={isRTUEnabled ? 'border-brand' : 'border-neutral-300'}
             checked={isRTUEnabled}
-            disabled={onlyCompileBoards.includes(deviceBoard)}
+            disabled={isRuntimeTarget}
             onCheckedChange={handleEnableModbusRTU}
           />
           <Label
@@ -77,7 +80,7 @@ const Communication = () => {
             id='enable-modbus-tcp-checkbox'
             className={isTCPEnabled ? 'border-brand' : 'border-neutral-300'}
             checked={isTCPEnabled}
-            disabled={onlyCompileBoards.includes(deviceBoard)}
+            disabled={isRuntimeTarget}
             onCheckedChange={handleEnableModbusTCP}
           />
           <Label

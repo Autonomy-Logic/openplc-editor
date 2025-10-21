@@ -7,7 +7,7 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { cn, isArduinoTarget } from '@root/utils'
+import { cn, isArduinoTarget, isOpenPLCRuntimeTarget } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -37,6 +37,8 @@ const Board = memo(function () {
   const pins = pinSelectors.usePins()
   const createNewPin = pinSelectors.useCreateNewPin()
   const removePin = pinSelectors.useRemovePin()
+
+  const currentBoardInfo = availableBoards.get(deviceBoard)
 
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
@@ -308,7 +310,7 @@ const Board = memo(function () {
               </SelectContent>
             </Select>
           </div>
-          {deviceBoard === 'OpenPLC Runtime v3' || deviceBoard === 'OpenPLC Runtime v4' ? (
+          {isOpenPLCRuntimeTarget(currentBoardInfo) ? (
             <>
               <div id='runtime-ip-address-field' className='flex w-full items-center justify-start gap-1'>
                 <Label

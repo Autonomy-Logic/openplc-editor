@@ -4,7 +4,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { matchVariableWithDebugEntry, parseDebugFile } from '@root/renderer/utils/parse-debug-file'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
-import { BufferToStringArray, cn } from '@root/utils'
+import { BufferToStringArray, cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
 import { validateCppCode } from '@root/utils/cpp/validateCppCode'
@@ -370,8 +370,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       const boardTarget = deviceDefinitions.configuration.deviceBoard
       const projectPath = project.meta.path
-      const onlyCompileBoards = ['OpenPLC Runtime v3', 'OpenPLC Runtime v4', 'Raspberry Pi']
-      const isRuntimeTarget = onlyCompileBoards.includes(boardTarget)
+      const currentBoardInfo = availableBoards.get(boardTarget)
+      const isRuntimeTarget = isOpenPLCRuntimeTarget(currentBoardInfo)
       const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
 
       let targetIpAddress: string | undefined
