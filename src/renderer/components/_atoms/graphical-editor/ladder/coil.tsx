@@ -336,7 +336,7 @@ export const Coil = (block: CoilProps) => {
     const result = await window.bridge.debuggerSetVariable(variableIndex, true, 1)
 
     if (result.success) {
-      const newForcedVariables = new Map(debugForcedVariables)
+      const newForcedVariables = new Map(Array.from(debugForcedVariables))
       newForcedVariables.set(compositeKey, true)
       setDebugForcedVariables(newForcedVariables)
     }
@@ -357,7 +357,7 @@ export const Coil = (block: CoilProps) => {
     const result = await window.bridge.debuggerSetVariable(variableIndex, true, 0)
 
     if (result.success) {
-      const newForcedVariables = new Map(debugForcedVariables)
+      const newForcedVariables = new Map(Array.from(debugForcedVariables))
       newForcedVariables.set(compositeKey, false)
       setDebugForcedVariables(newForcedVariables)
     }
@@ -378,7 +378,7 @@ export const Coil = (block: CoilProps) => {
     const result = await window.bridge.debuggerSetVariable(variableIndex, false)
 
     if (result.success) {
-      const newForcedVariables = new Map(debugForcedVariables)
+      const newForcedVariables = new Map(Array.from(debugForcedVariables))
       newForcedVariables.delete(compositeKey)
       setDebugForcedVariables(newForcedVariables)
     }
