@@ -284,7 +284,7 @@ export class ModbusTcpClient {
     const unitId = 0x00
     const functionCode = ModbusFunctionCode.DEBUG_SET
 
-    const pduLength = !force ? 6 : 8
+    const pduLength = 8
     const request = Buffer.alloc(6 + pduLength)
 
     request.writeUInt16BE(transactionId, 0)
@@ -295,9 +295,7 @@ export class ModbusTcpClient {
     request.writeUInt16BE(variableIndex, 8)
     request.writeUInt8(force ? 1 : 0, 10)
     request.writeUInt16BE(1, 11)
-    if (force) {
-      request.writeUInt8(value ?? 0, 13)
-    }
+    request.writeUInt8(force ? value ?? 0 : 0, 13)
 
     console.log('[ModbusTcpClient] Sending request:', {
       transactionId,

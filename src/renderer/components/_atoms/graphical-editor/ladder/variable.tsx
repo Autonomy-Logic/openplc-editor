@@ -371,8 +371,8 @@ const VariableElement = (block: VariableProps) => {
             'text-left placeholder:text-left': data.variant === 'output',
             'text-right placeholder:text-right': data.variant === 'input',
             'font-bold': isForced,
-            'text-[#FF8C00]': isForced && forcedValue,
-            'text-[#FF6B35]': isForced && !forcedValue,
+            'text-[#80C000]': isForced && forcedValue,
+            'text-[#4080FF]': isForced && !forcedValue,
           })}
           highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-left placeholder:text-left': data.variant === 'output',
@@ -439,29 +439,28 @@ const VariableElement = (block: VariableProps) => {
                 onOpenAutoFocus={(e) => e.preventDefault()}
               >
                 {isBoolVariable ? (
-                  isForced ? (
+                  <>
                     <div
-                      className='flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleReleaseForce}
+                      className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceTrue}
                     >
-                      <p>Release Force</p>
+                      <p>Force True</p>
                     </div>
-                  ) : (
-                    <>
-                      <div
-                        className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        onClick={handleForceTrue}
-                      >
-                        <p>Force True</p>
-                      </div>
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceFalse}
+                    >
+                      <p>Force False</p>
+                    </div>
+                    {isForced && (
                       <div
                         className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        onClick={handleForceFalse}
+                        onClick={handleReleaseForce}
                       >
-                        <p>Force False</p>
+                        <p>Release Force</p>
                       </div>
-                    </>
-                  )
+                    )}
+                  </>
                 ) : (
                   <div
                     className='flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'

@@ -152,7 +152,7 @@ export const Coil = (block: CoilProps) => {
     const isForced = debugForcedVariables.has(compositeKey)
     if (isForced) {
       const forcedValue = debugForcedVariables.get(compositeKey)
-      return forcedValue ? '#FF8C00' : '#FF6B35'
+      return forcedValue ? '#80C000' : '#4080FF'
     }
 
     return displayState ? '#00FF00' : '#0464FB'
@@ -508,28 +508,25 @@ export const Coil = (block: CoilProps) => {
                     }}
                     onOpenAutoFocus={(e) => e.preventDefault()}
                   >
-                    {isForced ? (
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceTrue}
+                    >
+                      <p>Force True</p>
+                    </div>
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceFalse}
+                    >
+                      <p>Force False</p>
+                    </div>
+                    {isForced && (
                       <div
-                        className='flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
                         onClick={handleReleaseForce}
                       >
                         <p>Release Force</p>
                       </div>
-                    ) : (
-                      <>
-                        <div
-                          className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                          onClick={handleForceTrue}
-                        >
-                          <p>Force True</p>
-                        </div>
-                        <div
-                          className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                          onClick={handleForceFalse}
-                        >
-                          <p>Force False</p>
-                        </div>
-                      </>
                     )}
                   </Popover.Content>
                 </Popover.Portal>
