@@ -374,6 +374,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
     this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
     this.ipcMain.handle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
+    this.ipcMain.handle('debugger:set-variable', this.handleDebuggerSetVariable)
     this.ipcMain.handle('debugger:connect', this.handleDebuggerConnect)
     this.ipcMain.handle('debugger:disconnect', this.handleDebuggerDisconnect)
 
@@ -959,6 +960,50 @@ class MainProcessBridge implements MainIpcModule {
     this.debuggerJwtToken = null
     this.debuggerReconnecting = false
     return Promise.resolve({ success: true })
+  }
+
+  handleDebuggerSetVariable = async (
+    _event: IpcMainInvokeEvent,
+    variableIndex: number,
+    force: boolean,
+    value?: number,
+  ): Promise<{ success: boolean; error?: string }> => {
+    console.log('[IPC Handler] debugger:set-variable called with:', {
+      variableIndex,
+      force,
+      value,
+      connectionType: this.debuggerConnectionType,
+    })
+
+    if (this.debuggerConnectionType === 'websocket') {
+      if (!this.debuggerWebSocketClient) {
+        console.log('[IPC Handler] WebSocket client not connected')
+        return { success: false, error: 'Not connected to debugger' }
+      }
+
+      try {
+        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, value)
+        console.log('[IPC Handler] WebSocket setVariable result:', result)
+        return result
+      } catch (error) {
+        console.error('[IPC Handler] WebSocket setVariable error:', error)
+        return { success: false, error: String(error) }
+      }
+    }
+
+    if (!this.debuggerModbusClient) {
+      console.log('[IPC Handler] Modbus client not connected')
+      return { success: false, error: 'Not connected to debugger' }
+    }
+
+    try {
+      const result = await this.debuggerModbusClient.setVariable(variableIndex, force, value)
+      console.log('[IPC Handler] Modbus setVariable result:', result)
+      return result
+    } catch (error) {
+      console.error('[IPC Handler] Modbus setVariable error:', error)
+      return { success: false, error: String(error) }
+    }
   }
 
   // ===================== EVENT HANDLERS =====================

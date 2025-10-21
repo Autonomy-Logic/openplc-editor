@@ -20,6 +20,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debuggerTargetIp: null,
     debugVariableIndexes: new Map(),
     debugVariableValues: new Map(),
+    debugForcedVariables: new Map(),
     close: {
       window: false,
       app: false,
@@ -159,6 +160,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugVariableValues = values
+        }),
+      )
+    },
+    setDebugForcedVariables: (forced: Map<string, boolean>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugForcedVariables = forced
         }),
       )
     },

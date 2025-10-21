@@ -126,7 +126,8 @@ export const Coil = (block: CoilProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: { isDebuggerVisible, debugVariableValues },
+    workspace: { isDebuggerVisible, debugVariableValues, debugVariableIndexes, debugForcedVariables },
+    workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
@@ -147,6 +148,13 @@ export const Coil = (block: CoilProps) => {
 
     const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
     const displayState = data.variant === 'negated' ? !isTrue : isTrue
+
+    const isForced = debugForcedVariables.has(compositeKey)
+    if (isForced) {
+      const forcedValue = debugForcedVariables.get(compositeKey)
+      return forcedValue ? '#80C000' : '#4080FF'
+    }
+
     return displayState ? '#00FF00' : '#0464FB'
   }
 
@@ -313,16 +321,67 @@ export const Coil = (block: CoilProps) => {
     }
   }
 
-  const handleForceTrue = (e: React.MouseEvent) => {
+  const handleForceTrue = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
+
+    if (!data.variable.name) return
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const variableIndex = debugVariableIndexes.get(compositeKey)
+
+    if (variableIndex === undefined) return
+
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 1)
+
+    if (result.success) {
+      const newForcedVariables = new Map(Array.from(debugForcedVariables))
+      newForcedVariables.set(compositeKey, true)
+      setDebugForcedVariables(newForcedVariables)
+    }
   }
 
-  const handleForceFalse = (e: React.MouseEvent) => {
+  const handleForceFalse = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
+
+    if (!data.variable.name) return
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const variableIndex = debugVariableIndexes.get(compositeKey)
+
+    if (variableIndex === undefined) return
+
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 0)
+
+    if (result.success) {
+      const newForcedVariables = new Map(Array.from(debugForcedVariables))
+      newForcedVariables.set(compositeKey, false)
+      setDebugForcedVariables(newForcedVariables)
+    }
+  }
+
+  const handleReleaseForce = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsContextMenuOpen(false)
+
+    if (!data.variable.name) return
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const variableIndex = debugVariableIndexes.get(compositeKey)
+
+    if (variableIndex === undefined) return
+
+    const result = await window.bridge.debuggerSetVariable(variableIndex, false)
+
+    if (result.success) {
+      const newForcedVariables = new Map(Array.from(debugForcedVariables))
+      newForcedVariables.delete(compositeKey)
+      setDebugForcedVariables(newForcedVariables)
+    }
   }
 
   const handleClick = (e: React.MouseEvent) => {
@@ -424,41 +483,56 @@ export const Coil = (block: CoilProps) => {
           )}
         </div>
 
-        {isDebuggerVisible && contextMenuPosition && (
-          <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
-            <Popover.Portal>
-              <Popover.Content
-                align='start'
-                side='bottom'
-                sideOffset={5}
-                className={cn(
-                  'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
-                  'focus:outline-none focus-visible:outline-none',
-                  'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
-                )}
-                style={{
-                  position: 'fixed',
-                  left: `${contextMenuPosition.x}px`,
-                  top: `${contextMenuPosition.y}px`,
-                }}
-                onOpenAutoFocus={(e) => e.preventDefault()}
-              >
-                <div
-                  className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                  onClick={handleForceTrue}
-                >
-                  <p>Force True</p>
-                </div>
-                <div
-                  className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                  onClick={handleForceFalse}
-                >
-                  <p>Force False</p>
-                </div>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
-        )}
+        {isDebuggerVisible &&
+          contextMenuPosition &&
+          (() => {
+            const compositeKey = `${editor.meta.name}:${data.variable.name}`
+            const isForced = debugForcedVariables.has(compositeKey)
+
+            return (
+              <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+                <Popover.Portal>
+                  <Popover.Content
+                    align='start'
+                    side='bottom'
+                    sideOffset={5}
+                    className={cn(
+                      'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                      'focus:outline-none focus-visible:outline-none',
+                      'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+                    )}
+                    style={{
+                      position: 'fixed',
+                      left: `${contextMenuPosition.x}px`,
+                      top: `${contextMenuPosition.y}px`,
+                    }}
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                  >
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceTrue}
+                    >
+                      <p>Force True</p>
+                    </div>
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceFalse}
+                    >
+                      <p>Force False</p>
+                    </div>
+                    {isForced && (
+                      <div
+                        className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        onClick={handleReleaseForce}
+                      >
+                        <p>Release Force</p>
+                      </div>
+                    )}
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+            )
+          })()}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
