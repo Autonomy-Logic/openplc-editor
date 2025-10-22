@@ -272,9 +272,9 @@ const rendererProcessBridge = {
   debuggerSetVariable: (
     variableIndex: number,
     force: boolean,
-    value?: number,
+    valueBuffer?: Buffer,
   ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('debugger:set-variable', variableIndex, force, value),
+    ipcRenderer.invoke('debugger:set-variable', variableIndex, force, valueBuffer),
 
   debuggerConnect: (
     connectionType: 'tcp' | 'rtu' | 'websocket',

@@ -3,6 +3,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { getVariableTypeInfo, integerToBuffer, parseIntegerValue } from '@root/utils/PLC/variable-types'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -268,7 +269,8 @@ const VariableElement = (block: VariableProps) => {
 
     if (variableIndex === undefined) return
 
-    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 1)
+    const valueBuffer = Buffer.from([1])
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -289,7 +291,8 @@ const VariableElement = (block: VariableProps) => {
 
     if (variableIndex === undefined) return
 
-    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 0)
+    const valueBuffer = Buffer.from([0])
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -326,7 +329,53 @@ const VariableElement = (block: VariableProps) => {
     setForceValueModalOpen(true)
   }
 
-  const handleForceValueConfirm = () => {
+  const handleForceValueConfirm = async () => {
+    if (!data.variable.name || !forceValue.trim()) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const variableIndex = debugVariableIndexes.get(compositeKey)
+
+    if (variableIndex === undefined) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const variableType = getVariableType()
+    if (!variableType) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const typeInfo = getVariableTypeInfo(variableType)
+    if (!typeInfo) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const parsedValue = parseIntegerValue(forceValue, typeInfo)
+    if (parsedValue === null) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const valueBuffer = integerToBuffer(parsedValue, typeInfo.byteSize, typeInfo.signed)
+
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
+
+    if (result.success) {
+      const newForcedVariables = new Map(Array.from(debugForcedVariables))
+      newForcedVariables.set(compositeKey, parsedValue >= BigInt(0))
+      setDebugForcedVariables(newForcedVariables)
+    }
+
     setForceValueModalOpen(false)
     setForceValue('')
   }

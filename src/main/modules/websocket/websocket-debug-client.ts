@@ -267,7 +267,7 @@ export class WebSocketDebugClient {
   async setVariable(
     variableIndex: number,
     force: boolean,
-    value?: number,
+    valueBuffer?: Buffer,
   ): Promise<{
     success: boolean
     error?: string
@@ -278,20 +278,18 @@ export class WebSocketDebugClient {
 
     const functionCode = ModbusFunctionCode.DEBUG_SET
 
-    let request: Buffer
-    if (!force) {
-      request = Buffer.alloc(6)
-      request.writeUInt8(functionCode, 0)
-      request.writeUInt16BE(variableIndex, 1)
-      request.writeUInt8(0, 3)
-      request.writeUInt16BE(1, 4)
+    const dataLength = force && valueBuffer ? valueBuffer.length : 1
+    const request = Buffer.alloc(6 + dataLength)
+
+    request.writeUInt8(functionCode, 0)
+    request.writeUInt16BE(variableIndex, 1)
+    request.writeUInt8(force ? 1 : 0, 3)
+    request.writeUInt16BE(dataLength, 4)
+
+    if (force && valueBuffer) {
+      valueBuffer.copy(request, 6)
     } else {
-      request = Buffer.alloc(7)
-      request.writeUInt8(functionCode, 0)
-      request.writeUInt16BE(variableIndex, 1)
-      request.writeUInt8(1, 3)
-      request.writeUInt16BE(1, 4)
-      request.writeUInt8(value ?? 0, 6)
+      request.writeUInt8(0, 6)
     }
 
     const commandHex = this.bufferToHexString(request)
