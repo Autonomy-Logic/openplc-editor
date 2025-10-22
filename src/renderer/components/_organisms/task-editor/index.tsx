@@ -1,6 +1,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TaskType } from '@root/renderer/store/slices'
 import { PLCTask } from '@root/types/PLC/open-plc'
@@ -20,6 +21,7 @@ const TaskEditor = () => {
     editor,
     workspace: {
       systemConfigs: { shouldUseDarkMode },
+      isDebuggerVisible,
     },
     project: {
       data: {
@@ -32,6 +34,8 @@ const TaskEditor = () => {
     projectActions: { createTask, rearrangeTasks, deleteTask, setTasks, setInstances },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
+  const handleFileAndWorkspaceSavedState = sharedSelectors.useHandleFileAndWorkspaceSavedState()
 
   const [taskData, setTaskData] = useState<PLCTask[]>([])
   const [editorCode, setEditorCode] = useState(() => parseResourceConfigurationToString(taskData, instances))
@@ -104,6 +108,7 @@ const TaskEditor = () => {
       display: 'table',
       selectedRow: parseInt(editorTasks.selectedRow) + index,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleCreateTask = () => {
@@ -127,6 +132,8 @@ const TaskEditor = () => {
         display: 'table',
         selectedRow: 0,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -150,6 +157,8 @@ const TaskEditor = () => {
         display: 'table',
         selectedRow: tasks.length,
       })
+      handleFileAndWorkspaceSavedState('Resource')
+
       return
     }
 
@@ -158,6 +167,7 @@ const TaskEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleDeleteTask = () => {
@@ -178,6 +188,7 @@ const TaskEditor = () => {
         selectedRow: selectedRow - 1,
       })
     }
+    handleFileAndWorkspaceSavedState('Resource')
   }
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelTasks({
@@ -210,6 +221,8 @@ const TaskEditor = () => {
 
       toast({ title: 'Update tables', description: 'Changes applied successfully.' })
       setParseError(null)
+      handleFileAndWorkspaceSavedState('Resource')
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
@@ -242,13 +255,14 @@ const TaskEditor = () => {
                   {
                     ariaLabel: 'Add Tasks table row button',
                     onClick: handleCreateTask,
+                    disabled: isDebuggerVisible,
                     icon: <PlusIcon className='!stroke-brand' />,
                     id: 'add-task-button',
                   },
                   {
                     ariaLabel: 'Remove Tasks table row button',
                     onClick: handleDeleteTask,
-                    disabled: parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED,
+                    disabled: isDebuggerVisible || parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED,
                     icon: <MinusIcon />,
                     id: 'remove-task-button',
                   },
@@ -256,6 +270,7 @@ const TaskEditor = () => {
                     ariaLabel: 'Move Tasks table row up button',
                     onClick: () => handleRearrangeTasks(-1),
                     disabled:
+                      isDebuggerVisible ||
                       parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
                       parseInt(editorTasks.selectedRow) === 0,
                     icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
@@ -265,6 +280,7 @@ const TaskEditor = () => {
                     ariaLabel: 'Move Tasks table row down button',
                     onClick: () => handleRearrangeTasks(1),
                     disabled:
+                      isDebuggerVisible ||
                       parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
                       parseInt(editorTasks.selectedRow) === taskData.length - 1,
                     icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,

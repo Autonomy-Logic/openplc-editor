@@ -12,6 +12,8 @@ import { CreateXMLFile } from '@root/main/utils'
 import { ProjectState } from '@root/renderer/store/slices'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
+import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/utils/cpp/generateCBlocksCode'
+import { type CppPouData as CppPouDataHeader, generateCBlocksHeader } from '@root/utils/cpp/generateCBlocksHeader'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import { app as electronApp, dialog } from 'electron'
@@ -336,8 +338,14 @@ class CompilerModule {
         cp(staticBaremetalFilesPath, join(compilationPath, 'examples', 'Baremetal'), { recursive: true }),
       ]
     } else {
-      // INFO: If the board target is OpenPLC, we only copy the MatIEC library files.
-      filesToCopy = [cp(staticMatIECLibraryFilesPath, join(sourceTargetFolderPath, 'lib'), { recursive: true })]
+      // INFO: If the board target is OpenPLC, we copy the MatIEC library files and C/C++ block templates.
+      const cBlocksHeaderPath = join(this.sourceDirectoryPath, 'arduino', 'c_blocks.h')
+      const cBlocksCodePath = join(this.sourceDirectoryPath, 'Baremetal', 'c_blocks_code.cpp')
+      filesToCopy = [
+        cp(staticMatIECLibraryFilesPath, join(sourceTargetFolderPath, 'lib'), { recursive: true }),
+        cp(cBlocksHeaderPath, join(sourceTargetFolderPath, 'c_blocks.h')),
+        cp(cBlocksCodePath, join(sourceTargetFolderPath, 'c_blocks_code.cpp')),
+      ]
     }
 
     try {
@@ -895,6 +903,65 @@ class CompilerModule {
     return result
   }
 
+  async handleGenerateCBlocksHeader(
+    projectData: ProjectState['data'] & { originalCppPous?: CppPouDataCode[] },
+    sourceTargetFolderPath: string,
+    handleOutputData: HandleOutputDataCallback,
+  ) {
+    const originalCppPous = projectData.originalCppPous || []
+
+    if (originalCppPous.length === 0) {
+      handleOutputData('No C/C++ blocks found, skipping c_blocks.h generation', 'info')
+      return
+    }
+
+    const cppPous = originalCppPous.map((pou) => ({
+      name: pou.name,
+      variables: pou.variables,
+    })) as CppPouDataHeader[]
+
+    const headerContent = generateCBlocksHeader(cppPous)
+    const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
+
+    try {
+      await writeFile(headerFilePath, headerContent, { encoding: 'utf8' })
+      handleOutputData(`C blocks header file populated at: ${headerFilePath}`, 'info')
+    } catch (error) {
+      throw new Error(`Error writing c_blocks.h file: ${(error as Error).message}`)
+    }
+  }
+
+  async handleGenerateCBlocksCode(
+    projectData: ProjectState['data'] & { originalCppPous?: CppPouDataCode[] },
+    compilationPath: string,
+    boardRuntime: string,
+    handleOutputData: HandleOutputDataCallback,
+  ) {
+    const originalCppPous = projectData.originalCppPous || []
+
+    if (originalCppPous.length === 0) {
+      handleOutputData('No C/C++ blocks found, skipping c_blocks_code.cpp generation', 'info')
+      return
+    }
+
+    const cppPous = originalCppPous
+    const codeContent = generateCBlocksCode(cppPous)
+
+    const codeFilePath =
+      boardRuntime === 'openplc-compiler'
+        ? join(compilationPath, 'src', 'c_blocks_code.cpp')
+        : join(compilationPath, 'examples', 'Baremetal', 'c_blocks_code.cpp')
+
+    try {
+      const existingContent = await readFile(codeFilePath, { encoding: 'utf8' })
+      const updatedContent = existingContent + '\n' + codeContent
+      await writeFile(codeFilePath, updatedContent, { encoding: 'utf8' })
+      handleOutputData(`C blocks code file populated at: ${codeFilePath}`, 'info')
+    } catch (error) {
+      throw new Error(`Error writing c_blocks_code.cpp file: ${(error as Error).message}`)
+    }
+  }
+
   async handleCompileArduinoProgram({
     boardHalsContent,
     compilationPath,
@@ -1068,6 +1135,47 @@ class CompilerModule {
     return zipBuffer
   }
 
+  async embedCBlocksInProgramSt(
+    sourceTargetFolderPath: string,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const programStPath = join(sourceTargetFolderPath, 'program.st')
+    const cBlocksHeaderPath = join(sourceTargetFolderPath, 'c_blocks.h')
+    const cBlocksCodePath = join(sourceTargetFolderPath, 'c_blocks_code.cpp')
+
+    try {
+      let programStContent = await readFile(programStPath, 'utf8')
+
+      try {
+        await fs.access(cBlocksHeaderPath)
+        const headerContent = await readFile(cBlocksHeaderPath, 'utf8')
+        const headerLines = headerContent.split('\n')
+        const embeddedHeader = headerLines.map((line) => `(*FILE:c_blocks.h ${line} *)`).join('\n')
+        programStContent += '\n' + embeddedHeader
+
+        handleOutputData('Embedded c_blocks.h into program.st for Runtime v3', 'info')
+      } catch {
+        handleOutputData('c_blocks.h not found, skipping embedding', 'info')
+      }
+
+      try {
+        await fs.access(cBlocksCodePath)
+        const codeContent = await readFile(cBlocksCodePath, 'utf8')
+        const codeLines = codeContent.split('\n')
+        const embeddedCode = codeLines.map((line) => `(*FILE:c_blocks_code.cpp ${line} *)`).join('\n')
+        programStContent += '\n' + embeddedCode
+
+        handleOutputData('Embedded c_blocks_code.cpp into program.st for Runtime v3', 'info')
+      } catch {
+        handleOutputData('c_blocks_code.cpp not found, skipping embedding', 'info')
+      }
+
+      await writeFile(programStPath, programStContent, 'utf8')
+    } catch (error) {
+      throw new Error(`Error embedding C blocks in program.st: ${(error as Error).message}`)
+    }
+  }
+
   /**
    * This will be the main entry point for the compiler module.
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
@@ -1182,23 +1290,6 @@ class CompilerModule {
       return
     }
 
-    // Step 2.1: Generate MD5 hash of the XML file
-    try {
-      const xmlContentToGenerateHash = generateXMLResult.data?.xmlContent
-      if (xmlContentToGenerateHash) {
-        buildMD5Hash = await this.createMD5Hash(xmlContentToGenerateHash)
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: `Build MD5 hash: ${buildMD5Hash}`,
-        })
-      }
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error generating MD5 hash of the XML file: ${error as string}\n`,
-      })
-    }
-
     // Step 3: Transpile XML to ST
     const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml') // Assuming the XML file is named 'plc.xml'
     try {
@@ -1265,6 +1356,34 @@ class CompilerModule {
       return
     }
 
+    try {
+      const fs = await import('fs/promises')
+      const programStPath = join(sourceTargetFolderPath, 'program.st')
+      const programStContent = await fs.readFile(programStPath, 'utf-8')
+      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
+      const match = programStContent.match(md5Pattern)
+
+      if (match && match[1]) {
+        buildMD5Hash = match[1]
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: `Extracted MD5 hash from program.st: ${buildMD5Hash}`,
+        })
+      } else {
+        _mainProcessPort.postMessage({
+          logLevel: 'warn',
+          message: 'Could not extract MD5 from program.st, continuing without MD5',
+        })
+        buildMD5Hash = null
+      }
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error extracting MD5 from program.st: ${error as string}`,
+      })
+      buildMD5Hash = null
+    }
+
     // Step 6: Generate glue vars
     try {
       await this.handleGenerateGlueVars(sourceTargetFolderPath, (data, logLevel) => {
@@ -1281,6 +1400,62 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    // Step 7: Generate C/C++ blocks header file
+    try {
+      await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    // Step 8: Generate C/C++ blocks code file
+    try {
+      await this.handleGenerateCBlocksCode(projectData, compilationPath, boardRuntime, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    // Step 9: Embed C/C++ blocks in program.st for Runtime v3
+    if (boardRuntime === 'openplc-compiler' && boardTarget === 'OpenPLC Runtime v3') {
+      try {
+        await this.embedCBlocksInProgramSt(sourceTargetFolderPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
     }
 
     // -- Verify if the runtime target is Arduino or OpenPLC --
@@ -1718,7 +1893,200 @@ class CompilerModule {
     })
 
     // INFO: This step is under development.
-    _mainProcessPort.close()
+    setTimeout(() => {
+      _mainProcessPort.close()
+    }, 25)
+  }
+
+  async compileForDebugger(
+    args: Array<string | null | ProjectState['data']>,
+    _mainProcessPort: MessagePortMain,
+  ): Promise<void> {
+    _mainProcessPort.start()
+
+    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting debug compilation process...' })
+
+    const [projectPath, boardTarget, projectData] = args as [string, string, ProjectState['data']]
+
+    const boardRuntime = await this.#getBoardRuntime(boardTarget)
+    const normalizedProjectPath = projectPath.replace('project.json', '')
+    const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
+    const sourceTargetFolderPath = join(compilationPath, 'src')
+
+    _mainProcessPort.postMessage({
+      logLevel: 'info',
+      message: `Compiling for debugger - project: ${projectPath}, board: ${boardTarget}`,
+    })
+
+    try {
+      const iec2cCheckResult = await this.checkIec2cAvailability()
+      _mainProcessPort.postMessage({
+        message: `IEC2C available at version ${iec2cCheckResult.data}`,
+      })
+    } catch (_error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${String(_error)}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      await this.createBasicDirectories(normalizedProjectPath, boardTarget)
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'Directories for compilation source files created.',
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${String(error)}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error generating XML from JSON: ${error as string}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml')
+    try {
+      await this.handleTranspileXMLtoST(generatedXMLFilePath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error transpiling XML to ST: ${error as string}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      await this.copyStaticFiles(compilationPath, boardRuntime)
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error copying static files: ${error as string}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st')
+    try {
+      await this.handleTranspileSTtoC(generatedSTFilePath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping debug compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      await this.handleGenerateDebugFiles(sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping debug compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    try {
+      await this.handleGenerateGlueVars(sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping debug compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    // Generate C/C++ blocks header file
+    try {
+      await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping debug compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    // Generate C/C++ blocks code file
+    try {
+      await this.handleGenerateCBlocksCode(projectData, compilationPath, boardRuntime, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping debug compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    _mainProcessPort.postMessage({
+      logLevel: 'info',
+      message: 'Debug compilation completed successfully.',
+    })
+    _mainProcessPort.postMessage({
+      message:
+        '-------------------------------------------------------------------------------------------------------------\n',
+    })
+    setTimeout(() => {
+      _mainProcessPort.close()
+    }, 25)
   }
 }
 export { CompilerModule }

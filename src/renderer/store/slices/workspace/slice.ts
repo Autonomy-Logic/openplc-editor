@@ -16,10 +16,19 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     isCollapsed: false,
     isModalOpen: [],
     discardChanges: false,
+    isDebuggerVisible: false,
+    debuggerTargetIp: null,
+    debugVariableIndexes: new Map(),
+    debugVariableValues: new Map(),
+    debugForcedVariables: new Map(),
     close: {
       window: false,
       app: false,
       appDarwin: false,
+    },
+    selectedProjectTreeLeaf: {
+      label: '',
+      type: null,
     },
   },
 
@@ -105,6 +114,59 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           } else {
             workspace.isModalOpen.push({ modalName, modalState })
           }
+        }),
+      )
+    },
+    setSelectedProjectTreeLeaf: (selectedProjectTreeLeaf): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.selectedProjectTreeLeaf = selectedProjectTreeLeaf
+        }),
+      )
+    },
+    clearWorkspace: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.editingState = 'initial-state'
+          workspace.selectedProjectTreeLeaf = {
+            label: '',
+            type: null,
+          }
+        }),
+      )
+    },
+    setDebuggerVisible: (isVisible: boolean): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isDebuggerVisible = isVisible
+        }),
+      )
+    },
+    setDebuggerTargetIp: (targetIp: string | null): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debuggerTargetIp = targetIp
+        }),
+      )
+    },
+    setDebugVariableIndexes: (indexes: Map<string, number>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableIndexes = indexes
+        }),
+      )
+    },
+    setDebugVariableValues: (values: Map<string, string>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableValues = values
+        }),
+      )
+    },
+    setDebugForcedVariables: (forced: Map<string, boolean>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugForcedVariables = forced
         }),
       )
     },

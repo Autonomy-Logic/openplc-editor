@@ -4,9 +4,9 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { FocusEvent, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
@@ -214,7 +214,7 @@ export const BlockNodeElement = <T extends object>({
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
      */
     const newBlockNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: newGraphicalEditorNodeID('BLOCK'),
       position: {
         x: node.position.x,
         y: node.position.y,
@@ -503,7 +503,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
         const creationResult = createVariable({
           data: {
-            id: uuidv4(),
+            id: crypto.randomUUID(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: nodeBlockType },
             class: 'local',
@@ -608,7 +608,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     const updatedNewNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: newGraphicalEditorNodeID('BLOCK'),
       position: {
         x: node.position.x,
         y: node.position.y,

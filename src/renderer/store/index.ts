@@ -7,6 +7,8 @@ import type {
   DeviceSlice,
   EditorSlice,
   FBDFlowSlice,
+  FileSlice,
+  HistorySlice,
   LadderFlowSlice,
   LibrarySlice,
   ModalSlice,
@@ -21,6 +23,8 @@ import {
   createDeviceSlice,
   createEditorSlice,
   createFBDFlowSlice,
+  createFileSlice,
+  createHistorySlice,
   createLadderFlowSlice,
   createLibrarySlice,
   createModalSlice,
@@ -30,7 +34,6 @@ import {
   createTabsSlice,
   createWorkspaceSlice,
 } from './slices'
-import { createHistorySlice, HistorySlice } from './slices/history'
 
 export const openPLCStoreBase = create(
   subscribeWithSelector<
@@ -45,6 +48,7 @@ export const openPLCStoreBase = create(
       ProjectSlice &
       ConsoleSlice &
       ModalSlice &
+      FileSlice &
       DeviceSlice &
       HistorySlice
   >((...a) => ({
@@ -60,6 +64,7 @@ export const openPLCStoreBase = create(
     ...createConsoleSlice(...a),
     ...createModalSlice(...a),
     ...createDeviceSlice(...a),
+    ...createFileSlice(...a),
     ...createHistorySlice(...a),
   })),
 )

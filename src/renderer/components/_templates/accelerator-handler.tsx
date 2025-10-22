@@ -1,11 +1,8 @@
-import type { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
-import { useCompiler } from '@root/renderer/hooks'
+import { useCompiler, workspaceSelectors } from '@root/renderer/hooks'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { DeviceState, ModalTypes, ProjectState } from '@root/renderer/store/slices'
+import type { ModalTypes } from '@root/renderer/store/slices'
 import { IProjectServiceResponse } from '@root/types/IPC/project-service'
-import { deviceConfigurationSchema, devicePinSchema } from '@root/types/PLC/devices'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
 
 import { toast } from '../_features/[app]/toast/use-toast'
@@ -20,88 +17,6 @@ const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?
   openModal('quit-application', null)
 }
 
-export const saveProjectRequest = async (
-  project: ProjectState,
-  device: DeviceState['deviceDefinitions'],
-  setEditingState: (state: 'saved' | 'unsaved' | 'save-request' | 'initial-state') => void,
-): Promise<ISaveDataResponse> => {
-  setEditingState('save-request')
-  toast({
-    title: 'Save changes',
-    description: 'Trying to save the changes in the project file.',
-    variant: 'warn',
-  })
-
-  const projectData = PLCProjectSchema.safeParse(project)
-  if (!projectData.success) {
-    setEditingState('unsaved')
-    toast({
-      title: 'Error in the save request!',
-      description: 'The project data is not valid.',
-      variant: 'fail',
-    })
-    return {
-      success: false,
-      reason: { title: 'Error in the save request!', description: 'The project data is not valid.' },
-    }
-  }
-
-  const deviceConfiguration = deviceConfigurationSchema.safeParse(device.configuration)
-  if (!deviceConfiguration.success) {
-    setEditingState('unsaved')
-    toast({
-      title: 'Error in the save request!',
-      description: 'The device configuration data is not valid.',
-      variant: 'fail',
-    })
-    return {
-      success: false,
-      reason: { title: 'Error in the save request!', description: 'The device configuration data is not valid.' },
-    }
-  }
-
-  const devicePinMapping = devicePinSchema.array().safeParse(device.pinMapping.pins)
-  if (!devicePinMapping.success) {
-    setEditingState('unsaved')
-    toast({
-      title: 'Error in the save request!',
-      description: 'The device pin mapping data is not valid.',
-      variant: 'fail',
-    })
-    return {
-      success: false,
-      reason: { title: 'Error in the save request!', description: 'The device pin mapping data is not valid.' },
-    }
-  }
-
-  const { success, reason } = await window.bridge.saveProject({
-    projectPath: project.meta.path,
-    content: {
-      projectData: projectData.data,
-      deviceConfiguration: deviceConfiguration.data,
-      devicePinMapping: devicePinMapping.data,
-    },
-  })
-
-  if (success) {
-    setEditingState('saved')
-    toast({
-      title: 'Changes saved!',
-      description: 'The project was saved successfully!',
-      variant: 'default',
-    })
-  } else {
-    setEditingState('unsaved')
-    toast({
-      title: 'Error in the save request!',
-      description: reason?.description,
-      variant: 'fail',
-    })
-  }
-
-  return { success, reason }
-}
-
 const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
   const [requestFlag, setRequestFlag] = useState(false)
@@ -113,13 +28,17 @@ const AcceleratorHandler = () => {
     deviceDefinitions,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
-    workspaceActions: { setEditingState, switchAppTheme, toggleMaximizedWindow },
+    sharedWorkspaceActions: { closeProject, openProject, openRecentProject, saveFile, saveProject, closeFile },
+    workspaceActions: { switchAppTheme, toggleMaximizedWindow },
+    pouActions: { deleteRequest: deletePouRequest },
+    datatypeActions: { deleteRequest: deleteDatatypeRequest },
     snapshotActions: { undo, redo },
   } = useOpenPLCStore()
   const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
 
   const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
+
+  const selectedProjectLeaf = workspaceSelectors.useSelectedProjectTreeLeaf()
 
   /**
    * Compiler Related Accelerators
@@ -251,7 +170,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.saveProjectAccelerator((_event) => {
-      void saveProjectRequest(project, deviceDefinitions, setEditingState)
+      void saveProject(project, deviceDefinitions)
     })
 
     return () => {
@@ -260,6 +179,75 @@ const AcceleratorHandler = () => {
   }, [project, deviceDefinitions])
 
   /**
+   * ==== File Related Accelerators ====
+   */
+
+  /**
+   * -- Delete files
+   */
+  useEffect(() => {
+    const handleDelete = () => {
+      const { label, type } = selectedProjectLeaf
+      if (!type || !label) {
+        toast({
+          title: 'Error',
+          description: 'No file selected to delete.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      const isPou = ['function', 'function-block', 'program'].includes(type)
+      const isDatatype = type === 'data-type'
+
+      if (isPou) {
+        deletePouRequest(label)
+      } else if (isDatatype) {
+        deleteDatatypeRequest(label)
+      } else {
+        toast({
+          title: 'Error',
+          description: 'This element cannot be deleted.',
+          variant: 'fail',
+        })
+        return
+      }
+    }
+
+    window.bridge.deleteFileAccelerator((_event) => {
+      handleDelete()
+    })
+
+    return () => {
+      window.bridge.removeDeleteFileListener()
+    }
+  }, [selectedProjectLeaf])
+
+  /**
+   * -- Close tabs/editor
+   */
+  useEffect(() => {
+    window.bridge.closeTabAccelerator((_event) => closeFile(selectedProjectLeaf.label))
+
+    return () => {
+      window.bridge.removeCloseTabListener()
+    }
+  }, [selectedProjectLeaf])
+
+  /**
+   * -- Save file
+   */
+  useEffect(() => {
+    window.bridge.saveFileAccelerator((_event) => {
+      void saveFile(selectedProjectLeaf.label)
+    })
+
+    return () => {
+      window.bridge.removeSaveFileAccelerator()
+    }
+  }, [selectedProjectLeaf])
+
+  /*
    * ==== Edit Related Accelerators ====
    */
   useEffect(() => {
@@ -286,6 +274,7 @@ const AcceleratorHandler = () => {
       window.bridge.removeRedoRequestListener()
     }
   }, [meta.name, isMonacoFocused])
+
   /**
    * ==== Window Related Accelerators ====
    */

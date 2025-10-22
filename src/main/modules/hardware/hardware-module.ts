@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
-import type { AvailableBoards, HalsFile } from './hardware-types'
+import type { AvailableBoards, HalsFile, SerialPort } from './hardware-types'
 
 // interface MethodsResult<T> {
 //   success: boolean
@@ -87,7 +87,7 @@ class HardwareModule {
   // ############################################################################
 
   // ++ ============================= Getters ================================ ++
-  async getAvailableSerialPorts(): Promise<string[]> {
+  async getAvailableSerialPorts(): Promise<SerialPort[]> {
     let xml2stBinaryPath = join(
       this.binaryDirectoryPath,
       'xml2st',
@@ -105,7 +105,7 @@ class HardwareModule {
       return []
     }
 
-    let normalizedOutputString = ['fallback']
+    let normalizedOutputString: SerialPort[] = [{ name: '', address: 'fallback' }]
 
     if (stdout) {
       const parsedOutput = JSON.parse(stdout) as {
@@ -114,7 +114,10 @@ class HardwareModule {
           address: string
         }[]
       }
-      normalizedOutputString = parsedOutput.ports.map((port) => port.address)
+      normalizedOutputString = parsedOutput.ports.map((port) => ({
+        name: port.name ?? port.address,
+        address: port.address,
+      }))
     }
 
     return normalizedOutputString
@@ -140,6 +143,7 @@ class HardwareModule {
 
       availableBoards = produce(availableBoards, (draft) => {
         draft.set(board, {
+          compiler: boardData.compiler,
           core: boardData.core,
           preview: boardData.preview,
           specs: boardData.specs,

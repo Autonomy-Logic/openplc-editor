@@ -30,7 +30,10 @@ const SelectableTypeCell = ({
     ladderFlowActions: { updateNode },
     fbdFlowActions: { updateNode: updateFBDNode },
     libraries: sliceLibraries,
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
+
+  const language = 'language' in editor.meta ? editor.meta.language : null
 
   const VariableTypes = [
     {
@@ -66,7 +69,32 @@ const SelectableTypeCell = ({
     },
   ]
 
-  // const pou = pous.find((pou) => pou.data.name === editor.meta.name)
+  // Filter available types based on language
+  const getAvailableTypes = () => {
+    if (language === 'python' || language === 'cpp') {
+      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT']
+
+      // Only show Base Type for Python/C++ and filter out specific types
+      const availableTypes = VariableTypes.filter((type) => type.definition === 'base-type').map((type) => ({
+        ...type,
+        values: type.values.filter((value) => !excludedTypes.includes(value.toUpperCase())),
+      }))
+
+      return availableTypes
+    }
+    return VariableTypes
+  }
+
+  const getAvailableLibraryTypes = () => {
+    if (language === 'python' || language === 'cpp') {
+      // No library types for Python/C++
+      return []
+    }
+    return LibraryTypes
+  }
+
+  const availableVariableTypes = getAvailableTypes()
+  const availableLibraryTypes = getAvailableLibraryTypes()
 
   const { value, definition } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
@@ -82,27 +110,31 @@ const SelectableTypeCell = ({
   const [libraryFilter, setLibraryFilter] = useState('')
 
   const filteredBaseTypes =
-    VariableTypes.find((v) => v.definition === 'base-type')?.values.filter((val) =>
-      val.toUpperCase().includes(variableFilters['base-type'].toUpperCase()),
-    ) || []
+    availableVariableTypes
+      .find((v) => v.definition === 'base-type')
+      ?.values.filter((val) => val.toUpperCase().includes(variableFilters['base-type'].toUpperCase())) || []
 
   const filteredUserDataTypes =
-    VariableTypes.find((v) => v.definition === 'user-data-type')?.values.filter((val) =>
-      val.toUpperCase().includes(variableFilters['user-data-type'].toUpperCase()),
-    ) || []
+    availableVariableTypes
+      .find((v) => v.definition === 'user-data-type')
+      ?.values.filter((val) => val.toUpperCase().includes(variableFilters['user-data-type'].toUpperCase())) || []
 
   const filteredSystemLibraries =
-    LibraryTypes.find((l) => l.definition === 'system')?.values.filter((val) =>
-      val.toUpperCase().includes(libraryFilter.toUpperCase()),
-    ) || []
+    availableLibraryTypes
+      .find((l) => l.definition === 'system')
+      ?.values.filter((val) => val.toUpperCase().includes(libraryFilter.toUpperCase())) || []
 
   const filteredUserLibraries =
-    LibraryTypes.find((l) => l.definition === 'user')?.values.filter((val) =>
-      val.toUpperCase().includes(libraryFilter.toUpperCase()),
-    ) || []
+    availableLibraryTypes
+      .find((l) => l.definition === 'user')
+      ?.values.filter((val) => val.toUpperCase().includes(libraryFilter.toUpperCase())) || []
 
   const getBlockExpectedType = (node: Node): string => {
     const variant = (node.data as { variant?: { name?: string } }).variant
+
+    if (node.type === 'contact' || node.type === 'coil') {
+      return 'BOOL'
+    }
 
     if (variant && typeof variant.name === 'string') {
       return variant.name.trim().toUpperCase()
@@ -264,12 +296,14 @@ const SelectableTypeCell = ({
     <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
       <PrimitiveDropdown.Trigger
         asChild
+        disabled={isDebuggerVisible}
         // disabled={pou?.data.language !== 'st' && pou?.data.language !== 'il' && definition === 'derived'}
       >
         <div
           className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
-            'pointer-events-none': !selected,
+            'pointer-events-none': !selected || isDebuggerVisible,
             'cursor-default': !selected || definition === 'derived',
+            'cursor-not-allowed': isDebuggerVisible,
           })}
         >
           <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
@@ -287,7 +321,7 @@ const SelectableTypeCell = ({
           sideOffset={-20}
           className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
-          {VariableTypes.map((scope) => {
+          {availableVariableTypes.map((scope) => {
             const filterText = variableFilters[scope.definition] || ''
             const filteredValues = scope.definition === 'base-type' ? filteredBaseTypes : filteredUserDataTypes
             return (
@@ -348,17 +382,19 @@ const SelectableTypeCell = ({
             )
           })}
 
-          <PrimitiveDropdown.Item asChild>
-            <ArrayModal
-              variableName={variableName}
-              VariableRow={index}
-              arrayModalIsOpen={arrayModalIsOpen}
-              setArrayModalIsOpen={setArrayModalIsOpen}
-              closeContainer={() => setPoppoverIsOpen(false)}
-            />
-          </PrimitiveDropdown.Item>
+          {language !== 'python' && language !== 'cpp' && (
+            <PrimitiveDropdown.Item asChild>
+              <ArrayModal
+                variableName={variableName}
+                VariableRow={index}
+                arrayModalIsOpen={arrayModalIsOpen}
+                setArrayModalIsOpen={setArrayModalIsOpen}
+                closeContainer={() => setPoppoverIsOpen(false)}
+              />
+            </PrimitiveDropdown.Item>
+          )}
 
-          {LibraryTypes.map((scope) => {
+          {availableLibraryTypes.map((scope) => {
             const filteredValues = scope.definition === 'system' ? filteredSystemLibraries : filteredUserLibraries
             return (
               <PrimitiveDropdown.Sub key={scope.definition} onOpenChange={() => setLibraryFilter('')}>
@@ -415,8 +451,6 @@ const SelectableTypeCell = ({
   )
 }
 
-const VariableClasses = ['input', 'output', 'inOut', 'external', 'local', 'temp']
-
 const SelectableClassCell = ({
   getValue,
   row: { index },
@@ -424,7 +458,34 @@ const SelectableClassCell = ({
   table,
   selected = true,
 }: ISelectableCellProps) => {
-  const initialValue = getValue()
+  const {
+    editor,
+    workspace: { isDebuggerVisible },
+  } = useOpenPLCStore()
+
+  const language = 'language' in editor.meta ? editor.meta.language : null
+  const getVariableClasses = () => {
+    if (language === 'python' || language === 'cpp') {
+      return ['input', 'output']
+    }
+    return ['input', 'output', 'inOut', 'external', 'local', 'temp']
+  }
+
+  const variableClasses = getVariableClasses()
+
+  // Get the current value from the table
+  const currentValue = getValue()
+
+  // Determine initial value: use "input" for Python/C++ if current value is empty/undefined
+  const getInitialValue = () => {
+    if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
+      return 'input'
+    }
+    return currentValue
+  }
+
+  const initialValue = getInitialValue()
+
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
 
@@ -443,18 +504,28 @@ const SelectableClassCell = ({
     }
   }
 
-  // If the initialValue is changed external, sync it up with our state
+  // Effect to handle language changes and set default value for Python/C++
   useEffect(() => {
-    setCellValue(initialValue)
-  }, [initialValue])
+    if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
+      // Set default value to "input" for Python/C++ and update the table
+      setCellValue('input')
+      table.options.meta?.updateData(index, id, 'input')
+    } else {
+      console.log(currentValue)
+      setCellValue(currentValue)
+    }
+  }, [currentValue, language, index, id, table])
 
   return (
-    <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)}>
+    <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)} disabled={isDebuggerVisible}>
       <SelectTrigger
         placeholder={cellValue as string}
         className={cn(
           'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
-          { 'pointer-events-none': !selected },
+          {
+            'pointer-events-none': !selected || isDebuggerVisible,
+            'cursor-not-allowed': isDebuggerVisible,
+          },
         )}
       />
       <SelectContent
@@ -463,7 +534,7 @@ const SelectableClassCell = ({
         sideOffset={-20}
         className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
       >
-        {VariableClasses.map((type) => (
+        {variableClasses.map((type) => (
           <SelectItem
             key={type}
             value={type}

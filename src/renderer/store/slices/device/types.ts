@@ -22,11 +22,13 @@ const runtimeConnectionSchema = z.object({
   jwtToken: z.string().nullable(),
   connectionStatus: z.enum(['disconnected', 'connecting', 'connected', 'error']),
   plcStatus: z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable(),
+  ipAddress: z.string().nullable(),
 })
 
 type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>
 
 const availableBoardInfo = z.object({
+  compiler: z.enum(['arduino-cli', 'openplc-compiler']),
   core: z.string(),
   preview: z.string(),
   specs: z.object({
@@ -51,9 +53,14 @@ const availableBoardInfo = z.object({
 
 type AvailableBoardInfo = z.infer<typeof availableBoardInfo>
 
+const serialPortSchema = z.object({
+  name: z.string(),
+  address: z.string(),
+})
+
 const deviceAvailableOptionsSchema = z.object({
   availableBoards: z.map(z.string(), availableBoardInfo),
-  availableCommunicationPorts: z.array(z.string()),
+  availableCommunicationPorts: z.array(serialPortSchema),
   availableRTUInterfaces: z.array(z.string()),
   availableRTUBaudRates: z.array(z.string()),
   availableTCPInterfaces: z.array(z.string()),
@@ -67,6 +74,7 @@ const deviceStateSchema = z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
     compileOnly: z.boolean().default(true),
+    temporaryDhcpIp: z.string().optional(),
   }),
   deviceUpdated: z.object({
     updated: z.boolean(),
@@ -94,7 +102,7 @@ const deviceActionSchema = z.object({
     .args(
       z.object({
         availableBoards: z.map(z.string(), availableBoardInfo).optional(),
-        availableCommunicationPorts: z.array(z.string()).optional(),
+        availableCommunicationPorts: z.array(serialPortSchema).optional(),
       }),
     )
     .returns(z.void()),
@@ -151,6 +159,7 @@ const deviceActionSchema = z.object({
     .function()
     .args(z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable())
     .returns(z.void()),
+  setTemporaryDhcpIp: z.function().args(z.string().optional()).returns(z.void()),
 })
 
 type DeviceActions = z.infer<typeof deviceActionSchema>
