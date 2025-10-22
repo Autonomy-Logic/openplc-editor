@@ -471,6 +471,7 @@ const WorkspaceScreen = () => {
 
               if (result.error?.includes('Failed to reconnect')) {
                 workspaceActions.setDebuggerVisible(false)
+                workspaceActions.setDebugForcedVariables(new Map())
                 consoleActions.addLog({
                   id: crypto.randomUUID(),
                   level: 'error',
