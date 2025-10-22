@@ -149,7 +149,7 @@ export const parseStringValue = (value: string): string | null => {
 }
 
 export const stringToBuffer = (value: string): Uint8Array => {
-  const buffer = new Uint8Array(127)
+  const buffer = new Uint8Array(1 + value.length)
 
   buffer[0] = value.length
 
