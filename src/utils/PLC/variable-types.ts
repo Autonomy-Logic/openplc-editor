@@ -74,8 +74,8 @@ export const parseIntegerValue = (value: string, typeInfo: VariableTypeInfo): bi
   }
 }
 
-export const integerToBuffer = (value: bigint, byteSize: number, signed: boolean): Buffer => {
-  const buffer = Buffer.alloc(byteSize)
+export const integerToBuffer = (value: bigint, byteSize: number, signed: boolean): Uint8Array => {
+  const buffer = new Uint8Array(byteSize)
 
   let workingValue = value
   if (signed && value < BigInt(0)) {
@@ -84,7 +84,7 @@ export const integerToBuffer = (value: bigint, byteSize: number, signed: boolean
   }
 
   for (let i = 0; i < byteSize; i++) {
-    buffer.writeUInt8(Number(workingValue & BigInt(0xff)), i)
+    buffer[i] = Number(workingValue & BigInt(0xff))
     workingValue = workingValue >> BigInt(8)
   }
 

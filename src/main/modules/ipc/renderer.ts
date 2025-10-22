@@ -272,7 +272,7 @@ const rendererProcessBridge = {
   debuggerSetVariable: (
     variableIndex: number,
     force: boolean,
-    valueBuffer?: Buffer,
+    valueBuffer?: Uint8Array,
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('debugger:set-variable', variableIndex, force, valueBuffer),
 
