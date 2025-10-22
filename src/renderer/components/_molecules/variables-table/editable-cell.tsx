@@ -7,6 +7,7 @@ import { ProjectResponse } from '@root/renderer/store/slices/project'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
+import { isLegalIdentifier, sanitizeVariableInput } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -127,6 +128,14 @@ const EditableNameCell = ({
 
     const oldName = initialValue
     const newName = cellValue
+
+    const [isNameLegal, reason] = isLegalIdentifier(newName)
+    if (isNameLegal === false) {
+      toast({ title: 'Error', description: `'${newName}' ${reason}`, variant: 'fail' })
+      setCellValue(oldName)
+      setIsEditing(false)
+      return
+    }
 
     /* 1 ▸ which blocks use the variable? */
     const nodesUsingVarLadder = findNodesUsingVariable(ladderFlows, oldName)
@@ -328,6 +337,7 @@ const EditableNameCell = ({
           value={cellValue}
           onChange={(e) => setCellValue(e.target.value)}
           onBlur={() => void onBlur()}
+          onInput={(e) => sanitizeVariableInput(e.currentTarget)}
           className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
         />
       ) : (

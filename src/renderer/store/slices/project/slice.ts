@@ -7,6 +7,7 @@ import {
   PLCTask,
   PLCVariable,
 } from '@root/types/PLC/open-plc'
+import { isLegalIdentifier } from '@root/utils/keywords'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -231,6 +232,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
      */
     createVariable: (variableToBeCreated): ProjectResponse => {
       let response: ProjectResponse = { ok: true }
+      // validate variable name
+      const [isNameLegal, reason] = isLegalIdentifier(variableToBeCreated.data.name)
+      if (isNameLegal === false) {
+        console.error(`'${variableToBeCreated.data.name}' ${reason}`)
+        response = {
+          ok: false,
+          title: 'Illegal Variable Name',
+          message: `'${variableToBeCreated.data.name}' ${reason}`,
+        }
+        return response
+      }
       setState(
         produce(({ project }: ProjectSlice) => {
           const { scope } = variableToBeCreated

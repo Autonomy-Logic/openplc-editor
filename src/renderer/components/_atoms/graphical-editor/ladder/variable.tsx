@@ -3,6 +3,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { getLiteralType } from '@root/utils/keywords'
 import {
   floatToBuffer,
   getVariableTypeInfo,
@@ -227,11 +228,19 @@ const VariableElement = (block: VariableProps) => {
       pou.data.variables as PLCVariable[],
       variableNameToSubmit,
     )
-    if (!variable) {
+    const literalTypes = getLiteralType(variableNameToSubmit)
+    if (variable) {
+      setIsAVariable(true)
+      setInputError(false)
+    } else if (literalTypes) {
       setIsAVariable(false)
+      const mismatchType = !literalTypes.includes(data.block.variableType.type.value)
+      setInputError(mismatchType)
       variable = { name: variableNameToSubmit }
     } else {
       setIsAVariable(true)
+      setInputError(true)
+      variable = { name: variableNameToSubmit }
     }
 
     updateNode({
@@ -248,7 +257,6 @@ const VariableElement = (block: VariableProps) => {
     })
 
     updateRelatedNode(rung, variableNode, variable as PLCVariable)
-    setInputError(false)
   }
 
   const onChangeHandler = () => {
