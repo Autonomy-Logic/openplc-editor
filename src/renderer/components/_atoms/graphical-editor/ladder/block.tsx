@@ -6,6 +6,7 @@ import { LibraryState } from '@root/renderer/store/slices'
 import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
+import type { VariableReference } from '@root/types/PLC/variable-reference'
 import { cn, generateNumericUUID } from '@root/utils'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -31,10 +32,18 @@ export type BlockVariant = {
 type OldVariables = {
   [key: string]: { variable: PLCVariable; type: 'input' | 'output' }
 }
+
 export type LadderBlockConnectedVariables = {
   handleId: string
   handleTableId?: string
   type: 'input' | 'output'
+  variable: PLCVariable | undefined
+}[]
+
+export type LadderBlockConnectedVariablesV2 = {
+  handleName: string
+  type: 'input' | 'output'
+  variableRef: VariableReference | null
   variable: PLCVariable | undefined
 }[]
 
@@ -43,7 +52,9 @@ export type BlockNodeData<T> = BasicNodeData & {
   executionControl: boolean
   lockExecutionControl: boolean
   connectedVariables: LadderBlockConnectedVariables
+  connectedVariablesV2?: LadderBlockConnectedVariablesV2
   variable: { id?: string; name: string } | PLCVariable
+  variableRef?: VariableReference
   hasDivergence?: boolean
 }
 
