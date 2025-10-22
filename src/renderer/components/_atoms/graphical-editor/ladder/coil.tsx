@@ -333,7 +333,8 @@ export const Coil = (block: CoilProps) => {
 
     if (variableIndex === undefined) return
 
-    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 1)
+    const valueBuffer = Buffer.from([1])
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -354,7 +355,8 @@ export const Coil = (block: CoilProps) => {
 
     if (variableIndex === undefined) return
 
-    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 0)
+    const valueBuffer = Buffer.from([0])
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
