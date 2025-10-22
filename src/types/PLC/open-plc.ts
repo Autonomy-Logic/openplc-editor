@@ -24,7 +24,6 @@ const baseTypeSchema = z.enum([
   'word',
   'dword',
   'lword',
-  'loglevel',
 ])
 
 type BaseType = z.infer<typeof baseTypeSchema>

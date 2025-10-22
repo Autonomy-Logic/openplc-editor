@@ -3,7 +3,15 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
-import { getVariableTypeInfo, integerToBuffer, parseIntegerValue } from '@root/utils/PLC/variable-types'
+import {
+  floatToBuffer,
+  getVariableTypeInfo,
+  integerToBuffer,
+  parseFloatValue,
+  parseIntegerValue,
+  parseStringValue,
+  stringToBuffer,
+} from '@root/utils/PLC/variable-types'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -359,20 +367,47 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
-    const parsedValue = parseIntegerValue(forceValue, typeInfo)
-    if (parsedValue === null) {
-      setForceValueModalOpen(false)
-      setForceValue('')
-      return
-    }
+    const normalizedType = variableType.toLowerCase()
+    const isFloatType = normalizedType === 'real' || normalizedType === 'lreal'
+    const isStringType = normalizedType === 'string'
 
-    const valueBuffer = integerToBuffer(parsedValue, typeInfo.byteSize, typeInfo.signed)
+    let valueBuffer: Uint8Array
+    let forcedValueForState: boolean
+
+    if (isStringType) {
+      const parsedStringValue: string | null = parseStringValue(forceValue)
+      if (parsedStringValue === null) {
+        setForceValueModalOpen(false)
+        setForceValue('')
+        return
+      }
+      valueBuffer = stringToBuffer(parsedStringValue)
+      forcedValueForState = true
+    } else if (isFloatType) {
+      const parsedFloatValue = parseFloatValue(forceValue, typeInfo.byteSize)
+      if (parsedFloatValue === null) {
+        setForceValueModalOpen(false)
+        setForceValue('')
+        return
+      }
+      valueBuffer = floatToBuffer(parsedFloatValue, typeInfo.byteSize)
+      forcedValueForState = parsedFloatValue >= 0
+    } else {
+      const parsedIntValue = parseIntegerValue(forceValue, typeInfo)
+      if (parsedIntValue === null) {
+        setForceValueModalOpen(false)
+        setForceValue('')
+        return
+      }
+      valueBuffer = integerToBuffer(parsedIntValue, typeInfo.byteSize, typeInfo.signed)
+      forcedValueForState = parsedIntValue >= BigInt(0)
+    }
 
     const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
-      newForcedVariables.set(compositeKey, parsedValue >= BigInt(0))
+      newForcedVariables.set(compositeKey, forcedValueForState)
       setDebugForcedVariables(newForcedVariables)
     }
 

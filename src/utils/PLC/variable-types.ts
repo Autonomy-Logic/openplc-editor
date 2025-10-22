@@ -33,6 +33,8 @@ export const getVariableTypeInfo = (type: string): VariableTypeInfo | null => {
       return { byteSize: 4, signed: true }
     case 'lreal':
       return { byteSize: 8, signed: true }
+    case 'string':
+      return { byteSize: 127, signed: false }
     default:
       return null
   }
@@ -86,6 +88,73 @@ export const integerToBuffer = (value: bigint, byteSize: number, signed: boolean
   for (let i = byteSize - 1; i >= 0; i--) {
     buffer[i] = Number(workingValue & BigInt(0xff))
     workingValue = workingValue >> BigInt(8)
+  }
+
+  return buffer
+}
+
+export const parseFloatValue = (value: string, byteSize: number): number | null => {
+  try {
+    const trimmedValue = value.trim()
+    const parsedValue = parseFloat(trimmedValue)
+
+    if (isNaN(parsedValue) || !isFinite(parsedValue)) {
+      return null
+    }
+
+    if (byteSize === 4) {
+      const maxFloat32 = 3.4028235e38
+      const minFloat32 = -3.4028235e38
+      if (parsedValue > maxFloat32 || parsedValue < minFloat32) {
+        return null
+      }
+    }
+
+    return parsedValue
+  } catch {
+    return null
+  }
+}
+
+export const floatToBuffer = (value: number, byteSize: number): Uint8Array => {
+  const buffer = new Uint8Array(byteSize)
+  const dataView = new DataView(buffer.buffer)
+
+  if (byteSize === 4) {
+    dataView.setFloat32(0, value, false)
+  } else if (byteSize === 8) {
+    dataView.setFloat64(0, value, false)
+  }
+
+  return buffer
+}
+
+export const parseStringValue = (value: string): string | null => {
+  try {
+    if (value.length > 126) {
+      return null
+    }
+
+    for (let i = 0; i < value.length; i++) {
+      const charCode = value.charCodeAt(i)
+      if (charCode > 127) {
+        return null
+      }
+    }
+
+    return value
+  } catch {
+    return null
+  }
+}
+
+export const stringToBuffer = (value: string): Uint8Array => {
+  const buffer = new Uint8Array(1 + value.length)
+
+  buffer[0] = value.length
+
+  for (let i = 0; i < value.length; i++) {
+    buffer[i + 1] = value.charCodeAt(i)
   }
 
   return buffer
