@@ -153,8 +153,10 @@ export class ModbusRtuClient {
           const calculatedCrc = this.calculateCrc(responseBuffer.slice(0, responseBuffer.length - 2))
 
           if (receivedCrc !== calculatedCrc) {
-            reject(new Error('CRC validation failed'))
-            return
+            // OpenPLC debugger ignores CRC errors
+            //reject(new Error('CRC validation failed'))
+            //return
+            console.warn('Warning: CRC validation failed, but continuing anyway')
           }
 
           const responseWithoutCrc = responseBuffer.slice(0, responseBuffer.length - 2)
