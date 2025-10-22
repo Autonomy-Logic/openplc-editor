@@ -1135,6 +1135,47 @@ class CompilerModule {
     return zipBuffer
   }
 
+  async embedCBlocksInProgramSt(
+    sourceTargetFolderPath: string,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const programStPath = join(sourceTargetFolderPath, 'program.st')
+    const cBlocksHeaderPath = join(sourceTargetFolderPath, 'c_blocks.h')
+    const cBlocksCodePath = join(sourceTargetFolderPath, 'c_blocks_code.cpp')
+
+    try {
+      let programStContent = await readFile(programStPath, 'utf8')
+
+      try {
+        await fs.access(cBlocksHeaderPath)
+        const headerContent = await readFile(cBlocksHeaderPath, 'utf8')
+        const headerLines = headerContent.split('\n')
+        const embeddedHeader = headerLines.map((line) => `(*FILE:c_blocks.h ${line} *)`).join('\n')
+        programStContent += '\n' + embeddedHeader
+
+        handleOutputData('Embedded c_blocks.h into program.st for Runtime v3', 'info')
+      } catch {
+        handleOutputData('c_blocks.h not found, skipping embedding', 'info')
+      }
+
+      try {
+        await fs.access(cBlocksCodePath)
+        const codeContent = await readFile(cBlocksCodePath, 'utf8')
+        const codeLines = codeContent.split('\n')
+        const embeddedCode = codeLines.map((line) => `(*FILE:c_blocks_code.cpp ${line} *)`).join('\n')
+        programStContent += '\n' + embeddedCode
+
+        handleOutputData('Embedded c_blocks_code.cpp into program.st for Runtime v3', 'info')
+      } catch {
+        handleOutputData('c_blocks_code.cpp not found, skipping embedding', 'info')
+      }
+
+      await writeFile(programStPath, programStContent, 'utf8')
+    } catch (error) {
+      throw new Error(`Error embedding C blocks in program.st: ${(error as Error).message}`)
+    }
+  }
+
   /**
    * This will be the main entry point for the compiler module.
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
@@ -1395,6 +1436,26 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    // Step 9: Embed C/C++ blocks in program.st for Runtime v3
+    if (boardRuntime === 'openplc-compiler' && boardTarget === 'OpenPLC Runtime v3') {
+      try {
+        await this.embedCBlocksInProgramSt(sourceTargetFolderPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
     }
 
     // -- Verify if the runtime target is Arduino or OpenPLC --
