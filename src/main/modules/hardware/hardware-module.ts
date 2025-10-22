@@ -115,7 +115,7 @@ class HardwareModule {
         }[]
       }
       normalizedOutputString = parsedOutput.ports.map((port) => ({
-        name: port.name || '',
+        name: port.name ?? port.address,
         address: port.address,
       }))
     }
