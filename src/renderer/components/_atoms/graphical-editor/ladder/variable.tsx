@@ -3,6 +3,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { getVariableTypeInfo, integerToBuffer, parseIntegerValue } from '@root/utils/PLC/variable-types'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -268,7 +269,8 @@ const VariableElement = (block: VariableProps) => {
 
     if (variableIndex === undefined) return
 
-    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 1)
+    const valueBuffer = new Uint8Array([1])
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -289,7 +291,8 @@ const VariableElement = (block: VariableProps) => {
 
     if (variableIndex === undefined) return
 
-    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 0)
+    const valueBuffer = new Uint8Array([0])
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -326,7 +329,53 @@ const VariableElement = (block: VariableProps) => {
     setForceValueModalOpen(true)
   }
 
-  const handleForceValueConfirm = () => {
+  const handleForceValueConfirm = async () => {
+    if (!data.variable.name || !forceValue.trim()) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const variableIndex = debugVariableIndexes.get(compositeKey)
+
+    if (variableIndex === undefined) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const variableType = getVariableType()
+    if (!variableType) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const typeInfo = getVariableTypeInfo(variableType)
+    if (!typeInfo) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const parsedValue = parseIntegerValue(forceValue, typeInfo)
+    if (parsedValue === null) {
+      setForceValueModalOpen(false)
+      setForceValue('')
+      return
+    }
+
+    const valueBuffer = integerToBuffer(parsedValue, typeInfo.byteSize, typeInfo.signed)
+
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
+
+    if (result.success) {
+      const newForcedVariables = new Map(Array.from(debugForcedVariables))
+      newForcedVariables.set(compositeKey, parsedValue >= BigInt(0))
+      setDebugForcedVariables(newForcedVariables)
+    }
+
     setForceValueModalOpen(false)
     setForceValue('')
   }
@@ -442,32 +491,42 @@ const VariableElement = (block: VariableProps) => {
                   <>
                     <div
                       className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceTrue}
+                      onClick={(e) => void handleForceTrue(e)}
                     >
                       <p>Force True</p>
                     </div>
                     <div
                       className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceFalse}
+                      onClick={(e) => void handleForceFalse(e)}
                     >
                       <p>Force False</p>
                     </div>
                     {isForced && (
                       <div
                         className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        onClick={handleReleaseForce}
+                        onClick={(e) => void handleReleaseForce(e)}
                       >
                         <p>Release Force</p>
                       </div>
                     )}
                   </>
                 ) : (
-                  <div
-                    className='flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                    onClick={handleForceValue}
-                  >
-                    <p>Force value...</p>
-                  </div>
+                  <>
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceValue}
+                    >
+                      <p>Force value...</p>
+                    </div>
+                    {isForced && (
+                      <div
+                        className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        onClick={(e) => void handleReleaseForce(e)}
+                      >
+                        <p>Release Force</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </Popover.Content>
             </Popover.Portal>
@@ -493,7 +552,7 @@ const VariableElement = (block: VariableProps) => {
                 type='text'
                 value={forceValue}
                 onChange={(e) => setForceValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleForceValueConfirm()}
+                onKeyDown={(e) => e.key === 'Enter' && void handleForceValueConfirm()}
                 placeholder='Enter value'
                 className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
                 autoFocus
@@ -502,7 +561,7 @@ const VariableElement = (block: VariableProps) => {
 
             <div className='mt-4 flex gap-3'>
               <button
-                onClick={handleForceValueConfirm}
+                onClick={() => void handleForceValueConfirm()}
                 className='flex-1 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark'
               >
                 OK

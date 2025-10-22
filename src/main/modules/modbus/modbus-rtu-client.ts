@@ -304,7 +304,7 @@ export class ModbusRtuClient {
   async setVariable(
     variableIndex: number,
     force: boolean,
-    value?: number,
+    valueBuffer?: Buffer,
   ): Promise<{
     success: boolean
     error?: string
@@ -312,18 +312,19 @@ export class ModbusRtuClient {
     try {
       const functionCode = ModbusFunctionCode.DEBUG_SET
 
-      let data: Buffer
-      if (!force) {
-        data = Buffer.alloc(5)
-        data.writeUInt16BE(variableIndex, 0)
-        data.writeUInt8(0, 2)
-        data.writeUInt16BE(1, 3)
+      const dataLength = force && valueBuffer ? valueBuffer.length : 1
+      const data = Buffer.alloc(5 + dataLength)
+
+      data.writeUInt16BE(variableIndex, 0)
+      data.writeUInt8(force ? 1 : 0, 2)
+      data.writeUInt16BE(dataLength, 3)
+
+      if (force && valueBuffer) {
+        for (let i = 0; i < valueBuffer.length; i++) {
+          data.writeUInt8(valueBuffer[i], 5 + i)
+        }
       } else {
-        data = Buffer.alloc(6)
-        data.writeUInt16BE(variableIndex, 0)
-        data.writeUInt8(1, 2)
-        data.writeUInt16BE(1, 3)
-        data.writeUInt8(value ?? 0, 5)
+        data.writeUInt8(0, 5)
       }
 
       const request = this.assembleRequest(functionCode, data)

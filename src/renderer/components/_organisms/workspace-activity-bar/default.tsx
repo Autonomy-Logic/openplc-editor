@@ -354,6 +354,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const _disconnectResult: { success: boolean } = await window.bridge.debuggerDisconnect()
       workspaceActions.setDebuggerVisible(false)
       workspaceActions.setDebuggerTargetIp(null)
+      workspaceActions.setDebugForcedVariables(new Map())
       return
     }
 

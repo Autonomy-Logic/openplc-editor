@@ -267,12 +267,12 @@ export class ModbusTcpClient {
   async setVariable(
     variableIndex: number,
     force: boolean,
-    value?: number,
+    valueBuffer?: Buffer,
   ): Promise<{
     success: boolean
     error?: string
   }> {
-    console.log('[ModbusTcpClient] setVariable called with:', { variableIndex, force, value })
+    console.log('[ModbusTcpClient] setVariable called with:', { variableIndex, force, valueBuffer })
 
     if (!this.socket) {
       console.log('[ModbusTcpClient] Socket not connected')
@@ -284,7 +284,8 @@ export class ModbusTcpClient {
     const unitId = 0x00
     const functionCode = ModbusFunctionCode.DEBUG_SET
 
-    const pduLength = 8
+    const dataLength = force && valueBuffer ? valueBuffer.length : 1
+    const pduLength = 7 + dataLength
     const request = Buffer.alloc(6 + pduLength)
 
     request.writeUInt16BE(transactionId, 0)
@@ -294,8 +295,15 @@ export class ModbusTcpClient {
     request.writeUInt8(functionCode, 7)
     request.writeUInt16BE(variableIndex, 8)
     request.writeUInt8(force ? 1 : 0, 10)
-    request.writeUInt16BE(1, 11)
-    request.writeUInt8(force ? value ?? 0 : 0, 13)
+    request.writeUInt16BE(dataLength, 11)
+
+    if (force && valueBuffer) {
+      for (let i = 0; i < valueBuffer.length; i++) {
+        request.writeUInt8(valueBuffer[i], 13 + i)
+      }
+    } else {
+      request.writeUInt8(0, 13)
+    }
 
     console.log('[ModbusTcpClient] Sending request:', {
       transactionId,
@@ -305,8 +313,8 @@ export class ModbusTcpClient {
       functionCode: `0x${functionCode.toString(16)}`,
       variableIndex,
       forceFlag: force ? 1 : 0,
-      dataLength: 1,
-      value: force ? value ?? 0 : undefined,
+      dataLength,
+      valueBuffer: valueBuffer?.toString('hex'),
       requestHex: request.toString('hex'),
     })
 

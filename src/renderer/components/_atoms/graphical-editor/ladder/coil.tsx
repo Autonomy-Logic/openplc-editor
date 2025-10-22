@@ -333,7 +333,8 @@ export const Coil = (block: CoilProps) => {
 
     if (variableIndex === undefined) return
 
-    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 1)
+    const valueBuffer = new Uint8Array([1])
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -354,7 +355,8 @@ export const Coil = (block: CoilProps) => {
 
     if (variableIndex === undefined) return
 
-    const result = await window.bridge.debuggerSetVariable(variableIndex, true, 0)
+    const valueBuffer = new Uint8Array([0])
+    const result = await window.bridge.debuggerSetVariable(variableIndex, true, valueBuffer)
 
     if (result.success) {
       const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -510,20 +512,20 @@ export const Coil = (block: CoilProps) => {
                   >
                     <div
                       className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceTrue}
+                      onClick={(e) => void handleForceTrue(e)}
                     >
                       <p>Force True</p>
                     </div>
                     <div
                       className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceFalse}
+                      onClick={(e) => void handleForceFalse(e)}
                     >
                       <p>Force False</p>
                     </div>
                     {isForced && (
                       <div
                         className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        onClick={handleReleaseForce}
+                        onClick={(e) => void handleReleaseForce(e)}
                       >
                         <p>Release Force</p>
                       </div>

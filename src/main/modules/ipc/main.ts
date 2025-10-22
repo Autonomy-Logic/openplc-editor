@@ -966,12 +966,14 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     variableIndex: number,
     force: boolean,
-    value?: number,
+    valueBuffer?: Uint8Array,
   ): Promise<{ success: boolean; error?: string }> => {
+    const buffer = valueBuffer ? Buffer.from(valueBuffer) : undefined
+
     console.log('[IPC Handler] debugger:set-variable called with:', {
       variableIndex,
       force,
-      value,
+      valueBuffer: buffer?.toString('hex'),
       connectionType: this.debuggerConnectionType,
     })
 
@@ -982,7 +984,7 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       try {
-        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, value)
+        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, buffer)
         console.log('[IPC Handler] WebSocket setVariable result:', result)
         return result
       } catch (error) {
@@ -997,7 +999,7 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     try {
-      const result = await this.debuggerModbusClient.setVariable(variableIndex, force, value)
+      const result = await this.debuggerModbusClient.setVariable(variableIndex, force, buffer)
       console.log('[IPC Handler] Modbus setVariable result:', result)
       return result
     } catch (error) {
