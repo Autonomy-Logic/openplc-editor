@@ -511,12 +511,22 @@ const VariableElement = (block: VariableProps) => {
                     )}
                   </>
                 ) : (
-                  <div
-                    className='flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                    onClick={handleForceValue}
-                  >
-                    <p>Force value...</p>
-                  </div>
+                  <>
+                    <div
+                      className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      onClick={handleForceValue}
+                    >
+                      <p>Force value...</p>
+                    </div>
+                    {isForced && (
+                      <div
+                        className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        onClick={(e) => void handleReleaseForce(e)}
+                      >
+                        <p>Release Force</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </Popover.Content>
             </Popover.Portal>

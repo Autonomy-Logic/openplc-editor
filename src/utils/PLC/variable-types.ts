@@ -83,7 +83,7 @@ export const integerToBuffer = (value: bigint, byteSize: number, signed: boolean
     workingValue = maxUnsigned + value
   }
 
-  for (let i = 0; i < byteSize; i++) {
+  for (let i = byteSize - 1; i >= 0; i--) {
     buffer[i] = Number(workingValue & BigInt(0xff))
     workingValue = workingValue >> BigInt(8)
   }
