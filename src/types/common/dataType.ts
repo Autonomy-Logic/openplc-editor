@@ -27,7 +27,6 @@ const _dataTypeSchema = z.object({
             'WORD',
             'DWORD',
             'LWORD',
-            'LOGLEVEL',
           ]),
         }),
         subrange: z.object({
