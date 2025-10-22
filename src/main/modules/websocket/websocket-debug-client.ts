@@ -287,7 +287,9 @@ export class WebSocketDebugClient {
     request.writeUInt16BE(dataLength, 4)
 
     if (force && valueBuffer) {
-      valueBuffer.copy(request, 6)
+      for (let i = 0; i < valueBuffer.length; i++) {
+        request.writeUInt8(valueBuffer[i], 6 + i)
+      }
     } else {
       request.writeUInt8(0, 6)
     }

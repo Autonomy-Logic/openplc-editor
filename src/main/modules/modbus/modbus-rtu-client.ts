@@ -320,7 +320,9 @@ export class ModbusRtuClient {
       data.writeUInt16BE(dataLength, 3)
 
       if (force && valueBuffer) {
-        valueBuffer.copy(data, 5)
+        for (let i = 0; i < valueBuffer.length; i++) {
+          data.writeUInt8(valueBuffer[i], 5 + i)
+        }
       } else {
         data.writeUInt8(0, 5)
       }

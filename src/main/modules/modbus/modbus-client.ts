@@ -298,7 +298,9 @@ export class ModbusTcpClient {
     request.writeUInt16BE(dataLength, 11)
 
     if (force && valueBuffer) {
-      valueBuffer.copy(request, 13)
+      for (let i = 0; i < valueBuffer.length; i++) {
+        request.writeUInt8(valueBuffer[i], 13 + i)
+      }
     } else {
       request.writeUInt8(0, 13)
     }
