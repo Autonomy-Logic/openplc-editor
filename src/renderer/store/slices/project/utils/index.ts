@@ -64,7 +64,10 @@ function checkSimpleTypeCompatibility(
 
   const userType = dataTypes.find((dt) => dt.name.toUpperCase() === expectedNormalized)
   if (userType) {
-    if (variableType.definition === 'user-data-type' && variableType.value.toUpperCase() === expectedNormalized) {
+    if (
+      variableType.definition === 'user-data-type' &&
+      variableType.value.toUpperCase() === userType.name.toUpperCase()
+    ) {
       return { isCompatible: true }
     }
   }
@@ -77,6 +80,9 @@ function checkSimpleTypeCompatibility(
 
 /**
  * Checks if a variable type is compatible with an expected type (full type object form).
+ * TODO: Implement array dimension checking. Currently, array types are compared only by name, (important-comment)
+ * but we should also validate that array dimensions match (e.g., ARRAY[0..9] vs ARRAY[0..19]). (important-comment)
+ * This will require parsing the array bounds from the type value and comparing them. (important-comment)
  */
 function checkComplexTypeCompatibility(
   variableType: PLCVariable['type'],
@@ -135,6 +141,10 @@ export function getVariableByNameAndType(
   expectedType?: PLCVariable['type'] | string,
   dataTypes?: PLCDataType[],
 ): PLCVariable | Omit<PLCVariable, 'class'> | null {
+  if (!variableName) {
+    return null
+  }
+
   const normalizedName = variableName.toLowerCase()
 
   const matchingVariables = variables.filter((v) => v.name.toLowerCase() === normalizedName)
