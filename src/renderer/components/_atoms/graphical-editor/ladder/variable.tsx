@@ -375,7 +375,7 @@ const VariableElement = (block: VariableProps) => {
     let forcedValueForState: boolean
 
     if (isStringType) {
-      const parsedStringValue = parseStringValue(forceValue)
+      const parsedStringValue: string | null = parseStringValue(forceValue)
       if (parsedStringValue === null) {
         setForceValueModalOpen(false)
         setForceValue('')
