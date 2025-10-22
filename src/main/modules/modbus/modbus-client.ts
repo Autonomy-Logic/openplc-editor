@@ -285,7 +285,7 @@ export class ModbusTcpClient {
     const functionCode = ModbusFunctionCode.DEBUG_SET
 
     const dataLength = force && valueBuffer ? valueBuffer.length : 1
-    const pduLength = 5 + dataLength
+    const pduLength = 7 + dataLength
     const request = Buffer.alloc(6 + pduLength)
 
     request.writeUInt16BE(transactionId, 0)
