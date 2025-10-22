@@ -3,6 +3,7 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { LibraryState } from '@root/renderer/store/slices'
+import { getVariableByNameAndType } from '@root/renderer/store/slices/project/utils'
 import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
@@ -487,8 +488,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id === variable.id) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+    const nodeVariable = (node.data as BasicNodeData).variable
+    const nodeVariableName = nodeVariable.name.toLowerCase()
+    const selectedVariableName = variable.name.toLowerCase()
+
+    if (nodeVariableName === selectedVariableName) {
+      if (nodeVariable.name !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
@@ -564,14 +569,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     const blockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+    const expectedType = { definition: 'derived' as const, value: blockType }
 
-    const findMatchingVariable = () =>
-      variables.all.find(
-        (variable) =>
-          variable.name === variableNameToSubmit &&
-          variable.type.definition === 'derived' &&
-          variable.type.value === blockType,
-      )
+    const matchingVariable = getVariableByNameAndType(variables.all, variableNameToSubmit, expectedType, [])
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
       updateNode({
@@ -586,12 +586,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     let variableToLink = variables.selected
 
-    const matchingVariable = findMatchingVariable()
-
     if (variableToLink) {
-      if (variableToLink.name === variableNameToSubmit) return
+      if (variableToLink.name.toLowerCase() === variableNameToSubmit.toLowerCase()) return
 
-      if (matchingVariable && matchingVariable.id !== variableToLink.id) {
+      if (matchingVariable && matchingVariable.name.toLowerCase() !== variableToLink.name.toLowerCase()) {
         variableToLink = matchingVariable
       } else {
         updateNodeVariable({ name: variableNameToSubmit })
@@ -606,7 +604,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
         const creationResult = createVariable({
           data: {
-            id: crypto.randomUUID(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: blockType },
             class: 'local',
@@ -717,14 +714,17 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       node.data as BlockNodeData<BlockVariant>
     ).connectedVariables
       .map((connectedVariable) => {
-        if (newNodeVariables.some((newVar) => newVar.name === connectedVariable.handleId)) {
-          return connectedVariable
+        const matchByName = newNodeVariables.find(
+          (newVar) => newVar.name.toLowerCase() === connectedVariable.handleId.toLowerCase(),
+        )
+        if (matchByName) {
+          return { ...connectedVariable, handleId: matchByName.name }
         }
 
         if (connectedVariable.handleTableId) {
-          const matchId = newNodeVariables.find((newVar) => newVar.id === connectedVariable.handleTableId)
-          if (matchId) {
-            return { ...connectedVariable, handleId: matchId.name }
+          const matchById = newNodeVariables.find((newVar) => newVar.id === connectedVariable.handleTableId)
+          if (matchById) {
+            return { ...connectedVariable, handleId: matchById.name }
           }
         }
 

@@ -1,6 +1,7 @@
 import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RungLadderState } from '@root/renderer/store/slices'
+import { getFunctionBlockVariablesToCleanup } from '@root/renderer/store/slices/ladder/utils'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
@@ -33,6 +34,7 @@ type RungBodyProps = {
 export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActive = false }: RungBodyProps) => {
   const {
     ladderFlowActions,
+    ladderFlows,
     libraries,
     editor,
     editorActions: { updateModelVariables },
@@ -464,41 +466,30 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       nodes: [],
     })
 
-    /**
-     * Remove the variable associated with the block node
-     * If the editor is a graphical editor and the variable display is set to table, update the model variables
-     * If the variable is the selected row, set the selected row to -1
-     *
-     * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
-     * -- This block of code references at project:
-     *    -- src/renderer/components/_molecules/rung/body.tsx
-     *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
-     *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
-     *    -- src/renderer/components/_molecules/graphical-editor/fbd/index.tsx
-     */
-    const blockNodes = nodes.filter((node) => node.type === 'block')
-    if (blockNodes.length > 0) {
-      let variables: PLCVariable[] = []
-      if (pouRef) variables = [...pouRef.data.variables] as PLCVariable[]
+    if (pouRef && nodes.length > 0) {
+      const allVariables = pouRef.data.variables as PLCVariable[]
+      const flow = ladderFlows.find((f) => f.name === editor.meta.name)
+      const allRungs = flow?.rungs ?? []
 
-      blockNodes.forEach((blockNode) => {
-        const variableData = (blockNode.data as BasicNodeData)?.variable
-        const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
+      const variablesToDelete = getFunctionBlockVariablesToCleanup(nodes, allRungs, allVariables)
+
+      variablesToDelete.forEach((variableName) => {
+        const variableIndex = allVariables.findIndex((v) => v.name.toLowerCase() === variableName.toLowerCase())
 
         if (variableIndex !== -1) {
           deleteVariable({
-            variableId: (blockNode.data as BasicNodeData).variable.id,
+            variableName,
             scope: 'local',
             associatedPou: editor.meta.name,
           })
-          variables.splice(variableIndex, 1)
-        }
-        if (
-          editor.type === 'plc-graphical' &&
-          editor.variable.display === 'table' &&
-          parseInt(editor.variable.selectedRow) === variableIndex
-        ) {
-          updateModelVariables({ display: 'table', selectedRow: -1 })
+
+          if (
+            editor.type === 'plc-graphical' &&
+            editor.variable.display === 'table' &&
+            parseInt(editor.variable.selectedRow) === variableIndex
+          ) {
+            updateModelVariables({ display: 'table', selectedRow: -1 })
+          }
         }
       })
     }

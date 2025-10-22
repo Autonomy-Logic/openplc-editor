@@ -1,7 +1,8 @@
-import { PLCGlobalVariable, PLCStructureVariable, PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCDataType, PLCGlobalVariable, PLCStructureVariable, PLCVariable } from '@root/types/PLC/open-plc'
 import type { PLCVariable as PLCVariableUnit } from '@root/types/PLC/units/variable'
 
 import { ProjectResponse } from '../types'
+import { checkTypeCompatibility } from '../utils'
 
 /**
  * This is a validation to check if the variable name already exists.
@@ -484,6 +485,42 @@ const updateGlobalVariableValidation = (
   }
 
   return response
+}
+
+/**
+ * Checks if a variable with the same name and type already exists in the variable list.
+ * This function implements name+type-based validation following IEC 61131-3 case-insensitive matching.
+ *
+ * @param variables - Array of variables to search
+ * @param variableName - Name of the variable to check (case-insensitive)
+ * @param variableType - Type of the variable to check
+ * @param dataTypes - Optional array of user-defined data types for type checking
+ * @returns true if a conflict exists, false otherwise
+ */
+export const checkVariableNameAndTypeConflict = (
+  variables: PLCVariable[],
+  variableName: string,
+  variableType: PLCVariable['type'],
+  dataTypes?: PLCDataType[],
+): boolean => {
+  const normalizedName = variableName.toLowerCase()
+
+  const matchingVariables = variables.filter((v) => v.name.toLowerCase() === normalizedName)
+
+  if (matchingVariables.length === 0) {
+    return false
+  }
+
+  // Check if any matching variable has the same type
+  for (const variable of matchingVariables) {
+    const compatibility = checkTypeCompatibility(variable.type, variableType, dataTypes || [])
+
+    if (compatibility.isCompatible) {
+      return true // Conflict found
+    }
+  }
+
+  return false // No conflict
 }
 
 export {

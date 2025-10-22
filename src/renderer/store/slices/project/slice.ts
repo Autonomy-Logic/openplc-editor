@@ -459,11 +459,20 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               if (variableToBeDeleted.rowId === -1) {
                 break
               }
-              const variable = getVariableBasedOnRowIdOrVariableId(
-                project.data.configuration.resource.globalVariables,
-                variableToBeDeleted.rowId,
-                variableToBeDeleted.variableId,
-              )
+              let variable: PLCGlobalVariable | undefined
+
+              if (variableToBeDeleted.variableName) {
+                variable = project.data.configuration.resource.globalVariables.find(
+                  (v) => v.name.toLowerCase() === variableToBeDeleted.variableName?.toLowerCase(),
+                )
+              } else {
+                variable = getVariableBasedOnRowIdOrVariableId(
+                  project.data.configuration.resource.globalVariables,
+                  variableToBeDeleted.rowId,
+                  variableToBeDeleted.variableId,
+                )
+              }
+
               if (!variable) {
                 return
               }
@@ -479,11 +488,21 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 console.error(`Pou ${variableToBeDeleted.associatedPou} not found`)
                 return
               }
-              const variable = getVariableBasedOnRowIdOrVariableId(
-                pou.data.variables,
-                variableToBeDeleted.rowId,
-                variableToBeDeleted.variableId,
-              )
+
+              let variable: PLCVariable | undefined
+
+              if (variableToBeDeleted.variableName) {
+                variable = pou.data.variables.find(
+                  (v) => v.name.toLowerCase() === variableToBeDeleted.variableName?.toLowerCase(),
+                )
+              } else {
+                variable = getVariableBasedOnRowIdOrVariableId(
+                  pou.data.variables,
+                  variableToBeDeleted.rowId,
+                  variableToBeDeleted.variableId,
+                )
+              }
+
               if (!variable) {
                 return
               }
