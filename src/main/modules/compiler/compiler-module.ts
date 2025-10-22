@@ -1438,6 +1438,26 @@ class CompilerModule {
       return
     }
 
+    // Step 9: Embed C/C++ blocks in program.st for Runtime v3
+    if (boardRuntime === 'openplc-compiler' && boardTarget === 'OpenPLC Runtime v3') {
+      try {
+        await this.embedCBlocksInProgramSt(sourceTargetFolderPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
+    }
+
     // -- Verify if the runtime target is Arduino or OpenPLC --
     // INFO: If the runtime target is Arduino, we will continue the compilation process.
     // INFO: If the runtime target is OpenPLC we will finish the process here.
@@ -1500,10 +1520,6 @@ class CompilerModule {
           } catch {
             throw new Error(`Required file not found: ${programStPath}. Cannot upload to OpenPLC Runtime v3.`)
           }
-
-          await this.embedCBlocksInProgramSt(sourceTargetFolderPath, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
 
           fileBuffer = await fs.readFile(programStPath)
           filename = 'program.st'
