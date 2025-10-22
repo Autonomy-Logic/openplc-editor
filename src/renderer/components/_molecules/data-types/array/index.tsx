@@ -25,6 +25,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     },
     libraries: sliceLibraries,
     snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
@@ -79,14 +80,16 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     const updatedData = { ...data }
     updatedData.initialValue = e.target.value
     updateDatatype(data.name, updatedData as PLCArrayDatatype)
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
-  const handleSelect = (definition: string, value: string) => {
+  const handleBaseTypeSelection = (definition: string, value: string) => {
     setBaseType(value)
     updateDatatype(data.name, {
       ...data,
       baseType: { value, definition },
     } as PLCArrayDatatype)
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
   const addNewRow = () => {
@@ -100,6 +103,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
       setArrayTable({ selectedRow: newRows.length - 1 })
       updateDatatype(data.name, { dimensions: newRows } as PLCArrayDatatype)
+      handleFileAndWorkspaceSavedState(data.name)
       return newRows
     })
   }
@@ -122,6 +126,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         })
         prevRows = newRows
       }
+      handleFileAndWorkspaceSavedState(data.name)
       return prevRows
     })
   }
@@ -147,6 +152,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         })
         prevRows = newRows
       }
+      handleFileAndWorkspaceSavedState(data.name)
       return prevRows
     })
   }
@@ -172,6 +178,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         })
         prevRows = newRows
       }
+      handleFileAndWorkspaceSavedState(data.name)
       return prevRows
     })
   }
@@ -187,7 +194,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
             <TypeDropdownSelector
               value={baseType}
-              onSelect={handleSelect}
+              onSelect={handleBaseTypeSelection}
               variableTypes={VariableTypes}
               libraryTypes={LibraryTypes}
             />

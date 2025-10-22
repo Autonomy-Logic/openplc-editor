@@ -59,6 +59,22 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
         }),
       )
     },
+    updateLibraryName: (libraryName, newLibraryName) => {
+      setState(
+        produce(({ libraries: { user: userLibraries } }: LibrarySlice) => {
+          const currentIndex = userLibraries.findIndex((lib) => lib.name === libraryName)
+          if (currentIndex === -1) return
+
+          const nextName = newLibraryName.trim()
+          if (nextName.length === 0) return
+
+          const conflictIndex = userLibraries.findIndex((lib) => lib.name === nextName)
+          if (conflictIndex !== -1 && conflictIndex !== currentIndex) return
+
+          userLibraries[currentIndex].name = nextName
+        }),
+      )
+    },
     clearUserLibraries: () => {
       setState(
         produce((slice: LibrarySlice) => {

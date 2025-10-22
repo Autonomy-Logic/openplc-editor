@@ -4,6 +4,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node } from '@xyflow/react'
 import { isArray } from 'lodash'
 import { ComponentPropsWithRef, forwardRef, useMemo } from 'react'
@@ -217,7 +218,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
 
     const submitCreateANewBlock = (blockType: CustomFbdNodeTypes) => {
       const newBlock = buildGenericNode({
-        id: crypto.randomUUID(),
+        id: newGraphicalEditorNodeID(blockType.toUpperCase()),
         position:
           block.positionAbsoluteX && block.positionAbsoluteY
             ? { x: block.positionAbsoluteX, y: block.positionAbsoluteY + (block.height ?? 0) + 16 }

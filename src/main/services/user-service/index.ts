@@ -1,8 +1,7 @@
 import { exec } from 'child_process'
 import { app } from 'electron'
-import { rm } from 'fs'
-import { access, constants, mkdir, writeFile } from 'fs/promises'
-import { join } from 'path'
+import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
+import { basename, join } from 'path'
 import { promisify } from 'util'
 
 import { ARDUINO_DATA } from './data/arduino'
@@ -59,12 +58,49 @@ class UserService {
       await writeFile(filePath, JSON.stringify(data, null, 2), { flag: 'wx' })
     } catch (err) {
       // If the error is due to the file already existing, log a warning and continue.
-      if (err instanceof Error && err.message.includes('EEXIST')) {
+      if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'EEXIST') {
         console.warn(`File already exists at ${filePath}.\nSkipping creation.`)
+        return
       } else if (err instanceof Error) {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
+        throw new Error(`Failed to create file at ${filePath}: ${String(err)}`)
       } else {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
+        throw new Error(`Failed to create file at ${filePath}: ${String(err)}`)
+      }
+    }
+  }
+
+  static async deleteFile(filePath: string): Promise<void> {
+    try {
+      await rm(filePath, { recursive: true, force: true })
+    } catch (err) {
+      console.error(`Error deleting file at ${filePath}: ${String(err)}`)
+      throw new Error(`Failed to delete file at ${filePath}: ${String(err)}`)
+    }
+  }
+
+  static async renameFile(
+    oldFilePath: string,
+    newFilePath: string,
+  ): Promise<{
+    success: boolean
+    error?: {
+      title: string
+      description: string
+      error: Error
+    }
+    data?: { filePath: string }
+  }> {
+    const newFileName = basename(newFilePath)
+    try {
+      await rename(oldFilePath, newFilePath)
+      return { success: true, data: { filePath: newFilePath } }
+    } catch (err) {
+      console.error(`Error renaming file at ${oldFilePath} to ${newFileName}: ${String(err)}`)
+      return {
+        success: false,
+        error: { title: 'File Rename Error', description: 'Failed to rename file', error: err as Error },
       }
     }
   }
@@ -174,9 +210,8 @@ class UserService {
     await writeFile(pathToArduinoCoreControlFile, JSON.stringify(installedCoresFromListOutput, null, 2), { flag: 'w' })
 
     // This is a legacy file that is no longer used, should be removed in the next major release!!!
-    const removeLegacy = promisify(rm)
     const pathToLegacyHals = join(pathToRuntimeFolder, 'hals.json')
-    await removeLegacy(pathToLegacyHals, { recursive: true, force: true })
+    await rm(pathToLegacyHals, { recursive: true, force: true })
   }
 
   async #checkIfArduinoLibraryControlFileExists() {

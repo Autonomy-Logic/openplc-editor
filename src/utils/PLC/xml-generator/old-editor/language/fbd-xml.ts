@@ -26,7 +26,7 @@ const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
   )
 
   if (!sourceNodeHandle || !targetNodeHandle) {
-    console.log('Error: source or target handle not found')
+    console.error('Error: source or target handle not found')
     console.log('Source:', sourceNodeHandle)
     console.log('Target:', targetNodeHandle)
     return

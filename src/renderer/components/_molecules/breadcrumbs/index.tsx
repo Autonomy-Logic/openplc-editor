@@ -75,7 +75,7 @@ const Breadcrumbs = () => {
         pou_to_display: {
           name: meta.name,
           type: Array.isArray(typeOrIcon) ? typeOrIcon : ['data-type'],
-          language: [text as 'st' | 'il' | 'ld' | 'fbd' | 'sfc'],
+          language: [text as 'st' | 'il' | 'ld' | 'fbd' | 'sfc' | 'python'],
         },
       }}
       typeIcon={icon}

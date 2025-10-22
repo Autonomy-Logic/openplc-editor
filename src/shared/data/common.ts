@@ -19,7 +19,6 @@ const baseTypes = [
   'WORD',
   'DWORD',
   'LWORD',
-  'LOGLEVEL',
 ] as const
 
 const PLCLanguagesShortenedForm = ['IL', 'ST', 'LD', 'FBD', 'SFC'] as const

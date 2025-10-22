@@ -28,13 +28,15 @@ const BlockedLanguagesStyles = {
   'Ladder Diagram': '',
   'Structured Text': '',
   'Instruction List': '',
+  Python: '',
+  'C/C++': '',
 } as const
 
 const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: () => void; onClose: () => void }) => {
   type FormData = {
     name: string
     path: string
-    language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+    language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
     time: string
   }
   const { toast } = useToast()
@@ -111,22 +113,24 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
                       align='center'
                       side='bottom'
                     >
-                      {PouLanguageSources.map((lang) => {
-                        return (
-                          <SelectItem
-                            key={lang.value}
-                            className={cn(
-                              `${BlockedLanguagesStyles[lang.value]}`,
-                              'relative flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900',
-                            )}
-                            value={ConvertToLangShortenedFormat(lang.value)}
-                          >
-                            <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                              {lang.icon} {lang.value}
-                            </span>
-                          </SelectItem>
-                        )
-                      })}
+                      {PouLanguageSources.filter((lang) => lang.value !== 'Python' && lang.value !== 'C/C++').map(
+                        (lang) => {
+                          return (
+                            <SelectItem
+                              key={lang.value}
+                              className={cn(
+                                `${BlockedLanguagesStyles[lang.value]}`,
+                                'relative flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900',
+                              )}
+                              value={ConvertToLangShortenedFormat(lang.value)}
+                            >
+                              <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                {lang.icon} {lang.value}
+                              </span>
+                            </SelectItem>
+                          )
+                        },
+                      )}
                     </SelectContent>
                   </Select>
                 )

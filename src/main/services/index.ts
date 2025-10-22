@@ -1,3 +1,4 @@
 export * from './logger-service'
+export * from './pou-service'
 export * from './project-service'
 export * from './user-service'

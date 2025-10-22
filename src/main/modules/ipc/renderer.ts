@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { ProjectState } from '../../../renderer/store/slices'
-import { PLCProject } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
@@ -12,6 +13,7 @@ type IDataToWrite = {
   projectPath: string
   content: {
     projectData: PLCProject
+    pous: PLCPou[]
     deviceConfiguration: DeviceConfiguration
     devicePinMapping: DevicePin[]
   }
@@ -40,8 +42,8 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:create', data),
   createProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
-  deletePouAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+  deleteFileAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:delete-file-accelerator', callback),
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:find-in-project-accelerator', callback),
   handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
@@ -56,15 +58,28 @@ const rendererProcessBridge = {
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
-  removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
+  removeDeleteFileListener: () => ipcRenderer.removeAllListeners('workspace:delete-file-accelerator'),
   removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
   removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
+  removeSaveFileAccelerator: () => ipcRenderer.removeAllListeners('project:save-file-accelerator'),
   removeSaveProjectAccelerator: () => ipcRenderer.removeAllListeners('project:save-accelerator'),
+  saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:save-file', filePath, content),
+  saveFileAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-file-accelerator', callback),
   saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
     ipcRenderer.invoke('project:save', dataToWrite),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+
+  // ===================== POU METHODS =====================
+  createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
+  deletePouFile: (filePath: string): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:delete', filePath),
+  renamePouFile: (data: {
+    filePath: string
+    newFileName: string
+    fileContent?: unknown
+  }): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:rename', data),
 
   // ===================== EDIT METHODS =====================
   handleUndoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:undo-request', callback),
@@ -139,6 +154,17 @@ const rendererProcessBridge = {
     // Set up the renderer process port to listen for messages from the main process
   },
 
+  runDebugCompilation: (compileArgs: Array<string | ProjectState['data']>, callback: (args: any) => void) => {
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    ipcRenderer.postMessage('compiler:run-debug-compilation', compileArgs, [mainProcessPort])
+    rendererProcessPort.onmessage = (event) => callback(event.data)
+    rendererProcessPort.addEventListener('close', () =>
+      callback({
+        closePort: true,
+      }),
+    )
+  },
+
   // !! Deprecated: These methods are an outdated implementation and should be removed.
   compileRequest: (xmlPath: string, callback: (args: any) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
@@ -174,6 +200,7 @@ const rendererProcessBridge = {
     Map<
       string,
       {
+        compiler: 'arduino-cli' | 'openplc-compiler'
         core: string
         preview: string
         specs: {
@@ -197,15 +224,72 @@ const rendererProcessBridge = {
       }
     >
   > => ipcRenderer.invoke('hardware:get-available-boards'),
-  getAvailableCommunicationPorts: (): Promise<string[]> =>
+  getAvailableCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
     ipcRenderer.invoke('hardware:get-available-communication-ports'),
   refreshAvailableBoards: (): Promise<{ board: string; version: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-available-boards'),
-  refreshCommunicationPorts: (): Promise<string[]> => ipcRenderer.invoke('hardware:refresh-communication-ports'),
+  refreshCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
+    ipcRenderer.invoke('hardware:refresh-communication-ports'),
 
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
   log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
+  readDebugFile: (
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> =>
+    ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
+
+  debuggerVerifyMd5: (
+    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+    expectedMd5: string,
+  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
+    ipcRenderer.invoke('debugger:verify-md5', connectionType, connectionParams, expectedMd5),
+
+  debuggerReadProgramStMd5: (
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; md5?: string; error?: string }> =>
+    ipcRenderer.invoke('debugger:read-program-st-md5', projectPath, boardTarget),
+
+  debuggerGetVariablesList: (
+    variableIndexes: number[],
+  ): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => ipcRenderer.invoke('debugger:get-variables-list', variableIndexes),
+
+  debuggerSetVariable: (
+    variableIndex: number,
+    force: boolean,
+    valueBuffer?: Uint8Array,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('debugger:set-variable', variableIndex, force, valueBuffer),
+
+  debuggerConnect: (
+    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('debugger:connect', connectionType, connectionParams),
+
+  debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>

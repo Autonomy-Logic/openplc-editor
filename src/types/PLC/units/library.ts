@@ -33,7 +33,6 @@ const baseTypeSchema = z.enum([
   'WORD',
   'DWORD',
   'LWORD',
-  'LOGLEVEL',
 ])
 
 const genericTypeSchema = z.object({
@@ -44,7 +43,6 @@ const genericTypeSchema = z.object({
     z.literal('ANY_STRING'),
     z.literal('ANY_REAL'),
     z.literal('ANY_DATE'),
-    z.literal('ANY_LOGLEVEL'),
     z.literal('ANY_CHAR'),
     z.literal('ANY_CHARS'),
     z.literal('ANY_NUM'),
@@ -59,7 +57,6 @@ const genericTypeSchema = z.object({
   ANY_STRING: baseTypeSchema.extract(['STRING']),
   ANY_REAL: baseTypeSchema.extract(['REAL', 'LREAL']),
   ANY_DATE: baseTypeSchema.extract(['TIME', 'DATE', 'TOD', 'DT']),
-  ANY_LOGLEVEL: baseTypeSchema.extract(['LOGLEVEL']),
   ANY_CHAR: z.enum(['CHAR', 'WCHAR']),
   ANY_CHARS: z.union([z.literal('ANY_CHAR'), z.array(z.literal('ANY_STRING'))]), // Should be reviewed
   ANY_NUM: z.union([z.literal('ANY_INT'), z.literal('ANY_REAL')]),

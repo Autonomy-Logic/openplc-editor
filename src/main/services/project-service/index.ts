@@ -1,3 +1,4 @@
+import { fileOrDirectoryExists } from '@root/main/utils'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
@@ -6,9 +7,9 @@ import {
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
-import { join, normalize } from 'path'
+import { dirname, join, normalize } from 'path'
 
-import { PLCProject } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
@@ -122,10 +123,10 @@ class ProjectService {
   async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
     try {
       await promises.access(projectPath)
-      const projectFiles = readProjectFiles(projectPath)
+      const projectFiles = await readProjectFiles(projectPath)
 
       if (!projectFiles.success || !projectFiles.data) {
-        console.log(`Error opening project at path: ${projectPath}`, projectFiles.error)
+        console.error(`Error opening project at path: ${projectPath}`, projectFiles.error)
         await this.removeProjectFromHistory(projectPath)
 
         return {
@@ -152,7 +153,7 @@ class ProjectService {
         },
       }
     } catch (error) {
-      console.log(`Error opening project at path: ${projectPath}`, error)
+      console.error(`Error opening project at path: ${projectPath}`, error)
       await this.removeProjectFromHistory(projectPath)
 
       return {
@@ -189,10 +190,10 @@ class ProjectService {
 
     try {
       await promises.access(directoryPath)
-      const projectFiles = readProjectFiles(directoryPath)
+      const projectFiles = await readProjectFiles(directoryPath)
 
       if (!projectFiles.success || !projectFiles.data) {
-        console.log(`Error opening project at path: ${directoryPath}`, projectFiles.error)
+        console.error(`Error opening project at path: ${directoryPath}`, projectFiles.error)
         await this.removeProjectFromHistory(directoryPath)
 
         return {
@@ -239,6 +240,7 @@ class ProjectService {
     projectPath: string
     content: {
       projectData: PLCProject
+      pous: PLCPou[]
       deviceConfiguration: DeviceConfiguration
       devicePinMapping: DevicePin[]
     }
@@ -286,9 +288,72 @@ class ProjectService {
       }
     }
 
+    // Save pous
+    try {
+      const savedPous = {
+        programs: data.content.pous.filter((pou) => pou.type === 'program'),
+        functions: data.content.pous.filter((pou) => pou.type === 'function'),
+        'function-blocks': data.content.pous.filter((pou) => pou.type === 'function-block'),
+      }
+
+      // Save each POU in its respective folder
+      for (const [type, pous] of Object.entries(savedPous)) {
+        const dir = join(directoryPath, 'pous', type)
+
+        if (!fileOrDirectoryExists(dir)) {
+          await promises.mkdir(dir, { recursive: true })
+        }
+
+        // Write/update each POU file
+        for (const pou of pous) {
+          const filePath = join(dir, `${pou.data.name}.json`)
+          await promises.writeFile(filePath, JSON.stringify(pou, null, 2))
+        }
+      }
+    } catch (error) {
+      console.error('Error saving POUs:', error)
+      return {
+        success: false,
+        error: {
+          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
+          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
+            filePath: directoryPath,
+          }),
+          error,
+        },
+      }
+    }
+
     return {
       success: true,
       message: i18n.t('projectServiceResponses:saveProject.success.successToSaveFile.message'),
+    }
+  }
+
+  async saveFile(filePath: string, content: unknown): Promise<IProjectServiceResponse> {
+    try {
+      if (!fileOrDirectoryExists(filePath)) {
+        const dir = dirname(filePath)
+        await promises.mkdir(dir, { recursive: true })
+      }
+
+      await promises.writeFile(filePath, JSON.stringify(content, null, 2))
+      return {
+        success: true,
+        message: i18n.t('projectServiceResponses:saveProject.success.successToSaveFile.message'),
+      }
+    } catch (error) {
+      console.error('Error saving file:', error)
+      return {
+        success: false,
+        error: {
+          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
+          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
+            filePath,
+          }),
+          error,
+        },
+      }
     }
   }
 }

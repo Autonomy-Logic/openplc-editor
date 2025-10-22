@@ -28,7 +28,6 @@ const dataTypeSchema = z.object({
         'word',
         'dword',
         'lword',
-        'loglevel',
         /** Can also be a local datatype - created by the user */
       ]),
       /** This property needs to be updated to validate if the right number is higher than the left */
@@ -72,7 +71,6 @@ const dataTypeSchema = z.object({
                 'word',
                 'dword',
                 'lword',
-                'loglevel',
               ]),
             }),
             z.object({

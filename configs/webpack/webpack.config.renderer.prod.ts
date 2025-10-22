@@ -151,7 +151,9 @@ const configuration: webpack.Configuration = {
       'process.type': '"renderer"',
     }),
 
-    new MonacoEditorWebpackPlugin(),
+    new MonacoEditorWebpackPlugin({
+      languages: ['python'],
+    }),
   ],
 }
 
