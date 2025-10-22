@@ -9,6 +9,8 @@ import {
   integerToBuffer,
   parseFloatValue,
   parseIntegerValue,
+  parseStringValue,
+  stringToBuffer,
 } from '@root/utils/PLC/variable-types'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
@@ -367,11 +369,21 @@ const VariableElement = (block: VariableProps) => {
 
     const normalizedType = variableType.toLowerCase()
     const isFloatType = normalizedType === 'real' || normalizedType === 'lreal'
+    const isStringType = normalizedType === 'string'
 
     let valueBuffer: Uint8Array
     let forcedValueForState: boolean
 
-    if (isFloatType) {
+    if (isStringType) {
+      const parsedStringValue = parseStringValue(forceValue)
+      if (parsedStringValue === null) {
+        setForceValueModalOpen(false)
+        setForceValue('')
+        return
+      }
+      valueBuffer = stringToBuffer(parsedStringValue)
+      forcedValueForState = true
+    } else if (isFloatType) {
       const parsedFloatValue = parseFloatValue(forceValue, typeInfo.byteSize)
       if (parsedFloatValue === null) {
         setForceValueModalOpen(false)

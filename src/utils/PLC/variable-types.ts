@@ -33,6 +33,8 @@ export const getVariableTypeInfo = (type: string): VariableTypeInfo | null => {
       return { byteSize: 4, signed: true }
     case 'lreal':
       return { byteSize: 8, signed: true }
+    case 'string':
+      return { byteSize: 127, signed: false }
     default:
       return null
   }
@@ -122,6 +124,37 @@ export const floatToBuffer = (value: number, byteSize: number): Uint8Array => {
     dataView.setFloat32(0, value, false)
   } else if (byteSize === 8) {
     dataView.setFloat64(0, value, false)
+  }
+
+  return buffer
+}
+
+export const parseStringValue = (value: string): string | null => {
+  try {
+    if (value.length > 126) {
+      return null
+    }
+
+    for (let i = 0; i < value.length; i++) {
+      const charCode = value.charCodeAt(i)
+      if (charCode > 127) {
+        return null
+      }
+    }
+
+    return value
+  } catch {
+    return null
+  }
+}
+
+export const stringToBuffer = (value: string): Uint8Array => {
+  const buffer = new Uint8Array(1 + value.length)
+
+  buffer[0] = value.length
+
+  for (let i = 0; i < value.length; i++) {
+    buffer[i + 1] = value.charCodeAt(i)
   }
 
   return buffer
