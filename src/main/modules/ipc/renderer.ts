@@ -224,11 +224,12 @@ const rendererProcessBridge = {
       }
     >
   > => ipcRenderer.invoke('hardware:get-available-boards'),
-  getAvailableCommunicationPorts: (): Promise<string[]> =>
+  getAvailableCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
     ipcRenderer.invoke('hardware:get-available-communication-ports'),
   refreshAvailableBoards: (): Promise<{ board: string; version: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-available-boards'),
-  refreshCommunicationPorts: (): Promise<string[]> => ipcRenderer.invoke('hardware:refresh-communication-ports'),
+  refreshCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
+    ipcRenderer.invoke('hardware:refresh-communication-ports'),
 
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),

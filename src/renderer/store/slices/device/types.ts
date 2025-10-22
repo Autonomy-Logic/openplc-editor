@@ -53,9 +53,14 @@ const availableBoardInfo = z.object({
 
 type AvailableBoardInfo = z.infer<typeof availableBoardInfo>
 
+const serialPortSchema = z.object({
+  name: z.string(),
+  address: z.string(),
+})
+
 const deviceAvailableOptionsSchema = z.object({
   availableBoards: z.map(z.string(), availableBoardInfo),
-  availableCommunicationPorts: z.array(z.string()),
+  availableCommunicationPorts: z.array(serialPortSchema),
   availableRTUInterfaces: z.array(z.string()),
   availableRTUBaudRates: z.array(z.string()),
   availableTCPInterfaces: z.array(z.string()),
@@ -97,7 +102,7 @@ const deviceActionSchema = z.object({
     .args(
       z.object({
         availableBoards: z.map(z.string(), availableBoardInfo).optional(),
-        availableCommunicationPorts: z.array(z.string()).optional(),
+        availableCommunicationPorts: z.array(serialPortSchema).optional(),
       }),
     )
     .returns(z.void()),

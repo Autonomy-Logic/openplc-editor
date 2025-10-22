@@ -381,20 +381,23 @@ const Board = memo(function () {
                   side='bottom'
                   viewportRef={communicationSelectRef}
                 >
-                  {availableCommunicationPorts.map((port) => (
-                    <SelectItem
-                      key={port}
-                      className={cn(
-                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                        'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
-                      )}
-                      value={port}
-                    >
-                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                        {port}
-                      </span>
-                    </SelectItem>
-                  ))}
+                  {availableCommunicationPorts.map((port) => {
+                    const displayName = port.name || port.address
+                    return (
+                      <SelectItem
+                        key={port.address}
+                        className={cn(
+                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                          'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                        )}
+                        value={port.address}
+                      >
+                        <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                          {displayName}
+                        </span>
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
               <button
