@@ -1,5 +1,12 @@
 import { z } from 'zod/v4'
 
+const SerialPortSchema = z.object({
+  name: z.string(),
+  address: z.string(),
+})
+
+type SerialPort = z.infer<typeof SerialPortSchema>
+
 const BoardInfoSchema = z.object({
   board_manager_url: z.string().optional(),
   compiler: z.string(),
@@ -82,5 +89,5 @@ type AvailableBoards = Map<
   }
 >
 
-export { availableBoardsSchema, BoardInfoSchema, HalsFileSchema }
-export type { AvailableBoards, BoardInfo, HalsFile }
+export { availableBoardsSchema, BoardInfoSchema, HalsFileSchema, SerialPortSchema }
+export type { AvailableBoards, BoardInfo, HalsFile, SerialPort }
