@@ -90,3 +90,39 @@ export const integerToBuffer = (value: bigint, byteSize: number, signed: boolean
 
   return buffer
 }
+
+export const parseFloatValue = (value: string, byteSize: number): number | null => {
+  try {
+    const trimmedValue = value.trim()
+    const parsedValue = parseFloat(trimmedValue)
+
+    if (isNaN(parsedValue) || !isFinite(parsedValue)) {
+      return null
+    }
+
+    if (byteSize === 4) {
+      const maxFloat32 = 3.4028235e38
+      const minFloat32 = -3.4028235e38
+      if (parsedValue > maxFloat32 || parsedValue < minFloat32) {
+        return null
+      }
+    }
+
+    return parsedValue
+  } catch {
+    return null
+  }
+}
+
+export const floatToBuffer = (value: number, byteSize: number): Uint8Array => {
+  const buffer = new Uint8Array(byteSize)
+  const dataView = new DataView(buffer.buffer)
+
+  if (byteSize === 4) {
+    dataView.setFloat32(0, value, false)
+  } else if (byteSize === 8) {
+    dataView.setFloat64(0, value, false)
+  }
+
+  return buffer
+}
