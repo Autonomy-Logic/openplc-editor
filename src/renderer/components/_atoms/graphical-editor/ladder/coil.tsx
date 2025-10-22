@@ -512,20 +512,20 @@ export const Coil = (block: CoilProps) => {
                   >
                     <div
                       className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceTrue}
+                      onClick={(e) => void handleForceTrue(e)}
                     >
                       <p>Force True</p>
                     </div>
                     <div
                       className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceFalse}
+                      onClick={(e) => void handleForceFalse(e)}
                     >
                       <p>Force False</p>
                     </div>
                     {isForced && (
                       <div
                         className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        onClick={handleReleaseForce}
+                        onClick={(e) => void handleReleaseForce(e)}
                       >
                         <p>Release Force</p>
                       </div>

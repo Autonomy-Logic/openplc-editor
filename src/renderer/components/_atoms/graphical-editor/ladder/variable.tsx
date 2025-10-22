@@ -491,20 +491,20 @@ const VariableElement = (block: VariableProps) => {
                   <>
                     <div
                       className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceTrue}
+                      onClick={(e) => void handleForceTrue(e)}
                     >
                       <p>Force True</p>
                     </div>
                     <div
                       className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={handleForceFalse}
+                      onClick={(e) => void handleForceFalse(e)}
                     >
                       <p>Force False</p>
                     </div>
                     {isForced && (
                       <div
                         className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        onClick={handleReleaseForce}
+                        onClick={(e) => void handleReleaseForce(e)}
                       >
                         <p>Release Force</p>
                       </div>
@@ -542,7 +542,7 @@ const VariableElement = (block: VariableProps) => {
                 type='text'
                 value={forceValue}
                 onChange={(e) => setForceValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleForceValueConfirm()}
+                onKeyDown={(e) => e.key === 'Enter' && void handleForceValueConfirm()}
                 placeholder='Enter value'
                 className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
                 autoFocus
@@ -551,7 +551,7 @@ const VariableElement = (block: VariableProps) => {
 
             <div className='mt-4 flex gap-3'>
               <button
-                onClick={handleForceValueConfirm}
+                onClick={() => void handleForceValueConfirm()}
                 className='flex-1 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark'
               >
                 OK
