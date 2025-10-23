@@ -296,6 +296,16 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
           console.log(`Backup created at: ${backupPath}`)
         } catch (error) {
           console.error('Failed to create backup:', error)
+          return {
+            success: false,
+            message: 'Failed to create backup before migration',
+            error: {
+              title: 'Backup Creation Failed',
+              description:
+                'Could not create a backup of the original project before migration. Migration aborted to prevent data loss.',
+              error: error,
+            },
+          }
         }
       }
 
@@ -311,6 +321,15 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
         console.log('Migrated POUs saved successfully')
       } catch (error) {
         console.error('Failed to save migrated project:', error)
+        return {
+          success: false,
+          message: 'Failed to save migrated project',
+          error: {
+            title: 'Migration Save Failed',
+            description: 'Migration completed but failed to save the migrated project files.',
+            error: error,
+          },
+        }
       }
     } else {
       console.error('Migration failed:', report.errors)
