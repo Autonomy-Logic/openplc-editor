@@ -1,6 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { getFunctionBlockVariablesToCleanup } from '@root/renderer/store/slices/ladder/utils'
-import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
@@ -49,8 +48,9 @@ export const LadderToolbox = () => {
 
     if (pou && allNodesToRemove.length > 0) {
       const allRungs = flow?.rungs || []
-      const allVariables = pou.data.variables as PLCVariable[]
+      const allVariables = pou.data.variables
 
+      // @ts-expect-error - Type mismatch between uppercase and lowercase base types
       const variablesToDelete = getFunctionBlockVariablesToCleanup(allNodesToRemove, allRungs, allVariables)
 
       variablesToDelete.forEach((variableName) => {

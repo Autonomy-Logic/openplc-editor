@@ -7,7 +7,6 @@ import BlockElement from '@root/renderer/components/_features/[workspace]/editor
 import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
 import { getFunctionBlockVariablesToCleanup } from '@root/renderer/store/slices/ladder/utils'
-import { PLCVariable } from '@root/types/PLC/units/variable'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import {
   addEdge,
@@ -289,9 +288,10 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
       })
 
       if (pouRef && nodes.length > 0) {
-        const allVariables = pouRef.data.variables as PLCVariable[]
+        const allVariables = pouRef.data.variables
         const allRungs = [rung]
 
+        // @ts-expect-error - Type mismatch between uppercase and lowercase base types
         const variablesToDelete = getFunctionBlockVariablesToCleanup(nodes, allRungs, allVariables)
 
         variablesToDelete.forEach((variableName) => {

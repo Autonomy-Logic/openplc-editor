@@ -627,9 +627,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       }
     }
 
-    updateNodeVariable(variableToLink)
-    setBlockVariableValue(variableToLink.name)
-    setWrongVariable(false)
+    if (variableToLink) {
+      // @ts-expect-error - Type mismatch between uppercase and lowercase base types
+      updateNodeVariable(variableToLink)
+      setBlockVariableValue(variableToLink.name)
+      setWrongVariable(false)
+    }
   }
 
   const handleUpdateDivergence = () => {

@@ -2,7 +2,6 @@ import { getVariableRestrictionType } from '@root/renderer/components/_atoms/gra
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RungLadderState } from '@root/renderer/store/slices'
 import { getFunctionBlockVariablesToCleanup } from '@root/renderer/store/slices/ladder/utils'
-import type { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
@@ -467,10 +466,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     })
 
     if (pouRef && nodes.length > 0) {
-      const allVariables = pouRef.data.variables as PLCVariable[]
+      const allVariables = pouRef.data.variables
       const flow = ladderFlows.find((f) => f.name === editor.meta.name)
       const allRungs = flow?.rungs ?? []
 
+      // @ts-expect-error - Type mismatch between uppercase and lowercase base types
       const variablesToDelete = getFunctionBlockVariablesToCleanup(nodes, allRungs, allVariables)
 
       variablesToDelete.forEach((variableName) => {

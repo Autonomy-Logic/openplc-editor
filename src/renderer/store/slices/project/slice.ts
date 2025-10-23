@@ -459,25 +459,27 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               if (variableToBeDeleted.rowId === -1) {
                 break
               }
-              let variable: PLCGlobalVariable | undefined
-
               if (variableToBeDeleted.variableName) {
-                variable = project.data.configuration.resource.globalVariables.find(
+                const variable = project.data.configuration.resource.globalVariables.find(
                   (v) => v.name.toLowerCase() === variableToBeDeleted.variableName?.toLowerCase(),
                 )
+                if (!variable) {
+                  return
+                }
+                const index = project.data.configuration.resource.globalVariables.indexOf(variable)
+                project.data.configuration.resource.globalVariables.splice(index, 1)
               } else {
-                variable = getVariableBasedOnRowIdOrVariableId(
+                const variable = getVariableBasedOnRowIdOrVariableId(
                   project.data.configuration.resource.globalVariables,
                   variableToBeDeleted.rowId,
                   variableToBeDeleted.variableId,
                 )
+                if (!variable) {
+                  return
+                }
+                const index = project.data.configuration.resource.globalVariables.indexOf(variable)
+                project.data.configuration.resource.globalVariables.splice(index, 1)
               }
-
-              if (!variable) {
-                return
-              }
-              const index = project.data.configuration.resource.globalVariables.indexOf(variable)
-              project.data.configuration.resource.globalVariables.splice(index, 1)
               break
             }
             case 'local': {
@@ -489,25 +491,27 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 return
               }
 
-              let variable: PLCVariable | undefined
-
               if (variableToBeDeleted.variableName) {
-                variable = pou.data.variables.find(
+                const variable = pou.data.variables.find(
                   (v) => v.name.toLowerCase() === variableToBeDeleted.variableName?.toLowerCase(),
                 )
+                if (!variable) {
+                  return
+                }
+                const index = pou.data.variables.indexOf(variable)
+                pou.data.variables.splice(index, 1)
               } else {
-                variable = getVariableBasedOnRowIdOrVariableId(
+                const variable = getVariableBasedOnRowIdOrVariableId(
                   pou.data.variables,
                   variableToBeDeleted.rowId,
                   variableToBeDeleted.variableId,
                 )
+                if (!variable) {
+                  return
+                }
+                const index = pou.data.variables.indexOf(variable)
+                pou.data.variables.splice(index, 1)
               }
-
-              if (!variable) {
-                return
-              }
-              const index = pou.data.variables.indexOf(variable)
-              pou.data.variables.splice(index, 1)
               break
             }
             default: {
