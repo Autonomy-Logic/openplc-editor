@@ -57,11 +57,47 @@ export const validateTypeChange = (
   newType: PLCVariable['type'],
   ladderFlows: LadderFlowState['ladderFlows'],
   fbdFlows: FBDFlowState['fbdFlows'],
+  scope?: 'local' | 'global',
+  pous?: Array<{ data: { name: string; variables: PLCVariable[] } }>,
 ): TypeChangeValidationResult => {
   const affectedNodes: NodeUsage[] = []
   const warnings: string[] = []
 
+  if (scope === 'global' && pous) {
+    pous.forEach((pou) => {
+      const externalVars = pou.data.variables.filter(
+        (v) => v.class === 'external' && v.name.toLowerCase() === variableName.toLowerCase(),
+      )
+
+      if (externalVars.length > 0) {
+        warnings.push(
+          `POU "${pou.data.name}" has ${externalVars.length} external variable(s) referencing this global variable. Their types will be updated automatically.`,
+        )
+      }
+    })
+  }
+
+  const pouNamesToCheck =
+    scope === 'global' && pous
+      ? pous
+          .filter((pou) =>
+            pou.data.variables.some(
+              (v) => v.class === 'external' && v.name.toLowerCase() === variableName.toLowerCase(),
+            ),
+          )
+          .map((pou) => pou.data.name)
+      : []
+
+  const shouldCheckFlow = (flowName: string) => {
+    if (scope === 'global') {
+      return pouNamesToCheck.includes(flowName)
+    }
+    return true
+  }
+
   ladderFlows.forEach((flow) => {
+    if (!shouldCheckFlow(flow.name)) return
+
     flow.rungs.forEach((rung) => {
       rung.nodes.forEach((node) => {
         const nodeVar = (node.data as { variable?: PLCVariable }).variable
@@ -87,6 +123,8 @@ export const validateTypeChange = (
   })
 
   fbdFlows.forEach((flow) => {
+    if (!shouldCheckFlow(flow.name)) return
+
     flow.rung.nodes.forEach((node) => {
       const nodeVar = (node.data as { variable?: PLCVariable }).variable
 
