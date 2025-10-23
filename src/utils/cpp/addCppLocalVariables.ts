@@ -2,7 +2,6 @@ import { PLCPou, PLCProjectData, PLCVariable } from '@root/types/PLC/open-plc'
 
 const createHasBeenInitializedVariable = (): PLCVariable => {
   return {
-    id: crypto.randomUUID(),
     name: 'hasBeenInitialized',
     class: 'local',
     type: {

@@ -1,5 +1,4 @@
 import { PLCInstance, PLCTask } from '@root/types/PLC/open-plc'
-import { v4 as uuidv4 } from 'uuid'
 
 const DEFAULT_TRIGGERING = 'Cyclic'
 const IDENTIFIER = '[A-Za-z][A-Za-z0-9_-]*'
@@ -106,7 +105,6 @@ export function parseResourceStringToConfiguration(configString: string): {
         taskNamesSeen.add(nameLower)
 
         const taskObj: Partial<PLCTask> & { name: string } = {
-          id: uuidv4(),
           name,
           triggering: DEFAULT_TRIGGERING,
           interval: '',
@@ -149,10 +147,8 @@ export function parseResourceStringToConfiguration(configString: string): {
         }
         instanceNamesSeen.add(nameLower)
 
-        const id = uuidv4()
-
-        instances.push({ id, name, task, program })
-        instanceLines[id] = lineNumber
+        instances.push({ name, task, program })
+        instanceLines[name] = lineNumber
 
         return
       }
@@ -177,7 +173,7 @@ export function parseResourceStringToConfiguration(configString: string): {
 
   for (const instance of instances) {
     if (!declaredTaskNames.has(instance.task.toLowerCase())) {
-      const ln = instanceLines[instance.id as string] ?? '?'
+      const ln = instanceLines[instance.name] ?? '?'
       throw new Error(
         `Task "${instance.task}" referenced in PROGRAM "${instance.name}" on line ${ln} is not declared above.`,
       )

@@ -4,7 +4,7 @@ import type { Node } from '@xyflow/react'
 
 export type VariableReferenceLocation = {
   pouName: string
-  editorType: 'ladder' | 'fbd' | 'st' | 'il' | 'python' | 'c'
+  editorType: 'ladder' | 'fbd' | 'st' | 'il' | 'python' | 'cpp'
   nodeId?: string
   rungId?: string
   elementType?: 'contact' | 'coil' | 'block-instance' | 'block-connection' | 'variable'
@@ -168,7 +168,12 @@ export function findAllReferencesToVariable(
     })
   }
 
-  if (pou.data.body.language === 'st' || pou.data.body.language === 'il') {
+  if (
+    pou.data.body.language === 'st' ||
+    pou.data.body.language === 'il' ||
+    pou.data.body.language === 'python' ||
+    pou.data.body.language === 'cpp'
+  ) {
     const bodyValue = pou.data.body.value
     const lines = bodyValue.split('\n')
     const variablePattern = new RegExp(`\\b${variableName}\\b`, 'gi')
@@ -178,7 +183,7 @@ export function findAllReferencesToVariable(
       while ((match = variablePattern.exec(line)) !== null) {
         references.push({
           pouName,
-          editorType: pou.data.body.language as 'st' | 'il',
+          editorType: pou.data.body.language as 'st' | 'il' | 'python' | 'cpp',
           lineNumber: lineIndex + 1,
           columnStart: match.index,
           columnEnd: match.index + variableName.length,
@@ -220,7 +225,46 @@ export function propagateVariableRename(
     updatePou: (params: { name: string; content: PLCPou['data']['body'] }) => void
   },
 ): void {
+  const textBasedRefsByPou = new Map<string, VariableReferenceLocation[]>()
+  const graphicalRefs: VariableReferenceLocation[] = []
+
   references.forEach((ref) => {
+    if (ref.editorType === 'st' || ref.editorType === 'il' || ref.editorType === 'python' || ref.editorType === 'cpp') {
+      const pouRefs = textBasedRefsByPou.get(ref.pouName) || []
+      pouRefs.push(ref)
+      textBasedRefsByPou.set(ref.pouName, pouRefs)
+    } else {
+      graphicalRefs.push(ref)
+    }
+  })
+
+  textBasedRefsByPou.forEach((_refs, pouName) => {
+    const pou = pous.find((p) => p.data.name === pouName)
+    if (!pou) return
+
+    const bodyValue = pou.data.body.value
+    if (typeof bodyValue !== 'string') return
+
+    const language = pou.data.body.language
+    if (language !== 'st' && language !== 'il' && language !== 'python' && language !== 'cpp') return
+
+    try {
+      const variablePattern = new RegExp(`\\b${oldName}\\b`, 'g')
+      const updatedBody = bodyValue.replace(variablePattern, newName)
+
+      projectActions.updatePou({
+        name: pouName,
+        content: {
+          language,
+          value: updatedBody,
+        },
+      })
+    } catch (error) {
+      console.error('Error updating POU body:', error)
+    }
+  })
+
+  graphicalRefs.forEach((ref) => {
     if (ref.editorType === 'ladder' && ref.nodeId && ref.rungId) {
       const flow = ladderFlows.find((f) => f.name === ref.pouName)
       if (!flow) return
@@ -368,30 +412,6 @@ export function propagateVariableRename(
             },
           })
         }
-      }
-    } else if ((ref.editorType === 'st' || ref.editorType === 'il') && ref.lineNumber !== undefined) {
-      const pou = pous.find((p) => p.data.name === ref.pouName)
-      if (!pou) return
-
-      const bodyValue = pou.data.body.value
-      if (typeof bodyValue !== 'string') return
-
-      const language = pou.data.body.language
-      if (language !== 'st' && language !== 'il') return
-
-      try {
-        const variablePattern = new RegExp(`\\b${oldName}\\b`, 'gi')
-        const updatedBody = bodyValue.replace(variablePattern, newName)
-
-        projectActions.updatePou({
-          name: ref.pouName,
-          content: {
-            language,
-            value: updatedBody,
-          },
-        })
-      } catch (error) {
-        console.error('Error updating POU body:', error)
       }
     }
   })

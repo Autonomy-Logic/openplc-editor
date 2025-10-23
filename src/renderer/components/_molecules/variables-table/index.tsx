@@ -14,13 +14,14 @@ import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './
 const columnHelper = createColumnHelper<PLCVariable>()
 
 const columnsPrograms = [
-  columnHelper.accessor('id', {
+  columnHelper.display({
+    id: 'rowNumber',
     header: '#',
     size: 64,
     minSize: 32,
     maxSize: 64,
     enableResizing: true,
-    cell: (props) => props.row.id,
+    cell: (props) => props.row.index,
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -65,13 +66,14 @@ const columnsPrograms = [
 ]
 
 const columns = [
-  columnHelper.accessor('id', {
+  columnHelper.display({
+    id: 'rowNumber',
     header: '#',
     size: 64,
     minSize: 32,
     maxSize: 64,
     enableResizing: true,
-    cell: (props) => props.row.id,
+    cell: (props) => props.row.index,
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -160,7 +162,7 @@ const VariablesTable = ({
         const updatedVariableResponse = updateVariable({
           scope: 'local',
           associatedPou: name,
-          variableId: tableData[rowIndex].id,
+          rowId: rowIndex,
           data: {
             [columnId]: value,
           },

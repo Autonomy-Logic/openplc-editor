@@ -8,6 +8,18 @@ import { PLCPou } from '@root/types/PLC/open-plc'
 
 import { Modal, ModalContent } from '../../_molecules/modal'
 
+const compareVariableTypes = (type1: PLCVariable['type'], type2: PLCVariable['type']): boolean => {
+  if (type1.definition !== type2.definition) return false
+
+  if (type1.definition === 'array' && type2.definition === 'array') {
+    if (type1.value.toLowerCase() !== type2.value.toLowerCase()) return false
+    if (type1.data.dimensions.length !== type2.data.dimensions.length) return false
+    return type1.data.dimensions.every((dim1, idx) => dim1.dimension === type2.data.dimensions[idx].dimension)
+  }
+
+  return type1.value.toLowerCase() === type2.value.toLowerCase()
+}
+
 export type DeletePou = {
   type: 'pou'
   file: string
@@ -70,11 +82,19 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
 
         blockNodes.forEach((blockNode) => {
           const variableData = (blockNode.data as BasicNodeData)?.variable
-          const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
+          if (!variableData?.name) return
+
+          const variableIndex = variables.findIndex((variable) => {
+            if (variable.name.toLowerCase() !== variableData.name.toLowerCase()) return false
+            if ('type' in variableData && variableData.type) {
+              return compareVariableTypes(variable.type, variableData.type as PLCVariable['type'])
+            }
+            return true
+          })
 
           if (variableIndex !== -1) {
             deleteVariable({
-              variableId: variableData?.id,
+              rowId: variableIndex,
               scope: 'local',
               associatedPou: editor.meta.name,
             })

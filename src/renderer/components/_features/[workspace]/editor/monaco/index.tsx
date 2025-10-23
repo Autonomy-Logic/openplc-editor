@@ -96,9 +96,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   })
 
   useEffect(() => {
-    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+    const pou = pous.find((p) => p.data.name === name)
     setLocalText(typeof pou?.data.body.value === 'string' ? pou.data.body.value : '')
-  }, [name, language])
+  }, [name, language, pous])
 
   const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
 
@@ -772,7 +772,6 @@ void loop()
 
     const res = createVariable({
       data: {
-        id: crypto.randomUUID(),
         name: uniqueName,
         type: {
           definition: 'derived',
