@@ -1,3 +1,4 @@
+import { LibraryState } from '@root/renderer/store/slices/library/type'
 import { baseTypeSchema, PLCVariable } from '@root/types/PLC'
 import { PLCDataType, PLCPou } from '@root/types/PLC/open-plc'
 import { v4 as uuidv4 } from 'uuid'
@@ -28,6 +29,7 @@ export const parseIecStringToVariables = (
   iecString: string,
   pous?: PLCPou[],
   _dataTypes?: PLCDataType[],
+  libraries?: LibraryState['libraries'],
 ): PLCVariable[] => {
   const variables: PLCVariable[] = []
   const lines = iecString.split(/\r?\n/)
@@ -81,18 +83,34 @@ export const parseIecStringToVariables = (
       baseCheckData: baseCheck.success ? baseCheck.data : null,
       pousCount: pous?.length ?? 0,
       pous: pous?.map((p) => ({ name: p.data.name, type: p.type })) ?? [],
+      librariesAvailable: !!libraries,
     })
 
-    const isFunctionBlock = pous?.some(
+    const isUserFunctionBlock = pous?.some(
       (pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === parsedType.toLowerCase(),
     )
 
+    const isSystemFunctionBlock = libraries?.system.some((lib) => {
+      // @ts-expect-error - type is dynamic
+      const libPous = lib.pous || []
+      return libPous.some(
+        (pou: { name: string; type: string }) =>
+          pou.type === 'function-block' && pou.name.toLowerCase() === parsedType.toLowerCase(),
+      )
+    })
+
+    const isUserLibraryFunctionBlock = libraries?.user.some(
+      (lib) => lib.type === 'function-block' && lib.name.toLowerCase() === parsedType.toLowerCase(),
+    )
+
+    const isFunctionBlock = isUserFunctionBlock || isSystemFunctionBlock || isUserLibraryFunctionBlock
+
     console.log('[PARSER DEBUG] Function block check', {
       parsedType,
+      isUserFunctionBlock,
+      isSystemFunctionBlock,
+      isUserLibraryFunctionBlock,
       isFunctionBlock,
-      matchingPou: pous?.find(
-        (pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === parsedType.toLowerCase(),
-      ),
     })
 
     const typeDefinition: PLCVariable['type'] = baseCheck.success

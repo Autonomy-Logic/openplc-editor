@@ -41,6 +41,7 @@ const VariablesEditor = () => {
     project: {
       data: { pous, dataTypes },
     },
+    libraries,
     editorActions: { updateModelVariables },
     projectActions: {
       createVariable,
@@ -733,7 +734,7 @@ const VariablesEditor = () => {
 
       if (!language) return false
 
-      const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes)
+      const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
 
       const renamedPairs = tableData.flatMap((previousVariable) => {
         const variableStillExists = newVariables.some(
