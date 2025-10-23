@@ -28,20 +28,62 @@ export function findAllReferencesToVariable(
   pous: PLCPou[],
   ladderFlows: LadderFlowState['ladderFlows'],
   fbdFlows: FBDFlowState['fbdFlows'],
+  scope?: 'local' | 'global',
 ): ReferenceImpactAnalysis {
   const normalizedName = variableName.toLowerCase()
   const references: VariableReferenceLocation[] = []
 
-  const pou = pous.find((p) => p.data.name === pouName)
-  if (!pou) {
-    return {
-      totalReferences: 0,
-      byPou: new Map(),
-      byEditorType: new Map(),
-      references: [],
+  const isGlobalScope = scope === 'global'
+
+  if (!isGlobalScope) {
+    const pou = pous.find((p) => p.data.name === pouName)
+    if (!pou) {
+      return {
+        totalReferences: 0,
+        byPou: new Map(),
+        byEditorType: new Map(),
+        references: [],
+      }
     }
+
+    searchWithinPou(pou, pouName, normalizedName, variableName, ladderFlows, fbdFlows, references)
+  } else {
+    pous.forEach((pou) => {
+      const hasExternalVar = pou.data.variables.some(
+        (v) => v.class === 'external' && v.name.toLowerCase() === normalizedName,
+      )
+
+      if (hasExternalVar) {
+        searchWithinPou(pou, pou.data.name, normalizedName, variableName, ladderFlows, fbdFlows, references)
+      }
+    })
   }
 
+  const byPou = new Map<string, number>()
+  const byEditorType = new Map<string, number>()
+
+  references.forEach((ref) => {
+    byPou.set(ref.pouName, (byPou.get(ref.pouName) || 0) + 1)
+    byEditorType.set(ref.editorType, (byEditorType.get(ref.editorType) || 0) + 1)
+  })
+
+  return {
+    totalReferences: references.length,
+    byPou,
+    byEditorType,
+    references,
+  }
+}
+
+function searchWithinPou(
+  pou: PLCPou,
+  pouName: string,
+  normalizedName: string,
+  variableName: string,
+  ladderFlows: LadderFlowState['ladderFlows'],
+  fbdFlows: FBDFlowState['fbdFlows'],
+  references: VariableReferenceLocation[],
+): void {
   const ladderFlow = ladderFlows.find((f) => f.name === pouName)
   if (ladderFlow) {
     ladderFlow.rungs.forEach((rung) => {
@@ -191,21 +233,33 @@ export function findAllReferencesToVariable(
       }
     })
   }
+}
 
-  const byPou = new Map<string, number>()
-  const byEditorType = new Map<string, number>()
-
-  references.forEach((ref) => {
-    byPou.set(ref.pouName, (byPou.get(ref.pouName) || 0) + 1)
-    byEditorType.set(ref.editorType, (byEditorType.get(ref.editorType) || 0) + 1)
+export function propagateVariableTypeChange(
+  variableName: string,
+  newType: PLCVariable['type'],
+  pous: PLCPou[],
+  projectActions: {
+    updateVariable: (params: {
+      scope: 'local' | 'global'
+      rowId: number
+      associatedPou?: string
+      data: Partial<PLCVariable>
+    }) => void
+  },
+): void {
+  pous.forEach((pou) => {
+    pou.data.variables.forEach((variable, varIndex) => {
+      if (variable.class === 'external' && variable.name.toLowerCase() === variableName.toLowerCase()) {
+        projectActions.updateVariable({
+          scope: 'local',
+          rowId: varIndex,
+          associatedPou: pou.data.name,
+          data: { type: newType },
+        })
+      }
+    })
   })
-
-  return {
-    totalReferences: references.length,
-    byPou,
-    byEditorType,
-    references,
-  }
 }
 
 export function propagateVariableRename(
@@ -223,8 +277,30 @@ export function propagateVariableRename(
   },
   projectActions: {
     updatePou: (params: { name: string; content: PLCPou['data']['body'] }) => void
+    updateVariable: (params: {
+      scope: 'local' | 'global'
+      rowId: number
+      associatedPou?: string
+      data: Partial<PLCVariable>
+    }) => void
   },
+  scope?: 'local' | 'global',
 ): void {
+  if (scope === 'global') {
+    pous.forEach((pou) => {
+      pou.data.variables.forEach((variable, varIndex) => {
+        if (variable.class === 'external' && variable.name.toLowerCase() === oldName.toLowerCase()) {
+          projectActions.updateVariable({
+            scope: 'local',
+            rowId: varIndex,
+            associatedPou: pou.data.name,
+            data: { name: newName },
+          })
+        }
+      })
+    })
+  }
+
   const textBasedRefsByPou = new Map<string, VariableReferenceLocation[]>()
   const graphicalRefs: VariableReferenceLocation[] = []
 

@@ -168,7 +168,12 @@ const GlobalVariablesEditor = () => {
     addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
-    deleteVariable({ scope: 'global', rowId: selectedRow })
+    const result = deleteVariable({ scope: 'global', rowId: selectedRow })
+
+    if (!result.ok) {
+      toast({ title: result.title, description: result.message, variant: 'fail' })
+      return
+    }
 
     const variables = globalVariables.filter((variable) => variable.name)
     if (selectedRow === variables.length - 1) {

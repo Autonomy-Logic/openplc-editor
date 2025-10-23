@@ -206,7 +206,7 @@ const _projectActionsSchema = z.object({
         }),
       ),
     )
-    .returns(z.void()),
+    .returns(projectResponseSchema),
   rearrangeVariables: z
     .function()
     .args(

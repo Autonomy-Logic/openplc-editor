@@ -12,7 +12,7 @@ import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { isLegalIdentifier, sanitizeVariableInput } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
 import { GenericComboboxCell } from '../../_atoms/generic-table-inputs'
@@ -46,10 +46,10 @@ const EditableNameCell = ({
     fbdFlows,
     fbdFlowActions: { updateNode: updateFBDNode },
     searchQuery,
-    projectActions: { getVariable, updatePou },
+    projectActions: { getVariable, updatePou, updateVariable },
     snapshotActions: { addSnapshot },
     project: {
-      data: { pous },
+      data: { pous, configuration },
     },
     workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
@@ -60,6 +60,20 @@ const EditableNameCell = ({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [impactAnalysis, setImpactAnalysis] = useState<ReferenceImpactAnalysis | null>(null)
   const confirmResolveRef = useRef<(v: boolean) => void>()
+
+  const globalVariables = configuration.resource.globalVariables
+
+  const isExternalVariable = variable?.class === 'external'
+
+  const globalVariableOptions = useMemo(() => {
+    return globalVariables
+      .filter((gv) => gv.name) // Only include variables with names
+      .map((gv) => ({
+        id: `global-${gv.name}`,
+        value: gv.name,
+        label: `${gv.name} : ${gv.type.value.toUpperCase()}`,
+      }))
+  }, [globalVariables])
 
   const isCellEditable = () => {
     if (isDebuggerVisible) return false
@@ -89,6 +103,39 @@ const EditableNameCell = ({
       setConfirmOpen(true)
     })
 
+  const handleExternalVariableSelection = (selectedName: string) => {
+    const matchingGlobalVar = globalVariables.find((gv) => gv.name.toLowerCase() === selectedName.toLowerCase())
+
+    if (!matchingGlobalVar) {
+      toast({
+        title: 'Error',
+        description: `Global variable '${selectedName}' not found`,
+        variant: 'fail',
+      })
+      return
+    }
+
+    addSnapshot(editor.meta.name)
+    const nameRes = table.options.meta?.updateData(index, 'name', selectedName)
+
+    if (!nameRes?.ok) {
+      toast({ title: nameRes?.title, description: nameRes?.message, variant: 'fail' })
+      return
+    }
+
+    const typeRes = table.options.meta?.updateData(index, 'type', matchingGlobalVar.type)
+
+    if (!typeRes?.ok) {
+      toast({
+        title: 'Warning',
+        description: 'Variable name updated but type could not be auto-filled',
+        variant: 'fail',
+      })
+    }
+
+    setCellValue(selectedName)
+  }
+
   const onBlur = async () => {
     if (cellValue === initialValue) return setIsEditing(false)
 
@@ -110,7 +157,47 @@ const EditableNameCell = ({
       return
     }
 
-    const impact = findAllReferencesToVariable(oldName, variable.type, editor.meta.name, pous, ladderFlows, fbdFlows)
+    if (variable.class === 'external') {
+      const matchingGlobalVar = globalVariables.find((gv) => gv.name.toLowerCase() === newName.toLowerCase())
+
+      if (!matchingGlobalVar) {
+        toast({
+          title: 'Error',
+          description: `External variable '${newName}' must reference an existing global variable`,
+          variant: 'fail',
+        })
+        setCellValue(oldName)
+        setIsEditing(false)
+        return
+      }
+
+      const typeMatches =
+        matchingGlobalVar.type.definition === variable.type.definition &&
+        matchingGlobalVar.type.value.toUpperCase() === variable.type.value.toUpperCase()
+
+      if (!typeMatches) {
+        toast({
+          title: 'Error',
+          description: `Type mismatch: external variable type must match global variable '${matchingGlobalVar.name}' (${matchingGlobalVar.type.value})`,
+          variant: 'fail',
+        })
+        setCellValue(oldName)
+        setIsEditing(false)
+        return
+      }
+    }
+
+    const analysisScope = scope === 'global' || variable.class === 'external' ? 'global' : 'local'
+
+    const impact = findAllReferencesToVariable(
+      oldName,
+      variable.type,
+      editor.meta.name,
+      pous,
+      ladderFlows,
+      fbdFlows,
+      analysisScope,
+    )
 
     let shouldPropagate = true
     if (impact.totalReferences > 0) {
@@ -139,7 +226,8 @@ const EditableNameCell = ({
         pous,
         { updateNode },
         { updateNode: updateFBDNode },
-        { updatePou },
+        { updatePou, updateVariable },
+        analysisScope,
       )
     }
 
@@ -187,7 +275,19 @@ const EditableNameCell = ({
         />
       )}
 
-      {isEditing ? (
+      {isEditing && isExternalVariable && selected ? (
+        <GenericComboboxCell
+          value={cellValue}
+          onValueChange={(value) => {
+            handleExternalVariableSelection(value)
+            setIsEditing(false)
+          }}
+          selectValues={globalVariableOptions}
+          selected={selected}
+          openOnSelectedOption={false}
+          canAddACustomOption={false}
+        />
+      ) : isEditing ? (
         <InputWithRef
           value={cellValue}
           onChange={(e) => setCellValue(e.target.value)}
