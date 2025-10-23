@@ -75,7 +75,7 @@ export const parseIecStringToVariables = (
     }
 
     const parsedType = type.trim()
-    const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
+    const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
 
     console.log('[PARSER DEBUG] Parsing type', {
       parsedType,
