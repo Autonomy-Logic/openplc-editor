@@ -91,12 +91,8 @@ export const parseIecStringToVariables = (
     )
 
     const isSystemFunctionBlock = libraries?.system.some((lib) => {
-      // @ts-expect-error - type is dynamic
-      const libPous = lib.pous || []
-      return libPous.some(
-        (pou: { name: string; type: string }) =>
-          pou.type === 'function-block' && pou.name.toLowerCase() === parsedType.toLowerCase(),
-      )
+      const libPous = ('pous' in lib ? lib.pous : []) as Array<{ name: string; type: string }>
+      return libPous.some((pou) => pou.type === 'function-block' && pou.name.toLowerCase() === parsedType.toLowerCase())
     })
 
     const isUserLibraryFunctionBlock = libraries?.user.some(
