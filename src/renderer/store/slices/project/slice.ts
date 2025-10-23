@@ -459,16 +459,27 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               if (variableToBeDeleted.rowId === -1) {
                 break
               }
-              const variable = getVariableBasedOnRowIdOrVariableId(
-                project.data.configuration.resource.globalVariables,
-                variableToBeDeleted.rowId,
-                variableToBeDeleted.variableId,
-              )
-              if (!variable) {
-                return
+              if (variableToBeDeleted.variableName) {
+                const variable = project.data.configuration.resource.globalVariables.find(
+                  (v) => v.name.toLowerCase() === variableToBeDeleted.variableName?.toLowerCase(),
+                )
+                if (!variable) {
+                  return
+                }
+                const index = project.data.configuration.resource.globalVariables.indexOf(variable)
+                project.data.configuration.resource.globalVariables.splice(index, 1)
+              } else {
+                const variable = getVariableBasedOnRowIdOrVariableId(
+                  project.data.configuration.resource.globalVariables,
+                  variableToBeDeleted.rowId,
+                  variableToBeDeleted.variableId,
+                )
+                if (!variable) {
+                  return
+                }
+                const index = project.data.configuration.resource.globalVariables.indexOf(variable)
+                project.data.configuration.resource.globalVariables.splice(index, 1)
               }
-              const index = project.data.configuration.resource.globalVariables.indexOf(variable)
-              project.data.configuration.resource.globalVariables.splice(index, 1)
               break
             }
             case 'local': {
@@ -479,16 +490,28 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 console.error(`Pou ${variableToBeDeleted.associatedPou} not found`)
                 return
               }
-              const variable = getVariableBasedOnRowIdOrVariableId(
-                pou.data.variables,
-                variableToBeDeleted.rowId,
-                variableToBeDeleted.variableId,
-              )
-              if (!variable) {
-                return
+
+              if (variableToBeDeleted.variableName) {
+                const variable = pou.data.variables.find(
+                  (v) => v.name.toLowerCase() === variableToBeDeleted.variableName?.toLowerCase(),
+                )
+                if (!variable) {
+                  return
+                }
+                const index = pou.data.variables.indexOf(variable)
+                pou.data.variables.splice(index, 1)
+              } else {
+                const variable = getVariableBasedOnRowIdOrVariableId(
+                  pou.data.variables,
+                  variableToBeDeleted.rowId,
+                  variableToBeDeleted.variableId,
+                )
+                if (!variable) {
+                  return
+                }
+                const index = pou.data.variables.indexOf(variable)
+                pou.data.variables.splice(index, 1)
               }
-              const index = pou.data.variables.indexOf(variable)
-              pou.data.variables.splice(index, 1)
               break
             }
             default: {
