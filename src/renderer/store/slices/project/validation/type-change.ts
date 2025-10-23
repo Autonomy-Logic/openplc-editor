@@ -131,7 +131,7 @@ export const validateTypeChange = (
 export const validateNodeVariableCompatibility = (
   node: Node,
   variable: PLCVariable,
-): { isCompatible: boolean; message?: string; suggestedFix?: string } => {
+): { isCompatible: boolean; message?: string } => {
   const expectedType = getBlockExpectedType(node)
 
   if (!expectedType) {
@@ -140,19 +140,8 @@ export const validateNodeVariableCompatibility = (
 
   const validation = validateVariableType(variable.type.value, expectedType)
 
-  let suggestedFix: string | undefined
-
-  if (!validation.isValid) {
-    if (node.type === 'contact' || node.type === 'coil') {
-      suggestedFix = 'Change variable type to BOOL or select a different variable'
-    } else {
-      suggestedFix = `Change variable type to ${expectedType} or select a different variable`
-    }
-  }
-
   return {
     isCompatible: validation.isValid,
     message: validation.error,
-    suggestedFix,
   }
 }

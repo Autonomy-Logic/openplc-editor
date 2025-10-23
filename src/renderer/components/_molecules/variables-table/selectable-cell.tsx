@@ -20,6 +20,27 @@ import { ArrayModal } from './elements/array-modal'
 
 type ISelectableCellProps = CellContext<PLCVariable, unknown> & { selected?: boolean }
 
+const createVariableType = (
+  definition: PLCVariable['type']['definition'],
+  value: string,
+): PLCVariable['type'] | null => {
+  switch (definition) {
+    case 'base-type':
+      return {
+        definition: 'base-type',
+        value: value as Extract<PLCVariable['type'], { definition: 'base-type' }>['value'],
+      }
+    case 'user-data-type':
+      return { definition: 'user-data-type', value }
+    case 'derived':
+      return { definition: 'derived', value }
+    case 'array':
+      return null
+    default:
+      return null
+  }
+}
+
 const SelectableTypeCell = ({
   getValue,
   row: { index },
@@ -311,7 +332,12 @@ const SelectableTypeCell = ({
     if (language === 'fbd' || language === 'ld') {
       const { ladderFlows: freshLadderFlows, fbdFlows: freshFBDFlows } = useOpenPLCStore.getState()
 
-      const newType = { definition, value } as PLCVariable['type']
+      const newType = createVariableType(definition, value)
+
+      if (!newType) {
+        applyTypeChange(definition, value)
+        return
+      }
 
       const validation = validateTypeChange(variableName, oldType, newType, freshLadderFlows, freshFBDFlows)
 
@@ -349,17 +375,23 @@ const SelectableTypeCell = ({
 
   return (
     <>
-      {validationResult && pendingTypeChange && (
-        <TypeChangeModal
-          open={typeChangeModalOpen}
-          variableName={variableName}
-          oldType={currentVariable.type}
-          newType={pendingTypeChange as PLCVariable['type']}
-          validation={validationResult}
-          onConfirm={handleTypeChangeConfirm}
-          onCancel={handleTypeChangeCancel}
-        />
-      )}
+      {validationResult &&
+        pendingTypeChange &&
+        (() => {
+          const newType = createVariableType(pendingTypeChange.definition, pendingTypeChange.value)
+          if (!newType) return null
+          return (
+            <TypeChangeModal
+              open={typeChangeModalOpen}
+              variableName={variableName}
+              oldType={currentVariable.type}
+              newType={newType}
+              validation={validationResult}
+              onConfirm={handleTypeChangeConfirm}
+              onCancel={handleTypeChangeCancel}
+            />
+          )
+        })()}
       <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
         <PrimitiveDropdown.Trigger
           asChild
