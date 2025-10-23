@@ -187,7 +187,7 @@ const VariableElement = (block: VariableProps) => {
   useEffect(() => {
     const { node: variableNode, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
-      variableName: variableValue,
+      variableName: data.variable.name,
     })
     if (!variableNode) return
 
@@ -265,7 +265,7 @@ const VariableElement = (block: VariableProps) => {
       setInputError(true)
       return
     }
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event

@@ -147,7 +147,7 @@ const VariableElement = (block: VariableProps) => {
       variables,
     } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
-      variableName: variableValue,
+      variableName: data.variable.name,
     })
     if (!rung || !variableNode) return
 
@@ -207,7 +207,7 @@ const VariableElement = (block: VariableProps) => {
       setInputError(true)
       return
     }
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event

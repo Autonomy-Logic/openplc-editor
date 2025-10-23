@@ -352,7 +352,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
 
-  const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+  const { variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
     nodeId: id ?? '',
   })
 
@@ -405,19 +405,27 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if (!node || !rung) {
+    const {
+      rung: freshRung,
+      node: freshNode,
+      variables: freshVariables,
+    } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+
+    if (!freshNode || !freshRung) {
       console.error('Node or rung not found for ID:', id)
       return
     }
 
-    const variable = variables.selected
+    const variable = freshVariables.selected
     if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    const nodeVariableName = (node.data as BasicNodeData).variable.name
-    const nodeBlockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+    const nodeVariableName = (freshNode.data as BasicNodeData).variable.name
+    const nodeBlockType = (freshNode.data as BlockNodeData<BlockVariant>).variant.name
 
     if (nodeVariableName.toLowerCase() === variable.name.toLowerCase()) {
       const typeMatches =
@@ -431,11 +439,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (nodeVariableName !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
-          nodeId: node.id,
+          nodeId: freshNode.id,
           node: {
-            ...node,
+            ...freshNode,
             data: {
-              ...node.data,
+              ...freshNode.data,
               variable,
             },
           },
@@ -446,7 +454,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     setWrongVariable(true)
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event
