@@ -379,6 +379,9 @@ export function propagateVariableRename(
       const bodyValue = pou.data.body.value
       if (typeof bodyValue !== 'string') return
 
+      const language = pou.data.body.language
+      if (language !== 'st' && language !== 'il') return
+
       try {
         const variablePattern = new RegExp(`\\b${oldName}\\b`, 'gi')
         const updatedBody = bodyValue.replace(variablePattern, newName)
@@ -390,7 +393,7 @@ export function propagateVariableRename(
             data: {
               ...pou.data,
               body: {
-                ...pou.data.body,
+                language,
                 value: updatedBody,
               },
             },
