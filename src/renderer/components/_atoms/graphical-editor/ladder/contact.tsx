@@ -172,25 +172,56 @@ export const Contact = (block: ContactProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
+    console.log('[CONTACT DEBUG] useEffect triggered', {
+      nodeId: id,
+      dataVariableName: data.variable.name,
+      contactVariableValue,
+      editorName: editor.meta.name,
+    })
+
     const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: data.variable.name,
     })
-    if (!node || !rung) return
+
+    console.log('[CONTACT DEBUG] getLadderPouVariablesRungNodeAndEdges result', {
+      hasNode: !!node,
+      hasRung: !!rung,
+      selectedVariable: variables.selected,
+      allVariables: variables.all.map((v) => ({ name: v.name, type: v.type })),
+    })
+
+    if (!node || !rung) {
+      console.log('[CONTACT DEBUG] No node or rung found, returning')
+      return
+    }
 
     const variable = variables.selected
 
     if (!variable) {
+      console.log('[CONTACT DEBUG] No variable found, setting wrongVariable=true')
       setWrongVariable(true)
       return
     }
     if (variable && (variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL')) {
+      console.log('[CONTACT DEBUG] Variable type mismatch', {
+        definition: variable.type.definition,
+        value: variable.type.value,
+      })
       setWrongVariable(true)
       return
     }
 
     const nodeVariableName = (node.data as BasicNodeData).variable.name
+    console.log('[CONTACT DEBUG] Comparing names', {
+      nodeVariableName,
+      foundVariableName: variable.name,
+      contactVariableValue,
+      namesMatch: nodeVariableName.toLowerCase() === variable.name.toLowerCase(),
+    })
+
     if (nodeVariableName.toLowerCase() !== variable.name.toLowerCase()) {
+      console.log('[CONTACT DEBUG] Names do not match, updating node')
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -208,6 +239,7 @@ export const Contact = (block: ContactProps) => {
     }
 
     if (nodeVariableName.toLowerCase() === variable.name.toLowerCase() && variable.name !== contactVariableValue) {
+      console.log('[CONTACT DEBUG] Names match but contactVariableValue differs, updating')
       if (nodeVariableName !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
@@ -230,6 +262,7 @@ export const Contact = (block: ContactProps) => {
       return
     }
 
+    console.log('[CONTACT DEBUG] All checks passed, setting wrongVariable=false')
     setWrongVariable(false)
   }, [pous, data.variable.name])
 

@@ -477,21 +477,38 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
+    console.log('[BLOCK DEBUG] useEffect triggered', {
+      nodeId: id,
+      dataVariableName: data.variable.name,
+      blockVariableValue,
+      blockType,
+      editorName: editor.meta.name,
+    })
+
     const {
       variables: freshVariables,
       rung: freshRung,
       node: freshNode,
     } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
+      variableName: data.variable.name,
+    })
+
+    console.log('[BLOCK DEBUG] getLadderPouVariablesRungNodeAndEdges result', {
+      hasNode: !!freshNode,
+      hasRung: !!freshRung,
+      selectedVariable: freshVariables.selected,
+      allVariables: freshVariables.all.map((v) => ({ name: v.name, type: v.type })),
     })
 
     if (!freshNode || !freshRung) {
-      console.error('Node or rung not found for ID:', id)
+      console.log('[BLOCK DEBUG] No node or rung found, returning')
       return
     }
 
     const variable = freshVariables.selected
     if (!variable) {
+      console.log('[BLOCK DEBUG] No variable found, setting wrongVariable=true')
       setWrongVariable(true)
       return
     }
@@ -501,16 +518,33 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const selectedVariableName = variable.name.toLowerCase()
     const nodeBlockType = (freshNode.data as BlockNodeData<BlockVariant>).variant.name
 
+    console.log('[BLOCK DEBUG] Comparing variables', {
+      nodeVariableName,
+      selectedVariableName,
+      nodeBlockType,
+      variableType: variable.type,
+      namesMatch: nodeVariableName === selectedVariableName,
+    })
+
     if (nodeVariableName === selectedVariableName) {
       const typeMatches =
         variable.type.definition === 'derived' && variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
 
+      console.log('[BLOCK DEBUG] Type check', {
+        typeMatches,
+        variableDefinition: variable.type.definition,
+        variableValue: variable.type.value,
+        nodeBlockType,
+      })
+
       if (!typeMatches) {
+        console.log('[BLOCK DEBUG] Type mismatch, setting wrongVariable=true')
         setWrongVariable(true)
         return
       }
 
       if (nodeVariable.name !== variable.name) {
+        console.log('[BLOCK DEBUG] Updating node with correct variable')
         updateNode({
           editorName: editor.meta.name,
           rungId: freshRung.id,
@@ -524,10 +558,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           },
         })
       }
+      console.log('[BLOCK DEBUG] All checks passed, setting wrongVariable=false')
       setWrongVariable(false)
       return
     }
 
+    console.log('[BLOCK DEBUG] Names do not match, setting wrongVariable=true')
     setWrongVariable(true)
   }, [pous, data.variable.name])
 
