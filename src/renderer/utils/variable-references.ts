@@ -386,18 +386,20 @@ export function propagateVariableRename(
         const variablePattern = new RegExp(`\\b${oldName}\\b`, 'gi')
         const updatedBody = bodyValue.replace(variablePattern, newName)
 
+        const updatedPou: typeof pou = {
+          ...pou,
+          data: {
+            ...pou.data,
+            body: {
+              ...pou.data.body,
+              value: updatedBody,
+            } as typeof pou.data.body,
+          },
+        }
+
         projectActions.updatePou({
           pouName: ref.pouName,
-          pou: {
-            ...pou,
-            data: {
-              ...pou.data,
-              body: {
-                language,
-                value: updatedBody,
-              },
-            },
-          },
+          pou: updatedPou,
         })
       } catch (error) {
         console.error('Error updating POU body:', error)
