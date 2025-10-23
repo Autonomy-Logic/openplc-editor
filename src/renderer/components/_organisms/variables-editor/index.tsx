@@ -581,12 +581,6 @@ const VariablesEditor = () => {
     ladderFlows: LadderFlowState['ladderFlows'],
     updateNode: LadderFlowActions['updateNode'],
   ) => {
-    console.log('[SYNC DEBUG] syncNodesWithVariables called', {
-      newVarsCount: newVars.length,
-      newVars: newVars.map((v) => ({ name: v.name, type: v.type })),
-      flowsCount: ladderFlows.length,
-    })
-
     ladderFlows.forEach((flow) => {
       flow.rungs.forEach((rung) => {
         rung.nodes.forEach((node) => {
@@ -596,25 +590,11 @@ const VariablesEditor = () => {
             return
           }
 
-          console.log('[SYNC DEBUG] Processing node', {
-            nodeId: node.id,
-            nodeType: node.type,
-            nodeVarName: nodeVar.name,
-            flowName: flow.name,
-          })
-
           const selectedVariable = newVars.find(
             (variable) => variable.name.toLowerCase() === nodeVar.name.toLowerCase(),
           )
 
-          console.log('[SYNC DEBUG] Variable lookup result', {
-            nodeVarName: nodeVar.name,
-            found: !!selectedVariable,
-            selectedVariable: selectedVariable ? { name: selectedVariable.name, type: selectedVariable.type } : null,
-          })
-
           if (!selectedVariable) {
-            console.log('[SYNC DEBUG] Variable not found, marking as broken')
             updateNode({
               editorName: flow.name,
               rungId: rung.id,
@@ -635,14 +615,7 @@ const VariablesEditor = () => {
             const expectedType = 'bool'
             const actualType = selectedVariable.type.value.toLowerCase()
 
-            console.log('[SYNC DEBUG] Type check for contact/coil', {
-              expectedType,
-              actualType,
-              matches: actualType === expectedType,
-            })
-
             if (actualType !== expectedType) {
-              console.log('[SYNC DEBUG] Type mismatch, marking as broken')
               updateNode({
                 editorName: flow.name,
                 rungId: rung.id,
@@ -660,7 +633,6 @@ const VariablesEditor = () => {
             }
           }
 
-          console.log('[SYNC DEBUG] Applying variable to node')
           applyVariableToNode(selectedVariable, node.id, flow.name, ladderFlows, updateNode)
         })
       })

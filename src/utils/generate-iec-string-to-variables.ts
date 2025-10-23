@@ -77,15 +77,6 @@ export const parseIecStringToVariables = (
     const parsedType = type.trim()
     const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
 
-    console.log('[PARSER DEBUG] Parsing type', {
-      parsedType,
-      baseCheckSuccess: baseCheck.success,
-      baseCheckData: baseCheck.success ? baseCheck.data : null,
-      pousCount: pous?.length ?? 0,
-      pous: pous?.map((p) => ({ name: p.data.name, type: p.type })) ?? [],
-      librariesAvailable: !!libraries,
-    })
-
     const isUserFunctionBlock = pous?.some(
       (pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === parsedType.toLowerCase(),
     )
@@ -101,24 +92,11 @@ export const parseIecStringToVariables = (
 
     const isFunctionBlock = isUserFunctionBlock || isSystemFunctionBlock || isUserLibraryFunctionBlock
 
-    console.log('[PARSER DEBUG] Function block check', {
-      parsedType,
-      isUserFunctionBlock,
-      isSystemFunctionBlock,
-      isUserLibraryFunctionBlock,
-      isFunctionBlock,
-    })
-
     const typeDefinition: PLCVariable['type'] = baseCheck.success
       ? { definition: 'base-type' as const, value: baseCheck.data }
       : isFunctionBlock
         ? { definition: 'derived' as const, value: parsedType }
         : { definition: 'user-data-type' as const, value: parsedType }
-
-    console.log('[PARSER DEBUG] Final type definition', {
-      parsedType,
-      typeDefinition,
-    })
 
     variables.push({
       id: uuidv4(),
