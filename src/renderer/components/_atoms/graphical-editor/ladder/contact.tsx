@@ -174,7 +174,7 @@ export const Contact = (block: ContactProps) => {
   useEffect(() => {
     const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
-      variableName: contactVariableValue,
+      variableName: data.variable.name,
     })
     if (!node || !rung) return
 
@@ -231,7 +231,7 @@ export const Contact = (block: ContactProps) => {
     }
 
     setWrongVariable(false)
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event

@@ -477,21 +477,29 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if (!node || !rung) {
+    const {
+      variables: freshVariables,
+      rung: freshRung,
+      node: freshNode,
+    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      nodeId: id,
+    })
+
+    if (!freshNode || !freshRung) {
       console.error('Node or rung not found for ID:', id)
       return
     }
 
-    const variable = variables.selected
+    const variable = freshVariables.selected
     if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    const nodeVariable = (node.data as BasicNodeData).variable
+    const nodeVariable = (freshNode.data as BasicNodeData).variable
     const nodeVariableName = nodeVariable.name.toLowerCase()
     const selectedVariableName = variable.name.toLowerCase()
-    const nodeBlockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+    const nodeBlockType = (freshNode.data as BlockNodeData<BlockVariant>).variant.name
 
     if (nodeVariableName === selectedVariableName) {
       const typeMatches =
@@ -505,12 +513,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (nodeVariable.name !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
-          rungId: rung.id,
-          nodeId: node.id,
+          rungId: freshRung.id,
+          nodeId: freshNode.id,
           node: {
-            ...node,
+            ...freshNode,
             data: {
-              ...node.data,
+              ...freshNode.data,
               variable,
             },
           },
@@ -521,7 +529,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     setWrongVariable(true)
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * useEffect to check if the connectedVariable is the correct type when the block variant is changed
