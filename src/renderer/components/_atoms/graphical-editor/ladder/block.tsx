@@ -571,6 +571,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const blockType = (node.data as BlockNodeData<BlockVariant>).variant.name
     const expectedType = { definition: 'derived' as const, value: blockType }
 
+    // @ts-expect-error - Type mismatch between uppercase and lowercase base types
     const matchingVariable = getVariableByNameAndType(variables.all, variableNameToSubmit, expectedType, [])
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>

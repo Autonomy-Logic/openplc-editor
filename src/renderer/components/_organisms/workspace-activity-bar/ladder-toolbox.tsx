@@ -50,7 +50,6 @@ export const LadderToolbox = () => {
       const allRungs = flow?.rungs || []
       const allVariables = pou.data.variables
 
-      // @ts-expect-error - Type mismatch between uppercase and lowercase base types
       const variablesToDelete = getFunctionBlockVariablesToCleanup(allNodesToRemove, allRungs, allVariables)
 
       variablesToDelete.forEach((variableName) => {

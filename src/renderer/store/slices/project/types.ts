@@ -198,15 +198,13 @@ const _projectActionsSchema = z.object({
   deleteVariable: z
     .function()
     .args(
-      variableDTOSchema
-        .omit({ data: true })
-        .merge(
-          z.object({
-            rowId: z.number().optional(),
-            variableId: z.string().optional(),
-            variableName: z.string().optional(),
-          }),
-        ),
+      variableDTOSchema.omit({ data: true }).merge(
+        z.object({
+          rowId: z.number().optional(),
+          variableId: z.string().optional(),
+          variableName: z.string().optional(),
+        }),
+      ),
     )
     .returns(z.void()),
   rearrangeVariables: z

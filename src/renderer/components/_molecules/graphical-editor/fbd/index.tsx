@@ -291,7 +291,6 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
         const allVariables = pouRef.data.variables
         const allRungs = [rung]
 
-        // @ts-expect-error - Type mismatch between uppercase and lowercase base types
         const variablesToDelete = getFunctionBlockVariablesToCleanup(nodes, allRungs, allVariables)
 
         variablesToDelete.forEach((variableName) => {

@@ -470,7 +470,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const flow = ladderFlows.find((f) => f.name === editor.meta.name)
       const allRungs = flow?.rungs ?? []
 
-      // @ts-expect-error - Type mismatch between uppercase and lowercase base types
       const variablesToDelete = getFunctionBlockVariablesToCleanup(nodes, allRungs, allVariables)
 
       variablesToDelete.forEach((variableName) => {
