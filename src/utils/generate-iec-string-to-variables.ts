@@ -25,10 +25,17 @@ const guessErrorReason = (line: string): string => {
   return 'unrecognized declaration format'
 }
 
+/**
+ * Type guard to check if a library object has a 'pous' property
+ */
+const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type: string }> } => {
+  return typeof lib === 'object' && lib !== null && 'pous' in lib && Array.isArray((lib as { pous: unknown }).pous)
+}
+
 export const parseIecStringToVariables = (
   iecString: string,
   pous?: PLCPou[],
-  _dataTypes?: PLCDataType[],
+  _dataTypes?: PLCDataType[], // Reserved for future use: will enable user-defined data type validation
   libraries?: LibraryState['libraries'],
 ): PLCVariable[] => {
   const variables: PLCVariable[] = []
@@ -82,8 +89,10 @@ export const parseIecStringToVariables = (
     )
 
     const isSystemFunctionBlock = libraries?.system.some((lib) => {
-      const libPous = ('pous' in lib ? lib.pous : []) as Array<{ name: string; type: string }>
-      return libPous.some((pou) => pou.type === 'function-block' && pou.name.toLowerCase() === parsedType.toLowerCase())
+      if (!hasLibraryPous(lib)) return false
+      return lib.pous.some(
+        (pou) => pou.type === 'function-block' && pou.name.toLowerCase() === parsedType.toLowerCase(),
+      )
     })
 
     const isUserLibraryFunctionBlock = libraries?.user.some(
