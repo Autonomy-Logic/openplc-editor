@@ -591,6 +591,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (variableToLink.name.toLowerCase() === variableNameToSubmit.toLowerCase()) return
 
       if (matchingVariable && matchingVariable.name.toLowerCase() !== variableToLink.name.toLowerCase()) {
+        // @ts-expect-error - Type mismatch between uppercase and lowercase base types
         variableToLink = matchingVariable
       } else {
         updateNodeVariable({ name: variableNameToSubmit })
@@ -599,6 +600,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       }
     } else {
       if (matchingVariable) {
+        // @ts-expect-error - Type mismatch between uppercase and lowercase base types
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
         addSnapshot(editor.meta.name)
@@ -629,7 +631,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     if (variableToLink) {
-      // @ts-expect-error - Type mismatch between uppercase and lowercase base types
       updateNodeVariable(variableToLink)
       setBlockVariableValue(variableToLink.name)
       setWrongVariable(false)
