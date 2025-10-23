@@ -73,7 +73,7 @@ export const parseIecStringToVariables = (
     }
 
     const parsedType = type.trim()
-    const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
+    const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
 
     const isFunctionBlock = pous?.some(
       (pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === parsedType.toLowerCase(),
