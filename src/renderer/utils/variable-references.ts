@@ -226,7 +226,7 @@ export function propagateVariableRename(
     updateNode: (params: { editorName: string; nodeId: string; node: Node }) => void
   },
   projectActions: {
-    updatePou: (params: { pouName: string; pou: PLCPou }) => void
+    updatePou: (params: { name: string; content: PLCPou['data']['body'] }) => void
   },
 ): void {
   references.forEach((ref) => {
@@ -386,20 +386,12 @@ export function propagateVariableRename(
         const variablePattern = new RegExp(`\\b${oldName}\\b`, 'gi')
         const updatedBody = bodyValue.replace(variablePattern, newName)
 
-        const updatedPou: typeof pou = {
-          ...pou,
-          data: {
-            ...pou.data,
-            body: {
-              ...pou.data.body,
-              value: updatedBody,
-            } as typeof pou.data.body,
-          },
-        }
-
         projectActions.updatePou({
-          pouName: ref.pouName,
-          pou: updatedPou,
+          name: ref.pouName,
+          content: {
+            language,
+            value: updatedBody,
+          },
         })
       } catch (error) {
         console.error('Error updating POU body:', error)
