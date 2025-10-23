@@ -417,7 +417,17 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     const nodeVariableName = (node.data as BasicNodeData).variable.name
+    const nodeBlockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+
     if (nodeVariableName.toLowerCase() === variable.name.toLowerCase()) {
+      const typeMatches =
+        variable.type.definition === 'derived' && variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
+
+      if (!typeMatches) {
+        setWrongVariable(true)
+        return
+      }
+
       if (nodeVariableName !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
@@ -430,12 +440,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             },
           },
         })
-        setWrongVariable(false)
-        return
       }
+      setWrongVariable(false)
+      return
     }
 
-    setWrongVariable(false)
+    setWrongVariable(true)
   }, [pous])
 
   /**
