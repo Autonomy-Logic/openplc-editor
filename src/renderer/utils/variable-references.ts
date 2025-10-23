@@ -176,18 +176,9 @@ export function findAllReferencesToVariable(
     lines.forEach((line, lineIndex) => {
       let match
       while ((match = variablePattern.exec(line)) !== null) {
-        let editorType: 'ladder' | 'fbd' | 'st' | 'il' | 'python' | 'c'
-        if (pou.data.body.language === 'ld') {
-          editorType = 'ladder'
-        } else if (pou.data.body.language === 'cpp') {
-          editorType = 'c'
-        } else {
-          editorType = pou.data.body.language as 'fbd' | 'st' | 'il' | 'python'
-        }
-
         references.push({
           pouName,
-          editorType,
+          editorType: pou.data.body.language as 'st' | 'il',
           lineNumber: lineIndex + 1,
           columnStart: match.index,
           columnEnd: match.index + variableName.length,
@@ -241,7 +232,7 @@ export function propagateVariableRename(
       if (!node) return
 
       if (ref.elementType === 'contact' || ref.elementType === 'coil' || ref.elementType === 'variable') {
-        const data = node.data as { variable?: PLCVariable | { name?: string }; wrongVariable?: boolean }
+        const data = node.data as { variable?: PLCVariable | { name?: string } }
         if (data.variable) {
           ladderFlowActions.updateNode({
             editorName: ref.pouName,
@@ -252,13 +243,12 @@ export function propagateVariableRename(
               data: {
                 ...node.data,
                 variable: { ...data.variable, name: newName },
-                wrongVariable: false,
               },
             },
           })
         }
       } else if (ref.elementType === 'block-instance') {
-        const data = node.data as { variable?: PLCVariable | { name?: string }; wrongVariable?: boolean }
+        const data = node.data as { variable?: PLCVariable | { name?: string } }
         if (data.variable) {
           ladderFlowActions.updateNode({
             editorName: ref.pouName,
@@ -269,7 +259,6 @@ export function propagateVariableRename(
               data: {
                 ...node.data,
                 variable: { ...data.variable, name: newName },
-                wrongVariable: false,
               },
             },
           })
@@ -281,12 +270,17 @@ export function propagateVariableRename(
             variable?: PLCVariable
           }>
         }
-        if (data.connectedVariables && data.connectedVariables[ref.connectionIndex]) {
+        if (
+          data.connectedVariables &&
+          data.connectedVariables[ref.connectionIndex] &&
+          data.connectedVariables[ref.connectionIndex].variable
+        ) {
           const updatedConnectedVariables = [...data.connectedVariables]
+          const currentVariable = updatedConnectedVariables[ref.connectionIndex].variable as PLCVariable
           updatedConnectedVariables[ref.connectionIndex] = {
             ...updatedConnectedVariables[ref.connectionIndex],
             variable: {
-              ...updatedConnectedVariables[ref.connectionIndex].variable!,
+              ...currentVariable,
               name: newName,
             },
           }
@@ -312,7 +306,7 @@ export function propagateVariableRename(
       if (!node) return
 
       if (ref.elementType === 'contact' || ref.elementType === 'coil' || ref.elementType === 'variable') {
-        const data = node.data as { variable?: PLCVariable | { name?: string }; wrongVariable?: boolean }
+        const data = node.data as { variable?: PLCVariable | { name?: string } }
         if (data.variable) {
           fbdFlowActions.updateNode({
             editorName: ref.pouName,
@@ -322,13 +316,12 @@ export function propagateVariableRename(
               data: {
                 ...node.data,
                 variable: { ...data.variable, name: newName },
-                wrongVariable: false,
               },
             },
           })
         }
       } else if (ref.elementType === 'block-instance') {
-        const data = node.data as { variable?: PLCVariable | { name?: string }; wrongVariable?: boolean }
+        const data = node.data as { variable?: PLCVariable | { name?: string } }
         if (data.variable) {
           fbdFlowActions.updateNode({
             editorName: ref.pouName,
@@ -338,7 +331,6 @@ export function propagateVariableRename(
               data: {
                 ...node.data,
                 variable: { ...data.variable, name: newName },
-                wrongVariable: false,
               },
             },
           })
@@ -350,12 +342,17 @@ export function propagateVariableRename(
             variable?: PLCVariable
           }>
         }
-        if (data.connectedVariables && data.connectedVariables[ref.connectionIndex]) {
+        if (
+          data.connectedVariables &&
+          data.connectedVariables[ref.connectionIndex] &&
+          data.connectedVariables[ref.connectionIndex].variable
+        ) {
           const updatedConnectedVariables = [...data.connectedVariables]
+          const currentVariable = updatedConnectedVariables[ref.connectionIndex].variable as PLCVariable
           updatedConnectedVariables[ref.connectionIndex] = {
             ...updatedConnectedVariables[ref.connectionIndex],
             variable: {
-              ...updatedConnectedVariables[ref.connectionIndex].variable!,
+              ...currentVariable,
               name: newName,
             },
           }

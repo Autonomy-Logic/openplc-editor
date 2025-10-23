@@ -75,7 +75,7 @@ export const RenameImpactModal = ({ open, oldName, newName, impact, onConfirm, o
               </li>
               <li>
                 <span className='font-semibold'>No, keep references unchanged:</span> References will remain with the
-                old name and become invalid
+                old name and will no longer match the renamed variable, causing them to become unresolved references
               </li>
             </ul>
           </div>
