@@ -1,4 +1,5 @@
 import { baseTypeSchema, PLCVariable } from '@root/types/PLC'
+import { PLCDataType, PLCPou } from '@root/types/PLC/open-plc'
 import { v4 as uuidv4 } from 'uuid'
 
 const varBlockToClass: Record<string, PLCVariable['class']> = {
@@ -23,7 +24,11 @@ const guessErrorReason = (line: string): string => {
   return 'unrecognized declaration format'
 }
 
-export const parseIecStringToVariables = (iecString: string): PLCVariable[] => {
+export const parseIecStringToVariables = (
+  iecString: string,
+  pous?: PLCPou[],
+  _dataTypes?: PLCDataType[],
+): PLCVariable[] => {
   const variables: PLCVariable[] = []
   const lines = iecString.split(/\r?\n/)
   let currentClass: PLCVariable['class'] | null = null
@@ -70,13 +75,21 @@ export const parseIecStringToVariables = (iecString: string): PLCVariable[] => {
     const parsedType = type.trim()
     const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
 
+    const isFunctionBlock = pous?.some(
+      (pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === parsedType.toLowerCase(),
+    )
+
+    const typeDefinition: PLCVariable['type'] = baseCheck.success
+      ? { definition: 'base-type' as const, value: baseCheck.data }
+      : isFunctionBlock
+        ? { definition: 'derived' as const, value: parsedType }
+        : { definition: 'user-data-type' as const, value: parsedType }
+
     variables.push({
       id: uuidv4(),
       name: name.trim(),
       class: currentClass,
-      type: baseCheck.success
-        ? { definition: 'base-type', value: baseCheck.data }
-        : { definition: 'user-data-type', value: parsedType },
+      type: typeDefinition,
       location: location ? location.trim() : '',
       initialValue: initialValue ? initialValue.trim() : null,
       documentation: documentation ? documentation.trim() : '',

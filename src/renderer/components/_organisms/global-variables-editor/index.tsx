@@ -26,6 +26,8 @@ const GlobalVariablesEditor = () => {
     },
     project: {
       data: {
+        pous,
+        dataTypes,
         configuration: {
           resource: { globalVariables },
         },
@@ -196,7 +198,7 @@ const GlobalVariablesEditor = () => {
     try {
       addSnapshot(editor.meta.name)
 
-      const newVariables = parseIecStringToVariables(editorCode)
+      const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes)
 
       const response = setGlobalVariables({
         variables: newVariables as PLCVariable[],
