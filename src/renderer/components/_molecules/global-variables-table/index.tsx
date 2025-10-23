@@ -9,13 +9,14 @@ import { SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 const columnHelper = createColumnHelper<PLCGlobalVariable>()
 
 const columns = [
-  columnHelper.accessor('id', {
+  columnHelper.display({
+    id: 'rowNumber',
     header: '#',
     size: 64,
     minSize: 32,
     maxSize: 64,
     enableResizing: true,
-    cell: (props) => props.row.id,
+    cell: (props) => props.row.index,
   }),
   columnHelper.accessor('name', {
     header: 'Name',

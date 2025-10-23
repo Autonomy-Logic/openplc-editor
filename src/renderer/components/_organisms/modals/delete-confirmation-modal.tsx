@@ -70,11 +70,19 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
 
         blockNodes.forEach((blockNode) => {
           const variableData = (blockNode.data as BasicNodeData)?.variable
-          const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
+          if (!variableData?.name) return
+
+          const variableIndex = variables.findIndex((variable) => {
+            if (variable.name.toLowerCase() !== variableData.name.toLowerCase()) return false
+            if ('type' in variableData && variableData.type) {
+              return JSON.stringify(variable.type) === JSON.stringify(variableData.type)
+            }
+            return true
+          })
 
           if (variableIndex !== -1) {
             deleteVariable({
-              variableId: variableData?.id,
+              rowId: variableIndex,
               scope: 'local',
               associatedPou: editor.meta.name,
             })

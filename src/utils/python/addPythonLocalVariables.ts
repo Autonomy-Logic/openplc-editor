@@ -3,7 +3,6 @@ import { PLCPou, PLCProjectData, PLCVariable } from '@root/types/PLC/open-plc'
 const createRuntimeVariables = (): PLCVariable[] => {
   return [
     {
-      id: crypto.randomUUID(),
       name: 'first_run',
       class: 'local',
       type: {
@@ -15,7 +14,6 @@ const createRuntimeVariables = (): PLCVariable[] => {
       debug: false,
     },
     {
-      id: crypto.randomUUID(),
       name: 'shm_in_ptr',
       class: 'local',
       type: {
@@ -27,7 +25,6 @@ const createRuntimeVariables = (): PLCVariable[] => {
       debug: false,
     },
     {
-      id: crypto.randomUUID(),
       name: 'shm_out_ptr',
       class: 'local',
       type: {

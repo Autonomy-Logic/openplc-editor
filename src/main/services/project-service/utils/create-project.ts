@@ -56,7 +56,6 @@ const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLC
             triggering: 'Cyclic',
             interval: dataToCreateProjectFile.time,
             priority: 1,
-            id: '0',
           },
         ],
         instances: [
@@ -64,7 +63,6 @@ const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLC
             name: 'instance0',
             program: 'main',
             task: 'task0',
-            id: '0',
           },
         ],
         globalVariables: [],

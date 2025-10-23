@@ -189,8 +189,8 @@ export const Contact = (block: ContactProps) => {
       return
     }
 
-    // Variable of the node is different from the selected variable
-    if ((node.data as BasicNodeData).variable.id !== variable.id) {
+    const nodeVariableName = (node.data as BasicNodeData).variable.name
+    if (nodeVariableName.toLowerCase() !== variable.name.toLowerCase()) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -207,8 +207,8 @@ export const Contact = (block: ContactProps) => {
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id === variable.id && variable.name !== contactVariableValue) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+    if (nodeVariableName.toLowerCase() === variable.name.toLowerCase() && variable.name !== contactVariableValue) {
+      if (nodeVariableName !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,

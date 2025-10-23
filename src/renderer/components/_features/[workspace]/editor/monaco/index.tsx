@@ -772,7 +772,6 @@ void loop()
 
     const res = createVariable({
       data: {
-        id: crypto.randomUUID(),
         name: uniqueName,
         type: {
           definition: 'derived',

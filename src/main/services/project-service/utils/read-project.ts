@@ -9,6 +9,7 @@ import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCPou, PLCPouSchema, PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
+import { migrateProjectToNameTypeSystem, needsMigration } from '@root/utils/migrate-project-to-name-type-system'
 import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, join } from 'path'
 import { ZodTypeAny } from 'zod'
@@ -267,6 +268,56 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     pous: Object.values(pouFiles).map((pou) => pou as PLCPou),
     deviceConfiguration: projectFiles['devices/configuration.json'] as DeviceConfiguration,
     devicePinMapping: projectFiles['devices/pin-mapping.json'] as DevicePin[],
+  }
+
+  // Check if project needs migration from ID-based to name+type-based system
+  if (needsMigration(returnData.project.data)) {
+    console.log('Project needs migration from ID-based to name+type-based system')
+    const { migratedProject, report } = migrateProjectToNameTypeSystem(returnData.project.data)
+
+    if (report.success) {
+      console.log(`Migration successful: ${report.variablesMigrated} variables migrated`)
+
+      returnData.project.data = migratedProject
+
+      returnData.pous = returnData.pous.map((pou) => {
+        const migratedPou = migratedProject.pous.find((p) => p.data.name === pou.data.name)
+        if (migratedPou) {
+          return { ...pou, data: migratedPou.data } as PLCPou
+        }
+        return pou
+      })
+
+      // Create a backup of the original project before saving migrated version
+      const backupPath = join(basePath, 'project.backup.json')
+      if (!fileOrDirectoryExists(backupPath)) {
+        try {
+          await promises.writeFile(backupPath, JSON.stringify(projectFiles['project.json'], null, 2), 'utf-8')
+          console.log(`Backup created at: ${backupPath}`)
+        } catch (error) {
+          console.error('Failed to create backup:', error)
+        }
+      }
+
+      try {
+        await promises.writeFile(join(basePath, 'project.json'), JSON.stringify(returnData.project, null, 2), 'utf-8')
+        console.log('Migrated project saved successfully')
+
+        for (const pou of returnData.pous) {
+          const pouType = pou.type.toLowerCase() + 's'
+          const pouFilePath = join(basePath, 'pous', pouType, `${pou.data.name}.json`)
+          await promises.writeFile(pouFilePath, JSON.stringify(pou, null, 2), 'utf-8')
+        }
+        console.log('Migrated POUs saved successfully')
+      } catch (error) {
+        console.error('Failed to save migrated project:', error)
+      }
+    } else {
+      console.error('Migration failed:', report.errors)
+      if (report.unresolvedReferences.length > 0) {
+        console.error('Unresolved references:', report.unresolvedReferences)
+      }
+    }
   }
 
   return {

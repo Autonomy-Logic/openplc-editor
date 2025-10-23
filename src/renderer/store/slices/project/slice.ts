@@ -276,10 +276,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               variableToBeCreated.data = {
                 ...variableToBeCreated.data,
                 ...createVariableValidation(pou.data.variables, variableToBeCreated.data),
-                id: variableToBeCreated.data.id ? variableToBeCreated.data.id : crypto.randomUUID(),
               }
               if (variableToBeCreated.rowToInsert !== undefined) {
-                const pouVariables = pou.data.variables.filter((variable) => variable.id !== 'OUT')
+                const pouVariables = pou.data.variables.filter((variable) => variable.name !== 'OUT')
                 pouVariables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
                 pou.data.variables = [...pouVariables]
                 break
@@ -320,7 +319,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               const variableToUpdate = getVariableBasedOnRowIdOrVariableId(
                 project.data.configuration.resource.globalVariables,
                 dataToBeUpdated.rowId,
-                dataToBeUpdated.data.id,
+                undefined,
               )
               if (!variableToUpdate) {
                 response = { ok: false, title: 'Variable not found' }

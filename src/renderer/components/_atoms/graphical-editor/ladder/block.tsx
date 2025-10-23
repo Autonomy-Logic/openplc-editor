@@ -726,13 +726,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           return { ...connectedVariable, handleId: matchByName.name }
         }
 
-        if (connectedVariable.handleTableId) {
-          const matchById = newNodeVariables.find((newVar) => newVar.id === connectedVariable.handleTableId)
-          if (matchById) {
-            return { ...connectedVariable, handleId: matchById.name }
-          }
-        }
-
         return undefined
       })
       .filter((v): v is NonNullable<typeof v> => v !== undefined)

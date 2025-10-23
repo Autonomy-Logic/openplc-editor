@@ -157,12 +157,12 @@ const VariablesEditor = () => {
 
     addSnapshot(editor.meta.name)
 
-    const variable = tableData[row ?? parseInt(editorVariables.selectedRow)]
+    const currentIndex = row ?? parseInt(editorVariables.selectedRow)
     rearrangeVariables({
       scope: 'local',
       associatedPou: editor.meta.name,
-      variableId: variable.id,
-      newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
+      rowId: currentIndex,
+      newIndex: currentIndex + index,
     })
     updateModelVariables({
       display: 'table',
@@ -208,7 +208,6 @@ const VariablesEditor = () => {
         associatedPou: editor.meta.name,
         data: {
           ...variable,
-          id: '',
           type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
         },
       })
@@ -224,7 +223,6 @@ const VariablesEditor = () => {
       associatedPou: editor.meta.name,
       data: {
         ...variable,
-        id: '',
         type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
       },
       rowToInsert: selectedRow + 1,
@@ -242,8 +240,7 @@ const VariablesEditor = () => {
     addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
-    const selectedVariable = tableData[selectedRow]
-    deleteVariable({ scope: 'local', associatedPou: editor.meta.name, variableId: selectedVariable.id })
+    deleteVariable({ scope: 'local', associatedPou: editor.meta.name, rowId: selectedRow })
 
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     if (selectedRow === variables.length - 1) {

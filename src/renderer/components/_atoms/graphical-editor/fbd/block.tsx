@@ -416,8 +416,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id === variable.id) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+    const nodeVariableName = (node.data as BasicNodeData).variable.name
+    if (nodeVariableName.toLowerCase() === variable.name.toLowerCase()) {
+      if (nodeVariableName !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
           nodeId: node.id,
@@ -503,7 +504,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
         const creationResult = createVariable({
           data: {
-            id: crypto.randomUUID(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: nodeBlockType },
             class: 'local',
@@ -594,7 +594,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       const hasOut = newNodeVariables.some((v) => v.name === 'OUT')
       if (!hasOut)
         newNodeVariables.push({
-          id: 'OUT',
           name: 'OUT',
           class: 'output',
           type: {
