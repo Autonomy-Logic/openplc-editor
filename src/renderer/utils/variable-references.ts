@@ -176,9 +176,18 @@ export function findAllReferencesToVariable(
     lines.forEach((line, lineIndex) => {
       let match
       while ((match = variablePattern.exec(line)) !== null) {
+        let editorType: 'ladder' | 'fbd' | 'st' | 'il' | 'python' | 'c'
+        if (pou.data.body.language === 'ld') {
+          editorType = 'ladder'
+        } else if (pou.data.body.language === 'cpp') {
+          editorType = 'c'
+        } else {
+          editorType = pou.data.body.language as 'fbd' | 'st' | 'il' | 'python'
+        }
+
         references.push({
           pouName,
-          editorType: pou.data.body.language,
+          editorType,
           lineNumber: lineIndex + 1,
           columnStart: match.index,
           columnEnd: match.index + variableName.length,
@@ -368,6 +377,8 @@ export function propagateVariableRename(
       if (!pou) return
 
       const bodyValue = pou.data.body.value
+      if (typeof bodyValue !== 'string') return
+
       try {
         const variablePattern = new RegExp(`\\b${oldName}\\b`, 'gi')
         const updatedBody = bodyValue.replace(variablePattern, newName)
