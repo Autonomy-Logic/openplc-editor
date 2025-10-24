@@ -604,7 +604,7 @@ const VariablesEditor = () => {
         ]
       })
 
-      const renamedPairsToApply: typeof renamedPairs = []
+      const renamedPairsToPropagate: typeof renamedPairs = []
       const typeChangedPairsToApply: typeof typeChangedPairs = []
 
       for (const pair of renamedPairs) {
@@ -624,15 +624,13 @@ const VariablesEditor = () => {
             newName: pair.newName,
             impact,
           })
-          const shouldApply = await askRenameBlocks()
+          const shouldPropagateRename = await askRenameBlocks()
           setRenameImpactData(null)
 
-          if (!shouldApply) {
-            continue
+          if (shouldPropagateRename) {
+            renamedPairsToPropagate.push(pair)
           }
         }
-
-        renamedPairsToApply.push(pair)
       }
 
       for (const pair of typeChangedPairs) {
@@ -662,39 +660,20 @@ const VariablesEditor = () => {
         typeChangedPairsToApply.push(pair)
       }
 
-      const cancelledRenames = renamedPairs.filter(
-        (pair) =>
-          !renamedPairsToApply.some((appliedPair) => appliedPair.oldName.toLowerCase() === pair.oldName.toLowerCase()),
-      )
+      const finalVariables = newVariables.map((newVar) => {
+        const typeChangePair = typeChangedPairs.find((pair) => pair.name.toLowerCase() === newVar.name.toLowerCase())
 
-      const finalVariables = newVariables
-        .map((newVar) => {
-          const typeChangePair = typeChangedPairs.find((pair) => pair.name.toLowerCase() === newVar.name.toLowerCase())
-
-          if (typeChangePair) {
-            const wasApplied = typeChangedPairsToApply.some(
-              (appliedPair) => appliedPair.name.toLowerCase() === newVar.name.toLowerCase(),
-            )
-
-            if (!wasApplied) {
-              return { ...newVar, type: typeChangePair.oldVariable.type }
-            }
-          }
-
-          const cancelledRename = cancelledRenames.find(
-            (pair) => pair.newName.toLowerCase() === newVar.name.toLowerCase(),
+        if (typeChangePair) {
+          const wasApplied = typeChangedPairsToApply.some(
+            (appliedPair) => appliedPair.name.toLowerCase() === newVar.name.toLowerCase(),
           )
 
-          if (cancelledRename) {
-            return null
+          if (!wasApplied) {
+            return { ...newVar, type: typeChangePair.oldVariable.type }
           }
+        }
 
-          return newVar
-        })
-        .filter((v): v is PLCVariable => v !== null)
-
-      cancelledRenames.forEach((pair) => {
-        finalVariables.push(pair.oldVariable)
+        return newVar
       })
 
       const response = setPouVariables({
@@ -725,7 +704,7 @@ const VariablesEditor = () => {
         syncNodesWithVariablesFBDUtil(freshVariables, freshFBDFlows, updateFBDNode)
       }
 
-      for (const pair of renamedPairsToApply) {
+      for (const pair of renamedPairsToPropagate) {
         const impact = findAllReferencesToVariable(
           pair.oldName,
           pair.oldVariable.type,
