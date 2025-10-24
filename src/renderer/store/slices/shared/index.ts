@@ -1,6 +1,7 @@
 import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
+import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '@root/renderer/utils/sync-nodes-with-variables'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
 import {
@@ -931,6 +932,24 @@ export const createSharedSlice: StateCreator<
           })
 
         pous.map((pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type))
+
+        if (ladderPous.length) {
+          const state = getState()
+          const ladderFlows = state.ladderFlows.ladderFlows as LadderFlowType[]
+          const updateLadderNode = state.ladderFlowActions.updateNode
+          ladderPous.forEach((pou) => {
+            syncNodesWithVariables(pou.data.variables, ladderFlows, updateLadderNode)
+          })
+        }
+
+        if (fbdPous.length) {
+          const state = getState()
+          const fbdFlows = state.fbdFlows.fbdFlows as FBDFlowType[]
+          const updateFBDNode = state.fbdFlowActions.updateNode
+          fbdPous.forEach((pou) => {
+            syncNodesWithVariablesFBD(pou.data.variables, fbdFlows, updateFBDNode)
+          })
+        }
 
         if (pous.length !== 0) {
           const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
