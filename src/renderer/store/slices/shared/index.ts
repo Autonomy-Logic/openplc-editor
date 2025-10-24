@@ -935,7 +935,7 @@ export const createSharedSlice: StateCreator<
 
         if (ladderPous.length) {
           const state = getState()
-          const ladderFlows = state.ladderFlows.ladderFlows as LadderFlowType[]
+          const ladderFlows = state.ladderFlows
           const updateLadderNode = state.ladderFlowActions.updateNode
           ladderPous.forEach((pou) => {
             syncNodesWithVariables(pou.data.variables, ladderFlows, updateLadderNode)
@@ -944,7 +944,7 @@ export const createSharedSlice: StateCreator<
 
         if (fbdPous.length) {
           const state = getState()
-          const fbdFlows = state.fbdFlows.fbdFlows as FBDFlowType[]
+          const fbdFlows = state.fbdFlows
           const updateFBDNode = state.fbdFlowActions.updateNode
           fbdPous.forEach((pou) => {
             syncNodesWithVariablesFBD(pou.data.variables, fbdFlows, updateFBDNode)
