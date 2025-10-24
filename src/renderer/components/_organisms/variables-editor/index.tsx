@@ -662,9 +662,44 @@ const VariablesEditor = () => {
         typeChangedPairsToApply.push(pair)
       }
 
+      const cancelledRenames = renamedPairs.filter(
+        (pair) =>
+          !renamedPairsToApply.some((appliedPair) => appliedPair.oldName.toLowerCase() === pair.oldName.toLowerCase()),
+      )
+
+      const finalVariables = newVariables
+        .map((newVar) => {
+          const typeChangePair = typeChangedPairs.find((pair) => pair.name.toLowerCase() === newVar.name.toLowerCase())
+
+          if (typeChangePair) {
+            const wasApplied = typeChangedPairsToApply.some(
+              (appliedPair) => appliedPair.name.toLowerCase() === newVar.name.toLowerCase(),
+            )
+
+            if (!wasApplied) {
+              return { ...newVar, type: typeChangePair.oldVariable.type }
+            }
+          }
+
+          const cancelledRename = cancelledRenames.find(
+            (pair) => pair.newName.toLowerCase() === newVar.name.toLowerCase(),
+          )
+
+          if (cancelledRename) {
+            return null
+          }
+
+          return newVar
+        })
+        .filter((v): v is PLCVariable => v !== null)
+
+      cancelledRenames.forEach((pair) => {
+        finalVariables.push(pair.oldVariable)
+      })
+
       const response = setPouVariables({
         pouName: pou?.data?.name ?? '',
-        variables: newVariables,
+        variables: finalVariables,
       })
 
       if (!response.ok) {
