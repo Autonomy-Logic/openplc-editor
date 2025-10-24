@@ -1,7 +1,5 @@
 import { LibraryState } from '@root/renderer/store/slices/library/type'
-import { baseTypeSchema, PLCVariable } from '@root/types/PLC'
-import { PLCDataType, PLCPou } from '@root/types/PLC/open-plc'
-import { v4 as uuidv4 } from 'uuid'
+import { baseTypeSchema, PLCDataType, PLCPou, PLCVariable } from '@root/types/PLC/open-plc'
 
 const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR: 'local',
@@ -82,7 +80,7 @@ export const parseIecStringToVariables = (
     }
 
     const parsedType = type.trim()
-    const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
+    const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
 
     const isUserFunctionBlock = pous?.some(
       (pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === parsedType.toLowerCase(),
@@ -108,7 +106,6 @@ export const parseIecStringToVariables = (
         : { definition: 'user-data-type' as const, value: parsedType }
 
     variables.push({
-      id: uuidv4(),
       name: name.trim(),
       class: currentClass,
       type: typeDefinition,
