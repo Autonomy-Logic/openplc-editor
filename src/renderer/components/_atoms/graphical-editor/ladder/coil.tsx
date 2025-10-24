@@ -206,7 +206,7 @@ export const Coil = (block: CoilProps) => {
   useEffect(() => {
     const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
-      variableName: coilVariableValue,
+      variableName: data.variable.name,
     })
 
     if (!rung || !node) return
@@ -265,7 +265,7 @@ export const Coil = (block: CoilProps) => {
     }
 
     setWrongVariable(false)
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event
