@@ -938,7 +938,10 @@ export const createSharedSlice: StateCreator<
           const ladderFlows = state.ladderFlows
           const updateLadderNode = state.ladderFlowActions.updateNode
           ladderPous.forEach((pou) => {
-            syncNodesWithVariables(pou.data.variables, ladderFlows, updateLadderNode)
+            const pouFlow = ladderFlows.filter((flow) => flow.name === pou.data.name)
+            if (pouFlow.length > 0) {
+              syncNodesWithVariables(pou.data.variables, pouFlow, updateLadderNode)
+            }
           })
         }
 
@@ -947,7 +950,10 @@ export const createSharedSlice: StateCreator<
           const fbdFlows = state.fbdFlows
           const updateFBDNode = state.fbdFlowActions.updateNode
           fbdPous.forEach((pou) => {
-            syncNodesWithVariablesFBD(pou.data.variables, fbdFlows, updateFBDNode)
+            const pouFlow = fbdFlows.filter((flow) => flow.name === pou.data.name)
+            if (pouFlow.length > 0) {
+              syncNodesWithVariablesFBD(pou.data.variables, pouFlow, updateFBDNode)
+            }
           })
         }
 
