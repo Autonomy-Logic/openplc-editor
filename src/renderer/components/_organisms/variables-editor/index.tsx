@@ -13,6 +13,7 @@ import {
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
+  propagateVariableTypeChange,
   type ReferenceImpactAnalysis,
 } from '@root/renderer/utils/variable-references'
 import { baseTypes } from '@root/shared/data'
@@ -73,8 +74,7 @@ const VariablesEditor = () => {
   const [pouDescription, setPouDescription] = useState<string>('')
   const [confirmRenameBlocksOpen, setConfirmRenameBlocksOpen] = useState(false)
   const [renameImpactData, setRenameImpactData] = useState<{
-    oldName: string
-    newName: string
+    changes: Array<{ oldName: string; newName?: string; oldType?: string; newType?: string }>
     impact: ReferenceImpactAnalysis
   } | null>(null)
   const confirmRenameBlocksResolveRef = useRef<(v: boolean) => void>()
@@ -560,12 +560,39 @@ const VariablesEditor = () => {
           : []
       })
 
+      const typeChangedPairs = tableData.flatMap((previousVariable) => {
+        const matchingNewVariable = newVariables.find(
+          (newVariable) => newVariable.name.toLowerCase() === previousVariable.name.toLowerCase(),
+        )
+
+        if (
+          !matchingNewVariable ||
+          matchingNewVariable.type.value.toLowerCase() === previousVariable.type.value.toLowerCase()
+        ) {
+          return []
+        }
+
+        return [
+          {
+            name: previousVariable.name,
+            oldType: previousVariable.type.value,
+            newType: matchingNewVariable.type.value,
+            oldVariable: previousVariable,
+            newVariable: matchingNewVariable,
+          },
+        ]
+      })
+
       let shouldPropagate = true
-      if (renamedPairs.length > 0) {
-        const firstRename = renamedPairs[0]
+      const allChanges: Array<{ oldName: string; newName?: string; oldType?: string; newType?: string }> = []
+      const allReferences: ReferenceImpactAnalysis['references'] = []
+      const byPou = new Map<string, number>()
+      const byEditorType = new Map<string, number>()
+
+      for (const pair of renamedPairs) {
         const impact = findAllReferencesToVariable(
-          firstRename.oldName,
-          firstRename.oldVariable.type,
+          pair.oldName,
+          pair.oldVariable.type,
           editor.meta.name,
           pous,
           ladderFlows,
@@ -574,19 +601,59 @@ const VariablesEditor = () => {
         )
 
         if (impact.totalReferences > 0) {
-          setRenameImpactData({
-            oldName: firstRename.oldName,
-            newName: firstRename.newName,
-            impact,
+          allChanges.push({ oldName: pair.oldName, newName: pair.newName })
+          allReferences.push(...impact.references)
+          impact.byPou.forEach((count, pouName) => {
+            byPou.set(pouName, (byPou.get(pouName) || 0) + count)
           })
-          shouldPropagate = await askRenameBlocks()
-          setRenameImpactData(null)
+          impact.byEditorType.forEach((count, editorType) => {
+            byEditorType.set(editorType, (byEditorType.get(editorType) || 0) + count)
+          })
         }
+      }
+
+      for (const pair of typeChangedPairs) {
+        const impact = findAllReferencesToVariable(
+          pair.name,
+          pair.oldVariable.type,
+          editor.meta.name,
+          pous,
+          ladderFlows,
+          fbdFlows,
+          'local',
+        )
+
+        if (impact.totalReferences > 0) {
+          allChanges.push({ oldName: pair.name, oldType: pair.oldType, newType: pair.newType })
+          allReferences.push(...impact.references)
+          impact.byPou.forEach((count, pouName) => {
+            byPou.set(pouName, (byPou.get(pouName) || 0) + count)
+          })
+          impact.byEditorType.forEach((count, editorType) => {
+            byEditorType.set(editorType, (byEditorType.get(editorType) || 0) + count)
+          })
+        }
+      }
+
+      if (allChanges.length > 0 && allReferences.length > 0) {
+        const combinedImpact: ReferenceImpactAnalysis = {
+          totalReferences: allReferences.length,
+          byPou,
+          byEditorType,
+          references: allReferences,
+        }
+
+        setRenameImpactData({
+          changes: allChanges,
+          impact: combinedImpact,
+        })
+        shouldPropagate = await askRenameBlocks()
+        setRenameImpactData(null)
       }
 
       const response = setPouVariables({
         pouName: pou?.data?.name ?? '',
-        variables: newVariables as PLCVariable[],
+        variables: newVariables,
       })
 
       if (!response.ok) {
@@ -594,14 +661,14 @@ const VariablesEditor = () => {
       }
 
       if (language === 'ld') {
-        syncNodesWithVariables(newVariables as PLCVariable[], ladderFlows, updateNode)
+        syncNodesWithVariables(newVariables, ladderFlows, updateNode)
       }
 
       if (language === 'fbd') {
-        syncNodesWithVariablesFBD(newVariables as PLCVariable[], fbdFlows, updateFBDNode)
+        syncNodesWithVariablesFBD(newVariables, fbdFlows, updateFBDNode)
       }
 
-      if (shouldPropagate && renamedPairs.length > 0) {
+      if (shouldPropagate) {
         for (const pair of renamedPairs) {
           const impact = findAllReferencesToVariable(
             pair.oldName,
@@ -628,6 +695,14 @@ const VariablesEditor = () => {
             )
           }
         }
+
+        for (const pair of typeChangedPairs) {
+          propagateVariableTypeChange(pair.name, pair.newVariable.type, pous, {
+            updateVariable: () => {
+              return { ok: true }
+            },
+          })
+        }
       }
 
       toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
@@ -648,8 +723,7 @@ const VariablesEditor = () => {
       {confirmRenameBlocksOpen && renameImpactData && (
         <RenameImpactModal
           open={confirmRenameBlocksOpen}
-          oldName={renameImpactData.oldName}
-          newName={renameImpactData.newName}
+          changes={renameImpactData.changes}
           impact={renameImpactData.impact}
           onConfirm={() => {
             confirmRenameBlocksResolveRef.current?.(true)

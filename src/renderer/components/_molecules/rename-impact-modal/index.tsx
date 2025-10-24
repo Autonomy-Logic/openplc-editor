@@ -4,15 +4,27 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../mo
 
 type RenameImpactModalProps = {
   open: boolean
-  oldName: string
-  newName: string
+  oldName?: string
+  newName?: string
+  changes?: Array<{ oldName: string; newName?: string; oldType?: string; newType?: string }>
   impact: ReferenceImpactAnalysis
   onConfirm: () => void
   onCancel: () => void
 }
 
-export const RenameImpactModal = ({ open, oldName, newName, impact, onConfirm, onCancel }: RenameImpactModalProps) => {
+export const RenameImpactModal = ({
+  open,
+  oldName,
+  newName,
+  changes,
+  impact,
+  onConfirm,
+  onCancel,
+}: RenameImpactModalProps) => {
   if (!open) return null
+
+  const hasMultipleChanges = changes && changes.length > 1
+  const singleChange = changes && changes.length === 1 ? changes[0] : null
 
   return (
     <Modal open>
@@ -22,16 +34,55 @@ export const RenameImpactModal = ({ open, oldName, newName, impact, onConfirm, o
       >
         <ModalHeader>
           <ModalTitle className='text-sm font-medium text-neutral-950 dark:text-white'>
-            Rename Variable: Impact Analysis
+            Variable Changes: Impact Analysis
           </ModalTitle>
         </ModalHeader>
 
         <div className='flex flex-col gap-3 overflow-y-auto'>
           <div className='text-xs text-neutral-600 dark:text-neutral-50'>
-            <p className='mb-2'>
-              Renaming <span className='font-semibold'>{oldName}</span> to{' '}
-              <span className='font-semibold'>{newName}</span> will affect:
-            </p>
+            {hasMultipleChanges ? (
+              <>
+                <p className='mb-2 font-medium'>The following variable changes will affect:</p>
+                <ul className='mb-2 list-inside list-disc space-y-1'>
+                  {changes.map((change, idx) => (
+                    <li key={idx}>
+                      {change.newName ? (
+                        <>
+                          Rename <span className='font-semibold'>{change.oldName}</span> to{' '}
+                          <span className='font-semibold'>{change.newName}</span>
+                        </>
+                      ) : (
+                        <>
+                          Change type of <span className='font-semibold'>{change.oldName}</span> from{' '}
+                          <span className='font-semibold'>{change.oldType}</span> to{' '}
+                          <span className='font-semibold'>{change.newType}</span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : singleChange ? (
+              <p className='mb-2'>
+                {singleChange.newName ? (
+                  <>
+                    Renaming <span className='font-semibold'>{singleChange.oldName}</span> to{' '}
+                    <span className='font-semibold'>{singleChange.newName}</span> will affect:
+                  </>
+                ) : (
+                  <>
+                    Changing type of <span className='font-semibold'>{singleChange.oldName}</span> from{' '}
+                    <span className='font-semibold'>{singleChange.oldType}</span> to{' '}
+                    <span className='font-semibold'>{singleChange.newType}</span> will affect:
+                  </>
+                )}
+              </p>
+            ) : (
+              <p className='mb-2'>
+                Renaming <span className='font-semibold'>{oldName}</span> to{' '}
+                <span className='font-semibold'>{newName}</span> will affect:
+              </p>
+            )}
           </div>
 
           <div className='rounded-md border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-800'>
