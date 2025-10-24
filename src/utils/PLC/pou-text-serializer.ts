@@ -114,3 +114,23 @@ export const serializeGraphicalPouToString = (pou: PLCPou): string => {
 
   return result
 }
+
+/**
+ * Helper function to serialize a POU to text format based on its language
+ * Routes to the appropriate serializer based on the POU's language type
+ * @param pou - The POU to serialize
+ * @returns The serialized text string
+ */
+export const serializePouToText = (pou: PLCPou): string => {
+  const language = pou.data.body.language
+
+  if (language === 'st' || language === 'il') {
+    return serializeTextualPouToString(pou)
+  } else if (language === 'python' || language === 'cpp') {
+    return serializeHybridPouToString(pou)
+  } else if (language === 'ld' || language === 'fbd') {
+    return serializeGraphicalPouToString(pou)
+  } else {
+    throw new Error(`Unsupported language: ${language}`)
+  }
+}

@@ -1,6 +1,7 @@
 import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
+import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '@root/renderer/utils/sync-nodes-with-variables'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
 import {
@@ -13,6 +14,8 @@ import {
   PLCStructureDatatype,
   PLCVariable,
 } from '@root/types/PLC/open-plc'
+import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
+import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
 import { StateCreator } from 'zustand'
 
@@ -931,6 +934,55 @@ export const createSharedSlice: StateCreator<
           })
 
         pous.map((pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type))
+
+        const graphicalPous = [...ladderPous, ...fbdPous]
+        if (graphicalPous.length) {
+          const state = getState()
+          const {
+            project: {
+              data: { dataTypes },
+            },
+            libraries,
+          } = state
+
+          graphicalPous.forEach((pou) => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+            const iecString = generateIecVariablesToString(pou.data.variables as any)
+            const reparsedVariables = parseIecStringToVariables(iecString, pous, dataTypes, libraries)
+            getState().projectActions.setPouVariables({
+              pouName: pou.data.name,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              variables: reparsedVariables as any,
+            })
+          })
+
+          const freshState = getState()
+          const freshLadderFlows = freshState.ladderFlows
+          const freshFBDFlows = freshState.fbdFlows
+          const freshPous = freshState.project.data.pous
+          const updateLadderNode = freshState.ladderFlowActions.updateNode
+          const updateFBDNode = freshState.fbdFlowActions.updateNode
+
+          ladderPous.forEach((pou) => {
+            const freshPou = freshPous.find((p) => p.data.name === pou.data.name)
+            if (freshPou) {
+              const pouFlow = freshLadderFlows.filter((flow) => flow.name === pou.data.name)
+              if (pouFlow.length > 0) {
+                syncNodesWithVariables(freshPou.data.variables, pouFlow, updateLadderNode)
+              }
+            }
+          })
+
+          fbdPous.forEach((pou) => {
+            const freshPou = freshPous.find((p) => p.data.name === pou.data.name)
+            if (freshPou) {
+              const pouFlow = freshFBDFlows.filter((flow) => flow.name === pou.data.name)
+              if (pouFlow.length > 0) {
+                syncNodesWithVariablesFBD(freshPou.data.variables, pouFlow, updateFBDNode)
+              }
+            }
+          })
+        }
 
         if (pous.length !== 0) {
           const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
