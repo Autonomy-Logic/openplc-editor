@@ -14,6 +14,8 @@ import {
   PLCStructureDatatype,
   PLCVariable,
 } from '@root/types/PLC/open-plc'
+import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
+import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
 import { StateCreator } from 'zustand'
 
@@ -933,26 +935,51 @@ export const createSharedSlice: StateCreator<
 
         pous.map((pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type))
 
-        if (ladderPous.length) {
+        const graphicalPous = [...ladderPous, ...fbdPous]
+        if (graphicalPous.length) {
           const state = getState()
-          const ladderFlows = state.ladderFlows
-          const updateLadderNode = state.ladderFlowActions.updateNode
+          const {
+            project: {
+              data: { dataTypes },
+            },
+            libraries,
+          } = state
+
+          graphicalPous.forEach((pou) => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+            const iecString = generateIecVariablesToString(pou.data.variables as any)
+            const reparsedVariables = parseIecStringToVariables(iecString, pous, dataTypes, libraries)
+            getState().projectActions.setPouVariables({
+              pouName: pou.data.name,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              variables: reparsedVariables as any,
+            })
+          })
+
+          const freshState = getState()
+          const freshLadderFlows = freshState.ladderFlows
+          const freshFBDFlows = freshState.fbdFlows
+          const freshPous = freshState.project.data.pous
+          const updateLadderNode = freshState.ladderFlowActions.updateNode
+          const updateFBDNode = freshState.fbdFlowActions.updateNode
+
           ladderPous.forEach((pou) => {
-            const pouFlow = ladderFlows.filter((flow) => flow.name === pou.data.name)
-            if (pouFlow.length > 0) {
-              syncNodesWithVariables(pou.data.variables, pouFlow, updateLadderNode)
+            const freshPou = freshPous.find((p) => p.data.name === pou.data.name)
+            if (freshPou) {
+              const pouFlow = freshLadderFlows.filter((flow) => flow.name === pou.data.name)
+              if (pouFlow.length > 0) {
+                syncNodesWithVariables(freshPou.data.variables, pouFlow, updateLadderNode)
+              }
             }
           })
-        }
 
-        if (fbdPous.length) {
-          const state = getState()
-          const fbdFlows = state.fbdFlows
-          const updateFBDNode = state.fbdFlowActions.updateNode
           fbdPous.forEach((pou) => {
-            const pouFlow = fbdFlows.filter((flow) => flow.name === pou.data.name)
-            if (pouFlow.length > 0) {
-              syncNodesWithVariablesFBD(pou.data.variables, pouFlow, updateFBDNode)
+            const freshPou = freshPous.find((p) => p.data.name === pou.data.name)
+            if (freshPou) {
+              const pouFlow = freshFBDFlows.filter((flow) => flow.name === pou.data.name)
+              if (pouFlow.length > 0) {
+                syncNodesWithVariablesFBD(freshPou.data.variables, pouFlow, updateFBDNode)
+              }
             }
           })
         }
