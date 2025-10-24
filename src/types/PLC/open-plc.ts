@@ -53,7 +53,6 @@ const PLCEnumeratedDatatypeSchema = z.object({
 })
 
 const PLCStructureVariableSchema = z.object({
-  id: z.string().optional(),
   name: z.string(),
   type: z.discriminatedUnion('definition', [
     z.object({
@@ -118,7 +117,6 @@ const PLCDataTypeSchema = z.discriminatedUnion('derivation', [
 type PLCDataType = z.infer<typeof PLCDataTypeSchema>
 
 const PLCVariableSchema = z.object({
-  id: z.string().optional(),
   name: z.string(),
   class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp', 'global']).optional(),
   type: z.discriminatedUnion('definition', [
@@ -164,7 +162,6 @@ const PLCGlobalVariableSchema = PLCVariableSchema
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
 
 const PLCTaskSchema = z.object({
-  id: z.string().optional(),
   name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the task object.
   triggering: z.enum(['Cyclic', 'Interrupt']),
   interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
@@ -230,7 +227,6 @@ const PLCProgramSchema = z.object({
 type PLCProgram = z.infer<typeof PLCProgramSchema>
 
 const PLCInstanceSchema = z.object({
-  id: z.string().optional(),
   name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
   task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
   program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.

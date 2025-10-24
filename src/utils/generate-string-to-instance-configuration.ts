@@ -1,5 +1,4 @@
 import { PLCInstance } from '@root/types/PLC/open-plc'
-import { v4 as uuidv4 } from 'uuid'
 
 const IDENTIFIER = '[A-Za-z][A-Za-z0-9_-]*'
 
@@ -58,7 +57,7 @@ export function parseInstanceConfigurationString(config: string): PLCInstance[] 
     if (match?.groups) {
       const { name, task, program } = match.groups
 
-      instances.push({ id: uuidv4(), name, task, program })
+      instances.push({ name, task, program })
 
       return
     }

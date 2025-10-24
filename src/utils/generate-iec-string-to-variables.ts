@@ -1,5 +1,5 @@
-import { baseTypeSchema, PLCVariable } from '@root/types/PLC'
-import { v4 as uuidv4 } from 'uuid'
+import { LibraryState } from '@root/renderer/store/slices/library/type'
+import { baseTypeSchema, PLCDataType, PLCPou, PLCVariable } from '@root/types/PLC/open-plc'
 
 const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR: 'local',
@@ -23,7 +23,19 @@ const guessErrorReason = (line: string): string => {
   return 'unrecognized declaration format'
 }
 
-export const parseIecStringToVariables = (iecString: string): PLCVariable[] => {
+/**
+ * Type guard to check if a library object has a 'pous' property
+ */
+const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type: string }> } => {
+  return typeof lib === 'object' && lib !== null && 'pous' in lib && Array.isArray((lib as { pous: unknown }).pous)
+}
+
+export const parseIecStringToVariables = (
+  iecString: string,
+  pous?: PLCPou[],
+  _dataTypes?: PLCDataType[], // Reserved for future use: will enable user-defined data type validation
+  libraries?: LibraryState['libraries'],
+): PLCVariable[] => {
   const variables: PLCVariable[] = []
   const lines = iecString.split(/\r?\n/)
   let currentClass: PLCVariable['class'] | null = null
@@ -68,15 +80,35 @@ export const parseIecStringToVariables = (iecString: string): PLCVariable[] => {
     }
 
     const parsedType = type.trim()
-    const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
+    const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
+
+    const isUserFunctionBlock = pous?.some(
+      (pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === parsedType.toLowerCase(),
+    )
+
+    const isSystemFunctionBlock = libraries?.system.some((lib) => {
+      if (!hasLibraryPous(lib)) return false
+      return lib.pous.some(
+        (pou) => pou.type === 'function-block' && pou.name.toLowerCase() === parsedType.toLowerCase(),
+      )
+    })
+
+    const isUserLibraryFunctionBlock = libraries?.user.some(
+      (lib) => lib.type === 'function-block' && lib.name.toLowerCase() === parsedType.toLowerCase(),
+    )
+
+    const isFunctionBlock = isUserFunctionBlock || isSystemFunctionBlock || isUserLibraryFunctionBlock
+
+    const typeDefinition: PLCVariable['type'] = baseCheck.success
+      ? { definition: 'base-type' as const, value: baseCheck.data }
+      : isFunctionBlock
+        ? { definition: 'derived' as const, value: parsedType }
+        : { definition: 'user-data-type' as const, value: parsedType }
 
     variables.push({
-      id: uuidv4(),
       name: name.trim(),
       class: currentClass,
-      type: baseCheck.success
-        ? { definition: 'base-type', value: baseCheck.data }
-        : { definition: 'user-data-type', value: parsedType },
+      type: typeDefinition,
       location: location ? location.trim() : '',
       initialValue: initialValue ? initialValue.trim() : null,
       documentation: documentation ? documentation.trim() : '',

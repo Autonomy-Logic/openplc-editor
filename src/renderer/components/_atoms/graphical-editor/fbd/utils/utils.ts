@@ -30,8 +30,8 @@ export const getFBDPouVariablesRungNodeAndEdges = (
     switch (node.type as keyof typeof customNodeTypes) {
       case 'block':
         return (
-          (node.data as BasicNodeData).variable.id !== undefined &&
-          (node.data as BasicNodeData).variable.id === variable.id
+          (node.data as BasicNodeData).variable.name !== undefined &&
+          (node.data as BasicNodeData).variable.name.toLowerCase() === variable.name.toLowerCase()
         )
       case 'connector':
       case 'continuation':
@@ -40,8 +40,8 @@ export const getFBDPouVariablesRungNodeAndEdges = (
         return undefined
       default:
         return (
-          ((node.data as BasicNodeData).variable.id !== undefined
-            ? variable.id === (node.data as BasicNodeData).variable.id
+          ((node.data as BasicNodeData).variable.name !== undefined
+            ? variable.name.toLowerCase() === (node.data as BasicNodeData).variable.name.toLowerCase()
             : variable.name === data.variableName) && variable.type.definition !== 'derived'
         )
     }

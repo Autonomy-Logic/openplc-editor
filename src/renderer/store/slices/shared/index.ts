@@ -1199,6 +1199,8 @@ export const createSharedSlice: StateCreator<
 
       const projectData = PLCProjectSchema.safeParse(project)
       if (!projectData.success) {
+        console.error('Project validation failed:', projectData.error)
+        console.error('Detailed errors:', JSON.stringify(projectData.error.issues, null, 2))
         getState().workspaceActions.setEditingState('unsaved')
         toast({
           title: 'Error in the save request!',

@@ -147,7 +147,7 @@ const VariableElement = (block: VariableProps) => {
       variables,
     } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
-      variableName: variableValue,
+      variableName: data.variable.name,
     })
     if (!rung || !variableNode) return
 
@@ -155,8 +155,9 @@ const VariableElement = (block: VariableProps) => {
     if (!variable || !inputVariableRef) {
       setIsAVariable(false)
     } else {
-      // if the variable is not the same as the one in the node, update the node
-      if (variable.id !== (variableNode as VariableNode).data.variable.id) {
+      const nodeVariableName = (variableNode as VariableNode).data.variable.name
+
+      if (variable.name.toLowerCase() !== nodeVariableName.toLowerCase()) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
@@ -172,11 +173,7 @@ const VariableElement = (block: VariableProps) => {
         updateRelatedNode(rung, variableNode as VariableNode, variable)
       }
 
-      // if the variable is the same as the one in the node, update the node
-      if (
-        variable.id === (variableNode as VariableNode).data.variable.id &&
-        variable.name !== (variableNode as VariableNode).data.variable.name
-      ) {
+      if (variable.name.toLowerCase() === nodeVariableName.toLowerCase() && variable.name !== nodeVariableName) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
@@ -210,7 +207,7 @@ const VariableElement = (block: VariableProps) => {
       setInputError(true)
       return
     }
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event
@@ -266,10 +263,10 @@ const VariableElement = (block: VariableProps) => {
   }
 
   const getVariableType = (): string | undefined => {
-    if (!data.variable || !('id' in data.variable)) return undefined
+    if (!data.variable || !data.variable.name) return undefined
     const { pou } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId: id })
     if (!pou) return undefined
-    const variable = pou.data.variables.find((v) => v.id === data.variable.id)
+    const variable = pou.data.variables.find((v) => v.name.toLowerCase() === data.variable.name.toLowerCase())
     return variable?.type.value
   }
 
