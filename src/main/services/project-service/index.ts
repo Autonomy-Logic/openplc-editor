@@ -6,11 +6,7 @@ import {
 } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
-import {
-  serializeGraphicalPouToString,
-  serializeHybridPouToString,
-  serializeTextualPouToString,
-} from '@root/utils/PLC/pou-text-serializer'
+import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
@@ -18,25 +14,6 @@ import { dirname, join, normalize } from 'path'
 import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
-
-/**
- * Helper function to serialize a POU to text format based on its language
- * @param pou - The POU to serialize
- * @returns The serialized text string
- */
-const serializePouToText = (pou: PLCPou): string => {
-  const language = pou.data.body.language
-
-  if (language === 'st' || language === 'il') {
-    return serializeTextualPouToString(pou)
-  } else if (language === 'python' || language === 'cpp') {
-    return serializeHybridPouToString(pou)
-  } else if (language === 'ld' || language === 'fbd') {
-    return serializeGraphicalPouToString(pou)
-  } else {
-    throw new Error(`Unsupported language: ${language}`)
-  }
-}
 
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}

@@ -1,3 +1,4 @@
+import { logger } from '@root/main/services/logger-service'
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
 import {
   projectDefaultDirectoriesValidation,
@@ -257,7 +258,7 @@ function readDirectoryRecursive(
       const fileExtension = extname(entry.name)
 
       if (!VALID_POU_EXTENSIONS.includes(fileExtension)) {
-        console.debug(`[read-project] Skipping file with invalid extension: ${entryPath}`)
+        logger.debug(`[read-project] Skipping file with invalid extension: ${entryPath}`)
         continue
       }
 
@@ -267,14 +268,14 @@ function readDirectoryRecursive(
 
       if (existingEntry) {
         if (isTextBased && !existingEntry.isTextBased) {
-          console.debug(`[read-project] Replacing JSON file with text-based file for POU: ${pouName}`)
+          logger.debug(`[read-project] Replacing JSON file with text-based file for POU: ${pouName}`)
           delete projectFiles[existingEntry.key]
           projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
           pouNameMap.set(pouName, { key: entryKey, isTextBased })
         } else if (!isTextBased && existingEntry.isTextBased) {
-          console.debug(`[read-project] Skipping JSON file, text-based file already loaded for POU: ${pouName}`)
+          logger.debug(`[read-project] Skipping JSON file, text-based file already loaded for POU: ${pouName}`)
         } else {
-          console.warn(`[read-project] Duplicate POU file found: ${entryPath}`)
+          logger.debug(`[read-project] Duplicate POU file found: ${entryPath}`)
         }
       } else {
         projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
