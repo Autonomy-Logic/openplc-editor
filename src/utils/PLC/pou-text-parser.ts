@@ -38,6 +38,26 @@ const formatParseError = (message: string, lineNumber?: number): string => {
 }
 
 /**
+ * Helper function to find the last END_VAR in the content
+ * @param content - The content to search
+ * @param startIndex - The index to start searching from
+ * @returns The index after the last END_VAR, or -1 if not found
+ */
+const findLastEndVarIndex = (content: string, startIndex: number): number => {
+  let lastEndVarIndex = -1
+  let searchIndex = startIndex
+
+  let endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
+  while (endVarMatch && endVarMatch.index !== undefined) {
+    lastEndVarIndex = searchIndex + endVarMatch.index + endVarMatch[0].length
+    searchIndex = lastEndVarIndex
+    endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
+  }
+
+  return lastEndVarIndex
+}
+
+/**
  * Parse a textual POU (ST, IL) from string to PLCPou object
  * @param content - The text content to parse
  * @param language - The language code (st, il)
@@ -83,15 +103,7 @@ export const parseTextualPouFromString = (content: string, language: string, typ
 
     if (varStartIndex !== -1) {
       const varSectionStart = varStartIndex
-      let lastEndVarIndex = -1
-      let searchIndex = varSectionStart
-
-      while (true) {
-        const endVarMatch = remainingContent.slice(searchIndex).match(/\bEND_VAR\b/i)
-        if (!endVarMatch || endVarMatch.index === undefined) break
-        lastEndVarIndex = searchIndex + endVarMatch.index + endVarMatch[0].length
-        searchIndex = lastEndVarIndex
-      }
+      const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
 
       if (lastEndVarIndex !== -1) {
         variablesString = remainingContent.slice(varSectionStart, lastEndVarIndex)
@@ -217,15 +229,7 @@ export const parseHybridPouFromString = (content: string, language: string, type
 
     if (varStartIndex !== -1) {
       const varSectionStart = varStartIndex
-      let lastEndVarIndex = -1
-      let searchIndex = varSectionStart
-
-      while (true) {
-        const endVarMatch = remainingContent.slice(searchIndex).match(/\bEND_VAR\b/i)
-        if (!endVarMatch || endVarMatch.index === undefined) break
-        lastEndVarIndex = searchIndex + endVarMatch.index + endVarMatch[0].length
-        searchIndex = lastEndVarIndex
-      }
+      const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
 
       if (lastEndVarIndex !== -1) {
         variablesString = remainingContent.slice(varSectionStart, lastEndVarIndex)
@@ -337,15 +341,7 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
 
     if (varStartIndex !== -1) {
       const varSectionStart = varStartIndex
-      let lastEndVarIndex = -1
-      let searchIndex = varSectionStart
-
-      while (true) {
-        const endVarMatch = remainingContent.slice(searchIndex).match(/\bEND_VAR\b/i)
-        if (!endVarMatch || endVarMatch.index === undefined) break
-        lastEndVarIndex = searchIndex + endVarMatch.index + endVarMatch[0].length
-        searchIndex = lastEndVarIndex
-      }
+      const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
 
       if (lastEndVarIndex !== -1) {
         variablesString = remainingContent.slice(varSectionStart, lastEndVarIndex)
@@ -383,67 +379,113 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
       throw new Error(formatParseError('Invalid JSON in body'))
     }
 
-    let validatedBody: unknown
     if (language === 'ld') {
       const result = zodLadderFlowSchema.safeParse(parsedBody)
       if (!result.success) {
         throw new Error(formatParseError(`Invalid Ladder Diagram body: ${result.error.message}`))
       }
-      validatedBody = result.data
-    } else if (language === 'fbd') {
+      const validatedBody = result.data
+
+      if (type === 'function') {
+        return {
+          type: 'function',
+          data: {
+            language: 'ld' as const,
+            name: pouName,
+            returnType: returnType || '',
+            variables,
+            body: {
+              language: 'ld' as const,
+              value: validatedBody,
+            },
+            documentation,
+          },
+        }
+      } else if (type === 'function-block') {
+        return {
+          type: 'function-block',
+          data: {
+            language: 'ld' as const,
+            name: pouName,
+            variables,
+            body: {
+              language: 'ld' as const,
+              value: validatedBody,
+            },
+            documentation,
+          },
+        }
+      } else {
+        return {
+          type: 'program',
+          data: {
+            language: 'ld' as const,
+            name: pouName,
+            variables,
+            body: {
+              language: 'ld' as const,
+              value: validatedBody,
+            },
+            documentation,
+          },
+        }
+      }
+    }
+
+    if (language === 'fbd') {
       const result = zodFBDFlowSchema.safeParse(parsedBody)
       if (!result.success) {
         throw new Error(formatParseError(`Invalid FBD body: ${result.error.message}`))
       }
-      validatedBody = result.data
-    } else {
-      throw new Error(formatParseError(`Unsupported graphical language: ${language}`))
+      const validatedBody = result.data
+
+      if (type === 'function') {
+        return {
+          type: 'function',
+          data: {
+            language: 'fbd' as const,
+            name: pouName,
+            returnType: returnType || '',
+            variables,
+            body: {
+              language: 'fbd' as const,
+              value: validatedBody,
+            },
+            documentation,
+          },
+        }
+      } else if (type === 'function-block') {
+        return {
+          type: 'function-block',
+          data: {
+            language: 'fbd' as const,
+            name: pouName,
+            variables,
+            body: {
+              language: 'fbd' as const,
+              value: validatedBody,
+            },
+            documentation,
+          },
+        }
+      } else {
+        return {
+          type: 'program',
+          data: {
+            language: 'fbd' as const,
+            name: pouName,
+            variables,
+            body: {
+              language: 'fbd' as const,
+              value: validatedBody,
+            },
+            documentation,
+          },
+        }
+      }
     }
 
-    if (type === 'function') {
-      return {
-        type: 'function',
-        data: {
-          language: language,
-          name: pouName,
-          returnType: returnType || '',
-          variables,
-          body: {
-            language: language,
-            value: validatedBody as never, // Type assertion needed due to discriminated union
-          },
-          documentation,
-        },
-      }
-    } else if (type === 'function-block') {
-      return {
-        type: 'function-block',
-        data: {
-          language: language,
-          name: pouName,
-          variables,
-          body: {
-            language: language,
-            value: validatedBody as never, // Type assertion needed due to discriminated union
-          },
-          documentation,
-        },
-      }
-    } else {
-      return {
-        type: 'program',
-        data: {
-          language: language,
-          name: pouName,
-          variables,
-          body: {
-            language: language,
-            value: validatedBody as never, // Type assertion needed due to discriminated union
-          },
-          documentation,
-        },
-      }
-    }
+    throw new Error(formatParseError(`Unsupported graphical language: ${language}`))
   } catch (error: unknown) {
     if (error instanceof Error) {
       throw new Error(`Failed to parse graphical POU: ${error.message}`)
