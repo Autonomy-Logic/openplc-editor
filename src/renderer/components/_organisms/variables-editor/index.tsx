@@ -11,9 +11,16 @@ import {
   VariablesTable as VariablesTableType,
 } from '@root/renderer/store/slices'
 import {
+  TypeChangeValidationResult,
+  validateTypeChange,
+} from '@root/renderer/store/slices/project/validation/type-change'
+import {
+  syncNodesWithVariables as syncNodesWithVariablesUtil,
+  syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil,
+} from '@root/renderer/utils/sync-nodes-with-variables'
+import {
   findAllReferencesToVariable,
   propagateVariableRename,
-  propagateVariableTypeChange,
   type ReferenceImpactAnalysis,
 } from '@root/renderer/utils/variable-references'
 import { baseTypes } from '@root/shared/data'
@@ -30,6 +37,7 @@ import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { VariablesTable } from '../../_molecules'
 import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
+import { TypeChangeModal } from '../../_molecules/type-change-modal'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
 const VariablesEditor = () => {
@@ -74,10 +82,19 @@ const VariablesEditor = () => {
   const [pouDescription, setPouDescription] = useState<string>('')
   const [confirmRenameBlocksOpen, setConfirmRenameBlocksOpen] = useState(false)
   const [renameImpactData, setRenameImpactData] = useState<{
-    changes: Array<{ oldName: string; newName?: string; oldType?: string; newType?: string }>
+    oldName: string
+    newName: string
     impact: ReferenceImpactAnalysis
   } | null>(null)
   const confirmRenameBlocksResolveRef = useRef<(v: boolean) => void>()
+  const [typeChangeModalOpen, setTypeChangeModalOpen] = useState(false)
+  const [typeChangeData, setTypeChangeData] = useState<{
+    variableName: string
+    oldType: PLCVariable['type']
+    newType: PLCVariable['type']
+    validation: TypeChangeValidationResult
+  } | null>(null)
+  const typeChangeResolveRef = useRef<(v: boolean) => void>()
 
   /**
    * Editor name state to keep track of the editor name
@@ -311,6 +328,12 @@ const VariablesEditor = () => {
       setConfirmRenameBlocksOpen(true)
     })
 
+  const askTypeChange = () =>
+    new Promise<boolean>((resolve) => {
+      typeChangeResolveRef.current = resolve
+      setTypeChangeModalOpen(true)
+    })
+
   const applyVariableToNode = (
     variable: PLCVariable,
     nodeId: string,
@@ -400,7 +423,7 @@ const VariablesEditor = () => {
     })
   }
 
-  const syncNodesWithVariables = (
+  const _syncNodesWithVariables = (
     newVars: PLCVariable[],
     ladderFlows: LadderFlowState['ladderFlows'],
     updateNode: LadderFlowActions['updateNode'],
@@ -464,7 +487,7 @@ const VariablesEditor = () => {
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
-  const syncNodesWithVariablesFBD = (
+  const _syncNodesWithVariablesFBD = (
     newVars: PLCVariable[],
     fbdFlows: FBDFlowState['fbdFlows'],
     updateNode: FBDFlowActions['updateNode'],
@@ -575,19 +598,14 @@ const VariablesEditor = () => {
         return [
           {
             name: previousVariable.name,
-            oldType: previousVariable.type.value,
-            newType: matchingNewVariable.type.value,
             oldVariable: previousVariable,
             newVariable: matchingNewVariable,
           },
         ]
       })
 
-      let shouldPropagate = true
-      const allChanges: Array<{ oldName: string; newName?: string; oldType?: string; newType?: string }> = []
-      const allReferences: ReferenceImpactAnalysis['references'] = []
-      const byPou = new Map<string, number>()
-      const byEditorType = new Map<string, number>()
+      const renamedPairsToApply: typeof renamedPairs = []
+      const typeChangedPairsToApply: typeof typeChangedPairs = []
 
       for (const pair of renamedPairs) {
         const impact = findAllReferencesToVariable(
@@ -601,54 +619,47 @@ const VariablesEditor = () => {
         )
 
         if (impact.totalReferences > 0) {
-          allChanges.push({ oldName: pair.oldName, newName: pair.newName })
-          allReferences.push(...impact.references)
-          impact.byPou.forEach((count, pouName) => {
-            byPou.set(pouName, (byPou.get(pouName) || 0) + count)
+          setRenameImpactData({
+            oldName: pair.oldName,
+            newName: pair.newName,
+            impact,
           })
-          impact.byEditorType.forEach((count, editorType) => {
-            byEditorType.set(editorType, (byEditorType.get(editorType) || 0) + count)
-          })
+          const shouldApply = await askRenameBlocks()
+          setRenameImpactData(null)
+
+          if (!shouldApply) {
+            continue
+          }
         }
+
+        renamedPairsToApply.push(pair)
       }
 
       for (const pair of typeChangedPairs) {
-        const impact = findAllReferencesToVariable(
+        const validation = validateTypeChange(
           pair.name,
           pair.oldVariable.type,
-          editor.meta.name,
-          pous,
+          pair.newVariable.type,
           ladderFlows,
           fbdFlows,
-          'local',
         )
 
-        if (impact.totalReferences > 0) {
-          allChanges.push({ oldName: pair.name, oldType: pair.oldType, newType: pair.newType })
-          allReferences.push(...impact.references)
-          impact.byPou.forEach((count, pouName) => {
-            byPou.set(pouName, (byPou.get(pouName) || 0) + count)
+        if (validation.affectedNodes.length > 0 || validation.warnings.length > 0) {
+          setTypeChangeData({
+            variableName: pair.name,
+            oldType: pair.oldVariable.type,
+            newType: pair.newVariable.type,
+            validation,
           })
-          impact.byEditorType.forEach((count, editorType) => {
-            byEditorType.set(editorType, (byEditorType.get(editorType) || 0) + count)
-          })
-        }
-      }
+          const shouldApply = await askTypeChange()
+          setTypeChangeData(null)
 
-      if (allChanges.length > 0 && allReferences.length > 0) {
-        const combinedImpact: ReferenceImpactAnalysis = {
-          totalReferences: allReferences.length,
-          byPou,
-          byEditorType,
-          references: allReferences,
+          if (!shouldApply) {
+            continue
+          }
         }
 
-        setRenameImpactData({
-          changes: allChanges,
-          impact: combinedImpact,
-        })
-        shouldPropagate = await askRenameBlocks()
-        setRenameImpactData(null)
+        typeChangedPairsToApply.push(pair)
       }
 
       const response = setPouVariables({
@@ -660,48 +671,49 @@ const VariablesEditor = () => {
         throw new Error(response.title + (response.message ? `: ${response.message}` : ''))
       }
 
+      const {
+        project: {
+          data: { pous: freshPous },
+        },
+        ladderFlows: freshLadderFlows,
+        fbdFlows: freshFBDFlows,
+      } = useOpenPLCStore.getState()
+
+      const freshPou = freshPous.find((p) => p.data.name === editor.meta.name)
+      const freshVariables = freshPou?.data.variables ?? []
+
       if (language === 'ld') {
-        syncNodesWithVariables(newVariables, ladderFlows, updateNode)
+        syncNodesWithVariablesUtil(freshVariables, freshLadderFlows, updateNode)
       }
 
       if (language === 'fbd') {
-        syncNodesWithVariablesFBD(newVariables, fbdFlows, updateFBDNode)
+        syncNodesWithVariablesFBDUtil(freshVariables, freshFBDFlows, updateFBDNode)
       }
 
-      if (shouldPropagate) {
-        for (const pair of renamedPairs) {
-          const impact = findAllReferencesToVariable(
+      for (const pair of renamedPairsToApply) {
+        const impact = findAllReferencesToVariable(
+          pair.oldName,
+          pair.oldVariable.type,
+          editor.meta.name,
+          freshPous,
+          freshLadderFlows,
+          freshFBDFlows,
+          'local',
+        )
+
+        if (impact.totalReferences > 0) {
+          propagateVariableRename(
             pair.oldName,
-            pair.oldVariable.type,
-            editor.meta.name,
-            pous,
-            ladderFlows,
-            fbdFlows,
+            pair.newName,
+            impact.references,
+            freshLadderFlows,
+            freshFBDFlows,
+            freshPous,
+            { updateNode },
+            { updateNode: updateFBDNode },
+            { updatePou: () => ({ ok: true }), updateVariable: () => ({ ok: true }) },
             'local',
           )
-
-          if (impact.totalReferences > 0) {
-            propagateVariableRename(
-              pair.oldName,
-              pair.newName,
-              impact.references,
-              ladderFlows,
-              fbdFlows,
-              pous,
-              { updateNode },
-              { updateNode: updateFBDNode },
-              { updatePou: () => ({ ok: true }), updateVariable: () => ({ ok: true }) },
-              'local',
-            )
-          }
-        }
-
-        for (const pair of typeChangedPairs) {
-          propagateVariableTypeChange(pair.name, pair.newVariable.type, pous, {
-            updateVariable: () => {
-              return { ok: true }
-            },
-          })
         }
       }
 
@@ -723,7 +735,8 @@ const VariablesEditor = () => {
       {confirmRenameBlocksOpen && renameImpactData && (
         <RenameImpactModal
           open={confirmRenameBlocksOpen}
-          changes={renameImpactData.changes}
+          oldName={renameImpactData.oldName}
+          newName={renameImpactData.newName}
           impact={renameImpactData.impact}
           onConfirm={() => {
             confirmRenameBlocksResolveRef.current?.(true)
@@ -732,6 +745,24 @@ const VariablesEditor = () => {
           onCancel={() => {
             confirmRenameBlocksResolveRef.current?.(false)
             setConfirmRenameBlocksOpen(false)
+          }}
+        />
+      )}
+
+      {typeChangeModalOpen && typeChangeData && (
+        <TypeChangeModal
+          open={typeChangeModalOpen}
+          variableName={typeChangeData.variableName}
+          oldType={typeChangeData.oldType}
+          newType={typeChangeData.newType}
+          validation={typeChangeData.validation}
+          onConfirm={() => {
+            typeChangeResolveRef.current?.(true)
+            setTypeChangeModalOpen(false)
+          }}
+          onCancel={() => {
+            typeChangeResolveRef.current?.(false)
+            setTypeChangeModalOpen(false)
           }}
         />
       )}
