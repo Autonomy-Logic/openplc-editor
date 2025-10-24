@@ -36,7 +36,9 @@ const PlcLogs = memo(() => {
       className='relative h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
     >
       {logLines.length > 0 &&
-        logLines.map((line, index) => <LogComponent key={`plc-log-${index}`} level='info' message={line} tstamp='' />)}
+        logLines.map((line, index) => (
+          <LogComponent key={`plc-log-${index}-${line.slice(0, 50)}`} level='info' message={line} tstamp='' />
+        ))}
       <div ref={bottomLogRef} id='bottom-log' />
     </div>
   )
