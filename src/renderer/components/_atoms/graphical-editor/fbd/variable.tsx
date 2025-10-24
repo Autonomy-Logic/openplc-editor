@@ -187,7 +187,7 @@ const VariableElement = (block: VariableProps) => {
   useEffect(() => {
     const { node: variableNode, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
-      variableName: variableValue,
+      variableName: data.variable.name,
     })
     if (!variableNode) return
 
@@ -195,8 +195,9 @@ const VariableElement = (block: VariableProps) => {
     if (!variable || !inputVariableRef) {
       setIsAVariable(false)
     } else {
-      // if the variable is not the same as the one in the node, update the node
-      if (variable.id !== (variableNode as VariableNode).data.variable.id) {
+      const nodeVariableName = (variableNode as VariableNode).data.variable.name
+
+      if (variable.name.toLowerCase() !== nodeVariableName.toLowerCase()) {
         updateNode({
           editorName: editor.meta.name,
           nodeId: variableNode.id,
@@ -210,11 +211,7 @@ const VariableElement = (block: VariableProps) => {
         })
       }
 
-      // if the variable is the same as the one in the node, update the node
-      if (
-        variable.id === (variableNode as VariableNode).data.variable.id &&
-        variable.name !== (variableNode as VariableNode).data.variable.name
-      ) {
+      if (variable.name.toLowerCase() === nodeVariableName.toLowerCase() && variable.name !== nodeVariableName) {
         updateNode({
           editorName: editor.meta.name,
           nodeId: variableNode.id,
@@ -268,7 +265,7 @@ const VariableElement = (block: VariableProps) => {
       setInputError(true)
       return
     }
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event
@@ -458,7 +455,7 @@ const buildVariableNode = ({ id, position, variant }: VariableBuilderProps): Var
       inputConnector: inputHandle,
       outputConnector: outputHandle,
       numericId: generateNumericUUID(),
-      variable: { id: '', name: '' },
+      variable: { name: '' },
       executionOrder: 0,
       variant,
       negated: false,

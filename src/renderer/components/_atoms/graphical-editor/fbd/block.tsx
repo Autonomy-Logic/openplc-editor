@@ -352,7 +352,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
 
-  const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+  const { variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
     nodeId: id ?? '',
   })
 
@@ -405,37 +405,56 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if (!node || !rung) {
+    const {
+      rung: freshRung,
+      node: freshNode,
+      variables: freshVariables,
+    } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+
+    if (!freshNode || !freshRung) {
       console.error('Node or rung not found for ID:', id)
       return
     }
 
-    const variable = variables.selected
+    const variable = freshVariables.selected
     if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id === variable.id) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+    const nodeVariableName = (freshNode.data as BasicNodeData).variable.name
+    const nodeBlockType = (freshNode.data as BlockNodeData<BlockVariant>).variant.name
+
+    if (nodeVariableName.toLowerCase() === variable.name.toLowerCase()) {
+      const typeMatches =
+        variable.type.definition === 'derived' && variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
+
+      if (!typeMatches) {
+        setWrongVariable(true)
+        return
+      }
+
+      if (nodeVariableName !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
-          nodeId: node.id,
+          nodeId: freshNode.id,
           node: {
-            ...node,
+            ...freshNode,
             data: {
-              ...node.data,
+              ...freshNode.data,
               variable,
             },
           },
         })
-        setWrongVariable(false)
-        return
       }
+      setWrongVariable(false)
+      return
     }
 
-    setWrongVariable(false)
-  }, [pous])
+    setWrongVariable(true)
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event
@@ -503,7 +522,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
         const creationResult = createVariable({
           data: {
-            id: crypto.randomUUID(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: nodeBlockType },
             class: 'local',
@@ -594,7 +612,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       const hasOut = newNodeVariables.some((v) => v.name === 'OUT')
       if (!hasOut)
         newNodeVariables.push({
-          id: 'OUT',
           name: 'OUT',
           class: 'output',
           type: {

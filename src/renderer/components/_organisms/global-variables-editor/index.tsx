@@ -6,7 +6,7 @@ import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { GlobalVariablesTableType } from '@root/renderer/store/slices'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
-import { PLCGlobalVariable, PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCGlobalVariable, PLCVariable as _PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
@@ -26,11 +26,14 @@ const GlobalVariablesEditor = () => {
     },
     project: {
       data: {
+        pous,
+        dataTypes,
         configuration: {
           resource: { globalVariables },
         },
       },
     },
+    libraries,
     editorActions: { updateModelVariables },
     projectActions: { createVariable, deleteVariable, rearrangeVariables, setGlobalVariables },
     snapshotActions: { addSnapshot },
@@ -168,7 +171,12 @@ const GlobalVariablesEditor = () => {
     addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
-    deleteVariable({ scope: 'global', rowId: selectedRow })
+    const result = deleteVariable({ scope: 'global', rowId: selectedRow })
+
+    if (!result.ok) {
+      toast({ title: result.title, description: result.message, variant: 'fail' })
+      return
+    }
 
     const variables = globalVariables.filter((variable) => variable.name)
     if (selectedRow === variables.length - 1) {
@@ -191,10 +199,10 @@ const GlobalVariablesEditor = () => {
     try {
       addSnapshot(editor.meta.name)
 
-      const newVariables = parseIecStringToVariables(editorCode)
+      const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
 
       const response = setGlobalVariables({
-        variables: newVariables as PLCVariable[],
+        variables: newVariables,
       })
 
       if (!response.ok) {

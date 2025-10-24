@@ -184,7 +184,6 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
 
       const res = createVariable({
         data: {
-          id: crypto.randomUUID(),
           name: variableName,
           // @ts-expect-error - type is dynamic
           type: {

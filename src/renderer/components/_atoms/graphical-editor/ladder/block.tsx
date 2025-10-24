@@ -3,9 +3,11 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { LibraryState } from '@root/renderer/store/slices'
+import { getVariableByNameAndType } from '@root/renderer/store/slices/project/utils'
 import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
+import type { VariableReference } from '@root/types/PLC/variable-reference'
 import { cn, generateNumericUUID } from '@root/utils'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -31,10 +33,18 @@ export type BlockVariant = {
 type OldVariables = {
   [key: string]: { variable: PLCVariable; type: 'input' | 'output' }
 }
+
 export type LadderBlockConnectedVariables = {
   handleId: string
   handleTableId?: string
   type: 'input' | 'output'
+  variable: PLCVariable | undefined
+}[]
+
+export type LadderBlockConnectedVariablesV2 = {
+  handleName: string
+  type: 'input' | 'output'
+  variableRef: VariableReference | null
   variable: PLCVariable | undefined
 }[]
 
@@ -43,7 +53,9 @@ export type BlockNodeData<T> = BasicNodeData & {
   executionControl: boolean
   lockExecutionControl: boolean
   connectedVariables: LadderBlockConnectedVariables
+  connectedVariablesV2?: LadderBlockConnectedVariablesV2
   variable: { id?: string; name: string } | PLCVariable
+  variableRef?: VariableReference
   hasDivergence?: boolean
 }
 
@@ -465,38 +477,59 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if (!node || !rung) {
-      console.error('Node or rung not found for ID:', id)
+    const {
+      variables: freshVariables,
+      rung: freshRung,
+      node: freshNode,
+    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      nodeId: id,
+      variableName: data.variable.name,
+    })
+
+    if (!freshNode || !freshRung) {
       return
     }
 
-    const variable = variables.selected
+    const variable = freshVariables.selected
     if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id === variable.id) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+    const nodeVariable = (freshNode.data as BasicNodeData).variable
+    const nodeVariableName = nodeVariable.name.toLowerCase()
+    const selectedVariableName = variable.name.toLowerCase()
+    const nodeBlockType = (freshNode.data as BlockNodeData<BlockVariant>).variant.name
+
+    if (nodeVariableName === selectedVariableName) {
+      const typeMatches =
+        variable.type.definition === 'derived' && variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
+
+      if (!typeMatches) {
+        setWrongVariable(true)
+        return
+      }
+
+      if (nodeVariable.name !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
-          rungId: rung.id,
-          nodeId: node.id,
+          rungId: freshRung.id,
+          nodeId: freshNode.id,
           node: {
-            ...node,
+            ...freshNode,
             data: {
-              ...node.data,
+              ...freshNode.data,
               variable,
             },
           },
         })
-        setWrongVariable(false)
-        return
       }
+      setWrongVariable(false)
+      return
     }
 
-    setWrongVariable(false)
-  }, [pous])
+    setWrongVariable(true)
+  }, [pous, data.variable.name])
 
   /**
    * useEffect to check if the connectedVariable is the correct type when the block variant is changed
@@ -553,14 +586,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     const blockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+    const expectedType = { definition: 'derived' as const, value: blockType }
 
-    const findMatchingVariable = () =>
-      variables.all.find(
-        (variable) =>
-          variable.name === variableNameToSubmit &&
-          variable.type.definition === 'derived' &&
-          variable.type.value === blockType,
-      )
+    // @ts-expect-error - Type mismatch between uppercase and lowercase base types
+    const matchingVariable = getVariableByNameAndType(variables.all, variableNameToSubmit, expectedType, [])
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
       updateNode({
@@ -575,12 +604,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     let variableToLink = variables.selected
 
-    const matchingVariable = findMatchingVariable()
-
     if (variableToLink) {
-      if (variableToLink.name === variableNameToSubmit) return
+      if (variableToLink.name.toLowerCase() === variableNameToSubmit.toLowerCase()) return
 
-      if (matchingVariable && matchingVariable.id !== variableToLink.id) {
+      if (matchingVariable && matchingVariable.name.toLowerCase() !== variableToLink.name.toLowerCase()) {
+        // @ts-expect-error - Type mismatch between uppercase and lowercase base types
         variableToLink = matchingVariable
       } else {
         updateNodeVariable({ name: variableNameToSubmit })
@@ -589,13 +617,13 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       }
     } else {
       if (matchingVariable) {
+        // @ts-expect-error - Type mismatch between uppercase and lowercase base types
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
         addSnapshot(editor.meta.name)
 
         const creationResult = createVariable({
           data: {
-            id: crypto.randomUUID(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: blockType },
             class: 'local',
@@ -619,9 +647,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       }
     }
 
-    updateNodeVariable(variableToLink)
-    setBlockVariableValue(variableToLink.name)
-    setWrongVariable(false)
+    if (variableToLink) {
+      updateNodeVariable(variableToLink)
+      setBlockVariableValue(variableToLink.name)
+      setWrongVariable(false)
+    }
   }
 
   const handleUpdateDivergence = () => {
@@ -706,15 +736,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       node.data as BlockNodeData<BlockVariant>
     ).connectedVariables
       .map((connectedVariable) => {
-        if (newNodeVariables.some((newVar) => newVar.name === connectedVariable.handleId)) {
-          return connectedVariable
-        }
-
-        if (connectedVariable.handleTableId) {
-          const matchId = newNodeVariables.find((newVar) => newVar.id === connectedVariable.handleTableId)
-          if (matchId) {
-            return { ...connectedVariable, handleId: matchId.name }
-          }
+        const matchByName = newNodeVariables.find(
+          (newVar) => newVar.name.toLowerCase() === connectedVariable.handleId.toLowerCase(),
+        )
+        if (matchByName) {
+          return { ...connectedVariable, handleId: matchByName.name }
         }
 
         return undefined
