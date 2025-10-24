@@ -17,7 +17,7 @@ import {
   parseTextualPouFromString,
 } from '@root/utils/PLC/pou-text-parser'
 import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
-import { basename, dirname, extname, join } from 'path'
+import { basename, dirname, extname, join, sep } from 'path'
 import { ZodTypeAny } from 'zod'
 
 /**
@@ -174,12 +174,14 @@ const VALID_POU_EXTENSIONS = ['.st', '.il', '.ld', '.fbd', '.py', '.cpp', '.json
  * @throws Error if POU type cannot be determined
  */
 function detectPouTypeFromPath(filePath: string): string {
-  if (filePath.includes('programs')) {
+  const normalizedPath = filePath.split(sep).join('/')
+
+  if (normalizedPath.includes('/programs/')) {
     return 'program'
-  } else if (filePath.includes('functions')) {
-    return 'function'
-  } else if (filePath.includes('function-blocks')) {
+  } else if (normalizedPath.includes('/function-blocks/')) {
     return 'function-block'
+  } else if (normalizedPath.includes('/functions/')) {
+    return 'function'
   }
   throw new Error(`Cannot determine POU type from path: ${filePath}`)
 }
@@ -205,8 +207,8 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
   }
 
   try {
-    const language = detectLanguageFromExtension(filePath)
     const pouType = detectPouTypeFromPath(filePath)
+    const language = detectLanguageFromExtension(filePath)
 
     let pou: PLCPou
 
@@ -249,6 +251,7 @@ function readDirectoryRecursive(baseDir: string, baseFileName: string, projectFi
       const fileExtension = extname(entry.name)
 
       if (!VALID_POU_EXTENSIONS.includes(fileExtension)) {
+        console.debug(`[read-project] Skipping file with invalid extension: ${entryPath}`)
         continue
       }
 
