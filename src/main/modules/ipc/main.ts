@@ -310,6 +310,27 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+    try {
+      const result = await this.makeRuntimeApiRequest<string>(
+        ipAddress,
+        jwtToken,
+        '/api/runtime-logs',
+        (data: string) => {
+          const response = JSON.parse(data) as { 'runtime-logs': string }
+          return response['runtime-logs']
+        },
+      )
+      if (result.success) {
+        return { success: true, logs: result.data }
+      } else {
+        return { success: false, error: result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -386,6 +407,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
     this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
     this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
+    this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
   }
 
   // ===================== HANDLER METHODS =====================

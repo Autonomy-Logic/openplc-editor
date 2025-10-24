@@ -21,6 +21,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugVariableIndexes: new Map(),
     debugVariableValues: new Map(),
     debugForcedVariables: new Map(),
+    isPlcLogsVisible: false,
+    plcLogs: '',
     close: {
       window: false,
       app: false,
@@ -167,6 +169,20 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugForcedVariables = forced
+        }),
+      )
+    },
+    setPlcLogsVisible: (isVisible: boolean): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isPlcLogsVisible = isVisible
+        }),
+      )
+    },
+    setPlcLogs: (logs: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcLogs = logs
         }),
       )
     },

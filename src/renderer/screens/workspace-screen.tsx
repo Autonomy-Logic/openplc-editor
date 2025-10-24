@@ -25,6 +25,7 @@ import {
 } from '../components/_organisms/modals'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
+import { PlcLogs } from '../components/_organisms/plc-logs'
 import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
@@ -33,11 +34,12 @@ import { useOpenPLCStore } from '../store'
 import { getVariableSize, parseVariableValue } from '../utils/variable-sizes'
 
 const DEBUGGER_POLL_INTERVAL_MS = 200
+const PLC_LOGS_POLL_INTERVAL_MS = 2500
 
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { isCollapsed, isDebuggerVisible, debugVariableValues },
+    workspace: { isCollapsed, isDebuggerVisible, isPlcLogsVisible, debugVariableValues },
     editor,
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
@@ -565,6 +567,50 @@ const WorkspaceScreen = () => {
     }
   }, [isDebuggerVisible])
 
+  useEffect(() => {
+    let logsPollingInterval: NodeJS.Timeout | null = null
+
+    const pollLogs = async (): Promise<void> => {
+      const {
+        runtimeConnection: { connectionStatus, ipAddress, jwtToken, plcStatus },
+        workspaceActions,
+      } = useOpenPLCStore.getState()
+
+      if (connectionStatus === 'connected') {
+        workspaceActions.setPlcLogsVisible(true)
+      } else {
+        workspaceActions.setPlcLogsVisible(false)
+        workspaceActions.setPlcLogs('')
+        return
+      }
+
+      if (ipAddress && jwtToken && plcStatus === 'RUNNING') {
+        try {
+          const result = await window.bridge.runtimeGetLogs(ipAddress, jwtToken)
+          if (result.success && result.logs !== undefined) {
+            workspaceActions.setPlcLogs(result.logs)
+          } else {
+            console.error('Failed to fetch PLC logs:', result.error ?? 'Unknown error')
+          }
+        } catch (error: unknown) {
+          console.error('Error polling PLC logs:', String(error))
+        }
+      }
+    }
+
+    void pollLogs()
+
+    logsPollingInterval = setInterval(() => {
+      void pollLogs()
+    }, PLC_LOGS_POLL_INTERVAL_MS)
+
+    return () => {
+      if (logsPollingInterval) {
+        clearInterval(logsPollingInterval)
+      }
+    }
+  }, [])
+
   type PanelMethods = {
     collapse: () => void
     expand: () => void
@@ -795,6 +841,14 @@ const WorkspaceScreen = () => {
                           Debugger
                         </Tabs.Trigger>
                       )}
+                      {isPlcLogsVisible && (
+                        <Tabs.Trigger
+                          value='plc-logs'
+                          className='h-7 w-20 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
+                        >
+                          PLC Logs
+                        </Tabs.Trigger>
+                      )}
                       {hasSearchResults && (
                         <Tabs.Trigger
                           value='search'
@@ -829,6 +883,15 @@ const WorkspaceScreen = () => {
                             <Debugger graphList={graphList} />
                           </ResizablePanel>
                         </ResizablePanelGroup>
+                      </Tabs.Content>
+                    )}
+                    {isPlcLogsVisible && (
+                      <Tabs.Content
+                        aria-label='PLC Logs panel content'
+                        value='plc-logs'
+                        className='h-full w-full overflow-hidden p-2 data-[state=inactive]:hidden'
+                      >
+                        <PlcLogs />
                       </Tabs.Content>
                     )}
                     {hasSearchResults && (

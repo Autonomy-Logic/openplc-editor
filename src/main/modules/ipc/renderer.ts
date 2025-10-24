@@ -323,5 +323,7 @@ const rendererProcessBridge = {
     data?: { status: string; logs: string[]; exit_code: number | null }
     error?: string
   }> => ipcRenderer.invoke('runtime:get-compilation-status', ipAddress, jwtToken),
+  runtimeGetLogs: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; logs?: string; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-logs', ipAddress, jwtToken),
 }
 export default rendererProcessBridge
