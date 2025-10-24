@@ -64,6 +64,8 @@ const VariablesEditor = () => {
       updatePouDocumentation,
       updatePouReturnType,
       setPouVariables,
+      updatePou,
+      updateVariable,
     },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
@@ -725,7 +727,7 @@ const VariablesEditor = () => {
             freshPous,
             { updateNode },
             { updateNode: updateFBDNode },
-            { updatePou: () => ({ ok: true }), updateVariable: () => ({ ok: true }) },
+            { updatePou, updateVariable },
             'local',
           )
         }
