@@ -239,8 +239,14 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
 /**
  * This function reads a directory recursively and parses POU files according to their format.
  * Supports both text-based formats (.st, .il, .ld, .fbd, .py, .cpp) and JSON format (backward compatibility).
+ * When both text-based and JSON files exist for the same POU, the text-based file is preferred.
  */
-function readDirectoryRecursive(baseDir: string, baseFileName: string, projectFiles: Record<string, unknown>) {
+function readDirectoryRecursive(
+  baseDir: string,
+  baseFileName: string,
+  projectFiles: Record<string, unknown>,
+  pouNameMap: Map<string, { key: string; isTextBased: boolean }>,
+) {
   const entries = readdirSync(baseDir, { withFileTypes: true })
 
   for (const entry of entries) {
@@ -255,9 +261,27 @@ function readDirectoryRecursive(baseDir: string, baseFileName: string, projectFi
         continue
       }
 
-      projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
+      const pouName = basename(entry.name, fileExtension)
+      const isTextBased = fileExtension !== '.json'
+      const existingEntry = pouNameMap.get(pouName)
+
+      if (existingEntry) {
+        if (isTextBased && !existingEntry.isTextBased) {
+          console.debug(`[read-project] Replacing JSON file with text-based file for POU: ${pouName}`)
+          delete projectFiles[existingEntry.key]
+          projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
+          pouNameMap.set(pouName, { key: entryKey, isTextBased })
+        } else if (!isTextBased && existingEntry.isTextBased) {
+          console.debug(`[read-project] Skipping JSON file, text-based file already loaded for POU: ${pouName}`)
+        } else {
+          console.warn(`[read-project] Duplicate POU file found: ${entryPath}`)
+        }
+      } else {
+        projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
+        pouNameMap.set(pouName, { key: entryKey, isTextBased })
+      }
     } else if (entry.isDirectory()) {
-      readDirectoryRecursive(entryPath, entryKey, projectFiles)
+      readDirectoryRecursive(entryPath, entryKey, projectFiles, pouNameMap)
     }
   }
 }
@@ -297,11 +321,13 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
 
   /**
    * Read pou files from the project directory.
+   * Use a map to track POUs by name and prefer text-based files over JSON.
    */
+  const pouNameMap = new Map<string, { key: string; isTextBased: boolean }>()
   for (const pouDirectory of projectPouDirectories) {
     const pouDirPath = join(basePath, pouDirectory)
     if (fileOrDirectoryExists(pouDirPath)) {
-      readDirectoryRecursive(pouDirPath, pouDirectory, pouFiles)
+      readDirectoryRecursive(pouDirPath, pouDirectory, pouFiles, pouNameMap)
     }
   }
 
