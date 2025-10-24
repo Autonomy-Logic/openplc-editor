@@ -579,14 +579,14 @@ const WorkspaceScreen = () => {
       if (connectionStatus === 'connected' && ipAddress && jwtToken && plcStatus === 'RUNNING') {
         try {
           const result = await window.bridge.runtimeGetLogs(ipAddress, jwtToken)
-          if (result.success && result.logs) {
+          if (result.success && result.logs !== undefined) {
             workspaceActions.setPlcLogs(result.logs)
             workspaceActions.setPlcLogsVisible(true)
           } else {
-            console.error('Failed to fetch PLC logs:', result.error)
+            console.error('Failed to fetch PLC logs:', result.error ?? 'Unknown error')
           }
-        } catch (error) {
-          console.error('Error polling PLC logs:', error)
+        } catch (error: unknown) {
+          console.error('Error polling PLC logs:', String(error))
         }
       } else {
         workspaceActions.setPlcLogsVisible(false)

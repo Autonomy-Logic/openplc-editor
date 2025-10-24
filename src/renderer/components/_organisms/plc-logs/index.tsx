@@ -8,7 +8,7 @@ const PlcLogs = memo(() => {
   const plcLogs = useOpenPLCStore((state) => state.workspace.plcLogs)
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
 
-  const logLines = plcLogs ? plcLogs.split('\n').filter((line) => line.trim() !== '') : []
+  const logLines: string[] = plcLogs ? plcLogs.split('\n').filter((line: string) => line.trim() !== '') : []
 
   useEffect(() => {
     const debouncedScrollToBottomLog = debounce(
