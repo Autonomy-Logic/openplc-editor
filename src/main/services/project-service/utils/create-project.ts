@@ -9,6 +9,32 @@ import {
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
+import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import {
+  serializeGraphicalPouToString,
+  serializeHybridPouToString,
+  serializeTextualPouToString,
+} from '@root/utils/PLC/pou-text-serializer'
+import { writeFileSync } from 'fs'
+
+/**
+ * Helper function to serialize a POU to text format based on its language
+ * @param pou - The POU to serialize
+ * @returns The serialized text string
+ */
+const serializePouToText = (pou: PLCPou): string => {
+  const language = pou.data.body.language
+
+  if (language === 'st' || language === 'il') {
+    return serializeTextualPouToString(pou)
+  } else if (language === 'python' || language === 'cpp') {
+    return serializeHybridPouToString(pou)
+  } else if (language === 'ld' || language === 'fbd') {
+    return serializeGraphicalPouToString(pou)
+  } else {
+    throw new Error(`Unsupported language: ${language}`)
+  }
+}
 
 const definePou = (language: CreateProjectFileProps['language']): PLCPou => ({
   type: 'program',
@@ -206,7 +232,11 @@ const createProjectDefaultStructure = (
 
   try {
     if (!fileOrDirectoryExists(pouPath)) createDirectory(pouPath)
-    CreateJSONFile(pouPath, JSON.stringify(pou, null, 2), pou.data.name)
+    const language = pou.data.body.language
+    const extension = getExtensionFromLanguage(language)
+    const textContent = serializePouToText(pou)
+    const filePath = `${pouPath}/${pou.data.name}${extension}`
+    writeFileSync(filePath, textContent, 'utf-8')
   } catch (error) {
     return {
       success: false,

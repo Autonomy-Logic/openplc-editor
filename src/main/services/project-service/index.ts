@@ -5,6 +5,12 @@ import {
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import {
+  serializeGraphicalPouToString,
+  serializeHybridPouToString,
+  serializeTextualPouToString,
+} from '@root/utils/PLC/pou-text-serializer'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
@@ -12,6 +18,25 @@ import { dirname, join, normalize } from 'path'
 import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
+
+/**
+ * Helper function to serialize a POU to text format based on its language
+ * @param pou - The POU to serialize
+ * @returns The serialized text string
+ */
+const serializePouToText = (pou: PLCPou): string => {
+  const language = pou.data.body.language
+
+  if (language === 'st' || language === 'il') {
+    return serializeTextualPouToString(pou)
+  } else if (language === 'python' || language === 'cpp') {
+    return serializeHybridPouToString(pou)
+  } else if (language === 'ld' || language === 'fbd') {
+    return serializeGraphicalPouToString(pou)
+  } else {
+    throw new Error(`Unsupported language: ${language}`)
+  }
+}
 
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
@@ -306,8 +331,11 @@ class ProjectService {
 
         // Write/update each POU file
         for (const pou of pous) {
-          const filePath = join(dir, `${pou.data.name}.json`)
-          await promises.writeFile(filePath, JSON.stringify(pou, null, 2))
+          const language = pou.data.body.language
+          const extension = getExtensionFromLanguage(language)
+          const filePath = join(dir, `${pou.data.name}${extension}`)
+          const textContent = serializePouToText(pou)
+          await promises.writeFile(filePath, textContent, 'utf-8')
         }
       }
     } catch (error) {
@@ -337,7 +365,16 @@ class ProjectService {
         await promises.mkdir(dir, { recursive: true })
       }
 
-      await promises.writeFile(filePath, JSON.stringify(content, null, 2))
+      const isPou = typeof content === 'object' && content !== null && 'type' in content && 'data' in content
+
+      if (isPou) {
+        const pou = content as PLCPou
+        const textContent = serializePouToText(pou)
+        await promises.writeFile(filePath, textContent, 'utf-8')
+      } else {
+        await promises.writeFile(filePath, JSON.stringify(content, null, 2))
+      }
+
       return {
         success: true,
         message: i18n.t('projectServiceResponses:saveProject.success.successToSaveFile.message'),
