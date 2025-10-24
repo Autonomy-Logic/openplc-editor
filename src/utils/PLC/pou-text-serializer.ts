@@ -42,7 +42,7 @@ export const serializeTextualPouToString = (pou: PLCPou): string => {
   const variablesString = generateIecVariablesToString(variables as VariablePLC[])
   result += variablesString + '\n\n'
 
-  result += body.value + '\n'
+  result += body.value + '\n\n'
 
   const endKeyword = getEndKeyword(type)
   result += endKeyword
