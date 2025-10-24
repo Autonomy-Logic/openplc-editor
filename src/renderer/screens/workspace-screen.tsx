@@ -576,21 +576,25 @@ const WorkspaceScreen = () => {
         workspaceActions,
       } = useOpenPLCStore.getState()
 
-      if (connectionStatus === 'connected' && ipAddress && jwtToken && plcStatus === 'RUNNING') {
+      if (connectionStatus === 'connected') {
+        workspaceActions.setPlcLogsVisible(true)
+      } else {
+        workspaceActions.setPlcLogsVisible(false)
+        workspaceActions.setPlcLogs('')
+        return
+      }
+
+      if (ipAddress && jwtToken && plcStatus === 'RUNNING') {
         try {
           const result = await window.bridge.runtimeGetLogs(ipAddress, jwtToken)
           if (result.success && result.logs !== undefined) {
             workspaceActions.setPlcLogs(result.logs)
-            workspaceActions.setPlcLogsVisible(true)
           } else {
             console.error('Failed to fetch PLC logs:', result.error ?? 'Unknown error')
           }
         } catch (error: unknown) {
           console.error('Error polling PLC logs:', String(error))
         }
-      } else {
-        workspaceActions.setPlcLogsVisible(false)
-        workspaceActions.setPlcLogs('')
       }
     }
 
