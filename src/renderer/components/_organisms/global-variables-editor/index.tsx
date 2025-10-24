@@ -6,7 +6,7 @@ import { sharedSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { GlobalVariablesTableType } from '@root/renderer/store/slices'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
-import { PLCGlobalVariable, PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCGlobalVariable, PLCVariable as _PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
@@ -202,7 +202,7 @@ const GlobalVariablesEditor = () => {
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
 
       const response = setGlobalVariables({
-        variables: newVariables as PLCVariable[],
+        variables: newVariables,
       })
 
       if (!response.ok) {

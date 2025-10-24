@@ -10,6 +10,19 @@ import {
   LadderFlowState,
   VariablesTable as VariablesTableType,
 } from '@root/renderer/store/slices'
+import {
+  TypeChangeValidationResult,
+  validateTypeChange,
+} from '@root/renderer/store/slices/project/validation/type-change'
+import {
+  syncNodesWithVariables as syncNodesWithVariablesUtil,
+  syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil,
+} from '@root/renderer/utils/sync-nodes-with-variables'
+import {
+  findAllReferencesToVariable,
+  propagateVariableRename,
+  type ReferenceImpactAnalysis,
+} from '@root/renderer/utils/variable-references'
 import { baseTypes } from '@root/shared/data'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
 import { BaseType, PLCVariable } from '@root/types/PLC/open-plc'
@@ -17,13 +30,14 @@ import { cn } from '@root/utils'
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { ColumnFiltersState } from '@tanstack/react-table'
-import { Node } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
-import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, VariablesTable } from '../../_molecules'
+import { VariablesTable } from '../../_molecules'
+import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
+import { TypeChangeModal } from '../../_molecules/type-change-modal'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
 const VariablesEditor = () => {
@@ -50,6 +64,8 @@ const VariablesEditor = () => {
       updatePouDocumentation,
       updatePouReturnType,
       setPouVariables,
+      updatePou,
+      updateVariable,
     },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
@@ -67,7 +83,20 @@ const VariablesEditor = () => {
   const [parseError, setParseError] = useState<string | null>(null)
   const [pouDescription, setPouDescription] = useState<string>('')
   const [confirmRenameBlocksOpen, setConfirmRenameBlocksOpen] = useState(false)
+  const [renameImpactData, setRenameImpactData] = useState<{
+    oldName: string
+    newName: string
+    impact: ReferenceImpactAnalysis
+  } | null>(null)
   const confirmRenameBlocksResolveRef = useRef<(v: boolean) => void>()
+  const [typeChangeModalOpen, setTypeChangeModalOpen] = useState(false)
+  const [typeChangeData, setTypeChangeData] = useState<{
+    variableName: string
+    oldType: PLCVariable['type']
+    newType: PLCVariable['type']
+    validation: TypeChangeValidationResult
+  } | null>(null)
+  const typeChangeResolveRef = useRef<(v: boolean) => void>()
 
   /**
    * Editor name state to keep track of the editor name
@@ -301,191 +330,11 @@ const VariablesEditor = () => {
       setConfirmRenameBlocksOpen(true)
     })
 
-  const unlinkRenamedVariablesByNameFBD = (
-    renamedPairs: { oldName: string; type: string }[],
-    fbdFlows: FBDFlowState['fbdFlows'],
-    updateNode: FBDFlowActions['updateNode'],
-  ) => {
-    addSnapshot(editor.meta.name)
-    fbdFlows.forEach((flow) =>
-      flow.rung.nodes.forEach((node) => {
-        const data = (node.data as { variable?: PLCVariable }).variable
-        if (!data) return
-
-        const renamed = renamedPairs.find(
-          (p) => p.oldName.toLowerCase() === data.name.toLowerCase() && p.type === data.type.value.toLowerCase(),
-        )
-        if (!renamed) return
-
-        updateNode({
-          editorName: flow.name,
-          nodeId: node.id,
-          node: {
-            ...node,
-            data: {
-              ...node.data,
-              variable: { ...data, id: `broken-${node.id}` },
-              wrongVariable: true,
-            },
-          },
-        })
-      }),
-    )
-    handleFileAndWorkspaceSavedState(editor.meta.name)
-  }
-
-  const unlinkRenamedVariablesByName = (
-    renamedPairs: { oldName: string; type: string }[],
-    ladderFlows: LadderFlowState['ladderFlows'],
-    updateNode: LadderFlowActions['updateNode'],
-  ) => {
-    addSnapshot(editor.meta.name)
-
-    ladderFlows.forEach((flow) =>
-      flow.rungs.forEach((rung) =>
-        rung.nodes.forEach((node) => {
-          const data = (node.data as { variable?: PLCVariable }).variable
-          if (!data) return
-
-          const renamed = renamedPairs.find(
-            (p) => p.oldName.toLowerCase() === data.name.toLowerCase() && p.type === data.type.value.toLowerCase(),
-          )
-          if (!renamed) return
-
-          updateNode({
-            editorName: flow.name,
-            rungId: rung.id,
-            nodeId: node.id,
-            node: {
-              ...node,
-              data: {
-                ...node.data,
-                variable: { ...data, id: `broken-${node.id}` },
-                wrongVariable: true,
-              },
-            },
-          })
-        }),
-      ),
-    )
-    handleFileAndWorkspaceSavedState(editor.meta.name)
-  }
-
-  const relinkVariablesByName = (
-    renamedPairs: { oldName: string; newName: string; type: string }[],
-    newVariables: PLCVariable[],
-    ladderFlows: LadderFlowState['ladderFlows'],
-    updateNode: LadderFlowActions['updateNode'],
-    propagateRenamed: boolean,
-  ): void => {
-    addSnapshot(editor.meta.name)
-
-    ladderFlows.forEach((flow) =>
-      flow.rungs.forEach((rung) =>
-        rung.nodes.forEach((node) => {
-          const nodeVar = (node.data as { variable?: PLCVariable }).variable
-
-          if (!nodeVar?.name) {
-            return
-          }
-
-          const pair = renamedPairs.find((p) => p.oldName.toLowerCase() === nodeVar.name.toLowerCase())
-
-          if (pair && !propagateRenamed) {
-            return
-          }
-
-          const targetName = pair ? pair.newName : nodeVar.name
-
-          const target = newVariables.find((v) => v.name.toLowerCase() === targetName.toLowerCase())
-
-          if (!target || target === nodeVar) {
-            return
-          }
-
-          const expectedType = getBlockExpectedType(node)
-
-          if (!sameType(target.type.value, expectedType)) {
-            return
-          }
-
-          updateNode({
-            editorName: flow.name,
-            rungId: rung.id,
-            nodeId: node.id,
-            node: {
-              ...node,
-              data: { ...node.data, variable: target, wrongVariable: false },
-            },
-          })
-        }),
-      ),
-    )
-    handleFileAndWorkspaceSavedState(editor.meta.name)
-  }
-
-  const relinkVariablesByNameFBD = (
-    renamedPairs: { oldName: string; newName: string; type: string }[],
-    newVariables: PLCVariable[],
-    fbdFlows: FBDFlowState['fbdFlows'],
-    updateNode: FBDFlowActions['updateNode'],
-    propagateRenamed: boolean,
-  ): void => {
-    addSnapshot(editor.meta.name)
-
-    fbdFlows.forEach((flow) =>
-      flow.rung.nodes.forEach((node) => {
-        const nodeVar = (node.data as { variable?: PLCVariable }).variable
-
-        if (!nodeVar?.name) {
-          return
-        }
-
-        const pair = renamedPairs.find((p) => p.oldName.toLowerCase() === nodeVar.name.toLowerCase())
-
-        if (pair && !propagateRenamed) {
-          return
-        }
-
-        const targetName = pair ? pair.newName : nodeVar.name
-
-        const target = newVariables.find((v) => v.name.toLowerCase() === targetName.toLowerCase())
-
-        if (!target || target === nodeVar) {
-          return
-        }
-
-        const expectedType = getBlockExpectedType(node)
-
-        if (!sameType(target.type.value, expectedType)) {
-          return
-        }
-
-        updateNode({
-          editorName: flow.name,
-          nodeId: node.id,
-          node: {
-            ...node,
-            data: { ...node.data, variable: target, wrongVariable: false },
-          },
-        })
-      }),
-    )
-    handleFileAndWorkspaceSavedState(editor.meta.name)
-  }
-
-  const getBlockExpectedType = (node: Node): string => {
-    const variant = (node.data as { variant?: { name?: string } }).variant
-
-    if (variant && typeof variant.name === 'string') {
-      return variant.name.trim().toUpperCase()
-    }
-
-    return ''
-  }
-
-  const sameType = (firstType: string, secondType: string) =>
-    firstType.toString().trim().toLowerCase() === secondType.toString().trim().toLowerCase()
+  const askTypeChange = () =>
+    new Promise<boolean>((resolve) => {
+      typeChangeResolveRef.current = resolve
+      setTypeChangeModalOpen(true)
+    })
 
   const applyVariableToNode = (
     variable: PLCVariable,
@@ -576,7 +425,7 @@ const VariablesEditor = () => {
     })
   }
 
-  const syncNodesWithVariables = (
+  const _syncNodesWithVariables = (
     newVars: PLCVariable[],
     ladderFlows: LadderFlowState['ladderFlows'],
     updateNode: LadderFlowActions['updateNode'],
@@ -640,7 +489,7 @@ const VariablesEditor = () => {
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
-  const syncNodesWithVariablesFBD = (
+  const _syncNodesWithVariablesFBD = (
     newVars: PLCVariable[],
     fbdFlows: FBDFlowState['fbdFlows'],
     updateNode: FBDFlowActions['updateNode'],
@@ -730,68 +579,158 @@ const VariablesEditor = () => {
               {
                 oldName: previousVariable.name,
                 newName: renameCandidate.name,
-                type: previousVariable.type.value.toLowerCase(),
+                oldVariable: previousVariable,
               },
             ]
           : []
       })
 
-      let shouldPropagate = true
-
-      if (renamedPairs.length && language === 'ld') {
-        const blockUsesOldName = ladderFlows.some((flow) =>
-          flow.rungs.some((rung) =>
-            rung.nodes.some((node) => {
-              const varName = (node.data as { variable?: PLCVariable }).variable?.name || ''
-              return renamedPairs.some((p) => p.oldName.toLowerCase() === varName.toLowerCase())
-            }),
-          ),
+      const typeChangedPairs = tableData.flatMap((previousVariable) => {
+        const matchingNewVariable = newVariables.find(
+          (newVariable) => newVariable.name.toLowerCase() === previousVariable.name.toLowerCase(),
         )
 
-        if (blockUsesOldName) shouldPropagate = await askRenameBlocks()
-      }
+        if (
+          !matchingNewVariable ||
+          matchingNewVariable.type.value.toLowerCase() === previousVariable.type.value.toLowerCase()
+        ) {
+          return []
+        }
 
-      if (renamedPairs.length && language === 'fbd') {
-        const blockUsesOldName = fbdFlows.some((flow) =>
-          flow.rung.nodes.some((node) => {
-            const varName = (node.data as { variable?: PLCVariable }).variable?.name || ''
-            return renamedPairs.some((p) => p.oldName.toLowerCase() === varName.toLowerCase())
-          }),
+        return [
+          {
+            name: previousVariable.name,
+            oldVariable: previousVariable,
+            newVariable: matchingNewVariable,
+          },
+        ]
+      })
+
+      const renamedPairsToPropagate: typeof renamedPairs = []
+      const typeChangedPairsToApply: typeof typeChangedPairs = []
+
+      for (const pair of renamedPairs) {
+        const impact = findAllReferencesToVariable(
+          pair.oldName,
+          pair.oldVariable.type,
+          editor.meta.name,
+          pous,
+          ladderFlows,
+          fbdFlows,
+          'local',
         )
 
-        if (blockUsesOldName) shouldPropagate = await askRenameBlocks()
+        if (impact.totalReferences > 0) {
+          setRenameImpactData({
+            oldName: pair.oldName,
+            newName: pair.newName,
+            impact,
+          })
+          const shouldPropagateRename = await askRenameBlocks()
+          setRenameImpactData(null)
+
+          if (shouldPropagateRename) {
+            renamedPairsToPropagate.push(pair)
+          }
+        }
       }
+
+      for (const pair of typeChangedPairs) {
+        const validation = validateTypeChange(
+          pair.name,
+          pair.oldVariable.type,
+          pair.newVariable.type,
+          ladderFlows,
+          fbdFlows,
+        )
+
+        if (validation.affectedNodes.length > 0 || validation.warnings.length > 0) {
+          setTypeChangeData({
+            variableName: pair.name,
+            oldType: pair.oldVariable.type,
+            newType: pair.newVariable.type,
+            validation,
+          })
+          const shouldApply = await askTypeChange()
+          setTypeChangeData(null)
+
+          if (!shouldApply) {
+            continue
+          }
+        }
+
+        typeChangedPairsToApply.push(pair)
+      }
+
+      const finalVariables = newVariables.map((newVar) => {
+        const typeChangePair = typeChangedPairs.find((pair) => pair.name.toLowerCase() === newVar.name.toLowerCase())
+
+        if (typeChangePair) {
+          const wasApplied = typeChangedPairsToApply.some(
+            (appliedPair) => appliedPair.name.toLowerCase() === newVar.name.toLowerCase(),
+          )
+
+          if (!wasApplied) {
+            return { ...newVar, type: typeChangePair.oldVariable.type }
+          }
+        }
+
+        return newVar
+      })
 
       const response = setPouVariables({
         pouName: pou?.data?.name ?? '',
-        variables: newVariables as PLCVariable[],
+        variables: finalVariables,
       })
 
       if (!response.ok) {
         throw new Error(response.title + (response.message ? `: ${response.message}` : ''))
       }
 
+      const {
+        project: {
+          data: { pous: freshPous },
+        },
+        ladderFlows: freshLadderFlows,
+        fbdFlows: freshFBDFlows,
+      } = useOpenPLCStore.getState()
+
+      const freshPou = freshPous.find((p) => p.data.name === editor.meta.name)
+      const freshVariables = freshPou?.data.variables ?? []
+
       if (language === 'ld') {
-        syncNodesWithVariables(newVariables as PLCVariable[], ladderFlows, updateNode)
+        syncNodesWithVariablesUtil(freshVariables, freshLadderFlows, updateNode)
       }
 
       if (language === 'fbd') {
-        syncNodesWithVariablesFBD(newVariables as PLCVariable[], fbdFlows, updateFBDNode)
+        syncNodesWithVariablesFBDUtil(freshVariables, freshFBDFlows, updateFBDNode)
       }
 
-      if (shouldPropagate) {
-        if (language === 'fbd') {
-          relinkVariablesByNameFBD(renamedPairs, newVariables as PLCVariable[], fbdFlows, updateFBDNode, true)
-        }
+      for (const pair of renamedPairsToPropagate) {
+        const impact = findAllReferencesToVariable(
+          pair.oldName,
+          pair.oldVariable.type,
+          editor.meta.name,
+          freshPous,
+          freshLadderFlows,
+          freshFBDFlows,
+          'local',
+        )
 
-        if (language === 'ld') {
-          relinkVariablesByName(renamedPairs, newVariables as PLCVariable[], ladderFlows, updateNode, true)
+        if (impact.totalReferences > 0) {
+          propagateVariableRename(
+            pair.oldName,
+            pair.newName,
+            impact.references,
+            freshLadderFlows,
+            freshFBDFlows,
+            freshPous,
+            { updateNode },
+            { updateNode: updateFBDNode },
+            { updatePou, updateVariable },
+            'local',
+          )
         }
-      } else {
-        relinkVariablesByName(renamedPairs, newVariables as PLCVariable[], ladderFlows, updateNode, false)
-        relinkVariablesByNameFBD(renamedPairs, newVariables as PLCVariable[], fbdFlows, updateFBDNode, false)
-        unlinkRenamedVariablesByName(renamedPairs, ladderFlows, updateNode)
-        unlinkRenamedVariablesByNameFBD(renamedPairs, fbdFlows, updateFBDNode)
       }
 
       toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
@@ -809,48 +748,39 @@ const VariablesEditor = () => {
 
   return (
     <>
-      {confirmRenameBlocksOpen && (
-        <Modal open>
-          <ModalContent
-            className='flex h-48 w-[496px] select-none flex-col justify-between gap-2 rounded-lg p-8'
-            onClose={() => {
-              confirmRenameBlocksResolveRef.current?.(false)
-              setConfirmRenameBlocksOpen(false)
-            }}
-          >
-            <ModalHeader>
-              <ModalTitle className='text-sm font-medium text-neutral-950 dark:text-white'>
-                Rename references
-              </ModalTitle>
-            </ModalHeader>
+      {confirmRenameBlocksOpen && renameImpactData && (
+        <RenameImpactModal
+          open={confirmRenameBlocksOpen}
+          oldName={renameImpactData.oldName}
+          newName={renameImpactData.newName}
+          impact={renameImpactData.impact}
+          onConfirm={() => {
+            confirmRenameBlocksResolveRef.current?.(true)
+            setConfirmRenameBlocksOpen(false)
+          }}
+          onCancel={() => {
+            confirmRenameBlocksResolveRef.current?.(false)
+            setConfirmRenameBlocksOpen(false)
+          }}
+        />
+      )}
 
-            <p className='text-xs text-neutral-600 dark:text-neutral-50'>
-              You renamed one or more variables. Do you want to propagate those new names to all elements that reference
-              the old names?
-            </p>
-
-            <ModalFooter className='mt-auto flex justify-end gap-2'>
-              <button
-                onClick={() => {
-                  confirmRenameBlocksResolveRef.current?.(false)
-                  setConfirmRenameBlocksOpen(false)
-                }}
-                className='h-8 w-full rounded bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
-              >
-                No, keep references unchanged
-              </button>
-              <button
-                onClick={() => {
-                  confirmRenameBlocksResolveRef.current?.(true)
-                  setConfirmRenameBlocksOpen(false)
-                }}
-                className='h-8 w-full rounded bg-brand px-3 py-1 text-xs text-white'
-              >
-                Yes, rename references
-              </button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+      {typeChangeModalOpen && typeChangeData && (
+        <TypeChangeModal
+          open={typeChangeModalOpen}
+          variableName={typeChangeData.variableName}
+          oldType={typeChangeData.oldType}
+          newType={typeChangeData.newType}
+          validation={typeChangeData.validation}
+          onConfirm={() => {
+            typeChangeResolveRef.current?.(true)
+            setTypeChangeModalOpen(false)
+          }}
+          onCancel={() => {
+            typeChangeResolveRef.current?.(false)
+            setTypeChangeModalOpen(false)
+          }}
+        />
       )}
 
       <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
