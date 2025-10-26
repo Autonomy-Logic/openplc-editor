@@ -1,22 +1,20 @@
 import { logger } from '@root/main/services/logger-service'
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
-import {
-  projectDefaultDirectoriesValidation,
-  projectDefaultFilesMapSchema,
-  projectPouDirectories,
-} from '@root/types/IPC/project-service'
+import { projectDefaultFilesMapSchema, projectPouDirectories } from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCPou, PLCPouSchema, PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { migrateProjectToNameTypeSystem, needsMigration } from '@root/utils/migrate-project-to-name-type-system'
+import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
 import {
   detectLanguageFromExtension,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
   parseTextualPouFromString,
 } from '@root/utils/PLC/pou-text-parser'
+import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, extname, join, sep } from 'path'
 import { ZodTypeAny } from 'zod'
@@ -54,55 +52,27 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
     }
   }
 
-  const entries = readdirSync(basePath, { withFileTypes: true, recursive: true })
-  let isValidProject = true
+  const entries = readdirSync(basePath, { withFileTypes: true, recursive: false })
   let hasProjectFile = false
+
   for (const entry of entries) {
-    // Skip any entries that are not relevant to the project structure
-    if (entry.path.startsWith(join(basePath, 'pous')) || entry.path.startsWith(join(basePath, 'build'))) {
-      continue
-    }
-
-    // If any entry is a file, it should be one of the expected project files
-    if (entry.isFile()) {
-      if (entry.name === 'project.json') {
-        hasProjectFile = true
-      }
-
-      if (!Object.keys(projectDefaultFilesMapSchema).includes(entry.name)) {
-        isValidProject = false
-      }
-    }
-
-    // If any entry is a directory, it should be one of the expected directories
-    if (entry.isDirectory()) {
-      if (!projectDefaultDirectoriesValidation.some((dir) => dir.includes(entry.name))) {
-        return {
-          success: false,
-          error: {
-            title: i18n.t('projectServiceResponses:openProject.errors.invalidProjectDirectory.title'),
-            description: i18n.t('projectServiceResponses:openProject.errors.invalidProjectDirectory.description', {
-              basePath,
-            }),
-            error: new Error('Invalid project directory structure'),
-          },
-        }
-      }
+    if (entry.isFile() && entry.name === 'project.json') {
+      hasProjectFile = true
+      break
     }
   }
 
   return {
-    success: isValidProject || hasProjectFile,
-    error:
-      isValidProject || hasProjectFile
-        ? undefined
-        : {
-            title: i18n.t('projectServiceResponses:openProject.errors.invalidProject.title'),
-            description: i18n.t('projectServiceResponses:openProject.errors.invalidProject.description', {
-              basePath,
-            }),
-            error: new Error('Invalid project files structure'),
-          },
+    success: hasProjectFile,
+    error: hasProjectFile
+      ? undefined
+      : {
+          title: i18n.t('projectServiceResponses:openProject.errors.invalidProject.title'),
+          description: i18n.t('projectServiceResponses:openProject.errors.invalidProject.description', {
+            basePath,
+          }),
+          error: new Error('project.json not found in directory'),
+        },
   }
 }
 
@@ -111,8 +81,8 @@ function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchem
   data: unknown,
   schema?: ZodTypeAny,
 ) {
-  if (!Object.keys(projectDefaultFilesMapSchema).includes(fileName) && !schema) {
-    throw new Error(`File ${fileName} is not a valid project file or schema is not provided.`)
+  if (!Object.keys(projectDefaultFilesMapSchema).includes(fileName as string) && !schema) {
+    throw new Error(`File ${String(fileName)} is not a valid project file or schema is not provided.`)
   }
 
   const fileSchema = projectDefaultFilesMapSchema[fileName] || schema
@@ -126,7 +96,7 @@ function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchem
    * logging a warning instead of throwing an error.
    */
   if (!result.success) {
-    throw new Error(`Failed to parse ${fileName}: ${result.error.message}`)
+    throw new Error(`Failed to parse ${String(fileName)}: ${result.error.message}`)
   }
 
   return result.data
@@ -270,16 +240,26 @@ function readDirectoryRecursive(
         if (isTextBased && !existingEntry.isTextBased) {
           logger.debug(`[read-project] Replacing JSON file with text-based file for POU: ${pouName}`)
           delete projectFiles[existingEntry.key]
-          projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
-          pouNameMap.set(pouName, { key: entryKey, isTextBased })
+          try {
+            projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
+            pouNameMap.set(pouName, { key: entryKey, isTextBased })
+          } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            logger.warn(`[read-project] Failed to parse POU file ${entryPath}: ${errorMessage}. Skipping this file.`)
+          }
         } else if (!isTextBased && existingEntry.isTextBased) {
           logger.debug(`[read-project] Skipping JSON file, text-based file already loaded for POU: ${pouName}`)
         } else {
           logger.debug(`[read-project] Duplicate POU file found: ${entryPath}`)
         }
       } else {
-        projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
-        pouNameMap.set(pouName, { key: entryKey, isTextBased })
+        try {
+          projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
+          pouNameMap.set(pouName, { key: entryKey, isTextBased })
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          logger.warn(`[read-project] Failed to parse POU file ${entryPath}: ${errorMessage}. Skipping this file.`)
+        }
       }
     } else if (entry.isDirectory()) {
       readDirectoryRecursive(entryPath, entryKey, projectFiles, pouNameMap)
@@ -300,23 +280,16 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
    * Read the default project files from the project directory.
    * This includes the project.json, devices/configuration.json, and devices/pin-mapping.json files.
    * If any of these files do not exist, they will be created with default values from the schema.
-   * If any of the files cannot be read or parsed, an error will be returned.
+   * If any of the files cannot be read or parsed, use default values and log a warning.
    */
   for (const [fileName, schema] of Object.entries(projectDefaultFilesMapSchema)) {
     const filePath = join(basePath, fileName)
     try {
-      projectFiles[fileName] = readAndParseFile(filePath, fileName, schema)
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
-            filePath,
-          }),
-          error: error,
-        },
-      }
+      projectFiles[fileName] = readAndParseFile(filePath, fileName, schema as ZodTypeAny)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      logger.warn(`[read-project] Failed to parse ${fileName}: ${errorMessage}. Using default values.`)
+      projectFiles[fileName] = getDefaultSchemaValues(schema as ZodTypeAny)
     }
   }
 
@@ -332,25 +305,34 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     }
   }
 
-  // Create pou files based on the project file's POU data
+  let needsLegacyMigration = false
   if (projectFiles['project.json']) {
     const project = projectFiles['project.json'] as PLCProject
-    await Promise.all(
-      project.data.pous.map(async (pou) => {
-        const pouType = pou.type.toLowerCase() + 's' // Convert type to lowercase and append 's'
-        const pouFilePath = join(basePath, 'pous', pouType, `${pou.data.name}.json`)
-        try {
-          if (!fileOrDirectoryExists(pouFilePath)) {
-            await promises.mkdir(dirname(pouFilePath), { recursive: true })
-            await promises.writeFile(pouFilePath, JSON.stringify(pou, null, 2), 'utf-8')
+    if (project.data.pous && project.data.pous.length > 0) {
+      needsLegacyMigration = true
+      await Promise.all(
+        project.data.pous.map(async (pou) => {
+          const pouType = pou.type.toLowerCase() + 's'
+          const language = pou.data.body.language
+          const extension = getExtensionFromLanguage(language)
+          const pouFilePath = join(basePath, 'pous', pouType, `${pou.data.name}${extension}`)
+
+          try {
+            if (!fileOrDirectoryExists(pouFilePath)) {
+              await promises.mkdir(dirname(pouFilePath), { recursive: true })
+              const textContent = serializePouToText(pou)
+              await promises.writeFile(pouFilePath, textContent, 'utf-8')
+              logger.info(`[read-project] Migrated POU ${pou.data.name} to text-code format: ${pouFilePath}`)
+            }
+            pouFiles[join('pous', pouType, `${pou.data.name}${extension}`)] = pou
+          } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            logger.error(`[read-project] Failed to migrate POU file ${pouFilePath}: ${errorMessage}`)
+            throw new Error(`Failed to migrate POU file for ${pou.data.name}`)
           }
-          pouFiles[join('pous', pouType, `${pou.data.name}.json`)] = pou
-        } catch (error) {
-          console.error(`Failed to create POU file ${pouFilePath}:`, error)
-          throw new Error(`Failed to create POU file for ${pou.data.name}`)
-        }
-      }),
-    )
+        }),
+      )
+    }
   }
 
   /**
@@ -375,6 +357,17 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     pous: Object.values(pouFiles).map((pou) => pou as PLCPou),
     deviceConfiguration: projectFiles['devices/configuration.json'] as DeviceConfiguration,
     devicePinMapping: projectFiles['devices/pin-mapping.json'] as DevicePin[],
+  }
+
+  if (needsLegacyMigration) {
+    try {
+      returnData.project.data.pous = []
+      await promises.writeFile(join(basePath, 'project.json'), JSON.stringify(returnData.project, null, 2), 'utf-8')
+      logger.info('[read-project] Legacy migration completed: POUs array cleared from project.json')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      logger.error(`[read-project] Failed to clear POUs array from project.json: ${errorMessage}`)
+    }
   }
 
   // Check if project needs migration from ID-based to name+type-based system
