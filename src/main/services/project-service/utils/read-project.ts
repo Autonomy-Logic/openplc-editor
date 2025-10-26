@@ -1,3 +1,4 @@
+import { logger } from '@root/main/services/logger-service'
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
 import {
   projectDefaultDirectoriesValidation,
@@ -10,8 +11,14 @@ import { PLCPou, PLCPouSchema, PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { migrateProjectToNameTypeSystem, needsMigration } from '@root/utils/migrate-project-to-name-type-system'
+import {
+  detectLanguageFromExtension,
+  parseGraphicalPouFromString,
+  parseHybridPouFromString,
+  parseTextualPouFromString,
+} from '@root/utils/PLC/pou-text-parser'
 import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
-import { basename, dirname, join } from 'path'
+import { basename, dirname, extname, join, sep } from 'path'
 import { ZodTypeAny } from 'zod'
 
 /**
@@ -157,32 +164,125 @@ function readAndParseFile(filePath: string, fileName: string, schema: ZodTypeAny
 }
 
 /**
- * @todo WORK IN PROGRESS (WIP):
- * This function reads a directory recursively and parses files according to the provided schema.
- * It is not currently used in the codebase, but it can be useful for future enhancements
- * where we might want to read all files in a directory structure and validate them against schemas.
- * For example: this might be used to read all the pous in a project directory
+ * Valid POU file extensions (text-based and JSON for backward compatibility)
  */
-function readDirectoryRecursive(baseDir: string, baseFileName: string, projectFiles: Record<string, unknown>) {
+const VALID_POU_EXTENSIONS = ['.st', '.il', '.ld', '.fbd', '.py', '.cpp', '.json']
+
+/**
+ * Helper function to detect POU type from the file path
+ * @param filePath - The file path containing the POU type directory
+ * @returns The POU type (program, function, function-block)
+ * @throws Error if POU type cannot be determined
+ */
+function detectPouTypeFromPath(filePath: string): string {
+  const normalizedPath = filePath.split(sep).join('/')
+
+  if (normalizedPath.includes('/programs/')) {
+    return 'program'
+  } else if (normalizedPath.includes('/function-blocks/')) {
+    return 'function-block'
+  } else if (normalizedPath.includes('/functions/')) {
+    return 'function'
+  }
+  throw new Error(`Cannot determine POU type from path: ${filePath}`)
+}
+
+/**
+ * Parse a POU file (either JSON or text-based format)
+ * @param filePath - The path to the POU file
+ * @param fileName - The name of the file (for error messages)
+ * @returns Parsed PLCPou object
+ * @throws Error if parsing fails
+ */
+function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
+  const fileExtension = extname(filePath)
+  const fileContent = readFileSync(filePath, 'utf-8')
+
+  if (fileExtension === '.json') {
+    const parsedJson = JSON.parse(fileContent)
+    const result = PLCPouSchema.safeParse(parsedJson)
+    if (!result.success) {
+      throw new Error(`Failed to parse JSON POU file ${fileName}: ${result.error.message}`)
+    }
+    return result.data
+  }
+
+  try {
+    const pouType = detectPouTypeFromPath(filePath)
+    const language = detectLanguageFromExtension(filePath)
+
+    let pou: PLCPou
+
+    if (language === 'st' || language === 'il') {
+      pou = parseTextualPouFromString(fileContent, language, pouType)
+    } else if (language === 'python' || language === 'cpp') {
+      pou = parseHybridPouFromString(fileContent, language, pouType)
+    } else if (language === 'ld' || language === 'fbd') {
+      pou = parseGraphicalPouFromString(fileContent, language, pouType)
+    } else {
+      throw new Error(`Unsupported language: ${language}`)
+    }
+
+    const result = PLCPouSchema.safeParse(pou)
+    if (!result.success) {
+      throw new Error(`Parsed POU failed validation: ${result.error.message}`)
+    }
+
+    return result.data
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to parse POU file ${fileName}: ${error.message}`)
+    }
+    throw new Error(`Failed to parse POU file ${fileName}: Unknown error`)
+  }
+}
+
+/**
+ * This function reads a directory recursively and parses POU files according to their format.
+ * Supports both text-based formats (.st, .il, .ld, .fbd, .py, .cpp) and JSON format (backward compatibility).
+ * When both text-based and JSON files exist for the same POU, the text-based file is preferred.
+ */
+function readDirectoryRecursive(
+  baseDir: string,
+  baseFileName: string,
+  projectFiles: Record<string, unknown>,
+  pouNameMap: Map<string, { key: string; isTextBased: boolean }>,
+) {
   const entries = readdirSync(baseDir, { withFileTypes: true })
 
   for (const entry of entries) {
     const entryPath = join(baseDir, entry.name)
     const entryKey = join(baseFileName, entry.name)
 
-    // If the entry is a file, read and parse it
     if (entry.isFile()) {
-      const schema = projectPouDirectories.some((pouDir) => baseDir.includes(pouDir)) ? PLCPouSchema : undefined
-      if (!schema) {
-        throw new Error(`No schema found for file: ${entryPath}`)
+      const fileExtension = extname(entry.name)
+
+      if (!VALID_POU_EXTENSIONS.includes(fileExtension)) {
+        logger.debug(`[read-project] Skipping file with invalid extension: ${entryPath}`)
+        continue
       }
 
-      projectFiles[entryKey] = readAndParseFile(entryPath, entryKey, schema)
-    }
+      const pouName = basename(entry.name, fileExtension)
+      const isTextBased = fileExtension !== '.json'
+      const existingEntry = pouNameMap.get(pouName)
 
-    // If the entry is a directory, recursively read its contents
-    else if (entry.isDirectory()) {
-      readDirectoryRecursive(entryPath, entryKey, projectFiles)
+      if (existingEntry) {
+        if (isTextBased && !existingEntry.isTextBased) {
+          logger.debug(`[read-project] Replacing JSON file with text-based file for POU: ${pouName}`)
+          delete projectFiles[existingEntry.key]
+          projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
+          pouNameMap.set(pouName, { key: entryKey, isTextBased })
+        } else if (!isTextBased && existingEntry.isTextBased) {
+          logger.debug(`[read-project] Skipping JSON file, text-based file already loaded for POU: ${pouName}`)
+        } else {
+          logger.debug(`[read-project] Duplicate POU file found: ${entryPath}`)
+        }
+      } else {
+        projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
+        pouNameMap.set(pouName, { key: entryKey, isTextBased })
+      }
+    } else if (entry.isDirectory()) {
+      readDirectoryRecursive(entryPath, entryKey, projectFiles, pouNameMap)
     }
   }
 }
@@ -222,11 +322,13 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
 
   /**
    * Read pou files from the project directory.
+   * Use a map to track POUs by name and prefer text-based files over JSON.
    */
+  const pouNameMap = new Map<string, { key: string; isTextBased: boolean }>()
   for (const pouDirectory of projectPouDirectories) {
     const pouDirPath = join(basePath, pouDirectory)
     if (fileOrDirectoryExists(pouDirPath)) {
-      readDirectoryRecursive(pouDirPath, pouDirectory, pouFiles)
+      readDirectoryRecursive(pouDirPath, pouDirectory, pouFiles, pouNameMap)
     }
   }
 
@@ -252,14 +354,19 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
   }
 
   /**
-   * Get pou name by extracting the file name from the path.
+   * Ensure POU names are set correctly.
+   * For text-based formats, the name is already extracted from the file content by the parser.
+   * For JSON files (backward compatibility), extract from filename if not already set.
    */
   Object.keys(pouFiles).forEach((key) => {
     const pouFile = pouFiles[key] as PLCPou
-    const pouName = basename(key, '.json')
-    if (pouName) {
-      pouFile.data.name = pouName
-      pouFiles[key] = pouFile
+    if (!pouFile.data.name) {
+      const fileExtension = extname(key)
+      const pouName = basename(key, fileExtension)
+      if (pouName) {
+        pouFile.data.name = pouName
+        pouFiles[key] = pouFile
+      }
     }
   })
 
