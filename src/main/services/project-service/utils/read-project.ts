@@ -76,16 +76,16 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
   }
 }
 
-function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchema>(
+function safeParseProjectFile<K extends Extract<keyof typeof projectDefaultFilesMapSchema, string>>(
   fileName: K,
   data: unknown,
   schema?: ZodTypeAny,
 ) {
-  if (!Object.keys(projectDefaultFilesMapSchema).includes(fileName as string) && !schema) {
-    throw new Error(`File ${String(fileName)} is not a valid project file or schema is not provided.`)
+  if (!(fileName in projectDefaultFilesMapSchema) && !schema) {
+    throw new Error(`File ${fileName} is not a valid project file or schema is not provided.`)
   }
 
-  const fileSchema = projectDefaultFilesMapSchema[fileName] || schema
+  const fileSchema = projectDefaultFilesMapSchema[fileName] ?? schema
   const result = fileSchema.safeParse(data)
 
   /**
@@ -96,7 +96,7 @@ function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchem
    * logging a warning instead of throwing an error.
    */
   if (!result.success) {
-    throw new Error(`Failed to parse ${String(fileName)}: ${result.error.message}`)
+    throw new Error(`Failed to parse ${fileName}: ${result.error.message}`)
   }
 
   return result.data
@@ -282,14 +282,15 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
    * If any of these files do not exist, they will be created with default values from the schema.
    * If any of the files cannot be read or parsed, use default values and log a warning.
    */
-  for (const [fileName, schema] of Object.entries(projectDefaultFilesMapSchema)) {
+  for (const fileName of Object.keys(projectDefaultFilesMapSchema) as (keyof typeof projectDefaultFilesMapSchema)[]) {
+    const schema = projectDefaultFilesMapSchema[fileName]
     const filePath = join(basePath, fileName)
     try {
-      projectFiles[fileName] = readAndParseFile(filePath, fileName, schema as ZodTypeAny)
+      projectFiles[fileName] = readAndParseFile(filePath, fileName, schema)
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       logger.warn(`[read-project] Failed to parse ${fileName}: ${errorMessage}. Using default values.`)
-      projectFiles[fileName] = getDefaultSchemaValues(schema as ZodTypeAny)
+      projectFiles[fileName] = getDefaultSchemaValues(schema)
     }
   }
 
@@ -305,12 +306,10 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     }
   }
 
-  let needsLegacyMigration = false
   if (projectFiles['project.json']) {
     const project = projectFiles['project.json'] as PLCProject
     if (project.data.pous && project.data.pous.length > 0) {
-      needsLegacyMigration = true
-      await Promise.all(
+      const migrationResults = await Promise.allSettled(
         project.data.pous.map(async (pou) => {
           const pouType = pou.type.toLowerCase() + 's'
           const language = pou.data.body.language
@@ -325,13 +324,41 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
               logger.info(`[read-project] Migrated POU ${pou.data.name} to text-code format: ${pouFilePath}`)
             }
             pouFiles[join('pous', pouType, `${pou.data.name}${extension}`)] = pou
+            return { success: true, pouName: pou.data.name }
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error'
             logger.error(`[read-project] Failed to migrate POU file ${pouFilePath}: ${errorMessage}`)
-            throw new Error(`Failed to migrate POU file for ${pou.data.name}`)
+            return { success: false, pouName: pou.data.name, error: errorMessage }
           }
         }),
       )
+
+      const successfulMigrations = migrationResults.filter((r) => r.status === 'fulfilled' && r.value.success)
+      const failedMigrations = migrationResults.filter(
+        (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success),
+      )
+
+      if (failedMigrations.length > 0) {
+        const failedNames = failedMigrations
+          .map((r) => (r.status === 'fulfilled' ? r.value.pouName : 'unknown'))
+          .join(', ')
+        logger.warn(
+          `[read-project] Legacy migration partially failed: ${failedMigrations.length} POUs failed to migrate (${failedNames}). Keeping embedded POUs in project.json for retry.`,
+        )
+      }
+
+      if (successfulMigrations.length === project.data.pous.length) {
+        try {
+          project.data.pous = []
+          await promises.writeFile(join(basePath, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
+          logger.info(
+            `[read-project] Legacy migration completed successfully: All ${successfulMigrations.length} POUs migrated to text-code format and cleared from project.json`,
+          )
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          logger.error(`[read-project] Failed to clear POUs array from project.json: ${errorMessage}`)
+        }
+      }
     }
   }
 
@@ -357,17 +384,6 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     pous: Object.values(pouFiles).map((pou) => pou as PLCPou),
     deviceConfiguration: projectFiles['devices/configuration.json'] as DeviceConfiguration,
     devicePinMapping: projectFiles['devices/pin-mapping.json'] as DevicePin[],
-  }
-
-  if (needsLegacyMigration) {
-    try {
-      returnData.project.data.pous = []
-      await promises.writeFile(join(basePath, 'project.json'), JSON.stringify(returnData.project, null, 2), 'utf-8')
-      logger.info('[read-project] Legacy migration completed: POUs array cleared from project.json')
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      logger.error(`[read-project] Failed to clear POUs array from project.json: ${errorMessage}`)
-    }
   }
 
   // Check if project needs migration from ID-based to name+type-based system
