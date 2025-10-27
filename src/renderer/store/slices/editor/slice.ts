@@ -2,6 +2,15 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { EditorSlice, EditorState } from './types'
+
+type UpdateModelVariablesArgs = {
+  display: 'code' | 'table'
+  selectedRow?: number
+  classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
+  description?: string
+  codeText?: string
+}
+
 export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState, getState) => ({
   editors: [],
   editor: {
@@ -27,7 +36,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    updateModelVariables: (variables) =>
+    updateModelVariables: (variables: UpdateModelVariablesArgs) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
@@ -39,30 +48,22 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
                   description: variables.description ?? editor.variable.description ?? '',
-                  codeText: variables.codeText !== undefined ? variables.codeText : editor.variable.codeText,
+                  codeText: variables.codeText ?? editor.variable.codeText,
                 }
               } else {
+                const prevCodeText = editor.variable.display === 'code' ? editor.variable.codeText : undefined
                 editor.variable = {
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? '-1',
                   description: variables.description ?? '',
-                  codeText:
-                    variables.codeText !== undefined
-                      ? variables.codeText
-                      : editor.variable.display === 'code'
-                        ? editor.variable.codeText
-                        : undefined,
+                  codeText: variables.codeText ?? prevCodeText,
                 }
               }
             } else {
+              const prevCodeText = editor.variable.display === 'code' ? editor.variable.codeText : undefined
               editor.variable = {
                 display: 'code',
-                codeText:
-                  variables.codeText !== undefined
-                    ? variables.codeText
-                    : editor.variable.display === 'code'
-                      ? editor.variable.codeText
-                      : undefined,
+                codeText: variables.codeText ?? prevCodeText,
               }
             }
           } else if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
@@ -73,31 +74,23 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
                   selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
                   classFilter: variables.classFilter ?? editor.variable.classFilter ?? 'All',
                   description: variables.description ?? editor.variable.description ?? '',
-                  codeText: variables.codeText !== undefined ? variables.codeText : editor.variable.codeText,
+                  codeText: variables.codeText ?? editor.variable.codeText,
                 }
               } else {
+                const prevCodeText = editor.variable.display === 'code' ? editor.variable.codeText : undefined
                 editor.variable = {
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? '-1',
                   classFilter: variables.classFilter ?? 'All',
                   description: variables.description ?? '',
-                  codeText:
-                    variables.codeText !== undefined
-                      ? variables.codeText
-                      : editor.variable.display === 'code'
-                        ? editor.variable.codeText
-                        : undefined,
+                  codeText: variables.codeText ?? prevCodeText,
                 }
               }
             } else {
+              const prevCodeText = editor.variable.display === 'code' ? editor.variable.codeText : undefined
               editor.variable = {
                 display: 'code',
-                codeText:
-                  variables.codeText !== undefined
-                    ? variables.codeText
-                    : editor.variable.display === 'code'
-                      ? editor.variable.codeText
-                      : undefined,
+                codeText: variables.codeText ?? prevCodeText,
               }
             }
           }

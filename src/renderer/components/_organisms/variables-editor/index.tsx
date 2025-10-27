@@ -182,11 +182,13 @@ const VariablesEditor = () => {
 
   useEffect(() => {
     if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-      if (editor.variable.codeText !== undefined) {
-        setEditorCode(editor.variable.codeText)
-      } else {
-        setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
-      }
+      const prevCodeText =
+        editor.variable.display === 'code' && typeof editor.variable.codeText === 'string'
+          ? editor.variable.codeText
+          : editor.variable.display === 'table' && typeof editor.variable.codeText === 'string'
+            ? editor.variable.codeText
+            : undefined
+      setEditorCode(prevCodeText ?? generateIecVariablesToString(tableData as VariablePLC[]))
     }
   }, [tableData, editor])
 
