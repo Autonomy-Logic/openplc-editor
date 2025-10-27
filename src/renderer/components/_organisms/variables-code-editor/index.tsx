@@ -5,10 +5,11 @@ import { useEffect, useRef, useState } from 'react'
 interface VariablesCodeEditorProps {
   code: string
   onCodeChange: (code: string) => void
+  onBlur?: () => void
   shouldUseDarkMode: boolean
 }
 
-const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode }: VariablesCodeEditorProps) => {
+const VariablesCodeEditor = ({ code, onCodeChange, onBlur, shouldUseDarkMode }: VariablesCodeEditorProps) => {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [height, setHeight] = useState(1000)
@@ -17,6 +18,12 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode }: Variable
   const handleEditorDidMount: OnMount = (editor) => {
     editorRef.current = editor
     editor.layout()
+
+    if (onBlur) {
+      editor.onDidBlurEditorText(() => {
+        onBlur()
+      })
+    }
   }
 
   // Workaround to dynamically adjust the editor layout on container resize.

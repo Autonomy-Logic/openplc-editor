@@ -10,7 +10,7 @@ import { PLCGlobalVariable, PLCVariable as _PLCVariable } from '@root/types/PLC/
 import { cn } from '@root/utils'
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -63,8 +63,52 @@ const GlobalVariablesEditor = () => {
   }, [editor, globalVariables])
 
   useEffect(() => {
-    setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
-  }, [tableData])
+    if (editor.type === 'plc-resource') {
+      if (editor.variable.codeText !== undefined) {
+        setEditorCode(editor.variable.codeText)
+      } else {
+        setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
+      }
+    }
+  }, [tableData, editor])
+
+  const debouncedPersistCodeText = useCallback(
+    (() => {
+      let timeoutId: NodeJS.Timeout | null = null
+      return (code: string) => {
+        if (timeoutId) clearTimeout(timeoutId)
+        timeoutId = setTimeout(() => {
+          updateModelVariables({
+            display: editorVariables.display,
+            codeText: code,
+          })
+        }, 500)
+      }
+    })(),
+    [editorVariables.display, updateModelVariables],
+  )
+
+  const handleCodeChange = useCallback(
+    (code: string) => {
+      setEditorCode(code)
+      if (editorVariables.display === 'code') {
+        debouncedPersistCodeText(code)
+      }
+    },
+    [editorVariables.display, debouncedPersistCodeText],
+  )
+
+  const handleCodeBlur = useCallback(() => {
+    commitCode()
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (editorVariables.display === 'code') {
+        commitCode()
+      }
+    }
+  }, [editor.meta.name])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -199,6 +243,11 @@ const GlobalVariablesEditor = () => {
     try {
       addSnapshot(editor.meta.name)
 
+      updateModelVariables({
+        display: editorVariables.display,
+        codeText: editorCode,
+      })
+
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
 
       const response = setGlobalVariables({
@@ -209,6 +258,11 @@ const GlobalVariablesEditor = () => {
         throw new Error(response.title + (response.message ? `: ${response.message}` : ''))
       }
 
+      updateModelVariables({
+        display: editorVariables.display,
+        codeText: undefined,
+      })
+
       toast({ title: 'Global Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
       handleFileAndWorkspaceSavedState('Resource')
@@ -217,7 +271,6 @@ const GlobalVariablesEditor = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
       setParseError(message)
-      toast({ title: 'Syntax error', description: message, variant: 'fail' })
       return false
     }
   }
@@ -317,7 +370,12 @@ const GlobalVariablesEditor = () => {
           className='h-80 overflow-y-auto'
           style={{ scrollbarGutter: 'stable' }}
         >
-          <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
+          <VariablesCodeEditor
+            code={editorCode}
+            onCodeChange={handleCodeChange}
+            onBlur={handleCodeBlur}
+            shouldUseDarkMode={shouldUseDarkMode}
+          />
 
           {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}
         </div>

@@ -39,17 +39,30 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
                   description: variables.description ?? editor.variable.description ?? '',
+                  codeText: variables.codeText !== undefined ? variables.codeText : editor.variable.codeText,
                 }
               } else {
                 editor.variable = {
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? '-1',
                   description: variables.description ?? '',
+                  codeText:
+                    variables.codeText !== undefined
+                      ? variables.codeText
+                      : editor.variable.display === 'code'
+                        ? editor.variable.codeText
+                        : undefined,
                 }
               }
             } else {
               editor.variable = {
                 display: 'code',
+                codeText:
+                  variables.codeText !== undefined
+                    ? variables.codeText
+                    : editor.variable.display === 'code'
+                      ? editor.variable.codeText
+                      : undefined,
               }
             }
           } else if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
@@ -60,6 +73,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
                   selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
                   classFilter: variables.classFilter ?? editor.variable.classFilter ?? 'All',
                   description: variables.description ?? editor.variable.description ?? '',
+                  codeText: variables.codeText !== undefined ? variables.codeText : editor.variable.codeText,
                 }
               } else {
                 editor.variable = {
@@ -67,11 +81,23 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
                   selectedRow: variables.selectedRow?.toString() ?? '-1',
                   classFilter: variables.classFilter ?? 'All',
                   description: variables.description ?? '',
+                  codeText:
+                    variables.codeText !== undefined
+                      ? variables.codeText
+                      : editor.variable.display === 'code'
+                        ? editor.variable.codeText
+                        : undefined,
                 }
               }
             } else {
               editor.variable = {
                 display: 'code',
+                codeText:
+                  variables.codeText !== undefined
+                    ? variables.codeText
+                    : editor.variable.display === 'code'
+                      ? editor.variable.codeText
+                      : undefined,
               }
             }
           }

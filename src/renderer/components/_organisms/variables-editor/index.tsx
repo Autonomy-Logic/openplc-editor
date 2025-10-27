@@ -30,7 +30,7 @@ import { cn } from '@root/utils'
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { ColumnFiltersState } from '@tanstack/react-table'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import TableActions from '../../_atoms/table-actions'
@@ -120,6 +120,44 @@ const VariablesEditor = () => {
     }
   }, [editor, pou?.data.documentation])
 
+  const debouncedPersistCodeText = useCallback(
+    (() => {
+      let timeoutId: NodeJS.Timeout | null = null
+      return (code: string) => {
+        if (timeoutId) clearTimeout(timeoutId)
+        timeoutId = setTimeout(() => {
+          updateModelVariables({
+            display: editorVariables.display,
+            codeText: code,
+          })
+        }, 500)
+      }
+    })(),
+    [editorVariables.display, updateModelVariables],
+  )
+
+  const handleCodeChange = useCallback(
+    (code: string) => {
+      setEditorCode(code)
+      if (editorVariables.display === 'code') {
+        debouncedPersistCodeText(code)
+      }
+    },
+    [editorVariables.display, debouncedPersistCodeText],
+  )
+
+  const handleCodeBlur = useCallback(async () => {
+    await commitCode()
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (editorVariables.display === 'code') {
+        void commitCode()
+      }
+    }
+  }, [editor.meta.name])
+
   /**
    * Update the table data and the editor's variables when the editor or the pous change
    */
@@ -143,8 +181,14 @@ const VariablesEditor = () => {
   }, [dataTypes])
 
   useEffect(() => {
-    setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
-  }, [tableData])
+    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+      if (editor.variable.codeText !== undefined) {
+        setEditorCode(editor.variable.codeText)
+      } else {
+        setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
+      }
+    }
+  }, [tableData, editor])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -551,6 +595,11 @@ const VariablesEditor = () => {
     try {
       addSnapshot(editor.meta.name)
 
+      updateModelVariables({
+        display: editorVariables.display,
+        codeText: editorCode,
+      })
+
       const language = 'language' in editor.meta ? editor.meta.language : undefined
 
       if (!language) return false
@@ -733,6 +782,11 @@ const VariablesEditor = () => {
         }
       }
 
+      updateModelVariables({
+        display: editorVariables.display,
+        codeText: undefined,
+      })
+
       toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
@@ -741,7 +795,6 @@ const VariablesEditor = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
       setParseError(message)
-      toast({ title: 'Syntax error', description: message, variant: 'fail' })
       return false
     }
   }
@@ -1066,7 +1119,12 @@ const VariablesEditor = () => {
             className='mb-1 h-full overflow-y-auto'
             style={{ scrollbarGutter: 'stable' }}
           >
-            <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
+            <VariablesCodeEditor
+              code={editorCode}
+              onCodeChange={handleCodeChange}
+              onBlur={handleCodeBlur}
+              shouldUseDarkMode={shouldUseDarkMode}
+            />
 
             {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}
           </div>
