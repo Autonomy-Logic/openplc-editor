@@ -948,11 +948,10 @@ export const createSharedSlice: StateCreator<
           graphicalPous.forEach((pou) => {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
             const iecString = generateIecVariablesToString(pou.data.variables as any)
-            const reparsedVariables = parseIecStringToVariables(iecString, pous, dataTypes, libraries)
+            const reparsedVariables: PLCVariable[] = parseIecStringToVariables(iecString, pous, dataTypes, libraries)
             getState().projectActions.setPouVariables({
               pouName: pou.data.name,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              variables: reparsedVariables as any,
+              variables: reparsedVariables,
             })
           })
 
