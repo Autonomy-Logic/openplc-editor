@@ -1370,9 +1370,8 @@ export const createSharedSlice: StateCreator<
       return { success: true }
     },
     closeFile: (name) => {
-      // Remove the tab from the tabs slice and the editor model from the editor slice
+      // Remove the tab from the tabs slice
       getState().tabsActions.removeTab(name)
-      getState().editorActions.removeModel(name)
 
       // Check if there are any remaining tabs
       const filteredTabs = getState().tabs
