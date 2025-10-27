@@ -146,6 +146,21 @@ const VariablesEditor = () => {
     setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
   }, [tableData])
 
+  const containerRef = useRef<HTMLDivElement>(null)
+  const latestCodeRef = useRef(editorCode)
+  const latestDisplayRef = useRef(editorVariables.display)
+  const lastParsedCodeRef = useRef(editorCode)
+  const isParsingRef = useRef(false)
+
+  useEffect(() => {
+    latestCodeRef.current = editorCode
+    latestDisplayRef.current = editorVariables.display
+  }, [editorCode, editorVariables.display])
+
+  useEffect(() => {
+    lastParsedCodeRef.current = editorCode
+  }, [editor])
+
   useEffect(() => {
     if (editorVariables.display === 'code') {
       updateModelVariables({
@@ -154,6 +169,39 @@ const VariablesEditor = () => {
       })
     }
   }, [editorCode, editorVariables.display, updateModelVariables])
+
+  useEffect(() => {
+    return () => {
+      if (latestDisplayRef.current === 'code') {
+        updateModelVariables({
+          display: 'code',
+          code: latestCodeRef.current,
+        })
+      }
+    }
+  }, [updateModelVariables])
+
+  useEffect(() => {
+    if (editorVariables.display !== 'code') return
+
+    const onDocMouseDown = async (e: MouseEvent) => {
+      if (!containerRef.current || containerRef.current.contains(e.target as Node)) return
+      if (confirmRenameBlocksOpen || typeChangeModalOpen) return
+      if (isParsingRef.current) return
+      if (editorCode === lastParsedCodeRef.current) return
+
+      isParsingRef.current = true
+      try {
+        const ok = await commitCode()
+        if (ok) lastParsedCodeRef.current = editorCode
+      } finally {
+        isParsingRef.current = false
+      }
+    }
+
+    document.addEventListener('mousedown', onDocMouseDown, true)
+    return () => document.removeEventListener('mousedown', onDocMouseDown, true)
+  }, [editorVariables.display, editorCode, confirmRenameBlocksOpen, typeChangeModalOpen])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -797,7 +845,11 @@ const VariablesEditor = () => {
         />
       )}
 
-      <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
+      <div
+        ref={containerRef}
+        aria-label='Variables editor container'
+        className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'
+      >
         <div aria-label='Variables editor actions' className='relative flex h-8 w-full gap-4'>
           {editorVariables.display === 'table' && (
             <div aria-label='Variables editor table actions container' className='flex h-full w-full select-none gap-4'>
