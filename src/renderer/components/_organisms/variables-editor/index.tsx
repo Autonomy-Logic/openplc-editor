@@ -174,11 +174,11 @@ const VariablesEditor = () => {
             ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: classFilter.toLowerCase() })
             : prev.filter((filter) => filter.id !== 'class'),
         )
-      } else {
+      } else if (editor.variable.display === 'code') {
         setEditorVariables({
           display: editor.variable.display,
         })
-        if (editor.variable.code !== undefined) {
+        if (typeof editor.variable.code === 'string') {
           setEditorCode(editor.variable.code)
         }
       }

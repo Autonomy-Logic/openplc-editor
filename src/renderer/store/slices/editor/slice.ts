@@ -27,7 +27,13 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    updateModelVariables: (variables) =>
+    updateModelVariables: (variables: {
+      display: 'code' | 'table'
+      selectedRow?: number
+      classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
+      description?: string
+      code?: string
+    }) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
