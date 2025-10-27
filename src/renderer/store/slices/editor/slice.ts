@@ -72,6 +72,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
             } else {
               editor.variable = {
                 display: 'code',
+                code: variables.code ?? (editor.variable.display === 'code' ? editor.variable.code : undefined),
               }
             }
           }
