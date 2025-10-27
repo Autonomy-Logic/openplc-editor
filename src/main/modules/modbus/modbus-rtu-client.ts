@@ -248,7 +248,7 @@ export class ModbusRtuClient {
       }
     }
 
-    throw lastError || new Error('Failed to get MD5 hash after retries')
+    throw Object.assign(new Error('Failed to get MD5 hash after retries'), { cause: lastError })
   }
 
   async getVariablesList(variableIndexes: number[]): Promise<{
