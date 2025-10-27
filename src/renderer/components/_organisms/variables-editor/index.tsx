@@ -147,16 +147,8 @@ const VariablesEditor = () => {
   )
 
   const handleCodeBlur = useCallback(async () => {
-    await commitCode()
+    await commitCode({ reason: 'blur' })
   }, [])
-
-  useEffect(() => {
-    return () => {
-      if (editorVariables.display === 'code') {
-        void commitCode()
-      }
-    }
-  }, [editor.meta.name])
 
   /**
    * Update the table data and the editor's variables when the editor or the pous change
@@ -219,7 +211,7 @@ const VariablesEditor = () => {
 
   const handleVisualizationTypeChange = async (value: 'code' | 'table') => {
     if (editorVariables.display === 'code' && value === 'table') {
-      const success = await commitCode()
+      const success = await commitCode({ reason: 'explicit-switch' })
       if (!success) return
     }
 
@@ -593,20 +585,34 @@ const VariablesEditor = () => {
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
-  const commitCode = async (): Promise<boolean> => {
+  const commitCode = async (options?: {
+    reason?: 'blur' | 'tab-switch' | 'explicit-switch' | 'save'
+  }): Promise<boolean> => {
     try {
-      addSnapshot(editor.meta.name)
+      const reason = options?.reason ?? 'explicit-switch'
+      const isAutoCommit = reason === 'blur' || reason === 'tab-switch'
 
       updateModelVariables({
         display: editorVariables.display,
         codeText: editorCode,
       })
 
+      if (isAutoCommit && editorCode.trim() === '') {
+        return true // No-op, keep raw text but don't apply changes
+      }
+
       const language = 'language' in editor.meta ? editor.meta.language : undefined
 
       if (!language) return false
 
+      addSnapshot(editor.meta.name)
+
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
+
+      if (isAutoCommit && newVariables.length === 0 && tableData.length > 0) {
+        setParseError('Cannot parse variables from code')
+        return true
+      }
 
       const renamedPairs = tableData.flatMap((previousVariable) => {
         const variableStillExists = newVariables.some(
@@ -784,12 +790,16 @@ const VariablesEditor = () => {
         }
       }
 
-      updateModelVariables({
-        display: editorVariables.display,
-        codeText: undefined,
-      })
+      if (!isAutoCommit) {
+        updateModelVariables({
+          display: editorVariables.display,
+          codeText: undefined,
+        })
+      }
 
-      toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
+      if (!isAutoCommit) {
+        toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
+      }
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 

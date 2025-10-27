@@ -101,16 +101,8 @@ const GlobalVariablesEditor = () => {
   )
 
   const handleCodeBlur = useCallback(() => {
-    commitCode()
+    commitCode({ reason: 'blur' })
   }, [])
-
-  useEffect(() => {
-    return () => {
-      if (editorVariables.display === 'code') {
-        commitCode()
-      }
-    }
-  }, [editor.meta.name])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -133,7 +125,7 @@ const GlobalVariablesEditor = () => {
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
     if (editorVariables.display === 'code' && value === 'table') {
-      const success = commitCode()
+      const success = commitCode({ reason: 'explicit-switch' })
       if (!success) return
     }
 
@@ -241,16 +233,28 @@ const GlobalVariablesEditor = () => {
     })
   }
 
-  const commitCode = (): boolean => {
+  const commitCode = (options?: { reason?: 'blur' | 'tab-switch' | 'explicit-switch' | 'save' }): boolean => {
     try {
-      addSnapshot(editor.meta.name)
+      const reason = options?.reason ?? 'explicit-switch'
+      const isAutoCommit = reason === 'blur' || reason === 'tab-switch'
 
       updateModelVariables({
         display: editorVariables.display,
         codeText: editorCode,
       })
 
+      if (isAutoCommit && editorCode.trim() === '') {
+        return true
+      }
+
+      addSnapshot(editor.meta.name)
+
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
+
+      if (isAutoCommit && newVariables.length === 0 && tableData.length > 0) {
+        setParseError('Cannot parse variables from code')
+        return true
+      }
 
       const response = setGlobalVariables({
         variables: newVariables,
@@ -260,12 +264,16 @@ const GlobalVariablesEditor = () => {
         throw new Error(response.title + (response.message ? `: ${response.message}` : ''))
       }
 
-      updateModelVariables({
-        display: editorVariables.display,
-        codeText: undefined,
-      })
+      if (!isAutoCommit) {
+        updateModelVariables({
+          display: editorVariables.display,
+          codeText: undefined,
+        })
+      }
 
-      toast({ title: 'Global Variables updated', description: 'Changes applied successfully.' })
+      if (!isAutoCommit) {
+        toast({ title: 'Global Variables updated', description: 'Changes applied successfully.' })
+      }
       setParseError(null)
       handleFileAndWorkspaceSavedState('Resource')
 
