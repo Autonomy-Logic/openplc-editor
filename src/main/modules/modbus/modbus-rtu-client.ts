@@ -11,6 +11,10 @@ interface ModbusRtuClientOptions {
   timeout: number
 }
 
+const ARDUINO_BOOTLOADER_DELAY_MS = 500
+const MD5_REQUEST_MAX_RETRIES = 3
+const MD5_REQUEST_RETRY_DELAY_MS = 500
+
 export class ModbusRtuClient {
   private port: string
   private baudRate: number
@@ -99,7 +103,9 @@ export class ModbusRtuClient {
         })
 
         this.serialPort.on('open', () => {
-          resolve()
+          setTimeout(() => {
+            resolve()
+          }, ARDUINO_BOOTLOADER_DELAY_MS)
         })
 
         this.serialPort.on('error', (error: unknown) => {
@@ -207,25 +213,42 @@ export class ModbusRtuClient {
     data.writeUInt8(0, 3)
 
     const request = this.assembleRequest(functionCode, data)
-    const response = await this.sendRequest(request)
 
-    if (response.length < 9) {
-      throw new Error('Invalid response: too short')
+    let lastError: Error | null = null
+    for (let attempt = 0; attempt <= MD5_REQUEST_MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, MD5_REQUEST_RETRY_DELAY_MS))
+        }
+
+        const response = await this.sendRequest(request)
+
+        if (response.length < 9) {
+          throw new Error('Invalid response: too short')
+        }
+
+        const functionCodeResponse = response.readUInt8(7)
+        const statusCode = response.readUInt8(8)
+
+        if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
+          throw new Error('Function code mismatch')
+        }
+
+        if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+          throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
+        }
+
+        const md5String = response.slice(9).toString('utf-8').trim()
+        return md5String
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        if (attempt < MD5_REQUEST_MAX_RETRIES) {
+          console.warn(`MD5 request attempt ${attempt + 1} failed: ${lastError.message}. Retrying...`)
+        }
+      }
     }
 
-    const functionCodeResponse = response.readUInt8(7)
-    const statusCode = response.readUInt8(8)
-
-    if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
-      throw new Error('Function code mismatch')
-    }
-
-    if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-      throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
-    }
-
-    const md5String = response.slice(9).toString('utf-8').trim()
-    return md5String
+    throw Object.assign(new Error('Failed to get MD5 hash after retries'), { cause: lastError })
   }
 
   async getVariablesList(variableIndexes: number[]): Promise<{
