@@ -146,6 +146,15 @@ const VariablesEditor = () => {
     setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
   }, [tableData])
 
+  useEffect(() => {
+    if (editorVariables.display === 'code') {
+      updateModelVariables({
+        display: 'code',
+        code: editorCode,
+      })
+    }
+  }, [editorCode, editorVariables.display, updateModelVariables])
+
   /**
    * If the editor name is not the same as the current editor name
    * set the editor name and the editor's variables to the states
@@ -165,10 +174,14 @@ const VariablesEditor = () => {
             ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: classFilter.toLowerCase() })
             : prev.filter((filter) => filter.id !== 'class'),
         )
-      } else
+      } else if (editor.variable.display === 'code') {
         setEditorVariables({
           display: editor.variable.display,
         })
+        if (typeof editor.variable.code === 'string') {
+          setEditorCode(editor.variable.code)
+        }
+      }
   }, [editor])
 
   const handleVisualizationTypeChange = async (value: 'code' | 'table') => {
@@ -179,6 +192,7 @@ const VariablesEditor = () => {
 
     updateModelVariables({
       display: value,
+      code: value === 'code' ? editorCode : undefined,
     })
   }
 
