@@ -1311,39 +1311,54 @@ export const createSharedSlice: StateCreator<
         }
       }
 
-      // Sync unparsed variable text from editors to POUs before saving
       const editors = getState().editors
-      for (const editor of editors) {
-        if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-          const codeLen = editor.variable.display === 'code' ? editor.variable.code?.length : undefined
-          console.log('[SAVE-PROJECT][renderer] syncing editor -> POU', {
-            editorName: editor.meta.name,
-            display: editor.variable.display,
-            codeLen,
-          })
+      const editorsByName = new Map(
+        editors.filter((e) => e.type === 'plc-textual' || e.type === 'plc-graphical').map((e) => [e.meta.name, e]),
+      )
 
-          const pou = projectData.data.data.pous.find((p) => p.data.name === editor.meta.name)
-          if (pou) {
-            if (editor.variable.display === 'code') {
-              pou.data.variablesText = editor.variable.code
-              console.log('[SAVE-PROJECT][renderer] set variablesText', {
-                present: Object.prototype.hasOwnProperty.call(pou.data, 'variablesText'),
-                len: pou.data.variablesText?.length,
-              })
-            } else {
-              pou.data.variablesText = undefined
-              console.log('[SAVE-PROJECT][renderer] delete variablesText, using table serialization')
-            }
-          }
+      const sanitizedPous = projectData.data.data.pous.map((p) => {
+        const ed = editorsByName.get(p.data.name)
+        if (!ed) return p
+
+        const codeLen = ed.variable.display === 'code' ? ed.variable.code?.length : undefined
+        console.log('[SAVE-PROJECT][renderer] processing POU', {
+          pouName: p.data.name,
+          display: ed.variable.display,
+          codeLen,
+        })
+
+        if (ed.variable.display === 'code') {
+          const pouWithText = {
+            type: p.type,
+            data: {
+              ...p.data,
+              variablesText: ed.variable.code ?? '',
+            },
+          } as typeof p
+          console.log('[SAVE-PROJECT][renderer] pouWithText variablesText', {
+            present: Object.prototype.hasOwnProperty.call(pouWithText.data, 'variablesText'),
+            len: pouWithText.data.variablesText?.length,
+          })
+          return pouWithText
+        } else {
+          const { variablesText, ...restData } = p.data as typeof p.data & { variablesText?: string }
+          const pouWithoutText = {
+            type: p.type,
+            data: restData,
+          } as typeof p
+          console.log('[SAVE-PROJECT][renderer] pouWithoutText (table mode)', {
+            present: Object.prototype.hasOwnProperty.call(pouWithoutText.data, 'variablesText'),
+          })
+          return pouWithoutText
         }
-      }
+      })
 
       // Remove the POU from the project data before saving
       // This is because the POU data is not needed in the project file
       // and it is stored in the filesystem
       // This is a workaround to avoid circular references
       // and to reduce the size of the project file
-      const pous = projectData.data.data.pous
+      const pous = sanitizedPous
       projectData.data.data.pous = []
 
       const { success, reason } = await window.bridge.saveProject({
@@ -1504,6 +1519,7 @@ export const createSharedSlice: StateCreator<
           const editor = getState().editorActions.getEditorFromEditors(name)
           const pou = getState().project.data.pous.find((pou) => pou.data.name === name)
 
+          let pouToSave = pou
           if (pou && editor && (editor.type === 'plc-textual' || editor.type === 'plc-graphical')) {
             const codeLen = editor.variable.display === 'code' ? editor.variable.code?.length : undefined
             console.log('[SAVE][renderer] editor state', {
@@ -1511,38 +1527,32 @@ export const createSharedSlice: StateCreator<
               codeLen,
             })
 
-            console.log('[SAVE][renderer] pou.data immutability check', {
-              isFrozen: Object.isFrozen(pou.data),
-              isSealed: Object.isSealed(pou.data),
-              isExtensible: Object.isExtensible(pou.data),
-            })
-
             if (editor.variable.display === 'code') {
-              const cachedData = pou.data
-              cachedData.variablesText = editor.variable.code
-              console.log('[SAVE][renderer] after assignment to cached ref', {
-                presentOnCached: Object.prototype.hasOwnProperty.call(cachedData, 'variablesText'),
-                lenOnCached: cachedData.variablesText?.length,
-                presentOnPou: Object.prototype.hasOwnProperty.call(pou.data, 'variablesText'),
-                lenOnPou: pou.data.variablesText?.length,
-                sameReference: cachedData === pou.data,
-              })
-
-              pou.data.variablesText = editor.variable.code
-              console.log('[SAVE][renderer] after direct assignment', {
-                present: Object.prototype.hasOwnProperty.call(pou.data, 'variablesText'),
-                len: pou.data.variablesText?.length,
-                inOperator: 'variablesText' in pou.data,
-                inKeys: Object.keys(pou.data).includes('variablesText'),
-              })
+              pouToSave = {
+                type: pou.type,
+                data: {
+                  ...pou.data,
+                  variablesText: editor.variable.code ?? '',
+                },
+              } as typeof pou
             } else {
-              pou.data.variablesText = undefined
-              console.log('[SAVE][renderer] delete variablesText, using table serialization')
+              const { variablesText, ...restData } = pou.data as typeof pou.data & { variablesText?: string }
+              pouToSave = {
+                type: pou.type,
+                data: restData,
+              } as typeof pou
             }
+
+            console.log('[SAVE][renderer] pouToSave variablesText', {
+              present: Object.prototype.hasOwnProperty.call(pouToSave.data, 'variablesText'),
+              len: pouToSave.data.variablesText?.length,
+              inOperator: 'variablesText' in pouToSave.data,
+              inKeys: Object.keys(pouToSave.data).includes('variablesText'),
+            })
           }
 
-          if (pou) {
-            const language = pou.data.body.language
+          if (pouToSave) {
+            const language = pouToSave.data.body.language
             const extension = getExtensionFromLanguage(language)
             const typeDir =
               file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
@@ -1550,7 +1560,7 @@ export const createSharedSlice: StateCreator<
             console.log('[SAVE][renderer] computed path', { language, computedFilePath })
           }
 
-          saveContent = pou
+          saveContent = pouToSave
           break
         }
         case 'device': {
