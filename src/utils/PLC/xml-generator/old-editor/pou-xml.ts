@@ -199,7 +199,7 @@ export const oldEditorParsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
       }
       case 'python':
       case 'cpp': {
-        const result = stToXML(pou.data.body.value)
+        const result = stToXML(pou.data.body.value, false)
         xml.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,

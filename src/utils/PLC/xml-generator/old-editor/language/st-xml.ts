@@ -65,7 +65,7 @@ const convertComments = (value: string) => {
   return outValue
 }
 
-const stToXML = (value: string) => {
+const stToXML = (value: string, shouldConvertComments: boolean = true) => {
   const stXML: {
     body: {
       ST: StXML
@@ -74,7 +74,7 @@ const stToXML = (value: string) => {
     body: {
       ST: {
         'xhtml:p': {
-          $: convertComments(value),
+          $: shouldConvertComments ? convertComments(value) : value,
         },
       },
     },
