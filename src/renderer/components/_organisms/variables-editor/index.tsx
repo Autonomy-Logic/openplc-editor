@@ -240,8 +240,9 @@ const VariablesEditor = () => {
         setEditorVariables({
           display: editor.variable.display,
         })
-        if (typeof editor.variable.code === 'string') {
-          setEditorCode(editor.variable.code)
+        const code = editor.variable.code
+        if (typeof code === 'string') {
+          setEditorCode(code)
         }
       }
   }, [editor])
