@@ -211,6 +211,8 @@ const PLCFunctionSchema = z.object({
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
+  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
+  variablesText: z.string().optional(),
 })
 
 type PLCFunction = z.infer<typeof PLCFunctionSchema>
@@ -222,6 +224,8 @@ const PLCProgramSchema = z.object({
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
+  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
+  variablesText: z.string().optional(),
 })
 
 type PLCProgram = z.infer<typeof PLCProgramSchema>
@@ -241,6 +245,8 @@ const PLCFunctionBlockSchema = z.object({
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
+  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
+  variablesText: z.string().optional(),
 })
 
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>

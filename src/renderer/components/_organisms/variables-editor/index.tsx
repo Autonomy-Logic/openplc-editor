@@ -63,6 +63,7 @@ const VariablesEditor = () => {
       rearrangeVariables,
       updatePouDocumentation,
       updatePouReturnType,
+      clearPouVariablesText,
       setPouVariables,
       updatePou,
       updateVariable,
@@ -79,7 +80,16 @@ const VariablesEditor = () => {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [returnType, setReturnType] = useState('BOOL')
   const [returnTypeOptions, setReturnTypeOptions] = useState<string[]>([])
-  const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData as VariablePLC[]))
+  const [editorCode, setEditorCode] = useState(() => {
+    if (
+      (editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
+      editor.variable.display === 'code' &&
+      typeof editor.variable.code === 'string'
+    ) {
+      return editor.variable.code
+    }
+    return generateIecVariablesToString(tableData as VariablePLC[])
+  })
   const [parseError, setParseError] = useState<string | null>(null)
   const [pouDescription, setPouDescription] = useState<string>('')
   const [confirmRenameBlocksOpen, setConfirmRenameBlocksOpen] = useState(false)
@@ -104,11 +114,18 @@ const VariablesEditor = () => {
    */
   const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
   type FilterOptionsType = (typeof FilterOptions)[number]
-  const [editorVariables, setEditorVariables] = useState<VariablesTableType>({
-    display: 'table',
-    selectedRow: ROWS_NOT_SELECTED.toString(),
-    classFilter: 'All',
-    description: '',
+  const [editorVariables, setEditorVariables] = useState<VariablesTableType>(() => {
+    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+      if (editor.variable.display === 'code') {
+        return { display: 'code' }
+      }
+    }
+    return {
+      display: 'table',
+      selectedRow: ROWS_NOT_SELECTED.toString(),
+      classFilter: 'All',
+      description: '',
+    }
   })
 
   const pou = pous.find((p) => p.data.name === editor.meta.name)
@@ -143,8 +160,10 @@ const VariablesEditor = () => {
   }, [dataTypes])
 
   useEffect(() => {
-    setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
-  }, [tableData])
+    if (editorVariables.display !== 'code') {
+      setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
+    }
+  }, [tableData, editorVariables.display])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const latestCodeRef = useRef(editorCode)
@@ -237,11 +256,13 @@ const VariablesEditor = () => {
             : prev.filter((filter) => filter.id !== 'class'),
         )
       } else if (editor.variable.display === 'code') {
+        const code = editor.variable.code
         setEditorVariables({
           display: editor.variable.display,
         })
-        if (typeof editor.variable.code === 'string') {
-          setEditorCode(editor.variable.code)
+        if (typeof code === 'string') {
+          setEditorCode(code)
+          // lastParsedCodeRef is only reset when POU changes (via [editor.meta.name] effect)
         }
       }
   }, [editor])
@@ -627,7 +648,12 @@ const VariablesEditor = () => {
     try {
       addSnapshot(editor.meta.name)
 
-      const language = 'language' in editor.meta ? editor.meta.language : undefined
+      let language: string | undefined
+      if (editor.type === 'plc-graphical') {
+        language = editor.graphical.language
+      } else if (editor.type === 'plc-textual') {
+        language = editor.meta.language
+      }
 
       if (!language) return false
 
@@ -812,6 +838,10 @@ const VariablesEditor = () => {
       toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
+
+      if (freshPou && 'variablesText' in freshPou.data) {
+        clearPouVariablesText(editor.meta.name)
+      }
 
       return true
     } catch (err) {

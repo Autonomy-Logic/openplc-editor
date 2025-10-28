@@ -19,6 +19,25 @@ import { generateIecVariablesToString } from '@root/utils/generate-iec-variables
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
 import { StateCreator } from 'zustand'
 
+const getExtensionFromLanguage = (language: string): string => {
+  switch (language) {
+    case 'st':
+      return '.st'
+    case 'il':
+      return '.il'
+    case 'ld':
+      return '.ld'
+    case 'fbd':
+      return '.fbd'
+    case 'python':
+      return '.py'
+    case 'cpp':
+      return '.cpp'
+    default:
+      return '.txt'
+  }
+}
+
 import { ConsoleSlice } from '../console'
 import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } from '../device'
 import { EditorModel, EditorSlice } from '../editor'
@@ -919,6 +938,20 @@ export const createSharedSlice: StateCreator<
         // Set pous
         getState().projectActions.setPous(pous)
 
+        pous.forEach((pou) => {
+          const hasVariablesText = Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')
+          const variablesText = hasVariablesText
+            ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+            : undefined
+          console.log('[OPEN-PROJECT] loaded POU', {
+            name: pou.data.name,
+            type: pou.type,
+            hasVariablesText,
+            variablesTextLen: variablesText?.length,
+            variablesTextPreview: variablesText?.substring(0, 60),
+          })
+        })
+
         const ladderPous = pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length)
           ladderPous.forEach((pou) => {
@@ -1292,12 +1325,54 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      const editors = getState().editors
+      const editorsByName = new Map(
+        editors.filter((e) => e.type === 'plc-textual' || e.type === 'plc-graphical').map((e) => [e.meta.name, e]),
+      )
+
+      const sanitizedPous = projectData.data.data.pous.map((p) => {
+        const ed = editorsByName.get(p.data.name)
+        if (!ed) return p
+
+        const codeLen = ed.variable.display === 'code' ? ed.variable.code?.length : undefined
+        console.log('[SAVE-PROJECT][renderer] processing POU', {
+          pouName: p.data.name,
+          display: ed.variable.display,
+          codeLen,
+        })
+
+        if (ed.variable.display === 'code') {
+          const pouWithText = {
+            type: p.type,
+            data: {
+              ...p.data,
+              variablesText: ed.variable.code ?? '',
+            },
+          } as typeof p
+          console.log('[SAVE-PROJECT][renderer] pouWithText variablesText', {
+            present: Object.prototype.hasOwnProperty.call(pouWithText.data, 'variablesText'),
+            len: pouWithText.data.variablesText?.length,
+          })
+          return pouWithText
+        } else {
+          const { variablesText, ...restData } = p.data as typeof p.data & { variablesText?: string }
+          const pouWithoutText = {
+            type: p.type,
+            data: restData,
+          } as typeof p
+          console.log('[SAVE-PROJECT][renderer] pouWithoutText (table mode)', {
+            present: Object.prototype.hasOwnProperty.call(pouWithoutText.data, 'variablesText'),
+          })
+          return pouWithoutText
+        }
+      })
+
       // Remove the POU from the project data before saving
       // This is because the POU data is not needed in the project file
       // and it is stored in the filesystem
       // This is a workaround to avoid circular references
       // and to reduce the size of the project file
-      const pous = projectData.data.data.pous
+      const pous = sanitizedPous
       projectData.data.data.pous = []
 
       const { success, reason } = await window.bridge.saveProject({
@@ -1351,11 +1426,30 @@ export const createSharedSlice: StateCreator<
       }
 
       // Define editor model at the editor slice
-      const editor =
-        getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name) ||
-        CreateEditorObjectFromTab(editorTabToBeCreated)
+      let editor = getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name)
+
+      if (!editor) {
+        editor = CreateEditorObjectFromTab(editorTabToBeCreated)
+      }
+
       getState().editorActions.addModel(editor)
       getState().editorActions.setEditor(editor)
+
+      // Check if POU has unparsed variablesText and initialize in code mode
+      if (elementType.type === 'program' || elementType.type === 'function' || elementType.type === 'function-block') {
+        const pou = getState().project.data.pous.find((p) => p.data.name === name)
+        const hasVariablesText = pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')
+        const variablesText = hasVariablesText
+          ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+          : undefined
+
+        if (hasVariablesText && variablesText !== undefined) {
+          getState().editorActions.updateModelVariables({
+            display: 'code',
+            code: variablesText,
+          })
+        }
+      }
 
       // Define tab at the tabs slice
       getState().tabsActions.updateTabs(editorTabToBeCreated)
@@ -1425,13 +1519,47 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      const projectFilePath = getState().project.meta.path
       let saveContent: PLCProject | PLCPou | DeviceState['deviceDefinitions'] | undefined
+      let computedFilePath: string | undefined
+
       switch (file.type) {
         case 'function':
         case 'function-block':
-        case 'program':
-          saveContent = getState().project.data.pous.find((pou) => pou.data.name === name)
+        case 'program': {
+          const editor = getState().editorActions.getEditorFromEditors(name)
+          const pou = getState().project.data.pous.find((pou) => pou.data.name === name)
+
+          let pouToSave = pou
+          if (pou && editor && (editor.type === 'plc-textual' || editor.type === 'plc-graphical')) {
+            if (editor.variable.display === 'code') {
+              pouToSave = {
+                type: pou.type,
+                data: {
+                  ...pou.data,
+                  variablesText: editor.variable.code ?? '',
+                },
+              } as typeof pou
+            } else {
+              const { variablesText, ...restData } = pou.data as typeof pou.data & { variablesText?: string }
+              pouToSave = {
+                type: pou.type,
+                data: restData,
+              } as typeof pou
+            }
+          }
+
+          if (pouToSave) {
+            const language = pouToSave.data.body.language
+            const extension = getExtensionFromLanguage(language)
+            const typeDir =
+              file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+            computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
+          }
+
+          saveContent = pouToSave
           break
+        }
         case 'device': {
           const deviceConfiguration = deviceConfigurationSchema.safeParse(getState().deviceDefinitions.configuration)
           if (!deviceConfiguration.success) {
@@ -1522,8 +1650,9 @@ export const createSharedSlice: StateCreator<
         }
       }
 
-      const projectFilePath = getState().project.meta.path
-      const filePath = file.filePath.includes(projectFilePath) ? file.filePath : `${projectFilePath}${file.filePath}`
+      const filePath =
+        computedFilePath ||
+        (file.filePath.includes(projectFilePath) ? file.filePath : `${projectFilePath}${file.filePath}`)
 
       let saveResponse: { success: boolean; error?: string }
       switch (file.type) {
