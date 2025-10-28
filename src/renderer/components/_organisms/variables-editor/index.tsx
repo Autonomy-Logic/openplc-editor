@@ -183,55 +183,27 @@ const VariablesEditor = () => {
   }, [updateModelVariables])
 
   useEffect(() => {
-    if (editorVariables.display !== 'code') {
-      console.log('[AUTO-PARSE] Not in code mode, skipping listener attachment')
-      return
-    }
-
-    console.log('[AUTO-PARSE] Attaching mousedown listener')
+    if (editorVariables.display !== 'code') return
 
     const onDocMouseDown = (e: MouseEvent) => {
-      console.log('[AUTO-PARSE] Mousedown event fired, target:', e.target)
-
-      if (!containerRef.current) {
-        console.log('[AUTO-PARSE] containerRef.current is null')
-        return
-      }
+      if (!containerRef.current) return
 
       const isInside = containerRef.current.contains(e.target as Node)
-      console.log('[AUTO-PARSE] Click inside container?', isInside)
       if (isInside) return
 
-      console.log(
-        '[AUTO-PARSE] confirmRenameBlocksOpen:',
-        confirmRenameBlocksOpen,
-        'typeChangeModalOpen:',
-        typeChangeModalOpen,
-      )
       if (confirmRenameBlocksOpen || typeChangeModalOpen) return
 
-      console.log('[AUTO-PARSE] isParsingRef.current:', isParsingRef.current)
       if (isParsingRef.current) return
 
-      console.log('[AUTO-PARSE] editorCode === lastParsedCodeRef.current?', editorCode === lastParsedCodeRef.current)
-      console.log(
-        '[AUTO-PARSE] editorCode length:',
-        editorCode.length,
-        'lastParsedCodeRef.current length:',
-        lastParsedCodeRef.current.length,
-      )
       if (editorCode === lastParsedCodeRef.current) return
 
-      console.log('[AUTO-PARSE] All guards passed, calling commitCode')
       isParsingRef.current = true
 
       void commitCodeRef
         .current()
         .then((ok) => {
-          console.log('[AUTO-PARSE] commitCode returned:', ok)
           if (ok) {
             lastParsedCodeRef.current = editorCode
-            console.log('[AUTO-PARSE] Updated lastParsedCodeRef')
           }
         })
         .finally(() => {
@@ -241,7 +213,6 @@ const VariablesEditor = () => {
 
     document.addEventListener('mousedown', onDocMouseDown, true)
     return () => {
-      console.log('[AUTO-PARSE] Removing mousedown listener')
       document.removeEventListener('mousedown', onDocMouseDown, true)
     }
   }, [editorVariables.display, editorCode, confirmRenameBlocksOpen, typeChangeModalOpen])
@@ -654,16 +625,11 @@ const VariablesEditor = () => {
 
   const commitCode = async (): Promise<boolean> => {
     try {
-      console.log('[AUTO-PARSE] commitCode called')
       addSnapshot(editor.meta.name)
 
       const language = 'language' in editor.meta ? editor.meta.language : undefined
-      console.log('[AUTO-PARSE] language:', language)
 
-      if (!language) {
-        console.log('[AUTO-PARSE] No language, returning false')
-        return false
-      }
+      if (!language) return false
 
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
 
