@@ -5,13 +5,17 @@
  *
  * This function should only be applied to ST and IL code, NOT to Python or C++ code.
  *
+ * Escape handling: Backslash escapes are handled by counting consecutive backslashes.
+ * The $ character is treated as an escape character for any following character, which is
+ * a custom extension and not strictly IEC 61131-3 compliant (standard only allows $$, $', $").
+ *
  * @param value - The code string to process
  * @returns The code with unsupported comments wrapped in (* *)
  */
 export const wrapUnsupportedComments = (value: string): string => {
   let stringContext = '' // either empty for non-string or " || ' to signal type of string
   let commentContext = '' // either empty for non-comment or // || (* || /*
-  let inCBlock = false // track if we're inside {{ ... }} C code blocks
+  let cBlockDepth = 0 // track nesting depth of {{ ... }} C code blocks
   let outValue = value
     .split('')
     .map((iChar, i, original) => {
@@ -19,19 +23,22 @@ export const wrapUnsupportedComments = (value: string): string => {
       const lastTwoChars = original.slice(i - 2, i).join('') // exclusive of iChar
 
       if (nextTwoChars === '{{') {
-        inCBlock = true
+        cBlockDepth++
       } else if (lastTwoChars === '}}') {
-        inCBlock = false
+        cBlockDepth--
       }
 
-      if (inCBlock) {
+      if (cBlockDepth > 0) {
         return iChar
       }
 
       /* CONTEXTUALIZE STRINGS */
       if (stringContext) {
-        if (original[i - 1] === '\\' || original[i - 1] === '$') {
-          // check for escape char, doesn't matter what current char is, note Array[-1] is just undefined
+        let backslashCount = 0
+        for (let j = i - 1; j >= 0 && original[j] === '\\'; j--) {
+          backslashCount++
+        }
+        if (backslashCount % 2 === 1 || original[i - 1] === '$') {
           return iChar
         } else if (iChar == stringContext) {
           stringContext = ''
