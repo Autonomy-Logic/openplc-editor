@@ -17,26 +17,8 @@ import {
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
+import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
 import { StateCreator } from 'zustand'
-
-const getExtensionFromLanguage = (language: string): string => {
-  switch (language) {
-    case 'st':
-      return '.st'
-    case 'il':
-      return '.il'
-    case 'ld':
-      return '.ld'
-    case 'fbd':
-      return '.fbd'
-    case 'python':
-      return '.py'
-    case 'cpp':
-      return '.cpp'
-    default:
-      return '.txt'
-  }
-}
 
 import { ConsoleSlice } from '../console'
 import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } from '../device'
@@ -110,6 +92,28 @@ export type SharedSlice = {
     addSnapshot: (pouName: string) => void
     undo: (pouName: string) => void
     redo: (pouName: string) => void
+  }
+}
+
+const sanitizePou = (pou: PLCPou, editor: EditorModel | undefined): PLCPou => {
+  if (!editor || (editor.type !== 'plc-textual' && editor.type !== 'plc-graphical')) {
+    return pou
+  }
+
+  if (editor.variable.display === 'code') {
+    return {
+      type: pou.type,
+      data: {
+        ...pou.data,
+        variablesText: editor.variable.code ?? '',
+      },
+    } as typeof pou
+  } else {
+    const { variablesText, ...restData } = pou.data as typeof pou.data & { variablesText?: string }
+    return {
+      type: pou.type,
+      data: restData,
+    } as typeof pou
   }
 }
 
@@ -938,13 +942,6 @@ export const createSharedSlice: StateCreator<
         // Set pous
         getState().projectActions.setPous(pous)
 
-        pous.forEach((pou) => {
-          const hasVariablesText = Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')
-          const variablesText = hasVariablesText
-            ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
-            : undefined
-        })
-
         const ladderPous = pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length)
           ladderPous.forEach((pou) => {
@@ -1325,27 +1322,7 @@ export const createSharedSlice: StateCreator<
 
       const sanitizedPous = projectData.data.data.pous.map((p) => {
         const ed = editorsByName.get(p.data.name)
-        if (!ed) return p
-
-        const codeLen = ed.variable.display === 'code' ? ed.variable.code?.length : undefined
-
-        if (ed.variable.display === 'code') {
-          const pouWithText = {
-            type: p.type,
-            data: {
-              ...p.data,
-              variablesText: ed.variable.code ?? '',
-            },
-          } as typeof p
-          return pouWithText
-        } else {
-          const { variablesText, ...restData } = p.data as typeof p.data & { variablesText?: string }
-          const pouWithoutText = {
-            type: p.type,
-            data: restData,
-          } as typeof p
-          return pouWithoutText
-        }
+        return sanitizePou(p, ed)
       })
 
       // Remove the POU from the project data before saving
@@ -1511,31 +1488,18 @@ export const createSharedSlice: StateCreator<
           const editor = getState().editorActions.getEditorFromEditors(name)
           const pou = getState().project.data.pous.find((pou) => pou.data.name === name)
 
-          let pouToSave = pou
-          if (pou && editor && (editor.type === 'plc-textual' || editor.type === 'plc-graphical')) {
-            if (editor.variable.display === 'code') {
-              pouToSave = {
-                type: pou.type,
-                data: {
-                  ...pou.data,
-                  variablesText: editor.variable.code ?? '',
-                },
-              } as typeof pou
-            } else {
-              const { variablesText, ...restData } = pou.data as typeof pou.data & { variablesText?: string }
-              pouToSave = {
-                type: pou.type,
-                data: restData,
-              } as typeof pou
-            }
-          }
+          const pouToSave = pou ? sanitizePou(pou, editor ?? undefined) : undefined
 
           if (pouToSave) {
-            const language = pouToSave.data.body.language
-            const extension = getExtensionFromLanguage(language)
-            const typeDir =
-              file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
-            computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
+            try {
+              const language = pouToSave.data.body.language
+              const extension = getExtensionFromLanguage(language)
+              const typeDir =
+                file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+              computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
+            } catch (_error) {
+              // If language is not supported, fall back to using the original file.filePath
+            }
           }
 
           saveContent = pouToSave
