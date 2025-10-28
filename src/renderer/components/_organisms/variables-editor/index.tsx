@@ -63,6 +63,7 @@ const VariablesEditor = () => {
       rearrangeVariables,
       updatePouDocumentation,
       updatePouReturnType,
+      clearPouVariablesText,
       setPouVariables,
       updatePou,
       updateVariable,
@@ -852,8 +853,8 @@ const VariablesEditor = () => {
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
       if (freshPou && 'variablesText' in freshPou.data) {
-        console.log('[PARSE] clearing variablesText after successful commit', { name: freshPou.data.name })
-        freshPou.data.variablesText = undefined
+        console.log('[PARSE] clearing variablesText via action', { name: freshPou.data.name })
+        clearPouVariablesText(editor.meta.name)
       }
 
       console.log('[VE] commitCode success', { result: true })
