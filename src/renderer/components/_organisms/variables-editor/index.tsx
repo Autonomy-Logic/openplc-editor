@@ -205,10 +205,25 @@ const VariablesEditor = () => {
     if (editorVariables.display !== 'code') return
 
     const onDocMouseDown = (e: MouseEvent) => {
-      if (!containerRef.current) return
+      console.log('[AUTO-PARSE] mousedown detected')
+
+      if (!containerRef.current) {
+        console.log('[AUTO-PARSE] no containerRef, returning')
+        return
+      }
 
       const isInside = containerRef.current.contains(e.target as Node)
+      console.log('[AUTO-PARSE] isInside:', isInside)
       if (isInside) return
+
+      console.log('[AUTO-PARSE] guards check:', {
+        confirmRenameBlocksOpen,
+        typeChangeModalOpen,
+        isParsingRef: isParsingRef.current,
+        editorCode: editorCode.substring(0, 50),
+        lastParsedCode: lastParsedCodeRef.current.substring(0, 50),
+        codesEqual: editorCode === lastParsedCodeRef.current,
+      })
 
       if (confirmRenameBlocksOpen || typeChangeModalOpen) return
 
@@ -216,11 +231,13 @@ const VariablesEditor = () => {
 
       if (editorCode === lastParsedCodeRef.current) return
 
+      console.log('[AUTO-PARSE] calling commitCode')
       isParsingRef.current = true
 
       void commitCodeRef
         .current()
         .then((ok) => {
+          console.log('[AUTO-PARSE] commitCode result:', ok)
           if (ok) {
             lastParsedCodeRef.current = editorCode
           }
@@ -646,11 +663,25 @@ const VariablesEditor = () => {
 
   const commitCode = async (): Promise<boolean> => {
     try {
+      console.log('[COMMIT-CODE] starting', {
+        editorType: editor.type,
+        editorMeta: editor.meta,
+      })
+
       addSnapshot(editor.meta.name)
 
       const language = 'language' in editor.meta ? editor.meta.language : undefined
 
-      if (!language) return false
+      console.log('[COMMIT-CODE] language detection', {
+        hasLanguageInMeta: 'language' in editor.meta,
+        language,
+        editorType: editor.type,
+      })
+
+      if (!language) {
+        console.log('[COMMIT-CODE] no language, returning false')
+        return false
+      }
 
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
 
