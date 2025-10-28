@@ -12,7 +12,7 @@ const classToVarBlock: Record<string, string> = {
 
 export const generateIecVariablesToString = (variables: PLCVariable[]): string => {
   if (!variables || variables.length === 0) {
-    return '(* No variables declared. *)'
+    return 'VAR\nEND_VAR'
   }
 
   const groupedVariables = variables.reduce(
