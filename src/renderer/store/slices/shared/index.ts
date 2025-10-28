@@ -943,13 +943,6 @@ export const createSharedSlice: StateCreator<
           const variablesText = hasVariablesText
             ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
             : undefined
-          console.log('[OPEN-PROJECT] loaded POU', {
-            name: pou.data.name,
-            type: pou.type,
-            hasVariablesText,
-            variablesTextLen: variablesText?.length,
-            variablesTextPreview: variablesText?.substring(0, 60),
-          })
         })
 
         const ladderPous = pous.filter((pou) => pou.data.language === 'ld')
@@ -1335,11 +1328,6 @@ export const createSharedSlice: StateCreator<
         if (!ed) return p
 
         const codeLen = ed.variable.display === 'code' ? ed.variable.code?.length : undefined
-        console.log('[SAVE-PROJECT][renderer] processing POU', {
-          pouName: p.data.name,
-          display: ed.variable.display,
-          codeLen,
-        })
 
         if (ed.variable.display === 'code') {
           const pouWithText = {
@@ -1349,10 +1337,6 @@ export const createSharedSlice: StateCreator<
               variablesText: ed.variable.code ?? '',
             },
           } as typeof p
-          console.log('[SAVE-PROJECT][renderer] pouWithText variablesText', {
-            present: Object.prototype.hasOwnProperty.call(pouWithText.data, 'variablesText'),
-            len: pouWithText.data.variablesText?.length,
-          })
           return pouWithText
         } else {
           const { variablesText, ...restData } = p.data as typeof p.data & { variablesText?: string }
@@ -1360,9 +1344,6 @@ export const createSharedSlice: StateCreator<
             type: p.type,
             data: restData,
           } as typeof p
-          console.log('[SAVE-PROJECT][renderer] pouWithoutText (table mode)', {
-            present: Object.prototype.hasOwnProperty.call(pouWithoutText.data, 'variablesText'),
-          })
           return pouWithoutText
         }
       })
