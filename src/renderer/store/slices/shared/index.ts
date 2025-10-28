@@ -1511,11 +1511,29 @@ export const createSharedSlice: StateCreator<
               codeLen,
             })
 
+            console.log('[SAVE][renderer] pou.data immutability check', {
+              isFrozen: Object.isFrozen(pou.data),
+              isSealed: Object.isSealed(pou.data),
+              isExtensible: Object.isExtensible(pou.data),
+            })
+
             if (editor.variable.display === 'code') {
+              const cachedData = pou.data
+              cachedData.variablesText = editor.variable.code
+              console.log('[SAVE][renderer] after assignment to cached ref', {
+                presentOnCached: Object.prototype.hasOwnProperty.call(cachedData, 'variablesText'),
+                lenOnCached: cachedData.variablesText?.length,
+                presentOnPou: Object.prototype.hasOwnProperty.call(pou.data, 'variablesText'),
+                lenOnPou: pou.data.variablesText?.length,
+                sameReference: cachedData === pou.data,
+              })
+
               pou.data.variablesText = editor.variable.code
-              console.log('[SAVE][renderer] set variablesText', {
+              console.log('[SAVE][renderer] after direct assignment', {
                 present: Object.prototype.hasOwnProperty.call(pou.data, 'variablesText'),
                 len: pou.data.variablesText?.length,
+                inOperator: 'variablesText' in pou.data,
+                inKeys: Object.keys(pou.data).includes('variablesText'),
               })
             } else {
               pou.data.variablesText = undefined
