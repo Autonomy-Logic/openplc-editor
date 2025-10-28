@@ -18,6 +18,7 @@ type CppPouData = {
 type ProjectDataWithCpp = PLCProjectData & {
   originalCppPous?: CppPouData[]
 }
+import { wrapUnsupportedComments } from '@root/utils/PLC/wrap-unsupported-comments'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '@root/utils/python/generateSTCode'
@@ -107,6 +108,23 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.data.body.language === 'python')
 
     let processedProjectData: PLCProjectData = projectData
+
+    processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
+      if (pou.data.body.language === 'st' || pou.data.body.language === 'il') {
+        const wrappedValue = wrapUnsupportedComments(pou.data.body.value)
+        return {
+          ...pou,
+          data: {
+            ...pou.data,
+            body: {
+              language: pou.data.body.language,
+              value: wrappedValue,
+            },
+          },
+        } as PLCPou
+      }
+      return pou
+    })
 
     if (hasPythonCode) {
       const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'python')
@@ -518,6 +536,23 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.data.body.language === 'python')
       let processedProjectData: PLCProjectData = projectData
+
+      processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
+        if (pou.data.body.language === 'st' || pou.data.body.language === 'il') {
+          const wrappedValue = wrapUnsupportedComments(pou.data.body.value)
+          return {
+            ...pou,
+            data: {
+              ...pou.data,
+              body: {
+                language: pou.data.body.language,
+                value: wrappedValue,
+              },
+            },
+          } as PLCPou
+        }
+        return pou
+      })
 
       if (hasPythonCode) {
         const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'python')
