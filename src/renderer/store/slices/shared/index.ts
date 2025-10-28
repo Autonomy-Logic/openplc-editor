@@ -938,6 +938,20 @@ export const createSharedSlice: StateCreator<
         // Set pous
         getState().projectActions.setPous(pous)
 
+        pous.forEach((pou) => {
+          const hasVariablesText = Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')
+          const variablesText = hasVariablesText
+            ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+            : undefined
+          console.log('[OPEN-PROJECT] loaded POU', {
+            name: pou.data.name,
+            type: pou.type,
+            hasVariablesText,
+            variablesTextLen: variablesText?.length,
+            variablesTextPreview: variablesText?.substring(0, 60),
+          })
+        })
+
         const ladderPous = pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length)
           ladderPous.forEach((pou) => {
@@ -1414,34 +1428,68 @@ export const createSharedSlice: StateCreator<
       // Define editor model at the editor slice
       let editor = getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name)
 
+      const editorExists = !!editor
+      console.log('[OPEN][renderer] editor exists?', {
+        name,
+        exists: editorExists,
+        currentDisplay:
+          editor && (editor.type === 'plc-textual' || editor.type === 'plc-graphical')
+            ? editor.variable.display
+            : 'N/A',
+        currentCodeLen:
+          editor &&
+          (editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
+          editor.variable.display === 'code'
+            ? editor.variable.code?.length
+            : 'N/A',
+      })
+
       if (!editor) {
         editor = CreateEditorObjectFromTab(editorTabToBeCreated)
-
-        // Check if POU has unparsed variablesText and initialize in code mode
-        if (
-          elementType.type === 'program' ||
-          elementType.type === 'function' ||
-          elementType.type === 'function-block'
-        ) {
-          const pou = getState().project.data.pous.find((p) => p.data.name === name)
-          if (pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')) {
-            if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-              console.log('[OPEN][renderer] init variables editor from variablesText', {
-                mode: 'code',
-                codeLen: pou.data.variablesText?.length,
-              })
-              editor.variable = {
-                ...editor.variable,
-                display: 'code',
-                code: pou.data.variablesText ?? '',
-              }
-            }
-          }
-        }
       }
 
       getState().editorActions.addModel(editor)
       getState().editorActions.setEditor(editor)
+
+      // Check if POU has unparsed variablesText and initialize in code mode
+      if (elementType.type === 'program' || elementType.type === 'function' || elementType.type === 'function-block') {
+        const pou = getState().project.data.pous.find((p) => p.data.name === name)
+        const hasVariablesText = pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')
+        const variablesText = hasVariablesText
+          ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+          : undefined
+
+        console.log('[OPEN][renderer] checking variablesText', {
+          name,
+          hasVariablesText,
+          variablesTextLen: variablesText?.length,
+          variablesTextPreview: variablesText?.substring(0, 60),
+        })
+
+        if (hasVariablesText && variablesText !== undefined) {
+          console.log('[OPEN][renderer] calling updateModelVariables with code mode', {
+            name,
+            codeLen: variablesText.length,
+          })
+          getState().editorActions.updateModelVariables({
+            display: 'code',
+            code: variablesText,
+          })
+          const currentEditor = getState().editor
+          console.log('[OPEN][renderer] after updateModelVariables', {
+            name,
+            newDisplay:
+              currentEditor.type === 'plc-textual' || currentEditor.type === 'plc-graphical'
+                ? currentEditor.variable.display
+                : 'N/A',
+            newCodeLen:
+              (currentEditor.type === 'plc-textual' || currentEditor.type === 'plc-graphical') &&
+              currentEditor.variable.display === 'code'
+                ? currentEditor.variable.code?.length
+                : 'N/A',
+          })
+        }
+      }
 
       // Define tab at the tabs slice
       getState().tabsActions.updateTabs(editorTabToBeCreated)

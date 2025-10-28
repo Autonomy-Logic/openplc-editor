@@ -33,7 +33,11 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
       description?: string
       code?: string
-    }) =>
+    }) => {
+      console.log('[EDITOR][updateModelVariables]', {
+        display: variables.display,
+        codeLen: variables.code?.length,
+      })
       setState(
         produce((state: EditorState) => {
           const { editor } = state
@@ -83,7 +87,8 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
             }
           }
         }),
-      ),
+      )
+    },
 
     updateModelTasks: (tasks: { selectedRow?: number; display: 'code' | 'table' }) =>
       setState(

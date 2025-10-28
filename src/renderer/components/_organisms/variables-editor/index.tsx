@@ -875,6 +875,17 @@ const VariablesEditor = () => {
     console.log('[VE] mount', { initialDisplay: editorVariables.display })
   }, [])
 
+  console.log('[VE] render', {
+    display: editorVariables.display,
+    codeLen: editorCode.length,
+    editorType: editor.type,
+    editorDisplay: editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.variable.display : 'N/A',
+    editorCodeLen:
+      (editor.type === 'plc-textual' || editor.type === 'plc-graphical') && editor.variable.display === 'code'
+        ? editor.variable.code?.length
+        : 'N/A',
+  })
+
   return (
     <>
       {confirmRenameBlocksOpen && renameImpactData && (
