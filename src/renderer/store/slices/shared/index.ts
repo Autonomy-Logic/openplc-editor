@@ -1292,6 +1292,19 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      // Sync unparsed variable text from editors to POUs before saving
+      const editors = getState().editors
+      for (const editor of editors) {
+        if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+          if (editor.variable.display === 'code') {
+            const pou = projectData.data.data.pous.find((p) => p.data.name === editor.meta.name)
+            if (pou && 'variablesText' in pou.data) {
+              pou.data.variablesText = editor.variable.code
+            }
+          }
+        }
+      }
+
       // Remove the POU from the project data before saving
       // This is because the POU data is not needed in the project file
       // and it is stored in the filesystem
@@ -1351,9 +1364,30 @@ export const createSharedSlice: StateCreator<
       }
 
       // Define editor model at the editor slice
-      const editor =
-        getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name) ||
-        CreateEditorObjectFromTab(editorTabToBeCreated)
+      let editor = getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name)
+
+      if (!editor) {
+        editor = CreateEditorObjectFromTab(editorTabToBeCreated)
+
+        // Check if POU has unparsed variablesText and initialize in code mode
+        if (
+          elementType.type === 'program' ||
+          elementType.type === 'function' ||
+          elementType.type === 'function-block'
+        ) {
+          const pou = getState().project.data.pous.find((p) => p.data.name === name)
+          if (pou && 'variablesText' in pou.data && pou.data.variablesText) {
+            if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+              editor.variable = {
+                ...editor.variable,
+                display: 'code',
+                code: pou.data.variablesText,
+              }
+            }
+          }
+        }
+      }
+
       getState().editorActions.addModel(editor)
       getState().editorActions.setEditor(editor)
 
@@ -1429,9 +1463,18 @@ export const createSharedSlice: StateCreator<
       switch (file.type) {
         case 'function':
         case 'function-block':
-        case 'program':
-          saveContent = getState().project.data.pous.find((pou) => pou.data.name === name)
+        case 'program': {
+          // Sync unparsed variable text from editor to POU before saving
+          const editor = getState().editorActions.getEditorFromEditors(name)
+          const pou = getState().project.data.pous.find((pou) => pou.data.name === name)
+          if (pou && editor && (editor.type === 'plc-textual' || editor.type === 'plc-graphical')) {
+            if (editor.variable.display === 'code' && 'variablesText' in pou.data) {
+              pou.data.variablesText = editor.variable.code
+            }
+          }
+          saveContent = pou
           break
+        }
         case 'device': {
           const deviceConfiguration = deviceConfigurationSchema.safeParse(getState().deviceDefinitions.configuration)
           if (!deviceConfiguration.success) {

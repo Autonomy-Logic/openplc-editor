@@ -813,6 +813,10 @@ const VariablesEditor = () => {
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
+      if (freshPou && 'variablesText' in freshPou.data) {
+        freshPou.data.variablesText = undefined
+      }
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
