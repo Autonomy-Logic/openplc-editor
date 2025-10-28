@@ -18,6 +18,21 @@ import type {
   TabsSlice,
   WorkspaceSlice,
 } from './slices'
+
+export type RootState = WorkspaceSlice &
+  EditorSlice &
+  TabsSlice &
+  FBDFlowSlice &
+  LadderFlowSlice &
+  SearchSlice &
+  SharedSlice &
+  LibrarySlice &
+  ProjectSlice &
+  ConsoleSlice &
+  ModalSlice &
+  FileSlice &
+  DeviceSlice &
+  HistorySlice
 import {
   createConsoleSlice,
   createDeviceSlice,

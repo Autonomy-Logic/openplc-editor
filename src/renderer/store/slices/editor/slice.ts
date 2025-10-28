@@ -1,8 +1,9 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { RootState } from '../../index'
 import type { EditorSlice, EditorState } from './types'
-export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState, getState) => ({
+export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (setState, getState) => ({
   editors: [],
   editor: {
     type: 'available',
@@ -248,22 +249,20 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       )
 
       if (newEditor.type === 'plc-textual' || newEditor.type === 'plc-graphical') {
-        const fullState = getState()
-        const projectState = 'project' in fullState ? fullState.project : null
-        const pous = projectState?.data?.pous
-        if (pous) {
-          const pou = pous.find((p) => p.data.name === newEditor.meta.name)
-          if (pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')) {
-            const variablesText = pou.data.variablesText
-            console.log('[SET-EDITOR] seed from variablesText', {
-              name: newEditor.meta.name,
-              codeLen: variablesText?.length,
-            })
-            getState().editorActions.updateModelVariables({
-              display: 'code',
-              code: variablesText ?? '',
-            })
-          }
+        const { project } = getState()
+        const pous = project.data.pous
+        type Pou = (typeof pous)[number]
+        const pou = pous.find((p: Pou) => p.data.name === newEditor.meta.name)
+        if (pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')) {
+          const variablesText = (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+          console.log('[SET-EDITOR] seed from variablesText', {
+            name: newEditor.meta.name,
+            codeLen: variablesText?.length,
+          })
+          getState().editorActions.updateModelVariables({
+            display: 'code',
+            code: variablesText ?? '',
+          })
         }
       }
     },
