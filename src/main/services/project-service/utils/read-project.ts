@@ -164,13 +164,12 @@ function detectPouTypeFromPath(filePath: string): string {
  */
 function findLastEndVarIndex(content: string, startIndex: number): number {
   let lastEndVarIndex = -1
-  let searchIndex = startIndex
+  const regex = /\bEND_VAR\b/gi
+  regex.lastIndex = startIndex
 
-  let endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
-  while (endVarMatch && endVarMatch.index !== undefined) {
-    lastEndVarIndex = searchIndex + endVarMatch.index + endVarMatch[0].length
-    searchIndex = lastEndVarIndex
-    endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(content)) !== null) {
+    lastEndVarIndex = match.index + match[0].length
   }
 
   return lastEndVarIndex
@@ -404,7 +403,7 @@ function readDirectoryRecursive(
               projectFiles[entryKey] = fallbackPou
               pouNameMap.set(pouName, { key: entryKey, isTextBased })
             } catch {
-              // Skip POUs that fail fallback creation
+              // Intentionally skip POUs that cannot be parsed and also fail fallback creation
             }
           }
         }
@@ -421,7 +420,7 @@ function readDirectoryRecursive(
             projectFiles[entryKey] = fallbackPou
             pouNameMap.set(pouName, { key: entryKey, isTextBased })
           } catch {
-            // Skip POUs that fail fallback creation (important-comment)
+            // Intentionally skip POUs that cannot be parsed and also fail fallback creation
           }
         }
       }
@@ -500,7 +499,7 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
           project.data.pous = []
           await promises.writeFile(join(basePath, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
         } catch {
-          // Continue if clearing POUs array fails
+          // Intentionally continue if clearing POUs array fails to allow partial migration
         }
       }
     }
