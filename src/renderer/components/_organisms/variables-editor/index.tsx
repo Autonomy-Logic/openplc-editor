@@ -814,6 +814,7 @@ const VariablesEditor = () => {
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
       if (freshPou && 'variablesText' in freshPou.data) {
+        console.log('[PARSE] clearing variablesText after successful commit', { name: freshPou.data.name })
         freshPou.data.variablesText = undefined
       }
 

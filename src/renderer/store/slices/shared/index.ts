@@ -1315,10 +1315,24 @@ export const createSharedSlice: StateCreator<
       const editors = getState().editors
       for (const editor of editors) {
         if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-          if (editor.variable.display === 'code') {
-            const pou = projectData.data.data.pous.find((p) => p.data.name === editor.meta.name)
-            if (pou && 'variablesText' in pou.data) {
+          const codeLen = editor.variable.display === 'code' ? editor.variable.code?.length : undefined
+          console.log('[SAVE-PROJECT][renderer] syncing editor -> POU', {
+            editorName: editor.meta.name,
+            display: editor.variable.display,
+            codeLen,
+          })
+
+          const pou = projectData.data.data.pous.find((p) => p.data.name === editor.meta.name)
+          if (pou) {
+            if (editor.variable.display === 'code') {
               pou.data.variablesText = editor.variable.code
+              console.log('[SAVE-PROJECT][renderer] set variablesText', {
+                present: Object.prototype.hasOwnProperty.call(pou.data, 'variablesText'),
+                len: pou.data.variablesText?.length,
+              })
+            } else {
+              pou.data.variablesText = undefined
+              console.log('[SAVE-PROJECT][renderer] delete variablesText, using table serialization')
             }
           }
         }
@@ -1486,12 +1500,26 @@ export const createSharedSlice: StateCreator<
         case 'function':
         case 'function-block':
         case 'program': {
-          // Sync unparsed variable text from editor to POU before saving
+          console.log('[SAVE][renderer] start', { name, type: file.type })
           const editor = getState().editorActions.getEditorFromEditors(name)
           const pou = getState().project.data.pous.find((pou) => pou.data.name === name)
+
           if (pou && editor && (editor.type === 'plc-textual' || editor.type === 'plc-graphical')) {
-            if (editor.variable.display === 'code' && 'variablesText' in pou.data) {
+            const codeLen = editor.variable.display === 'code' ? editor.variable.code?.length : undefined
+            console.log('[SAVE][renderer] editor state', {
+              display: editor.variable.display,
+              codeLen,
+            })
+
+            if (editor.variable.display === 'code') {
               pou.data.variablesText = editor.variable.code
+              console.log('[SAVE][renderer] set variablesText', {
+                present: Object.prototype.hasOwnProperty.call(pou.data, 'variablesText'),
+                len: pou.data.variablesText?.length,
+              })
+            } else {
+              pou.data.variablesText = undefined
+              console.log('[SAVE][renderer] delete variablesText, using table serialization')
             }
           }
 
@@ -1501,6 +1529,7 @@ export const createSharedSlice: StateCreator<
             const typeDir =
               file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
             computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
+            console.log('[SAVE][renderer] computed path', { language, computedFilePath })
           }
 
           saveContent = pou
