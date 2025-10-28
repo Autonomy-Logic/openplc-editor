@@ -1527,18 +1527,11 @@ export const createSharedSlice: StateCreator<
         case 'function':
         case 'function-block':
         case 'program': {
-          console.log('[SAVE][renderer] start', { name, type: file.type })
           const editor = getState().editorActions.getEditorFromEditors(name)
           const pou = getState().project.data.pous.find((pou) => pou.data.name === name)
 
           let pouToSave = pou
           if (pou && editor && (editor.type === 'plc-textual' || editor.type === 'plc-graphical')) {
-            const codeLen = editor.variable.display === 'code' ? editor.variable.code?.length : undefined
-            console.log('[SAVE][renderer] editor state', {
-              display: editor.variable.display,
-              codeLen,
-            })
-
             if (editor.variable.display === 'code') {
               pouToSave = {
                 type: pou.type,
@@ -1554,13 +1547,6 @@ export const createSharedSlice: StateCreator<
                 data: restData,
               } as typeof pou
             }
-
-            console.log('[SAVE][renderer] pouToSave variablesText', {
-              present: Object.prototype.hasOwnProperty.call(pouToSave.data, 'variablesText'),
-              len: pouToSave.data.variablesText?.length,
-              inOperator: 'variablesText' in pouToSave.data,
-              inKeys: Object.keys(pouToSave.data).includes('variablesText'),
-            })
           }
 
           if (pouToSave) {
@@ -1569,7 +1555,6 @@ export const createSharedSlice: StateCreator<
             const typeDir =
               file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
             computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
-            console.log('[SAVE][renderer] computed path', { language, computedFilePath })
           }
 
           saveContent = pouToSave

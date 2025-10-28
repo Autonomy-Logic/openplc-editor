@@ -43,11 +43,6 @@ export const serializeTextualPouToString = (pou: PLCPou): string => {
   const variablesString = useVariablesText
     ? data.variablesText ?? ''
     : generateIecVariablesToString(variables as VariablePLC[])
-  console.log('[SERIALIZE][textual]', {
-    language: body.language,
-    useVariablesText,
-    variablesTextLen: data.variablesText?.length,
-  })
   result += variablesString + '\n\n'
 
   result += body.value + '\n\n'
@@ -85,11 +80,6 @@ export const serializeHybridPouToString = (pou: PLCPou): string => {
   const variablesString = useVariablesText
     ? data.variablesText ?? ''
     : generateIecVariablesToString(variables as VariablePLC[])
-  console.log('[SERIALIZE][hybrid]', {
-    language: body.language,
-    useVariablesText,
-    variablesTextLen: data.variablesText?.length,
-  })
   result += variablesString + '\n'
 
   result += body.value
@@ -124,11 +114,6 @@ export const serializeGraphicalPouToString = (pou: PLCPou): string => {
   const variablesString = useVariablesText
     ? data.variablesText ?? ''
     : generateIecVariablesToString(variables as VariablePLC[])
-  console.log('[SERIALIZE][graphical]', {
-    language: body.language,
-    useVariablesText,
-    variablesTextLen: data.variablesText?.length,
-  })
   result += variablesString + '\n\n'
 
   result += JSON.stringify(body.value, null, 2) + '\n'

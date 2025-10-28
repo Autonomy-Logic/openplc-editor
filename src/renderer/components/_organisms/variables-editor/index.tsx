@@ -86,10 +86,8 @@ const VariablesEditor = () => {
       editor.variable.display === 'code' &&
       typeof editor.variable.code === 'string'
     ) {
-      console.log('[VE] init editorCode from store', { codeLen: editor.variable.code.length })
       return editor.variable.code
     }
-    console.log('[VE] init editorCode from tableData', { dataLen: tableData.length })
     return generateIecVariablesToString(tableData as VariablePLC[])
   })
   const [parseError, setParseError] = useState<string | null>(null)
@@ -119,11 +117,9 @@ const VariablesEditor = () => {
   const [editorVariables, setEditorVariables] = useState<VariablesTableType>(() => {
     if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
       if (editor.variable.display === 'code') {
-        console.log('[VE] init state from store', { display: 'code' })
         return { display: 'code' }
       }
     }
-    console.log('[VE] init state default', { display: 'table' })
     return {
       display: 'table',
       selectedRow: ROWS_NOT_SELECTED.toString(),
@@ -165,10 +161,7 @@ const VariablesEditor = () => {
 
   useEffect(() => {
     if (editorVariables.display !== 'code') {
-      console.log('[VE][tableData] setting code from table', { dataLen: tableData.length })
       setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
-    } else {
-      console.log('[VE][tableData] skipped (in code mode)', { dataLen: tableData.length })
     }
   }, [tableData, editorVariables.display])
 
@@ -250,7 +243,6 @@ const VariablesEditor = () => {
   useEffect(() => {
     if (editor.type === 'plc-textual' || editor.type === 'plc-graphical')
       if (editor.variable.display === 'table') {
-        console.log('[VE][editor] incoming table mode', { display: 'table' })
         const { classFilter, description, display, selectedRow } = editor.variable
         setEditorVariables({
           display: display,
@@ -265,10 +257,6 @@ const VariablesEditor = () => {
         )
       } else if (editor.variable.display === 'code') {
         const code = editor.variable.code
-        console.log('[VE][editor] incoming code mode', {
-          display: 'code',
-          codeLen: typeof code === 'string' ? code.length : null,
-        })
         setEditorVariables({
           display: editor.variable.display,
         })
@@ -280,11 +268,6 @@ const VariablesEditor = () => {
   }, [editor])
 
   const handleVisualizationTypeChange = async (value: 'code' | 'table') => {
-    console.log('[VE] switch', {
-      to: value,
-      currentDisplay: editorVariables.display,
-      codeLen: editorCode.length,
-    })
     if (editorVariables.display === 'code' && value === 'table') {
       const success = await commitCode()
       if (!success) return
@@ -662,7 +645,6 @@ const VariablesEditor = () => {
   }
 
   const commitCode = async (): Promise<boolean> => {
-    console.log('[VE] commitCode start', { codeLen: editorCode.length })
     try {
       addSnapshot(editor.meta.name)
 
@@ -856,11 +838,9 @@ const VariablesEditor = () => {
         clearPouVariablesText(editor.meta.name)
       }
 
-      console.log('[VE] commitCode success', { result: true })
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
-      console.log('[VE] commitCode error', { result: false, error: message })
       setParseError(message)
       toast({ title: 'Syntax error', description: message, variant: 'fail' })
       return false
@@ -870,21 +850,6 @@ const VariablesEditor = () => {
   useEffect(() => {
     commitCodeRef.current = commitCode
   }, [commitCode])
-
-  useEffect(() => {
-    console.log('[VE] mount', { initialDisplay: editorVariables.display })
-  }, [])
-
-  console.log('[VE] render', {
-    display: editorVariables.display,
-    codeLen: editorCode.length,
-    editorType: editor.type,
-    editorDisplay: editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.variable.display : 'N/A',
-    editorCodeLen:
-      (editor.type === 'plc-textual' || editor.type === 'plc-graphical') && editor.variable.display === 'code'
-        ? editor.variable.code?.length
-        : 'N/A',
-  })
 
   return (
     <>

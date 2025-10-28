@@ -1,4 +1,3 @@
-import { logger } from '@root/main/services/logger-service'
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
 import { projectDefaultFilesMapSchema, projectPouDirectories } from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
@@ -186,8 +185,6 @@ function findLastEndVarIndex(content: string, startIndex: number): number {
  * @returns A partial PLCPou with empty variables array but preserved variablesText
  */
 function createFallbackPou(content: string, language: string, pouType: string, pouName: string): PLCPou {
-  logger.info(`[read-project] Creating fallback POU for ${pouName} due to parse failure`)
-
   const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
   const documentation = docMatch ? docMatch[1].trim() : ''
   const remainingContent = docMatch ? content.slice(docMatch[0].length) : content
@@ -385,7 +382,6 @@ function readDirectoryRecursive(
       const fileExtension = extname(entry.name)
 
       if (!VALID_POU_EXTENSIONS.includes(fileExtension)) {
-        logger.debug(`[read-project] Skipping file with invalid extension: ${entryPath}`)
         continue
       }
 
@@ -395,14 +391,11 @@ function readDirectoryRecursive(
 
       if (existingEntry) {
         if (isTextBased && !existingEntry.isTextBased) {
-          logger.debug(`[read-project] Replacing JSON file with text-based file for POU: ${pouName}`)
           delete projectFiles[existingEntry.key]
           try {
             projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
             pouNameMap.set(pouName, { key: entryKey, isTextBased })
-          } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-            logger.warn(`[read-project] Failed to parse POU file ${entryPath}: ${errorMessage}. Creating fallback POU.`)
+          } catch {
             try {
               const fileContent = readFileSync(entryPath, 'utf-8')
               const pouType = detectPouTypeFromPath(entryPath)
@@ -410,26 +403,16 @@ function readDirectoryRecursive(
               const fallbackPou = createFallbackPou(fileContent, language, pouType, pouName)
               projectFiles[entryKey] = fallbackPou
               pouNameMap.set(pouName, { key: entryKey, isTextBased })
-              logger.info(
-                `[read-project] Loaded POU ${pouName} with broken variables. Editor will open in code mode for fixing.`,
-              )
-            } catch (fallbackError: unknown) {
-              const fallbackErrorMessage = fallbackError instanceof Error ? fallbackError.message : 'Unknown error'
-              logger.error(`[read-project] Failed to create fallback POU for ${entryPath}: ${fallbackErrorMessage}`)
+            } catch {
+              // Skip POUs that fail fallback creation
             }
           }
-        } else if (!isTextBased && existingEntry.isTextBased) {
-          logger.debug(`[read-project] Skipping JSON file, text-based file already loaded for POU: ${pouName}`)
-        } else {
-          logger.debug(`[read-project] Duplicate POU file found: ${entryPath}`)
         }
       } else {
         try {
           projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
           pouNameMap.set(pouName, { key: entryKey, isTextBased })
-        } catch (error: unknown) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          logger.warn(`[read-project] Failed to parse POU file ${entryPath}: ${errorMessage}. Creating fallback POU.`)
+        } catch {
           try {
             const fileContent = readFileSync(entryPath, 'utf-8')
             const pouType = detectPouTypeFromPath(entryPath)
@@ -437,12 +420,8 @@ function readDirectoryRecursive(
             const fallbackPou = createFallbackPou(fileContent, language, pouType, pouName)
             projectFiles[entryKey] = fallbackPou
             pouNameMap.set(pouName, { key: entryKey, isTextBased })
-            logger.info(
-              `[read-project] Loaded POU ${pouName} with broken variables. Editor will open in code mode for fixing.`,
-            )
-          } catch (fallbackError: unknown) {
-            const fallbackErrorMessage = fallbackError instanceof Error ? fallbackError.message : 'Unknown error'
-            logger.error(`[read-project] Failed to create fallback POU for ${entryPath}: ${fallbackErrorMessage}`)
+          } catch {
+            // Skip POUs that fail fallback creation (important-comment)
           }
         }
       }
@@ -472,9 +451,7 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     const filePath = join(basePath, fileName)
     try {
       projectFiles[fileName] = readAndParseFile(filePath, fileName, schema)
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      logger.warn(`[read-project] Failed to parse ${fileName}: ${errorMessage}. Using default values.`)
+    } catch {
       projectFiles[fileName] = getDefaultSchemaValues(schema)
     }
   }
@@ -506,42 +483,24 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
               await promises.mkdir(dirname(pouFilePath), { recursive: true })
               const textContent = serializePouToText(pou)
               await promises.writeFile(pouFilePath, textContent, 'utf-8')
-              logger.info(`[read-project] Migrated POU ${pou.data.name} to text-code format: ${pouFilePath}`)
             }
             pouFiles[join('pous', pouType, `${pou.data.name}${extension}`)] = pou
             return { success: true, pouName: pou.data.name }
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-            logger.error(`[read-project] Failed to migrate POU file ${pouFilePath}: ${errorMessage}`)
             return { success: false, pouName: pou.data.name, error: errorMessage }
           }
         }),
       )
 
       const successfulMigrations = migrationResults.filter((r) => r.status === 'fulfilled' && r.value.success)
-      const failedMigrations = migrationResults.filter(
-        (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success),
-      )
-
-      if (failedMigrations.length > 0) {
-        const failedNames = failedMigrations
-          .map((r) => (r.status === 'fulfilled' ? r.value.pouName : 'unknown'))
-          .join(', ')
-        logger.warn(
-          `[read-project] Legacy migration partially failed: ${failedMigrations.length} POUs failed to migrate (${failedNames}). Keeping embedded POUs in project.json for retry.`,
-        )
-      }
 
       if (successfulMigrations.length === project.data.pous.length) {
         try {
           project.data.pous = []
           await promises.writeFile(join(basePath, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
-          logger.info(
-            `[read-project] Legacy migration completed successfully: All ${successfulMigrations.length} POUs migrated to text-code format and cleared from project.json`,
-          )
-        } catch (error: unknown) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          logger.error(`[read-project] Failed to clear POUs array from project.json: ${errorMessage}`)
+        } catch {
+          // Continue if clearing POUs array fails
         }
       }
     }

@@ -354,17 +354,6 @@ class ProjectService {
           actualFilePath = filePath.replace(/\.json$/, extension)
         }
 
-        console.log('[SAVE][main] serializing POU', {
-          name: pou.data.name,
-          type: pou.type,
-          language: pou.data.body.language,
-          filePath: actualFilePath,
-        })
-        console.log('[SAVE][main] variablesText presence', {
-          present: Object.prototype.hasOwnProperty.call(pou.data, 'variablesText'),
-          len: pou.data.variablesText?.length,
-        })
-
         const textContent = serializePouToText(pou)
         await promises.writeFile(actualFilePath, textContent, 'utf-8')
       } else {
