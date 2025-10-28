@@ -853,7 +853,6 @@ const VariablesEditor = () => {
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
       if (freshPou && 'variablesText' in freshPou.data) {
-        console.log('[PARSE] clearing variablesText via action', { name: freshPou.data.name })
         clearPouVariablesText(editor.meta.name)
       }
 

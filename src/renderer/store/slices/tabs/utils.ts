@@ -128,11 +128,6 @@ const CreateDeviceEditor = (name = 'device', derivation: 'configuration'): Edito
 
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
-  console.log('[CREATE-EDITOR]', {
-    name,
-    type: elementType.type,
-    initialDisplay: 'table',
-  })
   switch (elementType.type) {
     case 'program':
       return CreateEditorModelObject(name, elementType.language, 'program')

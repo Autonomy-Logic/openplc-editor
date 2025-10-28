@@ -1408,12 +1408,6 @@ export const createSharedSlice: StateCreator<
 
     // =========== File operations ===========
     openFile: ({ name, path, elementType }: TabsProps) => {
-      console.log('[OPEN][renderer] start', {
-        name,
-        type: elementType.type,
-        path,
-      })
-
       const editorTabToBeCreated = { name, path, elementType }
 
       if (!editorTabToBeCreated.path) {
@@ -1434,22 +1428,6 @@ export const createSharedSlice: StateCreator<
       // Define editor model at the editor slice
       let editor = getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name)
 
-      const editorExists = !!editor
-      console.log('[OPEN][renderer] editor exists?', {
-        name,
-        exists: editorExists,
-        currentDisplay:
-          editor && (editor.type === 'plc-textual' || editor.type === 'plc-graphical')
-            ? editor.variable.display
-            : 'N/A',
-        currentCodeLen:
-          editor &&
-          (editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
-          editor.variable.display === 'code'
-            ? editor.variable.code?.length
-            : 'N/A',
-      })
-
       if (!editor) {
         editor = CreateEditorObjectFromTab(editorTabToBeCreated)
       }
@@ -1465,34 +1443,10 @@ export const createSharedSlice: StateCreator<
           ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
           : undefined
 
-        console.log('[OPEN][renderer] checking variablesText', {
-          name,
-          hasVariablesText,
-          variablesTextLen: variablesText?.length,
-          variablesTextPreview: variablesText?.substring(0, 60),
-        })
-
         if (hasVariablesText && variablesText !== undefined) {
-          console.log('[OPEN][renderer] calling updateModelVariables with code mode', {
-            name,
-            codeLen: variablesText.length,
-          })
           getState().editorActions.updateModelVariables({
             display: 'code',
             code: variablesText,
-          })
-          const currentEditor = getState().editor
-          console.log('[OPEN][renderer] after updateModelVariables', {
-            name,
-            newDisplay:
-              currentEditor.type === 'plc-textual' || currentEditor.type === 'plc-graphical'
-                ? currentEditor.variable.display
-                : 'N/A',
-            newCodeLen:
-              (currentEditor.type === 'plc-textual' || currentEditor.type === 'plc-graphical') &&
-              currentEditor.variable.display === 'code'
-                ? currentEditor.variable.code?.length
-                : 'N/A',
           })
         }
       }
