@@ -1424,12 +1424,16 @@ export const createSharedSlice: StateCreator<
           elementType.type === 'function-block'
         ) {
           const pou = getState().project.data.pous.find((p) => p.data.name === name)
-          if (pou && 'variablesText' in pou.data && pou.data.variablesText) {
+          if (pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')) {
             if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+              console.log('[OPEN][renderer] init variables editor from variablesText', {
+                mode: 'code',
+                codeLen: pou.data.variablesText?.length,
+              })
               editor.variable = {
                 ...editor.variable,
                 display: 'code',
-                code: pou.data.variablesText,
+                code: pou.data.variablesText ?? '',
               }
             }
           }
