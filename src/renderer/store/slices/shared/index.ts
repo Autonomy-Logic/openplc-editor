@@ -19,6 +19,25 @@ import { generateIecVariablesToString } from '@root/utils/generate-iec-variables
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
 import { StateCreator } from 'zustand'
 
+const getExtensionFromLanguage = (language: string): string => {
+  switch (language) {
+    case 'st':
+      return '.st'
+    case 'il':
+      return '.il'
+    case 'ld':
+      return '.ld'
+    case 'fbd':
+      return '.fbd'
+    case 'python':
+      return '.py'
+    case 'cpp':
+      return '.cpp'
+    default:
+      return '.txt'
+  }
+}
+
 import { ConsoleSlice } from '../console'
 import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } from '../device'
 import { EditorModel, EditorSlice } from '../editor'
@@ -1459,7 +1478,10 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      const projectFilePath = getState().project.meta.path
       let saveContent: PLCProject | PLCPou | DeviceState['deviceDefinitions'] | undefined
+      let computedFilePath: string | undefined
+
       switch (file.type) {
         case 'function':
         case 'function-block':
@@ -1472,6 +1494,15 @@ export const createSharedSlice: StateCreator<
               pou.data.variablesText = editor.variable.code
             }
           }
+
+          if (pou) {
+            const language = pou.data.body.language
+            const extension = getExtensionFromLanguage(language)
+            const typeDir =
+              file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+            computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
+          }
+
           saveContent = pou
           break
         }
@@ -1565,8 +1596,9 @@ export const createSharedSlice: StateCreator<
         }
       }
 
-      const projectFilePath = getState().project.meta.path
-      const filePath = file.filePath.includes(projectFilePath) ? file.filePath : `${projectFilePath}${file.filePath}`
+      const filePath =
+        computedFilePath ||
+        (file.filePath.includes(projectFilePath) ? file.filePath : `${projectFilePath}${file.filePath}`)
 
       let saveResponse: { success: boolean; error?: string }
       switch (file.type) {
