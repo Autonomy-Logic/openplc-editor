@@ -216,7 +216,16 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       )
     },
 
-    setEditor: (newEditor) =>
+    setEditor: (newEditor) => {
+      const oldEditor = getState().editor
+      console.log('[SET-EDITOR] set', {
+        from: oldEditor.meta.name,
+        to: newEditor.meta.name,
+        type: newEditor.type,
+        display:
+          newEditor.type === 'plc-textual' || newEditor.type === 'plc-graphical' ? newEditor.variable.display : 'N/A',
+      })
+
       setState(
         produce((state: EditorState) => {
           /**
@@ -236,7 +245,28 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
 
           state.editor = newEditor
         }),
-      ),
+      )
+
+      if (newEditor.type === 'plc-textual' || newEditor.type === 'plc-graphical') {
+        const fullState = getState()
+        const projectState = 'project' in fullState ? fullState.project : null
+        const pous = projectState?.data?.pous
+        if (pous) {
+          const pou = pous.find((p) => p.data.name === newEditor.meta.name)
+          if (pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')) {
+            const variablesText = pou.data.variablesText
+            console.log('[SET-EDITOR] seed from variablesText', {
+              name: newEditor.meta.name,
+              codeLen: variablesText?.length,
+            })
+            getState().editorActions.updateModelVariables({
+              display: 'code',
+              code: variablesText ?? '',
+            })
+          }
+        }
+      }
+    },
     clearEditor: () =>
       setState(
         produce((state: EditorState) => {

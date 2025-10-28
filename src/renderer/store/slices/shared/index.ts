@@ -1408,6 +1408,12 @@ export const createSharedSlice: StateCreator<
 
     // =========== File operations ===========
     openFile: ({ name, path, elementType }: TabsProps) => {
+      console.log('[OPEN][renderer] start', {
+        name,
+        type: elementType.type,
+        path,
+      })
+
       const editorTabToBeCreated = { name, path, elementType }
 
       if (!editorTabToBeCreated.path) {

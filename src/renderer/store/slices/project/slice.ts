@@ -55,6 +55,19 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
     },
     setPous: (pous): void => {
+      pous.forEach((pou) => {
+        const hasVariablesText = Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')
+        const variablesText = hasVariablesText
+          ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+          : undefined
+        console.log('[PROJECT][setPous]', {
+          name: pou.data.name,
+          type: pou.type,
+          hasVariablesText,
+          variablesTextLen: variablesText?.length,
+          variablesTextPreview: variablesText?.substring(0, 60),
+        })
+      })
       setState(
         produce(({ project }: ProjectSlice) => {
           project.data.pous = pous as typeof project.data.pous

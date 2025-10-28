@@ -9,6 +9,7 @@ export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setS
 
   tabsActions: {
     updateTabs: (tab) => {
+      console.log('[TABS] updateTabs', { name: tab.name, type: tab.elementType.type })
       let updatedTabs: TabsProps[] = []
       setState(
         produce((slice: TabsSlice) => {
@@ -58,6 +59,7 @@ export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setS
       )
     },
     setSelectedTab: (tabName) => {
+      console.log('[TABS] setSelectedTab', { name: tabName })
       setState(
         produce((slice: TabsSlice) => {
           slice.selectedTab = tabName
