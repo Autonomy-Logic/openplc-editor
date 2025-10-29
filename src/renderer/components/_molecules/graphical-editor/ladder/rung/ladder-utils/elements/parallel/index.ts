@@ -1,6 +1,7 @@
 import { checkIfElementIsNode, nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/ladder'
 import { BlockNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
 import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
+import { DEFAULT_PARALLEL_CONNECTOR_Y } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/placeholder'
 import type { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 import type { RungLadderState } from '@root/renderer/store/slices'
@@ -8,7 +9,7 @@ import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-
 import type { Edge, Node } from '@xyflow/react'
 
 import { buildEdge, connectNodes, removeEdge } from '../../edges'
-import { buildGenericNode, isNodeOfType, removeNode } from '../../nodes'
+import { buildGenericNode, getDefaultNodeStyle, isNodeOfType, removeNode } from '../../nodes'
 import { removePlaceholderElements } from '../placeholder'
 import {
   getElementPositionBasedOnPlaceholderElement,
@@ -48,14 +49,21 @@ export const startParallelConnection = <T>(
   if (!aboveElementTargetEdges || !aboveElementSourceEdges) return { nodes: newNodes, edges: newEdges }
 
   /**
-   * Build the parallel open node based on the node that antecede the above node
-   * or the above node itself
+   * Build the parallel open node based on the above element's input connector position
+   * This ensures all parallel branches align vertically at the same X coordinate
    */
-  const openParallelPosition = getNodePositionBasedOnPreviousNode(
-    newNodes.find((node) => node.id === aboveElementTargetEdges[0].source) ?? aboveElement,
-    'parallel',
-    'serial',
-  )
+  const parallelStyle = getDefaultNodeStyle({ nodeType: 'parallel' })
+  const aboveElementInputConnector = (aboveElement.data.inputConnector ?? aboveElement.data.outputConnector) as
+    | { glbPosition: { x: number; y: number } }
+    | undefined
+  const handleX = aboveElementInputConnector?.glbPosition.x ?? aboveElement.position.x
+  const handleY = aboveElementInputConnector?.glbPosition.y ?? aboveElement.position.y + (aboveElement.height || 0) / 2
+  const openParallelPosition = {
+    posX: handleX - (parallelStyle.handle.x || 0),
+    posY: handleY - DEFAULT_PARALLEL_CONNECTOR_Y,
+    handleX,
+    handleY,
+  }
   const openParallelElement = nodesBuilder.parallel({
     id: newGraphicalEditorNodeID('PARALLEL_OPEN'),
     type: 'open',
