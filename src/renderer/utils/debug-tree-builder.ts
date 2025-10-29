@@ -225,16 +225,43 @@ function buildFunctionBlockTree(
       )
       children.push(nestedFBNode)
     } else if (fbVar.type.definition === 'user-data-type') {
-      const nestedNode = expandNestedNode(
-        fbVar.name,
-        childFullPath,
-        childCompositeKey,
-        fbVar.type.value,
-        'user-data-type',
-        debugVariables,
-        project,
+      const typeNameUpper = fbVar.type.value.toUpperCase()
+      const isStandardFB = StandardFunctionBlocks.pous.some(
+        (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
       )
-      children.push(nestedNode)
+      const isCustomFB = project.data.pous.some(
+        (pou) => normalizeTypeString(pou.type) === 'functionblock' && pou.data.name.toUpperCase() === typeNameUpper,
+      )
+
+      if (DEBUG_TREE_LOGGING) {
+        console.log(
+          `  user-data-type "${fbVar.type.value}" resolved as: ${isStandardFB || isCustomFB ? 'FB' : 'struct'}`,
+        )
+      }
+
+      if (isStandardFB || isCustomFB) {
+        const nestedFBNode = expandNestedNode(
+          fbVar.name,
+          childFullPath,
+          childCompositeKey,
+          fbVar.type.value,
+          'derived',
+          debugVariables,
+          project,
+        )
+        children.push(nestedFBNode)
+      } else {
+        const nestedNode = expandNestedNode(
+          fbVar.name,
+          childFullPath,
+          childCompositeKey,
+          fbVar.type.value,
+          'user-data-type',
+          debugVariables,
+          project,
+        )
+        children.push(nestedNode)
+      }
     } else if (fbVar.type.definition === 'array') {
       const nestedNode = expandNestedNode(
         fbVar.name,
