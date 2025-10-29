@@ -100,20 +100,17 @@ const sanitizePou = (pou: PLCPou, editor: EditorModel | undefined): PLCPou => {
     return pou
   }
 
-  if (editor.variable.display === 'code') {
+  if (editor.variable.display === 'code' && editor.variable.code != null) {
     return {
       type: pou.type,
       data: {
         ...pou.data,
-        variablesText: editor.variable.code ?? '',
+        variablesText: editor.variable.code,
       },
     } as typeof pou
   } else {
-    const { variablesText, ...restData } = pou.data as typeof pou.data & { variablesText?: string }
-    return {
-      type: pou.type,
-      data: restData,
-    } as typeof pou
+    // When not in code mode or code is undefined, preserve the POU as-is without stripping variablesText
+    return pou
   }
 }
 
@@ -1319,6 +1316,11 @@ export const createSharedSlice: StateCreator<
       const editorsByName = new Map(
         editors.filter((e) => e.type === 'plc-textual' || e.type === 'plc-graphical').map((e) => [e.meta.name, e]),
       )
+
+      const activeEditor = getState().editor
+      if (activeEditor.type === 'plc-textual' || activeEditor.type === 'plc-graphical') {
+        editorsByName.set(activeEditor.meta.name, activeEditor)
+      }
 
       const sanitizedPous = projectData.data.data.pous.map((p) => {
         const ed = editorsByName.get(p.data.name)
