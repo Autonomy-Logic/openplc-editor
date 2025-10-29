@@ -1,3 +1,4 @@
+import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
 import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RungLadderState } from '@root/renderer/store/slices'
@@ -14,6 +15,7 @@ import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { addNewElement, removeElements } from './ladder-utils/elements'
 import { onElementDragOver, onElementDragStart, onElementDrop } from './ladder-utils/elements/drag-n-drop'
+import { resizeParallelBranch } from './ladder-utils/elements/parallel/resize'
 import {
   removePlaceholderElements,
   renderPlaceholderElements,
@@ -51,6 +53,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const [rungLocal, setRungLocal] = useState<RungLadderState>(rung)
   const [dragging, setDragging] = useState(false)
+  const [resizing, setResizing] = useState(false)
+  const [resizingNode, setResizingNode] = useState<ParallelNode | null>(null)
+  const [resizeStartX, setResizeStartX] = useState<number>(0)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
@@ -564,6 +569,118 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   }
 
   /**
+   * Handle the start of a parallel node resize
+   */
+  const handleResizeStart = useCallback((event: MouseEvent, node: FlowNode) => {
+    // Check if the click is on a resize handle
+    const target = event.target as HTMLElement
+    if (!target.dataset.resizeHandle) return
+
+    if (node.type !== 'parallel') return
+    const parallelNode = node as ParallelNode
+    if (parallelNode.data.type !== 'close') return
+
+    event.stopPropagation()
+    setResizing(true)
+    setResizingNode(parallelNode)
+    setResizeStartX(event.clientX)
+  }, [])
+
+  /**
+   * Handle the drag of a parallel node resize
+   */
+  const handleResizeDrag = useCallback(
+    (event: MouseEvent) => {
+      if (!resizing || !resizingNode || !reactFlowInstance) return
+
+      event.stopPropagation()
+
+      const deltaX = event.clientX - resizeStartX
+      const zoom = reactFlowInstance.getZoom()
+      const newX = resizingNode.position.x + deltaX / zoom
+
+      // Update the node position temporarily for visual feedback
+      setRungLocal((rung) => ({
+        ...rung,
+        nodes: rung.nodes.map((node) => {
+          if (node.id === resizingNode.id) {
+            return {
+              ...node,
+              position: {
+                x: newX,
+                y: node.position.y,
+              },
+            }
+          }
+          return node
+        }),
+      }))
+
+      setResizeStartX(event.clientX)
+    },
+    [resizing, resizingNode, resizeStartX, reactFlowInstance],
+  )
+
+  /**
+   * Handle the stop of a parallel node resize
+   */
+  const handleResizeStop = useCallback(
+    (event: MouseEvent) => {
+      if (!resizing || !resizingNode) return
+
+      event.stopPropagation()
+
+      const deltaX = event.clientX - resizeStartX
+      const zoom = reactFlowInstance?.getZoom() ?? 1
+      const newX = resizingNode.position.x + deltaX / zoom
+
+      const { nodes: newNodes, edges: newEdges } = resizeParallelBranch(rungLocal, resizingNode, newX)
+
+      addSnapshot(editor.meta.name)
+
+      ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
+      ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
+
+      setResizing(false)
+      setResizingNode(null)
+      setResizeStartX(0)
+    },
+    [
+      resizing,
+      resizingNode,
+      resizeStartX,
+      reactFlowInstance,
+      rungLocal,
+      editor.meta.name,
+      ladderFlowActions,
+      addSnapshot,
+    ],
+  )
+
+  /**
+   * Add global mouse event listeners for resize operations
+   */
+  useEffect(() => {
+    if (!resizing) return
+
+    const handleMouseMove = (event: globalThis.MouseEvent) => {
+      handleResizeDrag(event as unknown as MouseEvent)
+    }
+
+    const handleMouseUp = (event: globalThis.MouseEvent) => {
+      handleResizeStop(event as unknown as MouseEvent)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [resizing, handleResizeDrag, handleResizeStop])
+
+  /**
    * Handle the change of the nodes
    * This function is called every time the nodes change
    * It is used to update the local rung state
@@ -752,7 +869,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
               onInit: setReactFlowInstance,
 
               onNodesChange: onNodesChange,
-              onNodeClick: isDebuggerActive ? handleNodeClick : undefined,
+              onNodeClick: isDebuggerActive
+                ? handleNodeClick
+                : (event, node) => {
+                    handleResizeStart(event, node)
+                  },
               onNodesDelete: isDebuggerActive
                 ? undefined
                 : (nodes) => {
