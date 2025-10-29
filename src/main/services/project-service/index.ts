@@ -346,8 +346,16 @@ class ProjectService {
 
       if (isPou) {
         const pou = content as PLCPou
+
+        let actualFilePath = filePath
+        if (filePath.endsWith('.json')) {
+          const language = pou.data.body.language
+          const extension = getExtensionFromLanguage(language)
+          actualFilePath = filePath.replace(/\.json$/, extension)
+        }
+
         const textContent = serializePouToText(pou)
-        await promises.writeFile(filePath, textContent, 'utf-8')
+        await promises.writeFile(actualFilePath, textContent, 'utf-8')
       } else {
         await promises.writeFile(filePath, JSON.stringify(content, null, 2))
       }

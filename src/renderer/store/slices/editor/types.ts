@@ -11,7 +11,10 @@ const editorVariablesSchema = z.discriminatedUnion('display', [
     classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']),
     selectedRow: z.string(),
   }),
-  z.object({ display: z.literal('code') }),
+  z.object({
+    display: z.literal('code'),
+    code: z.string().optional(),
+  }),
 ])
 
 const editorGlobalVariablesSchema = z.discriminatedUnion('display', [
@@ -203,6 +206,7 @@ const _editorActionsSchema = z.object({
         selectedRow: z.number().optional(),
         classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']).optional(),
         description: z.string().optional(),
+        code: z.string().optional(),
       }),
     )
     .returns(z.void()),

@@ -152,6 +152,7 @@ const _projectActionsSchema = z.object({
   deletePou: z.function().args(z.string()).returns(z.void()),
   updatePouDocumentation: z.function().args(z.string(), z.string()).returns(z.void()),
   updatePouReturnType: z.function().args(z.string(), z.string()).returns(z.void()),
+  clearPouVariablesText: z.function().args(z.string()).returns(z.void()),
   updatePouName: z.function().args(z.string(), z.string()).returns(z.void()),
   applyPouSnapshot: z.function().args(z.string(), z.array(PLCVariableSchema), bodySchema).returns(z.void()),
 

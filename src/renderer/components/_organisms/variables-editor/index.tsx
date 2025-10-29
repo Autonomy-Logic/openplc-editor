@@ -63,6 +63,7 @@ const VariablesEditor = () => {
       rearrangeVariables,
       updatePouDocumentation,
       updatePouReturnType,
+      clearPouVariablesText,
       setPouVariables,
       updatePou,
       updateVariable,
@@ -79,7 +80,16 @@ const VariablesEditor = () => {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [returnType, setReturnType] = useState('BOOL')
   const [returnTypeOptions, setReturnTypeOptions] = useState<string[]>([])
-  const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData as VariablePLC[]))
+  const [editorCode, setEditorCode] = useState(() => {
+    if (
+      (editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
+      editor.variable.display === 'code' &&
+      typeof editor.variable.code === 'string'
+    ) {
+      return editor.variable.code
+    }
+    return generateIecVariablesToString(tableData as VariablePLC[])
+  })
   const [parseError, setParseError] = useState<string | null>(null)
   const [pouDescription, setPouDescription] = useState<string>('')
   const [confirmRenameBlocksOpen, setConfirmRenameBlocksOpen] = useState(false)
@@ -104,11 +114,18 @@ const VariablesEditor = () => {
    */
   const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
   type FilterOptionsType = (typeof FilterOptions)[number]
-  const [editorVariables, setEditorVariables] = useState<VariablesTableType>({
-    display: 'table',
-    selectedRow: ROWS_NOT_SELECTED.toString(),
-    classFilter: 'All',
-    description: '',
+  const [editorVariables, setEditorVariables] = useState<VariablesTableType>(() => {
+    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+      if (editor.variable.display === 'code') {
+        return { display: 'code' }
+      }
+    }
+    return {
+      display: 'table',
+      selectedRow: ROWS_NOT_SELECTED.toString(),
+      classFilter: 'All',
+      description: '',
+    }
   })
 
   const pou = pous.find((p) => p.data.name === editor.meta.name)
@@ -143,8 +160,81 @@ const VariablesEditor = () => {
   }, [dataTypes])
 
   useEffect(() => {
-    setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
-  }, [tableData])
+    if (editorVariables.display !== 'code') {
+      setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
+    }
+  }, [tableData, editorVariables.display])
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const latestCodeRef = useRef(editorCode)
+  const latestDisplayRef = useRef(editorVariables.display)
+  const lastParsedCodeRef = useRef(editorCode)
+  const isParsingRef = useRef(false)
+  const commitCodeRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false))
+
+  useEffect(() => {
+    latestCodeRef.current = editorCode
+    latestDisplayRef.current = editorVariables.display
+  }, [editorCode, editorVariables.display])
+
+  useEffect(() => {
+    lastParsedCodeRef.current = editorCode
+  }, [editor.meta.name])
+
+  useEffect(() => {
+    if (editorVariables.display === 'code') {
+      updateModelVariables({
+        display: 'code',
+        code: editorCode,
+      })
+    }
+  }, [editorCode, editorVariables.display, updateModelVariables])
+
+  useEffect(() => {
+    return () => {
+      if (latestDisplayRef.current === 'code') {
+        updateModelVariables({
+          display: 'code',
+          code: latestCodeRef.current,
+        })
+      }
+    }
+  }, [updateModelVariables])
+
+  useEffect(() => {
+    if (editorVariables.display !== 'code') return
+
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!containerRef.current) return
+
+      const isInside = containerRef.current.contains(e.target as Node)
+      if (isInside) return
+
+      if (confirmRenameBlocksOpen || typeChangeModalOpen) return
+
+      if (isParsingRef.current) return
+
+      if (editorCode === lastParsedCodeRef.current) return
+
+      isParsingRef.current = true
+
+      void commitCodeRef
+        .current()
+        .then((ok) => {
+          if (ok) {
+            lastParsedCodeRef.current = editorCode
+          }
+        })
+        .finally(() => {
+          isParsingRef.current = false
+        })
+    }
+
+    document.addEventListener('mousedown', onDocMouseDown, true)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown, true)
+    }
+  }, [editorVariables.display, editorCode, confirmRenameBlocksOpen, typeChangeModalOpen])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -165,10 +255,16 @@ const VariablesEditor = () => {
             ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: classFilter.toLowerCase() })
             : prev.filter((filter) => filter.id !== 'class'),
         )
-      } else
+      } else if (editor.variable.display === 'code') {
+        const code = editor.variable.code
         setEditorVariables({
           display: editor.variable.display,
         })
+        if (typeof code === 'string') {
+          setEditorCode(code)
+          // lastParsedCodeRef is only reset when POU changes (via [editor.meta.name] effect)
+        }
+      }
   }, [editor])
 
   const handleVisualizationTypeChange = async (value: 'code' | 'table') => {
@@ -179,6 +275,7 @@ const VariablesEditor = () => {
 
     updateModelVariables({
       display: value,
+      code: value === 'code' ? editorCode : undefined,
     })
   }
 
@@ -551,7 +648,12 @@ const VariablesEditor = () => {
     try {
       addSnapshot(editor.meta.name)
 
-      const language = 'language' in editor.meta ? editor.meta.language : undefined
+      let language: string | undefined
+      if (editor.type === 'plc-graphical') {
+        language = editor.graphical.language
+      } else if (editor.type === 'plc-textual') {
+        language = editor.meta.language
+      }
 
       if (!language) return false
 
@@ -737,6 +839,10 @@ const VariablesEditor = () => {
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
+      if (freshPou && 'variablesText' in freshPou.data) {
+        clearPouVariablesText(editor.meta.name)
+      }
+
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
@@ -745,6 +851,10 @@ const VariablesEditor = () => {
       return false
     }
   }
+
+  useEffect(() => {
+    commitCodeRef.current = commitCode
+  }, [commitCode])
 
   return (
     <>
@@ -783,7 +893,11 @@ const VariablesEditor = () => {
         />
       )}
 
-      <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
+      <div
+        ref={containerRef}
+        aria-label='Variables editor container'
+        className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'
+      >
         <div aria-label='Variables editor actions' className='relative flex h-8 w-full gap-4'>
           {editorVariables.display === 'table' && (
             <div aria-label='Variables editor table actions container' className='flex h-full w-full select-none gap-4'>

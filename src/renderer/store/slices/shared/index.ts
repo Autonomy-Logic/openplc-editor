@@ -17,6 +17,7 @@ import {
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
+import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
 import { StateCreator } from 'zustand'
 
 import { ConsoleSlice } from '../console'
@@ -91,6 +92,28 @@ export type SharedSlice = {
     addSnapshot: (pouName: string) => void
     undo: (pouName: string) => void
     redo: (pouName: string) => void
+  }
+}
+
+const sanitizePou = (pou: PLCPou, editor: EditorModel | undefined): PLCPou => {
+  if (!editor || (editor.type !== 'plc-textual' && editor.type !== 'plc-graphical')) {
+    return pou
+  }
+
+  if (editor.variable.display === 'code') {
+    return {
+      type: pou.type,
+      data: {
+        ...pou.data,
+        variablesText: editor.variable.code ?? '',
+      },
+    } as typeof pou
+  } else {
+    const { variablesText, ...restData } = pou.data as typeof pou.data & { variablesText?: string }
+    return {
+      type: pou.type,
+      data: restData,
+    } as typeof pou
   }
 }
 
@@ -1292,12 +1315,22 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      const editors = getState().editors
+      const editorsByName = new Map(
+        editors.filter((e) => e.type === 'plc-textual' || e.type === 'plc-graphical').map((e) => [e.meta.name, e]),
+      )
+
+      const sanitizedPous = projectData.data.data.pous.map((p) => {
+        const ed = editorsByName.get(p.data.name)
+        return sanitizePou(p, ed)
+      })
+
       // Remove the POU from the project data before saving
       // This is because the POU data is not needed in the project file
       // and it is stored in the filesystem
       // This is a workaround to avoid circular references
       // and to reduce the size of the project file
-      const pous = projectData.data.data.pous
+      const pous = sanitizedPous
       projectData.data.data.pous = []
 
       const { success, reason } = await window.bridge.saveProject({
@@ -1351,11 +1384,30 @@ export const createSharedSlice: StateCreator<
       }
 
       // Define editor model at the editor slice
-      const editor =
-        getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name) ||
-        CreateEditorObjectFromTab(editorTabToBeCreated)
+      let editor = getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name)
+
+      if (!editor) {
+        editor = CreateEditorObjectFromTab(editorTabToBeCreated)
+      }
+
       getState().editorActions.addModel(editor)
       getState().editorActions.setEditor(editor)
+
+      // Check if POU has unparsed variablesText and initialize in code mode
+      if (elementType.type === 'program' || elementType.type === 'function' || elementType.type === 'function-block') {
+        const pou = getState().project.data.pous.find((p) => p.data.name === name)
+        const hasVariablesText = pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')
+        const variablesText = hasVariablesText
+          ? (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+          : undefined
+
+        if (hasVariablesText && variablesText !== undefined) {
+          getState().editorActions.updateModelVariables({
+            display: 'code',
+            code: variablesText,
+          })
+        }
+      }
 
       // Define tab at the tabs slice
       getState().tabsActions.updateTabs(editorTabToBeCreated)
@@ -1370,9 +1422,8 @@ export const createSharedSlice: StateCreator<
       return { success: true }
     },
     closeFile: (name) => {
-      // Remove the tab from the tabs slice and the editor model from the editor slice
+      // Remove the tab from the tabs slice
       getState().tabsActions.removeTab(name)
-      getState().editorActions.removeModel(name)
 
       // Check if there are any remaining tabs
       const filteredTabs = getState().tabs
@@ -1426,13 +1477,34 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      const projectFilePath = getState().project.meta.path
       let saveContent: PLCProject | PLCPou | DeviceState['deviceDefinitions'] | undefined
+      let computedFilePath: string | undefined
+
       switch (file.type) {
         case 'function':
         case 'function-block':
-        case 'program':
-          saveContent = getState().project.data.pous.find((pou) => pou.data.name === name)
+        case 'program': {
+          const editor = getState().editorActions.getEditorFromEditors(name)
+          const pou = getState().project.data.pous.find((pou) => pou.data.name === name)
+
+          const pouToSave = pou ? sanitizePou(pou, editor ?? undefined) : undefined
+
+          if (pouToSave) {
+            try {
+              const language = pouToSave.data.body.language
+              const extension = getExtensionFromLanguage(language)
+              const typeDir =
+                file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+              computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
+            } catch (_error) {
+              // If language is not supported, fall back to using the original file.filePath
+            }
+          }
+
+          saveContent = pouToSave
           break
+        }
         case 'device': {
           const deviceConfiguration = deviceConfigurationSchema.safeParse(getState().deviceDefinitions.configuration)
           if (!deviceConfiguration.success) {
@@ -1523,8 +1595,9 @@ export const createSharedSlice: StateCreator<
         }
       }
 
-      const projectFilePath = getState().project.meta.path
-      const filePath = file.filePath.includes(projectFilePath) ? file.filePath : `${projectFilePath}${file.filePath}`
+      const filePath =
+        computedFilePath ||
+        (file.filePath.includes(projectFilePath) ? file.filePath : `${projectFilePath}${file.filePath}`)
 
       let saveResponse: { success: boolean; error?: string }
       switch (file.type) {

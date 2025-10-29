@@ -39,7 +39,10 @@ export const serializeTextualPouToString = (pou: PLCPou): string => {
     result += `${startKeyword} ${name}\n`
   }
 
-  const variablesString = generateIecVariablesToString(variables as VariablePLC[])
+  const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
+  const variablesString = useVariablesText
+    ? data.variablesText ?? ''
+    : generateIecVariablesToString(variables as VariablePLC[])
   result += variablesString + '\n\n'
 
   result += body.value + '\n\n'
@@ -73,7 +76,10 @@ export const serializeHybridPouToString = (pou: PLCPou): string => {
     result += `${startKeyword} ${name}\n`
   }
 
-  const variablesString = generateIecVariablesToString(variables as VariablePLC[])
+  const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
+  const variablesString = useVariablesText
+    ? data.variablesText ?? ''
+    : generateIecVariablesToString(variables as VariablePLC[])
   result += variablesString + '\n'
 
   result += body.value
@@ -104,7 +110,10 @@ export const serializeGraphicalPouToString = (pou: PLCPou): string => {
     result += `${startKeyword} ${name}\n`
   }
 
-  const variablesString = generateIecVariablesToString(variables as VariablePLC[])
+  const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
+  const variablesString = useVariablesText
+    ? data.variablesText ?? ''
+    : generateIecVariablesToString(variables as VariablePLC[])
   result += variablesString + '\n\n'
 
   result += JSON.stringify(body.value, null, 2) + '\n'

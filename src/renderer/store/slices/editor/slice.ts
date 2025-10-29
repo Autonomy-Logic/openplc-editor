@@ -1,8 +1,9 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { RootState } from '../../index'
 import type { EditorSlice, EditorState } from './types'
-export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState, getState) => ({
+export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (setState, getState) => ({
   editors: [],
   editor: {
     type: 'available',
@@ -27,7 +28,13 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    updateModelVariables: (variables) =>
+    updateModelVariables: (variables: {
+      display: 'code' | 'table'
+      selectedRow?: number
+      classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
+      description?: string
+      code?: string
+    }) => {
       setState(
         produce((state: EditorState) => {
           const { editor } = state
@@ -72,11 +79,13 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
             } else {
               editor.variable = {
                 display: 'code',
+                code: variables.code ?? (editor.variable.display === 'code' ? editor.variable.code : undefined),
               }
             }
           }
         }),
-      ),
+      )
+    },
 
     updateModelTasks: (tasks: { selectedRow?: number; display: 'code' | 'table' }) =>
       setState(
@@ -204,7 +213,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       )
     },
 
-    setEditor: (newEditor) =>
+    setEditor: (newEditor) => {
       setState(
         produce((state: EditorState) => {
           /**
@@ -224,7 +233,22 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
 
           state.editor = newEditor
         }),
-      ),
+      )
+
+      if (newEditor.type === 'plc-textual' || newEditor.type === 'plc-graphical') {
+        const { project } = getState()
+        const pous = project.data.pous
+        type Pou = (typeof pous)[number]
+        const pou = pous.find((p: Pou) => p.data.name === newEditor.meta.name)
+        if (pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')) {
+          const variablesText = (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+          getState().editorActions.updateModelVariables({
+            display: 'code',
+            code: variablesText ?? '',
+          })
+        }
+      }
+    },
     clearEditor: () =>
       setState(
         produce((state: EditorState) => {
