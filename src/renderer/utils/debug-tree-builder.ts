@@ -48,7 +48,7 @@ function logDebugTree(node: DebugTreeNode, indent = 0): void {
   if (node.arrayIndices) {
     const [start] = node.arrayIndices
     const sampleIEC = start + 1
-    const sampleC = 1
+    const sampleC = sampleIEC - start
     console.log(`${prefix}  Example: IEC [${sampleIEC}] → table[${sampleC}]`)
   }
 
@@ -192,6 +192,29 @@ function buildFunctionBlockTree(
         project,
       )
       children.push(nestedFBNode)
+    } else if (fbVar.type.definition === 'user-data-type') {
+      const nestedNode = expandNestedNode(
+        fbVar.name,
+        childFullPath,
+        childCompositeKey,
+        fbVar.type.value,
+        'user-data-type',
+        debugVariables,
+        project,
+      )
+      children.push(nestedNode)
+    } else if (fbVar.type.definition === 'array') {
+      const nestedNode = expandNestedNode(
+        fbVar.name,
+        childFullPath,
+        childCompositeKey,
+        'ARRAY',
+        'array',
+        debugVariables,
+        project,
+        fbVar.type.data,
+      )
+      children.push(nestedNode)
     } else {
       const debugVar = debugVariables.find((dv) => dv.name === childFullPath)
 
@@ -337,6 +360,7 @@ function expandNestedNode(
           'array',
           debugVariables,
           project,
+          structVar.type.data,
         )
         children.push(nestedNode)
       } else if (structVar.type.definition === 'derived') {
