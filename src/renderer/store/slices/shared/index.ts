@@ -100,16 +100,16 @@ const sanitizePou = (pou: PLCPou, editor: EditorModel | undefined): PLCPou => {
     return pou
   }
 
-  if (editor.variable.display === 'code') {
+  if (editor.variable.display === 'code' && editor.variable.code != null) {
     return {
       type: pou.type,
       data: {
         ...pou.data,
-        variablesText: editor.variable.code ?? '',
+        variablesText: editor.variable.code,
       },
     } as typeof pou
   } else {
-    // When not in code mode, preserve the POU as-is without stripping variablesText
+    // When not in code mode or code is undefined, preserve the POU as-is without stripping variablesText
     return pou
   }
 }
