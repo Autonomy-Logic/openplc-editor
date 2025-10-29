@@ -18,6 +18,7 @@ type CppPouData = {
 type ProjectDataWithCpp = PLCProjectData & {
   originalCppPous?: CppPouData[]
 }
+import { wrapUnsupportedComments } from '@root/utils/PLC/wrap-unsupported-comments'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '@root/utils/python/generateSTCode'
@@ -101,12 +102,34 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress)
 
+  const applyEarlyCommentWrapping = (projectData: PLCProjectData): PLCProjectData => {
+    return {
+      ...projectData,
+      pous: projectData.pous.map((pou: PLCPou) => {
+        if (pou.data.body.language === 'st' || pou.data.body.language === 'il') {
+          const wrappedValue = wrapUnsupportedComments(pou.data.body.value)
+          return {
+            ...pou,
+            data: {
+              ...pou.data,
+              body: {
+                language: pou.data.body.language,
+                value: wrappedValue,
+              },
+            },
+          } as PLCPou
+        }
+        return pou
+      }),
+    }
+  }
+
   const handleRequest = () => {
     const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
 
     const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.data.body.language === 'python')
 
-    let processedProjectData: PLCProjectData = projectData
+    let processedProjectData: PLCProjectData = applyEarlyCommentWrapping(projectData)
 
     if (hasPythonCode) {
       const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'python')
@@ -517,7 +540,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       })
 
       const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.data.body.language === 'python')
-      let processedProjectData: PLCProjectData = projectData
+      let processedProjectData: PLCProjectData = applyEarlyCommentWrapping(projectData)
 
       if (hasPythonCode) {
         const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'python')
