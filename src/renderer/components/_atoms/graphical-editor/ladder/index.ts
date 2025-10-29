@@ -73,8 +73,8 @@ export const defaultCustomNodesStyles: CustomFbdNodeTypes = {
   parallel: {
     width: parallelNode.DEFAULT_PARALLEL_WIDTH,
     height: parallelNode.DEFAULT_PARALLEL_HEIGHT,
-    gap: parallelNode.GAP,
-    verticalGap: parallelNode.GAP,
+    gap: parallelNode.HORIZONTAL_GAP,
+    verticalGap: parallelNode.VERTICAL_GAP,
     handle: {
       x: 0,
       y: parallelNode.DEFAULT_PARALLEL_CONNECTOR_Y,
