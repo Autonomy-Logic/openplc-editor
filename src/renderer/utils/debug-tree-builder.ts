@@ -389,7 +389,7 @@ function expandNestedNode(
     const children: DebugTreeNode[] = []
 
     for (const structVar of structType.variable) {
-      const fieldFullPath = `${fullPath}.${structVar.name.toUpperCase()}`
+      const fieldFullPath = `${fullPath}.value.${structVar.name.toUpperCase()}`
       const fieldCompositeKey = `${compositeKey}.${structVar.name}`
 
       if (structVar.type.definition === 'base-type') {
@@ -424,17 +424,6 @@ function expandNestedNode(
           debugVariables,
           project,
           structVar.type.data,
-        )
-        children.push(nestedNode)
-      } else if (structVar.type.definition === 'derived' || structVar.type.definition === 'derived-type') {
-        const nestedNode = expandNestedNode(
-          structVar.name,
-          fieldFullPath,
-          fieldCompositeKey,
-          structVar.type.value,
-          'derived',
-          debugVariables,
-          project,
         )
         children.push(nestedNode)
       }
@@ -704,17 +693,6 @@ function buildStructTree(
         debugVariables,
         project,
         structVar.type.data,
-      )
-      children.push(nestedNode)
-    } else if (structVar.type.definition === 'derived') {
-      const nestedNode = expandNestedNode(
-        structVar.name,
-        fieldFullPath,
-        fieldCompositeKey,
-        structVar.type.value,
-        'derived',
-        debugVariables,
-        project,
       )
       children.push(nestedNode)
     }
