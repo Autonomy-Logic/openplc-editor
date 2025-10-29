@@ -1,4 +1,3 @@
-import { logger } from '@root/main/services/logger-service'
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
 import { projectDefaultFilesMapSchema, projectPouDirectories } from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
@@ -158,6 +157,160 @@ function detectPouTypeFromPath(filePath: string): string {
 }
 
 /**
+ * Helper function to find the last END_VAR in the content
+ * @param content - The content to search
+ * @param startIndex - The index to start searching from
+ * @returns The index after the last END_VAR, or -1 if not found
+ */
+function findLastEndVarIndex(content: string, startIndex: number): number {
+  let lastEndVarIndex = -1
+  const regex = /\bEND_VAR\b/gi
+  regex.lastIndex = startIndex
+
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(content)) !== null) {
+    lastEndVarIndex = match.index + match[0].length
+  }
+
+  return lastEndVarIndex
+}
+
+/**
+ * Fallback extraction when parsing fails - extracts raw variables block and body
+ * @param content - The file content
+ * @param language - The language code
+ * @param pouType - The POU type
+ * @param pouName - The POU name (from filename)
+ * @returns A partial PLCPou with empty variables array but preserved variablesText
+ */
+function createFallbackPou(content: string, language: string, pouType: string, pouName: string): PLCPou {
+  const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
+  const documentation = docMatch ? docMatch[1].trim() : ''
+  const remainingContent = docMatch ? content.slice(docMatch[0].length) : content
+
+  const varStartIndex = remainingContent.search(
+    /\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i,
+  )
+
+  let variablesText = 'VAR\nEND_VAR' // Default if no variables section found
+  let bodyStartIndex = 0
+
+  const pouTypeKeywords = {
+    program: 'PROGRAM',
+    function: 'FUNCTION',
+    'function-block': 'FUNCTION_BLOCK',
+  }
+  const typeKeyword = pouTypeKeywords[pouType as keyof typeof pouTypeKeywords]
+  const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
+  const declarationMatch = remainingContent.match(declarationRegex)
+
+  if (declarationMatch) {
+    bodyStartIndex = declarationMatch[0].length
+  }
+
+  if (varStartIndex !== -1) {
+    const varSectionStart = varStartIndex
+    const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
+
+    if (lastEndVarIndex !== -1) {
+      variablesText = remainingContent.slice(varSectionStart, lastEndVarIndex)
+      bodyStartIndex = lastEndVarIndex
+    }
+  }
+
+  let bodyValue: unknown
+
+  if (language === 'st' || language === 'il' || language === 'python' || language === 'cpp') {
+    const endKeywords = {
+      program: 'END_PROGRAM',
+      function: 'END_FUNCTION',
+      'function-block': 'END_FUNCTION_BLOCK',
+    }
+    const endKeyword = endKeywords[pouType as keyof typeof endKeywords]
+    const endKeywordRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
+    const endMatch = remainingContent.slice(bodyStartIndex).search(endKeywordRegex)
+
+    if (endMatch !== -1) {
+      bodyValue = remainingContent.slice(bodyStartIndex, bodyStartIndex + endMatch).trim()
+    } else {
+      bodyValue = remainingContent.slice(bodyStartIndex).trim()
+    }
+  } else if (language === 'ld' || language === 'fbd') {
+    const endKeywords = {
+      program: 'END_PROGRAM',
+      function: 'END_FUNCTION',
+      'function-block': 'END_FUNCTION_BLOCK',
+    }
+    const endKeyword = endKeywords[pouType as keyof typeof endKeywords]
+    const endKeywordRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
+    const endMatch = remainingContent.slice(bodyStartIndex).search(endKeywordRegex)
+
+    const bodyContent =
+      endMatch !== -1
+        ? remainingContent.slice(bodyStartIndex, bodyStartIndex + endMatch).trim()
+        : remainingContent.slice(bodyStartIndex).trim()
+
+    try {
+      bodyValue = JSON.parse(bodyContent)
+    } catch {
+      bodyValue = {
+        nodes: [],
+        edges: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      }
+    }
+  } else {
+    bodyValue = ''
+  }
+
+  const commonData = {
+    name: pouName,
+    variables: [],
+    documentation,
+    variablesText,
+  }
+
+  if (pouType === 'function') {
+    return {
+      type: 'function',
+      data: {
+        ...commonData,
+        language: language as 'st' | 'il' | 'python' | 'cpp' | 'ld' | 'fbd',
+        returnType: 'BOOL',
+        body: {
+          language: language as 'st' | 'il' | 'python' | 'cpp' | 'ld' | 'fbd',
+          value: bodyValue,
+        },
+      },
+    } as PLCPou
+  } else if (pouType === 'function-block') {
+    return {
+      type: 'function-block',
+      data: {
+        ...commonData,
+        language: language as 'st' | 'il' | 'python' | 'cpp' | 'ld' | 'fbd',
+        body: {
+          language: language as 'st' | 'il' | 'python' | 'cpp' | 'ld' | 'fbd',
+          value: bodyValue,
+        },
+      },
+    } as PLCPou
+  } else {
+    return {
+      type: 'program',
+      data: {
+        ...commonData,
+        language: language as 'st' | 'il' | 'python' | 'cpp' | 'ld' | 'fbd',
+        body: {
+          language: language as 'st' | 'il' | 'python' | 'cpp' | 'ld' | 'fbd',
+          value: bodyValue,
+        },
+      },
+    } as PLCPou
+  }
+}
+
+/**
  * Parse a POU file (either JSON or text-based format)
  * @param filePath - The path to the POU file
  * @param fileName - The name of the file (for error messages)
@@ -228,7 +381,6 @@ function readDirectoryRecursive(
       const fileExtension = extname(entry.name)
 
       if (!VALID_POU_EXTENSIONS.includes(fileExtension)) {
-        logger.debug(`[read-project] Skipping file with invalid extension: ${entryPath}`)
         continue
       }
 
@@ -238,27 +390,38 @@ function readDirectoryRecursive(
 
       if (existingEntry) {
         if (isTextBased && !existingEntry.isTextBased) {
-          logger.debug(`[read-project] Replacing JSON file with text-based file for POU: ${pouName}`)
           delete projectFiles[existingEntry.key]
           try {
             projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
             pouNameMap.set(pouName, { key: entryKey, isTextBased })
-          } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-            logger.warn(`[read-project] Failed to parse POU file ${entryPath}: ${errorMessage}. Skipping this file.`)
+          } catch {
+            try {
+              const fileContent = readFileSync(entryPath, 'utf-8')
+              const pouType = detectPouTypeFromPath(entryPath)
+              const language = detectLanguageFromExtension(entryPath)
+              const fallbackPou = createFallbackPou(fileContent, language, pouType, pouName)
+              projectFiles[entryKey] = fallbackPou
+              pouNameMap.set(pouName, { key: entryKey, isTextBased })
+            } catch {
+              // Intentionally skip POUs that cannot be parsed and also fail fallback creation
+            }
           }
-        } else if (!isTextBased && existingEntry.isTextBased) {
-          logger.debug(`[read-project] Skipping JSON file, text-based file already loaded for POU: ${pouName}`)
-        } else {
-          logger.debug(`[read-project] Duplicate POU file found: ${entryPath}`)
         }
       } else {
         try {
           projectFiles[entryKey] = readAndParsePouFile(entryPath, entryKey)
           pouNameMap.set(pouName, { key: entryKey, isTextBased })
-        } catch (error: unknown) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          logger.warn(`[read-project] Failed to parse POU file ${entryPath}: ${errorMessage}. Skipping this file.`)
+        } catch {
+          try {
+            const fileContent = readFileSync(entryPath, 'utf-8')
+            const pouType = detectPouTypeFromPath(entryPath)
+            const language = detectLanguageFromExtension(entryPath)
+            const fallbackPou = createFallbackPou(fileContent, language, pouType, pouName)
+            projectFiles[entryKey] = fallbackPou
+            pouNameMap.set(pouName, { key: entryKey, isTextBased })
+          } catch {
+            // Intentionally skip POUs that cannot be parsed and also fail fallback creation
+          }
         }
       }
     } else if (entry.isDirectory()) {
@@ -287,9 +450,7 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     const filePath = join(basePath, fileName)
     try {
       projectFiles[fileName] = readAndParseFile(filePath, fileName, schema)
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      logger.warn(`[read-project] Failed to parse ${fileName}: ${errorMessage}. Using default values.`)
+    } catch {
       projectFiles[fileName] = getDefaultSchemaValues(schema)
     }
   }
@@ -321,42 +482,24 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
               await promises.mkdir(dirname(pouFilePath), { recursive: true })
               const textContent = serializePouToText(pou)
               await promises.writeFile(pouFilePath, textContent, 'utf-8')
-              logger.info(`[read-project] Migrated POU ${pou.data.name} to text-code format: ${pouFilePath}`)
             }
             pouFiles[join('pous', pouType, `${pou.data.name}${extension}`)] = pou
             return { success: true, pouName: pou.data.name }
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-            logger.error(`[read-project] Failed to migrate POU file ${pouFilePath}: ${errorMessage}`)
             return { success: false, pouName: pou.data.name, error: errorMessage }
           }
         }),
       )
 
       const successfulMigrations = migrationResults.filter((r) => r.status === 'fulfilled' && r.value.success)
-      const failedMigrations = migrationResults.filter(
-        (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success),
-      )
-
-      if (failedMigrations.length > 0) {
-        const failedNames = failedMigrations
-          .map((r) => (r.status === 'fulfilled' ? r.value.pouName : 'unknown'))
-          .join(', ')
-        logger.warn(
-          `[read-project] Legacy migration partially failed: ${failedMigrations.length} POUs failed to migrate (${failedNames}). Keeping embedded POUs in project.json for retry.`,
-        )
-      }
 
       if (successfulMigrations.length === project.data.pous.length) {
         try {
           project.data.pous = []
           await promises.writeFile(join(basePath, 'project.json'), JSON.stringify(project, null, 2), 'utf-8')
-          logger.info(
-            `[read-project] Legacy migration completed successfully: All ${successfulMigrations.length} POUs migrated to text-code format and cleared from project.json`,
-          )
-        } catch (error: unknown) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          logger.error(`[read-project] Failed to clear POUs array from project.json: ${errorMessage}`)
+        } catch {
+          // Intentionally continue if clearing POUs array fails to allow partial migration
         }
       }
     }

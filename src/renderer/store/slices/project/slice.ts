@@ -161,6 +161,18 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+    clearPouVariablesText: (pouName: string): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const draft = project.data.pous.find((pou) => {
+            return pou.data.name === pouName
+          })
+          if (draft && 'variablesText' in draft.data) {
+            delete (draft.data as typeof draft.data & { variablesText?: string }).variablesText
+          }
+        }),
+      )
+    },
     updatePouDocumentation: (pouName, documentation): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
