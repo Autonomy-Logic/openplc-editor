@@ -181,7 +181,7 @@ function buildFunctionBlockTree(
         isComplex: false,
         debugIndex: debugVar?.index,
       })
-    } else if (fbVar.type.definition === 'derived-type') {
+    } else if (fbVar.type.definition === 'derived') {
       const nestedFBNode = expandNestedNode(
         fbVar.name,
         childFullPath,
@@ -265,7 +265,7 @@ function expandNestedNode(
           isComplex: false,
           debugIndex: debugVar?.index,
         })
-      } else if (fbVar.type.definition === 'derived-type') {
+      } else if (fbVar.type.definition === 'derived') {
         const nestedNode = expandNestedNode(
           fbVar.name,
           childFullPath,
