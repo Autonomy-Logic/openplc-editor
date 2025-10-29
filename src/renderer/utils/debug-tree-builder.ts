@@ -6,6 +6,14 @@ import type { DebugVariable } from './parse-debug-file'
 const DEBUG_TREE_LOGGING = true
 
 /**
+ * Normalizes type strings for case-insensitive comparison.
+ * Handles variations like 'function-block', 'functionBlock', 'function_block'.
+ */
+function normalizeTypeString(typeStr: string): string {
+  return typeStr.toLowerCase().replace(/[-_]/g, '')
+}
+
+/**
  * Represents a node in the debug variable tree structure.
  * Used to organize complex variables (arrays, structs, function blocks) hierarchically.
  */
@@ -150,11 +158,11 @@ function buildFunctionBlockTree(
   const fullPath = `RES0__${instanceNameUpper}.${variableName}`
 
   const standardFB = StandardFunctionBlocks.pous.find(
-    (pou) => pou.name.toUpperCase() === fbTypeNameUpper && pou.type === 'function-block',
+    (pou) => pou.name.toUpperCase() === fbTypeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
   )
 
   const customFB = project.data.pous.find(
-    (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === fbTypeNameUpper,
+    (pou) => normalizeTypeString(pou.type) === 'functionblock' && pou.data.name.toUpperCase() === fbTypeNameUpper,
   )
 
   const fbDefinition = standardFB || (customFB?.type === 'function-block' ? customFB.data : null)
@@ -185,6 +193,12 @@ function buildFunctionBlockTree(
   const children: DebugTreeNode[] = []
 
   for (const fbVar of fbDefinition.variables) {
+    if (DEBUG_TREE_LOGGING) {
+      console.log(
+        `[buildFunctionBlockTree] Processing ${fbTypeName}.${fbVar.name}: definition=${fbVar.type.definition}, value=${fbVar.type.value}`,
+      )
+    }
+
     const childFullPath = `${fullPath}.${fbVar.name.toUpperCase()}`
     const childCompositeKey = `${compositeKey}.${fbVar.name}`
 
@@ -199,7 +213,7 @@ function buildFunctionBlockTree(
         isComplex: false,
         debugIndex: debugVar?.index,
       })
-    } else if (fbVar.type.definition === 'derived') {
+    } else if (fbVar.type.definition === 'derived' || fbVar.type.definition === 'derived-type') {
       const nestedFBNode = expandNestedNode(
         fbVar.name,
         childFullPath,
@@ -276,13 +290,36 @@ function expandNestedNode(
 ): DebugTreeNode {
   if (typeDefinition === 'derived') {
     const typeNameUpper = typeName.toUpperCase()
+
+    if (DEBUG_TREE_LOGGING) {
+      console.log(`[expandNestedNode] Looking up derived type "${typeName}" (uppercase: "${typeNameUpper}")`)
+      console.log(`  StandardFunctionBlocks.pous.length: ${StandardFunctionBlocks.pous.length}`)
+      console.log(
+        `  Sample standard FBs:`,
+        StandardFunctionBlocks.pous.slice(0, 5).map((p) => ({ name: p.name, type: p.type })),
+      )
+    }
+
     const standardFB = StandardFunctionBlocks.pous.find(
-      (pou) => pou.name.toUpperCase() === typeNameUpper && pou.type === 'function-block',
+      (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
     )
     const customFB = project.data.pous.find(
-      (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === typeNameUpper,
+      (pou) => normalizeTypeString(pou.type) === 'functionblock' && pou.data.name.toUpperCase() === typeNameUpper,
     )
     const fbDefinition = standardFB || (customFB?.type === 'function-block' ? customFB.data : null)
+
+    if (DEBUG_TREE_LOGGING) {
+      console.log(`  standardFB found: ${!!standardFB}`)
+      console.log(`  customFB found: ${!!customFB}`)
+      if (!fbDefinition) {
+        const nameOnlyMatch = StandardFunctionBlocks.pous.find((pou) => pou.name.toUpperCase() === typeNameUpper)
+        if (nameOnlyMatch) {
+          console.warn(
+            `  Name match found but type filter failed: name="${nameOnlyMatch.name}", type="${nameOnlyMatch.type}"`,
+          )
+        }
+      }
+    }
 
     if (!fbDefinition) {
       return {
@@ -311,7 +348,7 @@ function expandNestedNode(
           isComplex: false,
           debugIndex: debugVar?.index,
         })
-      } else if (fbVar.type.definition === 'derived') {
+      } else if (fbVar.type.definition === 'derived' || fbVar.type.definition === 'derived-type') {
         const nestedNode = expandNestedNode(
           fbVar.name,
           childFullPath,
@@ -389,7 +426,7 @@ function expandNestedNode(
           structVar.type.data,
         )
         children.push(nestedNode)
-      } else if (structVar.type.definition === 'derived') {
+      } else if (structVar.type.definition === 'derived' || structVar.type.definition === 'derived-type') {
         const nestedNode = expandNestedNode(
           structVar.name,
           fieldFullPath,
