@@ -3,6 +3,8 @@ import type { PLCProject, PLCVariable } from '@root/types/PLC/open-plc'
 import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import type { DebugVariable } from './parse-debug-file'
 
+const DEBUG_TREE_LOGGING = true
+
 /**
  * Represents a node in the debug variable tree structure.
  * Used to organize complex variables (arrays, structs, function blocks) hierarchically.
@@ -29,6 +31,36 @@ export interface DebugTreeNode {
 }
 
 /**
+ * Logs debug tree information to console (dev-only).
+ */
+function logDebugTree(node: DebugTreeNode, indent = 0): void {
+  if (!DEBUG_TREE_LOGGING) return
+
+  const prefix = '  '.repeat(indent)
+  const complexMarker = node.isComplex ? '[COMPLEX]' : '[LEAF]'
+  const indexInfo = node.debugIndex !== undefined ? ` debugIndex=${node.debugIndex}` : ''
+  const arrayInfo = node.arrayIndices ? ` arrayIndices=[${node.arrayIndices[0]}..${node.arrayIndices[1]}]` : ''
+
+  console.log(`${prefix}${complexMarker} ${node.name} (${node.type})${indexInfo}${arrayInfo}`)
+  console.log(`${prefix}  fullPath: ${node.fullPath}`)
+  console.log(`${prefix}  compositeKey: ${node.compositeKey}`)
+
+  if (node.arrayIndices) {
+    const [start] = node.arrayIndices
+    const sampleIEC = start + 1
+    const sampleC = 1
+    console.log(`${prefix}  Example: IEC [${sampleIEC}] → table[${sampleC}]`)
+  }
+
+  if (node.children && node.children.length > 0) {
+    console.log(`${prefix}  children (${node.children.length}):`)
+    for (const child of node.children) {
+      logDebugTree(child, indent + 2)
+    }
+  }
+}
+
+/**
  * Builds a debug tree structure for a PLC variable.
  * Recursively processes complex types (arrays, structs, function blocks).
  *
@@ -52,13 +84,15 @@ export function buildDebugTree(
 
   const compositeKey = `${pouNameUpper}:${variableName}`
 
+  let node: DebugTreeNode
+
   if (variable.type.definition === 'base-type') {
     const baseType = variable.type.value.toUpperCase()
     const fullPath = `RES0__${instanceNameUpper}.${variableName}`
 
     const debugVar = debugVariables.find((dv) => dv.name === fullPath)
 
-    return {
+    node = {
       name: variable.name,
       fullPath,
       compositeKey,
@@ -67,20 +101,28 @@ export function buildDebugTree(
       debugIndex: debugVar?.index,
     }
   } else if (variable.type.definition === 'derived') {
-    return buildFunctionBlockTree(variable, pouName, instanceName, debugVariables, project)
+    node = buildFunctionBlockTree(variable, pouName, instanceName, debugVariables, project)
   } else if (variable.type.definition === 'array') {
-    return buildArrayTree(variable, pouName, instanceName, debugVariables, project)
+    node = buildArrayTree(variable, pouName, instanceName, debugVariables, project)
   } else if (variable.type.definition === 'user-data-type') {
-    return buildStructTree(variable, pouName, instanceName, debugVariables, project)
+    node = buildStructTree(variable, pouName, instanceName, debugVariables, project)
+  } else {
+    node = {
+      name: variable.name,
+      fullPath: `RES0__${instanceNameUpper}.${variableName}`,
+      compositeKey,
+      type: 'UNKNOWN',
+      isComplex: false,
+    }
   }
 
-  return {
-    name: variable.name,
-    fullPath: `RES0__${instanceNameUpper}.${variableName}`,
-    compositeKey,
-    type: 'UNKNOWN',
-    isComplex: false,
+  if (DEBUG_TREE_LOGGING) {
+    console.groupCollapsed(`Debug Tree for ${variable.name}`)
+    logDebugTree(node)
+    console.groupEnd()
   }
+
+  return node
 }
 
 /**
@@ -128,23 +170,40 @@ function buildFunctionBlockTree(
     const childFullPath = `${fullPath}.${fbVar.name.toUpperCase()}`
     const childCompositeKey = `${compositeKey}.${fbVar.name}`
 
-    const debugVar = debugVariables.find((dv) => dv.name === childFullPath)
-
-    let childType = 'UNKNOWN'
     if (fbVar.type.definition === 'base-type') {
-      childType = fbVar.type.value.toUpperCase()
-    } else if (fbVar.type.definition === 'derived-type') {
-      childType = fbVar.type.value
-    }
+      const debugVar = debugVariables.find((dv) => dv.name === childFullPath)
 
-    children.push({
-      name: fbVar.name,
-      fullPath: childFullPath,
-      compositeKey: childCompositeKey,
-      type: childType,
-      isComplex: false,
-      debugIndex: debugVar?.index,
-    })
+      children.push({
+        name: fbVar.name,
+        fullPath: childFullPath,
+        compositeKey: childCompositeKey,
+        type: fbVar.type.value.toUpperCase(),
+        isComplex: false,
+        debugIndex: debugVar?.index,
+      })
+    } else if (fbVar.type.definition === 'derived-type') {
+      const nestedFBNode = expandNestedNode(
+        fbVar.name,
+        childFullPath,
+        childCompositeKey,
+        fbVar.type.value,
+        'derived',
+        debugVariables,
+        project,
+      )
+      children.push(nestedFBNode)
+    } else {
+      const debugVar = debugVariables.find((dv) => dv.name === childFullPath)
+
+      children.push({
+        name: fbVar.name,
+        fullPath: childFullPath,
+        compositeKey: childCompositeKey,
+        type: 'UNKNOWN',
+        isComplex: false,
+        debugIndex: debugVar?.index,
+      })
+    }
   }
 
   return {
@@ -154,6 +213,241 @@ function buildFunctionBlockTree(
     type: fbTypeName,
     isComplex: true,
     children,
+  }
+}
+
+/**
+ * Helper function to expand nested complex nodes (structs, arrays, FBs).
+ * Used for recursively expanding complex types within structs, arrays, and FBs.
+ */
+function expandNestedNode(
+  name: string,
+  fullPath: string,
+  compositeKey: string,
+  typeName: string,
+  typeDefinition: 'user-data-type' | 'array' | 'derived',
+  debugVariables: DebugVariable[],
+  project: PLCProject,
+  arrayData?: {
+    baseType: { definition: 'base-type' | 'user-data-type'; value: string }
+    dimensions: Array<{ dimension: string }>
+  },
+): DebugTreeNode {
+  if (typeDefinition === 'derived') {
+    const standardFB = StandardFunctionBlocks.pous.find((pou) => pou.name === typeName && pou.type === 'function-block')
+    const customFB = project.data.pous.find((pou) => pou.type === 'function-block' && pou.data.name === typeName)
+    const fbDefinition = standardFB || (customFB?.type === 'function-block' ? customFB.data : null)
+
+    if (!fbDefinition) {
+      return {
+        name,
+        fullPath,
+        compositeKey,
+        type: typeName,
+        isComplex: false,
+      }
+    }
+
+    const children: DebugTreeNode[] = []
+
+    for (const fbVar of fbDefinition.variables) {
+      const childFullPath = `${fullPath}.${fbVar.name.toUpperCase()}`
+      const childCompositeKey = `${compositeKey}.${fbVar.name}`
+
+      if (fbVar.type.definition === 'base-type') {
+        const debugVar = debugVariables.find((dv) => dv.name === childFullPath)
+
+        children.push({
+          name: fbVar.name,
+          fullPath: childFullPath,
+          compositeKey: childCompositeKey,
+          type: fbVar.type.value.toUpperCase(),
+          isComplex: false,
+          debugIndex: debugVar?.index,
+        })
+      } else if (fbVar.type.definition === 'derived-type') {
+        const nestedNode = expandNestedNode(
+          fbVar.name,
+          childFullPath,
+          childCompositeKey,
+          fbVar.type.value,
+          'derived',
+          debugVariables,
+          project,
+        )
+        children.push(nestedNode)
+      }
+    }
+
+    return {
+      name,
+      fullPath,
+      compositeKey,
+      type: typeName,
+      isComplex: true,
+      children,
+    }
+  } else if (typeDefinition === 'user-data-type') {
+    const structType = project.data.dataTypes.find((dt) => dt.name === typeName && dt.derivation === 'structure')
+
+    if (!structType || structType.derivation !== 'structure') {
+      return {
+        name,
+        fullPath,
+        compositeKey,
+        type: typeName,
+        isComplex: false,
+      }
+    }
+
+    const children: DebugTreeNode[] = []
+
+    for (const structVar of structType.variable) {
+      const fieldFullPath = `${fullPath}.${structVar.name.toUpperCase()}`
+      const fieldCompositeKey = `${compositeKey}.${structVar.name}`
+
+      if (structVar.type.definition === 'base-type') {
+        const debugVar = debugVariables.find((dv) => dv.name === fieldFullPath)
+
+        children.push({
+          name: structVar.name,
+          fullPath: fieldFullPath,
+          compositeKey: fieldCompositeKey,
+          type: structVar.type.value.toUpperCase(),
+          isComplex: false,
+          debugIndex: debugVar?.index,
+        })
+      } else if (structVar.type.definition === 'user-data-type') {
+        const nestedNode = expandNestedNode(
+          structVar.name,
+          fieldFullPath,
+          fieldCompositeKey,
+          structVar.type.value,
+          'user-data-type',
+          debugVariables,
+          project,
+        )
+        children.push(nestedNode)
+      } else if (structVar.type.definition === 'array') {
+        const nestedNode = expandNestedNode(
+          structVar.name,
+          fieldFullPath,
+          fieldCompositeKey,
+          'ARRAY',
+          'array',
+          debugVariables,
+          project,
+        )
+        children.push(nestedNode)
+      } else if (structVar.type.definition === 'derived') {
+        const nestedNode = expandNestedNode(
+          structVar.name,
+          fieldFullPath,
+          fieldCompositeKey,
+          structVar.type.value,
+          'derived',
+          debugVariables,
+          project,
+        )
+        children.push(nestedNode)
+      }
+    }
+
+    return {
+      name,
+      fullPath,
+      compositeKey,
+      type: typeName,
+      isComplex: true,
+      children,
+    }
+  } else if (typeDefinition === 'array' && arrayData) {
+    const dimensions = arrayData.dimensions
+    if (dimensions.length === 0) {
+      return {
+        name,
+        fullPath,
+        compositeKey,
+        type: 'ARRAY',
+        isComplex: false,
+      }
+    }
+
+    const firstDimension = dimensions[0].dimension
+    const dimensionMatch = firstDimension.match(/^(\d+)\.\.(\d+)$/)
+
+    if (!dimensionMatch) {
+      return {
+        name,
+        fullPath,
+        compositeKey,
+        type: 'ARRAY',
+        isComplex: false,
+      }
+    }
+
+    const startIndex = parseInt(dimensionMatch[1], 10)
+    const endIndex = parseInt(dimensionMatch[2], 10)
+    const arraySize = endIndex - startIndex + 1
+
+    const baseType = arrayData.baseType
+    let elementTypeName = 'UNKNOWN'
+
+    if (baseType.definition === 'base-type') {
+      elementTypeName = baseType.value.toUpperCase()
+    } else if (baseType.definition === 'user-data-type') {
+      elementTypeName = baseType.value
+    }
+
+    const children: DebugTreeNode[] = []
+
+    for (let i = 0; i < arraySize; i++) {
+      const elementIndex = startIndex + i
+      const elementFullPath = `${fullPath}.value.table[${i}]`
+      const elementCompositeKey = `${compositeKey}[${elementIndex}]`
+
+      if (baseType.definition === 'base-type') {
+        const debugVar = debugVariables.find((dv) => dv.name === elementFullPath)
+
+        children.push({
+          name: `[${elementIndex}]`,
+          fullPath: elementFullPath,
+          compositeKey: elementCompositeKey,
+          type: elementTypeName,
+          isComplex: false,
+          debugIndex: debugVar?.index,
+        })
+      } else if (baseType.definition === 'user-data-type') {
+        const nestedNode = expandNestedNode(
+          `[${elementIndex}]`,
+          elementFullPath,
+          elementCompositeKey,
+          baseType.value,
+          'user-data-type',
+          debugVariables,
+          project,
+        )
+        children.push(nestedNode)
+      }
+    }
+
+    return {
+      name,
+      fullPath,
+      compositeKey,
+      type: 'ARRAY',
+      isComplex: true,
+      children,
+      arrayIndices: [startIndex, endIndex],
+    }
+  }
+
+  return {
+    name,
+    fullPath,
+    compositeKey,
+    type: typeName,
+    isComplex: false,
   }
 }
 
@@ -223,56 +517,16 @@ function buildArrayTree(
         debugIndex: debugVar?.index,
       })
     } else if (baseType.definition === 'user-data-type') {
-      const structType = project.data.dataTypes.find(
-        (dt) => dt.name === baseType.value && dt.derivation === 'structure',
+      const nestedNode = expandNestedNode(
+        `[${elementIndex}]`,
+        elementFullPath,
+        elementCompositeKey,
+        baseType.value,
+        'user-data-type',
+        debugVariables,
+        project,
       )
-
-      if (structType && structType.derivation === 'structure') {
-        const structChildren: DebugTreeNode[] = []
-
-        for (const structVar of structType.variable) {
-          const fieldFullPath = `${elementFullPath}.${structVar.name.toUpperCase()}`
-          const fieldCompositeKey = `${elementCompositeKey}.${structVar.name}`
-
-          const debugVar = debugVariables.find((dv) => dv.name === fieldFullPath)
-
-          let fieldType = 'UNKNOWN'
-          if (structVar.type.definition === 'base-type') {
-            fieldType = structVar.type.value.toUpperCase()
-          } else if (structVar.type.definition === 'user-data-type') {
-            fieldType = structVar.type.value
-          }
-
-          structChildren.push({
-            name: structVar.name,
-            fullPath: fieldFullPath,
-            compositeKey: fieldCompositeKey,
-            type: fieldType,
-            isComplex: false,
-            debugIndex: debugVar?.index,
-          })
-        }
-
-        children.push({
-          name: `[${elementIndex}]`,
-          fullPath: elementFullPath,
-          compositeKey: elementCompositeKey,
-          type: elementTypeName,
-          isComplex: true,
-          children: structChildren,
-        })
-      } else {
-        const debugVar = debugVariables.find((dv) => dv.name === elementFullPath)
-
-        children.push({
-          name: `[${elementIndex}]`,
-          fullPath: elementFullPath,
-          compositeKey: elementCompositeKey,
-          type: elementTypeName,
-          isComplex: false,
-          debugIndex: debugVar?.index,
-        })
-      }
+      children.push(nestedNode)
     }
   }
 
@@ -328,32 +582,52 @@ function buildStructTree(
     const fieldFullPath = `${fullPath}.value.${structVar.name.toUpperCase()}`
     const fieldCompositeKey = `${compositeKey}.${structVar.name}`
 
-    const debugVar = debugVariables.find((dv) => dv.name === fieldFullPath)
-
-    let fieldType = 'UNKNOWN'
-    let isFieldComplex = false
-
     if (structVar.type.definition === 'base-type') {
-      fieldType = structVar.type.value.toUpperCase()
-    } else if (structVar.type.definition === 'user-data-type') {
-      fieldType = structVar.type.value
-      isFieldComplex = true
-    } else if (structVar.type.definition === 'array') {
-      fieldType = 'ARRAY'
-      isFieldComplex = true
-    } else if (structVar.type.definition === 'derived') {
-      fieldType = structVar.type.value
-      isFieldComplex = true
-    }
+      const debugVar = debugVariables.find((dv) => dv.name === fieldFullPath)
 
-    children.push({
-      name: structVar.name,
-      fullPath: fieldFullPath,
-      compositeKey: fieldCompositeKey,
-      type: fieldType,
-      isComplex: isFieldComplex,
-      debugIndex: debugVar?.index,
-    })
+      children.push({
+        name: structVar.name,
+        fullPath: fieldFullPath,
+        compositeKey: fieldCompositeKey,
+        type: structVar.type.value.toUpperCase(),
+        isComplex: false,
+        debugIndex: debugVar?.index,
+      })
+    } else if (structVar.type.definition === 'user-data-type') {
+      const nestedNode = expandNestedNode(
+        structVar.name,
+        fieldFullPath,
+        fieldCompositeKey,
+        structVar.type.value,
+        'user-data-type',
+        debugVariables,
+        project,
+      )
+      children.push(nestedNode)
+    } else if (structVar.type.definition === 'array') {
+      const nestedNode = expandNestedNode(
+        structVar.name,
+        fieldFullPath,
+        fieldCompositeKey,
+        'ARRAY',
+        'array',
+        debugVariables,
+        project,
+        structVar.type.data,
+      )
+      children.push(nestedNode)
+    } else if (structVar.type.definition === 'derived') {
+      const nestedNode = expandNestedNode(
+        structVar.name,
+        fieldFullPath,
+        fieldCompositeKey,
+        structVar.type.value,
+        'derived',
+        debugVariables,
+        project,
+      )
+      children.push(nestedNode)
+    }
   }
 
   return {
