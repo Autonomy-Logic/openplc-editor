@@ -141,6 +141,7 @@ function buildFunctionBlockTree(
   }
 
   const fbTypeName = variable.type.value
+  const fbTypeNameUpper = fbTypeName.toUpperCase()
   const variableName = variable.name.toUpperCase()
   const instanceNameUpper = instanceName.toUpperCase()
   const pouNameUpper = pouName.toUpperCase()
@@ -148,13 +149,30 @@ function buildFunctionBlockTree(
   const compositeKey = `${pouNameUpper}:${variableName}`
   const fullPath = `RES0__${instanceNameUpper}.${variableName}`
 
-  const standardFB = StandardFunctionBlocks.pous.find((pou) => pou.name === fbTypeName && pou.type === 'function-block')
+  const standardFB = StandardFunctionBlocks.pous.find(
+    (pou) => pou.name.toUpperCase() === fbTypeNameUpper && pou.type === 'function-block',
+  )
 
-  const customFB = project.data.pous.find((pou) => pou.type === 'function-block' && pou.data.name === fbTypeName)
+  const customFB = project.data.pous.find(
+    (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === fbTypeNameUpper,
+  )
 
   const fbDefinition = standardFB || (customFB?.type === 'function-block' ? customFB.data : null)
 
   if (!fbDefinition) {
+    if (DEBUG_TREE_LOGGING) {
+      console.warn(`[buildFunctionBlockTree] FB definition not found for "${fbTypeName}"`)
+      console.warn(
+        `  Available custom FBs:`,
+        project.data.pous.filter((p) => p.type === 'function-block').map((p) => ({ name: p.data.name, type: p.type })),
+      )
+      const caseInsensitiveMatch = project.data.pous.find(
+        (p) => p.type === 'function-block' && p.data.name.toUpperCase() === fbTypeName.toUpperCase(),
+      )
+      if (caseInsensitiveMatch) {
+        console.warn(`  Case-insensitive match found: "${caseInsensitiveMatch.data.name}"`)
+      }
+    }
     return {
       name: variable.name,
       fullPath,
@@ -257,8 +275,13 @@ function expandNestedNode(
   },
 ): DebugTreeNode {
   if (typeDefinition === 'derived') {
-    const standardFB = StandardFunctionBlocks.pous.find((pou) => pou.name === typeName && pou.type === 'function-block')
-    const customFB = project.data.pous.find((pou) => pou.type === 'function-block' && pou.data.name === typeName)
+    const typeNameUpper = typeName.toUpperCase()
+    const standardFB = StandardFunctionBlocks.pous.find(
+      (pou) => pou.name.toUpperCase() === typeNameUpper && pou.type === 'function-block',
+    )
+    const customFB = project.data.pous.find(
+      (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === typeNameUpper,
+    )
     const fbDefinition = standardFB || (customFB?.type === 'function-block' ? customFB.data : null)
 
     if (!fbDefinition) {
@@ -311,7 +334,10 @@ function expandNestedNode(
       children,
     }
   } else if (typeDefinition === 'user-data-type') {
-    const structType = project.data.dataTypes.find((dt) => dt.name === typeName && dt.derivation === 'structure')
+    const typeNameUpper = typeName.toUpperCase()
+    const structType = project.data.dataTypes.find(
+      (dt) => dt.name.toUpperCase() === typeNameUpper && dt.derivation === 'structure',
+    )
 
     if (!structType || structType.derivation !== 'structure') {
       return {
@@ -581,6 +607,7 @@ function buildStructTree(
   }
 
   const structTypeName = variable.type.value
+  const structTypeNameUpper = structTypeName.toUpperCase()
   const variableName = variable.name.toUpperCase()
   const instanceNameUpper = instanceName.toUpperCase()
   const pouNameUpper = pouName.toUpperCase()
@@ -588,7 +615,9 @@ function buildStructTree(
   const compositeKey = `${pouNameUpper}:${variableName}`
   const fullPath = `RES0__${instanceNameUpper}.${variableName}`
 
-  const structType = project.data.dataTypes.find((dt) => dt.name === structTypeName && dt.derivation === 'structure')
+  const structType = project.data.dataTypes.find(
+    (dt) => dt.name.toUpperCase() === structTypeNameUpper && dt.derivation === 'structure',
+  )
 
   if (!structType || structType.derivation !== 'structure') {
     return {
