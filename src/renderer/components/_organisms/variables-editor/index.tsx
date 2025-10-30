@@ -338,6 +338,7 @@ const VariablesEditor = () => {
         associatedPou: editor.meta.name,
         data: {
           ...variable,
+          class: defaultClass,
           type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
         },
       })
@@ -353,6 +354,7 @@ const VariablesEditor = () => {
       associatedPou: editor.meta.name,
       data: {
         ...variable,
+        class: defaultClass,
         type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
       },
       rowToInsert: selectedRow + 1,

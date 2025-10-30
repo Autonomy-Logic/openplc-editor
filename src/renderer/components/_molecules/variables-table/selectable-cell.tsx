@@ -11,7 +11,7 @@ import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import { TypeChangeModal } from '../type-change-modal'
@@ -446,20 +446,8 @@ const SelectableClassCell = ({
   // Get the current value from the table
   const currentValue = getValue()
 
-  // Determine initial value: use "input" for Python/C++ if current value is empty/undefined
-  const getInitialValue = () => {
-    if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
-      return 'input'
-    }
-    return currentValue
-  }
-
-  const initialValue = getInitialValue()
-
   // We need to keep and update the state of the cell normally
-  const [cellValue, setCellValue] = useState(initialValue)
-
-  const didInitRef = useRef(false)
+  const [cellValue, setCellValue] = useState(currentValue)
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onValueChange = (value: string) => {
@@ -476,19 +464,9 @@ const SelectableClassCell = ({
     }
   }
 
-  // Effect to handle initial normalization of 'local' to 'input' for Python/C++ blocks
   useEffect(() => {
-    if (didInitRef.current) return
-    didInitRef.current = true
-
-    if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
-      // Set default value to "input" for Python/C++ and update the table
-      setCellValue('input')
-      table.options.meta?.updateData(index, id, 'input')
-    } else {
-      setCellValue(currentValue)
-    }
-  }, [])
+    setCellValue(currentValue)
+  }, [currentValue])
 
   return (
     <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)} disabled={isDebuggerVisible}>
