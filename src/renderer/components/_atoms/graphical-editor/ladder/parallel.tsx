@@ -1,7 +1,6 @@
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
-import { useState } from 'react'
 
 import { buildHandle, CustomHandle, CustomHandleProps } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils'
@@ -29,8 +28,6 @@ export const DEFAULT_PARALLEL_CONNECTOR_Y = DEFAULT_PARALLEL_HEIGHT / 2
 
 export const Parallel = ({ selected, data }: ParallelProps) => {
   const strokeColor = data.isFlowActive ? '#00FF00' : undefined
-  const [isHovered, setIsHovered] = useState(false)
-  const isCloseParallel = data.type === 'close'
 
   const handleMouseDown = (event: React.MouseEvent) => {
     event.preventDefault()
@@ -48,8 +45,6 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
           width: DEFAULT_PARALLEL_WIDTH,
           height: DEFAULT_PARALLEL_HEIGHT,
         }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
       >
         <svg
           style={{
@@ -65,9 +60,9 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
             style={strokeColor ? { stroke: strokeColor, strokeWidth: 2 } : undefined}
           />
         </svg>
-        {isCloseParallel && isHovered && data.onResizeStart && (
+        {data.type === 'close' && data.onResizeStart && (
           <div
-            className='absolute left-0 top-1/2 z-10 h-12 w-6 -translate-x-2 -translate-y-1/2 cursor-ew-resize bg-brand opacity-70 hover:opacity-100'
+            className='absolute right-0 top-1/2 z-50 h-16 w-8 -translate-y-1/2 translate-x-2 cursor-ew-resize bg-brand opacity-0 hover:opacity-100'
             style={{
               borderRadius: '2px',
             }}
