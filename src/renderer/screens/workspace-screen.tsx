@@ -50,7 +50,10 @@ const WorkspaceScreen = () => {
     },
   } = useOpenPLCStore()
 
-  const expandedVisibleLeafKeys = useOpenPLCStore((s) => s.workspace.expandedVisibleLeafKeys)
+  const expandedVisibleLeafKeys = useOpenPLCStore((s): Set<string> => {
+    const v = s.workspace.expandedVisibleLeafKeys
+    return v instanceof Set ? v : new Set<string>()
+  })
 
   const allDebugVariables = pous.flatMap((pou) => {
     return pou.data.variables
