@@ -38,7 +38,7 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
   return (
     <>
       <div
-        className={cn('relative hover:ring-2 hover:ring-brand', {
+        className={cn('group relative hover:ring-2 hover:ring-brand', {
           'ring-2 ring-brand': selected,
         })}
         style={{
@@ -60,9 +60,9 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
             style={strokeColor ? { stroke: strokeColor, strokeWidth: 2 } : undefined}
           />
         </svg>
-        {data.type === 'close' && data.onResizeStart && (
+        {data.type === 'close' && (
           <div
-            className='absolute right-0 top-1/2 z-50 h-16 w-8 -translate-y-1/2 translate-x-2 cursor-ew-resize bg-brand opacity-0 hover:opacity-100'
+            className='pointer-events-auto absolute left-0 top-1/2 z-50 h-12 w-6 -translate-x-1 -translate-y-1/2 cursor-ew-resize bg-brand opacity-0 group-hover:opacity-100'
             style={{
               borderRadius: '2px',
             }}
