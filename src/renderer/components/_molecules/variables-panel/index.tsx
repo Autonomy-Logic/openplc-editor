@@ -1,5 +1,9 @@
 import ViewIcon from '@root/renderer/assets/icons/interface/View'
 import ZapIcon from '@root/renderer/assets/icons/interface/Zap'
+import { TreeNode } from '@root/renderer/components/_atoms/debug-tree-node'
+import { DebugTreeNode } from '@root/types/debugger'
+import { useState } from 'react'
+
 type Variable = {
   name: string
   type: string
@@ -7,11 +11,15 @@ type Variable = {
 }
 
 type VariablePanelProps = {
-  variables: Variable[]
+  variables?: Variable[]
+  variableTree?: Map<string, DebugTreeNode>
   graphList?: string[]
   setGraphList: React.Dispatch<React.SetStateAction<string[]>>
 }
-const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelProps) => {
+
+const VariablesPanel = ({ variables, variableTree, setGraphList, graphList }: VariablePanelProps) => {
+  const [expandedNodes, setExpandedNodes] = useState<Map<string, boolean>>(new Map())
+
   const toggleGraphVisibility = (variableName: string) => {
     setGraphList((prevGraphList) => {
       if (prevGraphList.includes(variableName)) {
@@ -22,12 +30,47 @@ const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelPro
     })
   }
 
-  return (
-    <div className='flex h-full w-full min-w-52 flex-col gap-2 overflow-hidden rounded-lg border-[0.75px] border-neutral-200 bg-white p-2 text-cp-sm font-medium text-neutral-1000 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-50'>
-      <div className='flex h-7 w-[90px] select-none items-center gap-1 rounded-lg bg-neutral-100 p-1 text-cp-sm dark:bg-brand-dark'>
-        <ZapIcon className='h-4 w-4' />
-        <p>Variables</p>
+  const handleToggleExpand = (compositeKey: string) => {
+    setExpandedNodes((prev) => {
+      const newMap = new Map(prev)
+      newMap.set(compositeKey, !newMap.get(compositeKey))
+      return newMap
+    })
+  }
+
+  const updateNodeExpansion = (node: DebugTreeNode): DebugTreeNode => {
+    const isExpanded = expandedNodes.get(node.compositeKey) ?? false
+    return {
+      ...node,
+      isExpanded,
+      children: node.children?.map(updateNodeExpansion),
+    }
+  }
+
+  const renderTreeView = () => {
+    if (!variableTree || variableTree.size === 0) return null
+
+    const rootNodes = Array.from(variableTree.values()).map(updateNodeExpansion)
+
+    return (
+      <div className='flex h-full flex-col overflow-auto whitespace-nowrap'>
+        {rootNodes.map((node) => (
+          <TreeNode
+            key={node.compositeKey}
+            node={node}
+            onToggleExpand={handleToggleExpand}
+            onViewToggle={toggleGraphVisibility}
+            isViewing={graphList?.includes(node.compositeKey)}
+          />
+        ))}
       </div>
+    )
+  }
+
+  const renderFlatView = () => {
+    if (!variables || variables.length === 0) return null
+
+    return (
       <div className='flex h-full flex-col gap-2 overflow-auto whitespace-nowrap'>
         {variables.map((variable) => (
           <div key={variable.name} className='grid h-auto w-full grid-cols-[1fr_auto_auto] items-center gap-2'>
@@ -45,6 +88,16 @@ const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelPro
           </div>
         ))}
       </div>
+    )
+  }
+
+  return (
+    <div className='flex h-full w-full min-w-52 flex-col gap-2 overflow-hidden rounded-lg border-[0.75px] border-neutral-200 bg-white p-2 text-cp-sm font-medium text-neutral-1000 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-50'>
+      <div className='flex h-7 w-[90px] select-none items-center gap-1 rounded-lg bg-neutral-100 p-1 text-cp-sm dark:bg-brand-dark'>
+        <ZapIcon className='h-4 w-4' />
+        <p>Variables</p>
+      </div>
+      {variableTree && variableTree.size > 0 ? renderTreeView() : renderFlatView()}
     </div>
   )
 }

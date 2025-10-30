@@ -1,3 +1,4 @@
+import type { DebugTreeNode } from '@root/types/debugger'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -21,6 +22,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugVariableIndexes: new Map(),
     debugVariableValues: new Map(),
     debugForcedVariables: new Map(),
+    debugVariableTree: new Map(),
     isPlcLogsVisible: false,
     plcLogs: '',
     close: {
@@ -169,6 +171,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugForcedVariables = forced
+        }),
+      )
+    },
+    setDebugVariableTree: (tree: Map<string, DebugTreeNode>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableTree = tree
         }),
       )
     },
