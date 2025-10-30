@@ -435,6 +435,24 @@ const WorkspaceScreen = () => {
             })
           }
 
+          const functionBlockInstances = currentPou.data.variables.filter(
+            (variable) => variable.type.definition === 'derived',
+          )
+
+          functionBlockInstances.forEach((fbInstance) => {
+            Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+              if (
+                varInfo.pouName === currentPou.data.name &&
+                varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                varInfo.variable.type.definition === 'base-type' &&
+                varInfo.variable.type.value.toLowerCase() === 'bool'
+              ) {
+                const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                debugVariableKeys.add(compositeKey)
+              }
+            })
+          })
+
           const instances = currentProject.data.configuration.resource.instances
           const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
           if (programInstance && currentLadderFlow) {
