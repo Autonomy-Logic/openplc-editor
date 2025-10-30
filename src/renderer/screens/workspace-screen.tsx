@@ -40,14 +40,7 @@ const PLC_LOGS_POLL_INTERVAL_MS = 2500
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: {
-      isCollapsed,
-      isDebuggerVisible,
-      isPlcLogsVisible,
-      debugVariableValues,
-      debugVariableTree,
-      expandedVisibleLeafKeys,
-    },
+    workspace: { isCollapsed, isDebuggerVisible, isPlcLogsVisible, debugVariableValues, debugVariableTree },
     editor,
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
@@ -56,6 +49,8 @@ const WorkspaceScreen = () => {
       data: { pous },
     },
   } = useOpenPLCStore()
+
+  const expandedVisibleLeafKeys = useOpenPLCStore((s) => s.workspace.expandedVisibleLeafKeys)
 
   const allDebugVariables = pous.flatMap((pou) => {
     return pou.data.variables
@@ -406,8 +401,7 @@ const WorkspaceScreen = () => {
             })
         })
 
-        const expandedVisibleLeafKeysSet = expandedVisibleLeafKeys
-        for (const key of expandedVisibleLeafKeysSet) {
+        for (const key of expandedVisibleLeafKeys) {
           debugVariableKeys.add(key)
         }
 
