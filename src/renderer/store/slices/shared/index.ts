@@ -349,9 +349,9 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return {
+      return Promise.resolve({
         success: true,
-      }
+      })
     },
 
     rename: async (pouName, newPouName) => {
