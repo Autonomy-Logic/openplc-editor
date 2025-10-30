@@ -20,52 +20,20 @@ const Debugger = ({ graphList }: DebuggerData) => {
   const historiesRef = useRef<Map<string, SeriesEntry>>(new Map())
 
   const {
-    project: {
-      data: { pous },
-    },
     workspace: { debugVariableValues },
   } = useOpenPLCStore()
-
-  const resolveVariable = (displayName: string): { compositeKey: string | null; isBool: boolean } => {
-    let pouName: string | null = null
-    let varName = displayName
-    const m = /^\[(?<pou>[^\]]+)\]\s+(?<name>.+)$/.exec(displayName)
-    if (m?.groups?.pou && m?.groups?.name) {
-      pouName = m.groups.pou
-      varName = m.groups.name
-    }
-
-    let foundPou = pouName
-    if (!foundPou) {
-      const matches = pous
-        .filter((p) => p.type === 'program')
-        .filter((p) => p.data.variables.some((v) => v.name === varName))
-      if (matches.length === 1) foundPou = matches[0].data.name
-    }
-
-    if (!foundPou) return { compositeKey: null, isBool: false }
-
-    const pou = pous.find((p) => p.type === 'program' && p.data.name === foundPou)
-    const variable = pou?.data.variables.find((v) => v.name === varName)
-    const isBool = variable?.type.definition === 'base-type' && variable.type.value.toLowerCase() === 'bool'
-
-    return { compositeKey: `${foundPou}:${varName}`, isBool: Boolean(isBool) }
-  }
 
   useEffect(() => {
     const set = historiesRef.current
     for (const key of Array.from(set.keys())) {
       if (!graphList.includes(key)) set.delete(key)
     }
-    for (const name of graphList) {
-      if (!set.has(name)) {
-        const { compositeKey, isBool } = resolveVariable(name)
-        if (compositeKey) {
-          set.set(name, { points: [], isBool, compositeKey })
-        }
+    for (const compositeKey of graphList) {
+      if (!set.has(compositeKey)) {
+        set.set(compositeKey, { points: [], isBool: false, compositeKey })
       }
     }
-  }, [graphList, pous])
+  }, [graphList])
 
   useEffect(() => {
     if (isPaused) return
@@ -75,10 +43,13 @@ const Debugger = ({ graphList }: DebuggerData) => {
       const raw = entry.compositeKey ? debugVariableValues.get(entry.compositeKey) : undefined
       if (raw === undefined) continue
       let y: number | null = null
-      if (entry.isBool) {
-        const up = String(raw).toUpperCase()
-        y = up === 'TRUE' ? 1 : up === 'FALSE' ? 0 : Number(up)
-        if (Number.isNaN(y)) y = null
+      const rawStr = String(raw).toUpperCase()
+      if (rawStr === 'TRUE') {
+        y = 1
+        entry.isBool = true
+      } else if (rawStr === 'FALSE') {
+        y = 0
+        entry.isBool = true
       } else {
         const n = Number(raw)
         y = Number.isNaN(n) ? null : n
@@ -100,10 +71,10 @@ const Debugger = ({ graphList }: DebuggerData) => {
   const renderSeries = useMemo(() => {
     const now = Date.now()
     const cutoff = now - range * 1000
-    return graphList.map((name) => {
-      const entry = historiesRef.current.get(name)
+    return graphList.map((compositeKey) => {
+      const entry = historiesRef.current.get(compositeKey)
       const points = entry ? entry.points.filter((p) => p.t >= cutoff) : []
-      return { name, points, isBool: entry?.isBool ?? false }
+      return { name: compositeKey, points, isBool: entry?.isBool ?? false }
     })
   }, [graphList, range, renderTrigger])
 

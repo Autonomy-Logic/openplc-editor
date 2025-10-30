@@ -109,7 +109,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         if (!blockVariableName) return undefined
 
         const outputVariableName = `${blockVariableName}.${sourceHandle}`
-        const compositeKey = `${programInstance.name}:${outputVariableName}`
+        const compositeKey = `${editor.meta.name}:${outputVariableName}`
         const value = debugVariableValues.get(compositeKey)
 
         if (value === undefined) return undefined
@@ -122,7 +122,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         if (!numericId) return undefined
 
         const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
-        const compositeKey = `${programInstance.name}:${tempVarName}`
+        const compositeKey = `${editor.meta.name}:${tempVarName}`
         const value = debugVariableValues.get(compositeKey)
 
         if (value === undefined) return undefined
