@@ -410,6 +410,10 @@ const WorkspaceScreen = () => {
           debugVariableKeys.add(key)
         })
 
+        graphList.forEach((key) => {
+          debugVariableKeys.add(key)
+        })
+
         const { editor, ladderFlows } = useOpenPLCStore.getState()
         const currentPou = currentProject.data.pous.find((pou) => pou.data.name === editor.meta.name)
         if (currentPou && currentPou.data.body.language === 'ld') {
