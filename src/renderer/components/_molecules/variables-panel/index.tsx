@@ -8,6 +8,7 @@ type Variable = {
   name: string
   type: string
   value?: string
+  compositeKey: string
 }
 
 type VariablePanelProps = {
@@ -15,10 +16,25 @@ type VariablePanelProps = {
   variableTree?: Map<string, DebugTreeNode>
   graphList?: string[]
   setGraphList: React.Dispatch<React.SetStateAction<string[]>>
+  debugVariableValues?: Map<string, string>
 }
 
-const VariablesPanel = ({ variables, variableTree, setGraphList, graphList }: VariablePanelProps) => {
+const VariablesPanel = ({
+  variables,
+  variableTree,
+  setGraphList,
+  graphList,
+  debugVariableValues,
+}: VariablePanelProps) => {
   const [expandedNodes, setExpandedNodes] = useState<Map<string, boolean>>(new Map())
+
+  console.log('[VariablesPanel] Render - variableTree size:', variableTree?.size ?? 0)
+  console.log('[VariablesPanel] Render - variableTree keys:', variableTree ? Array.from(variableTree.keys()) : [])
+  console.log('[VariablesPanel] Render - variables count:', variables?.length ?? 0)
+
+  const getValue = (compositeKey: string): string | undefined => {
+    return debugVariableValues?.get(compositeKey)
+  }
 
   const toggleGraphVisibility = (variableName: string) => {
     setGraphList((prevGraphList) => {
@@ -61,6 +77,7 @@ const VariablesPanel = ({ variables, variableTree, setGraphList, graphList }: Va
             onToggleExpand={handleToggleExpand}
             onViewToggle={toggleGraphVisibility}
             isViewing={graphList?.includes(node.compositeKey)}
+            getValue={getValue}
           />
         ))}
       </div>
@@ -73,13 +90,13 @@ const VariablesPanel = ({ variables, variableTree, setGraphList, graphList }: Va
     return (
       <div className='flex h-full flex-col gap-2 overflow-auto whitespace-nowrap'>
         {variables.map((variable) => (
-          <div key={variable.name} className='grid h-auto w-full grid-cols-[1fr_auto_auto] items-center gap-2'>
+          <div key={variable.compositeKey} className='grid h-auto w-full grid-cols-[1fr_auto_auto] items-center gap-2'>
             <div className='flex min-w-0 items-center gap-2'>
               <ViewIcon
                 type='button'
                 className='flex-shrink-0 cursor-pointer'
-                stroke={graphList?.includes(variable.name) ? '' : '#B4D0FE'}
-                onClick={() => toggleGraphVisibility(variable.name)}
+                stroke={graphList?.includes(variable.compositeKey) ? '#7C3AED' : '#B4D0FE'}
+                onClick={() => toggleGraphVisibility(variable.compositeKey)}
               />
               <p className='truncate text-neutral-1000 dark:text-white'>{variable.name}</p>
             </div>

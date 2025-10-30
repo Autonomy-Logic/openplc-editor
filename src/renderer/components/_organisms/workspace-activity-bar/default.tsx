@@ -902,29 +902,58 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             const treeMap = new Map<string, DebugTreeNode>()
             let complexCount = 0
 
+            const totalVars = project.data.pous.reduce((count, pou) => {
+              return count + pou.data.variables.length
+            }, 0)
+
+            console.log(
+              `[Debug Tree Builder] Starting tree build for ${totalVars} total variables (building for all, filtering in view)`,
+            )
+            console.log(`[Debug Tree Builder] Available instances:`, instances)
+
             project.data.pous.forEach((pou) => {
               if (pou.type !== 'program') return
 
               const instance = instances.find((inst) => inst.program === pou.data.name)
-              if (!instance) return
+              if (!instance) {
+                console.warn(`[Debug Tree Builder] No instance found for program ${pou.data.name}`)
+                return
+              }
+
+              console.log(`[Debug Tree Builder] Processing POU ${pou.data.name} with instance ${instance.name}`)
+              console.log(
+                `[Debug Tree Builder] Building trees for ${pou.data.variables.length} variables in ${pou.data.name}`,
+              )
 
               pou.data.variables.forEach((v) => {
-                if (!v.debug) return
-
                 try {
                   const node = buildDebugTree(v, pou.data.name, instance.name, parsed.variables, project)
+                  console.log(`[Debug Tree Builder] Built tree for ${v.name}:`, {
+                    compositeKey: node.compositeKey,
+                    isComplex: node.isComplex,
+                    type: node.type,
+                    childrenCount: node.children?.length ?? 0,
+                  })
                   trees.push(node)
                   treeMap.set(node.compositeKey, node)
                   if (node.isComplex) {
                     complexCount++
                   }
                 } catch (error) {
-                  console.error(`Failed to build tree for ${v.name}:`, error)
+                  console.error(`[Debug Tree Builder] Failed to build tree for ${v.name}:`, error)
                 }
               })
             })
 
+            console.log(`[Debug Tree Builder] Final treeMap size: ${treeMap.size}`)
+            console.log(`[Debug Tree Builder] Tree map keys:`, Array.from(treeMap.keys()))
+
             workspaceActions.setDebugVariableTree(treeMap)
+
+            setTimeout(() => {
+              const stateTreeSize = useOpenPLCStore.getState().workspace.debugVariableTree?.size ?? 0
+              console.log(`[Debug Tree Builder] State verification - debugVariableTree size: ${stateTreeSize}`)
+            }, 100)
 
             if (process.env.NODE_ENV === 'development') {
               ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = trees

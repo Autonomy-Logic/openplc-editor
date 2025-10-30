@@ -84,12 +84,26 @@ const WorkspaceScreen = () => {
 
   const debugVariables = allDebugVariables.map((v) => {
     const hasConflict = nameOccurrences.get(v.name)! > 1
+    const compositeKey = `${v.pouName}:${v.name}`
     return {
       name: hasConflict ? `[${v.pouName}] ${v.name}` : v.name,
       type: v.type,
       value: v.value,
+      compositeKey,
     }
   })
+
+  const watchedCompositeKeys = new Set<string>(
+    pous.flatMap((pou) => pou.data.variables.filter((v) => v.debug === true).map((v) => `${pou.data.name}:${v.name}`)),
+  )
+
+  const filteredDebugVariableTree = debugVariableTree
+    ? new Map(Array.from(debugVariableTree.entries()).filter(([key]) => watchedCompositeKeys.has(key)))
+    : undefined
+
+  console.log('[WorkspaceScreen] Watched composite keys:', Array.from(watchedCompositeKeys))
+  console.log('[WorkspaceScreen] Full tree size:', debugVariableTree?.size ?? 0)
+  console.log('[WorkspaceScreen] Filtered tree size:', filteredDebugVariableTree?.size ?? 0)
 
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
@@ -113,7 +127,7 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const {
-      workspace: { isDebuggerVisible, debuggerTargetIp, debugVariableIndexes, debugVariableValues },
+      workspace: { isDebuggerVisible, debuggerTargetIp, debugVariableIndexes },
       deviceDefinitions,
       workspaceActions,
       project,
@@ -450,8 +464,9 @@ const WorkspaceScreen = () => {
           return
         }
 
+        const { workspace: currentWorkspace } = useOpenPLCStore.getState()
         const newValues = new Map<string, string>()
-        debugVariableValues.forEach((value: string, key: string) => {
+        currentWorkspace.debugVariableValues.forEach((value: string, key: string) => {
           newValues.set(key, value)
         })
         let currentBatchSize = batchSize
@@ -874,9 +889,10 @@ const WorkspaceScreen = () => {
                           <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
                             <VariablesPanel
                               variables={debugVariables}
-                              variableTree={debugVariableTree}
+                              variableTree={filteredDebugVariableTree}
                               graphList={graphList}
                               setGraphList={setGraphList}
+                              debugVariableValues={debugVariableValues}
                             />
                           </ResizablePanel>
                           <ResizableHandle className='w-2 bg-transparent' />
