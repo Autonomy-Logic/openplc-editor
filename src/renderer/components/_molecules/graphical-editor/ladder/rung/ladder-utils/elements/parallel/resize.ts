@@ -81,11 +81,35 @@ export const resizeParallelBranch = (
     }
   })
 
+  // Separate serial and parallel nodes that are inside the branch
+  const serialInsideAfter = serialNodes
+    .filter((node) => {
+      const nodeRightEdge = node.position.x + (node.width ?? 0)
+      return nodeRightEdge < constrainedX
+    })
+    .sort((a, b) => a.position.x - b.position.x)
+
+  const parallelInsideAfter = parallelNodes
+    .filter((node) => {
+      const nodeRightEdge = node.position.x + (node.width ?? 0)
+      return nodeRightEdge < constrainedX
+    })
+    .sort((a, b) => a.position.x - b.position.x)
+
   console.log('[resizeParallelBranch] classification', {
-    inside: nodesInsideBranch.map((n) => ({ id: n.id, rightEdge: n.position.x + (n.width ?? 0) })),
-    outside: nodesOutsideBranch.map((n) => ({ id: n.id, rightEdge: n.position.x + (n.width ?? 0) })),
+    serialInside: serialInsideAfter.map((n) => ({
+      id: n.id,
+      x: n.position.x,
+      rightEdge: n.position.x + (n.width ?? 0),
+    })),
+    parallelInside: parallelInsideAfter.map((n) => ({
+      id: n.id,
+      x: n.position.x,
+      rightEdge: n.position.x + (n.width ?? 0),
+    })),
   })
 
+  // Remove all edges connected to the close parallel node
   const edgesToRemove = newEdges.filter(
     (edge) => edge.target === closeParallelNode.id || edge.source === closeParallelNode.id,
   )
@@ -93,22 +117,72 @@ export const resizeParallelBranch = (
     newEdges = removeEdge(newEdges, edge.id)
   })
 
-  if (serialNodes.length > 0) {
-    const lastSerialNode = serialNodes[serialNodes.length - 1]
-    if (nodesInsideBranch.includes(lastSerialNode)) {
-      newEdges.push(
-        buildEdge(lastSerialNode.id, closeParallelNode.id, {
-          sourceHandle: (lastSerialNode.data as BasicNodeData).outputConnector?.id,
-          targetHandle: closeParallelNode.data.inputConnector?.id,
-        }),
-      )
-    } else {
-      newEdges.push(
-        buildEdge(openParallelNode.id, lastSerialNode.id, {
-          sourceHandle: openParallelNode.data.outputConnector?.id,
-          targetHandle: (lastSerialNode.data as BasicNodeData).inputConnector?.id,
-        }),
-      )
+  // Remove edges from open parallel to any serial nodes that are now inside the branch
+  serialInsideAfter.forEach((node) => {
+    const staleEdges = newEdges.filter(
+      (edge) =>
+        edge.source === openParallelNode.id &&
+        edge.target === node.id &&
+        edge.sourceHandle === openParallelNode.data.outputConnector?.id,
+    )
+    staleEdges.forEach((edge) => {
+      newEdges = removeEdge(newEdges, edge.id)
+      console.log('[resizeParallelBranch] removed stale open→serial edge', {
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+      })
+    })
+  })
+
+  // Remove edges from open parallel to any parallel nodes that are now inside the branch
+  parallelInsideAfter.forEach((node) => {
+    const staleEdges = newEdges.filter(
+      (edge) =>
+        edge.source === openParallelNode.id &&
+        edge.target === node.id &&
+        edge.sourceHandle === openParallelNode.data.parallelOutputConnector?.id,
+    )
+    staleEdges.forEach((edge) => {
+      newEdges = removeEdge(newEdges, edge.id)
+      console.log('[resizeParallelBranch] removed stale open→parallel edge', {
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+      })
+    })
+  })
+
+  if (serialInsideAfter.length > 0) {
+    // Connect the chain of serial nodes inside the branch
+    for (let i = 0; i < serialInsideAfter.length; i++) {
+      const currentNode = serialInsideAfter[i]
+      const nextNode = serialInsideAfter[i + 1]
+
+      if (i === 0) {
+        newEdges.push(
+          buildEdge(openParallelNode.id, currentNode.id, {
+            sourceHandle: openParallelNode.data.parallelOutputConnector?.id,
+            targetHandle: (currentNode.data as BasicNodeData).inputConnector?.id,
+          }),
+        )
+      }
+
+      if (nextNode) {
+        newEdges.push(
+          buildEdge(currentNode.id, nextNode.id, {
+            sourceHandle: (currentNode.data as BasicNodeData).outputConnector?.id,
+            targetHandle: (nextNode.data as BasicNodeData).inputConnector?.id,
+          }),
+        )
+      } else {
+        newEdges.push(
+          buildEdge(currentNode.id, closeParallelNode.id, {
+            sourceHandle: (currentNode.data as BasicNodeData).outputConnector?.id,
+            targetHandle: closeParallelNode.data.inputConnector?.id,
+          }),
+        )
+      }
     }
   } else {
     newEdges.push(
@@ -119,22 +193,36 @@ export const resizeParallelBranch = (
     )
   }
 
-  if (parallelNodes.length > 0) {
-    const lastParallelNode = parallelNodes[parallelNodes.length - 1]
-    if (nodesInsideBranch.includes(lastParallelNode)) {
-      newEdges.push(
-        buildEdge(lastParallelNode.id, closeParallelNode.id, {
-          sourceHandle: (lastParallelNode.data as BasicNodeData).outputConnector?.id,
-          targetHandle: closeParallelNode.data.parallelInputConnector?.id,
-        }),
-      )
-    } else {
-      newEdges.push(
-        buildEdge(openParallelNode.id, lastParallelNode.id, {
-          sourceHandle: openParallelNode.data.parallelOutputConnector?.id,
-          targetHandle: (lastParallelNode.data as BasicNodeData).inputConnector?.id,
-        }),
-      )
+  if (parallelInsideAfter.length > 0) {
+    // Connect the chain of parallel nodes inside the branch
+    for (let i = 0; i < parallelInsideAfter.length; i++) {
+      const currentNode = parallelInsideAfter[i]
+      const nextNode = parallelInsideAfter[i + 1]
+
+      if (i === 0) {
+        newEdges.push(
+          buildEdge(openParallelNode.id, currentNode.id, {
+            sourceHandle: openParallelNode.data.parallelOutputConnector?.id,
+            targetHandle: (currentNode.data as BasicNodeData).inputConnector?.id,
+          }),
+        )
+      }
+
+      if (nextNode) {
+        newEdges.push(
+          buildEdge(currentNode.id, nextNode.id, {
+            sourceHandle: (currentNode.data as BasicNodeData).outputConnector?.id,
+            targetHandle: (nextNode.data as BasicNodeData).inputConnector?.id,
+          }),
+        )
+      } else {
+        newEdges.push(
+          buildEdge(currentNode.id, closeParallelNode.id, {
+            sourceHandle: (currentNode.data as BasicNodeData).outputConnector?.id,
+            targetHandle: closeParallelNode.data.parallelInputConnector?.id,
+          }),
+        )
+      }
     }
   } else {
     newEdges.push(
