@@ -161,5 +161,21 @@ export const resizeParallelBranch = (
     rung.defaultBounds as [number, number],
   )
 
+  const finalCloseNodeIndex = updatedNodes.findIndex((n) => n.id === closeParallelNode.id)
+  if (finalCloseNodeIndex !== -1) {
+    updatedNodes[finalCloseNodeIndex] = {
+      ...updatedNodes[finalCloseNodeIndex],
+      position: {
+        x: constrainedX,
+        y: updatedNodes[finalCloseNodeIndex].position.y,
+      },
+    }
+  }
+
+  console.log('[resizeParallelBranch] after updateDiagramElementsPosition', {
+    beforeFix: updatedNodes.find((n) => n.id === closeParallelNode.id)?.position.x,
+    afterFix: constrainedX,
+  })
+
   return { nodes: updatedNodes, edges: updatedEdges }
 }
