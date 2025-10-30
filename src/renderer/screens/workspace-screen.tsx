@@ -40,7 +40,14 @@ const PLC_LOGS_POLL_INTERVAL_MS = 2500
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { isCollapsed, isDebuggerVisible, isPlcLogsVisible, debugVariableValues, debugVariableTree },
+    workspace: {
+      isCollapsed,
+      isDebuggerVisible,
+      isPlcLogsVisible,
+      debugVariableValues,
+      debugVariableTree,
+      expandedVisibleLeafKeys,
+    },
     editor,
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
@@ -399,14 +406,8 @@ const WorkspaceScreen = () => {
             })
         })
 
-        Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
-          if (varInfo.variable.name.includes('.')) {
-            const parentKey = `${varInfo.pouName}:${varInfo.variable.name.split('.')[0]}`
-            if (debugVariableKeys.has(parentKey)) {
-              const childKey = `${varInfo.pouName}:${varInfo.variable.name}`
-              debugVariableKeys.add(childKey)
-            }
-          }
+        expandedVisibleLeafKeys.forEach((key) => {
+          debugVariableKeys.add(key)
         })
 
         const { editor, ladderFlows } = useOpenPLCStore.getState()

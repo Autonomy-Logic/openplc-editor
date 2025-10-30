@@ -23,6 +23,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugVariableValues: new Map(),
     debugForcedVariables: new Map(),
     debugVariableTree: new Map(),
+    expandedVisibleLeafKeys: new Set(),
     isPlcLogsVisible: false,
     plcLogs: '',
     close: {
@@ -178,6 +179,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugVariableTree = tree
+        }),
+      )
+    },
+    setExpandedVisibleLeafKeys: (keys: Set<string>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.expandedVisibleLeafKeys = keys
         }),
       )
     },

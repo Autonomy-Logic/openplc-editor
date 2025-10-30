@@ -1,8 +1,9 @@
 import ViewIcon from '@root/renderer/assets/icons/interface/View'
 import ZapIcon from '@root/renderer/assets/icons/interface/Zap'
 import { TreeNode } from '@root/renderer/components/_atoms/debug-tree-node'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { DebugTreeNode } from '@root/types/debugger'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type Variable = {
   name: string
@@ -27,6 +28,33 @@ const VariablesPanel = ({
   debugVariableValues,
 }: VariablePanelProps) => {
   const [expandedNodes, setExpandedNodes] = useState<Map<string, boolean>>(new Map())
+
+  useEffect(() => {
+    if (!variableTree || variableTree.size === 0) {
+      useOpenPLCStore.getState().workspaceActions.setExpandedVisibleLeafKeys(new Set())
+      return
+    }
+
+    const visibleLeafKeys = new Set<string>()
+
+    const collectVisibleLeaves = (node: DebugTreeNode) => {
+      if (!node.isComplex || !node.children || node.children.length === 0) {
+        if (node.debugIndex !== undefined) {
+          visibleLeafKeys.add(node.compositeKey)
+        }
+        return
+      }
+
+      const isExpanded = expandedNodes.get(node.compositeKey) ?? false
+      if (isExpanded && node.children) {
+        node.children.forEach(collectVisibleLeaves)
+      }
+    }
+
+    Array.from(variableTree.values()).forEach(collectVisibleLeaves)
+
+    useOpenPLCStore.getState().workspaceActions.setExpandedVisibleLeafKeys(visibleLeafKeys)
+  }, [expandedNodes, variableTree])
 
   const getValue = (compositeKey: string): string | undefined => {
     return debugVariableValues?.get(compositeKey)
