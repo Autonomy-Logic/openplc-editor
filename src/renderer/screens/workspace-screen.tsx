@@ -1,5 +1,6 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
+import { DebugTreeNode } from '@root/types/debugger'
 import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -98,7 +99,11 @@ const WorkspaceScreen = () => {
   )
 
   const filteredDebugVariableTree = debugVariableTree
-    ? new Map(Array.from(debugVariableTree.entries()).filter(([key]) => watchedCompositeKeys.has(key)))
+    ? new Map<string, DebugTreeNode>(
+        Array.from(debugVariableTree.entries() as Iterable<[string, DebugTreeNode]>).filter(([key]) =>
+          watchedCompositeKeys.has(key),
+        ),
+      )
     : undefined
 
   const [graphList, setGraphList] = useState<string[]>([])
