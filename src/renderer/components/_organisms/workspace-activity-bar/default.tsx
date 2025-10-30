@@ -2,8 +2,9 @@ import { StopIcon } from '@root/renderer/assets'
 import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { buildDebugTree, type DebugTreeNode } from '@root/renderer/utils/debug-tree-builder'
+import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
 import { matchVariableWithDebugEntry, parseDebugFile } from '@root/renderer/utils/parse-debug-file'
+import type { DebugTreeNode } from '@root/types/debugger'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
@@ -896,46 +897,52 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
           })
 
-          if (process.env.NODE_ENV === 'development') {
-            try {
-              const trees: DebugTreeNode[] = []
-              let complexCount = 0
+          try {
+            const trees: DebugTreeNode[] = []
+            const treeMap = new Map<string, DebugTreeNode>()
+            let complexCount = 0
 
-              project.data.pous.forEach((pou) => {
-                if (pou.type !== 'program') return
+            project.data.pous.forEach((pou) => {
+              if (pou.type !== 'program') return
 
-                const instance = instances.find((inst) => inst.program === pou.data.name)
-                if (!instance) return
+              const instance = instances.find((inst) => inst.program === pou.data.name)
+              if (!instance) {
+                return
+              }
 
-                pou.data.variables.forEach((v) => {
-                  try {
-                    const node = buildDebugTree(v, pou.data.name, instance.name, parsed.variables, project)
-                    trees.push(node)
-                    if (node.isComplex) {
-                      complexCount++
-                    }
-                  } catch (error) {
-                    console.error(`Failed to build tree for ${v.name}:`, error)
+              pou.data.variables.forEach((v) => {
+                try {
+                  const node = buildDebugTree(v, pou.data.name, instance.name, parsed.variables, project)
+                  trees.push(node)
+                  treeMap.set(node.compositeKey, node)
+                  if (node.isComplex) {
+                    complexCount++
                   }
-                })
+                } catch (error) {
+                  console.error(`[Debug Tree Builder] Failed to build tree for ${v.name}:`, error)
+                }
               })
+            })
+
+            workspaceActions.setDebugVariableTree(treeMap)
+
+            if (process.env.NODE_ENV === 'development') {
               ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = trees
-
               console.log(`[Debug Tree Builder] Built ${trees.length} debug trees (${complexCount} complex variables)`)
-
-              consoleActions.addLog({
-                id: crypto.randomUUID(),
-                level: 'info',
-                message: `Debug tree builder: Built ${trees.length} trees (${complexCount} complex). Check DevTools console for details.`,
-              })
-            } catch (error) {
-              console.error('[Debug Tree Builder] Error building trees:', error)
-              consoleActions.addLog({
-                id: crypto.randomUUID(),
-                level: 'warning',
-                message: `Debug tree builder encountered errors. Check DevTools console.`,
-              })
             }
+
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'info',
+              message: `Debug tree builder: Built ${trees.length} trees (${complexCount} complex).`,
+            })
+          } catch (error) {
+            console.error('[Debug Tree Builder] Error building trees:', error)
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'warning',
+              message: `Debug tree builder encountered errors. Check DevTools console.`,
+            })
           }
 
           const connectResult: { success: boolean; error?: string } = await window.bridge.debuggerConnect(
