@@ -28,10 +28,6 @@ const VariablesPanel = ({
 }: VariablePanelProps) => {
   const [expandedNodes, setExpandedNodes] = useState<Map<string, boolean>>(new Map())
 
-  console.log('[VariablesPanel] Render - variableTree size:', variableTree?.size ?? 0)
-  console.log('[VariablesPanel] Render - variableTree keys:', variableTree ? Array.from(variableTree.keys()) : [])
-  console.log('[VariablesPanel] Render - variables count:', variables?.length ?? 0)
-
   const getValue = (compositeKey: string): string | undefined => {
     return debugVariableValues?.get(compositeKey)
   }

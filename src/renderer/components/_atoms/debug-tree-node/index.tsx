@@ -16,16 +16,6 @@ type TreeNodeProps = ComponentPropsWithoutRef<'div'> & {
 const TreeNode = ({ node, onToggleExpand, onViewToggle, isViewing, getValue, level = 0, ...rest }: TreeNodeProps) => {
   const indentWidth = level * 16
 
-  if (level === 0) {
-    console.log('[TreeNode] Rendering root node:', {
-      compositeKey: node.compositeKey,
-      name: node.name,
-      type: node.type,
-      isComplex: node.isComplex,
-      childrenCount: node.children?.length ?? 0,
-    })
-  }
-
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (node.isComplex) {

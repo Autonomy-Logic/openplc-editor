@@ -101,10 +101,6 @@ const WorkspaceScreen = () => {
     ? new Map(Array.from(debugVariableTree.entries()).filter(([key]) => watchedCompositeKeys.has(key)))
     : undefined
 
-  console.log('[WorkspaceScreen] Watched composite keys:', Array.from(watchedCompositeKeys))
-  console.log('[WorkspaceScreen] Full tree size:', debugVariableTree?.size ?? 0)
-  console.log('[WorkspaceScreen] Filtered tree size:', filteredDebugVariableTree?.size ?? 0)
-
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState('console')
