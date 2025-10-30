@@ -11,7 +11,7 @@ import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import { TypeChangeModal } from '../type-change-modal'
@@ -97,7 +97,7 @@ const SelectableTypeCell = ({
   // Filter available types based on language
   const getAvailableTypes = () => {
     if (language === 'python' || language === 'cpp') {
-      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT']
+      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
 
       // Only show Base Type for Python/C++ and filter out specific types
       const availableTypes = VariableTypes.filter((type) => type.definition === 'base-type').map((type) => ({
@@ -459,6 +459,8 @@ const SelectableClassCell = ({
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
 
+  const didInitRef = useRef(false)
+
   // When the input is blurred, we'll call our table meta's updateData function
   const onValueChange = (value: string) => {
     // Todo: Must update the data in the store
@@ -474,17 +476,19 @@ const SelectableClassCell = ({
     }
   }
 
-  // Effect to handle language changes and set default value for Python/C++
+  // Effect to handle initial normalization of 'local' to 'input' for Python/C++ blocks
   useEffect(() => {
+    if (didInitRef.current) return
+    didInitRef.current = true
+
     if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
       // Set default value to "input" for Python/C++ and update the table
       setCellValue('input')
       table.options.meta?.updateData(index, id, 'input')
     } else {
-      console.log(currentValue)
       setCellValue(currentValue)
     }
-  }, [currentValue, language, index, id, table])
+  }, [])
 
   return (
     <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)} disabled={isDebuggerVisible}>
