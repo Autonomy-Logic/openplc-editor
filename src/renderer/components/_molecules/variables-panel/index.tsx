@@ -2,7 +2,7 @@ import ViewIcon from '@root/renderer/assets/icons/interface/View'
 import ZapIcon from '@root/renderer/assets/icons/interface/Zap'
 import { TreeNode } from '@root/renderer/components/_atoms/debug-tree-node'
 import { DebugTreeNode } from '@root/types/debugger'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 type Variable = {
   name: string
@@ -59,6 +59,13 @@ const VariablesPanel = ({
     }
   }
 
+  const isViewingPredicate = useCallback(
+    (compositeKey: string) => {
+      return graphList?.includes(compositeKey) ?? false
+    },
+    [graphList],
+  )
+
   const renderTreeView = () => {
     if (!variableTree || variableTree.size === 0) return null
 
@@ -72,7 +79,7 @@ const VariablesPanel = ({
             node={node}
             onToggleExpand={handleToggleExpand}
             onViewToggle={toggleGraphVisibility}
-            isViewing={graphList?.includes(node.compositeKey)}
+            isViewing={isViewingPredicate}
             getValue={getValue}
           />
         ))}

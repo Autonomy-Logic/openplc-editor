@@ -8,13 +8,14 @@ type TreeNodeProps = ComponentPropsWithoutRef<'div'> & {
   node: DebugTreeNode
   onToggleExpand: (compositeKey: string) => void
   onViewToggle?: (compositeKey: string) => void
-  isViewing?: boolean
+  isViewing?: (compositeKey: string) => boolean
   getValue?: (compositeKey: string) => string | undefined
   level?: number
 }
 
 const TreeNode = ({ node, onToggleExpand, onViewToggle, isViewing, getValue, level = 0, ...rest }: TreeNodeProps) => {
   const indentWidth = level * 16
+  const isCurrentNodeViewing = isViewing ? isViewing(node.compositeKey) : false
 
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -57,7 +58,7 @@ const TreeNode = ({ node, onToggleExpand, onViewToggle, isViewing, getValue, lev
               className='flex h-4 w-4 items-center justify-center'
               aria-label='Toggle graph visibility'
             >
-              <ViewIcon className='h-4 w-4 cursor-pointer' stroke={isViewing ? '#7C3AED' : '#B4D0FE'} />
+              <ViewIcon className='h-4 w-4 cursor-pointer' stroke={isCurrentNodeViewing ? '#7C3AED' : '#B4D0FE'} />
             </button>
           ) : null}
         </div>

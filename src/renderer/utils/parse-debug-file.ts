@@ -53,14 +53,18 @@ function parsePathComponents(fullPath: string) {
   let parentPath: string | undefined
 
   if (isStructField) {
-    const valueIndex = fullPath.indexOf('.value.')
+    const valueIndex = fullPath.lastIndexOf('.value.')
     if (valueIndex !== -1) {
       parentPath = fullPath.substring(0, valueIndex)
     }
   } else if (isArrayElement) {
-    const valueTableIndex = fullPath.indexOf('.value.table[')
+    const valueTableIndex = fullPath.lastIndexOf('.value.table[')
     if (valueTableIndex !== -1) {
-      parentPath = fullPath.substring(0, valueTableIndex)
+      const closingBracketIndex = fullPath.indexOf(']', valueTableIndex)
+      parentPath =
+        closingBracketIndex !== -1
+          ? fullPath.substring(0, closingBracketIndex + 1)
+          : fullPath.substring(0, valueTableIndex)
     }
   } else if (isFunctionBlockVar) {
     const lastDotIndex = fullPath.lastIndexOf('.')

@@ -4,7 +4,7 @@ import type { PLCProject, PLCVariable } from '@root/types/PLC/open-plc'
 import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import type { DebugVariable } from './parse-debug-file'
 
-const DEBUG_TREE_LOGGING = true
+const DEBUG_TREE_LOGGING = false
 
 /**
  * Normalizes type strings for case-insensitive comparison.
@@ -358,6 +358,29 @@ function expandNestedNode(
           'derived',
           debugVariables,
           project,
+        )
+        children.push(nestedNode)
+      } else if (fbVar.type.definition === 'user-data-type') {
+        const nestedNode = expandNestedNode(
+          fbVar.name,
+          childFullPath,
+          childCompositeKey,
+          fbVar.type.value,
+          'user-data-type',
+          debugVariables,
+          project,
+        )
+        children.push(nestedNode)
+      } else if (fbVar.type.definition === 'array') {
+        const nestedNode = expandNestedNode(
+          fbVar.name,
+          childFullPath,
+          childCompositeKey,
+          'ARRAY',
+          'array',
+          debugVariables,
+          project,
+          fbVar.type.data,
         )
         children.push(nestedNode)
       }
