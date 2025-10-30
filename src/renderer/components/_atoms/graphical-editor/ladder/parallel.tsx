@@ -14,6 +14,7 @@ export type ParallelNode = Node<
     parallelCloseReference: string | undefined
     type: 'open' | 'close'
     isFlowActive?: boolean
+    onResizeStart?: (event: React.MouseEvent) => void
   }
 >
 type ParallelProps = NodeProps<ParallelNode>
@@ -31,10 +32,16 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
   const [isHovered, setIsHovered] = useState(false)
   const isCloseParallel = data.type === 'close'
 
+  const handleMouseDown = (event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    data.onResizeStart?.(event)
+  }
+
   return (
     <>
       <div
-        className={cn('hover:ring-2 hover:ring-brand', {
+        className={cn('relative hover:ring-2 hover:ring-brand', {
           'ring-2 ring-brand': selected,
         })}
         style={{
@@ -58,13 +65,13 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
             style={strokeColor ? { stroke: strokeColor, strokeWidth: 2 } : undefined}
           />
         </svg>
-        {isCloseParallel && isHovered && (
+        {isCloseParallel && isHovered && data.onResizeStart && (
           <div
-            className='absolute left-0 top-1/2 h-8 w-2 -translate-x-1 -translate-y-1/2 cursor-ew-resize bg-brand opacity-70 hover:opacity-100'
+            className='absolute left-0 top-1/2 z-10 h-12 w-6 -translate-x-2 -translate-y-1/2 cursor-ew-resize bg-brand opacity-70 hover:opacity-100'
             style={{
               borderRadius: '2px',
             }}
-            data-resize-handle='true'
+            onMouseDown={handleMouseDown}
           />
         )}
       </div>

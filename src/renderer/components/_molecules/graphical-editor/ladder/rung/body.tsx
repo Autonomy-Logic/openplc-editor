@@ -7,7 +7,7 @@ import { cn } from '@root/utils'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
 import { differenceWith, isEqual, parseInt } from 'lodash'
-import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { customNodeTypes } from '../../../../_atoms/graphical-editor/ladder'
 import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
@@ -55,7 +55,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   const [dragging, setDragging] = useState(false)
   const [resizing, setResizing] = useState(false)
   const [resizingNode, setResizingNode] = useState<ParallelNode | null>(null)
-  const [resizeStartX, setResizeStartX] = useState<number>(0)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
@@ -263,7 +262,18 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }))
     }
 
-    return baseNodes
+    return baseNodes.map((node) => {
+      if (node.type === 'parallel' && (node as ParallelNode).data.type === 'close') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            onResizeStart: (event: React.MouseEvent) => handleResizeStart(event, node),
+          },
+        }
+      }
+      return node
+    })
   }, [
     rungLocal.edges,
     rungLocal.nodes,
@@ -509,7 +519,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   /**
    * Handle the drag of a node
    */
-  const handleNodeDrag = (event: MouseEvent) => {
+  const handleNodeDrag = (event: React.MouseEvent) => {
     if (!reactFlowInstance) return
     const closestPlaceholder = onElementDragOver(rungLocal, reactFlowInstance, { x: event.clientX, y: event.clientY })
     if (!closestPlaceholder) return
@@ -571,35 +581,25 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   /**
    * Handle the start of a parallel node resize
    */
-  const handleResizeStart = useCallback((event: MouseEvent, node: FlowNode) => {
-    // Check if the click is on a resize handle
-    const target = event.target as HTMLElement
-    if (!target.dataset.resizeHandle) return
-
+  const handleResizeStart = useCallback((_event: React.MouseEvent, node: FlowNode) => {
     if (node.type !== 'parallel') return
     const parallelNode = node as ParallelNode
     if (parallelNode.data.type !== 'close') return
 
-    event.stopPropagation()
     setResizing(true)
     setResizingNode(parallelNode)
-    setResizeStartX(event.clientX)
   }, [])
 
   /**
    * Handle the drag of a parallel node resize
    */
   const handleResizeDrag = useCallback(
-    (event: MouseEvent) => {
+    (event: globalThis.MouseEvent) => {
       if (!resizing || !resizingNode || !reactFlowInstance) return
 
-      event.stopPropagation()
+      const position = reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      const newX = position.x
 
-      const deltaX = event.clientX - resizeStartX
-      const zoom = reactFlowInstance.getZoom()
-      const newX = resizingNode.position.x + deltaX / zoom
-
-      // Update the node position temporarily for visual feedback
       setRungLocal((rung) => ({
         ...rung,
         nodes: rung.nodes.map((node) => {
@@ -615,24 +615,19 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
           return node
         }),
       }))
-
-      setResizeStartX(event.clientX)
     },
-    [resizing, resizingNode, resizeStartX, reactFlowInstance],
+    [resizing, resizingNode, reactFlowInstance],
   )
 
   /**
    * Handle the stop of a parallel node resize
    */
   const handleResizeStop = useCallback(
-    (event: MouseEvent) => {
-      if (!resizing || !resizingNode) return
+    (event: globalThis.MouseEvent) => {
+      if (!resizing || !resizingNode || !reactFlowInstance) return
 
-      event.stopPropagation()
-
-      const deltaX = event.clientX - resizeStartX
-      const zoom = reactFlowInstance?.getZoom() ?? 1
-      const newX = resizingNode.position.x + deltaX / zoom
+      const position = reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      const newX = position.x
 
       const { nodes: newNodes, edges: newEdges } = resizeParallelBranch(rungLocal, resizingNode, newX)
 
@@ -643,18 +638,8 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       setResizing(false)
       setResizingNode(null)
-      setResizeStartX(0)
     },
-    [
-      resizing,
-      resizingNode,
-      resizeStartX,
-      reactFlowInstance,
-      rungLocal,
-      editor.meta.name,
-      ladderFlowActions,
-      addSnapshot,
-    ],
+    [resizing, resizingNode, reactFlowInstance, rungLocal, editor.meta.name, ladderFlowActions, addSnapshot],
   )
 
   /**
@@ -664,11 +649,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     if (!resizing) return
 
     const handleMouseMove = (event: globalThis.MouseEvent) => {
-      handleResizeDrag(event as unknown as MouseEvent)
+      handleResizeDrag(event)
     }
 
     const handleMouseUp = (event: globalThis.MouseEvent) => {
-      handleResizeStop(event as unknown as MouseEvent)
+      handleResizeStop(event)
     }
 
     document.addEventListener('mousemove', handleMouseMove)
@@ -869,11 +854,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
               onInit: setReactFlowInstance,
 
               onNodesChange: onNodesChange,
-              onNodeClick: isDebuggerActive
-                ? handleNodeClick
-                : (event, node) => {
-                    handleResizeStart(event, node)
-                  },
+              onNodeClick: isDebuggerActive ? handleNodeClick : undefined,
               onNodesDelete: isDebuggerActive
                 ? undefined
                 : (nodes) => {
