@@ -1,4 +1,5 @@
 import { ArrowIcon } from '@root/renderer/assets'
+import ViewIcon from '@root/renderer/assets/icons/interface/View'
 import { DebugTreeNode } from '@root/types/debugger'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef } from 'react'
@@ -53,19 +54,7 @@ const TreeNode = ({ node, onToggleExpand, onViewToggle, isViewing, level = 0, ..
           <div className='flex min-w-0 items-center gap-2'>
             {onViewToggle && !node.isComplex && (
               <button onClick={handleViewToggle} className='flex-shrink-0' aria-label='Toggle graph visibility'>
-                <svg
-                  width='16'
-                  height='16'
-                  viewBox='0 0 16 16'
-                  fill='none'
-                  xmlns='http://www.w3.org/2000/svg'
-                  className='cursor-pointer'
-                >
-                  <path
-                    d='M8 3C4.5 3 1.73 5.61 1 9c.73 3.39 3.5 6 7 6s6.27-2.61 7-6c-.73-3.39-3.5-6-7-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z'
-                    fill={isViewing ? '#0066FF' : '#B4D0FE'}
-                  />
-                </svg>
+                <ViewIcon className={cn('h-4 w-4 cursor-pointer', isViewing ? 'fill-brand' : 'fill-brand-light')} />
               </button>
             )}
             <p className='truncate text-neutral-1000 dark:text-white'>{node.name}</p>

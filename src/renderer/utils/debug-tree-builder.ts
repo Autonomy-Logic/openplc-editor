@@ -1,3 +1,4 @@
+import type { DebugTreeNode } from '@root/types/debugger'
 import type { PLCProject, PLCVariable } from '@root/types/PLC/open-plc'
 
 import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
@@ -11,31 +12,6 @@ const DEBUG_TREE_LOGGING = true
  */
 function normalizeTypeString(typeStr: string): string {
   return typeStr.toLowerCase().replace(/[-_]/g, '')
-}
-
-/**
- * Represents a node in the debug variable tree structure.
- * Used to organize complex variables (arrays, structs, function blocks) hierarchically.
- */
-export interface DebugTreeNode {
-  /** Display name (e.g., "TON0", "favorite_person", "name") */
-  name: string
-  /** Full debug path (e.g., "RES0__INSTANCE0.TON0.EN") */
-  fullPath: string
-  /** Editor key format (e.g., "main:TON0.EN") */
-  compositeKey: string
-  /** IEC type or "STRUCT", "ARRAY", "FB" */
-  type: string
-  /** true for arrays, structs, FBs */
-  isComplex: boolean
-  /** UI state (not stored in global state) */
-  isExpanded?: boolean
-  /** Sub-variables */
-  children?: DebugTreeNode[]
-  /** Only for leaf nodes */
-  debugIndex?: number
-  /** For array nodes [start, end] */
-  arrayIndices?: number[]
 }
 
 /**
@@ -88,9 +64,8 @@ export function buildDebugTree(
 ): DebugTreeNode {
   const variableName = variable.name.toUpperCase()
   const instanceNameUpper = instanceName.toUpperCase()
-  const pouNameUpper = pouName.toUpperCase()
 
-  const compositeKey = `${pouNameUpper}:${variableName}`
+  const compositeKey = `${pouName}:${variable.name}`
 
   let node: DebugTreeNode
 
@@ -152,9 +127,8 @@ function buildFunctionBlockTree(
   const fbTypeNameUpper = fbTypeName.toUpperCase()
   const variableName = variable.name.toUpperCase()
   const instanceNameUpper = instanceName.toUpperCase()
-  const pouNameUpper = pouName.toUpperCase()
 
-  const compositeKey = `${pouNameUpper}:${variableName}`
+  const compositeKey = `${pouName}:${variable.name}`
   const fullPath = `RES0__${instanceNameUpper}.${variableName}`
 
   const standardFB = StandardFunctionBlocks.pous.find(
@@ -571,9 +545,8 @@ function buildArrayTree(
 
   const variableName = variable.name.toUpperCase()
   const instanceNameUpper = instanceName.toUpperCase()
-  const pouNameUpper = pouName.toUpperCase()
 
-  const compositeKey = `${pouNameUpper}:${variableName}`
+  const compositeKey = `${pouName}:${variable.name}`
   const fullPath = `RES0__${instanceNameUpper}.${variableName}`
 
   const dimensions = variable.type.data.dimensions
@@ -663,9 +636,8 @@ function buildStructTree(
   const structTypeNameUpper = structTypeName.toUpperCase()
   const variableName = variable.name.toUpperCase()
   const instanceNameUpper = instanceName.toUpperCase()
-  const pouNameUpper = pouName.toUpperCase()
 
-  const compositeKey = `${pouNameUpper}:${variableName}`
+  const compositeKey = `${pouName}:${variable.name}`
   const fullPath = `RES0__${instanceNameUpper}.${variableName}`
 
   const structType = project.data.dataTypes.find(

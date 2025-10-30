@@ -39,7 +39,7 @@ const PLC_LOGS_POLL_INTERVAL_MS = 2500
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { isCollapsed, isDebuggerVisible, isPlcLogsVisible, debugVariableValues },
+    workspace: { isCollapsed, isDebuggerVisible, isPlcLogsVisible, debugVariableValues, debugVariableTree },
     editor,
     workspaceActions: { toggleCollapse },
     deviceActions: { setAvailableOptions },
@@ -874,6 +874,7 @@ const WorkspaceScreen = () => {
                           <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
                             <VariablesPanel
                               variables={debugVariables}
+                              variableTree={debugVariableTree}
                               graphList={graphList}
                               setGraphList={setGraphList}
                             />
