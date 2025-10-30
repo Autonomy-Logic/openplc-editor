@@ -39,6 +39,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           globalVariables: [],
         },
       },
+      deletedPous: [],
     },
   },
 
@@ -79,6 +80,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 globalVariables: [],
               },
             },
+            deletedPous: [],
           }
         }),
       )
@@ -119,6 +121,11 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (!pouExists && !dataTypeExists) {
             // @ts-expect-error - pouToBeCreated can not be from a valid type once it can be a rung object.
             project.data.pous.push(pouToBeCreated)
+            if (project.data.deletedPous) {
+              project.data.deletedPous = project.data.deletedPous.filter(
+                (deletedPou) => deletedPou.name !== pouToBeCreated.data.name,
+              )
+            }
             response = { ok: true, message: 'Pou created successfully' }
           }
           if (dataTypeExists || pouExists) {
@@ -146,6 +153,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     deletePou: (pouToBeDeleted): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
+          const pouToDelete = project.data.pous.find((pou) => pou.data.name === pouToBeDeleted)
+          if (pouToDelete) {
+            if (!project.data.deletedPous) {
+              project.data.deletedPous = []
+            }
+            project.data.deletedPous.push({
+              name: pouToDelete.data.name,
+              type: pouToDelete.type,
+              language: pouToDelete.data.body.language,
+            })
+          }
           project.data.pous = project.data.pous.filter((pou) => pou.data.name !== pouToBeDeleted)
         }),
       )
