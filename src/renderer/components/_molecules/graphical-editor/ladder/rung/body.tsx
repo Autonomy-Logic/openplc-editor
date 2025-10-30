@@ -112,8 +112,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         const compositeKey = `${editor.meta.name}:${outputVariableName}`
         const value = debugVariableValues.get(compositeKey)
 
-        console.log(`[Rung Coloring FB] ${compositeKey}, value=${value}`)
-
         if (value === undefined) return undefined
 
         const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
@@ -126,8 +124,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
         const compositeKey = `${editor.meta.name}:${tempVarName}`
         const value = debugVariableValues.get(compositeKey)
-
-        console.log(`[Rung Coloring Function] ${compositeKey}, value=${value}`)
 
         if (value === undefined) return undefined
 
