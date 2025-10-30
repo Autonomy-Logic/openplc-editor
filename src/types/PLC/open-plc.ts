@@ -280,6 +280,15 @@ const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(PLCPouSchema),
   configuration: PLCConfigurationSchema,
+  deletedPous: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z.enum(['program', 'function', 'function-block']),
+        language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
+      }),
+    )
+    .optional(),
 })
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>

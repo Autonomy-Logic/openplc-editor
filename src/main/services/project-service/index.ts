@@ -315,6 +315,36 @@ class ProjectService {
           await promises.writeFile(filePath, textContent, 'utf-8')
         }
       }
+
+      if (projectData.data.deletedPous && projectData.data.deletedPous.length > 0) {
+        for (const deletedPou of projectData.data.deletedPous) {
+          const typeDir =
+            deletedPou.type === 'function'
+              ? 'functions'
+              : deletedPou.type === 'function-block'
+                ? 'function-blocks'
+                : 'programs'
+          const extension = getExtensionFromLanguage(deletedPou.language)
+          const filePath = join(directoryPath, 'pous', typeDir, `${deletedPou.name}${extension}`)
+
+          try {
+            if (fileOrDirectoryExists(filePath)) {
+              await promises.unlink(filePath)
+            }
+          } catch (deleteError) {
+            console.error(`Error deleting POU file ${filePath}:`, deleteError)
+          }
+
+          const jsonFilePath = join(directoryPath, 'pous', typeDir, `${deletedPou.name}.json`)
+          try {
+            if (fileOrDirectoryExists(jsonFilePath)) {
+              await promises.unlink(jsonFilePath)
+            }
+          } catch (deleteError) {
+            console.error(`Error deleting legacy JSON POU file ${jsonFilePath}:`, deleteError)
+          }
+        }
+      }
     } catch (error) {
       console.error('Error saving POUs:', error)
       return {

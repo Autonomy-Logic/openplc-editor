@@ -39,6 +39,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           globalVariables: [],
         },
       },
+      deletedPous: [],
     },
   },
 
@@ -79,6 +80,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 globalVariables: [],
               },
             },
+            deletedPous: [],
           }
         }),
       )
@@ -146,6 +148,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     deletePou: (pouToBeDeleted): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
+          const pouToDelete = project.data.pous.find((pou) => pou.data.name === pouToBeDeleted)
+          if (pouToDelete) {
+            if (!project.data.deletedPous) {
+              project.data.deletedPous = []
+            }
+            project.data.deletedPous.push({
+              name: pouToDelete.data.name,
+              type: pouToDelete.type,
+              language: pouToDelete.data.language,
+            })
+          }
           project.data.pous = project.data.pous.filter((pou) => pou.data.name !== pouToBeDeleted)
         }),
       )

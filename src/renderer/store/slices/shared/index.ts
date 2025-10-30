@@ -330,32 +330,8 @@ export const createSharedSlice: StateCreator<
       getState().modalActions.openModal('confirm-delete-element', modalData)
     },
 
-    delete: async (data) => {
-      const { file: targetLabel, path } = data
-      const projectPath = getState().project.meta.path
-      const filePath = path.includes(projectPath) ? path : `${projectPath}${path}`
-
-      try {
-        const response = await window.bridge.deletePouFile(filePath)
-        if (!response.success) {
-          return {
-            success: false,
-            error: {
-              title: 'Error deleting POU',
-              description: response.error ? response.error.description : `POU "${targetLabel}" could not be deleted.`,
-            },
-          }
-        }
-      } catch (error) {
-        console.error('Error deleting POU file:', error)
-        return {
-          success: false,
-          error: {
-            title: 'Error deleting POU',
-            description: `An error occurred while deleting the POU "${targetLabel}".`,
-          },
-        }
-      }
+    delete: (data) => {
+      const { file: targetLabel } = data
 
       getState().projectActions.deletePou(targetLabel)
       getState().ladderFlowActions.removeLadderFlow(targetLabel)
@@ -932,7 +908,10 @@ export const createSharedSlice: StateCreator<
 
         // Set project data
         getState().projectActions.setProject({
-          data: projectData,
+          data: {
+            ...projectData,
+            deletedPous: [],
+          },
           meta: projectMeta,
         })
 
@@ -1348,6 +1327,16 @@ export const createSharedSlice: StateCreator<
       if (success) {
         getState().workspaceActions.setEditingState('saved')
         getState().fileActions.setAllToSaved()
+        const currentProject = getState().project
+        if (currentProject.data.deletedPous && currentProject.data.deletedPous.length > 0) {
+          getState().projectActions.setProject({
+            ...currentProject,
+            data: {
+              ...currentProject.data,
+              deletedPous: [],
+            },
+          })
+        }
         toast({
           title: 'Changes saved!',
           description: 'The project was saved successfully!',
