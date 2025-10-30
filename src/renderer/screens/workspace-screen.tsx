@@ -406,13 +406,14 @@ const WorkspaceScreen = () => {
             })
         })
 
-        expandedVisibleLeafKeys.forEach((key) => {
+        const expandedVisibleLeafKeysSet = expandedVisibleLeafKeys
+        for (const key of expandedVisibleLeafKeysSet) {
           debugVariableKeys.add(key)
-        })
+        }
 
-        graphList.forEach((key) => {
+        for (const key of graphList) {
           debugVariableKeys.add(key)
-        })
+        }
 
         const { editor, ladderFlows } = useOpenPLCStore.getState()
         const currentPou = currentProject.data.pous.find((pou) => pou.data.name === editor.meta.name)
