@@ -629,7 +629,21 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const position = reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
       const newX = position.x
 
+      console.log('[handleResizeStop]', {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        newX,
+        nodeId: resizingNode.id,
+        closeX: resizingNode.position.x,
+      })
+
       const { nodes: newNodes, edges: newEdges } = resizeParallelBranch(rungLocal, resizingNode, newX)
+
+      console.log('[handleResizeStop] after resizeParallelBranch', {
+        newNodesLength: newNodes.length,
+        newEdgesLength: newEdges.length,
+        closeNodeNewX: newNodes.find((n) => n.id === resizingNode.id)?.position.x,
+      })
 
       addSnapshot(editor.meta.name)
 

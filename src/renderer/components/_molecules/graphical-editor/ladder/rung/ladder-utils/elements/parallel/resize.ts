@@ -29,13 +29,31 @@ export const resizeParallelBranch = (
   const openParallelNode = newNodes.find((n) => n.id === closeParallelNode.data.parallelOpenReference) as ParallelNode
   if (!openParallelNode) return { nodes: newNodes, edges: newEdges }
 
+  console.log('[resizeParallelBranch] before', {
+    openX: openParallelNode.position.x,
+    openWidth: openParallelNode.width,
+    closeX: closeParallelNode.position.x,
+    newX,
+  })
+
   const { serial: serialNodes, parallel: parallelNodes } = getNodesInsideParallel(
     { ...rung, nodes: newNodes, edges: newEdges },
     closeParallelNode,
   )
 
+  console.log('[resizeParallelBranch] candidates', {
+    serial: serialNodes.map((n) => ({ id: n.id, x: n.position.x, width: n.width })),
+    parallel: parallelNodes.map((n) => ({ id: n.id, x: n.position.x, width: n.width })),
+  })
+
   const minX = openParallelNode.position.x + (openParallelNode.width ?? 0) + 50
   const constrainedX = Math.max(minX, newX)
+
+  console.log('[resizeParallelBranch] constraints', {
+    minX,
+    constrainedX,
+    wasConstrained: constrainedX !== newX,
+  })
 
   const closeParallelIndex = newNodes.findIndex((n) => n.id === closeParallelNode.id)
   if (closeParallelIndex === -1) return { nodes: newNodes, edges: newEdges }
@@ -59,6 +77,11 @@ export const resizeParallelBranch = (
     } else {
       nodesOutsideBranch.push(node)
     }
+  })
+
+  console.log('[resizeParallelBranch] classification', {
+    inside: nodesInsideBranch.map((n) => ({ id: n.id, rightEdge: n.position.x + (n.width ?? 0) })),
+    outside: nodesOutsideBranch.map((n) => ({ id: n.id, rightEdge: n.position.x + (n.width ?? 0) })),
   })
 
   const edgesToRemove = newEdges.filter(
