@@ -248,7 +248,7 @@ export const findAllParallelsDepthAndNodes = (
 
   // check serial nodes
   const serialNodes = nodesInsideParallel.serial
-  let highestNode = serialNodes[0]
+  let highestNode = serialNodes[0] ?? openParallel
   let serialHeight = highestNode.height ?? 0
   for (const serialNode of serialNodes) {
     // If it is a parallel node, check if it is an open parallel

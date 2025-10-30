@@ -162,7 +162,7 @@ export const resizeParallelBranch = (
       if (i === 0) {
         newEdges.push(
           buildEdge(openParallelNode.id, currentNode.id, {
-            sourceHandle: openParallelNode.data.parallelOutputConnector?.id,
+            sourceHandle: openParallelNode.data.outputConnector?.id,
             targetHandle: (currentNode.data as BasicNodeData).inputConnector?.id,
           }),
         )
