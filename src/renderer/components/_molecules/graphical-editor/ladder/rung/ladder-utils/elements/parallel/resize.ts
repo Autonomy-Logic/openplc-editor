@@ -36,16 +36,6 @@ export const resizeParallelBranch = (
     newX,
   })
 
-  const { serial: serialNodes, parallel: parallelNodes } = getNodesInsideParallel(
-    { ...rung, nodes: newNodes, edges: newEdges },
-    closeParallelNode,
-  )
-
-  console.log('[resizeParallelBranch] candidates', {
-    serial: serialNodes.map((n) => ({ id: n.id, x: n.position.x, width: n.width })),
-    parallel: parallelNodes.map((n) => ({ id: n.id, x: n.position.x, width: n.width })),
-  })
-
   const minX = openParallelNode.position.x + (openParallelNode.width ?? 0) + 50
   const constrainedX = Math.max(minX, newX)
 
@@ -58,13 +48,25 @@ export const resizeParallelBranch = (
   const closeParallelIndex = newNodes.findIndex((n) => n.id === closeParallelNode.id)
   if (closeParallelIndex === -1) return { nodes: newNodes, edges: newEdges }
 
-  newNodes[closeParallelIndex] = {
+  const updatedCloseNode: ParallelNode = {
     ...closeParallelNode,
     position: {
       x: constrainedX,
       y: closeParallelNode.position.y,
     },
   }
+
+  newNodes[closeParallelIndex] = updatedCloseNode
+
+  const { serial: serialNodes, parallel: parallelNodes } = getNodesInsideParallel(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    updatedCloseNode,
+  )
+
+  console.log('[resizeParallelBranch] candidates', {
+    serial: serialNodes.map((n) => ({ id: n.id, x: n.position.x, width: n.width })),
+    parallel: parallelNodes.map((n) => ({ id: n.id, x: n.position.x, width: n.width })),
+  })
 
   const allNodesInRange = [...serialNodes, ...parallelNodes]
   const nodesInsideBranch: Node[] = []
