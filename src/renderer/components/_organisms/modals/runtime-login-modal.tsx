@@ -65,9 +65,8 @@ const RuntimeLoginModal = () => {
       onOpenChange={(open) => {
         if (!open) {
           handleCancel()
-        } else {
-          modalActions.onOpenChange('runtime-login', open)
         }
+        modalActions.onOpenChange('runtime-login', open)
       }}
     >
       <ModalContent className='flex min-h-[380px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>

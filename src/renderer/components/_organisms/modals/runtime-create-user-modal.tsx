@@ -78,9 +78,8 @@ const RuntimeCreateUserModal = () => {
       onOpenChange={(open) => {
         if (!open) {
           handleCancel()
-        } else {
-          modalActions.onOpenChange('runtime-create-user', open)
         }
+        modalActions.onOpenChange('runtime-create-user', open)
       }}
     >
       <ModalContent className='flex min-h-[480px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>

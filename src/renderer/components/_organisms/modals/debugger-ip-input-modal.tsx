@@ -46,9 +46,8 @@ const DebuggerIpInputModal = () => {
       onOpenChange={(open) => {
         if (!open) {
           handleCancel()
-        } else {
-          modalActions.onOpenChange('debugger-ip-input', open)
         }
+        modalActions.onOpenChange('debugger-ip-input', open)
       }}
     >
       <ModalContent className='flex min-h-[250px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>

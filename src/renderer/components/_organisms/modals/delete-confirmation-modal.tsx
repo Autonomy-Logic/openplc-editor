@@ -202,9 +202,8 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
       onOpenChange={(open) => {
         if (!open) {
           handleCloseModal()
-        } else {
-          onOpenChange('confirm-delete-element', open)
         }
+        onOpenChange('confirm-delete-element', open)
       }}
       {...rest}
     >

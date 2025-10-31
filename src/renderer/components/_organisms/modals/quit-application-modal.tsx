@@ -32,9 +32,8 @@ const QuitApplicationModal = ({ isOpen, ...rest }: SaveChangeModalProps) => {
       onOpenChange={(open) => {
         if (!open) {
           handleCancelModal()
-        } else {
-          onOpenChange('quit-application', open)
         }
+        onOpenChange('quit-application', open)
       }}
       {...rest}
     >

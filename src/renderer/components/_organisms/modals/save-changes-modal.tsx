@@ -76,9 +76,8 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
       onOpenChange={(open) => {
         if (!open) {
           handleCancelModal()
-        } else {
-          onOpenChange('save-changes-project', open)
         }
+        onOpenChange('save-changes-project', open)
       }}
       {...rest}
     >
