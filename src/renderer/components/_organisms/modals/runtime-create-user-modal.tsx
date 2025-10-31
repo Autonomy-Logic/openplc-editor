@@ -73,7 +73,15 @@ const RuntimeCreateUserModal = () => {
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => modalActions.onOpenChange('runtime-create-user', open)}>
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleCancel()
+        }
+        modalActions.onOpenChange('runtime-create-user', open)
+      }}
+    >
       <ModalContent className='flex min-h-[480px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
         <ModalTitle className='mb-4 text-xl font-semibold'>Create First User</ModalTitle>
 

@@ -27,7 +27,16 @@ const QuitApplicationModal = ({ isOpen, ...rest }: SaveChangeModalProps) => {
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('quit-application', open)} {...rest}>
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleCancelModal()
+        }
+        onOpenChange('quit-application', open)
+      }}
+      {...rest}
+    >
       <ModalContent className='flex max-h-80 w-[300px] select-none flex-col items-center justify-evenly rounded-lg'>
         <div className='flex select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />

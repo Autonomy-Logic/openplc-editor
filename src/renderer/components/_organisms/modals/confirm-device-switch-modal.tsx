@@ -34,7 +34,15 @@ const ConfirmDeviceSwitchModal = () => {
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => modalActions.onOpenChange('confirm-device-switch', open)}>
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleCancel()
+        }
+        modalActions.onOpenChange('confirm-device-switch', open)
+      }}
+    >
       <ModalContent className='flex max-h-80 w-[400px] select-none flex-col items-center justify-evenly rounded-lg'>
         <div className='flex select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
