@@ -46,6 +46,8 @@ export const ELEMENT_HEIGHT = 32
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 
+export const Z_INDEX_DEBUGGER_VARIABLE = 10
+
 const VariableElement = (block: VariableProps) => {
   const { id, data, selected } = block
   const {
@@ -486,6 +488,8 @@ const VariableElement = (block: VariableProps) => {
     const isStringType = normalizedType === 'string'
 
     let valueBuffer: Uint8Array
+    // forcedValueForState is used for visual feedback (green/blue color indicator) in the UI.
+    // For non-BOOL types, we use a simple heuristic: positive values = true (green), negative = false (blue).
     let forcedValueForState: boolean
 
     if (isStringType) {
@@ -560,6 +564,8 @@ const VariableElement = (block: VariableProps) => {
     <>
       <TooltipProvider>
         <Tooltip>
+          {/* asChild prop is required to prevent TooltipTrigger from intercepting click events during diagram locking. (important-comment) */}
+          {/* Without asChild, the context menu cannot be opened when nodes are locked (draggable/selectable=false). (important-comment) */}
           <TooltipTrigger asChild>
             <div
               style={{
@@ -574,7 +580,7 @@ const VariableElement = (block: VariableProps) => {
                 ...(isDebuggerVisible
                   ? {
                       pointerEvents: 'auto' as const,
-                      zIndex: 10,
+                      zIndex: Z_INDEX_DEBUGGER_VARIABLE,
                     }
                   : {}),
               }}

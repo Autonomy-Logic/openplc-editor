@@ -157,30 +157,42 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       return node.type === 'connector' || node.type === 'continuation'
     }
 
-    const determineEdgeState = (edgeId: string): boolean => {
+    const determineEdgeState = (edgeId: string, visited: Set<string> = new Set()): boolean => {
       if (edgeStateMap.has(edgeId)) {
         return edgeStateMap.get(edgeId)!
       }
 
+      if (visited.has(edgeId)) {
+        return false
+      }
+      visited.add(edgeId)
+
       const edge = rungLocal.edges.find((e) => e.id === edgeId)
-      if (!edge) return false
+      if (!edge) {
+        visited.delete(edgeId)
+        return false
+      }
 
       const sourceNode = rungLocal.nodes.find((n) => n.id === edge.source)
-      if (!sourceNode) return false
+      if (!sourceNode) {
+        visited.delete(edgeId)
+        return false
+      }
 
       const incomingEdges = rungLocal.edges.filter((e) => e.target === edge.source)
-      const isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id))
+      const isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id, visited))
 
       const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
 
       const isGreen = isPassThroughNode(sourceNode) ? isInputGreen : sourceOutputState === true
 
       edgeStateMap.set(edgeId, isGreen)
+      visited.delete(edgeId)
       return isGreen
     }
 
     rungLocal.edges.forEach((edge) => {
-      determineEdgeState(edge.id)
+      determineEdgeState(edge.id, new Set())
     })
 
     return rungLocal.edges.map((edge) => {
