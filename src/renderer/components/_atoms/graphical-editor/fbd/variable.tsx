@@ -542,25 +542,9 @@ const VariableElement = (block: VariableProps) => {
   }
 
   const handleClick = (e: React.MouseEvent) => {
-    console.log('[FBD Variable] handleClick called', {
-      variant: data.variant,
-      variableName: data.variable?.name,
-      isDebuggerVisible,
-      isAVariable,
-      x: e.clientX,
-      y: e.clientY,
-      eventType: e.type,
-    })
-    if (!isDebuggerVisible || !isAVariable) {
-      console.log('[FBD Variable] handleClick blocked by guard', {
-        isDebuggerVisible,
-        isAVariable,
-      })
-      return
-    }
+    if (!isDebuggerVisible || !isAVariable) return
     e.preventDefault()
     e.stopPropagation()
-    console.log('[FBD Variable] Opening context menu at', { x: e.clientX, y: e.clientY })
     setContextMenuPosition({ x: e.clientX, y: e.clientY })
     setIsContextMenuOpen(true)
   }
@@ -605,26 +589,6 @@ const VariableElement = (block: VariableProps) => {
               onMouseLeave={onMouseLeave}
               onClick={isDebuggerVisible ? handleClick : undefined}
               onContextMenu={isDebuggerVisible ? handleClick : undefined}
-              onPointerDownCapture={
-                isDebuggerVisible
-                  ? () => {
-                      console.log('[FBD Variable] pointerDownCapture - click detected in capture phase', {
-                        variant: data.variant,
-                        variableName: data.variable?.name,
-                      })
-                    }
-                  : undefined
-              }
-              onMouseDownCapture={
-                isDebuggerVisible
-                  ? () => {
-                      console.log('[FBD Variable] mouseDownCapture - click detected in capture phase', {
-                        variant: data.variant,
-                        variableName: data.variable?.name,
-                      })
-                    }
-                  : undefined
-              }
             >
               <div
                 className='relative flex items-center'

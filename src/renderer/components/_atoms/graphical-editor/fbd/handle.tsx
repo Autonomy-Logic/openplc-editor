@@ -35,17 +35,6 @@ export const CustomHandle = ({
       }}
       className={cn(className)}
       {...props}
-      onPointerDown={
-        isDebuggerVisible
-          ? () => {
-              console.log('[FBD Handle] pointerDown - handle intercepting click', {
-                handleId: id,
-                type,
-                position,
-              })
-            }
-          : undefined
-      }
     />
   )
 }
