@@ -97,7 +97,7 @@ const SelectableTypeCell = ({
   // Filter available types based on language
   const getAvailableTypes = () => {
     if (language === 'python' || language === 'cpp') {
-      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT']
+      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
 
       // Only show Base Type for Python/C++ and filter out specific types
       const availableTypes = VariableTypes.filter((type) => type.definition === 'base-type').map((type) => ({
@@ -446,18 +446,8 @@ const SelectableClassCell = ({
   // Get the current value from the table
   const currentValue = getValue()
 
-  // Determine initial value: use "input" for Python/C++ if current value is empty/undefined
-  const getInitialValue = () => {
-    if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
-      return 'input'
-    }
-    return currentValue
-  }
-
-  const initialValue = getInitialValue()
-
   // We need to keep and update the state of the cell normally
-  const [cellValue, setCellValue] = useState(initialValue)
+  const [cellValue, setCellValue] = useState(currentValue)
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onValueChange = (value: string) => {
@@ -474,17 +464,9 @@ const SelectableClassCell = ({
     }
   }
 
-  // Effect to handle language changes and set default value for Python/C++
   useEffect(() => {
-    if ((language === 'python' || language === 'cpp') && currentValue === 'local') {
-      // Set default value to "input" for Python/C++ and update the table
-      setCellValue('input')
-      table.options.meta?.updateData(index, id, 'input')
-    } else {
-      console.log(currentValue)
-      setCellValue(currentValue)
-    }
-  }, [currentValue, language, index, id, table])
+    setCellValue(currentValue)
+  }, [currentValue])
 
   return (
     <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)} disabled={isDebuggerVisible}>

@@ -305,13 +305,16 @@ const VariablesEditor = () => {
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     const selectedRow = parseInt(editorVariables.selectedRow)
 
+    const language = 'language' in editor.meta ? editor.meta.language : null
+    const defaultClass: PLCVariable['class'] = language === 'python' || language === 'cpp' ? 'input' : 'local'
+
     if (variables.length === 0) {
       createVariable({
         scope: 'local',
         associatedPou: editor.meta.name,
         data: {
           name: 'LocalVar',
-          class: 'local',
+          class: defaultClass,
           type: { definition: 'base-type', value: 'dint' },
           location: '',
           documentation: '',
@@ -335,6 +338,7 @@ const VariablesEditor = () => {
         associatedPou: editor.meta.name,
         data: {
           ...variable,
+          class: defaultClass,
           type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
         },
       })
@@ -350,6 +354,7 @@ const VariablesEditor = () => {
       associatedPou: editor.meta.name,
       data: {
         ...variable,
+        class: defaultClass,
         type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
       },
       rowToInsert: selectedRow + 1,

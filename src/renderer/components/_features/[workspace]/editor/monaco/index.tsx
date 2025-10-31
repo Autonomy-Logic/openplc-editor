@@ -97,8 +97,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   useEffect(() => {
     const pou = pous.find((p) => p.data.name === name)
-    setLocalText(typeof pou?.data.body.value === 'string' ? pou.data.body.value : '')
-  }, [name, language, pous])
+    const nextText = typeof pou?.data.body.value === 'string' ? pou.data.body.value : ''
+    if (nextText !== localText) {
+      setLocalText(nextText)
+    }
+  }, [name, language, pous, localText])
 
   const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
 
@@ -840,6 +843,8 @@ void loop()
           onMount={handleEditorDidMount}
           onChange={handleWriteInPou}
           theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
+          saveViewState={true}
+          keepCurrentModel={true}
         />
       </div>
       <Modal open={isOpen} onOpenChange={setIsOpen}>
