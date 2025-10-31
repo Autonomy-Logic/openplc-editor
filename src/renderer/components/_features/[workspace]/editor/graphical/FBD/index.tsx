@@ -16,6 +16,7 @@ export default function FbdEditor() {
     fbdFlowActions,
     projectActions: { updatePou },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
 
   const flow = fbdFlows.find((flow) => flow.name === editor.meta.name)
@@ -100,7 +101,7 @@ export default function FbdEditor() {
   return (
     <div className='h-full w-full'>
       {flow?.rung ? (
-        <FBDBody rung={flow?.rung} nodeDivergences={nodeDivergences} />
+        <FBDBody rung={flow?.rung} nodeDivergences={nodeDivergences} isDebuggerActive={isDebuggerVisible} />
       ) : (
         <span>No rung found for editor</span>
       )}

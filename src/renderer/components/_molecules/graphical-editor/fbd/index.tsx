@@ -153,6 +153,10 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
     const edgeStateMap = new Map<string, boolean>()
 
+    const isPassThroughNode = (node: (typeof rungLocal.nodes)[number]): boolean => {
+      return node.type === 'connector' || node.type === 'continuation'
+    }
+
     const determineEdgeState = (edgeId: string): boolean => {
       if (edgeStateMap.has(edgeId)) {
         return edgeStateMap.get(edgeId)!
@@ -161,12 +165,16 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       const edge = rungLocal.edges.find((e) => e.id === edgeId)
       if (!edge) return false
 
+      const sourceNode = rungLocal.nodes.find((n) => n.id === edge.source)
+      if (!sourceNode) return false
+
       const incomingEdges = rungLocal.edges.filter((e) => e.target === edge.source)
       const isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id))
 
       const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
 
-      const isGreen = sourceOutputState !== undefined ? sourceOutputState : isInputGreen
+      const isGreen = isPassThroughNode(sourceNode) ? isInputGreen : sourceOutputState === true
+
       edgeStateMap.set(edgeId, isGreen)
       return isGreen
     }

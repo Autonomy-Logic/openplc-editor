@@ -481,6 +481,74 @@ const WorkspaceScreen = () => {
           }
         }
 
+        const { fbdFlows } = useOpenPLCStore.getState()
+        if (currentPou && currentPou.data.body.language === 'fbd') {
+          const currentFbdFlow = fbdFlows.find((flow) => flow.name === editor.meta.name)
+          if (currentFbdFlow) {
+            currentFbdFlow.rung.nodes.forEach((node) => {
+              if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
+                const nodeData = node.data as {
+                  variable?: { name?: string }
+                }
+                const variableName = nodeData.variable?.name
+
+                if (variableName) {
+                  const variable = currentPou.data.variables.find(
+                    (v) => v.name.toLowerCase() === variableName.toLowerCase(),
+                  )
+                  if (variable && variable.type.value.toUpperCase() === 'BOOL') {
+                    const compositeKey = `${currentPou.data.name}:${variableName}`
+                    debugVariableKeys.add(compositeKey)
+                  }
+                }
+              }
+            })
+          }
+
+          const functionBlockInstances = currentPou.data.variables.filter(
+            (variable) => variable.type.definition === 'derived',
+          )
+
+          functionBlockInstances.forEach((fbInstance) => {
+            Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+              if (
+                varInfo.pouName === currentPou.data.name &&
+                varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                varInfo.variable.type.definition === 'base-type' &&
+                varInfo.variable.type.value.toLowerCase() === 'bool'
+              ) {
+                const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                debugVariableKeys.add(compositeKey)
+              }
+            })
+          })
+
+          const instances = currentProject.data.configuration.resource.instances
+          const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
+          if (programInstance && currentFbdFlow) {
+            currentFbdFlow.rung.nodes.forEach((node) => {
+              if (node.type === 'block') {
+                const blockData = node.data as {
+                  variant?: { type: string }
+                  numericId?: string
+                }
+
+                if (blockData.variant?.type === 'function' && blockData.numericId) {
+                  Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                    if (
+                      varInfo.pouName === currentPou.data.name &&
+                      varInfo.variable.name.includes(blockData.numericId!)
+                    ) {
+                      const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                      debugVariableKeys.add(compositeKey)
+                    }
+                  })
+                }
+              }
+            })
+          }
+        }
+
         const allIndexes = Array.from(variableInfoMapRef.current.entries())
           .filter(([_, varInfo]) => {
             const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
