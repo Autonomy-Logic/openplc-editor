@@ -28,25 +28,29 @@ import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } f
 import { buildGenericNode } from './fbd-utils/nodes'
 import { useFBDClipboard } from './fbd-utils/useCopyPaste'
 
+const EDGE_COLOR_TRUE = '#00FF00'
+
 interface FBDProps {
   rung: FBDRungState
   nodeDivergences?: string[]
+  isDebuggerActive?: boolean
 }
 
-export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
+export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
   const {
     editor,
     editorActions: { updateModelVariables, saveEditorViewState },
     fbdFlowActions,
     libraries,
-    project: {
-      data: { pous },
-    },
+    project,
     projectActions: { deleteVariable },
     modals,
     modalActions: { closeModal, openModal },
     snapshotActions: { addSnapshot },
+    workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
+
+  const pous = project.data.pous
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
@@ -66,6 +70,112 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
       handleOnDelete(nodes, edges)
     },
   })
+
+  const getNodeOutputState = (nodeId: string, sourceHandle: string | null | undefined): boolean | undefined => {
+    if (!isDebuggerVisible) return undefined
+
+    const node = rungLocal.nodes.find((n) => n.id === nodeId)
+    if (!node) return undefined
+
+    if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
+      const variableData = node.data as { variable?: { name: string } }
+      const variableName = variableData.variable?.name
+      if (!variableName) return undefined
+
+      const compositeKey = `${editor.meta.name}:${variableName}`
+      const value = debugVariableValues.get(compositeKey)
+      if (value === undefined) return undefined
+
+      const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+      return isTrue
+    }
+
+    if (node.type === 'block') {
+      const blockData = node.data as {
+        variable?: { name: string }
+        variant?: { name: string; type: string; variables: Array<{ name: string; type: { value: string } }> }
+      }
+      if (!sourceHandle) return undefined
+
+      const instances = project.data.configuration.resource.instances
+      const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
+      if (!programInstance) return undefined
+
+      const outputVariable = blockData.variant?.variables.find((v) => v.name === sourceHandle)
+      if (!outputVariable || outputVariable.type.value.toUpperCase() !== 'BOOL') return undefined
+
+      if (blockData.variant?.type === 'function-block') {
+        const blockVariableName = blockData.variable?.name
+        if (!blockVariableName) return undefined
+
+        const outputVariableName = `${blockVariableName}.${sourceHandle}`
+        const compositeKey = `${editor.meta.name}:${outputVariableName}`
+        const value = debugVariableValues.get(compositeKey)
+
+        if (value === undefined) return undefined
+
+        const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+        return isTrue
+      } else if (blockData.variant?.type === 'function') {
+        const blockName = blockData.variant.name.toUpperCase()
+        const numericId = (node.data as { numericId?: string }).numericId
+        if (!numericId) return undefined
+
+        const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
+        const compositeKey = `${editor.meta.name}:${tempVarName}`
+        const value = debugVariableValues.get(compositeKey)
+
+        if (value === undefined) return undefined
+
+        const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+        return isTrue
+      }
+
+      return undefined
+    }
+
+    return undefined
+  }
+
+  const styledEdges = useMemo(() => {
+    if (!isDebuggerVisible) {
+      return rungLocal.edges
+    }
+
+    const edgeStateMap = new Map<string, boolean>()
+
+    const determineEdgeState = (edgeId: string): boolean => {
+      if (edgeStateMap.has(edgeId)) {
+        return edgeStateMap.get(edgeId)!
+      }
+
+      const edge = rungLocal.edges.find((e) => e.id === edgeId)
+      if (!edge) return false
+
+      const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
+
+      const isGreen = sourceOutputState === true
+      edgeStateMap.set(edgeId, isGreen)
+      return isGreen
+    }
+
+    rungLocal.edges.forEach((edge) => {
+      determineEdgeState(edge.id)
+    })
+
+    return rungLocal.edges.map((edge) => {
+      const isGreen = edgeStateMap.get(edge.id)
+
+      if (isGreen === true) {
+        return {
+          ...edge,
+          style: { stroke: EDGE_COLOR_TRUE, strokeWidth: 2 },
+        }
+      }
+
+      return edge
+    })
+  }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, editor.meta.name, project])
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
   const canZoom = useMemo(() => {
@@ -553,21 +663,31 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
 
           nodeTypes,
           nodes: rungLocal.nodes,
-          edges: rungLocal.edges,
+          edges: styledEdges,
 
           defaultEdgeOptions: {
             type: 'smoothstep',
           },
 
-          onDelete: ({ nodes, edges }) => {
-            handleOnDelete(nodes, edges)
-          },
-          onConnect: (connection) => {
-            handleOnConnect(connection)
-          },
-          onNodeDoubleClick: (_event, node) => {
-            handleNodeDoubleClick(node)
-          },
+          nodesDraggable: !isDebuggerActive,
+          nodesConnectable: !isDebuggerActive,
+          elementsSelectable: true,
+
+          onDelete: isDebuggerActive
+            ? undefined
+            : ({ nodes, edges }) => {
+                handleOnDelete(nodes, edges)
+              },
+          onConnect: isDebuggerActive
+            ? undefined
+            : (connection) => {
+                handleOnConnect(connection)
+              },
+          onNodeDoubleClick: isDebuggerActive
+            ? undefined
+            : (_event, node) => {
+                handleNodeDoubleClick(node)
+              },
 
           onDragEnter: onDragEnterViewport,
           onDragLeave: onDragLeaveViewport,
@@ -578,8 +698,8 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
           onEdgesChange: onEdgesChange,
           selectionMode: SelectionMode.Partial,
 
-          onNodeDragStart: onNodeDragStart,
-          onNodeDragStop: onNodeDragStop,
+          onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,
+          onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
 
           preventScrolling: canZoom,
           panOnDrag: canPan,
