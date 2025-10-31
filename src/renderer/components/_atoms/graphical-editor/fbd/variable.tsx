@@ -56,7 +56,7 @@ const VariableElement = (block: VariableProps) => {
     project: {
       data: { pous, dataTypes },
     },
-    workspace: { isDebuggerVisible, debugVariableIndexes, debugForcedVariables },
+    workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues, debugForcedVariables },
     workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
 
@@ -351,6 +351,34 @@ const VariableElement = (block: VariableProps) => {
     return variable?.type.value
   }
 
+  const getDebuggerColor = (): string | undefined => {
+    if (!isDebuggerVisible || !data.variable.name || !isAVariable) {
+      return undefined
+    }
+
+    const variableType = getVariableType()
+    if (!variableType || variableType.toUpperCase() !== 'BOOL') {
+      return undefined
+    }
+
+    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+
+    if (debugForcedVariables.has(compositeKey)) {
+      const forcedValue = debugForcedVariables.get(compositeKey)
+      return forcedValue ? '#80C000' : '#4080FF'
+    }
+
+    const value = debugVariableValues.get(compositeKey)
+    if (value === undefined) {
+      return undefined
+    }
+
+    const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+    return isTrue ? '#00FF00' : '#0464FB'
+  }
+
+  const debuggerColor = getDebuggerColor()
+
   const handleForceTrue = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -534,12 +562,21 @@ const VariableElement = (block: VariableProps) => {
         <Tooltip>
           <TooltipTrigger>
             <div
-              style={{ width: ELEMENT_SIZE, height: ELEMENT_HEIGHT }}
+              style={{
+                width: ELEMENT_SIZE,
+                height: ELEMENT_HEIGHT,
+                ...(debuggerColor
+                  ? {
+                      borderColor: debuggerColor,
+                      boxShadow: `0 0 0 2px ${debuggerColor}33 inset`,
+                    }
+                  : {}),
+              }}
               className={cn(
                 'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
                 'hover:border-transparent hover:ring-2 hover:ring-brand',
                 {
-                  'border-transparent ring-2 ring-brand': selected,
+                  'border-transparent ring-2 ring-brand': selected && !debuggerColor,
                 },
               )}
               onMouseEnter={onMouseEnter}

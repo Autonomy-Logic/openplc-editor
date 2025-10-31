@@ -47,7 +47,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     modals,
     modalActions: { closeModal, openModal },
     snapshotActions: { addSnapshot },
-    workspace: { isDebuggerVisible, debugVariableValues },
+    workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables },
   } = useOpenPLCStore()
 
   const pous = project.data.pous
@@ -82,7 +82,16 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       const variableName = variableData.variable?.name
       if (!variableName) return undefined
 
+      if (!pouRef) return undefined
+      const variable = pouRef.data.variables.find((v) => v.name.toLowerCase() === variableName.toLowerCase())
+      if (!variable || variable.type.value.toUpperCase() !== 'BOOL') return undefined
+
       const compositeKey = `${editor.meta.name}:${variableName}`
+
+      if (debugForcedVariables.has(compositeKey)) {
+        return debugForcedVariables.get(compositeKey)
+      }
+
       const value = debugVariableValues.get(compositeKey)
       if (value === undefined) return undefined
 
@@ -152,9 +161,12 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       const edge = rungLocal.edges.find((e) => e.id === edgeId)
       if (!edge) return false
 
+      const incomingEdges = rungLocal.edges.filter((e) => e.target === edge.source)
+      const isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id))
+
       const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
 
-      const isGreen = sourceOutputState === true
+      const isGreen = sourceOutputState !== undefined ? sourceOutputState : isInputGreen
       edgeStateMap.set(edgeId, isGreen)
       return isGreen
     }
@@ -175,7 +187,28 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       return edge
     })
-  }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, editor.meta.name, project])
+  }, [
+    rungLocal.edges,
+    rungLocal.nodes,
+    isDebuggerVisible,
+    debugVariableValues,
+    debugForcedVariables,
+    editor.meta.name,
+    project,
+  ])
+
+  const styledNodes = useMemo(() => {
+    if (isDebuggerActive) {
+      return rungLocal.nodes.map((node) => ({
+        ...node,
+        draggable: false,
+        selectable: false,
+        deletable: false,
+      }))
+    }
+
+    return rungLocal.nodes
+  }, [rungLocal.nodes, isDebuggerActive])
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
   const canZoom = useMemo(() => {
@@ -662,7 +695,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           onInit: setReactFlowInstance,
 
           nodeTypes,
-          nodes: rungLocal.nodes,
+          nodes: styledNodes,
           edges: styledEdges,
 
           defaultEdgeOptions: {
@@ -689,10 +722,10 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
                 handleNodeDoubleClick(node)
               },
 
-          onDragEnter: onDragEnterViewport,
-          onDragLeave: onDragLeaveViewport,
-          onDragOver: onDragOver,
-          onDrop: onDrop,
+          onDragEnter: isDebuggerActive ? undefined : onDragEnterViewport,
+          onDragLeave: isDebuggerActive ? undefined : onDragLeaveViewport,
+          onDragOver: isDebuggerActive ? undefined : onDragOver,
+          onDrop: isDebuggerActive ? undefined : onDrop,
 
           onNodesChange: onNodesChange,
           onEdgesChange: onEdgesChange,
