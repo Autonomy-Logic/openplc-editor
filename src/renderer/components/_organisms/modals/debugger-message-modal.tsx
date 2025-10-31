@@ -37,7 +37,19 @@ const DebuggerMessageModal = () => {
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => modalActions.onOpenChange('debugger-message', open)}>
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          if (modalData?.onResponse) {
+            modalData.onResponse(modalData.buttons.length - 1)
+          }
+          modalActions.closeModal()
+        } else {
+          modalActions.onOpenChange('debugger-message', open)
+        }
+      }}
+    >
       <ModalContent className='flex min-h-[200px] w-[450px] select-none flex-col items-center justify-start rounded-lg p-6'>
         <div className='mb-4 text-4xl'>{getIcon()}</div>
         <ModalTitle className='mb-4 text-xl font-semibold'>{modalData.title}</ModalTitle>

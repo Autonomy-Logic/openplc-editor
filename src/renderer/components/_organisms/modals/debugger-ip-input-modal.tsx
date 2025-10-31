@@ -41,7 +41,16 @@ const DebuggerIpInputModal = () => {
   if (!modalData) return null
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => modalActions.onOpenChange('debugger-ip-input', open)}>
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleCancel()
+        } else {
+          modalActions.onOpenChange('debugger-ip-input', open)
+        }
+      }}
+    >
       <ModalContent className='flex min-h-[250px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
         <ModalTitle className='mb-4 text-xl font-semibold'>{modalData.title}</ModalTitle>
         <p className='mb-4 text-center text-sm text-neutral-700 dark:text-neutral-300'>{modalData.message}</p>

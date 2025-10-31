@@ -197,7 +197,17 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('confirm-delete-element', open)} {...rest}>
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleCloseModal()
+        } else {
+          onOpenChange('confirm-delete-element', open)
+        }
+      }}
+      {...rest}
+    >
       <ModalContent className='flex max-h-80 w-[300px] select-none flex-col items-center justify-evenly rounded-lg'>
         <div className='flex select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />

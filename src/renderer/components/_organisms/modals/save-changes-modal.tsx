@@ -71,7 +71,17 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('save-changes-project', open)} {...rest}>
+    <Modal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleCancelModal()
+        } else {
+          onOpenChange('save-changes-project', open)
+        }
+      }}
+      {...rest}
+    >
       <ModalContent className='flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
         <ModalTitle className='hidden'>Save project changes</ModalTitle>
         <div className='flex h-[350px] select-none flex-col items-center gap-6'>
