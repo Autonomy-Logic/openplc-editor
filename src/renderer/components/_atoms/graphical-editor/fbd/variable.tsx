@@ -560,7 +560,7 @@ const VariableElement = (block: VariableProps) => {
     <>
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger>
+          <TooltipTrigger asChild>
             <div
               style={{
                 width: ELEMENT_SIZE,
@@ -582,6 +582,7 @@ const VariableElement = (block: VariableProps) => {
               onMouseEnter={onMouseEnter}
               onMouseLeave={onMouseLeave}
               onClick={isDebuggerVisible ? handleClick : undefined}
+              onContextMenu={isDebuggerVisible ? handleClick : undefined}
             >
               <div
                 className='relative flex items-center'
