@@ -780,12 +780,12 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const { deviceActions } = useOpenPLCStore.getState()
-    window.bridge.onRuntimeTokenRefreshed((_event, newToken: string) => {
+    const unsubscribe = window.bridge.onRuntimeTokenRefreshed((_event, newToken: string) => {
       deviceActions.setRuntimeJwtToken(newToken)
     })
 
     return () => {
-      window.bridge.removeRuntimeTokenRefreshedListener()
+      unsubscribe()
     }
   }, [])
 

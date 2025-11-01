@@ -47,6 +47,7 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerRtuSlaveId: number | null = null
   private debuggerJwtToken: string | null = null
   private runtimeCredentials: { ipAddress: string; username: string; password: string } | null = null
+  private tokenRefreshInFlight: Promise<{ success: boolean; accessToken?: string; error?: string }> | null = null
 
   constructor({
     ipcMain,
@@ -162,7 +163,11 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
+  private async performAuthentication(
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<{ success: boolean; accessToken?: string; error?: string }> {
     try {
       const postData = JSON.stringify({ username, password })
 
@@ -188,7 +193,6 @@ class MainProcessBridge implements MainIpcModule {
               if (res.statusCode === 200) {
                 try {
                   const response = JSON.parse(data) as { access_token: string }
-                  this.runtimeCredentials = { ipAddress, username, password }
                   resolve({ success: true, accessToken: response.access_token })
                 } catch {
                   resolve({ success: false, error: 'Invalid response format' })
@@ -214,56 +218,30 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
+    const result = await this.performAuthentication(ipAddress, username, password)
+    if (result.success && result.accessToken) {
+      this.runtimeCredentials = { ipAddress, username, password }
+    }
+    return result
+  }
+
   private async attemptTokenRefresh(): Promise<{ success: boolean; accessToken?: string; error?: string }> {
+    if (this.tokenRefreshInFlight) {
+      return this.tokenRefreshInFlight
+    }
+
     if (!this.runtimeCredentials) {
       return { success: false, error: 'No stored credentials available for token refresh' }
     }
 
     const { ipAddress, username, password } = this.runtimeCredentials
-    const postData = JSON.stringify({ username, password })
 
-    return new Promise((resolve) => {
-      const req = https.request(
-        {
-          hostname: ipAddress,
-          port: this.RUNTIME_API_PORT,
-          path: '/api/login',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-          ...getRuntimeHttpsOptions(),
-        },
-        (res: IncomingMessage) => {
-          let data = ''
-          res.on('data', (chunk: Buffer) => {
-            data += chunk.toString()
-          })
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              try {
-                const response = JSON.parse(data) as { access_token: string }
-                resolve({ success: true, accessToken: response.access_token })
-              } catch {
-                resolve({ success: false, error: 'Invalid response format' })
-              }
-            } else {
-              resolve({ success: false, error: data })
-            }
-          })
-        },
-      )
-      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-        req.destroy()
-        resolve({ success: false, error: 'Connection timeout' })
-      })
-      req.on('error', (error: Error) => {
-        resolve({ success: false, error: error.message })
-      })
-      req.write(postData)
-      req.end()
+    this.tokenRefreshInFlight = this.performAuthentication(ipAddress, username, password).finally(() => {
+      this.tokenRefreshInFlight = null
     })
+
+    return this.tokenRefreshInFlight
   }
 
   private isTokenExpiredError(statusCode: number | undefined, errorMessage: string): boolean {
@@ -356,7 +334,10 @@ class MainProcessBridge implements MainIpcModule {
                     resolve({ success: false, error: error.message })
                   })
                 } else {
-                  resolve({ success: false, error: data })
+                  resolve({
+                    success: false,
+                    error: refreshResult.error ? `Token refresh failed: ${refreshResult.error}` : data,
+                  })
                 }
               })
             } else {
