@@ -789,6 +789,17 @@ const WorkspaceScreen = () => {
     })
   }, [])
 
+  useEffect(() => {
+    const { deviceActions } = useOpenPLCStore.getState()
+    const unsubscribe = window.bridge.onRuntimeTokenRefreshed((_event, newToken: string) => {
+      deviceActions.setRuntimeJwtToken(newToken)
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
   const handleForceVariable = async (
     compositeKey: string,
     _variableType: string,
@@ -817,7 +828,6 @@ const WorkspaceScreen = () => {
       }
     }
   }
-
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
