@@ -40,9 +40,17 @@ const PLC_LOGS_POLL_INTERVAL_MS = 2500
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { isCollapsed, isDebuggerVisible, isPlcLogsVisible, debugVariableValues, debugVariableTree },
+    workspace: {
+      isCollapsed,
+      isDebuggerVisible,
+      isPlcLogsVisible,
+      debugVariableValues,
+      debugVariableTree,
+      debugVariableIndexes,
+      debugForcedVariables,
+    },
     editor,
-    workspaceActions: { toggleCollapse },
+    workspaceActions: { toggleCollapse, setDebugForcedVariables },
     deviceActions: { setAvailableOptions },
     searchResults,
     project: {
@@ -98,10 +106,13 @@ const WorkspaceScreen = () => {
     pous.flatMap((pou) => pou.data.variables.filter((v) => v.debug === true).map((v) => `${pou.data.name}:${v.name}`)),
   )
 
+  const forcedKeys = Array.from(debugForcedVariables.keys())
+  const allKeys = new Set([...watchedCompositeKeys, ...forcedKeys])
+
   const filteredDebugVariableTree = debugVariableTree
     ? new Map<string, DebugTreeNode>(
         Array.from(debugVariableTree.entries() as Iterable<[string, DebugTreeNode]>).filter(([key]) =>
-          watchedCompositeKeys.has(key),
+          allKeys.has(key),
         ),
       )
     : undefined
@@ -778,6 +789,35 @@ const WorkspaceScreen = () => {
     })
   }, [])
 
+  const handleForceVariable = async (
+    compositeKey: string,
+    _variableType: string,
+    value?: boolean,
+    valueBuffer?: Uint8Array,
+    lookupKey?: string,
+  ): Promise<void> => {
+    const keyForIndexLookup = lookupKey ?? compositeKey
+    const variableIndex = debugVariableIndexes.get(keyForIndexLookup)
+    if (variableIndex === undefined) return
+
+    if (value === undefined) {
+      const result = await window.bridge.debuggerSetVariable(variableIndex, false)
+      if (result.success) {
+        const newForcedVariables = new Map(Array.from(debugForcedVariables))
+        newForcedVariables.delete(compositeKey)
+        setDebugForcedVariables(newForcedVariables)
+      }
+    } else {
+      const buffer = valueBuffer || new Uint8Array([value ? 1 : 0])
+      const result = await window.bridge.debuggerSetVariable(variableIndex, true, buffer)
+      if (result.success) {
+        const newForcedVariables = new Map(Array.from(debugForcedVariables))
+        newForcedVariables.set(compositeKey, value)
+        setDebugForcedVariables(newForcedVariables)
+      }
+    }
+  }
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
@@ -990,6 +1030,10 @@ const WorkspaceScreen = () => {
                               graphList={graphList}
                               setGraphList={setGraphList}
                               debugVariableValues={debugVariableValues}
+                              debugVariableIndexes={debugVariableIndexes}
+                              debugForcedVariables={debugForcedVariables}
+                              isDebuggerVisible={isDebuggerVisible}
+                              onForceVariable={handleForceVariable}
                             />
                           </ResizablePanel>
                           <ResizableHandle className='w-2 bg-transparent' />
