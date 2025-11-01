@@ -10,16 +10,29 @@ export type CustomHandleProps = HandleProps & {
     x: number
     y: number
   }
+  isDebuggerVisible?: boolean
 }
 
-export const CustomHandle = ({ id, className, style, type, position, isConnectable, ...props }: CustomHandleProps) => {
+export const CustomHandle = ({
+  id,
+  className,
+  style,
+  type,
+  position,
+  isConnectable,
+  isDebuggerVisible,
+  ...props
+}: CustomHandleProps) => {
   return (
     <Handle
       id={id}
       position={position}
       type={type}
       isConnectable={isConnectable}
-      style={style}
+      style={{
+        ...style,
+        ...(isDebuggerVisible ? { pointerEvents: 'none' } : {}),
+      }}
       className={cn(className)}
       {...props}
     />
