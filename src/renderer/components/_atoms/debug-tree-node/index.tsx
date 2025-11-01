@@ -12,13 +12,8 @@ type TreeNodeProps = ComponentPropsWithoutRef<'div'> & {
   getValue?: (compositeKey: string) => string | undefined
   isForced?: (compositeKey: string) => boolean
   getForcedValue?: (compositeKey: string) => boolean | undefined
-  canForce?: (compositeKey: string, isComplex: boolean) => boolean
-  onRowClick?: (
-    compositeKey: string,
-    variableType: string,
-    position: { x: number; y: number },
-    isComplex: boolean,
-  ) => void
+  canForce?: (node: DebugTreeNode) => boolean
+  onRowClick?: (node: DebugTreeNode, position: { x: number; y: number }) => void
   level?: number
 }
 
@@ -39,7 +34,7 @@ const TreeNode = ({
   const isCurrentNodeViewing = isViewing ? isViewing(node.compositeKey) : false
   const isCurrentNodeForced = isForced ? isForced(node.compositeKey) : false
   const forcedValue = getForcedValue ? getForcedValue(node.compositeKey) : undefined
-  const canForceNode = canForce ? canForce(node.compositeKey, node.isComplex) : false
+  const canForceNode = canForce ? canForce(node) : false
 
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -57,7 +52,7 @@ const TreeNode = ({
 
   const handleRowBodyClick = (e: React.MouseEvent) => {
     if (canForceNode && onRowClick) {
-      onRowClick(node.compositeKey, node.type, { x: e.clientX, y: e.clientY }, node.isComplex)
+      onRowClick(node, { x: e.clientX, y: e.clientY })
     }
   }
 
@@ -65,7 +60,7 @@ const TreeNode = ({
 
   return (
     <div {...rest}>
-      <div className='flex h-auto w-full items-center gap-2 py-1' style={{ paddingLeft: `${indentWidth}px` }}>
+      <div className='flex h-auto w-full items-center gap-2'>
         <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
           {node.isComplex ? (
             <button
@@ -94,9 +89,10 @@ const TreeNode = ({
 
         <div
           className={cn(
-            'grid min-w-0 flex-1 grid-cols-[1fr_auto_auto] items-center gap-2',
+            'grid min-w-0 flex-1 grid-cols-[1fr_auto_auto] items-center gap-2 py-1',
             canForceNode && 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900',
           )}
+          style={{ paddingLeft: `${indentWidth}px` }}
           onClick={handleRowBodyClick}
         >
           <div className='flex min-w-0 items-center gap-2'>

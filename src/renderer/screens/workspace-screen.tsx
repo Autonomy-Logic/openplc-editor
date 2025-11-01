@@ -106,10 +106,13 @@ const WorkspaceScreen = () => {
     pous.flatMap((pou) => pou.data.variables.filter((v) => v.debug === true).map((v) => `${pou.data.name}:${v.name}`)),
   )
 
+  const forcedKeys = Array.from(debugForcedVariables.keys())
+  const allKeys = new Set([...watchedCompositeKeys, ...forcedKeys])
+
   const filteredDebugVariableTree = debugVariableTree
     ? new Map<string, DebugTreeNode>(
         Array.from(debugVariableTree.entries() as Iterable<[string, DebugTreeNode]>).filter(([key]) =>
-          watchedCompositeKeys.has(key),
+          allKeys.has(key),
         ),
       )
     : undefined

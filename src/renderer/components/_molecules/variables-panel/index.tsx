@@ -56,6 +56,7 @@ const VariablesPanel = ({
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     compositeKey: string
+    lookupKey: string
     variableType: string
     position: { x: number; y: number }
   } | null>(null)
@@ -115,21 +116,25 @@ const VariablesPanel = ({
   )
 
   const canForceVariable = useCallback(
-    (compositeKey: string, isComplex: boolean) => {
-      if (!isDebuggerVisible || isComplex) return false
-      return debugVariableIndexes?.has(compositeKey) ?? false
+    (node: DebugTreeNode) => {
+      if (!isDebuggerVisible || node.isComplex) return false
+      if (node.debugIndex !== undefined) return true
+      return debugVariableIndexes?.has(node.fullPath) ?? debugVariableIndexes?.has(node.compositeKey) ?? false
     },
     [isDebuggerVisible, debugVariableIndexes],
   )
 
   const handleRowClick = useCallback(
-    (compositeKey: string, variableType: string, position: { x: number; y: number }, isComplex: boolean) => {
-      if (!canForceVariable(compositeKey, isComplex)) return
+    (node: DebugTreeNode, position: { x: number; y: number }) => {
+      if (!canForceVariable(node)) return
+
+      const lookupKey = node.debugIndex !== undefined ? node.fullPath : node.compositeKey
 
       setContextMenuState({
         isOpen: true,
-        compositeKey,
-        variableType,
+        compositeKey: node.compositeKey,
+        lookupKey,
+        variableType: node.type,
         position,
       })
     },
@@ -145,7 +150,7 @@ const VariablesPanel = ({
       e.preventDefault()
       e.stopPropagation()
       if (contextMenuState && onForceVariable) {
-        void onForceVariable(contextMenuState.compositeKey, 'BOOL', true)
+        void onForceVariable(contextMenuState.lookupKey, 'BOOL', true)
       }
       handleCloseContextMenu()
     },
@@ -157,7 +162,7 @@ const VariablesPanel = ({
       e.preventDefault()
       e.stopPropagation()
       if (contextMenuState && onForceVariable) {
-        void onForceVariable(contextMenuState.compositeKey, 'BOOL', false)
+        void onForceVariable(contextMenuState.lookupKey, 'BOOL', false)
       }
       handleCloseContextMenu()
     },
@@ -169,7 +174,7 @@ const VariablesPanel = ({
       e.preventDefault()
       e.stopPropagation()
       if (contextMenuState && onForceVariable) {
-        void onForceVariable(contextMenuState.compositeKey, contextMenuState.variableType, undefined)
+        void onForceVariable(contextMenuState.lookupKey, contextMenuState.variableType, undefined)
       }
       handleCloseContextMenu()
     },
@@ -237,7 +242,7 @@ const VariablesPanel = ({
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    void onForceVariable(contextMenuState.compositeKey, variableType, forcedValueForState, valueBuffer)
+    void onForceVariable(contextMenuState.lookupKey, variableType, forcedValueForState, valueBuffer)
 
     setForceValueModalOpen(false)
     setForceValue('')
@@ -288,7 +293,17 @@ const VariablesPanel = ({
         {variables.map((variable) => {
           const isForced = isForcedPredicate(variable.compositeKey)
           const forcedValue = getForcedValue(variable.compositeKey)
-          const canForce = canForceVariable(variable.compositeKey, false)
+
+          const nodeForFlat: DebugTreeNode = {
+            name: variable.name,
+            fullPath: variable.compositeKey,
+            compositeKey: variable.compositeKey,
+            type: variable.type,
+            isComplex: false,
+            debugIndex: debugVariableIndexes?.get(variable.compositeKey),
+          }
+
+          const canForce = canForceVariable(nodeForFlat)
 
           const textColor = isForced ? (forcedValue ? '#80C000' : '#4080FF') : undefined
 
@@ -311,7 +326,7 @@ const VariablesPanel = ({
                 }`}
                 onClick={(e) => {
                   if (canForce) {
-                    handleRowClick(variable.compositeKey, variable.type, { x: e.clientX, y: e.clientY }, false)
+                    handleRowClick(nodeForFlat, { x: e.clientX, y: e.clientY })
                   }
                 }}
               >
