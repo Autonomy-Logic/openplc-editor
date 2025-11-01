@@ -731,39 +731,44 @@ const VariableElement = (block: VariableProps) => {
       </TooltipProvider>
 
       <Modal open={forceValueModalOpen} onOpenChange={handleForceValueModalChange}>
-        <ModalContent className='flex max-w-[400px] flex-col gap-4'>
-          <ModalTitle>Force Variable Value</ModalTitle>
-          <div className='flex flex-col gap-2'>
-            <Label htmlFor='force-value'>Enter value for {data.variable.name}:</Label>
-            <input
-              id='force-value'
-              type='text'
-              value={forceValue}
-              onChange={(e) => setForceValue(e.target.value)}
-              className='rounded border border-neutral-300 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900'
-              placeholder='Enter value'
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  void handleForceValueConfirm()
-                } else if (e.key === 'Escape') {
-                  handleForceValueCancel()
-                }
-              }}
-            />
-          </div>
-          <div className='flex justify-end gap-2'>
-            <button
-              onClick={handleForceValueCancel}
-              className='rounded bg-neutral-200 px-4 py-2 text-sm hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700'
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => void handleForceValueConfirm()}
-              className='rounded bg-brand px-4 py-2 text-sm text-white hover:bg-brand-dark'
-            >
-              Force
-            </button>
+        <ModalContent className='flex h-fit min-h-0 w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
+          <ModalTitle className='mb-4 text-lg font-semibold'>Force Value</ModalTitle>
+
+          <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>
+            Enter the value to force for {data.variable?.name || 'this variable'}
+          </p>
+
+          <div className='flex w-full flex-col gap-4'>
+            <div>
+              <Label htmlFor='force-value-input' className='mb-2 block text-sm'>
+                Value
+              </Label>
+              <input
+                id='force-value-input'
+                type='text'
+                value={forceValue}
+                onChange={(e) => setForceValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void handleForceValueConfirm()}
+                placeholder='Enter value'
+                className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
+                autoFocus
+              />
+            </div>
+
+            <div className='mt-4 flex gap-3'>
+              <button
+                onClick={() => void handleForceValueConfirm()}
+                className='flex-1 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark'
+              >
+                OK
+              </button>
+              <button
+                onClick={handleForceValueCancel}
+                className='flex-1 rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100'
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </ModalContent>
       </Modal>
