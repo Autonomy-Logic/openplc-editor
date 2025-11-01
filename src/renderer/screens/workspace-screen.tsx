@@ -778,6 +778,17 @@ const WorkspaceScreen = () => {
     })
   }, [])
 
+  useEffect(() => {
+    const { deviceActions } = useOpenPLCStore.getState()
+    window.bridge.onRuntimeTokenRefreshed((_event, newToken: string) => {
+      deviceActions.setRuntimeJwtToken(newToken)
+    })
+
+    return () => {
+      window.bridge.removeRuntimeTokenRefreshedListener()
+    }
+  }, [])
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />

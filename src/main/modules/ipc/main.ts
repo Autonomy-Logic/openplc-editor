@@ -46,6 +46,7 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerRtuBaudRate: number | null = null
   private debuggerRtuSlaveId: number | null = null
   private debuggerJwtToken: string | null = null
+  private runtimeCredentials: { ipAddress: string; username: string; password: string } | null = null
 
   constructor({
     ipcMain,
@@ -187,6 +188,7 @@ class MainProcessBridge implements MainIpcModule {
               if (res.statusCode === 200) {
                 try {
                   const response = JSON.parse(data) as { access_token: string }
+                  this.runtimeCredentials = { ipAddress, username, password }
                   resolve({ success: true, accessToken: response.access_token })
                 } catch {
                   resolve({ success: false, error: 'Invalid response format' })
@@ -210,6 +212,71 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       return { success: false, error: String(error) }
     }
+  }
+
+  private async attemptTokenRefresh(): Promise<{ success: boolean; accessToken?: string; error?: string }> {
+    if (!this.runtimeCredentials) {
+      return { success: false, error: 'No stored credentials available for token refresh' }
+    }
+
+    const { ipAddress, username, password } = this.runtimeCredentials
+    const postData = JSON.stringify({ username, password })
+
+    return new Promise((resolve) => {
+      const req = https.request(
+        {
+          hostname: ipAddress,
+          port: this.RUNTIME_API_PORT,
+          path: '/api/login',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
+          ...getRuntimeHttpsOptions(),
+        },
+        (res: IncomingMessage) => {
+          let data = ''
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString()
+          })
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              try {
+                const response = JSON.parse(data) as { access_token: string }
+                resolve({ success: true, accessToken: response.access_token })
+              } catch {
+                resolve({ success: false, error: 'Invalid response format' })
+              }
+            } else {
+              resolve({ success: false, error: data })
+            }
+          })
+        },
+      )
+      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+        req.destroy()
+        resolve({ success: false, error: 'Connection timeout' })
+      })
+      req.on('error', (error: Error) => {
+        resolve({ success: false, error: error.message })
+      })
+      req.write(postData)
+      req.end()
+    })
+  }
+
+  private isTokenExpiredError(statusCode: number | undefined, errorMessage: string): boolean {
+    if (statusCode === 401 || statusCode === 403) {
+      return true
+    }
+    const lowerError = errorMessage.toLowerCase()
+    return (
+      lowerError.includes('unauthorized') ||
+      lowerError.includes('token') ||
+      lowerError.includes('expired') ||
+      lowerError.includes('invalid token')
+    )
   }
 
   makeRuntimeApiRequest<T = void>(
@@ -244,6 +311,54 @@ class MainProcessBridge implements MainIpcModule {
               } else {
                 resolve({ success: true })
               }
+            } else if (this.isTokenExpiredError(res.statusCode, data)) {
+              void this.attemptTokenRefresh().then((refreshResult) => {
+                if (refreshResult.success && refreshResult.accessToken) {
+                  if (this.mainWindow && this.mainWindow.webContents) {
+                    this.mainWindow.webContents.send('runtime:token-refreshed', refreshResult.accessToken)
+                  }
+                  const retryReq = https.get(
+                    `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`,
+                    {
+                      headers: {
+                        Authorization: `Bearer ${refreshResult.accessToken}`,
+                      },
+                      ...getRuntimeHttpsOptions(),
+                    },
+                    (retryRes: IncomingMessage) => {
+                      let retryData = ''
+                      retryRes.on('data', (chunk: Buffer) => {
+                        retryData += chunk.toString()
+                      })
+                      retryRes.on('end', () => {
+                        if (retryRes.statusCode === 200) {
+                          if (responseParser) {
+                            try {
+                              const parsedData = responseParser(retryData)
+                              resolve({ success: true, data: parsedData })
+                            } catch {
+                              resolve({ success: false, error: 'Invalid response format' })
+                            }
+                          } else {
+                            resolve({ success: true })
+                          }
+                        } else {
+                          resolve({ success: false, error: retryData })
+                        }
+                      })
+                    },
+                  )
+                  retryReq.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+                    retryReq.destroy()
+                    resolve({ success: false, error: 'Connection timeout' })
+                  })
+                  retryReq.on('error', (error: Error) => {
+                    resolve({ success: false, error: error.message })
+                  })
+                } else {
+                  resolve({ success: false, error: data })
+                }
+              })
             } else {
               resolve({ success: false, error: data })
             }
@@ -331,6 +446,11 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
+    this.runtimeCredentials = null
+    return { success: true }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -408,6 +528,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
     this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
     this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
+    this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
   }
 
   // ===================== HANDLER METHODS =====================

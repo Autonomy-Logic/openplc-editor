@@ -325,5 +325,9 @@ const rendererProcessBridge = {
   }> => ipcRenderer.invoke('runtime:get-compilation-status', ipAddress, jwtToken),
   runtimeGetLogs: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; logs?: string; error?: string }> =>
     ipcRenderer.invoke('runtime:get-logs', ipAddress, jwtToken),
+  runtimeClearCredentials: (): Promise<{ success: boolean }> => ipcRenderer.invoke('runtime:clear-credentials'),
+  onRuntimeTokenRefreshed: (callback: (_event: IpcRendererEvent, newToken: string) => void) =>
+    ipcRenderer.on('runtime:token-refreshed', callback),
+  removeRuntimeTokenRefreshedListener: () => ipcRenderer.removeAllListeners('runtime:token-refreshed'),
 }
 export default rendererProcessBridge
