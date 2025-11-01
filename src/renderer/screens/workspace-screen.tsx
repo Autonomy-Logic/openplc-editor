@@ -794,8 +794,10 @@ const WorkspaceScreen = () => {
     _variableType: string,
     value?: boolean,
     valueBuffer?: Uint8Array,
+    lookupKey?: string,
   ): Promise<void> => {
-    const variableIndex = debugVariableIndexes.get(compositeKey)
+    const keyForIndexLookup = lookupKey ?? compositeKey
+    const variableIndex = debugVariableIndexes.get(keyForIndexLookup)
     if (variableIndex === undefined) return
 
     if (value === undefined) {

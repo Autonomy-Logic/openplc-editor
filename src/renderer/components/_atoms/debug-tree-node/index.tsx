@@ -90,7 +90,7 @@ const TreeNode = ({
         <div
           className={cn(
             'grid min-w-0 flex-1 grid-cols-[1fr_auto_auto] items-center gap-2 py-1',
-            canForceNode && 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900',
+            canForceNode && 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-850',
           )}
           style={{ paddingLeft: `${indentWidth}px` }}
           onClick={handleRowBodyClick}

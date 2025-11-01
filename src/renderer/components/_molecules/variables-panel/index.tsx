@@ -38,6 +38,7 @@ type VariablePanelProps = {
     variableType: string,
     value?: boolean,
     valueBuffer?: Uint8Array,
+    lookupKey?: string,
   ) => Promise<void>
 }
 
@@ -150,7 +151,7 @@ const VariablesPanel = ({
       e.preventDefault()
       e.stopPropagation()
       if (contextMenuState && onForceVariable) {
-        void onForceVariable(contextMenuState.lookupKey, 'BOOL', true)
+        void onForceVariable(contextMenuState.compositeKey, 'BOOL', true, undefined, contextMenuState.lookupKey)
       }
       handleCloseContextMenu()
     },
@@ -162,7 +163,7 @@ const VariablesPanel = ({
       e.preventDefault()
       e.stopPropagation()
       if (contextMenuState && onForceVariable) {
-        void onForceVariable(contextMenuState.lookupKey, 'BOOL', false)
+        void onForceVariable(contextMenuState.compositeKey, 'BOOL', false, undefined, contextMenuState.lookupKey)
       }
       handleCloseContextMenu()
     },
@@ -174,7 +175,13 @@ const VariablesPanel = ({
       e.preventDefault()
       e.stopPropagation()
       if (contextMenuState && onForceVariable) {
-        void onForceVariable(contextMenuState.lookupKey, contextMenuState.variableType, undefined)
+        void onForceVariable(
+          contextMenuState.compositeKey,
+          contextMenuState.variableType,
+          undefined,
+          undefined,
+          contextMenuState.lookupKey,
+        )
       }
       handleCloseContextMenu()
     },
@@ -242,7 +249,13 @@ const VariablesPanel = ({
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    void onForceVariable(contextMenuState.lookupKey, variableType, forcedValueForState, valueBuffer)
+    void onForceVariable(
+      contextMenuState.compositeKey,
+      variableType,
+      forcedValueForState,
+      valueBuffer,
+      contextMenuState.lookupKey,
+    )
 
     setForceValueModalOpen(false)
     setForceValue('')
@@ -322,7 +335,7 @@ const VariablesPanel = ({
               </div>
               <div
                 className={`grid min-w-0 flex-1 grid-cols-[1fr_auto_auto] items-center gap-2 ${
-                  canForce ? 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900' : ''
+                  canForce ? 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-850' : ''
                 }`}
                 onClick={(e) => {
                   if (canForce) {
