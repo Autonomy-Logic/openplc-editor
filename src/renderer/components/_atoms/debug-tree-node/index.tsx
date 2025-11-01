@@ -10,12 +10,36 @@ type TreeNodeProps = ComponentPropsWithoutRef<'div'> & {
   onViewToggle?: (compositeKey: string) => void
   isViewing?: (compositeKey: string) => boolean
   getValue?: (compositeKey: string) => string | undefined
+  isForced?: (compositeKey: string) => boolean
+  getForcedValue?: (compositeKey: string) => boolean | undefined
+  canForce?: (compositeKey: string, isComplex: boolean) => boolean
+  onRowClick?: (
+    compositeKey: string,
+    variableType: string,
+    position: { x: number; y: number },
+    isComplex: boolean,
+  ) => void
   level?: number
 }
 
-const TreeNode = ({ node, onToggleExpand, onViewToggle, isViewing, getValue, level = 0, ...rest }: TreeNodeProps) => {
+const TreeNode = ({
+  node,
+  onToggleExpand,
+  onViewToggle,
+  isViewing,
+  getValue,
+  isForced,
+  getForcedValue,
+  canForce,
+  onRowClick,
+  level = 0,
+  ...rest
+}: TreeNodeProps) => {
   const indentWidth = level * 16
   const isCurrentNodeViewing = isViewing ? isViewing(node.compositeKey) : false
+  const isCurrentNodeForced = isForced ? isForced(node.compositeKey) : false
+  const forcedValue = getForcedValue ? getForcedValue(node.compositeKey) : undefined
+  const canForceNode = canForce ? canForce(node.compositeKey, node.isComplex) : false
 
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -31,12 +55,17 @@ const TreeNode = ({ node, onToggleExpand, onViewToggle, isViewing, getValue, lev
     }
   }
 
+  const handleRowBodyClick = (e: React.MouseEvent) => {
+    if (canForceNode && onRowClick) {
+      onRowClick(node.compositeKey, node.type, { x: e.clientX, y: e.clientY }, node.isComplex)
+    }
+  }
+
+  const textColor = isCurrentNodeForced ? (forcedValue ? '#80C000' : '#4080FF') : undefined
+
   return (
     <div {...rest}>
-      <div
-        className='flex h-auto w-full items-center gap-2 py-1 hover:bg-slate-50 dark:hover:bg-neutral-900'
-        style={{ paddingLeft: `${indentWidth}px` }}
-      >
+      <div className='flex h-auto w-full items-center gap-2 py-1' style={{ paddingLeft: `${indentWidth}px` }}>
         <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
           {node.isComplex ? (
             <button
@@ -63,12 +92,32 @@ const TreeNode = ({ node, onToggleExpand, onViewToggle, isViewing, getValue, lev
           ) : null}
         </div>
 
-        <div className='grid min-w-0 flex-1 grid-cols-[1fr_auto_auto] items-center gap-2'>
+        <div
+          className={cn(
+            'grid min-w-0 flex-1 grid-cols-[1fr_auto_auto] items-center gap-2',
+            canForceNode && 'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900',
+          )}
+          onClick={handleRowBodyClick}
+        >
           <div className='flex min-w-0 items-center gap-2'>
-            <p className='truncate text-neutral-1000 dark:text-white'>{node.name}</p>
+            <p
+              className='truncate text-neutral-1000 dark:text-white'
+              style={{
+                color: textColor,
+                fontWeight: isCurrentNodeForced ? 600 : undefined,
+              }}
+            >
+              {node.name}
+            </p>
           </div>
           <p className='uppercase text-neutral-400 dark:text-neutral-700'>{node.type}</p>
-          <p className='text-neutral-1000 dark:text-white'>
+          <p
+            className='text-neutral-1000 dark:text-white'
+            style={{
+              color: textColor,
+              fontWeight: isCurrentNodeForced ? 600 : undefined,
+            }}
+          >
             {node.isComplex && !node.isExpanded
               ? '...'
               : node.isComplex
@@ -90,6 +139,10 @@ const TreeNode = ({ node, onToggleExpand, onViewToggle, isViewing, getValue, lev
               onViewToggle={onViewToggle}
               isViewing={isViewing}
               getValue={getValue}
+              isForced={isForced}
+              getForcedValue={getForcedValue}
+              canForce={canForce}
+              onRowClick={onRowClick}
               level={level + 1}
             />
           ))}
