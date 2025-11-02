@@ -1074,25 +1074,22 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
     !validateVariableType('BOOL', outputConnectors[0].type.value.toUpperCase()).isValid
 
   if (executionControl || mustHaveExecutionControlEnabled) {
-    const executionControlVariable = variant.variables.some(
-      (variable) => variable.name === 'EN' || variable.name === 'ENO',
-    )
+    const existingEN = variant.variables.find((variable) => variable.name === 'EN')
+    const existingENO = variant.variables.find((variable) => variable.name === 'ENO')
+    const otherVariables = variant.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
 
-    if (!executionControlVariable) {
-      variant.variables = [
-        {
-          name: 'EN',
-          class: 'input',
-          type: { definition: 'generic-type', value: 'BOOL' },
-        },
-        {
-          name: 'ENO',
-          class: 'output',
-          type: { definition: 'generic-type', value: 'BOOL' },
-        },
-        ...variant.variables,
-      ]
+    const EN = existingEN || {
+      name: 'EN',
+      class: 'input',
+      type: { definition: 'base-type', value: 'BOOL' },
     }
+    const ENO = existingENO || {
+      name: 'ENO',
+      class: 'output',
+      type: { definition: 'base-type', value: 'BOOL' },
+    }
+
+    variant.variables = [EN, ENO, ...otherVariables]
   } else {
     variant.variables = variant.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
   }
