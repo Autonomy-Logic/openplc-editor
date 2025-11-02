@@ -1081,12 +1081,12 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
     const EN = existingEN || {
       name: 'EN',
       class: 'input',
-      type: { definition: 'generic-type', value: 'BOOL' },
+      type: { definition: 'base-type', value: 'BOOL' },
     }
     const ENO = existingENO || {
       name: 'ENO',
       class: 'output',
-      type: { definition: 'generic-type', value: 'BOOL' },
+      type: { definition: 'base-type', value: 'BOOL' },
     }
 
     variant.variables = [EN, ENO, ...otherVariables]

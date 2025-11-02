@@ -322,7 +322,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       blockVariables.push({
         name: 'EN',
         class: 'input',
-        type: { definition: 'generic-type', value: 'BOOL' },
+        type: { definition: 'base-type', value: 'BOOL' },
       })
     }
     for (let i = 0; i < value; i++) {
