@@ -4,7 +4,14 @@ import * as blockNode from './block'
 import * as coilNode from './coil'
 import * as contactNode from './contact'
 import * as mockNode from './mock-node'
-import * as parallelNode from './parallel'
+import {
+  buildParallel,
+  DEFAULT_PARALLEL_CONNECTOR_Y,
+  DEFAULT_PARALLEL_HEIGHT,
+  DEFAULT_PARALLEL_WIDTH,
+  GAP as PARALLEL_GAP,
+  Parallel,
+} from './parallel'
 import * as placeholderNode from './placeholder'
 import * as powerRailNode from './power-rail'
 import * as variableNode from './variable'
@@ -15,7 +22,7 @@ export const customNodeTypes = {
   block: blockNode.Block,
   coil: coilNode.Coil,
   contact: contactNode.Contact,
-  parallel: parallelNode.Parallel,
+  parallel: Parallel,
   parallelPlaceholder: placeholderNode.Placeholder,
   placeholder: placeholderNode.Placeholder,
   powerRail: powerRailNode.PowerRail,
@@ -71,13 +78,13 @@ export const defaultCustomNodesStyles: CustomFbdNodeTypes = {
     },
   },
   parallel: {
-    width: parallelNode.DEFAULT_PARALLEL_WIDTH,
-    height: parallelNode.DEFAULT_PARALLEL_HEIGHT,
-    gap: parallelNode.GAP,
-    verticalGap: parallelNode.GAP,
+    width: DEFAULT_PARALLEL_WIDTH,
+    height: DEFAULT_PARALLEL_HEIGHT,
+    gap: PARALLEL_GAP,
+    verticalGap: PARALLEL_GAP,
     handle: {
       x: 0,
-      y: parallelNode.DEFAULT_PARALLEL_CONNECTOR_Y,
+      y: DEFAULT_PARALLEL_CONNECTOR_Y,
       offsetY: 0,
     },
   },
@@ -142,7 +149,7 @@ export const nodesBuilder = {
   block: blockNode.buildBlockNode,
   coil: coilNode.buildCoilNode,
   contact: contactNode.buildContactNode,
-  parallel: parallelNode.buildParallel,
+  parallel: buildParallel,
   parallelPlaceholder: placeholderNode.builderPlaceholderNode,
   placeholder: placeholderNode.builderPlaceholderNode,
   powerRail: powerRailNode.buildPowerRailNode,
