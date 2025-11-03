@@ -110,7 +110,7 @@ const Board = memo(function () {
         setIsPressed(true)
         const ports = await window.bridge.refreshCommunicationPorts()
         setAvailableOptions({ availableCommunicationPorts: ports })
-      } catch (error) {
+      } catch (error: unknown) {
         // TODO: Add a toast notification for error and for success
         console.error(error)
       } finally {

@@ -659,7 +659,7 @@ const WorkspaceScreen = () => {
         if (isMountedRef.current) {
           workspaceActions.setDebugVariableValues(newValues)
         }
-      } catch (error) {
+      } catch (error: unknown) {
         const { consoleActions } = useOpenPLCStore.getState()
         consoleActions.addLog({
           id: `debugger-poll-error-${Date.now()}`,
@@ -679,7 +679,7 @@ const WorkspaceScreen = () => {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
-      void window.bridge.debuggerDisconnect().catch((error) => {
+      void window.bridge.debuggerDisconnect().catch((error: unknown) => {
         const { consoleActions } = useOpenPLCStore.getState()
         consoleActions.addLog({
           id: crypto.randomUUID(),
