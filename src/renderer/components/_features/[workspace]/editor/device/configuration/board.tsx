@@ -165,10 +165,8 @@ const Board = memo(function () {
       consecutiveFailuresRef.current = 0
       setRuntimeJwtToken(null)
       setRuntimeConnectionStatus('disconnected')
-      const clearCreds: unknown = window.bridge.runtimeClearCredentials
-      if (typeof clearCreds === 'function') {
-        await clearCreds()
-      }
+      const clearCreds = window.bridge.runtimeClearCredentials as (() => Promise<{ success: boolean }>) | undefined
+      await clearCreds?.()
       return
     }
 
