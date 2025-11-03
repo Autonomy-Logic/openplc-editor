@@ -110,7 +110,7 @@ const Board = memo(function () {
         setIsPressed(true)
         const ports = await window.bridge.refreshCommunicationPorts()
         setAvailableOptions({ availableCommunicationPorts: ports })
-      } catch (error) {
+      } catch (error: unknown) {
         // TODO: Add a toast notification for error and for success
         console.error(error)
       } finally {
@@ -165,7 +165,8 @@ const Board = memo(function () {
       consecutiveFailuresRef.current = 0
       setRuntimeJwtToken(null)
       setRuntimeConnectionStatus('disconnected')
-      await window.bridge.runtimeClearCredentials()
+      const clearCreds = window.bridge.runtimeClearCredentials as (() => Promise<{ success: boolean }>) | undefined
+      await clearCreds?.()
       return
     }
 

@@ -21,7 +21,7 @@ type ParallelBuilderProps = BuilderBasicProps & { type: 'open' | 'close' }
 export const DEFAULT_PARALLEL_WIDTH = 30
 export const DEFAULT_PARALLEL_HEIGHT = 2
 
-export const GAP = 20
+export const GAP: number = 20
 
 export const DEFAULT_PARALLEL_CONNECTOR_Y = DEFAULT_PARALLEL_HEIGHT / 2
 
