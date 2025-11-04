@@ -98,29 +98,38 @@ class HardwareModule {
     }
     const executeCommand = promisify(exec)
 
-    const { stdout, stderr } = await executeCommand(`"${xml2stBinaryPath}" --list-ports`)
+    try {
+      const { stdout, stderr } = await executeCommand(`"${xml2stBinaryPath}" --list-ports`)
 
-    if (stderr) {
-      console.error('Error while getting available serial ports:', stderr)
+      if (stderr) {
+        console.warn('xml2st stderr output:', stderr)
+      }
+
+      let normalizedOutputString: SerialPort[] = [{ name: '', address: 'fallback' }]
+
+      if (stdout) {
+        try {
+          const parsedOutput = JSON.parse(stdout) as {
+            ports: {
+              name: string
+              address: string
+            }[]
+          }
+          normalizedOutputString = parsedOutput.ports.map((port) => ({
+            name: port.name ?? port.address,
+            address: port.address,
+          }))
+        } catch (parseError: unknown) {
+          console.error('Failed to parse xml2st output:', parseError)
+          return []
+        }
+      }
+
+      return normalizedOutputString
+    } catch (execError: unknown) {
+      console.error('Failed to execute xml2st:', execError)
       return []
     }
-
-    let normalizedOutputString: SerialPort[] = [{ name: '', address: 'fallback' }]
-
-    if (stdout) {
-      const parsedOutput = JSON.parse(stdout) as {
-        ports: {
-          name: string
-          address: string
-        }[]
-      }
-      normalizedOutputString = parsedOutput.ports.map((port) => ({
-        name: port.name ?? port.address,
-        address: port.address,
-      }))
-    }
-
-    return normalizedOutputString
   }
 
   async getAvailableBoards(): Promise<AvailableBoards> {

@@ -63,6 +63,8 @@ const Board = memo(function () {
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
   const consecutiveFailuresRef = useRef<number>(0)
+  const portsReqIdRef = useRef<number>(0)
+  const [isRefreshingPorts, setIsRefreshingPorts] = useState(false)
 
   const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
     if (!selectIsOpen) return
@@ -106,18 +108,29 @@ const Board = memo(function () {
   const refreshCommunicationPorts = useCallback(
     async (e: React.MouseEvent) => {
       e.preventDefault()
+      if (isRefreshingPorts) return
+
       try {
+        setIsRefreshingPorts(true)
         setIsPressed(true)
+
+        portsReqIdRef.current += 1
+        const currentReqId = portsReqIdRef.current
+
         const ports = await window.bridge.refreshCommunicationPorts()
-        setAvailableOptions({ availableCommunicationPorts: ports })
+
+        if (currentReqId === portsReqIdRef.current) {
+          setAvailableOptions({ availableCommunicationPorts: ports })
+        }
       } catch (error: unknown) {
         // TODO: Add a toast notification for error and for success
         console.error(error)
       } finally {
+        setIsRefreshingPorts(false)
         setTimeout(() => setIsPressed(false), 400)
       }
     },
-    [setAvailableOptions],
+    [setAvailableOptions, isRefreshingPorts],
   )
 
   const handleSetDeviceBoard = useCallback(
@@ -405,7 +418,8 @@ const Board = memo(function () {
               <button
                 type='button'
                 onClick={refreshCommunicationPorts}
-                className='group'
+                disabled={isRefreshingPorts}
+                className={cn('group', isRefreshingPorts && 'cursor-not-allowed opacity-50')}
                 aria-pressed={isPressed}
                 aria-label='Refresh communication ports'
               >
