@@ -99,15 +99,8 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
     ) => {
       setState(
         produce((state: EditorState) => {
-          let targetEditor = null
-          if (state.editor.meta.name === name) {
-            targetEditor = state.editor
-          } else {
-            const editorIndex = state.editors.findIndex((e) => e.meta.name === name)
-            if (editorIndex !== -1) {
-              targetEditor = state.editors[editorIndex]
-            }
-          }
+          const targetEditor =
+            state.editor.meta.name === name ? state.editor : state.editors.find((e) => e.meta.name === name)
 
           if (!targetEditor) return
 
