@@ -125,3 +125,23 @@
 .spin-refresh {
   animation: spin-refresh 0.5s linear;
 }
+
+/* Monaco Editor z-index constraints to prevent sticky scroll from overlapping dialogs */
+/* Target only Monaco's overlay widgets without affecting layout containers */
+.oplc-monaco-wrapper .monaco-editor .sticky-widget {
+  z-index: 1 !important;
+}
+
+/* Ensure Monaco's other overlay widgets stay below dialogs but above editor content */
+.oplc-monaco-wrapper .monaco-editor .suggest-widget,
+.oplc-monaco-wrapper .monaco-editor .monaco-hover,
+.oplc-monaco-wrapper .monaco-editor .parameter-hints-widget {
+  z-index: 10 !important;
+}
+
+/* Ensure Radix popper/select content sits well above Monaco */
+[data-radix-popper-content-wrapper],
+[data-radix-select-content],
+[role='listbox'] {
+  z-index: 1000 !important;
+}
