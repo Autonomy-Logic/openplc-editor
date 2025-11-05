@@ -10,7 +10,7 @@ import { PLCGlobalVariable, PLCVariable as _PLCVariable } from '@root/types/PLC/
 import { cn } from '@root/utils'
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -34,7 +34,7 @@ const GlobalVariablesEditor = () => {
       },
     },
     libraries,
-    editorActions: { updateModelVariables },
+    editorActions: { updateModelVariables, updateModelVariablesForName },
     projectActions: { createVariable, deleteVariable, rearrangeVariables, setGlobalVariables },
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
@@ -53,6 +53,16 @@ const GlobalVariablesEditor = () => {
     selectedRow: ROWS_NOT_SELECTED.toString(),
     description: '',
   })
+
+  const latestCodeRef = useRef(editorCode)
+  const latestDisplayRef = useRef(editorVariables.display)
+  const latestEditorNameRef = useRef(editor.meta.name)
+
+  useEffect(() => {
+    latestCodeRef.current = editorCode
+    latestDisplayRef.current = editorVariables.display
+    latestEditorNameRef.current = editor.meta.name
+  }, [editorCode, editorVariables.display, editor.meta.name])
 
   /**
    * Update the table data and the editor's variables when the editor or the pous change
@@ -84,6 +94,26 @@ const GlobalVariablesEditor = () => {
           display: editor.variable.display,
         })
   }, [editor])
+
+  useEffect(() => {
+    if (editorVariables.display === 'code') {
+      updateModelVariablesForName(latestEditorNameRef.current, {
+        display: 'code',
+        code: editorCode,
+      })
+    }
+  }, [editorCode, editorVariables.display, updateModelVariablesForName])
+
+  useEffect(() => {
+    return () => {
+      if (latestDisplayRef.current === 'code') {
+        updateModelVariablesForName(latestEditorNameRef.current, {
+          display: 'code',
+          code: latestCodeRef.current,
+        })
+      }
+    }
+  }, [updateModelVariablesForName])
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
     if (editorVariables.display === 'code' && value === 'table') {

@@ -56,7 +56,7 @@ const VariablesEditor = () => {
       data: { pous, dataTypes },
     },
     libraries,
-    editorActions: { updateModelVariables },
+    editorActions: { updateModelVariables, updateModelVariablesForName },
     projectActions: {
       createVariable,
       deleteVariable,
@@ -168,6 +168,7 @@ const VariablesEditor = () => {
   const containerRef = useRef<HTMLDivElement>(null)
   const latestCodeRef = useRef(editorCode)
   const latestDisplayRef = useRef(editorVariables.display)
+  const latestEditorNameRef = useRef(editor.meta.name)
   const lastParsedCodeRef = useRef(editorCode)
   const isParsingRef = useRef(false)
   const commitCodeRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false))
@@ -175,7 +176,8 @@ const VariablesEditor = () => {
   useEffect(() => {
     latestCodeRef.current = editorCode
     latestDisplayRef.current = editorVariables.display
-  }, [editorCode, editorVariables.display])
+    latestEditorNameRef.current = editor.meta.name
+  }, [editorCode, editorVariables.display, editor.meta.name])
 
   useEffect(() => {
     lastParsedCodeRef.current = editorCode
@@ -183,23 +185,23 @@ const VariablesEditor = () => {
 
   useEffect(() => {
     if (editorVariables.display === 'code') {
-      updateModelVariables({
+      updateModelVariablesForName(latestEditorNameRef.current, {
         display: 'code',
         code: editorCode,
       })
     }
-  }, [editorCode, editorVariables.display, updateModelVariables])
+  }, [editorCode, editorVariables.display, updateModelVariablesForName])
 
   useEffect(() => {
     return () => {
       if (latestDisplayRef.current === 'code') {
-        updateModelVariables({
+        updateModelVariablesForName(latestEditorNameRef.current, {
           display: 'code',
           code: latestCodeRef.current,
         })
       }
     }
-  }, [updateModelVariables])
+  }, [updateModelVariablesForName])
 
   useEffect(() => {
     if (editorVariables.display !== 'code') return
