@@ -144,11 +144,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       <Popover.Trigger
         onMouseEnter={handleMouseEnter}
         id={`create-${target}-trigger`}
-        className='rounded-md focus:bg-neutral-100 dark:focus:bg-neutral-900'
+        className='group rounded-md focus:bg-neutral-100 dark:focus:bg-neutral-900'
       >
         <div
           id={`create-${target}-trigger-container`}
-          className='relative flex h-7 w-full cursor-pointer  items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:data-[state=open]:bg-neutral-900'
+          className='relative flex h-7 w-full cursor-pointer  items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 group-aria-[expanded=true]:bg-neutral-100 group-data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:group-aria-[expanded=true]:bg-neutral-900 dark:group-data-[state=open]:bg-neutral-900'
         >
           {CreatePouSources[target]}
           <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>

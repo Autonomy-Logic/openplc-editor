@@ -831,7 +831,7 @@ void loop()
 
   return (
     <>
-      <div id='editor drop handler' className='h-full w-full' onDrop={handleDrop}>
+      <div id='editor drop handler' className='oplc-monaco-wrapper h-full w-full' onDrop={handleDrop}>
         <PrimitiveEditor
           options={monacoEditorUserOptions}
           height='100%'
