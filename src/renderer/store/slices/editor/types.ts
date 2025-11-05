@@ -23,7 +23,10 @@ const editorGlobalVariablesSchema = z.discriminatedUnion('display', [
     description: z.string(),
     selectedRow: z.string(),
   }),
-  z.object({ display: z.literal('code') }),
+  z.object({
+    display: z.literal('code'),
+    code: z.string().optional(),
+  }),
 ])
 
 const editorStructureSchema = z.object({
@@ -201,6 +204,19 @@ const _editorActionsSchema = z.object({
   updateModelVariables: z
     .function()
     .args(
+      z.object({
+        display: z.enum(['code', 'table']),
+        selectedRow: z.number().optional(),
+        classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']).optional(),
+        description: z.string().optional(),
+        code: z.string().optional(),
+      }),
+    )
+    .returns(z.void()),
+  updateModelVariablesForName: z
+    .function()
+    .args(
+      z.string(),
       z.object({
         display: z.enum(['code', 'table']),
         selectedRow: z.number().optional(),

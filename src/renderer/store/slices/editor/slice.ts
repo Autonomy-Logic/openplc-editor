@@ -87,6 +87,79 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
       )
     },
 
+    updateModelVariablesForName: (
+      name: string,
+      variables: {
+        display: 'code' | 'table'
+        selectedRow?: number
+        classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
+        description?: string
+        code?: string
+      },
+    ) => {
+      setState(
+        produce((state: EditorState) => {
+          let targetEditor = null
+          if (state.editor.meta.name === name) {
+            targetEditor = state.editor
+          } else {
+            const editorIndex = state.editors.findIndex((e) => e.meta.name === name)
+            if (editorIndex !== -1) {
+              targetEditor = state.editors[editorIndex]
+            }
+          }
+
+          if (!targetEditor) return
+
+          if (targetEditor.type === 'plc-resource') {
+            if (variables.display === 'table') {
+              if (targetEditor.variable.display === 'table') {
+                targetEditor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? targetEditor.variable.selectedRow ?? '-1',
+                  description: variables.description ?? targetEditor.variable.description ?? '',
+                }
+              } else {
+                targetEditor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  description: variables.description ?? '',
+                }
+              }
+            } else {
+              targetEditor.variable = {
+                display: 'code',
+              }
+            }
+          } else if (targetEditor.type === 'plc-textual' || targetEditor.type === 'plc-graphical') {
+            if (variables.display === 'table') {
+              if (targetEditor.variable.display === 'table') {
+                targetEditor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? targetEditor.variable.selectedRow ?? '-1',
+                  classFilter: variables.classFilter ?? targetEditor.variable.classFilter ?? 'All',
+                  description: variables.description ?? targetEditor.variable.description ?? '',
+                }
+              } else {
+                targetEditor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  classFilter: variables.classFilter ?? 'All',
+                  description: variables.description ?? '',
+                }
+              }
+            } else {
+              targetEditor.variable = {
+                display: 'code',
+                code:
+                  variables.code ?? (targetEditor.variable.display === 'code' ? targetEditor.variable.code : undefined),
+              }
+            }
+          }
+        }),
+      )
+    },
+
     updateModelTasks: (tasks: { selectedRow?: number; display: 'code' | 'table' }) =>
       setState(
         produce((state: EditorState) => {
