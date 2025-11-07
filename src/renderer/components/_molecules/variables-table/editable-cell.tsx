@@ -600,6 +600,7 @@ const EditableDocumentationCell = ({
             value={cellValue}
             onChange={(e) => setCellValue(e.target.value)}
             rows={5}
+            autoComplete='off'
             className='w-full max-w-[375px] flex-1 resize-none  bg-transparent text-start text-neutral-900 outline-none  dark:text-neutral-100'
           />
         </PrimitivePopover.Content>
