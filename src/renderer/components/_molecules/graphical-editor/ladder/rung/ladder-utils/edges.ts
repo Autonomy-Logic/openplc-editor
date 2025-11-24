@@ -40,13 +40,6 @@ export const connectNodes = (
   type: 'serial' | 'parallel',
   options?: ConnectionOptions,
 ): Edge[] => {
-  console.log('CONNECT OPERATION DETAILS:', {
-    sourceNodeId,
-    targetNodeId,
-    type,
-    options,
-  })
-
   // Find the source edge
   const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
   const sourceEdge = rung.edges.find((edge) => {

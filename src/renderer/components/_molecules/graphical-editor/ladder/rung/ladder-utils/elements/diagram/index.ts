@@ -91,6 +91,9 @@ export const updateDiagramElementsPosition = (
   const { nodes } = rung
   const newNodes: Node[] = []
 
+  console.log('Updating diagram elements position...')
+  console.log('Rung nodes:', rung)
+
   /**
    * Find the parallels in the rung
    */
@@ -158,6 +161,7 @@ export const updateDiagramElementsPosition = (
       let acc = newNodePosition
       for (let j = 0; j < previousNodes.all.length; j++) {
         const previousNode = previousNodes.all[j]
+        console.log('Previous Node:', previousNode)
         const position = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial')
         acc = {
           posX: Math.max(acc.posX, position.posX),
