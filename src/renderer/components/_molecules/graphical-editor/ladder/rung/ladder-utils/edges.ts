@@ -50,14 +50,6 @@ export const connectNodes = (
   // Find the source edge
   const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
   const sourceEdge = rung.edges.find((edge) => {
-    console.log('\tCHECKING EDGE:', edge)
-    console.log('\tSOURCE NODE ID:', sourceNodeId)
-    console.log('\tEDGE.SOURCE:', edge.source)
-    console.log('\t\tEDGE.SOURCE = = SOURCE NODE ID:', edge.source === sourceNodeId)
-    console.log('\tOPERATION TYPE:', type)
-    console.log('\tIS PARALLEL NODE:', isNodeOfType(sourceNode, 'parallel'))
-    console.log('\t\tCOMPARE:', type === 'parallel' && isNodeOfType(sourceNode, 'parallel'))
-
     return (
       edge.source === sourceNodeId &&
       (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
@@ -69,15 +61,8 @@ export const connectNodes = (
     )
   })
 
-  console.log('RUNGS:', rung)
-
-  console.log('SOURCE NODE:', sourceNode)
-  console.log('SOURCE EDGE:', sourceEdge)
-
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
-
-  console.log('TARGET NODE:', targetNode)
 
   /**
    * targetHandle: where the the sourceEdge connects to targetNode
@@ -85,8 +70,6 @@ export const connectNodes = (
    */
   const targetHandle = !options ? targetNodeData.inputConnector?.id : options.targetHandle
   const sourceHandle = !options ? targetNodeData.outputConnector?.id : options.sourceHandle
-
-  console.log('TARGET HANDLE:', targetHandle, 'SOURCE HANDLE:', sourceHandle)
 
   // If the source edge is found, update the target
   if (sourceEdge) {
@@ -109,7 +92,6 @@ export const connectNodes = (
 
     // Find the target edge node (target node connected to the source edge) to check if it is a parallel
     const sourceEdgeNodeTarget = rung.nodes.find((node) => node.id === sourceEdge?.target)
-    console.log('SOURCE EDGE NODE TARGET:', sourceEdgeNodeTarget)
 
     // Update the target of the target edge
     if (
@@ -118,8 +100,6 @@ export const connectNodes = (
       (sourceEdgeNodeTarget as ParallelNode).data.type === 'open'
     ) {
       const newTargetHandle = (sourceEdgeNodeTarget as ParallelNode).data.inputConnector?.id
-
-      console.log('TARGET HANDLE FOR PARALLEL:', targetHandle)
 
       edges.push(
         buildEdge(targetNodeId, sourceEdge.target, {
