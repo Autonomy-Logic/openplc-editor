@@ -168,20 +168,23 @@ export const startParallelConnection = <T>(
   newEdges = newEdges.filter((edge) => edge.source !== aboveElement.id && edge.target !== aboveElement.id)
 
   // serial connections
+  const isPreviousConnectionParallel =
+    relatedElementPreviousElements.serial.length > 0 &&
+    isNodeOfType(relatedElementPreviousElements.serial[0], 'parallel') &&
+    (relatedElementPreviousElements.serial[0] as ParallelNode).data.type === 'open' &&
+    relatedElementPreviousEdges[0].sourceHandle ===
+      (relatedElementPreviousElements.serial[0] as ParallelNode).data.parallelOutputConnector?.id
+
   newEdges = connectNodes(
     { ...rung, nodes: newNodes, edges: newEdges },
     aboveElementTargetEdges[0].source,
     openParallelElement.id,
-    relatedElementPreviousElements.serial.length > 0 &&
-      isNodeOfType(relatedElementPreviousElements.serial[0], 'parallel') &&
-      (relatedElementPreviousElements.serial[0] as ParallelNode).data.type === 'open' &&
-      relatedElementPreviousEdges[0].sourceHandle ===
-        (relatedElementPreviousElements.serial[0] as ParallelNode).data.parallelOutputConnector?.id
-      ? 'parallel'
-      : 'serial',
+    isPreviousConnectionParallel ? 'parallel' : 'serial',
     {
       sourceHandle: aboveElementTargetEdges[0].sourceHandle ?? undefined,
-      targetHandle: openParallelElement.data.inputConnector?.id,
+      targetHandle: isPreviousConnectionParallel
+        ? openParallelElement.data.parallelInputConnector?.id
+        : openParallelElement.data.inputConnector?.id,
     },
   )
   newEdges = connectNodes(
@@ -210,7 +213,9 @@ export const startParallelConnection = <T>(
     aboveElementSourceEdges[0].target,
     'serial',
     {
-      sourceHandle: closeParallelElement.data.outputConnector?.id,
+      sourceHandle: isPreviousConnectionParallel
+        ? closeParallelElement.data.parallelOutputConnector?.id
+        : closeParallelElement.data.outputConnector?.id,
       targetHandle: aboveElementSourceEdges[0].targetHandle ?? undefined,
     },
   )

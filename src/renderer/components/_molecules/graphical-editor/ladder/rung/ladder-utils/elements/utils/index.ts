@@ -140,16 +140,20 @@ export const getNodePositionBasedOnPreviousNode = (
     typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement },
   )
 
+  const parallelNodeCheckingParallelNode =
+    previousElement.type === 'parallel' &&
+    (typeof newElement === 'string' ? newElement === 'parallel' : newElement.type === 'parallel')
+
   const gap = previousElementStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
 
   const position = {
-    posX: previousElement.position.x + (previousElement.width || 0) + gap,
+    posX: previousElement.position.x + (!parallelNodeCheckingParallelNode ? (previousElement.width || 0) + gap : 0),
     posY:
       previousElement.type === (typeof newElement === 'string' ? newElement : newElement.type)
         ? previousElement.position.y
         : previousElementOutputHandle.glbPosition.y - offsetY,
-    handleX: previousElement.position.x + (previousElement.width || 0) + gap,
+    handleX: previousElement.position.x + (!parallelNodeCheckingParallelNode ? (previousElement.width || 0) + gap : 0),
     handleY: previousElementOutputHandle.glbPosition.y,
   }
 
