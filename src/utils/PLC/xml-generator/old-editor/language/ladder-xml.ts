@@ -133,10 +133,6 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
         (edge) =>
           edge.source === lastParallelNode.id && edge.sourceHandle === lastParallelNode.data.outputConnector?.id,
       )
-      console.log('parallels', parallels)
-      console.log('lastParallelNode', lastParallelNode)
-      console.log('lastParallelSerialEdge', lastParallelSerialEdge)
-      console.log('\n\n')
 
       // If the node is connected serially to the parallel node
       if (lastParallelSerialEdge && lastParallelSerialEdge.target === actualNode.id) {
