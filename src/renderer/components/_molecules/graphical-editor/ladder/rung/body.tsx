@@ -622,8 +622,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const nodes = renderPlaceholderElements(copyRungLocal)
       setDragging(true)
       setRungLocal((rung) => ({ ...rung, nodes }))
+      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] + 100]])
     },
-    [rung, rungLocal, isDebuggerActive],
+    [rung, rungLocal, isDebuggerActive, setReactFlowPanelExtent, reactFlowPanelExtent],
   )
 
   /**
@@ -646,8 +647,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const nodes = removePlaceholderElements(rungLocal.nodes)
       setDragging(false)
       setRungLocal((rung) => ({ ...rung, nodes }))
+      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 100]])
     },
-    [rung, rungLocal],
+    [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent],
   )
 
   /**
@@ -714,8 +716,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       // Then add the node to the rung
       setDragging(false)
       handleAddNode(blockType, library)
+      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] + 100]])
     },
-    [rung, rungLocal, isDebuggerActive],
+    [rung, rungLocal, isDebuggerActive, setReactFlowPanelExtent, reactFlowPanelExtent],
   )
 
   return (
