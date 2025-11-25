@@ -48,8 +48,8 @@ export const connectNodes = (
       (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
         ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
         : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
-          ? edge.sourceHandle === (sourceNode as ParallelNode).data.outputConnector?.id ||
-            (sourceNode as ParallelNode).data.parallelOutputConnector?.id
+          ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
+            (sourceNode as ParallelNode).data.outputConnector?.id
           : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id)
     )
   })

@@ -133,9 +133,13 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
         (edge) =>
           edge.source === lastParallelNode.id && edge.sourceHandle === lastParallelNode.data.outputConnector?.id,
       )
+      console.log('parallels', parallels)
+      console.log('lastParallelNode', lastParallelNode)
+      console.log('lastParallelSerialEdge', lastParallelSerialEdge)
+      console.log('\n\n')
 
       // If the node is connected serially to the parallel node
-      if (lastParallelSerialEdge && lastParallelSerialEdge.target === node.id) {
+      if (lastParallelSerialEdge && lastParallelSerialEdge.target === actualNode.id) {
         return nodes.map((node, index) => ({
           '@refLocalId': node.data.numericId,
           '@formalParameter': node.data.outputConnector?.id,
@@ -177,35 +181,6 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
                 ],
         }))
       }
-
-      // If the node is connected in parallel to the parallel node
-      // const sourceNodeOfParallelNode = nodes[0]
-      // return {
-      //   '@refLocalId': sourceNodeOfParallelNode.data.numericId,
-      //   '@formalParameter': sourceNodeOfParallelNode.data.outputConnector?.id,
-      //   position: [
-      //     // Final edge destination
-      //     {
-      //       '@x': node.data.inputConnector?.glbPosition.x ?? 0,
-      //       '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
-      //     },
-      //     // Final position of parallel
-      //     {
-      //       '@x': lastParallelNode.data.parallelOutputConnector?.glbPosition.x ?? 0,
-      //       '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
-      //     },
-      //     // Initial position of parallel
-      //     {
-      //       '@x': lastParallelNode.data.parallelOutputConnector?.glbPosition.x ?? 0,
-      //       '@y': (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
-      //     },
-      //     // Initial edge source
-      //     {
-      //       '@x': sourceNodeOfParallelNode.data.outputConnector?.glbPosition.x ?? 0,
-      //       '@y': (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
-      //     },
-      //   ],
-      // }
 
       return nodes.map((node) => {
         return {
