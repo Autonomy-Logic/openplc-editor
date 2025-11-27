@@ -12,7 +12,8 @@ const checkIfStructureVariableExists = (variables: PLCStructureVariable[], name:
   return variables.some((variable) => variable.name === name)
 }
 const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
-  return variables.some((variable) => variable.name.toLowerCase() === name.toLowerCase())
+  const nameAlreadyInUse = variables.some((variable) => variable.name.toLowerCase() === name.toLowerCase())
+  return nameAlreadyInUse
 }
 const checkIfGlobalVariableExists = (variables: PLCGlobalVariable[], name: string) => {
   return variables.some((variable) => variable.name === name)
@@ -197,16 +198,26 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
   const sortedVariables = filteredVariables.sort((a, b) => {
     const numberA = extractNumberAtEnd(a.name).number
     const numberB = extractNumberAtEnd(b.name).number
-    if (numberA && numberB) {
-      return numberA - numberB
-    }
-    return 0
+
+    // Treat variables without numbers as having number -1 for sorting purposes
+    // This ensures they come before numbered variables
+    const sortNumberA = numberA === -1 ? -1 : numberA
+    const sortNumberB = numberB === -1 ? -1 : numberB
+
+    return sortNumberA - sortNumberB
   })
 
   // Get the biggest number at the end of the variable name
   // If there is no number at the end of the variable name, return -1 (because the number at the end of the variable name is 0)
   const biggestVariable =
     sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: -1 }
+
+  console.log('biggestVariable', biggestVariable)
+  console.log('return', {
+    ok: filteredVariables.length > 0,
+    name: variableNameWithoutNumber,
+    number: biggestVariable.number + 1,
+  })
 
   return {
     ok: filteredVariables.length > 0,
