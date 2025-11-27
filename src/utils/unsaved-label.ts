@@ -5,6 +5,6 @@ export const unsavedLabel = (label: string | undefined, associatedFile: { saved:
   return `* ${label}`
 }
 
-export const isUnsaved = (associatedFile: { saved: boolean } | undefined) => {
-  return associatedFile && !associatedFile.saved
+export const isUnsaved = (associatedFile: { saved: boolean } | undefined): boolean => {
+  return !!associatedFile && !associatedFile.saved
 }
