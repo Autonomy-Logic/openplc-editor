@@ -18,6 +18,7 @@ import {
 } from '@root/renderer/assets'
 import { CommentIcon } from '@root/renderer/assets/icons/interface/Comment'
 import ZapIcon from '@root/renderer/assets/icons/interface/Zap'
+import { HighlightedText } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
@@ -42,12 +43,12 @@ const ProjectSearchTreeRoot = ({ children, label, ...res }: IProjectSearchTreeRo
             className={cn(`mr-[6px] h-4 w-4 stroke-brand-light transition-all ${isOpen && 'rotate-270 stroke-brand'}`)}
           />
           <PLCIcon />
-          <span
+          <HighlightedText
+            text={label || ''}
             className={cn(
               'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
               isOpen && 'font-medium text-neutral-1000 dark:text-white',
             )}
-            dangerouslySetInnerHTML={{ __html: label || '' }}
           />
         </li>
         {children && isOpen && (
@@ -114,12 +115,12 @@ const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSea
         <div className='h-5 w-5'>
           <BranchIcon size='sm' />
         </div>
-        <span
+        <HighlightedText
+          text={label || ''}
           className={cn(
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-          dangerouslySetInnerHTML={{ __html: label || '' }}
         />
       </div>
 
@@ -182,12 +183,12 @@ const ProjectSearchTreeNestedBranch = ({
           <div className='w-[22px]' />
         )}
         <BranchIcon />
-        <span
+        <HighlightedText
+          text={label || ''}
           className={cn(
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-          dangerouslySetInnerHTML={{ __html: label || '' }}
         />
       </div>
 
@@ -247,11 +248,11 @@ const ProjectSearchTreeLeaf = ({ leafLang, label, ...res }: IProjectSearchTreeLe
       {...res}
     >
       <LeafIcon className='flex-shrink-0' />
-      <span
+      <HighlightedText
+        text={label || ''}
         className={cn(
           'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',
         )}
-        dangerouslySetInnerHTML={{ __html: label || '' }}
       />
     </li>
   )
@@ -286,12 +287,12 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
           <div className='w-[22px]' />
         )}
         <LeafIcon />
-        <span
+        <HighlightedText
+          text={label || ''}
           className={cn(
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-          dangerouslySetInnerHTML={{ __html: label || '' }}
         />
       </div>
 
@@ -330,11 +331,11 @@ const ProjectSearchTreeVariableLeaf = ({
       >
         {hasVariable && <ZapIcon className='flex-shrink-0' />}
         {hasComment && <CommentIcon className='h-5 w-5 flex-shrink-0' />}
-        <span
+        <HighlightedText
+          text={label || ''}
           className={cn(
             'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',
           )}
-          dangerouslySetInnerHTML={{ __html: label || '' }}
         />
       </li>
     )

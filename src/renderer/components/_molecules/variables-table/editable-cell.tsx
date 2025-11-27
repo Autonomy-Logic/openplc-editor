@@ -2,7 +2,6 @@ import * as PrimitivePopover from '@radix-ui/react-popover'
 import { pinSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
-import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
@@ -14,7 +13,7 @@ import { isLegalIdentifier, sanitizeVariableInput } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { InputWithRef } from '../../_atoms'
+import { HighlightedText, InputWithRef } from '../../_atoms'
 import { GenericComboboxCell } from '../../_atoms/generic-table-inputs'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../rename-impact-modal'
@@ -239,8 +238,6 @@ const EditableNameCell = ({
     setIsEditing(true)
   }
 
-  const formattedCellValue = searchQuery && cellValue ? extractSearchQuery(cellValue, searchQuery) : cellValue
-
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
     setCellValue(initialValue)
@@ -303,9 +300,10 @@ const EditableNameCell = ({
             'cursor-not-allowed': !isEditable(),
           })}
         >
-          <p
+          <HighlightedText
+            text={cellValue}
+            searchQuery={searchQuery}
             className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
-            dangerouslySetInnerHTML={{ __html: formattedCellValue }}
           />
         </div>
       )}
@@ -381,8 +379,6 @@ const EditableInitialValueCell = ({
     setIsEditing(true)
   }
 
-  const formattedCellValue = searchQuery && cellValue ? extractSearchQuery(cellValue, searchQuery) : cellValue
-
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
     setCellValue(initialValue)
@@ -413,9 +409,10 @@ const EditableInitialValueCell = ({
         'cursor-not-allowed': !isEditable(),
       })}
     >
-      <p
+      <HighlightedText
+        text={cellValue}
+        searchQuery={searchQuery}
         className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
-        dangerouslySetInnerHTML={{ __html: formattedCellValue }}
       />
     </div>
   )
@@ -469,8 +466,6 @@ const EditableLocationCell = ({
     setCellValue(initialValue)
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
   }
-
-  const formattedCellValue = searchQuery && cellValue ? extractSearchQuery(cellValue, searchQuery) : cellValue
 
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
@@ -545,9 +540,10 @@ const EditableLocationCell = ({
         'cursor-not-allowed': !isEditable(),
       })}
     >
-      <p
+      <HighlightedText
+        text={cellValue}
+        searchQuery={searchQuery}
         className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
-        dangerouslySetInnerHTML={{ __html: formattedCellValue }}
       />
     </div>
   )
