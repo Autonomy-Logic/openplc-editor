@@ -212,13 +212,6 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
   const biggestVariable =
     sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: -1 }
 
-  console.log('biggestVariable', biggestVariable)
-  console.log('return', {
-    ok: filteredVariables.length > 0,
-    name: variableNameWithoutNumber,
-    number: biggestVariable.number + 1,
-  })
-
   return {
     ok: filteredVariables.length > 0,
     name: variableNameWithoutNumber,
