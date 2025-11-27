@@ -34,9 +34,6 @@ const isDragEventFromWithinLadderArea = (
   // Early return for null checks
   if (!relatedTarget || !ladderViewportRef) return false
 
-  console.log('Checking drag event source for ladder area containment...')
-  console.log('Related target:', relatedTarget)
-
   // Cast to Element for better type safety and DOM methods access
   let currentElement = relatedTarget as Element
 
@@ -47,15 +44,12 @@ const isDragEventFromWithinLadderArea = (
   // This is much faster than manual DOM traversal
 
   const isInside = ladderViewportRef.contains(currentElement)
-  console.log('Is inside ladder area (using contains):', isInside)
   if (isInside) return true
 
   // Fallback to manual traversal if contains() fails for any reason
   while (currentElement && currentElement !== document.documentElement) {
     if (currentElement === ladderViewportRef) return true
     currentElement = currentElement.parentElement as Element
-
-    console.log('Traversing up, current element:', currentElement)
 
     if (!currentElement) break
   }
