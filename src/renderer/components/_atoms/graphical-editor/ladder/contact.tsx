@@ -384,6 +384,7 @@ export const Contact = (block: ContactProps) => {
         {contact.svg(wrongVariable, debuggerStrokeColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
           <HighlightedTextArea
+            id={`contact-variable-input-${id}`}
             textAreaValue={contactVariableValue}
             setTextAreaValue={setContactVariableValue}
             handleSubmit={handleSubmitContactVariableOnTextareaBlur}

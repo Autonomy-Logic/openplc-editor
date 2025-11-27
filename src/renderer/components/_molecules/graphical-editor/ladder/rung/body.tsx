@@ -23,6 +23,45 @@ import { findNode } from './ladder-utils/nodes'
 
 const EDGE_COLOR_TRUE = '#00FF00'
 
+/**
+ * Check recursively if the related target or any of its parent elements are within the ladder area
+ * Optimized version with early returns and efficient DOM traversal
+ */
+const isDragEventFromWithinLadderArea = (
+  relatedTarget: EventTarget | null,
+  ladderViewportRef: HTMLDivElement | null,
+): boolean => {
+  // Early return for null checks
+  if (!relatedTarget || !ladderViewportRef) return false
+
+  console.log('Checking drag event source for ladder area containment...')
+  console.log('Related target:', relatedTarget)
+
+  // Cast to Element for better type safety and DOM methods access
+  let currentElement = relatedTarget as Element
+
+  // Use Element type check to ensure we have DOM methods available
+  if (!currentElement || typeof currentElement.closest !== 'function') return false
+
+  // Use the native closest() method for optimal performance
+  // This is much faster than manual DOM traversal
+
+  const isInside = ladderViewportRef.contains(currentElement)
+  console.log('Is inside ladder area (using contains):', isInside)
+  if (isInside) return true
+
+  // Fallback to manual traversal if contains() fails for any reason
+  while (currentElement && currentElement !== document.documentElement) {
+    if (currentElement === ladderViewportRef) return true
+    currentElement = currentElement.parentElement as Element
+
+    console.log('Traversing up, current element:', currentElement)
+
+    if (!currentElement) break
+  }
+  return false
+}
+
 type RungBodyProps = {
   rung: RungLadderState
   className?: string
@@ -611,6 +650,14 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     (event) => {
       if (isDebuggerActive) return
 
+      // Check recursively if the drag event is coming from within the ladder area
+      if (isDragEventFromWithinLadderArea(event.relatedTarget, reactFlowViewportRef.current)) {
+        return
+      }
+
+      setDragging(true)
+      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] + 50]])
+
       event.preventDefault()
       // Check if the dragged element is not a ladder block
       if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
@@ -620,9 +667,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       // If it is a ladder block and the dragged element is a child of the flow viewport, render the placeholder elements
       const copyRungLocal = { ...rungLocal }
       const nodes = renderPlaceholderElements(copyRungLocal)
-      setDragging(true)
       setRungLocal((rung) => ({ ...rung, nodes }))
-      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] + 100]])
     },
     [rung, rungLocal, isDebuggerActive, setReactFlowPanelExtent, reactFlowPanelExtent],
   )
@@ -634,20 +679,16 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   const onDragLeaveViewport = useCallback<DragEventHandler>(
     (event) => {
       // Check if the dragged element is a child of the flow viewport
-      const { relatedTarget } = event
-      if (
-        !reactFlowViewportRef.current ||
-        !relatedTarget ||
-        reactFlowViewportRef.current.contains(relatedTarget as Node)
-      ) {
+      if (isDragEventFromWithinLadderArea(event.relatedTarget, reactFlowViewportRef.current)) {
         return
       }
 
+      setDragging(false)
+      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
+
       // If it is, remove the placeholder elements`
       const nodes = removePlaceholderElements(rungLocal.nodes)
-      setDragging(false)
       setRungLocal((rung) => ({ ...rung, nodes }))
-      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 100]])
     },
     [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent],
   )
@@ -696,6 +737,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     (event) => {
       if (isDebuggerActive) return
 
+      setDragging(false)
+      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
+
       event.preventDefault()
       // Check if there is a ladder block in the dragged data
       const blockType =
@@ -714,9 +758,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
           : event.dataTransfer.getData('application/library')
 
       // Then add the node to the rung
-      setDragging(false)
       handleAddNode(blockType, library)
-      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] + 100]])
     },
     [rung, rungLocal, isDebuggerActive, setReactFlowPanelExtent, reactFlowPanelExtent],
   )
@@ -809,3 +851,5 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     </div>
   )
 }
+
+export { isDragEventFromWithinLadderArea }
