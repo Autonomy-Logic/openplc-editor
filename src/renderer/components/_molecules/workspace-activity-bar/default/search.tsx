@@ -31,10 +31,10 @@ export const SearchButton = () => {
     })
   }, [])
 
-  // FIX: This <ActivityBarButton> component is causing a warning about nesting elements using the modal trigger component from the radix library.
+  // Fixed: Use ActivityBarButton with ModalTrigger asChild to avoid nested button elements
   return (
     <Modal onOpenChange={handleOpenChange} open={isFindInProjectModalOpen}>
-      <ModalTrigger>
+      <ModalTrigger asChild>
         <ActivityBarButton aria-label='Search'>
           <SearchIcon />
         </ActivityBarButton>

@@ -374,6 +374,7 @@ export const BlockNodeElement = <T extends object>({
       }}
     >
       <InputWithRef
+        id={`block-input-name${nodeId ? `-${nodeId}` : ''}`}
         value={blockNameValue}
         onChange={(e) => setBlockNameValue(e.target.value)}
         maxLength={20}
@@ -851,6 +852,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       >
         {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
           <HighlightedTextArea
+            id={`block-input-variable-${id}`}
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
             handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}

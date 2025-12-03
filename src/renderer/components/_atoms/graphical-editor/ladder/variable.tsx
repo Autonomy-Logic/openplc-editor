@@ -454,6 +454,7 @@ const VariableElement = (block: VariableProps) => {
         onClick={isDebuggerVisible ? handleClick : undefined}
       >
         <HighlightedTextArea
+          id={`variable-input-${id}`}
           textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-yellow-500': !isAVariable,
             'text-red-500': inputError,
