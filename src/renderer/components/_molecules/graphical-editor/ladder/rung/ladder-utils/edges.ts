@@ -42,13 +42,17 @@ export const connectNodes = (
 ): Edge[] => {
   // Find the source edge
   const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
-  const sourceEdge = rung.edges.find(
-    (edge) =>
+  const sourceEdge = rung.edges.find((edge) => {
+    return (
       edge.source === sourceNodeId &&
       (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
         ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
-        : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id),
-  )
+        : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
+          ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
+            (sourceNode as ParallelNode).data.outputConnector?.id
+          : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id)
+    )
+  })
 
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
@@ -64,20 +68,47 @@ export const connectNodes = (
   if (sourceEdge) {
     // Remove the source edge
     const edges = rung.edges.filter((edge) => edge.id !== sourceEdge.id)
+
+    // If source node is a parallel and the operation type is serial, lets check if we need to update the source handle
+    let newSourceHandle = sourceEdge.sourceHandle ?? undefined
+    if (type === 'serial' && isNodeOfType(sourceNode, 'parallel')) {
+      newSourceHandle = (sourceNode as ParallelNode).data.outputConnector?.id
+    }
+
     // Update the target of the source edge
     edges.push(
       buildEdge(sourceNodeId, targetNodeId, {
-        sourceHandle: sourceEdge.sourceHandle ?? undefined,
+        sourceHandle: newSourceHandle,
         targetHandle: targetHandle,
       }),
     )
+
+    // Find the target edge node (target node connected to the source edge) to check if it is a parallel
+    const sourceEdgeNodeTarget = rung.nodes.find((node) => node.id === sourceEdge?.target)
+
     // Update the target of the target edge
-    edges.push(
-      buildEdge(targetNodeId, sourceEdge.target, {
-        sourceHandle: sourceHandle,
-        targetHandle: sourceEdge.targetHandle ?? undefined,
-      }),
-    )
+    if (
+      sourceEdgeNodeTarget &&
+      isNodeOfType(sourceEdgeNodeTarget, 'parallel') &&
+      (sourceEdgeNodeTarget as ParallelNode).data.type === 'open'
+    ) {
+      const newTargetHandle = (sourceEdgeNodeTarget as ParallelNode).data.inputConnector?.id
+
+      edges.push(
+        buildEdge(targetNodeId, sourceEdge.target, {
+          sourceHandle: sourceHandle,
+          targetHandle: newTargetHandle,
+        }),
+      )
+    } else {
+      edges.push(
+        buildEdge(targetNodeId, sourceEdge.target, {
+          sourceHandle: sourceHandle,
+          targetHandle: sourceEdge.targetHandle ?? undefined,
+        }),
+      )
+    }
+
     return edges
   }
 

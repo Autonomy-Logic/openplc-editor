@@ -414,6 +414,7 @@ export const Coil = (block: CoilProps) => {
         {coil.svg(wrongVariable, debuggerFillColor)}
         <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
           <HighlightedTextArea
+            id={`coil-variable-input-${id}`}
             textAreaValue={coilVariableValue}
             setTextAreaValue={setCoilVariableValue}
             handleSubmit={handleSubmitCoilVariableOnTextareaBlur}

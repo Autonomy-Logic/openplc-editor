@@ -18,10 +18,10 @@ export type ParallelNode = Node<
 type ParallelProps = NodeProps<ParallelNode>
 type ParallelBuilderProps = BuilderBasicProps & { type: 'open' | 'close' }
 
-export const DEFAULT_PARALLEL_WIDTH = 30
+export const DEFAULT_PARALLEL_WIDTH = 4
 export const DEFAULT_PARALLEL_HEIGHT = 2
 
-export const GAP: number = 20
+export const GAP: number = 0
 
 export const DEFAULT_PARALLEL_CONNECTOR_Y = DEFAULT_PARALLEL_HEIGHT / 2
 
@@ -78,7 +78,7 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       },
     }),
     buildHandle({
-      id: 'output-up',
+      id: 'output-right',
       position: Position.Right,
       type: 'source',
       isConnectable: false,
@@ -97,21 +97,37 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       type: type === 'open' ? 'source' : 'target',
       isConnectable: false,
       glbX: handleX + DEFAULT_PARALLEL_WIDTH / 2,
-      glbY: handleY,
+      glbY: handleY + DEFAULT_PARALLEL_HEIGHT,
       relX: DEFAULT_PARALLEL_WIDTH / 2,
-      relY: DEFAULT_PARALLEL_CONNECTOR_Y,
+      relY: DEFAULT_PARALLEL_HEIGHT,
       style: {
         // visibility: 'hidden',
         bottom: DEFAULT_PARALLEL_CONNECTOR_Y,
+      },
+    }),
+    buildHandle({
+      id: `${type === 'close' ? 'output' : 'input'}-top`,
+      position: Position.Top,
+      type: type === 'close' ? 'source' : 'target',
+      isConnectable: false,
+      glbX: handleX + DEFAULT_PARALLEL_WIDTH / 2,
+      glbY: handleY - DEFAULT_PARALLEL_CONNECTOR_Y,
+      relX: DEFAULT_PARALLEL_WIDTH / 2,
+      relY: 0,
+      style: {
+        // visibility: 'hidden',
+        top: DEFAULT_PARALLEL_CONNECTOR_Y,
       },
     }),
   ]
 
   const inputHandles = [handles[0]]
   if (type !== 'open') inputHandles.push(handles[2])
+  else inputHandles.push(handles[3])
 
   const outputHandles = [handles[1]]
   if (type === 'open') outputHandles.push(handles[2])
+  else outputHandles.push(handles[3])
 
   return {
     id,
@@ -124,8 +140,8 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       inputConnector: handles[0],
       outputConnector: handles[1],
       numericId: generateNumericUUID(),
-      parallelInputConnector: type === 'close' ? handles[2] : undefined,
-      parallelOutputConnector: type === 'open' ? handles[2] : undefined,
+      parallelInputConnector: type === 'close' ? handles[2] : type === 'open' ? handles[3] : undefined,
+      parallelOutputConnector: type === 'open' ? handles[2] : type === 'close' ? handles[3] : undefined,
       parallelOpenReference: undefined,
       parallelCloseReference: undefined,
       type,
