@@ -168,20 +168,34 @@ export const startParallelConnection = <T>(
   newEdges = newEdges.filter((edge) => edge.source !== aboveElement.id && edge.target !== aboveElement.id)
 
   // serial connections
+  const isPreviousConnectionParallel = (() => {
+    const previousElements = relatedElementPreviousElements.serial
+    const previousEdges = relatedElementPreviousEdges
+
+    if (previousElements.length === 0 || previousEdges.length === 0) {
+      return false
+    }
+
+    const firstElement = previousElements[0]
+    const firstEdge = previousEdges[0]
+
+    return (
+      isNodeOfType(firstElement, 'parallel') &&
+      (firstElement as ParallelNode).data?.type === 'open' &&
+      firstEdge.sourceHandle === (firstElement as ParallelNode).data?.parallelOutputConnector?.id
+    )
+  })()
+
   newEdges = connectNodes(
     { ...rung, nodes: newNodes, edges: newEdges },
     aboveElementTargetEdges[0].source,
     openParallelElement.id,
-    relatedElementPreviousElements.serial.length > 0 &&
-      isNodeOfType(relatedElementPreviousElements.serial[0], 'parallel') &&
-      (relatedElementPreviousElements.serial[0] as ParallelNode).data.type === 'open' &&
-      relatedElementPreviousEdges[0].sourceHandle ===
-        (relatedElementPreviousElements.serial[0] as ParallelNode).data.parallelOutputConnector?.id
-      ? 'parallel'
-      : 'serial',
+    isPreviousConnectionParallel ? 'parallel' : 'serial',
     {
       sourceHandle: aboveElementTargetEdges[0].sourceHandle ?? undefined,
-      targetHandle: openParallelElement.data.inputConnector?.id,
+      targetHandle: isPreviousConnectionParallel
+        ? openParallelElement.data.parallelInputConnector?.id
+        : openParallelElement.data.inputConnector?.id,
     },
   )
   newEdges = connectNodes(
@@ -204,13 +218,33 @@ export const startParallelConnection = <T>(
       targetHandle: closeParallelElement.data.inputConnector?.id,
     },
   )
+
+  // Validação para verificar se o bloco de destino é um paralelo
+  const isTargetConnectionParallel = (() => {
+    const targetNode = newNodes.find((node) => node.id === aboveElementSourceEdges[0]?.target)
+
+    if (!targetNode || !aboveElementSourceEdges[0]) {
+      return false
+    }
+
+    const targetEdge = aboveElementSourceEdges[0]
+
+    return (
+      isNodeOfType(targetNode, 'parallel') &&
+      (targetNode as ParallelNode).data?.type === 'close' &&
+      targetEdge.targetHandle === (targetNode as ParallelNode).data?.parallelInputConnector?.id
+    )
+  })()
+
   newEdges = connectNodes(
     { ...rung, nodes: newNodes, edges: newEdges },
     closeParallelElement.id,
     aboveElementSourceEdges[0].target,
     'serial',
     {
-      sourceHandle: closeParallelElement.data.outputConnector?.id,
+      sourceHandle: isTargetConnectionParallel
+        ? closeParallelElement.data.parallelOutputConnector?.id
+        : closeParallelElement.data.outputConnector?.id,
       targetHandle: aboveElementSourceEdges[0].targetHandle ?? undefined,
     },
   )

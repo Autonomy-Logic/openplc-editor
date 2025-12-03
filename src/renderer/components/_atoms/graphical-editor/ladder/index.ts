@@ -113,7 +113,7 @@ export const defaultCustomNodesStyles: CustomFbdNodeTypes = {
   powerRail: {
     width: powerRailNode.DEFAULT_POWER_RAIL_WIDTH,
     height: powerRailNode.DEFAULT_POWER_RAIL_HEIGHT,
-    gap: 10,
+    gap: 20,
     verticalGap: 0,
     handle: {
       x: powerRailNode.DEFAULT_POWER_RAIL_CONNECTOR_X,
