@@ -29,7 +29,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { WorkspaceProjectTreeLeafType } from '@root/renderer/store/slices/workspace/types'
 import { pousAllLanguages } from '@root/types/PLC/pous/language'
 import { cn } from '@root/utils'
-import { unsavedLabel } from '@root/utils/unsaved-label'
+import { isUnsaved, unsavedLabel } from '@root/utils/unsaved-label'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -134,9 +134,11 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
           className={cn(
             'truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
+            isUnsaved(associatedFile) && 'italic',
           )}
-          dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
-        />
+        >
+          {handleLabel(label) || ''}
+        </span>
       </div>
 
       {children && branchIsOpen && (
@@ -202,8 +204,9 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-          dangerouslySetInnerHTML={{ __html: label || '' }}
-        />
+        >
+          {label || ''}
+        </span>
       </div>
 
       {children && branchIsOpen && (
@@ -472,10 +475,12 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
           className={cn(
             'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             name === label && 'font-medium text-neutral-1000 dark:text-white',
+            isUnsaved(associatedFile) && 'italic',
           )}
           onDoubleClick={() => !isDebuggerVisible && setIsEditing(true)}
-          dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
-        />
+        >
+          {handleLabel(label) || ''}
+        </span>
       )}
 
       {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (

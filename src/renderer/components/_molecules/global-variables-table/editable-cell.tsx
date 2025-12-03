@@ -1,7 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
-import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
@@ -13,7 +12,7 @@ import { isLegalIdentifier, sanitizeVariableInput } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useRef, useState } from 'react'
 
-import { InputWithRef } from '../../_atoms'
+import { HighlightedText, InputWithRef } from '../../_atoms'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../rename-impact-modal'
 
@@ -121,8 +120,6 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
     setIsEditing(true)
   }
 
-  const formattedCellValue = searchQuery ? extractSearchQuery(cellValue, searchQuery) : cellValue
-
   return (
     <>
       {confirmOpen && impactAnalysis && (
@@ -157,9 +154,10 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
           onClick={handleStartEditing}
           className={cn('flex w-full flex-1 bg-transparent p-2 text-center', { 'pointer-events-none': !editable })}
         >
-          <p
+          <HighlightedText
+            text={cellValue}
+            searchQuery={searchQuery}
             className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'
-            dangerouslySetInnerHTML={{ __html: formattedCellValue }}
           />
         </div>
       )}

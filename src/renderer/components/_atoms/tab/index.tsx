@@ -16,7 +16,7 @@ import {
 import type { TabsProps } from '@process:renderer/store/slices/tabs'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { unsavedLabel } from '@root/utils/unsaved-label'
+import { isUnsaved, unsavedLabel } from '@root/utils/unsaved-label'
 import { ComponentPropsWithoutRef, useCallback } from 'react'
 
 type ITabProps = ComponentPropsWithoutRef<'div'> & {
@@ -97,9 +97,13 @@ const Tab = (props: ITabProps) => {
       <div className='flex h-full w-full items-center gap-1 px-3 py-2 ' onClick={() => handleClickedTab()}>
         {TabIcons[languageOrDerivation]}
         <span
-          className='flex-grow overflow-hidden text-ellipsis whitespace-nowrap'
-          dangerouslySetInnerHTML={{ __html: handleFileName(fileName) as string }}
-        />
+          className={cn(
+            'flex-grow overflow-hidden text-ellipsis whitespace-nowrap',
+            isUnsaved(associatedFile) && 'italic',
+          )}
+        >
+          {handleFileName(fileName) as string}
+        </span>
         <span
           aria-hidden='true'
           className={cn(currentTab ? 'bg-brand' : 'bg-transparent', 'absolute inset-x-0 top-0 z-50 h-[3px]')}

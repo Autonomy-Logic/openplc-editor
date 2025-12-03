@@ -1,8 +1,9 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn } from '@root/utils'
 import type { ChangeEvent, ComponentPropsWithRef, UIEvent } from 'react'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+
+import { HighlightedText } from '../highlighted-text'
 
 type HighlightedTextAreaProps = ComponentPropsWithRef<'textarea'> & {
   textAreaValue: string
@@ -49,7 +50,6 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
     const [inputFocus, setInputFocus] = useState<boolean>(false)
     const [canSubmit, setCanSubmit] = useState<boolean>(true)
     const [scrollValue, setScrollValue] = useState<number>(0)
-    const formattedVariableValue = searchQuery ? extractSearchQuery(textAreaValue, searchQuery) : textAreaValue
 
     // @ts-expect-error - not all properties are used
     useImperativeHandle(ref, () => {
@@ -121,9 +121,10 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           )}
           ref={highlightDivRef}
         >
-          <div
+          <HighlightedText
+            text={textAreaValue}
+            searchQuery={searchQuery}
             className={cn('w-full whitespace-pre-wrap break-words text-transparent')}
-            dangerouslySetInnerHTML={{ __html: formattedVariableValue }}
           />
         </div>
         <textarea
