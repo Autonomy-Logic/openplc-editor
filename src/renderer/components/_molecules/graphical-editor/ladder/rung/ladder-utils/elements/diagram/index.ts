@@ -26,12 +26,12 @@ import { updateVariableBlockPosition } from '../variable-block'
  * @returns The new right rail node
  */
 export const changeRailBounds = (rung: RungLadderState, defaultBounds: [number, number]): { nodes: Node[] } => {
-  const rightRail = rung.nodes.find((node) => node.id === 'right-rail')
+  const rightRail = rung.nodes.find((node) => node.id.startsWith('right-rail'))
   if (!rightRail) return { nodes: rung.nodes }
 
   const handles = rightRail.data.handles as CustomHandleProps[]
   const railStyle = getDefaultNodeStyle({ node: rightRail })
-  const nodesWithNoRail = rung.nodes.filter((node) => node.id !== 'right-rail')
+  const nodesWithNoRail = rung.nodes.filter((node) => !node.id.startsWith('right-rail'))
 
   const flowXBounds = nodesWithNoRail.reduce(
     (acc, node) => {

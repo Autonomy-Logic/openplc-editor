@@ -2,7 +2,6 @@ import { CloseIcon } from '@root/renderer/assets'
 import { Accordion } from '@root/renderer/components/_atoms/accordion'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { Project, TabsProps } from '@root/renderer/store/slices'
-import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 
 import {
@@ -120,7 +119,7 @@ const Search = ({ items }: SearchProps) => {
                             pou.variable || pou.language === 'st' || pou.language === 'il' ? (
                               <ProjectSearchTreeVariableBranch
                                 key={pouIndex}
-                                label={extractSearchQuery(pou.name, item.searchQuery)}
+                                label={pou.name}
                                 leafLang={pou.language}
                                 onClick={() => {
                                   handleCreateTab({
@@ -136,7 +135,7 @@ const Search = ({ items }: SearchProps) => {
                                     .map((variable, variableIndex) => (
                                       <ProjectSearchTreeVariableLeaf
                                         key={variableIndex}
-                                        label={extractSearchQuery(variable, item.searchQuery)}
+                                        label={variable}
                                         hasVariable
                                         onClick={() => setSearchQuery(variable)}
                                       />
@@ -147,7 +146,7 @@ const Search = ({ items }: SearchProps) => {
                                     .map((line, lineIndex) => (
                                       <ProjectSearchTreeVariableLeaf
                                         key={lineIndex}
-                                        label={extractSearchQuery(line, item.searchQuery)}
+                                        label={line}
                                         hasComment
                                         onClick={() => setSearchQuery(line)}
                                       />
@@ -156,7 +155,7 @@ const Search = ({ items }: SearchProps) => {
                             ) : (
                               <ProjectSearchTreeLeaf
                                 key={pouIndex}
-                                label={extractSearchQuery(pou.name, item.searchQuery)}
+                                label={pou.name}
                                 leafLang={pou.language}
                                 onClick={() => {
                                   handleCreateTab({
@@ -177,7 +176,7 @@ const Search = ({ items }: SearchProps) => {
                         {item.functions.dataTypes.map((dataType, dataTypeIndex) => (
                           <ProjectSearchTreeLeaf
                             key={dataTypeIndex}
-                            label={extractSearchQuery(dataType.name, item.searchQuery)}
+                            label={dataType.name}
                             leafLang={mapDataTypeToLeafLang(dataType.type)}
                             onClick={() => {
                               handleCreateTab({
@@ -201,12 +200,12 @@ const Search = ({ items }: SearchProps) => {
                             {item.functions.resource.globalVariable.split(', ').map((variable, variableIndex) => (
                               <ProjectSearchTreeVariableLeaf
                                 key={variableIndex}
-                                label={extractSearchQuery(variable, item.searchQuery)}
+                                label={variable}
                                 hasVariable
                                 onClick={() => {
                                   handleCreateTab({
                                     name: 'resource',
-                                    path: `/data/configuration/resource`,
+                                    path: `/project.json`,
                                     elementType: { type: 'resource' },
                                   })
                                   setSearchQuery(item.searchQuery)
@@ -220,12 +219,12 @@ const Search = ({ items }: SearchProps) => {
                             {item.functions.resource.task.split(', ').map((task, taskIndex) => (
                               <ProjectSearchTreeVariableLeaf
                                 key={taskIndex}
-                                label={extractSearchQuery(task, item.searchQuery)}
+                                label={task}
                                 hasVariable
                                 onClick={() => {
                                   handleCreateTab({
                                     name: 'resource',
-                                    path: `/data/configuration/resource`,
+                                    path: `/project.json`,
                                     elementType: { type: 'resource' },
                                   })
                                   setSearchQuery(item.searchQuery)
@@ -239,12 +238,12 @@ const Search = ({ items }: SearchProps) => {
                             {item.functions.resource.instance.split(', ').map((instance, instanceIndex) => (
                               <ProjectSearchTreeVariableLeaf
                                 key={instanceIndex}
-                                label={extractSearchQuery(instance, item.searchQuery)}
+                                label={instance}
                                 hasVariable
                                 onClick={() => {
                                   handleCreateTab({
                                     name: 'resource',
-                                    path: `/data/configuration/resource`,
+                                    path: `/project.json`,
                                     elementType: { type: 'resource' },
                                   })
                                   setSearchQuery(item.searchQuery)

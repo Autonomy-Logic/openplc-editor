@@ -3,19 +3,25 @@ import { PLCVariable } from '@root/types/PLC/open-plc'
 import { ColumnFiltersState, createColumnHelper, OnChangeFn } from '@tanstack/react-table'
 
 import { GenericTable } from '../../_atoms/generic-table'
-import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
+import {
+  EditableDocumentationCell,
+  EditableInitialValueCell,
+  EditableLocationCell,
+  EditableNameCell,
+} from './editable-cell'
 import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCVariable>()
 
 const columnsPrograms = [
-  columnHelper.accessor('id', {
+  columnHelper.display({
+    id: 'rowNumber',
     header: '#',
     size: 64,
     minSize: 32,
     maxSize: 64,
     enableResizing: true,
-    cell: (props) => props.row.id,
+    cell: (props) => props.row.index,
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -41,12 +47,12 @@ const columnsPrograms = [
   columnHelper.accessor('location', {
     header: 'Location',
     enableResizing: true,
-    cell: EditableNameCell,
+    cell: EditableLocationCell,
   }),
   columnHelper.accessor('initialValue', {
     header: 'Initial Value',
     enableResizing: true,
-    cell: EditableNameCell,
+    cell: EditableInitialValueCell,
   }),
   columnHelper.accessor('documentation', {
     header: 'Documentation',
@@ -60,13 +66,14 @@ const columnsPrograms = [
 ]
 
 const columns = [
-  columnHelper.accessor('id', {
+  columnHelper.display({
+    id: 'rowNumber',
     header: '#',
     size: 64,
     minSize: 32,
     maxSize: 64,
     enableResizing: true,
-    cell: (props) => props.row.id,
+    cell: (props) => props.row.index,
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -92,7 +99,7 @@ const columns = [
   columnHelper.accessor('initialValue', {
     header: 'Initial Value',
     enableResizing: true,
-    cell: EditableNameCell,
+    cell: EditableInitialValueCell,
   }),
   columnHelper.accessor('documentation', {
     header: 'Documentation',
@@ -130,6 +137,8 @@ const VariablesTable = ({
       data: { pous },
     },
     projectActions: { updateVariable },
+    snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const pou = pous.find((p) => p.data.name === name)
@@ -141,6 +150,8 @@ const VariablesTable = ({
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
       updateData={(rowIndex, columnId, value) => {
+        addSnapshot(name)
+
         if (columnId === 'class' && filterValue !== undefined && filterValue !== 'all' && filterValue !== value) {
           return {
             ok: false,
@@ -148,14 +159,19 @@ const VariablesTable = ({
           }
         }
 
-        return updateVariable({
+        const updatedVariableResponse = updateVariable({
           scope: 'local',
           associatedPou: name,
-          variableId: tableData[rowIndex].id,
+          rowId: rowIndex,
           data: {
             [columnId]: value,
           },
         })
+        if (updatedVariableResponse.ok) {
+          handleFileAndWorkspaceSavedState(name)
+        }
+
+        return updatedVariableResponse
       }}
       tableContext='Variables'
       columnFilters={columnFilters}

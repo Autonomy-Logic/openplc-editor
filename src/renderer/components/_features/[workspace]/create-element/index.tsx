@@ -1,10 +1,15 @@
 import * as Popover from '@radix-ui/react-popover'
 import { PlusIcon } from '@root/renderer/assets'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { cn } from '@root/utils'
 import { useState } from 'react'
 
 import { ElementCard } from './element-card'
 
 const CreatePLCElement = () => {
+  const {
+    workspace: { isDebuggerVisible },
+  } = useOpenPLCStore()
   const [isContainerOpen, setIsContainerOpen] = useState(false)
   const CreatePLCElementTypes: ('function' | 'function-block' | 'program' | 'data-type')[] = [
     'function',
@@ -14,12 +19,15 @@ const CreatePLCElement = () => {
   ]
 
   return (
-    <Popover.Root onOpenChange={setIsContainerOpen} open={isContainerOpen}>
+    <Popover.Root onOpenChange={setIsContainerOpen} open={isContainerOpen && !isDebuggerVisible}>
       <Popover.Trigger
         id='create-plc-element-trigger'
         aria-label='Create PLC element trigger component'
         type='button'
-        className='flex h-8 w-10 items-center justify-center rounded-lg bg-brand'
+        disabled={isDebuggerVisible}
+        className={cn('flex h-8 w-10 items-center justify-center rounded-lg bg-brand', {
+          'cursor-not-allowed opacity-50': isDebuggerVisible,
+        })}
       >
         <PlusIcon className='stroke-white' />
       </Popover.Trigger>

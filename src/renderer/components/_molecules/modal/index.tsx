@@ -30,6 +30,7 @@ const ModalContent = forwardRef<
   ComponentPropsWithoutRef<typeof PrimitiveDialog.Content> & { onClose?: () => void }
 >(({ className, onClose, ...props }, ref) => (
   <ModalPortal>
+    <PrimitiveDialog.Title /> {/* This is to ensure the title is rendered correctly */}
     <ModalOverlay />
     <PrimitiveDialog.Content
       ref={ref}

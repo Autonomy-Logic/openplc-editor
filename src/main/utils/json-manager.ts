@@ -15,6 +15,7 @@ const CreateJSONFile = (path: string, data: string | NodeJS.ArrayBufferView, fil
   writeFile(normalizedPath, data, (error) => {
     if (error) throw error
   })
+
   return { ok: true }
 }
 

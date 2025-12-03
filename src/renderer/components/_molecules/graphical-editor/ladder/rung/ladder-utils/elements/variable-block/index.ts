@@ -1,18 +1,18 @@
 import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/ladder'
 import { BlockNode, BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
 import { RungLadderState } from '@root/renderer/store/slices'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Edge, Node } from '@xyflow/react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { buildEdge } from '../../edges'
 
-export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
+export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderState, block: Node) => {
   const variableElements: Node[] = []
   const variableEdges: Edge[] = []
   const variableElementStyle = defaultCustomNodesStyles.variable
 
   const blockElement = block as BlockNode<T>
-  const blockVariant = blockElement.data.variant as BlockVariant
+  const blockVariant = blockElement.data.variant
 
   const inputHandles =
     blockElement.data.inputHandles.length > 1
@@ -24,10 +24,10 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
       : []
 
   inputHandles.forEach((inputHandle) => {
-    const connectedVariable =
-      inputHandle.id && inputHandle.id in blockElement.data.connectedVariables
-        ? blockElement.data.connectedVariables[inputHandle.id]
-        : undefined
+    const connectedVariable = blockElement.data.connectedVariables.find((variable) => {
+      return variable.type === 'input' && variable.handleId === inputHandle.id
+    })
+
     let variableType: BlockVariant['variables'][0] = {
       name: '',
       class: '',
@@ -41,7 +41,7 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
     })
 
     const variableElement = nodesBuilder.variable({
-      id: `variable_${uuidv4()}`,
+      id: newGraphicalEditorNodeID('variable'),
       posX: inputHandle.glbPosition.x - (variableElementStyle.width + variableElementStyle.gap),
       posY: inputHandle.glbPosition.y - variableElementStyle.handle.y,
       handleX: inputHandle.glbPosition.x - variableElementStyle.gap,
@@ -52,7 +52,7 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
         handleId: inputHandle.id as string,
         variableType,
       },
-      variable: connectedVariable ? connectedVariable.variable : undefined,
+      variable: connectedVariable?.variable,
     })
     const variableEdge = buildEdge(variableElement.id, blockElement.id, {
       sourceHandle: 'output',
@@ -64,7 +64,10 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
   })
 
   outputHandles.forEach((outputHandle) => {
-    const connectedVariable = blockElement.data.connectedVariables[outputHandle.id as string]
+    const connectedVariable = blockElement.data.connectedVariables.find((variable) => {
+      return variable.type === 'output' && variable.handleId === outputHandle.id
+    })
+
     let variableType: BlockVariant['variables'][0] = {
       name: '',
       class: '',
@@ -78,7 +81,7 @@ export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
     })
 
     const variableElement = nodesBuilder.variable({
-      id: `variable_${uuidv4()}`,
+      id: newGraphicalEditorNodeID('variable'),
       posX: outputHandle.glbPosition.x + variableElementStyle.gap,
       posY: outputHandle.glbPosition.y - variableElementStyle.handle.y,
       handleX: outputHandle.glbPosition.x + variableElementStyle.gap,

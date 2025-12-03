@@ -9,13 +9,14 @@ import { SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 const columnHelper = createColumnHelper<PLCGlobalVariable>()
 
 const columns = [
-  columnHelper.accessor('id', {
+  columnHelper.display({
+    id: 'rowNumber',
     header: '#',
     size: 64,
     minSize: 32,
     maxSize: 64,
     enableResizing: true,
-    cell: (props) => props.row.id,
+    cell: (props) => props.row.index,
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -67,7 +68,11 @@ type PLCVariablesTableProps = {
 
 const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVariablesTableProps) => {
   const {
+    editor: {
+      meta: { name },
+    },
     projectActions: { updateVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   return (
@@ -76,9 +81,10 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
       tableData={tableData}
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
-      updateData={(rowIndex, columnId, value) =>
-        updateVariable({ scope: 'global', rowId: rowIndex, data: { [columnId]: value } })
-      }
+      updateData={(rowIndex, columnId, value) => {
+        addSnapshot(name)
+        return updateVariable({ scope: 'global', rowId: rowIndex, data: { [columnId]: value } })
+      }}
       tableContext='Variables'
     />
   )

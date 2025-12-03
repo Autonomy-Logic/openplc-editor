@@ -24,8 +24,8 @@ const baseTypeSchema = z.enum([
   'word',
   'dword',
   'lword',
-  'loglevel',
 ])
+
 type BaseType = z.infer<typeof baseTypeSchema>
 
 const PLCArrayDatatypeSchema = z.object({
@@ -53,7 +53,6 @@ const PLCEnumeratedDatatypeSchema = z.object({
 })
 
 const PLCStructureVariableSchema = z.object({
-  id: z.string().optional(),
   name: z.string(),
   type: z.discriminatedUnion('definition', [
     z.object({
@@ -84,7 +83,7 @@ const PLCStructureVariableSchema = z.object({
     }),
     z.object({
       /**
-       * This should be ommited at variable table type options
+       * This should be omitted at variable table type options
        */
       definition: z.literal('derived'),
       value: z.string(),
@@ -118,7 +117,6 @@ const PLCDataTypeSchema = z.discriminatedUnion('derivation', [
 type PLCDataType = z.infer<typeof PLCDataTypeSchema>
 
 const PLCVariableSchema = z.object({
-  id: z.string().optional(),
   name: z.string(),
   class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp', 'global']).optional(),
   type: z.discriminatedUnion('definition', [
@@ -164,7 +162,6 @@ const PLCGlobalVariableSchema = PLCVariableSchema
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
 
 const PLCTaskSchema = z.object({
-  id: z.string().optional(),
   name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the task object.
   triggering: z.enum(['Cyclic', 'Interrupt']),
   interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
@@ -194,33 +191,46 @@ const bodySchema = z.discriminatedUnion('language', [
     language: z.literal('fbd'),
     value: zodFBDFlowSchema,
   }),
+  z.object({
+    language: z.literal('python'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('cpp'),
+    value: z.string(),
+  }),
 ])
+
+type BodySchema = z.infer<typeof bodySchema>
 //
 const PLCFunctionSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
   name: z.string(),
   returnType: z.union([baseTypeSchema, z.string()]),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
+  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
+  variablesText: z.string().optional(),
 })
 
 type PLCFunction = z.infer<typeof PLCFunctionSchema>
 
 const PLCProgramSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
+  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
+  variablesText: z.string().optional(),
 })
 
 type PLCProgram = z.infer<typeof PLCProgramSchema>
 
 const PLCInstanceSchema = z.object({
-  id: z.string().optional(),
   name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
   task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
   program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.
@@ -229,12 +239,14 @@ const PLCInstanceSchema = z.object({
 type PLCInstance = z.infer<typeof PLCInstanceSchema>
 
 const PLCFunctionBlockSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
+  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
+  variablesText: z.string().optional(),
 })
 
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
@@ -268,6 +280,15 @@ const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(PLCPouSchema),
   configuration: PLCConfigurationSchema,
+  deletedPous: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z.enum(['program', 'function', 'function-block']),
+        language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
+      }),
+    )
+    .optional(),
 })
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
@@ -309,6 +330,7 @@ export {
 
 export type {
   BaseType,
+  BodySchema,
   PLCArrayDatatype,
   PLCConfiguration,
   PLCDataType,

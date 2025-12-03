@@ -1,3 +1,4 @@
+import type { DebugTreeNode } from '@root/types/debugger'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -16,10 +17,22 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     isCollapsed: false,
     isModalOpen: [],
     discardChanges: false,
+    isDebuggerVisible: false,
+    debuggerTargetIp: null,
+    debugVariableIndexes: new Map(),
+    debugVariableValues: new Map(),
+    debugForcedVariables: new Map(),
+    debugVariableTree: new Map(),
+    isPlcLogsVisible: false,
+    plcLogs: '',
     close: {
       window: false,
       app: false,
       appDarwin: false,
+    },
+    selectedProjectTreeLeaf: {
+      label: '',
+      type: null,
     },
   },
 
@@ -105,6 +118,80 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           } else {
             workspace.isModalOpen.push({ modalName, modalState })
           }
+        }),
+      )
+    },
+    setSelectedProjectTreeLeaf: (selectedProjectTreeLeaf): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.selectedProjectTreeLeaf = selectedProjectTreeLeaf
+        }),
+      )
+    },
+    clearWorkspace: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.editingState = 'initial-state'
+          workspace.selectedProjectTreeLeaf = {
+            label: '',
+            type: null,
+          }
+        }),
+      )
+    },
+    setDebuggerVisible: (isVisible: boolean): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isDebuggerVisible = isVisible
+        }),
+      )
+    },
+    setDebuggerTargetIp: (targetIp: string | null): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debuggerTargetIp = targetIp
+        }),
+      )
+    },
+    setDebugVariableIndexes: (indexes: Map<string, number>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableIndexes = indexes
+        }),
+      )
+    },
+    setDebugVariableValues: (values: Map<string, string>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableValues = values
+        }),
+      )
+    },
+    setDebugForcedVariables: (forced: Map<string, boolean>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugForcedVariables = forced
+        }),
+      )
+    },
+    setDebugVariableTree: (tree: Map<string, DebugTreeNode>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableTree = tree
+        }),
+      )
+    },
+    setPlcLogsVisible: (isVisible: boolean): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isPlcLogsVisible = isVisible
+        }),
+      )
+    },
+    setPlcLogs: (logs: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcLogs = logs
         }),
       )
     },

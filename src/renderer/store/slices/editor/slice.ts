@@ -1,8 +1,9 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { RootState } from '../../index'
 import type { EditorSlice, EditorState } from './types'
-export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState, getState) => ({
+export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (setState, getState) => ({
   editors: [],
   editor: {
     type: 'available',
@@ -10,6 +11,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       name: 'available',
     },
   },
+  isMonacoFocused: false,
   editorActions: {
     addModel: (editor) =>
       setState(
@@ -26,7 +28,13 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    updateModelVariables: (variables) =>
+    updateModelVariables: (variables: {
+      display: 'code' | 'table'
+      selectedRow?: number
+      classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
+      description?: string
+      code?: string
+    }) => {
       setState(
         produce((state: EditorState) => {
           const { editor } = state
@@ -71,13 +79,81 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
             } else {
               editor.variable = {
                 display: 'code',
+                code: variables.code ?? (editor.variable.display === 'code' ? editor.variable.code : undefined),
               }
             }
           }
         }),
-      ),
+      )
+    },
 
-    updateModelTasks: (tasks: { selectedRow: number; display: 'code' | 'table' }) =>
+    updateModelVariablesForName: (
+      name: string,
+      variables: {
+        display: 'code' | 'table'
+        selectedRow?: number
+        classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
+        description?: string
+        code?: string
+      },
+    ) => {
+      setState(
+        produce((state: EditorState) => {
+          const targetEditor =
+            state.editor.meta.name === name ? state.editor : state.editors.find((e) => e.meta.name === name)
+
+          if (!targetEditor) return
+
+          if (targetEditor.type === 'plc-resource') {
+            if (variables.display === 'table') {
+              if (targetEditor.variable.display === 'table') {
+                targetEditor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? targetEditor.variable.selectedRow ?? '-1',
+                  description: variables.description ?? targetEditor.variable.description ?? '',
+                }
+              } else {
+                targetEditor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  description: variables.description ?? '',
+                }
+              }
+            } else {
+              targetEditor.variable = {
+                display: 'code',
+              }
+            }
+          } else if (targetEditor.type === 'plc-textual' || targetEditor.type === 'plc-graphical') {
+            if (variables.display === 'table') {
+              if (targetEditor.variable.display === 'table') {
+                targetEditor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? targetEditor.variable.selectedRow ?? '-1',
+                  classFilter: variables.classFilter ?? targetEditor.variable.classFilter ?? 'All',
+                  description: variables.description ?? targetEditor.variable.description ?? '',
+                }
+              } else {
+                targetEditor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  classFilter: variables.classFilter ?? 'All',
+                  description: variables.description ?? '',
+                }
+              }
+            } else {
+              targetEditor.variable = {
+                display: 'code',
+                code:
+                  variables.code ?? (targetEditor.variable.display === 'code' ? targetEditor.variable.code : undefined),
+              }
+            }
+          }
+        }),
+      )
+    },
+
+    updateModelTasks: (tasks: { selectedRow?: number; display: 'code' | 'table' }) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
@@ -86,10 +162,10 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
               editor.task = {
                 ...editor.task,
                 display: 'table',
-                selectedRow: tasks.selectedRow.toString(),
+                selectedRow: tasks.selectedRow !== undefined ? tasks.selectedRow.toString() : '-1',
               }
             } else {
-              editor.variable = {
+              editor.task = {
                 display: 'code',
               }
             }
@@ -97,7 +173,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    updateModelInstances: (instances: { selectedRow: number; display: 'code' | 'table' }) =>
+    updateModelInstances: (instances: { selectedRow?: number; display: 'code' | 'table' }) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
@@ -106,10 +182,10 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
               editor.instance = {
                 ...editor.instance,
                 display: 'table',
-                selectedRow: instances.selectedRow.toString(),
+                selectedRow: instances.selectedRow !== undefined ? instances.selectedRow.toString() : '-1',
               }
             } else {
-              editor.variable = {
+              editor.instance = {
                 display: 'code',
               }
             }
@@ -148,11 +224,12 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
                   }
                   return rung
                 })
+              } else {
+                editor.graphical.openedRungs.push({
+                  rungId,
+                  open,
+                })
               }
-              editor.graphical.openedRungs.push({
-                rungId,
-                open,
-              })
             }
           }
         }),
@@ -163,7 +240,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         const rung = editor.graphical.openedRungs.find((rung) => rung.rungId === rungId)
         if (rung) return rung.open
       }
-      return false
+      return true // Default to open instead of closed
     },
 
     updateModelFBD: ({ hoveringElement, canEditorZoom, canEditorPan }) =>
@@ -202,7 +279,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       )
     },
 
-    setEditor: (newEditor) =>
+    setEditor: (newEditor) => {
       setState(
         produce((state: EditorState) => {
           /**
@@ -210,6 +287,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
            */
           const oldEditor = state.editor
           if (oldEditor.meta.name === newEditor.meta.name) return
+
           if (oldEditor.type !== 'available') {
             state.editors = state.editors.map((model) => {
               if (model.meta.name === oldEditor.meta.name) {
@@ -218,9 +296,25 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
               return model
             })
           }
+
           state.editor = newEditor
         }),
-      ),
+      )
+
+      if (newEditor.type === 'plc-textual' || newEditor.type === 'plc-graphical') {
+        const { project } = getState()
+        const pous = project.data.pous
+        type Pou = (typeof pous)[number]
+        const pou = pous.find((p: Pou) => p.data.name === newEditor.meta.name)
+        if (pou && Object.prototype.hasOwnProperty.call(pou.data, 'variablesText')) {
+          const variablesText = (pou.data as typeof pou.data & { variablesText?: string }).variablesText
+          getState().editorActions.updateModelVariables({
+            display: 'code',
+            code: variablesText ?? '',
+          })
+        }
+      }
+    },
     clearEditor: () =>
       setState(
         produce((state: EditorState) => {
@@ -233,10 +327,45 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           }
         }),
       ),
+
+    saveEditorViewState: ({ prevEditorName, cursorPosition, scrollPosition, fbdPosition }) =>
+      setState(
+        produce((state: EditorState) => {
+          const currentEditor = state.editor
+          if (currentEditor.type === 'available') return
+
+          const index = state.editors.findIndex((e) => e.meta.name === prevEditorName)
+          if (index === -1) return
+
+          state.editors[index].cursorPosition = cursorPosition
+          state.editors[index].scrollPosition = scrollPosition
+          if (state.editors[index].type === 'plc-graphical') {
+            state.editors[index].fbdPosition = fbdPosition
+          }
+        }),
+      ),
+
     getEditorFromEditors: (name) => {
       const { editor, editors } = getState()
       if (name === editor.meta.name) return editor
       return editors.find((model) => model.meta.name === name) ?? null
+    },
+
+    updateEditorName: (oldName, newName) =>
+      setState(
+        produce((state: EditorState) => {
+          const model = state.editors.find((m) => m.meta.name === oldName)
+          if (model) {
+            model.meta.name = newName
+          }
+          if (state.editor.meta.name === oldName) {
+            state.editor.meta.name = newName
+          }
+        }),
+      ),
+
+    setMonacoFocused: (focused: boolean) => {
+      setState({ isMonacoFocused: focused })
     },
   },
 })

@@ -3,7 +3,24 @@ import { PLCVariable } from '@root/types/PLC'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
 
+import { pythonSnippets } from '../configs/languages/python/python.snippets'
+import { stSnippets } from '../configs/languages/st/st.snippets'
 import { parsePouToStText } from '../drag-and-drop/st'
+
+export {
+  arduinoApiCompletion,
+  cppSignatureHelp,
+  cppSnippetsCompletion,
+  cppStandardLibraryCompletion,
+} from './cpp.completion'
+
+interface SnippetItem {
+  label: string
+  insertText: string
+  documentation: string
+  kind: monaco.languages.CompletionItemKind
+  insertTextRules?: monaco.languages.CompletionItemInsertTextRule
+}
 
 export const languageKeywords = {
   st: [
@@ -168,11 +185,89 @@ export const languageKeywords = {
     'RETC',
     'RETN',
   ],
+  python: [
+    'if',
+    'elif',
+    'else',
+    'for',
+    'while',
+    'break',
+    'continue',
+    'pass',
+    'return',
+    'yield',
+    'try',
+    'except',
+    'finally',
+    'raise',
+    'with',
+    'as',
+
+    'True',
+    'False',
+    'None',
+    'and',
+    'or',
+    'not',
+    'is',
+    'in',
+
+    'def',
+    'class',
+    'lambda',
+    'self',
+
+    'import',
+    'from',
+
+    'global',
+    'nonlocal',
+
+    'assert',
+
+    'async',
+    'await',
+
+    'int',
+    'float',
+    'str',
+    'bool',
+    'list',
+    'dict',
+    'tuple',
+    'set',
+    'frozenset',
+    'bytes',
+    'bytearray',
+
+    'print',
+    'len',
+    'range',
+    'enumerate',
+    'zip',
+    'map',
+    'filter',
+    'sum',
+    'min',
+    'max',
+    'abs',
+    'round',
+    'sorted',
+    'reversed',
+    'any',
+    'all',
+    'type',
+    'isinstance',
+    'hasattr',
+    'getattr',
+    'setattr',
+    'delattr',
+  ],
 }
 
-export const getKeywords = (language: 'st' | 'il') => languageKeywords[language]
+export const getKeywords = (language: 'st' | 'il' | 'python') => languageKeywords[language]
 
-export const keywordsCompletion = ({ language, range }: { language: 'st' | 'il'; range: monaco.IRange }) => {
+export const keywordsCompletion = ({ language, range }: { language: 'st' | 'il' | 'python'; range: monaco.IRange }) => {
   const keywords = getKeywords(language)
   const suggestions = keywords.map((keyword) => {
     return {
@@ -249,6 +344,7 @@ export const libraryCompletion = ({
         return {
           label: pou.name,
           insertText: text,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
           documentation: pou.documentation,
           kind: monaco.languages.CompletionItemKind.Function,
           range,
@@ -317,4 +413,132 @@ export const libraryCompletion = ({
   return {
     suggestions: [...systemSuggestions, ...userSuggestions],
   }
+}
+
+export const snippetsCompletion = ({ language, range }: { language: 'st' | 'il' | 'python'; range: monaco.IRange }) => {
+  let snippets: SnippetItem[] = []
+
+  switch (language) {
+    case 'st':
+      snippets = stSnippets
+      break
+    case 'python':
+      snippets = pythonSnippets
+      break
+    case 'il':
+    default:
+      return { suggestions: [] }
+  }
+
+  const suggestions = snippets.map((snippet) => ({
+    label: snippet.label,
+    insertText: snippet.insertText,
+    documentation: snippet.documentation,
+    kind: snippet.kind,
+    insertTextRules: snippet.insertTextRules,
+    range,
+  }))
+
+  return { suggestions }
+}
+
+export const snippetsSTCompletion = ({ language, range }: { language: 'st' | 'il'; range: monaco.IRange }) => {
+  if (language !== 'st') {
+    return { suggestions: [] }
+  }
+
+  const suggestions = stSnippets.map((snippet) => ({
+    label: snippet.label,
+    insertText: snippet.insertText,
+    documentation: snippet.documentation,
+    kind: snippet.kind,
+    insertTextRules: snippet.insertTextRules,
+    range,
+  }))
+
+  return { suggestions }
+}
+
+export const pythonBuiltinsCompletion = ({ range }: { range: monaco.IRange }) => {
+  const builtinFunctions = [
+    'abs',
+    'all',
+    'any',
+    'ascii',
+    'bin',
+    'bool',
+    'breakpoint',
+    'bytearray',
+    'bytes',
+    'callable',
+    'chr',
+    'classmethod',
+    'compile',
+    'complex',
+    'delattr',
+    'dict',
+    'dir',
+    'divmod',
+    'enumerate',
+    'eval',
+    'exec',
+    'filter',
+    'float',
+    'format',
+    'frozenset',
+    'getattr',
+    'globals',
+    'hasattr',
+    'hash',
+    'help',
+    'hex',
+    'id',
+    'input',
+    'int',
+    'isinstance',
+    'issubclass',
+    'iter',
+    'len',
+    'list',
+    'locals',
+    'map',
+    'max',
+    'memoryview',
+    'min',
+    'next',
+    'object',
+    'oct',
+    'open',
+    'ord',
+    'pow',
+    'print',
+    'property',
+    'range',
+    'repr',
+    'reversed',
+    'round',
+    'set',
+    'setattr',
+    'slice',
+    'sorted',
+    'staticmethod',
+    'str',
+    'sum',
+    'super',
+    'tuple',
+    'type',
+    'vars',
+    'zip',
+  ]
+
+  const suggestions = builtinFunctions.map((func) => ({
+    label: func,
+    insertText: func + '(${1})',
+    documentation: `Python built-in function: ${func}`,
+    kind: monaco.languages.CompletionItemKind.Function,
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    range,
+  }))
+
+  return { suggestions }
 }

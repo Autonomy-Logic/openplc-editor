@@ -1,6 +1,6 @@
+import { ConfirmDeleteModalProps, SaveChangeModalProps } from '@root/renderer/components/_organisms/modals'
 import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungLadderState } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
@@ -16,10 +16,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     modals,
     workspaceActions: { setSystemConfigs, setRecent },
   } = useOpenPLCStore()
-  type ModalData = {
-    leafLang: string
-    label: string
-  }
+
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
@@ -55,7 +52,8 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
         {modals?.['save-changes-project']?.open === true && (
           <SaveChangesModal
             isOpen={modals['save-changes-project'].open}
-            validationContext={modals['save-changes-project'].data as string}
+            validationContext={(modals['save-changes-project'].data as SaveChangeModalProps).validationContext}
+            recentResponse={(modals['save-changes-project'].data as SaveChangeModalProps).recentResponse}
           />
         )}
         {modals?.['quit-application']?.open === true && (
@@ -64,9 +62,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
         {modals?.['confirm-delete-element']?.open === true && (
           <ConfirmDeleteElementModal
             isOpen={modals['confirm-delete-element'].open}
-            validationContext={modals['confirm-delete-element'].data as string}
-            rung={modals['confirm-delete-element'].data as RungLadderState}
-            modalData={modals['confirm-delete-element'].data as ModalData}
+            data={modals['confirm-delete-element'].data as ConfirmDeleteModalProps['data']}
           />
         )}
         <AcceleratorHandler />

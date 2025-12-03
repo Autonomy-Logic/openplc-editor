@@ -9,7 +9,6 @@ export const LightThemeIcon = (props: IIconProps) => {
 
   return (
     <svg
-      role='button'
       viewBox='0 0 44 24'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'

@@ -35,15 +35,7 @@ export default function VariableInIcon(props: IBlockIconProps) {
         stroke='#B4D0FE'
         strokeWidth='1.22727'
       />
-      <line
-        x1='18'
-        y1='13.3864'
-        x2='22.9091'
-        y2='13.3864'
-        stroke='#B4D0FE'
-        stroke-opacity='0.5'
-        strokeWidth='1.22727'
-      />
+      <line x1='18' y1='13.3864' x2='22.9091' y2='13.3864' stroke='#B4D0FE' strokeOpacity='0.5' strokeWidth='1.22727' />
     </svg>
   )
 }

@@ -1,8 +1,8 @@
 import { searchSelectors } from '@root/renderer/hooks'
-import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn } from '@root/utils'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { HighlightedText } from '../highlighted-text'
 import { InputWithRef } from '../input'
 
 export const GenericTextCell = ({
@@ -21,7 +21,6 @@ export const GenericTextCell = ({
   const inputRef = useRef<HTMLInputElement>(null)
 
   const searchQuery = searchSelectors.useSearchQuery()
-  const formattedCellValue = searchQuery && value ? extractSearchQuery(value, searchQuery) : value
 
   const [isEditing, setIsEditing] = useState(false)
   const handleStartEditing = useCallback(() => {
@@ -61,9 +60,10 @@ export const GenericTextCell = ({
         'cursor-not-allowed': !editable,
       })}
     >
-      <p
+      <HighlightedText
+        text={value}
+        searchQuery={searchQuery}
         className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
-        dangerouslySetInnerHTML={{ __html: formattedCellValue }}
       />
     </div>
   )

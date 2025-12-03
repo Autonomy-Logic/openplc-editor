@@ -1,5 +1,5 @@
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
-import { addEdge } from '@xyflow/react'
+import { addEdge, Node } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -143,8 +143,10 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
 
           flow.rung.nodes.push(node)
 
+          const selectedNodes: Node[] = []
           flow.rung.nodes = flow.rung.nodes.map((n) => {
             if (n.id === node.id) {
+              selectedNodes.push(n)
               return {
                 ...n,
                 selected: true,
@@ -156,6 +158,7 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
             }
           })
 
+          flow.rung.selectedNodes = selectedNodes
           flow.updated = true
         }),
       )
@@ -167,6 +170,9 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           if (!flow) return
 
           flow.rung.nodes = flow.rung.nodes.filter((node) => !nodes.find((n) => n.id === node.id))
+          flow.rung.selectedNodes = flow.rung.selectedNodes.filter(
+            (selectedNode) => !nodes.find((n) => n.id === selectedNode.id),
+          )
           flow.updated = true
         }),
       )
@@ -302,6 +308,38 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           if (!flow) return
 
           flow.updated = updated
+        }),
+      )
+    },
+
+    /**
+     * Control the undo and redo actions
+     */
+
+    applyFBDFlowSnapshot: ({ editorName, snapshot }) => {
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          const index = fbdFlows.findIndex((fbdFlow) => fbdFlow.name === editorName)
+
+          if (snapshot) {
+            const newFlow = {
+              ...snapshot,
+              name: editorName,
+              rung: {
+                ...snapshot.rung,
+                selectedNodes: [],
+              },
+              updated: true,
+            }
+
+            if (index === -1) {
+              fbdFlows.push(newFlow)
+            } else {
+              fbdFlows[index] = newFlow
+            }
+          } else {
+            if (index !== -1) fbdFlows.splice(index, 1)
+          }
         }),
       )
     },

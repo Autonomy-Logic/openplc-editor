@@ -1,69 +1,20 @@
-import type { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
-import type { IProjectServiceResponse } from '@root/main/services'
-import { useCompiler } from '@root/renderer/hooks'
+import { useCompiler, workspaceSelectors } from '@root/renderer/hooks'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { ModalTypes, ProjectState } from '@root/renderer/store/slices'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
+import type { ModalTypes } from '@root/renderer/store/slices'
+import { IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { useEffect, useState } from 'react'
 
 import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {
   if (isUnsaved) {
-    openModal('save-changes-project', 'close-app')
+    openModal('save-changes-project', {
+      validationContext: 'close-app',
+    })
     return
   }
   openModal('quit-application', null)
-}
-
-export const saveProjectRequest = async (
-  project: ProjectState,
-  setEditingState: (state: 'saved' | 'unsaved' | 'save-request' | 'initial-state') => void,
-): Promise<ISaveDataResponse> => {
-  setEditingState('save-request')
-  toast({
-    title: 'Save changes',
-    description: 'Trying to save the changes in the project file.',
-    variant: 'warn',
-  })
-
-  const projectData = PLCProjectSchema.safeParse(project)
-  if (!projectData.success) {
-    setEditingState('unsaved')
-    toast({
-      title: 'Error in the save request!',
-      description: 'The project data is not valid.',
-      variant: 'fail',
-    })
-    return {
-      success: false,
-      reason: { title: 'Error in the save request!', description: 'The project data is not valid.' },
-    }
-  }
-
-  const { success, reason } = await window.bridge.saveProject({
-    projectPath: project.meta.path,
-    projectData: projectData.data,
-  })
-
-  if (success) {
-    setEditingState('saved')
-    toast({
-      title: 'Changes saved!',
-      description: 'The project was saved successfully!',
-      variant: 'default',
-    })
-  } else {
-    setEditingState('unsaved')
-    toast({
-      title: 'Error in the save request!',
-      description: reason?.description,
-      variant: 'fail',
-    })
-  }
-
-  return { success, reason }
 }
 
 const AcceleratorHandler = () => {
@@ -73,13 +24,21 @@ const AcceleratorHandler = () => {
 
   const {
     project,
+    editor: { meta },
+    deviceDefinitions,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
-    workspaceActions: { setEditingState, switchAppTheme, toggleMaximizedWindow },
+    sharedWorkspaceActions: { closeProject, openProject, openRecentProject, saveFile, saveProject, closeFile },
+    workspaceActions: { switchAppTheme, toggleMaximizedWindow },
+    pouActions: { deleteRequest: deletePouRequest },
+    datatypeActions: { deleteRequest: deleteDatatypeRequest },
+    snapshotActions: { undo, redo },
   } = useOpenPLCStore()
+  const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
 
   const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
+
+  const selectedProjectLeaf = workspaceSelectors.useSelectedProjectTreeLeaf()
 
   /**
    * Compiler Related Accelerators
@@ -116,7 +75,9 @@ const AcceleratorHandler = () => {
       if (editingState !== 'unsaved') {
         openModal('create-project', null)
       } else {
-        openModal('save-changes-project', 'create-project')
+        openModal('save-changes-project', {
+          validationContext: 'create-project',
+        })
       }
     })
 
@@ -131,12 +92,25 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     window.bridge.handleOpenProjectRequest(async (_event) => {
-      if (editingState === 'initial-state') {
-        await openProject()
-        return
-      }
-      if (editingState === 'unsaved') {
-        openModal('save-changes-project', 'open-project')
+      switch (editingState) {
+        case 'saved':
+        case 'initial-state':
+          await openProject()
+          break
+        case 'unsaved':
+          openModal('save-changes-project', {
+            validationContext: 'open-project',
+          })
+          break
+        case 'save-request':
+          toast({
+            title: 'Save in progress',
+            description: 'Please wait for the current save operation to complete.',
+            variant: 'warn',
+          })
+          break
+        default:
+          return
       }
     })
 
@@ -150,13 +124,33 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
-      openRecentProject(response)
+      switch (editingState) {
+        case 'saved':
+        case 'initial-state':
+          openRecentProject(response)
+          break
+        case 'unsaved':
+          openModal('save-changes-project', {
+            validationContext: 'open-recent-project',
+            recentResponse: response,
+          })
+          break
+        case 'save-request':
+          toast({
+            title: 'Save in progress',
+            description: 'Please wait for the current save operation to complete.',
+            variant: 'warn',
+          })
+          break
+        default:
+          return
+      }
     })
 
     return () => {
       window.bridge.removeOpenRecentListener()
     }
-  }, [])
+  }, [editingState])
 
   /**
    * -- Close project
@@ -176,13 +170,110 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.saveProjectAccelerator((_event) => {
-      void saveProjectRequest(project, setEditingState)
+      void saveProject(project, deviceDefinitions)
     })
 
     return () => {
       window.bridge.removeSaveProjectAccelerator()
     }
-  }, [project])
+  }, [project, deviceDefinitions])
+
+  /**
+   * ==== File Related Accelerators ====
+   */
+
+  /**
+   * -- Delete files
+   */
+  useEffect(() => {
+    const handleDelete = () => {
+      const { label, type } = selectedProjectLeaf
+      if (!type || !label) {
+        toast({
+          title: 'Error',
+          description: 'No file selected to delete.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      const isPou = ['function', 'function-block', 'program'].includes(type)
+      const isDatatype = type === 'data-type'
+
+      if (isPou) {
+        deletePouRequest(label)
+      } else if (isDatatype) {
+        deleteDatatypeRequest(label)
+      } else {
+        toast({
+          title: 'Error',
+          description: 'This element cannot be deleted.',
+          variant: 'fail',
+        })
+        return
+      }
+    }
+
+    window.bridge.deleteFileAccelerator((_event) => {
+      handleDelete()
+    })
+
+    return () => {
+      window.bridge.removeDeleteFileListener()
+    }
+  }, [selectedProjectLeaf])
+
+  /**
+   * -- Close tabs/editor
+   */
+  useEffect(() => {
+    window.bridge.closeTabAccelerator((_event) => closeFile(selectedProjectLeaf.label))
+
+    return () => {
+      window.bridge.removeCloseTabListener()
+    }
+  }, [selectedProjectLeaf])
+
+  /**
+   * -- Save file
+   */
+  useEffect(() => {
+    window.bridge.saveFileAccelerator((_event) => {
+      void saveFile(selectedProjectLeaf.label)
+    })
+
+    return () => {
+      window.bridge.removeSaveFileAccelerator()
+    }
+  }, [selectedProjectLeaf])
+
+  /*
+   * ==== Edit Related Accelerators ====
+   */
+  useEffect(() => {
+    window.bridge.handleUndoRequest((_) => {
+      if (!meta?.name) {
+        return
+      }
+
+      undo(meta.name)
+    })
+    return () => {
+      window.bridge.removeUndoRequestListener()
+    }
+  }, [meta.name, isMonacoFocused])
+  useEffect(() => {
+    window.bridge.handleRedoRequest((_) => {
+      if (!meta?.name) {
+        return
+      }
+
+      redo(meta.name)
+    })
+    return () => {
+      window.bridge.removeRedoRequestListener()
+    }
+  }, [meta.name, isMonacoFocused])
 
   /**
    * ==== Window Related Accelerators ====

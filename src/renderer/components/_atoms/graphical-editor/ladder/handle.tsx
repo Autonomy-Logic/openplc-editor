@@ -12,7 +12,17 @@ export type CustomHandleProps = HandleProps & {
   }
 }
 
-export const CustomHandle = ({ id, className, style, type, position, isConnectable, ...props }: CustomHandleProps) => {
+export const CustomHandle = ({
+  id,
+  className,
+  style,
+  type,
+  position,
+  isConnectable,
+  glbPosition,
+  relPosition,
+  ...props
+}: CustomHandleProps) => {
   return (
     <Handle
       id={id}

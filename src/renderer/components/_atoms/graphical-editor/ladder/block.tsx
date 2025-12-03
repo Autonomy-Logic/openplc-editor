@@ -1,14 +1,17 @@
+import { RefreshIcon } from '@root/renderer/assets'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { LibraryState } from '@root/renderer/store/slices'
+import { getVariableByNameAndType } from '@root/renderer/store/slices/project/utils'
 import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
+import type { VariableReference } from '@root/types/PLC/variable-reference'
 import { cn, generateNumericUUID } from '@root/utils'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { FocusEvent, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
@@ -22,24 +25,40 @@ import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 export type BlockVariant = {
   name: string
   type: string
-  variables: { name: string; class: string; type: { definition: string; value: string } }[]
+  variables: { id?: string; name: string; class: string; type: { definition: string; value: string } }[]
   documentation: string
   extensible: boolean
 }
-type Variables = {
-  [key: string]: {
-    variable: PLCVariable | undefined
-    type: 'input' | 'output'
-  }
+
+type OldVariables = {
+  [key: string]: { variable: PLCVariable; type: 'input' | 'output' }
 }
+
+export type LadderBlockConnectedVariables = {
+  handleId: string
+  handleTableId?: string
+  type: 'input' | 'output'
+  variable: PLCVariable | undefined
+}[]
+
+export type LadderBlockConnectedVariablesV2 = {
+  handleName: string
+  type: 'input' | 'output'
+  variableRef: VariableReference | null
+  variable: PLCVariable | undefined
+}[]
 
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
   lockExecutionControl: boolean
-  connectedVariables: Variables
-  variable: { id: string; name: string } | PLCVariable
+  connectedVariables: LadderBlockConnectedVariables
+  connectedVariablesV2?: LadderBlockConnectedVariablesV2
+  variable: { id?: string; name: string } | PLCVariable
+  variableRef?: VariableReference
+  hasDivergence?: boolean
 }
+
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
 type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?: boolean }
@@ -89,6 +108,7 @@ export const BlockNodeElement = <T extends object>({
       data: { pous },
     },
     projectActions: { updateVariable, deleteVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const {
@@ -224,6 +244,8 @@ export const BlockNodeElement = <T extends object>({
         title: '',
       }
 
+      addSnapshot(editor.meta.name)
+
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
         deleteVariable({
           rowId: variableIndex,
@@ -270,7 +292,7 @@ export const BlockNodeElement = <T extends object>({
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
      */
     const newBlockNode = buildBlockNode({
-      id: `BLOCK_${uuidv4()}`,
+      id: newGraphicalEditorNodeID('BLOCK'),
       posX: node.position.x,
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
@@ -313,6 +335,8 @@ export const BlockNodeElement = <T extends object>({
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
 
+    addSnapshot(editor.meta.name)
+
     setNodes({
       editorName: editor.meta.name,
       rungId: rung.id,
@@ -350,6 +374,7 @@ export const BlockNodeElement = <T extends object>({
       }}
     >
       <InputWithRef
+        id={`block-input-name${nodeId ? `-${nodeId}` : ''}`}
         value={blockNameValue}
         onChange={(e) => setBlockNameValue(e.target.value)}
         maxLength={20}
@@ -391,15 +416,22 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     project: {
       data: { pous },
     },
-    projectActions: { createVariable, updateVariable },
+    projectActions: { createVariable },
+    libraries: { user: userLibraries },
     ladderFlows,
-    ladderFlowActions: { updateNode },
+    snapshotActions: { addSnapshot },
+    ladderFlowActions: { updateNode, setNodes, setEdges },
   } = useOpenPLCStore()
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as newBlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
+  const [hoveringBlock, setHoveringBlock] = useState(false)
+
+  const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    nodeId: id,
+  })
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -421,14 +453,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-              nodeId: id,
-            })
             const { name, number } = checkVariableNameUnit(
               variables.all,
               (data.variant as BlockVariant).name.toUpperCase(),
             )
-            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
+            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`, true)
             return
           }
           inputVariableRef.current.focus()
@@ -449,139 +478,325 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const {
+      variables: freshVariables,
+      rung: freshRung,
+      node: freshNode,
+    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
+      variableName: data.variable.name,
     })
-    if (!node || !rung) {
-      console.error('Node or rung not found for ID:', id)
+
+    if (!freshNode || !freshRung) {
       return
     }
 
-    const variable = variables.selected
+    const variable = freshVariables.selected
     if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id === variable.id) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+    const nodeVariable = (freshNode.data as BasicNodeData).variable
+    const nodeVariableName = nodeVariable.name.toLowerCase()
+    const selectedVariableName = variable.name.toLowerCase()
+    const nodeBlockType = (freshNode.data as BlockNodeData<BlockVariant>).variant.name
+
+    if (nodeVariableName === selectedVariableName) {
+      const typeMatches =
+        variable.type.definition === 'derived' && variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
+
+      if (!typeMatches) {
+        setWrongVariable(true)
+        return
+      }
+
+      if (nodeVariable.name !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
-          rungId: rung.id,
-          nodeId: node.id,
+          rungId: freshRung.id,
+          nodeId: freshNode.id,
           node: {
-            ...node,
+            ...freshNode,
             data: {
-              ...node.data,
+              ...freshNode.data,
               variable,
             },
           },
         })
-        setWrongVariable(false)
-        return
       }
+      setWrongVariable(false)
+      return
     }
 
-    setWrongVariable(false)
-  }, [pous])
+    setWrongVariable(true)
+  }, [pous, data.variable.name])
+
+  /**
+   * useEffect to check if the connectedVariable is the correct type when the block variant is changed
+   */
+  useEffect(() => {
+    if (
+      data.connectedVariables &&
+      typeof data.connectedVariables === 'object' &&
+      !Array.isArray(data.connectedVariables)
+    ) {
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+        nodeId: id,
+      })
+      if (!node || !rung) return
+
+      const newVariables: LadderBlockConnectedVariables = []
+      Object.entries(data.connectedVariables as OldVariables).forEach(([key, connectedVariable]) => {
+        newVariables.push({
+          variable: connectedVariable.variable,
+          type: connectedVariable.type,
+          handleId: key,
+        })
+      })
+
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            connectedVariables: newVariables,
+          },
+        },
+      })
+    }
+  }, [data])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string) => {
-    const variableNameToSubmit = variableName || blockVariableValue
+  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string, createIfNotFound?: boolean) => {
+    const variableNameToSubmit = variableName ?? blockVariableValue
 
-    if (variableNameToSubmit === '') {
+    if (variableNameToSubmit.trim() === '') {
       setWrongVariable(true)
       return
     }
 
-    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-      nodeId: id,
-    })
     if (!rung || !node) {
-      toast({
-        title: 'Error',
-        description: 'Could not find the related rung or node',
-        variant: 'fail',
-      })
+      toast({ title: 'Error', description: 'Could not find the related rung or node', variant: 'fail' })
       return
     }
 
-    /**
-     * Check if the variable exists in the table of variables
-     * If exists, update the node variable
-     */
-    let variable: PLCVariable | undefined = variables.selected
-    if (variable) {
-      if (variable.name === variableNameToSubmit) return
-      const res = updateVariable({
-        data: {
-          ...variable,
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
-          },
+    const blockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+    const expectedType = { definition: 'derived' as const, value: blockType }
+
+    // @ts-expect-error - Type mismatch between uppercase and lowercase base types
+    const matchingVariable = getVariableByNameAndType(variables.all, variableNameToSubmit, expectedType, [])
+
+    const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: { ...node.data, variable },
         },
-        rowId: variables.all.indexOf(variable),
-        scope: 'local',
-        associatedPou: editor.meta.name,
       })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
-        })
-        setBlockVariableValue(variable.name)
+
+    let variableToLink = variables.selected
+
+    if (variableToLink) {
+      if (variableToLink.name.toLowerCase() === variableNameToSubmit.toLowerCase()) return
+
+      if (matchingVariable && matchingVariable.name.toLowerCase() !== variableToLink.name.toLowerCase()) {
+        // @ts-expect-error - Type mismatch between uppercase and lowercase base types
+        variableToLink = matchingVariable
+      } else {
+        updateNodeVariable({ name: variableNameToSubmit })
+        setWrongVariable(true)
         return
       }
-      variable = res.data as PLCVariable | undefined
     } else {
-      const res = createVariable({
-        data: {
-          id: uuidv4(),
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
+      if (matchingVariable) {
+        // @ts-expect-error - Type mismatch between uppercase and lowercase base types
+        variableToLink = matchingVariable
+      } else if (createIfNotFound) {
+        addSnapshot(editor.meta.name)
+
+        const creationResult = createVariable({
+          data: {
+            name: variableNameToSubmit,
+            type: { definition: 'derived', value: blockType },
+            class: 'local',
+            location: '',
+            documentation: '',
+            debug: false,
           },
-          class: 'local',
-          location: '',
-          documentation: '',
-          debug: false,
-        },
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
+          scope: 'local',
+          associatedPou: editor.meta.name,
         })
+
+        if (!creationResult.ok) {
+          toast({ title: creationResult.title, description: creationResult.message, variant: 'fail' })
+          return
+        }
+        variableToLink = creationResult.data as PLCVariable
+      } else {
+        updateNodeVariable({ name: variableNameToSubmit })
+        setWrongVariable(true)
         return
-      }
-      variable = res.data as PLCVariable | undefined
-      if (variable?.name !== variableNameToSubmit) {
-        setBlockVariableValue(variable?.name ?? '')
       }
     }
 
-    updateNode({
+    if (variableToLink) {
+      updateNodeVariable(variableToLink)
+      setBlockVariableValue(variableToLink.name)
+      setWrongVariable(false)
+    }
+  }
+
+  const handleUpdateDivergence = () => {
+    const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      nodeId: id,
+    })
+    if (!node || !rung) return
+
+    const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
+    if (!variant) return
+
+    const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+    if (!libMatch) return
+
+    const libPou = pous.find((pou) => pou.data.name === libMatch.name)
+    if (!libPou) return
+
+    const blockVariant = node.data.variant as BlockVariant
+    const newNodeVariables = (libPou.data.variables || []).map((variable) => {
+      let newType
+      switch (variable.type.definition) {
+        case 'array':
+          newType = {
+            ...variable.type,
+            value: variable.type.value.toUpperCase(),
+            data: variable.type.data,
+          }
+          break
+        case 'base-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'base-type',
+          }
+          break
+        case 'user-data-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'user-data-type',
+          }
+          break
+        case 'derived':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'derived',
+          }
+          break
+        default:
+          newType = variable.type
+      }
+      return {
+        ...variable,
+        type: newType,
+      }
+    })
+
+    if (libPou.type === 'function') {
+      const variable = getVariableRestrictionType(libPou.data.returnType)
+      newNodeVariables.push({
+        name: 'OUT',
+        class: 'output',
+        type: {
+          definition: variable.definition ?? 'derived',
+          value: libPou.data.returnType.toUpperCase(),
+        },
+        location: '',
+        documentation: '',
+        debug: false,
+      })
+    }
+
+    const updatedNewNode = buildBlockNode({
+      id: newGraphicalEditorNodeID('BLOCK'),
+      posX: node.position.x,
+      posY: node.position.y,
+      handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
+      handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
+      variant: { ...libPou.data, type: blockVariant.type, variables: [...newNodeVariables] },
+      executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
+    })
+
+    const connectedVariables: LadderBlockConnectedVariables = (
+      node.data as BlockNodeData<BlockVariant>
+    ).connectedVariables
+      .map((connectedVariable) => {
+        const matchByName = newNodeVariables.find(
+          (newVar) => newVar.name.toLowerCase() === connectedVariable.handleId.toLowerCase(),
+        )
+        if (matchByName) {
+          return { ...connectedVariable, handleId: matchByName.name }
+        }
+
+        return undefined
+      })
+      .filter((v): v is NonNullable<typeof v> => v !== undefined)
+
+    updatedNewNode.data = {
+      ...updatedNewNode.data,
+      connectedVariables: connectedVariables ?? [],
+      variable: variables.selected ?? { name: '' },
+    }
+
+    const newBlockNode = { ...updatedNewNode }
+
+    let newNodes = [...rung.nodes]
+    let newEdges = [...rung.edges]
+
+    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
+
+    edges.source?.forEach((edge) => {
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newBlockNode.id),
+        source: newBlockNode.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+    })
+    edges.target?.forEach((edge) => {
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newBlockNode.id),
+        target: newBlockNode.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+    })
+
+    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      [rung.defaultBounds[0], rung.defaultBounds[1]],
+    )
+
+    setNodes({
       editorName: editor.meta.name,
       rungId: rung.id,
-      nodeId: node.id,
-      node: {
-        ...node,
-        data: {
-          ...node.data,
-          variable: variable ?? { name: '' },
-        },
-      },
+      nodes: variableNodes,
     })
-    setWrongVariable(false)
+    setEdges({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      edges: variableEdges,
+    })
   }
 
   return (
@@ -589,7 +804,27 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       className={cn('relative', {
         'opacity-40': id.startsWith('copycat'),
       })}
+      onMouseEnter={() => setHoveringBlock(true)}
+      onMouseLeave={() => setHoveringBlock(false)}
     >
+      {data.hasDivergence && hoveringBlock && (
+        <div
+          className='pointer absolute right-[-12px] top-[-12px] z-10 flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 shadow-sm'
+          onClick={handleUpdateDivergence}
+        >
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <RefreshIcon />
+              </TooltipTrigger>
+              <TooltipContent side='top' className='text-xs'>
+                Update node
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
+
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger>
@@ -617,14 +852,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       >
         {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
           <HighlightedTextArea
+            id={`block-input-variable-${id}`}
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
-            handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
+            handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
             onFocus={(e) => {
               e.target.select()
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-                nodeId: id ?? '',
-              })
               if (!node || !rung) return
               updateNode({
                 editorName: editor.meta.name,
@@ -638,9 +871,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-                nodeId: id ?? '',
-              })
               if (!node || !rung) return
               updateNode({
                 editorName: editor.meta.name,
@@ -689,11 +919,24 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
+  let variantVariables = [...((variant as BlockVariant)?.variables ?? [])]
+  const outIndex = variantVariables.findIndex((v) => v.name === 'OUT')
+  if (outIndex > 0) {
+    const [outVar] = variantVariables.splice(outIndex, 1)
+    variantVariables = [outVar, ...variantVariables]
+  }
+  const newVariant = variant ? { ...(variant as BlockVariant), variables: variantVariables } : DEFAULT_BLOCK_TYPE
+
   const {
     variant: variantLib,
     executionControl: executionControlAux,
     lockExecutionControl,
-  } = getBlockVariantAndExecutionControl({ ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }, executionControl)
+  } = getBlockVariantAndExecutionControl(
+    {
+      ...(newVariant as BlockVariant),
+    },
+    executionControl,
+  )
   const { handles, leftHandles, rightHandles, height, width } = getBlockSize(variantLib, { x: handleX, y: handleY })
 
   return {
@@ -712,7 +955,7 @@ export const buildBlockNode = <T extends object | undefined>({
       executionOrder: 0,
       executionControl: executionControlAux,
       lockExecutionControl,
-      connectedVariables: {},
+      connectedVariables: [] as LadderBlockConnectedVariables,
       draggable: true,
       selectable: true,
       deletable: true,
@@ -828,30 +1071,27 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
 
   const mustHaveExecutionControlEnabled =
     inputConnectors.length === 0 ||
-    !validateVariableType('BOOL', inputConnectors[0].type.value).isValid ||
+    !validateVariableType('BOOL', inputConnectors[0].type.value.toUpperCase()).isValid ||
     outputConnectors.length === 0 ||
-    !validateVariableType('BOOL', outputConnectors[0].type.value).isValid
+    !validateVariableType('BOOL', outputConnectors[0].type.value.toUpperCase()).isValid
 
   if (executionControl || mustHaveExecutionControlEnabled) {
-    const executionControlVariable = variant.variables.some(
-      (variable) => variable.name === 'EN' || variable.name === 'ENO',
-    )
+    const existingEN = variant.variables.find((variable) => variable.name === 'EN')
+    const existingENO = variant.variables.find((variable) => variable.name === 'ENO')
+    const otherVariables = variant.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
 
-    if (!executionControlVariable) {
-      variant.variables = [
-        {
-          name: 'EN',
-          class: 'input',
-          type: { definition: 'generic-type', value: 'BOOL' },
-        },
-        {
-          name: 'ENO',
-          class: 'output',
-          type: { definition: 'generic-type', value: 'BOOL' },
-        },
-        ...variant.variables,
-      ]
+    const EN = existingEN || {
+      name: 'EN',
+      class: 'input',
+      type: { definition: 'base-type', value: 'BOOL' },
     }
+    const ENO = existingENO || {
+      name: 'ENO',
+      class: 'output',
+      type: { definition: 'base-type', value: 'BOOL' },
+    }
+
+    variant.variables = [EN, ENO, ...otherVariables]
   } else {
     variant.variables = variant.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
   }

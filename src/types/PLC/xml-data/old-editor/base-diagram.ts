@@ -60,13 +60,13 @@ const baseXmlSchema = z.object({
           '@name': z.string().default('Config0'),
           resource: z.object({
             '@name': z.string().default('Res0'),
-            globalVars: z
-              .object({
-                variable: z.array(variableXMLSchema).optional(),
-              })
-              .optional(),
             task: z.array(taskXMLSchema),
           }),
+          globalVars: z
+            .object({
+              variable: z.array(variableXMLSchema).optional(),
+            })
+            .optional(),
         }),
       }),
     }),

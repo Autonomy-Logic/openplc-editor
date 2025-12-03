@@ -4,8 +4,8 @@ import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-ed
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/placeholder'
 import type { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 import type { RungLadderState } from '@root/renderer/store/slices'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import type { Edge, Node } from '@xyflow/react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { buildEdge, connectNodes, removeEdge } from '../../edges'
 import { buildGenericNode, isNodeOfType, removeNode } from '../../nodes'
@@ -57,7 +57,7 @@ export const startParallelConnection = <T>(
     'serial',
   )
   const openParallelElement = nodesBuilder.parallel({
-    id: `PARALLEL_OPEN_${uuidv4()}`,
+    id: newGraphicalEditorNodeID('PARALLEL_OPEN'),
     type: 'open',
     posX: openParallelPosition.posX,
     posY: openParallelPosition.posY,
@@ -77,7 +77,7 @@ export const startParallelConnection = <T>(
     newElement = buildGenericNode({
       nodeType: node.elementType,
       blockType: node.blockVariant,
-      id: `${node.elementType.toUpperCase()}_${uuidv4()}`,
+      id: newGraphicalEditorNodeID(node.elementType.toUpperCase()),
       ...newElementPosition,
     })
   } else {
@@ -94,11 +94,11 @@ export const startParallelConnection = <T>(
       ? buildGenericNode({
           nodeType: aboveElement.type ?? '',
           blockType: aboveElement.data.blockType,
-          id: `${aboveElement.type?.toUpperCase()}_${uuidv4()}`,
+          id: newGraphicalEditorNodeID(aboveElement.type?.toUpperCase()),
           ...newAboveElementPosition,
         })
       : nodesBuilder.block({
-          id: `${aboveElement.type?.toUpperCase()}_${uuidv4()}`,
+          id: newGraphicalEditorNodeID(aboveElement.type?.toUpperCase()),
           variant: (aboveElement.data as BlockNodeData<object>).variant,
           executionControl: (aboveElement.data as BlockNodeData<object>).executionControl,
           ...newAboveElementPosition,
@@ -121,7 +121,7 @@ export const startParallelConnection = <T>(
   const closeParallelPositionSerial = getNodePositionBasedOnPreviousNode(newElement, 'parallel', 'serial')
   const closeParallelPositionParallel = getNodePositionBasedOnPreviousNode(placeholder.selected, 'parallel', 'serial')
   const closeParallelElement = nodesBuilder.parallel({
-    id: `PARALLEL_CLOSE_${uuidv4()}`,
+    id: newGraphicalEditorNodeID('PARALLEL_CLOSE'),
     type: 'close',
     posX:
       closeParallelPositionSerial.posX > closeParallelPositionParallel.posX
@@ -168,20 +168,34 @@ export const startParallelConnection = <T>(
   newEdges = newEdges.filter((edge) => edge.source !== aboveElement.id && edge.target !== aboveElement.id)
 
   // serial connections
+  const isPreviousConnectionParallel = (() => {
+    const previousElements = relatedElementPreviousElements.serial
+    const previousEdges = relatedElementPreviousEdges
+
+    if (previousElements.length === 0 || previousEdges.length === 0) {
+      return false
+    }
+
+    const firstElement = previousElements[0]
+    const firstEdge = previousEdges[0]
+
+    return (
+      isNodeOfType(firstElement, 'parallel') &&
+      (firstElement as ParallelNode).data?.type === 'open' &&
+      firstEdge.sourceHandle === (firstElement as ParallelNode).data?.parallelOutputConnector?.id
+    )
+  })()
+
   newEdges = connectNodes(
     { ...rung, nodes: newNodes, edges: newEdges },
     aboveElementTargetEdges[0].source,
     openParallelElement.id,
-    relatedElementPreviousElements.serial.length > 0 &&
-      isNodeOfType(relatedElementPreviousElements.serial[0], 'parallel') &&
-      (relatedElementPreviousElements.serial[0] as ParallelNode).data.type === 'open' &&
-      relatedElementPreviousEdges[0].sourceHandle ===
-        (relatedElementPreviousElements.serial[0] as ParallelNode).data.parallelOutputConnector?.id
-      ? 'parallel'
-      : 'serial',
+    isPreviousConnectionParallel ? 'parallel' : 'serial',
     {
       sourceHandle: aboveElementTargetEdges[0].sourceHandle ?? undefined,
-      targetHandle: openParallelElement.data.inputConnector?.id,
+      targetHandle: isPreviousConnectionParallel
+        ? openParallelElement.data.parallelInputConnector?.id
+        : openParallelElement.data.inputConnector?.id,
     },
   )
   newEdges = connectNodes(
@@ -204,13 +218,33 @@ export const startParallelConnection = <T>(
       targetHandle: closeParallelElement.data.inputConnector?.id,
     },
   )
+
+  // Validação para verificar se o bloco de destino é um paralelo
+  const isTargetConnectionParallel = (() => {
+    const targetNode = newNodes.find((node) => node.id === aboveElementSourceEdges[0]?.target)
+
+    if (!targetNode || !aboveElementSourceEdges[0]) {
+      return false
+    }
+
+    const targetEdge = aboveElementSourceEdges[0]
+
+    return (
+      isNodeOfType(targetNode, 'parallel') &&
+      (targetNode as ParallelNode).data?.type === 'close' &&
+      targetEdge.targetHandle === (targetNode as ParallelNode).data?.parallelInputConnector?.id
+    )
+  })()
+
   newEdges = connectNodes(
     { ...rung, nodes: newNodes, edges: newEdges },
     closeParallelElement.id,
     aboveElementSourceEdges[0].target,
     'serial',
     {
-      sourceHandle: closeParallelElement.data.outputConnector?.id,
+      sourceHandle: isTargetConnectionParallel
+        ? closeParallelElement.data.parallelOutputConnector?.id
+        : closeParallelElement.data.outputConnector?.id,
       targetHandle: aboveElementSourceEdges[0].targetHandle ?? undefined,
     },
   )

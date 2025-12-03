@@ -6,9 +6,9 @@
 
 This PR resolve the *#issue_number*.
 
-### Link to Linear task
+### Link to Jira task
 
-*[linear task](link to linear)*
+*[jira task](link to jira)*
 
 ## Description of the changes proposed
 

@@ -1,8 +1,10 @@
+import { RefreshIcon } from '@root/renderer/assets'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { FocusEvent, useEffect, useRef, useState } from 'react'
 
@@ -10,7 +12,7 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockVariant } from '../types/block'
-import { getBlockDocumentation } from '../utils'
+import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
@@ -18,6 +20,7 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
+  hasDivergence: boolean
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
@@ -68,6 +71,7 @@ export const BlockNodeElement = <T extends object>({
       data: { pous },
     },
     projectActions: { updateVariable, deleteVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const {
@@ -90,6 +94,9 @@ export const BlockNodeElement = <T extends object>({
   const inputNameRef = useRef<HTMLInputElement>(null)
   const [inputNameFocus, setInputNameFocus] = useState<boolean>(true)
 
+  const { pou, rung, node, variables, edges } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    nodeId: nodeId ?? '',
+  })
   /**
    * useEffect to focus the name input when the correct block type is selected
    */
@@ -136,9 +143,6 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const { pou, rung, node, variables, edges } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-      nodeId: nodeId ?? '',
-    })
     if (!pou || !rung || !node) return
 
     if (libraryBlock && pou.type === 'function' && (libraryBlock as BlockVariant).type !== 'function') {
@@ -161,6 +165,8 @@ export const BlockNodeElement = <T extends object>({
         message: '',
         title: '',
       }
+
+      addSnapshot(editor.meta.name)
 
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
         deleteVariable({
@@ -208,7 +214,7 @@ export const BlockNodeElement = <T extends object>({
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
      */
     const newBlockNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: newGraphicalEditorNodeID('BLOCK'),
       position: {
         x: node.position.x,
         y: node.position.y,
@@ -241,6 +247,8 @@ export const BlockNodeElement = <T extends object>({
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
+
+    addSnapshot(editor.meta.name)
 
     setNodes({
       editorName: editor.meta.name,
@@ -331,15 +339,22 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     project: {
       data: { pous },
     },
-    projectActions: { createVariable, updateVariable },
+    projectActions: { createVariable },
+    libraries: { user: userLibraries },
     fbdFlows,
-    fbdFlowActions: { updateNode },
+    snapshotActions: { addSnapshot },
+    fbdFlowActions: { updateNode, setNodes, setEdges },
   } = useOpenPLCStore()
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as BlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
+  const [hoveringBlock, setHoveringBlock] = useState(false)
+
+  const { variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    nodeId: id ?? '',
+  })
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -351,24 +366,25 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   /**
    * useEffect to focus the variable input when the correct block type is selected
    */
+  const hasCreatedRef = useRef(false)
+
   useEffect(() => {
     if (data.variable && data.variable.name !== '' && blockType === 'function-block') {
       setBlockVariableValue(data.variable.name)
+      hasCreatedRef.current = true
       return
     }
 
-    if (inputVariableRef.current && selected) {
+    if (inputVariableRef.current && selected && !hasCreatedRef.current) {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-              nodeId: id,
-            })
             const { name, number } = checkVariableNameUnit(
               variables.all,
               (data.variant as BlockVariant).name.toUpperCase(),
             )
-            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
+            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`, true)
+            hasCreatedRef.current = true
             return
           }
           inputVariableRef.current.focus()
@@ -389,45 +405,61 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { variables, node, rung } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const {
+      rung: freshRung,
+      node: freshNode,
+      variables: freshVariables,
+    } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
-    if (!node || !rung) {
+
+    if (!freshNode || !freshRung) {
       console.error('Node or rung not found for ID:', id)
       return
     }
 
-    const variable = variables.selected
+    const variable = freshVariables.selected
     if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id === variable.id) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+    const nodeVariableName = (freshNode.data as BasicNodeData).variable.name
+    const nodeBlockType = (freshNode.data as BlockNodeData<BlockVariant>).variant.name
+
+    if (nodeVariableName.toLowerCase() === variable.name.toLowerCase()) {
+      const typeMatches =
+        variable.type.definition === 'derived' && variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
+
+      if (!typeMatches) {
+        setWrongVariable(true)
+        return
+      }
+
+      if (nodeVariableName !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
-          nodeId: node.id,
+          nodeId: freshNode.id,
           node: {
-            ...node,
+            ...freshNode,
             data: {
-              ...node.data,
+              ...freshNode.data,
               variable,
             },
           },
         })
-        setWrongVariable(false)
-        return
       }
+      setWrongVariable(false)
+      return
     }
 
-    setWrongVariable(false)
-  }, [pous])
+    setWrongVariable(true)
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string) => {
+  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string, createIfNotFound?: boolean) => {
     const variableNameToSubmit = variableName || blockVariableValue
 
     if (variableNameToSubmit === '') {
@@ -438,6 +470,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
+
     if (!rung || !node) {
       toast({
         title: 'Error',
@@ -447,79 +480,260 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    /**
-     * Check if the variable exists in the table of variables
-     * If exists, update the node variable
-     */
-    let variable: PLCVariable | undefined = variables.selected
-    if (variable) {
-      if (variable.name === variableNameToSubmit) return
-      const res = updateVariable({
-        data: {
-          ...variable,
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
-          },
+    const nodeBlockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+
+    const findMatchingVariable = () =>
+      variables.all.find(
+        (variable) =>
+          variable.name === variableNameToSubmit &&
+          variable.type.definition === 'derived' &&
+          variable.type.value === nodeBlockType,
+      )
+
+    const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
+      updateNode({
+        editorName: editor.meta.name,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: { ...node.data, variable },
         },
-        rowId: variables.all.indexOf(variable),
-        scope: 'local',
-        associatedPou: editor.meta.name,
       })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
-        })
-        setBlockVariableValue(variable.name)
+
+    let variableToLink = variables.selected
+
+    const matchingVariable = findMatchingVariable()
+
+    if (variableToLink) {
+      if (variableToLink.name === variableNameToSubmit) return
+
+      if (matchingVariable && matchingVariable.id !== variableToLink.id) {
+        variableToLink = matchingVariable
+      } else {
+        updateNodeVariable({ name: variableNameToSubmit })
+        setWrongVariable(true)
         return
       }
-      variable = res.data as PLCVariable | undefined
     } else {
-      const res = createVariable({
-        data: {
-          id: crypto.randomUUID(),
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
+      if (matchingVariable) {
+        variableToLink = matchingVariable
+      } else if (createIfNotFound) {
+        addSnapshot(editor.meta.name)
+
+        const creationResult = createVariable({
+          data: {
+            name: variableNameToSubmit,
+            type: { definition: 'derived', value: nodeBlockType },
+            class: 'local',
+            location: '',
+            documentation: '',
+            debug: false,
           },
-          class: 'local',
-          location: '',
-          documentation: '',
-          debug: false,
-        },
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
+          scope: 'local',
+          associatedPou: editor.meta.name,
         })
+
+        if (!creationResult.ok) {
+          toast({
+            title: creationResult.title,
+            description: creationResult.message,
+            variant: 'fail',
+          })
+          return
+        }
+        variableToLink = creationResult.data as PLCVariable
+      } else {
+        updateNodeVariable({ name: variableNameToSubmit })
+        setWrongVariable(true)
         return
-      }
-      variable = res.data as PLCVariable | undefined
-      if (variable?.name !== variableNameToSubmit) {
-        setBlockVariableValue(variable?.name ?? '')
       }
     }
 
-    updateNode({
-      editorName: editor.meta.name,
-      nodeId: node.id,
-      node: {
-        ...node,
-        data: {
-          ...node.data,
-          variable: variable ?? { name: '' },
-        },
-      },
-    })
+    updateNodeVariable(variableToLink)
+    setBlockVariableValue(variableToLink.name)
     setWrongVariable(false)
+  }
+
+  const handleUpdateDivergence = () => {
+    const { rung, node, pou } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+    if (!pou || !rung || !node) return
+
+    const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
+    if (!variant) return
+
+    const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+    if (!libMatch) return
+
+    const libPou = pous.find((pou) => pou.data.name === libMatch.name)
+    if (!libPou) return
+
+    const blockVariant = node.data.variant as BlockVariant
+    const newNodeVariables = (libPou.data.variables || []).map((variable) => {
+      let newType
+      switch (variable.type.definition) {
+        case 'array':
+          newType = {
+            ...variable.type,
+            value: variable.type.value.toUpperCase(),
+            data: variable.type.data,
+          }
+          break
+        case 'base-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'base-type',
+          }
+          break
+        case 'user-data-type':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'user-data-type',
+          }
+          break
+        case 'derived':
+          newType = {
+            value: variable.type.value.toUpperCase(),
+            definition: 'derived',
+          }
+          break
+        default:
+          newType = variable.type
+      }
+      return {
+        ...variable,
+        type: newType,
+      }
+    })
+
+    if (libPou.type === 'function') {
+      const variable = getVariableRestrictionType(libPou.data.returnType)
+      const hasOut = newNodeVariables.some((v) => v.name === 'OUT')
+      if (!hasOut)
+        newNodeVariables.push({
+          name: 'OUT',
+          class: 'output',
+          type: {
+            definition: variable.definition ?? 'derived',
+            value: libPou.data.returnType.toUpperCase(),
+          },
+          location: '',
+          documentation: '',
+          debug: false,
+        })
+    }
+
+    const updatedNewNode = buildBlockNode({
+      id: newGraphicalEditorNodeID('BLOCK'),
+      position: {
+        x: node.position.x,
+        y: node.position.y,
+      },
+      variant: { ...libPou.data, type: blockVariant.type, variables: newNodeVariables },
+      executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
+    })
+    updatedNewNode.data = {
+      ...updatedNewNode.data,
+      variable: variables.selected ?? { name: '' },
+    }
+
+    const newNode = { ...updatedNewNode }
+
+    const originalNodeInputs = (node.data.variant as BlockVariant).variables.filter(
+      (variable) => variable.class === 'input' || variable.class === 'inOut',
+    )
+    const originalNodeSources = (node.data.variant as BlockVariant).variables.filter(
+      (variable) => variable.class === 'output' || variable.class === 'inOut',
+    )
+
+    const updatedInputVariables = newNode.data.variant.variables.filter(
+      (variable) => variable.class === 'input' || variable.class === 'inOut',
+    )
+    const updatedOutputVariables = newNode.data.variant.variables.filter(
+      (variable) => variable.class === 'output' || variable.class === 'inOut',
+    )
+
+    let newNodes = [...rung.nodes]
+    newNodes = newNodes.map((nodeItem) => (nodeItem.id === node.id ? newNode : nodeItem))
+
+    // Update edges to match new node and variable positions
+    // Only reconnect edges that were previously connected to the node and have a matching handle in the updated node
+    const newEdges = rung.edges
+      .map((edge) => {
+        const isSource = edge.source === node.id
+        const isTarget = edge.target === node.id
+
+        // Only update edges that were previously connected to the node
+        if (isSource) {
+          // Find the handle name in the original node's output variables
+          const outputIndex = originalNodeSources.findIndex((v) => v.name === edge.sourceHandle)
+          // Only connect if the handle exists in both original and updated node
+          if (outputIndex === -1) return null
+
+          const updatedHandle = updatedOutputVariables.find((v) => v.name === originalNodeSources[outputIndex].name)
+          if (updatedHandle)
+            return {
+              ...edge,
+              source: newNode.id,
+              sourceHandle: updatedHandle.name,
+            }
+
+          const origId = originalNodeSources[outputIndex].id
+          if (origId) {
+            const updatedHandleId = updatedOutputVariables.find((v) => v.id === origId)
+            if (updatedHandleId)
+              return {
+                ...edge,
+                source: newNode.id,
+                sourceHandle: updatedHandleId.name,
+              }
+          }
+
+          return null
+        }
+
+        if (isTarget) {
+          // Find the handle name in the original node's input variables
+          const inputIndex = originalNodeInputs.findIndex((v) => v.name === edge.targetHandle)
+          // Only connect if the handle exists in both original and updated node
+          if (inputIndex === -1) return null
+
+          const updatedHandle = updatedInputVariables.find((v) => v.name === originalNodeInputs[inputIndex].name)
+          if (updatedHandle)
+            return {
+              ...edge,
+              target: newNode.id,
+              targetHandle: updatedHandle.name,
+            }
+
+          const origIdIn = originalNodeInputs[inputIndex].id
+          if (origIdIn) {
+            const updatedHandleId = updatedInputVariables.find((v) => v.id === origIdIn)
+            if (updatedHandleId)
+              return {
+                ...edge,
+                target: newNode.id,
+                targetHandle: updatedHandleId.name,
+              }
+          }
+
+          return null
+        }
+
+        // Unchanged edge
+        return edge
+      })
+      .filter((edge) => edge !== null)
+
+    setNodes({
+      editorName: editor.meta.name,
+      nodes: newNodes,
+    })
+    setEdges({
+      editorName: editor.meta.name,
+      edges: newEdges,
+    })
   }
 
   return (
@@ -527,7 +741,27 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       className={cn('relative', {
         'opacity-40': id.startsWith('copycat'),
       })}
+      onMouseEnter={() => setHoveringBlock(true)}
+      onMouseLeave={() => setHoveringBlock(false)}
     >
+      {data.hasDivergence && hoveringBlock && (
+        <div
+          className='pointer absolute right-[-12px] top-[-12px] z-10 flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 shadow-sm'
+          onClick={handleUpdateDivergence}
+        >
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <RefreshIcon />
+              </TooltipTrigger>
+              <TooltipContent side='top' className='text-xs'>
+                Update node
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
+
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger>
@@ -557,7 +791,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           <HighlightedTextArea
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
-            handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
+            handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
             onFocus={(e) => e.target.select()}
             onBlur={() => {}}
             inputHeight={{
@@ -590,8 +824,16 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
+  let variantVariables = [...((variant as BlockVariant)?.variables ?? [])]
+  const outIndex = variantVariables.findIndex((v) => v.name === 'OUT')
+  if (outIndex > 0) {
+    const [outVar] = variantVariables.splice(outIndex, 1)
+    variantVariables = [outVar, ...variantVariables]
+  }
+  const newVariant = variant ? { ...(variant as BlockVariant), variables: variantVariables } : DEFAULT_BLOCK_TYPE
+
   const { variant: variantLib, executionControl: executionControlAux } = getBlockVariantAndExecutionControl(
-    { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) },
+    { ...(newVariant as BlockVariant) },
     executionControl,
   )
   const handlePosition = {
@@ -615,6 +857,7 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
       executionOrder: 0,
       executionControl: executionControlAux,
+      hasDivergence: false,
       draggable: true,
       selectable: true,
       deletable: true,
@@ -718,25 +961,22 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
   const variant = { ...variantLib }
 
   if (executionControl) {
-    const executionControlVariable = variant.variables.some(
-      (variable) => variable.name === 'EN' || variable.name === 'ENO',
-    )
+    const existingEN = variant.variables.find((variable) => variable.name === 'EN')
+    const existingENO = variant.variables.find((variable) => variable.name === 'ENO')
+    const otherVariables = variant.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
 
-    if (!executionControlVariable) {
-      variant.variables = [
-        {
-          name: 'EN',
-          class: 'input',
-          type: { definition: 'base-type', value: 'BOOL' },
-        },
-        {
-          name: 'ENO',
-          class: 'output',
-          type: { definition: 'base-type', value: 'BOOL' },
-        },
-        ...variant.variables,
-      ]
+    const EN = existingEN || {
+      name: 'EN',
+      class: 'input',
+      type: { definition: 'base-type', value: 'BOOL' },
     }
+    const ENO = existingENO || {
+      name: 'ENO',
+      class: 'output',
+      type: { definition: 'base-type', value: 'BOOL' },
+    }
+
+    variant.variables = [EN, ENO, ...otherVariables]
   } else {
     variant.variables = variant.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
   }

@@ -9,12 +9,13 @@ import { SelectableTypeCell } from './selectable-cell'
 const columnHelper = createColumnHelper<PLCStructureVariable>()
 
 const columns = [
-  columnHelper.accessor('id', {
+  columnHelper.display({
+    id: 'rowNumber',
     header: '#',
     size: 64,
 
     enableResizing: true,
-    cell: (props) => props.row.id,
+    cell: (props) => props.row.index,
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -46,6 +47,7 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
   const {
     editor,
     projectActions: { updateDatatype },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   return (
@@ -69,6 +71,7 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
               return variable
             }),
           })
+          handleFileAndWorkspaceSavedState(editor.meta.name)
           return { ok: true, message: 'Data updated successfully.' }
         } catch (error) {
           console.error('Failed to update data:', error)

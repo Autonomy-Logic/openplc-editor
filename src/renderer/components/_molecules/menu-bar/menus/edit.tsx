@@ -1,9 +1,7 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
-import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
 
@@ -12,16 +10,9 @@ export const EditMenu = () => {
     editor,
     workspaceActions: { setModalOpen },
     modalActions: { openModal },
+    snapshotActions: { undo, redo },
   } = useOpenPLCStore()
-  const { setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
-  useEffect(() => {
-    setSelectedTab(editor.meta.name)
-    return () => {
-      setSelectedTab('')
-    }
-  }, [editor])
-
   const findInProject = () => {
     setModalOpen('findInProject', true)
   }
@@ -31,11 +22,11 @@ export const EditMenu = () => {
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:edit.label')}</MenuPrimitive.Trigger>
       <MenuPrimitive.Portal>
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
-          <MenuPrimitive.Item className={ITEM}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => undo(editor.meta.name)}>
             <span>{i18n.t('menu:edit.submenu.undo')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Z'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => redo(editor.meta.name)}>
             <span>{i18n.t('menu:edit.submenu.redo')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Y'}</span>
           </MenuPrimitive.Item>

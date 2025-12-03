@@ -1,6 +1,6 @@
 {
   "name": "open-plc-editor",
-  "version": "4.0.4-beta",
+  "version": "4.0.6-beta",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
   "license": "MIT",
   "author": {
@@ -12,5 +12,8 @@
     "postinstall": "npm run rebuild && npm run link-modules",
     "link-modules": "node -r ts-node/register ../../scripts/link-modules.ts"
   },
-  "dependencies": {}
+  "dependencies": {
+    "serialport": "^12.0.0",
+    "socket.io-client": "^4.8.1"
+  }
 }

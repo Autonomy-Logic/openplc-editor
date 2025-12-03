@@ -39,7 +39,9 @@ const CloseButton = () => {
     if (editingState !== 'unsaved') {
       window.bridge.handleCloseOrHideWindow()
     } else {
-      openModal('save-changes-project', 'close-app')
+      openModal('save-changes-project', {
+        validationContext: 'close-app',
+      })
     }
   }
 

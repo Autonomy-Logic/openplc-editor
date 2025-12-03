@@ -1,11 +1,14 @@
 import { createSelectorHooks } from 'auto-zustand-selectors-hook'
 import { create } from 'zustand'
+import { subscribeWithSelector } from 'zustand/middleware'
 
 import type {
   ConsoleSlice,
   DeviceSlice,
   EditorSlice,
   FBDFlowSlice,
+  FileSlice,
+  HistorySlice,
   LadderFlowSlice,
   LibrarySlice,
   ModalSlice,
@@ -15,11 +18,28 @@ import type {
   TabsSlice,
   WorkspaceSlice,
 } from './slices'
+
+export type RootState = WorkspaceSlice &
+  EditorSlice &
+  TabsSlice &
+  FBDFlowSlice &
+  LadderFlowSlice &
+  SearchSlice &
+  SharedSlice &
+  LibrarySlice &
+  ProjectSlice &
+  ConsoleSlice &
+  ModalSlice &
+  FileSlice &
+  DeviceSlice &
+  HistorySlice
 import {
   createConsoleSlice,
   createDeviceSlice,
   createEditorSlice,
   createFBDFlowSlice,
+  createFileSlice,
+  createHistorySlice,
   createLadderFlowSlice,
   createLibrarySlice,
   createModalSlice,
@@ -30,32 +50,38 @@ import {
   createWorkspaceSlice,
 } from './slices'
 
-export const openPLCStoreBase = create<
-  WorkspaceSlice &
-    EditorSlice &
-    TabsSlice &
-    FBDFlowSlice &
-    LadderFlowSlice &
-    SearchSlice &
-    SharedSlice &
-    LibrarySlice &
-    ProjectSlice &
-    ConsoleSlice &
-    ModalSlice &
-    DeviceSlice
->()((...a) => ({
-  ...createWorkspaceSlice(...a),
-  ...createEditorSlice(...a),
-  ...createTabsSlice(...a),
-  ...createSearchSlice(...a),
-  ...createSharedSlice(...a),
-  ...createFBDFlowSlice(...a),
-  ...createLadderFlowSlice(...a),
-  ...createLibrarySlice(...a),
-  ...createProjectSlice(...a),
-  ...createConsoleSlice(...a),
-  ...createModalSlice(...a),
-  ...createDeviceSlice(...a),
-}))
+export const openPLCStoreBase = create(
+  subscribeWithSelector<
+    WorkspaceSlice &
+      EditorSlice &
+      TabsSlice &
+      FBDFlowSlice &
+      LadderFlowSlice &
+      SearchSlice &
+      SharedSlice &
+      LibrarySlice &
+      ProjectSlice &
+      ConsoleSlice &
+      ModalSlice &
+      FileSlice &
+      DeviceSlice &
+      HistorySlice
+  >((...a) => ({
+    ...createWorkspaceSlice(...a),
+    ...createEditorSlice(...a),
+    ...createTabsSlice(...a),
+    ...createSearchSlice(...a),
+    ...createSharedSlice(...a),
+    ...createFBDFlowSlice(...a),
+    ...createLadderFlowSlice(...a),
+    ...createLibrarySlice(...a),
+    ...createProjectSlice(...a),
+    ...createConsoleSlice(...a),
+    ...createModalSlice(...a),
+    ...createDeviceSlice(...a),
+    ...createFileSlice(...a),
+    ...createHistorySlice(...a),
+  })),
+)
 
 export const useOpenPLCStore = createSelectorHooks(openPLCStoreBase)

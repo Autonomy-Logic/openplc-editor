@@ -21,37 +21,33 @@ const GenericDataTypeTable: React.FC<GenericTableProps> = ({
   tableBodyRef,
 }) => {
   return (
-    <div className='flex w-full flex-auto flex-col gap-4 overflow-hidden'>
-      <div className='flex h-fit w-full scroll-ml-1 overflow-y-auto'>
-        <Table context={context} className='w-full'>
-          <TableBody ref={tableBodyRef}>
-            {table.getRowModel().rows.map((row, index: number) => (
-              <TableRow
-                id={`${index}`}
-                key={index}
-                className='h-8'
-                selected={selectedRow === index}
-                ref={selectedRow === index ? tableBodyRowRef : null}
-                onClick={(e) => handleRowClick(e.currentTarget)}
-                tableHasHeader={false}
+    <Table context={context} className='w-full'>
+      <TableBody ref={tableBodyRef}>
+        {table.getRowModel().rows.map((row, index: number) => (
+          <TableRow
+            id={`${index}`}
+            key={index}
+            className='h-8'
+            selected={selectedRow === index}
+            ref={selectedRow === index ? tableBodyRowRef : null}
+            onClick={(e) => handleRowClick(e.currentTarget)}
+            tableHasHeader={false}
+          >
+            {row.getVisibleCells().map((cell) => (
+              <TableCell
+                style={{ maxWidth: cell.column.columnDef.maxSize, minWidth: cell.column.columnDef.minSize }}
+                key={cell.id}
               >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell
-                    style={{ maxWidth: cell.column.columnDef.maxSize, minWidth: cell.column.columnDef.minSize }}
-                    key={cell.id}
-                  >
-                    {flexRender(cell.column.columnDef.cell, {
-                      ...cell.getContext(),
-                      editable: selectedRow === index,
-                    })}
-                  </TableCell>
-                ))}
-              </TableRow>
+                {flexRender(cell.column.columnDef.cell, {
+                  ...cell.getContext(),
+                  editable: selectedRow === index,
+                })}
+              </TableCell>
             ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   )
 }
 

@@ -51,15 +51,15 @@ export const codeSysInstanceToXml = (xml: BaseXml, configuration: PLCConfigurati
       },
     }
 
-    if (!xml.project.instances.configurations.configuration.resource.globalVars) {
-      xml.project.instances.configurations.configuration.resource.globalVars = {
+    if (!xml.project.instances.configurations.configuration.globalVars) {
+      xml.project.instances.configurations.configuration.globalVars = {
         variable: [],
       }
     }
-    if (!xml.project.instances.configurations.configuration.resource.globalVars.variable) {
-      xml.project.instances.configurations.configuration.resource.globalVars.variable = []
+    if (!xml.project.instances.configurations.configuration.globalVars.variable) {
+      xml.project.instances.configurations.configuration.globalVars.variable = []
     }
-    xml.project.instances.configurations.configuration.resource.globalVars.variable.push(v)
+    xml.project.instances.configurations.configuration.globalVars.variable.push(v)
   })
 
   return xml

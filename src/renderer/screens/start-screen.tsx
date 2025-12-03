@@ -43,12 +43,19 @@ const StartScreen = () => {
   }, [])
 
   useEffect(() => {
-    const getAvailableDeviceOptions = async () => {
+    let isMounted = true
+
+    const getAvailableCommunicationPortsOptions = async () => {
       const ports = await window.bridge.getAvailableCommunicationPorts()
-      const boards = await window.bridge.getAvailableBoards()
-      setAvailableOptions({ availableBoards: boards, availableCommunicationPorts: ports })
+      if (isMounted) {
+        setAvailableOptions({ availableCommunicationPorts: ports })
+      }
     }
-    void getAvailableDeviceOptions()
+    void getAvailableCommunicationPortsOptions()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   return (

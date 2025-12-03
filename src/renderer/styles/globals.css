@@ -38,6 +38,51 @@
     --oplc-title-bar-height: 2rem;
     --fallback-darwin-title-bar-height: 1.75rem;
     --radix-popper-transform-origin: 100% 0px;
+    /* Viewport height variable for proper mobile/tablet support */
+    --app-vh: 100vh;
+  }
+
+  /* Use small viewport height (svh) for stable sizing on mobile/tablet */
+  @supports (height: 100svh) {
+    :root {
+      --app-vh: 100svh;
+    }
+  }
+
+  /* Fallback to dynamic viewport height (dvh) if svh not supported */
+  @supports (height: 100dvh) and (not (height: 100svh)) {
+    :root {
+      --app-vh: 100dvh;
+    }
+  }
+
+  /* Prevent scrolling on tablets and mobile devices */
+  html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Prevent selection of UI elements except for user-typed text */
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Allow selection only in text input areas */
+  input,
+  textarea,
+  [contenteditable='true'] {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
   }
 
   /* This can be useful to allocate the main container */
@@ -124,4 +169,24 @@
 
 .spin-refresh {
   animation: spin-refresh 0.5s linear;
+}
+
+/* Monaco Editor z-index constraints to prevent sticky scroll from overlapping dialogs */
+/* Target only Monaco's overlay widgets without affecting layout containers */
+.oplc-monaco-wrapper .monaco-editor .sticky-widget {
+  z-index: 1 !important;
+}
+
+/* Ensure Monaco's other overlay widgets stay below dialogs but above editor content */
+.oplc-monaco-wrapper .monaco-editor .suggest-widget,
+.oplc-monaco-wrapper .monaco-editor .monaco-hover,
+.oplc-monaco-wrapper .monaco-editor .parameter-hints-widget {
+  z-index: 10 !important;
+}
+
+/* Ensure Radix popper/select content sits well above Monaco */
+[data-radix-popper-content-wrapper],
+[data-radix-select-content],
+[role='listbox'] {
+  z-index: 1000 !important;
 }

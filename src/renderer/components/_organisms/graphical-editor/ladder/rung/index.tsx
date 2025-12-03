@@ -5,41 +5,38 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung'
+import { ladderSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
-import { useEffect, useState } from 'react'
 
 type RungProps = {
   className?: string
   index: number
   id: string
   rung: RungLadderState
+  nodeDivergences?: string[]
+  isDebuggerActive?: boolean
 }
 
-export const Rung = ({ className, index, id, rung }: RungProps) => {
+export const Rung = ({ className, index, id, rung, nodeDivergences, isDebuggerActive = false }: RungProps) => {
   const {
     ladderFlows,
-    editorActions: { updateModelLadder, getIsRungOpen },
+    editorActions: { getIsRungOpen },
   } = useOpenPLCStore()
+
+  const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id })
 
-  const [isOpen, setIsOpen] = useState<boolean>(true)
-  const flow = ladderFlows.find((flow) => flow.rungs.some((r) => r.id === rung.id)) || { rungs: [] }
+  const flow = ladderFlows.find((flow) => {
+    return flow.rungs.some((r) => r.id === rung.id)
+  }) || { rungs: [] }
 
   const handleOpenSection = () => {
-    setIsOpen(!isOpen)
+    const isOpen = getIsRungOpen({ rungId: rung.id })
     updateModelLadder({ openRung: { rungId: rung.id, open: !isOpen } })
   }
-
-  useEffect(() => {
-    updateModelLadder({ openRung: { rungId: rung.id, open: isOpen } })
-  }, [])
-
-  useEffect(() => {
-    setIsOpen(getIsRungOpen({ rungId: rung.id }))
-  }, [rung])
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -60,12 +57,12 @@ export const Rung = ({ className, index, id, rung }: RungProps) => {
     >
       <RungHeader
         onClick={handleOpenSection}
-        isOpen={isOpen}
+        isOpen={getIsRungOpen({ rungId: rung.id })}
         rung={rung}
-        draggableHandleProps={listeners}
+        draggableHandleProps={isDebuggerActive ? undefined : listeners}
         className={cn('border border-transparent', {
           'rounded-t-lg': index === 0,
-          'rounded-b-lg': index === flow.rungs.length - 1 && !isOpen,
+          'rounded-b-lg': index === flow.rungs.length - 1 && !getIsRungOpen({ rungId: rung.id }),
         })}
       />
       {getIsRungOpen({ rungId: rung.id }) && (
@@ -74,6 +71,8 @@ export const Rung = ({ className, index, id, rung }: RungProps) => {
           className={cn('border border-transparent', {
             'rounded-b-lg': index === flow.rungs.length - 1,
           })}
+          nodeDivergences={nodeDivergences}
+          isDebuggerActive={isDebuggerActive}
         />
       )}
     </div>

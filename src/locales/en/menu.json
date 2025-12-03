@@ -2,8 +2,8 @@
   "file": {
     "label": "File",
     "submenu": {
-      "new": "New",
-      "open": "Open",
+      "newProject": "New Project",
+      "openProject": "Open Project",
       "examples": {
         "label": "Tutorials and examples",
         "submenu": {
@@ -16,12 +16,13 @@
           "trafficLightFBD": "7: Traffic_Light_FBD"
         }
       },
-      "save": "Save",
+      "save": "Save File",
+      "saveProject": "Save Project",
       "saveAs": "Save As",
       "closeTab": "Close Tab",
       "closeProject": "Close Project",
       "exportToPLCOpenXml": "Export to PLCOpen XML",
-      "exportToCodeSys": "Export to CodeSys",
+      "exportToCodesysXml": "Export to CODESYS XML",
       "pageSetup": "Page Setup",
       "preview": "Preview",
       "print": "Print",

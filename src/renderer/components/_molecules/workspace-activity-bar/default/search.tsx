@@ -31,9 +31,10 @@ export const SearchButton = () => {
     })
   }, [])
 
+  // Fixed: Use ActivityBarButton with ModalTrigger asChild to avoid nested button elements
   return (
     <Modal onOpenChange={handleOpenChange} open={isFindInProjectModalOpen}>
-      <ModalTrigger>
+      <ModalTrigger asChild>
         <ActivityBarButton aria-label='Search'>
           <SearchIcon />
         </ActivityBarButton>

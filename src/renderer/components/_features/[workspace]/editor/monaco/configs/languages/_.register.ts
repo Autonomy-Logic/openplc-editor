@@ -26,7 +26,7 @@ export function registerLanguage({ def, conf, language }: ILangImp): void {
   const languageId = def.id
   if (!monaco.languages.getLanguages().some((lang) => lang.id === languageId)) {
     monaco.languages.register(def)
-    monaco.languages.setLanguageConfiguration(languageId, conf)
-    monaco.languages.setMonarchTokensProvider(languageId, language)
   }
+  monaco.languages.setLanguageConfiguration(languageId, conf)
+  monaco.languages.setMonarchTokensProvider(languageId, language)
 }

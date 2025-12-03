@@ -15,11 +15,11 @@ type ParallelBuilderProps = BuilderBasicProps & {
   position: 'left' | 'right' | 'bottom'
 }
 
-export const DEFAULT_PLACEHOLDER_WIDTH = 10
-export const DEFAULT_PLACEHOLDER_HEIGHT = 10
-export const DEFAULT_PLACEHOLDER_GAP = 15
+export const DEFAULT_PLACEHOLDER_WIDTH: number = 10
+export const DEFAULT_PLACEHOLDER_HEIGHT: number = 10
+export const DEFAULT_PLACEHOLDER_GAP: number = 15
 
-export const DEFAULT_PLACEHOLDER_CONNECTOR_Y = DEFAULT_PLACEHOLDER_HEIGHT / 2
+export const DEFAULT_PLACEHOLDER_CONNECTOR_Y: number = DEFAULT_PLACEHOLDER_HEIGHT / 2
 
 export const Placeholder = ({ selected, data }: PlaceholderProps) => {
   return (

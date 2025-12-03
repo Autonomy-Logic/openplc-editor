@@ -15,13 +15,14 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
+import { BlockNode, BlockNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/coil'
 import { ContactNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/contact'
 import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
 import { CreateRung } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/graphical-editor/ladder/rung'
-import { useOpenPLCStore } from '@root/renderer/store'
+import { ladderSelectors } from '@root/renderer/hooks'
+import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState, zodLadderFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
@@ -38,18 +39,28 @@ export default function LadderEditor() {
     editor,
     ladderFlowActions,
     searchNodePosition,
-    projectActions: { updatePou },
-    workspaceActions: { setEditingState },
-
     modals,
+    project: {
+      data: { pous },
+    },
+    projectActions: { updatePou },
+    editorActions: { saveEditorViewState },
     modalActions: { closeModal },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
+    snapshotActions: { addSnapshot },
+    libraries: { user: userLibraries },
+    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
+
+  const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
-  const flowUpdated = flow?.updated
+  const flowUpdated = flow?.updated || false
+
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
+  const nodeDivergences = getLibraryDivergences()
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -79,32 +90,75 @@ export default function LadderEditor() {
       },
     })
 
-    /**
-     * TODO: Verify if this is method is declared
-     */
     ladderFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
-    setEditingState('unsaved')
+
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }, [flowUpdated])
+
+  /**
+   * Editor state management for scroll position
+   */
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !scrollableRef.current) return
+        const scrollTop = scrollableRef.current.scrollTop
+        saveEditorViewState({
+          prevEditorName,
+          scrollPosition: { top: scrollTop, left: 0 },
+        })
+      },
+    )
+    return () => unsub()
+  }, [])
+  useEffect(() => {
+    const scrollable = scrollableRef.current
+    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
+
+    if (scrollable && scrollData) {
+      scrollable.scrollTop = scrollData.top
+      requestAnimationFrame(() => {
+        scrollable.scrollTop = scrollData.top
+      })
+    }
+  }, [scrollableRef.current, editor.meta.name])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (isDebuggerVisible) return
+
     const { active } = event
     setActiveId(active.id)
     setActiveItem(rungs.find((rung) => rung.id === active.id) || null)
   }
 
   const handleAddNewRung = () => {
+    if (isDebuggerVisible) return
+
+    addSnapshot(editor.meta.name)
+
     const defaultViewport: [number, number] = [300, 100]
+
+    const rungIdToBeAdded = `rung_${editor.meta.name}_${uuidv4()}`
+
     ladderFlowActions.startLadderRung({
       editorName: editor.meta.name,
-      rungId: `rung_${editor.meta.name}_${uuidv4()}`,
+      rungId: rungIdToBeAdded,
       defaultBounds: defaultViewport,
       reactFlowViewport: defaultViewport,
     })
+    updateModelLadder({ openRung: { rungId: rungIdToBeAdded, open: true } })
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (isDebuggerVisible) {
+      setActiveId(null)
+      setActiveItem(null)
+      return
+    }
+
     const { active, over } = event
 
     setActiveId(null)
@@ -142,6 +196,7 @@ export default function LadderEditor() {
     auxRungs.splice(destinationIndex, 0, removed)
 
     try {
+      addSnapshot(editor.meta.name)
       ladderFlowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)
@@ -157,6 +212,93 @@ export default function LadderEditor() {
    */
   const handleModalClose = () => {
     closeModal()
+  }
+
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !scrollableRef.current) return
+
+        const scrollTop = scrollableRef.current.scrollTop
+
+        saveEditorViewState({
+          prevEditorName,
+          scrollPosition: { top: scrollTop, left: 0 },
+        })
+      },
+    )
+
+    return () => unsub()
+  }, [])
+
+  useEffect(() => {
+    const scrollable = scrollableRef.current
+    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
+
+    if (scrollable && scrollData) {
+      scrollable.scrollTop = scrollData.top
+      requestAnimationFrame(() => {
+        scrollable.scrollTop = scrollData.top
+      })
+    }
+  }, [scrollableRef.current, editor.meta.name])
+
+  function getLibraryDivergences() {
+    if (!flow) return []
+
+    const divergences = []
+
+    for (const rung of flow.rungs) {
+      for (const node of rung.nodes) {
+        const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
+        if (!variant) continue
+
+        const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+        if (!libMatch) continue
+
+        const originalPou = pous.find((pou) => pou.data.name === libMatch.name)
+        if (!originalPou) continue
+
+        const originalVariables = originalPou.data?.variables ?? []
+        const originalInOut = originalVariables?.filter((variable) =>
+          ['input', 'output', 'inOut'].includes(variable.class || ''),
+        )
+
+        const currentVariables = variant.variables.filter(
+          (variable) =>
+            ['input', 'output', 'inOut'].includes(variable.class || '') &&
+            !['OUT', 'EN', 'ENO'].includes(variable.name),
+        )
+
+        const formatVariable = (variable: {
+          name: string
+          class?: string
+          type: { definition: string; value: string }
+        }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
+
+        if (originalPou.type === 'function') {
+          const outVariable = variant.variables.find((v) => v.name === 'OUT')
+          const outType = outVariable?.type?.value?.toUpperCase()
+          const returnType = originalPou.data.returnType?.toUpperCase()
+          if (!outType || !returnType || outType !== returnType) {
+            divergences.push(`${rung.id}:${node.id}`)
+            continue
+          }
+        }
+
+        const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
+        const hasDivergence =
+          originalInOut?.length !== currentVariables.length ||
+          !originalInOut?.every((variable) => currentMap.has(formatVariable(variable)))
+
+        if (hasDivergence) {
+          divergences.push(`${rung.id}:${node.id}`)
+        }
+      }
+    }
+
+    return divergences
   }
 
   return (
@@ -178,6 +320,8 @@ export default function LadderEditor() {
                   className={cn({
                     'opacity-35': activeId === rung.id,
                   })}
+                  nodeDivergences={nodeDivergences}
+                  isDebuggerActive={isDebuggerVisible}
                 />
               ))}
             </SortableContext>
