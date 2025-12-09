@@ -217,9 +217,6 @@ const WorkspaceScreen = () => {
 
           if (index !== undefined) {
             const varName = `${variableNamePrefix}.${fbVar.name}`
-            console.log(
-              `[Polling Setup] Adding nested base-type variable: ${varName}, debugPath: ${debugPath}, index: ${index}`,
-            )
             variableInfoMap.set(index, {
               pouName,
               variable: {
@@ -285,7 +282,6 @@ const WorkspaceScreen = () => {
           }
 
           if (nestedFBVariables) {
-            console.log(`[Polling Setup] Processing nested FB: ${nestedVarName} (type: ${nestedFBTypeName})`)
             processNestedVariables(nestedFBVariables, pouName, nestedDebugPath, nestedVarName)
           }
         } else if (fbVar.type.definition === 'user-data-type') {
@@ -330,9 +326,6 @@ const WorkspaceScreen = () => {
             }
 
             if (nestedFBVariables) {
-              console.log(
-                `[Polling Setup] Processing nested FB (user-data-type): ${nestedVarName} (type: ${structTypeName})`,
-              )
               processNestedVariables(nestedFBVariables, pouName, nestedDebugPath, nestedVarName)
             }
           } else {
@@ -349,7 +342,6 @@ const WorkspaceScreen = () => {
                 class: 'local' as const,
                 type: { definition: field.type.definition, value: field.type.value },
               }))
-              console.log(`[Polling Setup] Processing nested struct: ${nestedVarName} (type: ${structTypeName})`)
               processNestedVariables(structVariables, pouName, nestedDebugPath, nestedVarName)
             }
           }
@@ -632,7 +624,6 @@ const WorkspaceScreen = () => {
               // Check if this nested variable should be polled based on expansion state
               if (shouldPollNestedVariable(varInfo.variable.name, varInfo.pouName, graphListRef.current)) {
                 debugVariableKeys.add(childKey)
-                console.log(`[Polling] Adding nested variable to poll: ${childKey}`)
               }
             }
           }
@@ -858,12 +849,9 @@ const WorkspaceScreen = () => {
               const { value, bytesRead } = parseVariableValue(responseBuffer, bufferOffset, variable)
               newValues.set(compositeKey, value)
               bufferOffset += bytesRead
-              // Log polled variable info for debugging
-              console.log(`[Polling] ${compositeKey}, index: ${index}, value: ${value}`)
             } catch {
               newValues.set(compositeKey, 'ERR')
               bufferOffset += getVariableSize(variable)
-              console.log(`[Polling] ${compositeKey}, index: ${index}, value: ERR (parse error)`)
             }
 
             if (index === result.lastIndex) {
