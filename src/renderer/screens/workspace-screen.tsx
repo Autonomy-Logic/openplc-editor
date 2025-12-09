@@ -434,9 +434,6 @@ const WorkspaceScreen = () => {
 
               if (index !== undefined) {
                 const blockVarName = `${fbInstance.name}.${fbVar.name}`
-                console.log(
-                  `[Polling Setup] Adding first-level FB variable: ${blockVarName}, debugPath: ${debugPath}, index: ${index}`,
-                )
                 variableInfoMap.set(index, {
                   pouName: pou.data.name,
                   variable: {
@@ -481,9 +478,6 @@ const WorkspaceScreen = () => {
             if (nestedVariables.length > 0) {
               const debugPathPrefix = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}`
               const variableNamePrefix = fbInstance.name
-              console.log(
-                `[Polling Setup] Processing nested variables for FB: ${fbInstance.name} (type: ${fbTypeName})`,
-              )
               processNestedVariables(nestedVariables, pou.data.name, debugPathPrefix, variableNamePrefix)
             }
           }
