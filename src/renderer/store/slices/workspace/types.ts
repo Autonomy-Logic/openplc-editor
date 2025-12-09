@@ -28,6 +28,7 @@ const workspaceStateSchema = z.object({
     debugVariableValues: z.custom<Map<string, string>>((val) => val instanceof Map),
     debugForcedVariables: z.custom<Map<string, boolean>>((val) => val instanceof Map),
     debugVariableTree: z.custom<Map<string, DebugTreeNode>>((val) => val instanceof Map),
+    debugExpandedNodes: z.custom<Map<string, boolean>>((val) => val instanceof Map),
     isPlcLogsVisible: z.boolean(),
     plcLogs: z.string(),
     close: z.object({
@@ -77,6 +78,8 @@ const workspaceActionsSchema = z.object({
   setDebugVariableValues: z.function().args(z.map(z.string(), z.string())).returns(z.void()),
   setDebugForcedVariables: z.function().args(z.map(z.string(), z.boolean())).returns(z.void()),
   setDebugVariableTree: z.function().args(z.map(z.string(), z.custom<DebugTreeNode>())).returns(z.void()),
+  setDebugExpandedNodes: z.function().args(z.map(z.string(), z.boolean())).returns(z.void()),
+  toggleDebugExpandedNode: z.function().args(z.string()).returns(z.void()),
   setPlcLogsVisible: z.function().args(z.boolean()).returns(z.void()),
   setPlcLogs: z.function().args(z.string()).returns(z.void()),
   toggleDiscardChanges: z.function().returns(z.void()),
