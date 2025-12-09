@@ -1,6 +1,10 @@
 import { createSelectorHooks } from 'auto-zustand-selectors-hook'
+import { enableMapSet } from 'immer'
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
+
+// Enable Immer's MapSet plugin for Map/Set support in store state
+enableMapSet()
 
 import type {
   ConsoleSlice,

@@ -23,6 +23,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugVariableValues: new Map(),
     debugForcedVariables: new Map(),
     debugVariableTree: new Map(),
+    debugExpandedNodes: new Map(),
     isPlcLogsVisible: false,
     plcLogs: '',
     close: {
@@ -178,6 +179,21 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugVariableTree = tree
+        }),
+      )
+    },
+    setDebugExpandedNodes: (expandedNodes: Map<string, boolean>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugExpandedNodes = expandedNodes
+        }),
+      )
+    },
+    toggleDebugExpandedNode: (compositeKey: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const currentValue = workspace.debugExpandedNodes.get(compositeKey) ?? false
+          workspace.debugExpandedNodes.set(compositeKey, !currentValue)
         }),
       )
     },

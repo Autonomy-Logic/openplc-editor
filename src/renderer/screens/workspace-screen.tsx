@@ -48,9 +48,10 @@ const WorkspaceScreen = () => {
       debugVariableTree,
       debugVariableIndexes,
       debugForcedVariables,
+      debugExpandedNodes,
     },
     editor,
-    workspaceActions: { toggleCollapse, setDebugForcedVariables },
+    workspaceActions: { toggleCollapse, setDebugForcedVariables, toggleDebugExpandedNode },
     deviceActions: { setAvailableOptions },
     searchResults,
     project: {
@@ -123,6 +124,7 @@ const WorkspaceScreen = () => {
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const isMountedRef = useRef(true)
+  const graphListRef = useRef<string[]>([])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -130,6 +132,11 @@ const WorkspaceScreen = () => {
       isMountedRef.current = false
     }
   }, [])
+
+  // Keep graphListRef in sync with graphList state for use in polling
+  useEffect(() => {
+    graphListRef.current = graphList
+  }, [graphList])
 
   type VariableInfo = {
     pouName: string
@@ -194,6 +201,153 @@ const WorkspaceScreen = () => {
     }
 
     const variableInfoMap = new Map<number, VariableInfo>()
+
+    // Helper function to recursively process nested FB and struct variables
+    const processNestedVariables = (
+      fbVariables: Array<{ name: string; class: string; type: { definition: string; value: string } }>,
+      pouName: string,
+      debugPathPrefix: string,
+      variableNamePrefix: string,
+    ) => {
+      fbVariables.forEach((fbVar) => {
+        if (fbVar.type.definition === 'base-type') {
+          // Base type variable - add to variableInfoMap
+          const debugPath = `${debugPathPrefix}.${fbVar.name.toUpperCase()}`
+          const index = debugVariableIndexes.get(debugPath)
+
+          if (index !== undefined) {
+            const varName = `${variableNamePrefix}.${fbVar.name}`
+            variableInfoMap.set(index, {
+              pouName,
+              variable: {
+                name: varName,
+                type: {
+                  definition: 'base-type',
+                  value: fbVar.type.value.toLowerCase() as
+                    | 'bool'
+                    | 'int'
+                    | 'real'
+                    | 'time'
+                    | 'string'
+                    | 'date'
+                    | 'sint'
+                    | 'dint'
+                    | 'lint'
+                    | 'usint'
+                    | 'uint'
+                    | 'udint'
+                    | 'ulint'
+                    | 'lreal'
+                    | 'tod'
+                    | 'dt'
+                    | 'byte'
+                    | 'word'
+                    | 'dword'
+                    | 'lword',
+                },
+                class: 'local',
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+            })
+          }
+        } else if (fbVar.type.definition === 'derived') {
+          // Nested function block - recursively process
+          const nestedFBTypeName = fbVar.type.value.toUpperCase()
+          const nestedDebugPath = `${debugPathPrefix}.${fbVar.name.toUpperCase()}`
+          const nestedVarName = `${variableNamePrefix}.${fbVar.name}`
+
+          // Look up the nested FB definition
+          let nestedFBVariables:
+            | Array<{ name: string; class: string; type: { definition: string; value: string } }>
+            | undefined
+
+          const standardFB = StandardFunctionBlocks.pous.find(
+            (fb: { name: string }) => fb.name.toUpperCase() === nestedFBTypeName,
+          )
+          if (standardFB) {
+            nestedFBVariables = standardFB.variables
+          } else {
+            const customFB = project.data.pous.find(
+              (p) => p.type === 'function-block' && p.data.name.toUpperCase() === nestedFBTypeName,
+            )
+            if (customFB && customFB.type === 'function-block') {
+              nestedFBVariables = customFB.data.variables as Array<{
+                name: string
+                class: string
+                type: { definition: string; value: string }
+              }>
+            }
+          }
+
+          if (nestedFBVariables) {
+            processNestedVariables(nestedFBVariables, pouName, nestedDebugPath, nestedVarName)
+          }
+        } else if (fbVar.type.definition === 'user-data-type') {
+          // Nested struct - recursively process
+          const structTypeName = fbVar.type.value
+          const nestedDebugPath = `${debugPathPrefix}.${fbVar.name.toUpperCase()}`
+          const nestedVarName = `${variableNamePrefix}.${fbVar.name}`
+
+          // Check if this is actually a function block (some FBs are defined as user-data-type)
+          const typeNameUpper = structTypeName.toUpperCase()
+          const isStandardFB = StandardFunctionBlocks.pous.some(
+            (pou: { name: string; type: string }) =>
+              pou.name.toUpperCase() === typeNameUpper &&
+              pou.type.toLowerCase().replace(/[-_]/g, '') === 'functionblock',
+          )
+          const isCustomFB = project.data.pous.some(
+            (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === typeNameUpper,
+          )
+
+          if (isStandardFB || isCustomFB) {
+            // It's actually a function block
+            let nestedFBVariables:
+              | Array<{ name: string; class: string; type: { definition: string; value: string } }>
+              | undefined
+
+            const standardFB = StandardFunctionBlocks.pous.find(
+              (fb: { name: string }) => fb.name.toUpperCase() === typeNameUpper,
+            )
+            if (standardFB) {
+              nestedFBVariables = standardFB.variables
+            } else {
+              const customFB = project.data.pous.find(
+                (p) => p.type === 'function-block' && p.data.name.toUpperCase() === typeNameUpper,
+              )
+              if (customFB && customFB.type === 'function-block') {
+                nestedFBVariables = customFB.data.variables as Array<{
+                  name: string
+                  class: string
+                  type: { definition: string; value: string }
+                }>
+              }
+            }
+
+            if (nestedFBVariables) {
+              processNestedVariables(nestedFBVariables, pouName, nestedDebugPath, nestedVarName)
+            }
+          } else {
+            // It's a struct - look up the struct definition
+            const structType = project.data.dataTypes.find((dt) => dt.name.toUpperCase() === typeNameUpper)
+
+            if (structType && structType.derivation === 'structure') {
+              const structVariables: Array<{
+                name: string
+                class: string
+                type: { definition: string; value: string }
+              }> = structType.variable.map((field) => ({
+                name: field.name,
+                class: 'local' as const,
+                type: { definition: field.type.definition, value: field.type.value },
+              }))
+              processNestedVariables(structVariables, pouName, nestedDebugPath, nestedVarName)
+            }
+          }
+        }
+      })
+    }
 
     project.data.pous.forEach((pou) => {
       if (pou.type !== 'program') return
@@ -316,6 +470,16 @@ const WorkspaceScreen = () => {
                 })
               }
             })
+
+            // Process nested FB and struct variables recursively
+            const nestedVariables = fbVariables.filter(
+              (v) => v.type.definition === 'derived' || v.type.definition === 'user-data-type',
+            )
+            if (nestedVariables.length > 0) {
+              const debugPathPrefix = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}`
+              const variableNamePrefix = fbInstance.name
+              processNestedVariables(nestedVariables, pou.data.name, debugPathPrefix, variableNamePrefix)
+            }
           }
         })
 
@@ -410,12 +574,51 @@ const WorkspaceScreen = () => {
             })
         })
 
+        // Get the current expansion state from the store
+        const {
+          workspace: { debugExpandedNodes },
+        } = useOpenPLCStore.getState()
+
+        // Helper function to check if a nested variable should be polled based on expansion state
+        // A nested variable should be polled if:
+        // 1. Its immediate parent is expanded, OR
+        // 2. It's in the graph list (for real-time plotting)
+        const shouldPollNestedVariable = (varName: string, pouName: string, currentGraphList: string[]): boolean => {
+          const parts = varName.split('.')
+          if (parts.length <= 1) return true // Not a nested variable
+
+          // Check if this variable is in the graph list
+          const compositeKey = `${pouName}:${varName}`
+          if (currentGraphList.includes(compositeKey)) {
+            return true
+          }
+
+          // Check if all parent levels are expanded
+          for (let i = 1; i < parts.length; i++) {
+            const parentPath = parts.slice(0, i).join('.')
+            const parentKey = `${pouName}:${parentPath}`
+            const isParentExpanded = debugExpandedNodes.get(parentKey) ?? false
+            if (!isParentExpanded) {
+              return false
+            }
+          }
+          return true
+        }
+
+        // Add nested variables to polling based on expansion state
         Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
           if (varInfo.variable.name.includes('.')) {
-            const parentKey = `${varInfo.pouName}:${varInfo.variable.name.split('.')[0]}`
-            if (debugVariableKeys.has(parentKey)) {
+            const rootVarName = varInfo.variable.name.split('.')[0]
+            const rootKey = `${varInfo.pouName}:${rootVarName}`
+
+            // Only consider nested variables if the root variable is being watched
+            if (debugVariableKeys.has(rootKey)) {
               const childKey = `${varInfo.pouName}:${varInfo.variable.name}`
-              debugVariableKeys.add(childKey)
+
+              // Check if this nested variable should be polled based on expansion state
+              if (shouldPollNestedVariable(varInfo.variable.name, varInfo.pouName, graphListRef.current)) {
+                debugVariableKeys.add(childKey)
+              }
             }
           }
         })
@@ -1042,6 +1245,8 @@ const WorkspaceScreen = () => {
                               debugVariableValues={debugVariableValues}
                               debugVariableIndexes={debugVariableIndexes}
                               debugForcedVariables={debugForcedVariables}
+                              debugExpandedNodes={debugExpandedNodes}
+                              onToggleExpandedNode={toggleDebugExpandedNode}
                               isDebuggerVisible={isDebuggerVisible}
                               onForceVariable={handleForceVariable}
                             />

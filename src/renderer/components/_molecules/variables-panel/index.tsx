@@ -32,6 +32,8 @@ type VariablePanelProps = {
   debugVariableValues?: Map<string, string>
   debugVariableIndexes?: Map<string, number>
   debugForcedVariables?: Map<string, boolean>
+  debugExpandedNodes?: Map<string, boolean>
+  onToggleExpandedNode?: (compositeKey: string) => void
   isDebuggerVisible?: boolean
   onForceVariable?: (
     compositeKey: string,
@@ -50,10 +52,12 @@ const VariablesPanel = ({
   debugVariableValues,
   debugVariableIndexes,
   debugForcedVariables,
+  debugExpandedNodes,
+  onToggleExpandedNode,
   isDebuggerVisible,
   onForceVariable,
 }: VariablePanelProps) => {
-  const [expandedNodes, setExpandedNodes] = useState<Map<string, boolean>>(new Map())
+  const expandedNodes = debugExpandedNodes ?? new Map<string, boolean>()
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     compositeKey: string
@@ -79,11 +83,9 @@ const VariablesPanel = ({
   }
 
   const handleToggleExpand = (compositeKey: string) => {
-    setExpandedNodes((prev) => {
-      const newMap = new Map(prev)
-      newMap.set(compositeKey, !newMap.get(compositeKey))
-      return newMap
-    })
+    if (onToggleExpandedNode) {
+      onToggleExpandedNode(compositeKey)
+    }
   }
 
   const updateNodeExpansion = (node: DebugTreeNode): DebugTreeNode => {

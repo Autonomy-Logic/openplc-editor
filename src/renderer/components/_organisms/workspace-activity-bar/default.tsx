@@ -918,8 +918,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   if (node.isComplex) {
                     complexCount++
                   }
-                } catch (error) {
-                  console.error(`[Debug Tree Builder] Failed to build tree for ${v.name}:`, error)
+                } catch {
+                  // Tree building failed for this variable
                 }
               })
             })
@@ -928,7 +928,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
             if (process.env.NODE_ENV === 'development') {
               ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = trees
-              console.log(`[Debug Tree Builder] Built ${trees.length} debug trees (${complexCount} complex variables)`)
             }
 
             consoleActions.addLog({
@@ -936,12 +935,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               level: 'info',
               message: `Debug tree builder: Built ${trees.length} trees (${complexCount} complex).`,
             })
-          } catch (error) {
-            console.error('[Debug Tree Builder] Error building trees:', error)
+          } catch {
             consoleActions.addLog({
               id: crypto.randomUUID(),
               level: 'warning',
-              message: `Debug tree builder encountered errors. Check DevTools console.`,
+              message: `Debug tree builder encountered errors.`,
             })
           }
 
