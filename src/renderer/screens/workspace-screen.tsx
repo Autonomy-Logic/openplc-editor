@@ -820,6 +820,22 @@ const WorkspaceScreen = () => {
 
     variableInfoMapRef.current = variableInfoMap
 
+    // Extend debugVariableIndexes with composite keys from variableInfoMap
+    // This enables force variable functionality for FB POUs by ensuring all
+    // composite keys (like main:IRRIGATION_MAIN_CONTROLLER0.SENSOR_INPUT) are
+    // mapped to their debug indexes. Without this, force handlers can't find
+    // the index for FB variables because debugVariableIndexes only contains
+    // program-level keys (like main:COUNTER) from the initial parsing.
+    const { workspaceActions: wsActions } = useOpenPLCStore.getState()
+    const updatedIndexes = new Map(debugVariableIndexes)
+    variableInfoMap.forEach((varInfo, index) => {
+      const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+      if (!updatedIndexes.has(compositeKey)) {
+        updatedIndexes.set(compositeKey, index)
+      }
+    })
+    wsActions.setDebugVariableIndexes(updatedIndexes)
+
     // Targeted logging for ENO variables to debug FB POU ENO handling
     // Log ENO variables for nested FBs and function temps
     for (const [index, info] of variableInfoMap.entries()) {
