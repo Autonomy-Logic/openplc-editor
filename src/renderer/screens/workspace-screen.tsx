@@ -591,30 +591,98 @@ const WorkspaceScreen = () => {
       }
     })
 
-    // Process function outputs for FB POUs
-    // Functions inside FB POUs have debug paths like: RES0__INSTANCE0.FB_INSTANCE0._TMP_FUNC_NAME123_OUTPUT
-    project.data.pous.forEach((pou) => {
-      if (pou.type !== 'function-block') return
-      if (pou.data.body.language !== 'ld') return
+    // Central FB instance visitor that handles ALL variable types at arbitrary nesting depth
+    // This is the unified entry point for processing FB instances, handling:
+    // 1. Base-type variables of the FB
+    // 2. Nested FB/struct variables (via processNestedVariables)
+    // 3. Function temps in ladder (for functions with execution control)
+    // 4. Recursive processing of nested FB instances
+    const visitFbInstance = (
+      fbPou: (typeof project.data.pous)[0],
+      debugPathPrefix: string,
+      variablePathPrefix: string,
+      programPouName: string,
+      _blockExecutionControlMap: Map<string, boolean>,
+    ) => {
+      if (fbPou.type !== 'function-block') return
 
-      const fbLadderFlow = ladderFlows.find((flow) => flow.name === pou.data.name)
-      if (!fbLadderFlow) return
+      const fbVariables = fbPou.data.variables as Array<{
+        name: string
+        class: string
+        type: { definition: string; value: string }
+      }>
 
-      // Find all instances of this FB in program POUs
-      const instances = project.data.configuration.resource.instances
-      project.data.pous.forEach((programPou) => {
-        if (programPou.type !== 'program') return
+      // 1. Process base-type variables of this FB
+      const baseTypeVars = fbVariables.filter((v) => v.type.definition === 'base-type')
+      baseTypeVars.forEach((fbVar) => {
+        const debugPath = `${debugPathPrefix}.${fbVar.name.toUpperCase()}`
+        const index = debugVariableIndexes.get(debugPath)
 
-        const programInstance = instances.find((inst) => inst.program === programPou.data.name)
-        if (!programInstance) return
+        if (index !== undefined) {
+          const varName = `${variablePathPrefix}.${fbVar.name}`
+          variableInfoMap.set(index, {
+            pouName: programPouName,
+            variable: {
+              name: varName,
+              type: {
+                definition: 'base-type',
+                value: fbVar.type.value.toLowerCase() as
+                  | 'bool'
+                  | 'int'
+                  | 'real'
+                  | 'time'
+                  | 'string'
+                  | 'date'
+                  | 'sint'
+                  | 'dint'
+                  | 'lint'
+                  | 'usint'
+                  | 'uint'
+                  | 'udint'
+                  | 'ulint'
+                  | 'lreal'
+                  | 'tod'
+                  | 'dt'
+                  | 'byte'
+                  | 'word'
+                  | 'dword'
+                  | 'lword',
+              },
+              class: 'local',
+              location: '',
+              documentation: '',
+              debug: false,
+            },
+          })
+        }
+      })
 
-        // Find FB instances of this type in the program
-        const fbInstances = programPou.data.variables.filter(
-          (v) => v.type.definition === 'derived' && v.type.value.toUpperCase() === pou.data.name.toUpperCase(),
-        )
+      // 2. Process nested FB and struct variables recursively
+      const nestedVariables = fbVariables.filter(
+        (v) => v.type.definition === 'derived' || v.type.definition === 'user-data-type',
+      )
+      if (nestedVariables.length > 0) {
+        processNestedVariables(nestedVariables, programPouName, debugPathPrefix, variablePathPrefix)
+      }
 
-        fbInstances.forEach((fbInstance) => {
-          // Process function blocks in the FB's ladder flow
+      // 3. Process function temps in ladder (if this FB has a ladder body)
+      if (fbPou.data.body.language === 'ld') {
+        const fbLadderFlow = ladderFlows.find((flow) => flow.name === fbPou.data.name)
+        if (fbLadderFlow) {
+          // Build execution control map for blocks in this FB's ladder
+          const fbBlockExecutionControlMap = new Map<string, boolean>()
+          fbLadderFlow.rungs.forEach((rung) => {
+            rung.nodes.forEach((node) => {
+              if (node.type === 'block') {
+                const blockData = node.data as { variable?: { name: string }; executionControl?: boolean }
+                if (blockData.variable?.name && blockData.executionControl) {
+                  fbBlockExecutionControlMap.set(blockData.variable.name, true)
+                }
+              }
+            })
+          })
+
+          // Process function blocks in this FB's ladder flow
           fbLadderFlow.rungs.forEach((rung) => {
             rung.nodes.forEach((node) => {
               if (node.type !== 'block') return
@@ -630,7 +698,7 @@ const WorkspaceScreen = () => {
                 executionControl?: boolean
               }
 
-              // Only process functions (not function blocks)
+              // Only process functions (not function blocks) for _TMP_ variables
               if (!blockData.variant || blockData.variant.type !== 'function') return
 
               const blockName = blockData.variant.name.toUpperCase()
@@ -657,16 +725,16 @@ const WorkspaceScreen = () => {
               }
 
               boolOutputs.forEach((outputVar) => {
-                // For FB POUs, function temps are nested under the FB instance:
-                // RES0__INSTANCE0.IRRIGATION_MAIN_CONTROLLER0._TMP_EQ_STATE7415072_ENO
-                const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}._TMP_${blockName}${numericId}_${outputVar.name.toUpperCase()}`
+                // Debug path uses the full nested path:
+                // RES0__INSTANCE0.FB_B0.FB_A0._TMP_EQ_STATE7415072_ENO
+                const debugPath = `${debugPathPrefix}._TMP_${blockName}${numericId}_${outputVar.name.toUpperCase()}`
                 const index = debugVariableIndexes.get(debugPath)
 
                 if (index !== undefined) {
-                  // The variable name should include the FB instance prefix for composite key matching
-                  const tempVarName = `${fbInstance.name}._TMP_${blockName}${numericId}_${outputVar.name}`
+                  // Variable name includes the full nested path for composite key matching
+                  const tempVarName = `${variablePathPrefix}._TMP_${blockName}${numericId}_${outputVar.name}`
                   variableInfoMap.set(index, {
-                    pouName: programPou.data.name,
+                    pouName: programPouName,
                     variable: {
                       name: tempVarName,
                       type: { definition: 'base-type', value: 'bool' },
@@ -680,7 +748,73 @@ const WorkspaceScreen = () => {
               })
             })
           })
-        })
+        }
+      }
+
+      // 4. Recursively visit nested FB instances declared as variables
+      // Note: Standard FBs (TON, TOF, etc.) are already handled by processNestedVariables above
+      // Here we only recurse into custom (user-defined) FBs to process their internal ladder/FBD
+      const nestedFbInstances = fbVariables.filter((v) => v.type.definition === 'derived')
+      nestedFbInstances.forEach((nestedFbInstance) => {
+        const nestedFbTypeName = nestedFbInstance.type.value.toUpperCase()
+
+        // Only recurse into custom FBs (user-defined), not standard library FBs
+        const customFB = project.data.pous.find(
+          (p) => p.type === 'function-block' && p.data.name.toUpperCase() === nestedFbTypeName,
+        )
+
+        if (customFB && customFB.type === 'function-block') {
+          // For custom FBs, recursively visit to process their internals
+          const nestedDebugPathPrefix = `${debugPathPrefix}.${nestedFbInstance.name.toUpperCase()}`
+          const nestedVariablePathPrefix = `${variablePathPrefix}.${nestedFbInstance.name}`
+          visitFbInstance(customFB, nestedDebugPathPrefix, nestedVariablePathPrefix, programPouName, new Map())
+        }
+      })
+    }
+
+    // Start from program POUs and find all FB instances
+    const instances = project.data.configuration.resource.instances
+    project.data.pous.forEach((programPou) => {
+      if (programPou.type !== 'program') return
+
+      const programInstance = instances.find((inst) => inst.program === programPou.data.name)
+      if (!programInstance) return
+
+      // Build execution control map for blocks in this program's ladder
+      const blockExecutionControlMap = new Map<string, boolean>()
+      if (programPou.data.body.language === 'ld') {
+        const currentLadderFlow = ladderFlows.find((flow) => flow.name === programPou.data.name)
+        if (currentLadderFlow) {
+          currentLadderFlow.rungs.forEach((rung) => {
+            rung.nodes.forEach((node) => {
+              if (node.type === 'block') {
+                const blockData = node.data as { variable?: { name: string }; executionControl?: boolean }
+                if (blockData.variable?.name && blockData.executionControl) {
+                  blockExecutionControlMap.set(blockData.variable.name, true)
+                }
+              }
+            })
+          })
+        }
+      }
+
+      // Find all FB instances in the program
+      const fbInstances = programPou.data.variables.filter((v) => v.type.definition === 'derived')
+
+      fbInstances.forEach((fbInstance) => {
+        const fbTypeName = fbInstance.type.value.toUpperCase()
+
+        // Check if it's a custom FB (user-defined)
+        const customFB = project.data.pous.find(
+          (p) => p.type === 'function-block' && p.data.name.toUpperCase() === fbTypeName,
+        )
+
+        if (customFB && customFB.type === 'function-block') {
+          // For custom FBs, use visitFbInstance to process all internals
+          const debugPathPrefix = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}`
+          const variablePathPrefix = fbInstance.name
+          visitFbInstance(customFB, debugPathPrefix, variablePathPrefix, programPou.data.name, blockExecutionControlMap)
+        }
       })
     })
 
