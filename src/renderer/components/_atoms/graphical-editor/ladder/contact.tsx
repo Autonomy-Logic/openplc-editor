@@ -93,9 +93,33 @@ export const Contact = (block: ContactProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: { isDebuggerVisible, debugVariableValues, debugVariableIndexes, debugForcedVariables },
+    workspace: {
+      isDebuggerVisible,
+      debugVariableValues,
+      debugVariableIndexes,
+      debugForcedVariables,
+      fbSelectedInstance,
+      fbDebugInstances,
+    },
     workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
+
+  // Helper to get composite key with FB instance context
+  const getCompositeKey = (variableName: string): string => {
+    const currentPou = pous.find((p) => p.data.name === editor.meta.name)
+    if (currentPou?.type === 'function-block') {
+      const fbTypeKey = currentPou.data.name.toUpperCase()
+      const selectedKey = fbSelectedInstance.get(fbTypeKey)
+      if (selectedKey) {
+        const instances = fbDebugInstances.get(fbTypeKey) || []
+        const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+        if (selectedInstance) {
+          return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
+        }
+      }
+    }
+    return `${editor.meta.name}:${variableName}`
+  }
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
   const [contactVariableValue, setContactVariableValue] = useState<string>(data.variable.name)
@@ -106,7 +130,7 @@ export const Contact = (block: ContactProps) => {
       return undefined
     }
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const value = debugVariableValues.get(compositeKey)
 
     if (value === undefined) {
@@ -299,7 +323,7 @@ export const Contact = (block: ContactProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -321,7 +345,7 @@ export const Contact = (block: ContactProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -343,7 +367,7 @@ export const Contact = (block: ContactProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -460,7 +484,7 @@ export const Contact = (block: ContactProps) => {
         {isDebuggerVisible &&
           contextMenuPosition &&
           (() => {
-            const compositeKey = `${editor.meta.name}:${data.variable.name}`
+            const compositeKey = getCompositeKey(data.variable.name)
             const isForced = debugForcedVariables.has(compositeKey)
 
             return (

@@ -130,9 +130,13 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       }
       if (!sourceHandle) return undefined
 
-      const instances = project.data.configuration.resource.instances
-      const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
-      if (!programInstance) return undefined
+      // For program POUs, verify the program instance exists
+      // For FB POUs, skip this check since getCompositeKey already handles instance context
+      if (!fbInstanceContext) {
+        const instances = project.data.configuration.resource.instances
+        const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
+        if (!programInstance) return undefined
+      }
 
       const outputVariable = blockData.variant?.variables.find((v) => v.name === sourceHandle)
       if (!outputVariable || outputVariable.type.value.toUpperCase() !== 'BOOL') return undefined

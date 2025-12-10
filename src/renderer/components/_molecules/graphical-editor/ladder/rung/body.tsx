@@ -156,9 +156,13 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }
       if (!sourceHandle) return undefined
 
-      const instances = project.data.configuration.resource.instances
-      const programInstance = instances.find((inst) => inst.program === editor.meta.name)
-      if (!programInstance) return undefined
+      // For program POUs, verify the program instance exists
+      // For FB POUs, skip this check since getCompositeKey already handles instance context
+      if (!fbInstanceContext) {
+        const instances = project.data.configuration.resource.instances
+        const programInstance = instances.find((inst) => inst.program === editor.meta.name)
+        if (!programInstance) return undefined
+      }
 
       if (blockData.variant?.type === 'function-block') {
         const blockVariableName = blockData.variable?.name
