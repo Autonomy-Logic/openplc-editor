@@ -36,6 +36,18 @@ const TreeNode = ({
   const forcedValue = getForcedValue ? getForcedValue(node.compositeKey) : undefined
   const canForceNode = canForce ? canForce(node) : false
 
+  // For root-level nodes, derive a more informative label from compositeKey
+  // This shows full path for nested FB instances (e.g., "main.IRRIGATION_MAIN_CONTROLLER0.TON0")
+  // while keeping short names for children (e.g., "Q", "ET", "ENO")
+  const isRoot = level === 0
+  let displayLabel = node.name
+  if (isRoot) {
+    const [pouName, path] = node.compositeKey.split(':')
+    if (pouName && path) {
+      displayLabel = `${pouName}.${path}`
+    }
+  }
+
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (node.isComplex) {
@@ -103,7 +115,7 @@ const TreeNode = ({
                 fontWeight: isCurrentNodeForced ? 600 : undefined,
               }}
             >
-              {node.name}
+              {displayLabel}
             </p>
           </div>
           <p className='uppercase text-neutral-400 dark:text-neutral-700'>{node.type}</p>

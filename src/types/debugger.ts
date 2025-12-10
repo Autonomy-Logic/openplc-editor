@@ -1,4 +1,25 @@
 /**
+ * Function Block Instance Info
+ * Represents information about a specific FB instance for debugging
+ */
+export interface FbInstanceInfo {
+  /** FB type name (e.g., "Calculate_PID", "TON") */
+  fbTypeName: string
+
+  /** Program POU name containing this instance (e.g., "main") */
+  programName: string
+
+  /** Instance name from Resources configuration (e.g., "INSTANCE0") */
+  programInstanceName: string
+
+  /** FB variable name in the program (e.g., "MOTOR_SPEED0") */
+  fbVariableName: string
+
+  /** Unique key for this instance: `${programName}:${fbVariableName}` */
+  key: string
+}
+
+/**
  * Debug Tree Node Interface
  * Represents a node in the hierarchical debugger variable tree
  */

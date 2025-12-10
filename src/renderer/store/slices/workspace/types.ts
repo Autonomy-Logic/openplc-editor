@@ -1,4 +1,5 @@
 import type { DebugTreeNode } from '@root/types/debugger'
+import type { FbInstanceInfo } from '@root/types/debugger'
 import { z } from 'zod'
 
 const workspaceProjectTreeLeafSchema = z
@@ -29,6 +30,8 @@ const workspaceStateSchema = z.object({
     debugForcedVariables: z.custom<Map<string, boolean>>((val) => val instanceof Map),
     debugVariableTree: z.custom<Map<string, DebugTreeNode>>((val) => val instanceof Map),
     debugExpandedNodes: z.custom<Map<string, boolean>>((val) => val instanceof Map),
+    fbDebugInstances: z.custom<Map<string, FbInstanceInfo[]>>((val) => val instanceof Map),
+    fbSelectedInstance: z.custom<Map<string, string>>((val) => val instanceof Map),
     isPlcLogsVisible: z.boolean(),
     plcLogs: z.string(),
     close: z.object({
@@ -80,6 +83,12 @@ const workspaceActionsSchema = z.object({
   setDebugVariableTree: z.function().args(z.map(z.string(), z.custom<DebugTreeNode>())).returns(z.void()),
   setDebugExpandedNodes: z.function().args(z.map(z.string(), z.boolean())).returns(z.void()),
   toggleDebugExpandedNode: z.function().args(z.string()).returns(z.void()),
+  setFbDebugInstances: z
+    .function()
+    .args(z.map(z.string(), z.array(z.custom<FbInstanceInfo>())))
+    .returns(z.void()),
+  setFbSelectedInstance: z.function().args(z.string(), z.string()).returns(z.void()),
+  clearFbDebugContext: z.function().returns(z.void()),
   setPlcLogsVisible: z.function().args(z.boolean()).returns(z.void()),
   setPlcLogs: z.function().args(z.string()).returns(z.void()),
   toggleDiscardChanges: z.function().returns(z.void()),

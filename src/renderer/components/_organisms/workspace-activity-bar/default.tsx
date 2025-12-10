@@ -1,10 +1,11 @@
 import { StopIcon } from '@root/renderer/assets'
+import { StandardFunctionBlocks } from '@root/renderer/data/library/standard-function-blocks'
 import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
 import { matchVariableWithDebugEntry, parseDebugFile } from '@root/renderer/utils/parse-debug-file'
-import type { DebugTreeNode } from '@root/types/debugger'
+import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
@@ -380,6 +381,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       workspaceActions.setDebuggerVisible(false)
       workspaceActions.setDebuggerTargetIp(null)
       workspaceActions.setDebugForcedVariables(new Map())
+      workspaceActions.clearFbDebugContext()
       return
     }
 
@@ -902,6 +904,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             const treeMap = new Map<string, DebugTreeNode>()
             let complexCount = 0
 
+            // Helper function to recursively add a node and all its children to the treeMap
+            // This ensures nested FB variables like main:MOTOR_CONTROL0.TON0 are directly accessible
+            const addNodeAndChildrenToMap = (node: DebugTreeNode) => {
+              treeMap.set(node.compositeKey, node)
+              if (node.children) {
+                for (const child of node.children) {
+                  addNodeAndChildrenToMap(child)
+                }
+              }
+            }
+
             project.data.pous.forEach((pou) => {
               if (pou.type !== 'program') return
 
@@ -914,7 +927,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 try {
                   const node = buildDebugTree(v, pou.data.name, instance.name, parsed.variables, project)
                   trees.push(node)
-                  treeMap.set(node.compositeKey, node)
+                  addNodeAndChildrenToMap(node)
                   if (node.isComplex) {
                     complexCount++
                   }
@@ -940,6 +953,75 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               id: crypto.randomUUID(),
               level: 'warning',
               message: `Debug tree builder encountered errors.`,
+            })
+          }
+
+          // Build FB instance map for function block debugging
+          const fbDebugInstancesMap = new Map<string, FbInstanceInfo[]>()
+
+          // Helper function to normalize type strings for comparison
+          const normalizeTypeString = (typeStr: string): string => {
+            return typeStr.toLowerCase().replace(/[-_]/g, '')
+          }
+
+          // Iterate all program POUs to find FB instances
+          project.data.pous.forEach((pou) => {
+            if (pou.type !== 'program') return
+
+            const programInstance = instances.find((inst) => inst.program === pou.data.name)
+            if (!programInstance) return
+
+            // Check each variable in the program to see if it's an FB instance
+            pou.data.variables.forEach((v) => {
+              if (v.type.definition !== 'derived') return
+
+              const fbTypeNameRaw = v.type.value
+              const fbTypeKey = fbTypeNameRaw.toUpperCase() // Canonical key for map lookups
+
+              // Check if this is a standard function block
+              const isStandardFB = StandardFunctionBlocks.pous.some(
+                (sfb) => sfb.name.toUpperCase() === fbTypeKey && normalizeTypeString(sfb.type) === 'functionblock',
+              )
+
+              // Check if this is a custom function block
+              const isCustomFB = project.data.pous.some(
+                (p) => normalizeTypeString(p.type) === 'functionblock' && p.data.name.toUpperCase() === fbTypeKey,
+              )
+
+              if (isStandardFB || isCustomFB) {
+                const instanceInfo: FbInstanceInfo = {
+                  fbTypeName: fbTypeNameRaw, // Keep original name for display
+                  programName: pou.data.name,
+                  programInstanceName: programInstance.name,
+                  fbVariableName: v.name,
+                  key: `${pou.data.name}:${v.name}`,
+                }
+
+                // Use uppercase key for consistent lookups
+                const existingInstances = fbDebugInstancesMap.get(fbTypeKey) || []
+                existingInstances.push(instanceInfo)
+                fbDebugInstancesMap.set(fbTypeKey, existingInstances)
+              }
+            })
+          })
+
+          // Store FB debug instances and set default selections
+          workspaceActions.setFbDebugInstances(fbDebugInstancesMap)
+
+          // Set default selected instance for each FB type (first instance)
+          fbDebugInstancesMap.forEach((instanceList, fbTypeName) => {
+            if (instanceList.length > 0) {
+              workspaceActions.setFbSelectedInstance(fbTypeName, instanceList[0].key)
+            }
+          })
+
+          const fbTypesCount = fbDebugInstancesMap.size
+          const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
+          if (fbTypesCount > 0) {
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'info',
+              message: `FB instance map: Found ${totalFbInstances} instances across ${fbTypesCount} FB types.`,
             })
           }
 
