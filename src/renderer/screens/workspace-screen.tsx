@@ -64,6 +64,16 @@ const WorkspaceScreen = () => {
     workspace: { fbSelectedInstance, fbDebugInstances },
   } = useOpenPLCStore()
 
+  // Log POU debug flags for debugging
+  console.log(
+    '[FB DEBUG] POU debug flags:',
+    pous.map((pou) => ({
+      pouName: pou.data.name,
+      type: pou.type,
+      debugVars: pou.data.variables.filter((v) => v.debug === true).map((v) => v.name),
+    })),
+  )
+
   const allDebugVariables = pous.flatMap((pou) => {
     return pou.data.variables
       .filter((v) => v.debug === true)
@@ -115,6 +125,15 @@ const WorkspaceScreen = () => {
         }
       })
   })
+
+  console.log(
+    '[FB DEBUG] allDebugVariables:',
+    allDebugVariables.map((v) => ({
+      pouName: v.pouName,
+      name: v.name,
+      compositeKey: v.compositeKey,
+    })),
+  )
 
   const nameOccurrences = new Map<string, number>()
   allDebugVariables.forEach((v) => {

@@ -75,10 +75,21 @@ const Breadcrumbs = () => {
   const isFunctionBlock = 'pouType' in meta && meta.pouType === 'function-block'
   const fbTypeName = meta.name
 
+  console.log('[FB DEBUG] Breadcrumb render:', {
+    meta,
+    isFunctionBlock,
+    isDebuggerVisible,
+    fbTypeName,
+    fbDebugInstancesSize: fbDebugInstances.size,
+    fbDebugInstancesKeys: Array.from(fbDebugInstances.keys()),
+  })
+
   // Get available instances for this FB type
   const fbInstances = useMemo((): FbInstanceInfo[] => {
     if (!isFunctionBlock || !isDebuggerVisible) return []
-    return fbDebugInstances.get(fbTypeName) || []
+    const instances = fbDebugInstances.get(fbTypeName) || []
+    console.log('[FB DEBUG] fbInstances for type:', fbTypeName, instances)
+    return instances
   }, [isFunctionBlock, isDebuggerVisible, fbDebugInstances, fbTypeName])
 
   // Get currently selected instance key

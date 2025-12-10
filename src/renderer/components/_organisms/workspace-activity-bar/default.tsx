@@ -953,12 +953,29 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             return typeStr.toLowerCase().replace(/[-_]/g, '')
           }
 
+          console.log('[FB DEBUG] Building FB instance map...')
+          console.log(
+            '[FB DEBUG] All POUs:',
+            project.data.pous.map((p) => ({ name: p.data.name, type: p.type })),
+          )
+          console.log(
+            '[FB DEBUG] All instances from Resources:',
+            instances.map((i) => ({ name: i.name, program: i.program })),
+          )
+
           // Iterate all program POUs to find FB instances
           project.data.pous.forEach((pou) => {
             if (pou.type !== 'program') return
 
+            console.log('[FB DEBUG] Scanning program POU:', pou.data.name)
+
             const programInstance = instances.find((inst) => inst.program === pou.data.name)
-            if (!programInstance) return
+            if (!programInstance) {
+              console.log('[FB DEBUG] No instance found for program:', pou.data.name)
+              return
+            }
+
+            console.log('[FB DEBUG] Found program instance:', programInstance.name, 'for program:', pou.data.name)
 
             // Check each variable in the program to see if it's an FB instance
             pou.data.variables.forEach((v) => {
@@ -966,6 +983,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
               const fbTypeName = v.type.value
               const fbTypeNameUpper = fbTypeName.toUpperCase()
+
+              console.log('[FB DEBUG] Checking derived variable:', {
+                program: pou.data.name,
+                varName: v.name,
+                fbTypeName: fbTypeName,
+              })
 
               // Check if this is a standard function block
               const isStandardFB = StandardFunctionBlocks.pous.some(
@@ -978,6 +1001,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 (p) => normalizeTypeString(p.type) === 'functionblock' && p.data.name.toUpperCase() === fbTypeNameUpper,
               )
 
+              console.log('[FB DEBUG] FB type check:', { fbTypeName, isStandardFB, isCustomFB })
+
               if (isStandardFB || isCustomFB) {
                 const instanceInfo: FbInstanceInfo = {
                   fbTypeName: fbTypeName,
@@ -987,12 +1012,22 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   key: `${pou.data.name}:${v.name}`,
                 }
 
+                console.log('[FB DEBUG] Found FB instance:', instanceInfo)
+
                 const existingInstances = fbDebugInstancesMap.get(fbTypeName) || []
                 existingInstances.push(instanceInfo)
                 fbDebugInstancesMap.set(fbTypeName, existingInstances)
               }
             })
           })
+
+          console.log(
+            '[FB DEBUG] fbDebugInstancesMap built:',
+            Array.from(fbDebugInstancesMap.entries()).map(([fbTypeName, insts]) => ({
+              fbTypeName,
+              instances: insts.map((i) => i.key),
+            })),
+          )
 
           // Store FB debug instances and set default selections
           workspaceActions.setFbDebugInstances(fbDebugInstancesMap)
