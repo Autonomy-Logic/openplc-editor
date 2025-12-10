@@ -151,10 +151,6 @@ export const NavigationPanelBreadcrumbs = ({
   const { name, type, language } = pou_to_display
   const isResource = type[0] === 'resource'
 
-  // Find the selected instance info for display (used for potential future enhancements)
-  const _selectedInstance = fbInstances.find((inst) => inst.key === selectedInstanceKey)
-  void _selectedInstance // Suppress unused variable warning
-
   return (
     <ol className='flex h-1/2 cursor-default select-none items-center p-2' {...res}>
       <li>

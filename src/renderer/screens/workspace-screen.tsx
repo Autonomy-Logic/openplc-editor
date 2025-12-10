@@ -836,19 +836,6 @@ const WorkspaceScreen = () => {
     })
     wsActions.setDebugVariableIndexes(updatedIndexes)
 
-    // Targeted logging for ENO variables to debug FB POU ENO handling
-    // Log ENO variables for nested FBs and function temps
-    for (const [index, info] of variableInfoMap.entries()) {
-      const nameUpper = info.variable.name.toUpperCase()
-      if (nameUpper.endsWith('.ENO') || (nameUpper.includes('_TMP_') && nameUpper.endsWith('_ENO'))) {
-        console.log('[ENO MAP]', {
-          index,
-          pouName: info.pouName,
-          name: info.variable.name,
-        })
-      }
-    }
-
     const pollVariables = async () => {
       if (!isMountedRef.current) return
 
