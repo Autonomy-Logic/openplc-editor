@@ -737,15 +737,31 @@ const WorkspaceScreen = () => {
             })
           }
 
-          const functionBlockInstances = currentPou.data.variables.filter(
-            (variable) => variable.type.definition === 'derived',
-          )
+          // Get FB instance context for function block POUs
+          let fbInstanceCtx: { programName: string; fbVariableName: string } | null = null
+          if (currentPou.type === 'function-block') {
+            const fbTypeKey = currentPou.data.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (selectedKey) {
+              const instances = fbDebugInstances.get(fbTypeKey) || []
+              const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+              if (selectedInstance) {
+                fbInstanceCtx = {
+                  programName: selectedInstance.programName,
+                  fbVariableName: selectedInstance.fbVariableName,
+                }
+              }
+            }
+          }
 
-          functionBlockInstances.forEach((fbInstance) => {
-            Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+          // For FB POUs, poll nested FB variables using instance context
+          // For program POUs, poll FB instance variables using the standard approach
+          if (currentPou.type === 'function-block' && fbInstanceCtx) {
+            // Poll all nested BOOL variables within the FB instance
+            Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
               if (
-                varInfo.pouName === currentPou.data.name &&
-                varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                varInfo.pouName === fbInstanceCtx.programName &&
+                varInfo.variable.name.startsWith(`${fbInstanceCtx.fbVariableName}.`) &&
                 varInfo.variable.type.definition === 'base-type' &&
                 varInfo.variable.type.value.toLowerCase() === 'bool'
               ) {
@@ -753,11 +769,29 @@ const WorkspaceScreen = () => {
                 debugVariableKeys.add(compositeKey)
               }
             })
-          })
+          } else {
+            const functionBlockInstances = currentPou.data.variables.filter(
+              (variable) => variable.type.definition === 'derived',
+            )
 
-          const instances = currentProject.data.configuration.resource.instances
-          const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
-          if (programInstance && currentLadderFlow) {
+            functionBlockInstances.forEach((fbInstance) => {
+              Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                if (
+                  varInfo.pouName === currentPou.data.name &&
+                  varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                  varInfo.variable.type.definition === 'base-type' &&
+                  varInfo.variable.type.value.toLowerCase() === 'bool'
+                ) {
+                  const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                  debugVariableKeys.add(compositeKey)
+                }
+              })
+            })
+          }
+
+          // For FB POUs, poll function outputs using instance context
+          // For program POUs, poll function outputs using the standard approach
+          if (currentPou.type === 'function-block' && fbInstanceCtx && currentLadderFlow) {
             currentLadderFlow.rungs.forEach((rung) => {
               rung.nodes.forEach((node) => {
                 if (node.type === 'block') {
@@ -769,7 +803,8 @@ const WorkspaceScreen = () => {
                   if (blockData.variant?.type === 'function' && blockData.numericId) {
                     Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
                       if (
-                        varInfo.pouName === currentPou.data.name &&
+                        varInfo.pouName === fbInstanceCtx.programName &&
+                        varInfo.variable.name.startsWith(`${fbInstanceCtx.fbVariableName}.`) &&
                         varInfo.variable.name.includes(blockData.numericId!)
                       ) {
                         const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
@@ -780,6 +815,33 @@ const WorkspaceScreen = () => {
                 }
               })
             })
+          } else {
+            const instances = currentProject.data.configuration.resource.instances
+            const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
+            if (programInstance && currentLadderFlow) {
+              currentLadderFlow.rungs.forEach((rung) => {
+                rung.nodes.forEach((node) => {
+                  if (node.type === 'block') {
+                    const blockData = node.data as {
+                      variant?: { type: string }
+                      numericId?: string
+                    }
+
+                    if (blockData.variant?.type === 'function' && blockData.numericId) {
+                      Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                        if (
+                          varInfo.pouName === currentPou.data.name &&
+                          varInfo.variable.name.includes(blockData.numericId!)
+                        ) {
+                          const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                          debugVariableKeys.add(compositeKey)
+                        }
+                      })
+                    }
+                  }
+                })
+              })
+            }
           }
         }
 
@@ -809,15 +871,31 @@ const WorkspaceScreen = () => {
             })
           }
 
-          const functionBlockInstances = currentPou.data.variables.filter(
-            (variable) => variable.type.definition === 'derived',
-          )
+          // Get FB instance context for function block POUs (FBD)
+          let fbdFbInstanceCtx: { programName: string; fbVariableName: string } | null = null
+          if (currentPou.type === 'function-block') {
+            const fbTypeKey = currentPou.data.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (selectedKey) {
+              const instances = fbDebugInstances.get(fbTypeKey) || []
+              const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+              if (selectedInstance) {
+                fbdFbInstanceCtx = {
+                  programName: selectedInstance.programName,
+                  fbVariableName: selectedInstance.fbVariableName,
+                }
+              }
+            }
+          }
 
-          functionBlockInstances.forEach((fbInstance) => {
-            Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+          // For FB POUs, poll nested FB variables using instance context
+          // For program POUs, poll FB instance variables using the standard approach
+          if (currentPou.type === 'function-block' && fbdFbInstanceCtx) {
+            // Poll all nested BOOL variables within the FB instance
+            Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
               if (
-                varInfo.pouName === currentPou.data.name &&
-                varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                varInfo.pouName === fbdFbInstanceCtx.programName &&
+                varInfo.variable.name.startsWith(`${fbdFbInstanceCtx.fbVariableName}.`) &&
                 varInfo.variable.type.definition === 'base-type' &&
                 varInfo.variable.type.value.toLowerCase() === 'bool'
               ) {
@@ -825,11 +903,29 @@ const WorkspaceScreen = () => {
                 debugVariableKeys.add(compositeKey)
               }
             })
-          })
+          } else {
+            const functionBlockInstances = currentPou.data.variables.filter(
+              (variable) => variable.type.definition === 'derived',
+            )
 
-          const instances = currentProject.data.configuration.resource.instances
-          const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
-          if (programInstance && currentFbdFlow) {
+            functionBlockInstances.forEach((fbInstance) => {
+              Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                if (
+                  varInfo.pouName === currentPou.data.name &&
+                  varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                  varInfo.variable.type.definition === 'base-type' &&
+                  varInfo.variable.type.value.toLowerCase() === 'bool'
+                ) {
+                  const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                  debugVariableKeys.add(compositeKey)
+                }
+              })
+            })
+          }
+
+          // For FB POUs, poll function outputs using instance context
+          // For program POUs, poll function outputs using the standard approach
+          if (currentPou.type === 'function-block' && fbdFbInstanceCtx && currentFbdFlow) {
             currentFbdFlow.rung.nodes.forEach((node) => {
               if (node.type === 'block') {
                 const blockData = node.data as {
@@ -840,7 +936,8 @@ const WorkspaceScreen = () => {
                 if (blockData.variant?.type === 'function' && blockData.numericId) {
                   Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
                     if (
-                      varInfo.pouName === currentPou.data.name &&
+                      varInfo.pouName === fbdFbInstanceCtx.programName &&
+                      varInfo.variable.name.startsWith(`${fbdFbInstanceCtx.fbVariableName}.`) &&
                       varInfo.variable.name.includes(blockData.numericId!)
                     ) {
                       const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
@@ -850,6 +947,31 @@ const WorkspaceScreen = () => {
                 }
               }
             })
+          } else {
+            const instances = currentProject.data.configuration.resource.instances
+            const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
+            if (programInstance && currentFbdFlow) {
+              currentFbdFlow.rung.nodes.forEach((node) => {
+                if (node.type === 'block') {
+                  const blockData = node.data as {
+                    variant?: { type: string }
+                    numericId?: string
+                  }
+
+                  if (blockData.variant?.type === 'function' && blockData.numericId) {
+                    Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                      if (
+                        varInfo.pouName === currentPou.data.name &&
+                        varInfo.variable.name.includes(blockData.numericId!)
+                      ) {
+                        const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                        debugVariableKeys.add(compositeKey)
+                      }
+                    })
+                  }
+                }
+              })
+            }
           }
         }
 
