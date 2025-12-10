@@ -904,6 +904,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             const treeMap = new Map<string, DebugTreeNode>()
             let complexCount = 0
 
+            // Helper function to recursively add a node and all its children to the treeMap
+            // This ensures nested FB variables like main:MOTOR_CONTROL0.TON0 are directly accessible
+            const addNodeAndChildrenToMap = (node: DebugTreeNode) => {
+              treeMap.set(node.compositeKey, node)
+              if (node.children) {
+                for (const child of node.children) {
+                  addNodeAndChildrenToMap(child)
+                }
+              }
+            }
+
             project.data.pous.forEach((pou) => {
               if (pou.type !== 'program') return
 
@@ -916,7 +927,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 try {
                   const node = buildDebugTree(v, pou.data.name, instance.name, parsed.variables, project)
                   trees.push(node)
-                  treeMap.set(node.compositeKey, node)
+                  addNodeAndChildrenToMap(node)
                   if (node.isComplex) {
                     complexCount++
                   }

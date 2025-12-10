@@ -247,6 +247,16 @@ const WorkspaceScreen = () => {
 
     const variableInfoMap = new Map<number, VariableInfo>()
 
+    // Helper function to ensure ENO variable exists in FB variable list
+    // ENO is always present in debug.c for function blocks but may not be in the type definition
+    const ensureEnoVariable = (
+      fbVars: Array<{ name: string; class: string; type: { definition: string; value: string } }>,
+    ): Array<{ name: string; class: string; type: { definition: string; value: string } }> => {
+      const hasEno = fbVars.some((v) => v.type.definition === 'base-type' && v.name.toUpperCase() === 'ENO')
+      if (hasEno) return fbVars
+      return [...fbVars, { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } }]
+    }
+
     // Helper function to recursively process nested FB and struct variables
     const processNestedVariables = (
       fbVariables: Array<{ name: string; class: string; type: { definition: string; value: string } }>,
@@ -312,17 +322,19 @@ const WorkspaceScreen = () => {
             (fb: { name: string }) => fb.name.toUpperCase() === nestedFBTypeName,
           )
           if (standardFB) {
-            nestedFBVariables = standardFB.variables
+            nestedFBVariables = ensureEnoVariable(standardFB.variables)
           } else {
             const customFB = project.data.pous.find(
               (p) => p.type === 'function-block' && p.data.name.toUpperCase() === nestedFBTypeName,
             )
             if (customFB && customFB.type === 'function-block') {
-              nestedFBVariables = customFB.data.variables as Array<{
-                name: string
-                class: string
-                type: { definition: string; value: string }
-              }>
+              nestedFBVariables = ensureEnoVariable(
+                customFB.data.variables as Array<{
+                  name: string
+                  class: string
+                  type: { definition: string; value: string }
+                }>,
+              )
             }
           }
 
@@ -356,17 +368,19 @@ const WorkspaceScreen = () => {
               (fb: { name: string }) => fb.name.toUpperCase() === typeNameUpper,
             )
             if (standardFB) {
-              nestedFBVariables = standardFB.variables
+              nestedFBVariables = ensureEnoVariable(standardFB.variables)
             } else {
               const customFB = project.data.pous.find(
                 (p) => p.type === 'function-block' && p.data.name.toUpperCase() === typeNameUpper,
               )
               if (customFB && customFB.type === 'function-block') {
-                nestedFBVariables = customFB.data.variables as Array<{
-                  name: string
-                  class: string
-                  type: { definition: string; value: string }
-                }>
+                nestedFBVariables = ensureEnoVariable(
+                  customFB.data.variables as Array<{
+                    name: string
+                    class: string
+                    type: { definition: string; value: string }
+                  }>,
+                )
               }
             }
 
