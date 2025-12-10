@@ -64,16 +64,6 @@ const WorkspaceScreen = () => {
     workspace: { fbSelectedInstance, fbDebugInstances },
   } = useOpenPLCStore()
 
-  // Log POU debug flags for debugging
-  console.log(
-    '[FB DEBUG] POU debug flags:',
-    pous.map((pou) => ({
-      pouName: pou.data.name,
-      type: pou.type,
-      debugVars: pou.data.variables.filter((v) => v.debug === true).map((v) => v.name),
-    })),
-  )
-
   const allDebugVariables = pous.flatMap((pou) => {
     return pou.data.variables
       .filter((v) => v.debug === true)
@@ -125,15 +115,6 @@ const WorkspaceScreen = () => {
         }
       })
   })
-
-  console.log(
-    '[FB DEBUG] allDebugVariables:',
-    allDebugVariables.map((v) => ({
-      pouName: v.pouName,
-      name: v.name,
-      compositeKey: v.compositeKey,
-    })),
-  )
 
   const nameOccurrences = new Map<string, number>()
   allDebugVariables.forEach((v) => {
@@ -611,6 +592,19 @@ const WorkspaceScreen = () => {
     })
 
     variableInfoMapRef.current = variableInfoMap
+
+    // Targeted logging for ENO variables to debug FB POU ENO handling
+    // Log only ENO variables for nested FBs to verify they're being mapped correctly
+    for (const [index, info] of variableInfoMap.entries()) {
+      const nameUpper = info.variable.name.toUpperCase()
+      if (nameUpper.endsWith('.ENO')) {
+        console.log('[ENO MAP]', {
+          index,
+          pouName: info.pouName,
+          name: info.variable.name,
+        })
+      }
+    }
 
     const pollVariables = async () => {
       if (!isMountedRef.current) return

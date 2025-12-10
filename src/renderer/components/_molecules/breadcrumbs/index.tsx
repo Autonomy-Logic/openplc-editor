@@ -76,22 +76,10 @@ const Breadcrumbs = () => {
   const fbTypeName = meta.name
   const fbTypeKey = fbTypeName.toUpperCase() // Canonical key for map lookups
 
-  console.log('[FB DEBUG] Breadcrumb render:', {
-    meta,
-    isFunctionBlock,
-    isDebuggerVisible,
-    fbTypeName,
-    fbTypeKey,
-    fbDebugInstancesSize: fbDebugInstances.size,
-    fbDebugInstancesKeys: Array.from(fbDebugInstances.keys()),
-  })
-
   // Get available instances for this FB type
   const fbInstances = useMemo((): FbInstanceInfo[] => {
     if (!isFunctionBlock || !isDebuggerVisible) return []
-    const instances = fbDebugInstances.get(fbTypeKey) || []
-    console.log('[FB DEBUG] fbInstances for type key:', fbTypeKey, instances)
-    return instances
+    return fbDebugInstances.get(fbTypeKey) || []
   }, [isFunctionBlock, isDebuggerVisible, fbDebugInstances, fbTypeKey])
 
   // Get currently selected instance key
