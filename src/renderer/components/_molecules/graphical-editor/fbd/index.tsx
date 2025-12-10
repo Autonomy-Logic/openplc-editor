@@ -47,12 +47,36 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     modals,
     modalActions: { closeModal, openModal },
     snapshotActions: { addSnapshot },
-    workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables },
+    workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables, fbSelectedInstance, fbDebugInstances },
   } = useOpenPLCStore()
 
   const pous = project.data.pous
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
+
+  // Get FB instance context for function block POUs
+  const fbInstanceContext = useMemo(() => {
+    if (!pouRef || pouRef.type !== 'function-block') return null
+    const fbTypeName = pouRef.data.name
+    const selectedKey = fbSelectedInstance.get(fbTypeName)
+    if (!selectedKey) return null
+    const instances = fbDebugInstances.get(fbTypeName) || []
+    return instances.find((inst) => inst.key === selectedKey) || null
+  }, [pouRef, fbSelectedInstance, fbDebugInstances])
+
+  // Helper to get composite key for variable lookup, handling FB instance context
+  const getCompositeKey = useCallback(
+    (variableName: string): string => {
+      if (fbInstanceContext) {
+        // For FB POUs, transform to instance context: main:MOTOR_SPEED0.varName
+        return `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.${variableName}`
+      }
+      // For programs, use standard format: pouName:varName
+      return `${editor.meta.name}:${variableName}`
+    },
+    [fbInstanceContext, editor.meta.name],
+  )
+
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
 
@@ -86,7 +110,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       const variable = pouRef.data.variables.find((v) => v.name.toLowerCase() === variableName.toLowerCase())
       if (!variable || variable.type.value.toUpperCase() !== 'BOOL') return undefined
 
-      const compositeKey = `${editor.meta.name}:${variableName}`
+      const compositeKey = getCompositeKey(variableName)
 
       if (debugForcedVariables.has(compositeKey)) {
         return debugForcedVariables.get(compositeKey)
@@ -118,7 +142,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         if (!blockVariableName) return undefined
 
         const outputVariableName = `${blockVariableName}.${sourceHandle}`
-        const compositeKey = `${editor.meta.name}:${outputVariableName}`
+        const compositeKey = getCompositeKey(outputVariableName)
         const value = debugVariableValues.get(compositeKey)
 
         if (value === undefined) return undefined
@@ -131,7 +155,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         if (!numericId) return undefined
 
         const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
-        const compositeKey = `${editor.meta.name}:${tempVarName}`
+        const compositeKey = getCompositeKey(tempVarName)
         const value = debugVariableValues.get(compositeKey)
 
         if (value === undefined) return undefined

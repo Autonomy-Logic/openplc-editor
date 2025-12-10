@@ -76,11 +76,34 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     searchQuery,
     searchActions: { setSearchNodePosition },
     snapshotActions: { addSnapshot },
-    workspace: { isDebuggerVisible, debugVariableValues },
+    workspace: { isDebuggerVisible, debugVariableValues, fbSelectedInstance, fbDebugInstances },
   } = useOpenPLCStore()
 
   const pouRef = project.data.pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
+
+  // Get FB instance context for function block POUs
+  const fbInstanceContext = useMemo(() => {
+    if (!pouRef || pouRef.type !== 'function-block') return null
+    const fbTypeName = pouRef.data.name
+    const selectedKey = fbSelectedInstance.get(fbTypeName)
+    if (!selectedKey) return null
+    const instances = fbDebugInstances.get(fbTypeName) || []
+    return instances.find((inst) => inst.key === selectedKey) || null
+  }, [pouRef, fbSelectedInstance, fbDebugInstances])
+
+  // Helper to get composite key for variable lookup, handling FB instance context
+  const getCompositeKey = useCallback(
+    (variableName: string): string => {
+      if (fbInstanceContext) {
+        // For FB POUs, transform to instance context: main:MOTOR_SPEED0.varName
+        return `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.${variableName}`
+      }
+      // For programs, use standard format: pouName:varName
+      return `${editor.meta.name}:${variableName}`
+    },
+    [fbInstanceContext, editor.meta.name],
+  )
 
   const [rungLocal, setRungLocal] = useState<RungLadderState>(rung)
   const [dragging, setDragging] = useState(false)
@@ -111,7 +134,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const variableName = contactData.variable?.name
       if (!variableName) return undefined
 
-      const compositeKey = `${editor.meta.name}:${variableName}`
+      const compositeKey = getCompositeKey(variableName)
       const value = debugVariableValues.get(compositeKey)
       if (value === undefined) return undefined
 
@@ -142,7 +165,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         if (!blockVariableName) return undefined
 
         const outputVariableName = `${blockVariableName}.${sourceHandle}`
-        const compositeKey = `${editor.meta.name}:${outputVariableName}`
+        const compositeKey = getCompositeKey(outputVariableName)
         const value = debugVariableValues.get(compositeKey)
 
         if (value === undefined) return undefined
@@ -155,7 +178,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         if (!numericId) return undefined
 
         const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
-        const compositeKey = `${editor.meta.name}:${tempVarName}`
+        const compositeKey = getCompositeKey(tempVarName)
         const value = debugVariableValues.get(compositeKey)
 
         if (value === undefined) return undefined
@@ -221,7 +244,15 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       return edge
     })
-  }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, editor.meta.name, project])
+  }, [
+    rungLocal.edges,
+    rungLocal.nodes,
+    isDebuggerVisible,
+    debugVariableValues,
+    editor.meta.name,
+    project,
+    getCompositeKey,
+  ])
 
   const styledNodes = useMemo(() => {
     const baseNodes = !isDebuggerVisible
@@ -300,6 +331,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     debugVariableValues,
     editor.meta.name,
     project,
+    getCompositeKey,
   ])
 
   /**

@@ -1,4 +1,4 @@
-import type { DebugTreeNode } from '@root/types/debugger'
+import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -24,6 +24,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugForcedVariables: new Map(),
     debugVariableTree: new Map(),
     debugExpandedNodes: new Map(),
+    fbDebugInstances: new Map(),
+    fbSelectedInstance: new Map(),
     isPlcLogsVisible: false,
     plcLogs: '',
     close: {
@@ -194,6 +196,28 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         produce(({ workspace }: WorkspaceSlice) => {
           const currentValue = workspace.debugExpandedNodes.get(compositeKey) ?? false
           workspace.debugExpandedNodes.set(compositeKey, !currentValue)
+        }),
+      )
+    },
+    setFbDebugInstances: (instances: Map<string, FbInstanceInfo[]>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.fbDebugInstances = instances
+        }),
+      )
+    },
+    setFbSelectedInstance: (fbTypeName: string, key: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.fbSelectedInstance.set(fbTypeName, key)
+        }),
+      )
+    },
+    clearFbDebugContext: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.fbDebugInstances = new Map()
+          workspace.fbSelectedInstance = new Map()
         }),
       )
     },

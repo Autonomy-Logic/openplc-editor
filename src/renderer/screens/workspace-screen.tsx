@@ -59,6 +59,11 @@ const WorkspaceScreen = () => {
     },
   } = useOpenPLCStore()
 
+  // Get FB debug context for transforming FB variable keys
+  const {
+    workspace: { fbSelectedInstance, fbDebugInstances },
+  } = useOpenPLCStore()
+
   const allDebugVariables = pous.flatMap((pou) => {
     return pou.data.variables
       .filter((v) => v.debug === true)
@@ -74,15 +79,39 @@ const WorkspaceScreen = () => {
           typeValue = v.type.value
         }
 
-        const compositeKey = `${pou.data.name}:${v.name}`
+        // For function block POUs, transform the key to use instance context
+        let compositeKey: string
+        let displayName: string
+        if (pou.type === 'function-block') {
+          const fbTypeName = pou.data.name
+          const selectedKey = fbSelectedInstance.get(fbTypeName)
+          const instances = fbDebugInstances.get(fbTypeName) || []
+          const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+
+          if (selectedInstance) {
+            // Transform to instance context: main:MOTOR_SPEED0.varName
+            compositeKey = `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${v.name}`
+            // Display with full path: main.MOTOR_SPEED0.varName
+            displayName = `${selectedInstance.programName}.${selectedInstance.fbVariableName}.${v.name}`
+          } else {
+            // No instance selected, use original format
+            compositeKey = `${pou.data.name}:${v.name}`
+            displayName = v.name
+          }
+        } else {
+          compositeKey = `${pou.data.name}:${v.name}`
+          displayName = v.name
+        }
+
         const variableValue = debugVariableValues.get(compositeKey)
         const displayValue = variableValue !== undefined ? variableValue : '-'
 
         return {
           pouName: pou.data.name,
-          name: v.name,
+          name: displayName,
           type: typeValue,
           value: displayValue,
+          compositeKey,
         }
       })
   })
@@ -94,18 +123,15 @@ const WorkspaceScreen = () => {
 
   const debugVariables = allDebugVariables.map((v) => {
     const hasConflict = nameOccurrences.get(v.name)! > 1
-    const compositeKey = `${v.pouName}:${v.name}`
     return {
       name: hasConflict ? `[${v.pouName}] ${v.name}` : v.name,
       type: v.type,
       value: v.value,
-      compositeKey,
+      compositeKey: v.compositeKey,
     }
   })
 
-  const watchedCompositeKeys = new Set<string>(
-    pous.flatMap((pou) => pou.data.variables.filter((v) => v.debug === true).map((v) => `${pou.data.name}:${v.name}`)),
-  )
+  const watchedCompositeKeys = new Set<string>(allDebugVariables.map((v) => v.compositeKey))
 
   const forcedKeys = Array.from(debugForcedVariables.keys())
   const allKeys = new Set([...watchedCompositeKeys, ...forcedKeys])
@@ -565,13 +591,38 @@ const WorkspaceScreen = () => {
 
         const debugVariableKeys = new Set<string>()
 
+        // Get FB debug context for function block POUs
+        const {
+          workspace: { fbSelectedInstance, fbDebugInstances },
+        } = useOpenPLCStore.getState()
+
         currentProject.data.pous.forEach((pou) => {
-          if (pou.type !== 'program') return
-          pou.data.variables
-            .filter((v) => v.debug === true)
-            .forEach((v) => {
-              debugVariableKeys.add(`${pou.data.name}:${v.name}`)
-            })
+          if (pou.type === 'program') {
+            pou.data.variables
+              .filter((v) => v.debug === true)
+              .forEach((v) => {
+                debugVariableKeys.add(`${pou.data.name}:${v.name}`)
+              })
+          } else if (pou.type === 'function-block') {
+            // For function block POUs, transform variable keys using selected instance context
+            const fbTypeName = pou.data.name
+            const selectedKey = fbSelectedInstance.get(fbTypeName)
+            if (!selectedKey) return // No instance selected, skip
+
+            // Find the instance info for the selected key
+            const instances = fbDebugInstances.get(fbTypeName) || []
+            const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+            if (!selectedInstance) return // Instance not found, skip
+
+            // Transform FB variable keys to use instance context
+            // e.g., Calculate_PID:IN -> main:MOTOR_SPEED0.IN
+            pou.data.variables
+              .filter((v) => v.debug === true)
+              .forEach((v) => {
+                const transformedKey = `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${v.name}`
+                debugVariableKeys.add(transformedKey)
+              })
+          }
         })
 
         // Get the current expansion state from the store
