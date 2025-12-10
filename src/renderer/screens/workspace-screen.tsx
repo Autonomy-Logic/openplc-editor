@@ -695,6 +695,22 @@ const WorkspaceScreen = () => {
 
         const { editor, ladderFlows } = useOpenPLCStore.getState()
         const currentPou = currentProject.data.pous.find((pou) => pou.data.name === editor.meta.name)
+
+        // Helper to create composite key for current POU, handling FB instance context
+        const makeCompositeKeyForCurrentPou = (variableName: string): string | null => {
+          if (!currentPou) return null
+          if (currentPou.type === 'function-block') {
+            const fbTypeKey = currentPou.data.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (!selectedKey) return null
+            const instances = fbDebugInstances.get(fbTypeKey) || []
+            const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+            if (!selectedInstance) return null
+            return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
+          }
+          return `${currentPou.data.name}:${variableName}`
+        }
+
         if (currentPou && currentPou.data.body.language === 'ld') {
           const currentLadderFlow = ladderFlows.find((flow) => flow.name === editor.meta.name)
           if (currentLadderFlow) {
@@ -711,8 +727,10 @@ const WorkspaceScreen = () => {
                     nodeData.variable?.type?.definition === 'base-type' &&
                     nodeData.variable?.type?.value?.toUpperCase() === 'BOOL'
                   ) {
-                    const compositeKey = `${currentPou.data.name}:${variableName}`
-                    debugVariableKeys.add(compositeKey)
+                    const compositeKey = makeCompositeKeyForCurrentPou(variableName)
+                    if (compositeKey) {
+                      debugVariableKeys.add(compositeKey)
+                    }
                   }
                 }
               })
@@ -781,8 +799,10 @@ const WorkspaceScreen = () => {
                     (v) => v.name.toLowerCase() === variableName.toLowerCase(),
                   )
                   if (variable && variable.type.value.toUpperCase() === 'BOOL') {
-                    const compositeKey = `${currentPou.data.name}:${variableName}`
-                    debugVariableKeys.add(compositeKey)
+                    const compositeKey = makeCompositeKeyForCurrentPou(variableName)
+                    if (compositeKey) {
+                      debugVariableKeys.add(compositeKey)
+                    }
                   }
                 }
               }
