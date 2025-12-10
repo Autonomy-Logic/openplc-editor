@@ -85,10 +85,10 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   // Get FB instance context for function block POUs
   const fbInstanceContext = useMemo(() => {
     if (!pouRef || pouRef.type !== 'function-block') return null
-    const fbTypeName = pouRef.data.name
-    const selectedKey = fbSelectedInstance.get(fbTypeName)
+    const fbTypeKey = pouRef.data.name.toUpperCase() // Canonical key for map lookups
+    const selectedKey = fbSelectedInstance.get(fbTypeKey)
     if (!selectedKey) return null
-    const instances = fbDebugInstances.get(fbTypeName) || []
+    const instances = fbDebugInstances.get(fbTypeKey) || []
     return instances.find((inst) => inst.key === selectedKey) || null
   }, [pouRef, fbSelectedInstance, fbDebugInstances])
 

@@ -74,12 +74,14 @@ const Breadcrumbs = () => {
   // Check if we should show the FB instance dropdown
   const isFunctionBlock = 'pouType' in meta && meta.pouType === 'function-block'
   const fbTypeName = meta.name
+  const fbTypeKey = fbTypeName.toUpperCase() // Canonical key for map lookups
 
   console.log('[FB DEBUG] Breadcrumb render:', {
     meta,
     isFunctionBlock,
     isDebuggerVisible,
     fbTypeName,
+    fbTypeKey,
     fbDebugInstancesSize: fbDebugInstances.size,
     fbDebugInstancesKeys: Array.from(fbDebugInstances.keys()),
   })
@@ -87,23 +89,23 @@ const Breadcrumbs = () => {
   // Get available instances for this FB type
   const fbInstances = useMemo((): FbInstanceInfo[] => {
     if (!isFunctionBlock || !isDebuggerVisible) return []
-    const instances = fbDebugInstances.get(fbTypeName) || []
-    console.log('[FB DEBUG] fbInstances for type:', fbTypeName, instances)
+    const instances = fbDebugInstances.get(fbTypeKey) || []
+    console.log('[FB DEBUG] fbInstances for type key:', fbTypeKey, instances)
     return instances
-  }, [isFunctionBlock, isDebuggerVisible, fbDebugInstances, fbTypeName])
+  }, [isFunctionBlock, isDebuggerVisible, fbDebugInstances, fbTypeKey])
 
   // Get currently selected instance key
   const selectedInstanceKey = useMemo((): string | undefined => {
     if (!isFunctionBlock || !isDebuggerVisible) return undefined
-    return fbSelectedInstance.get(fbTypeName)
-  }, [isFunctionBlock, isDebuggerVisible, fbSelectedInstance, fbTypeName])
+    return fbSelectedInstance.get(fbTypeKey)
+  }, [isFunctionBlock, isDebuggerVisible, fbSelectedInstance, fbTypeKey])
 
   // Handle instance selection change
   const handleInstanceChange = useCallback(
     (newKey: string) => {
-      setFbSelectedInstance(fbTypeName, newKey)
+      setFbSelectedInstance(fbTypeKey, newKey)
     },
-    [fbTypeName, setFbSelectedInstance],
+    [fbTypeKey, setFbSelectedInstance],
   )
 
   // Determine if we should show the instance dropdown

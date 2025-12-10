@@ -93,9 +93,9 @@ const WorkspaceScreen = () => {
         let compositeKey: string
         let displayName: string
         if (pou.type === 'function-block') {
-          const fbTypeName = pou.data.name
-          const selectedKey = fbSelectedInstance.get(fbTypeName)
-          const instances = fbDebugInstances.get(fbTypeName) || []
+          const fbTypeKey = pou.data.name.toUpperCase() // Canonical key for map lookups
+          const selectedKey = fbSelectedInstance.get(fbTypeKey)
+          const instances = fbDebugInstances.get(fbTypeKey) || []
           const selectedInstance = instances.find((inst) => inst.key === selectedKey)
 
           if (selectedInstance) {
@@ -624,12 +624,12 @@ const WorkspaceScreen = () => {
               })
           } else if (pou.type === 'function-block') {
             // For function block POUs, transform variable keys using selected instance context
-            const fbTypeName = pou.data.name
-            const selectedKey = fbSelectedInstance.get(fbTypeName)
+            const fbTypeKey = pou.data.name.toUpperCase() // Canonical key for map lookups
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
             if (!selectedKey) return // No instance selected, skip
 
             // Find the instance info for the selected key
-            const instances = fbDebugInstances.get(fbTypeName) || []
+            const instances = fbDebugInstances.get(fbTypeKey) || []
             const selectedInstance = instances.find((inst) => inst.key === selectedKey)
             if (!selectedInstance) return // Instance not found, skip
 

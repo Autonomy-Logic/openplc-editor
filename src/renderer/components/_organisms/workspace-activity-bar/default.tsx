@@ -981,31 +981,31 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             pou.data.variables.forEach((v) => {
               if (v.type.definition !== 'derived') return
 
-              const fbTypeName = v.type.value
-              const fbTypeNameUpper = fbTypeName.toUpperCase()
+              const fbTypeNameRaw = v.type.value
+              const fbTypeKey = fbTypeNameRaw.toUpperCase() // Canonical key for map lookups
 
               console.log('[FB DEBUG] Checking derived variable:', {
                 program: pou.data.name,
                 varName: v.name,
-                fbTypeName: fbTypeName,
+                fbTypeNameRaw: fbTypeNameRaw,
+                fbTypeKey: fbTypeKey,
               })
 
               // Check if this is a standard function block
               const isStandardFB = StandardFunctionBlocks.pous.some(
-                (sfb) =>
-                  sfb.name.toUpperCase() === fbTypeNameUpper && normalizeTypeString(sfb.type) === 'functionblock',
+                (sfb) => sfb.name.toUpperCase() === fbTypeKey && normalizeTypeString(sfb.type) === 'functionblock',
               )
 
               // Check if this is a custom function block
               const isCustomFB = project.data.pous.some(
-                (p) => normalizeTypeString(p.type) === 'functionblock' && p.data.name.toUpperCase() === fbTypeNameUpper,
+                (p) => normalizeTypeString(p.type) === 'functionblock' && p.data.name.toUpperCase() === fbTypeKey,
               )
 
-              console.log('[FB DEBUG] FB type check:', { fbTypeName, isStandardFB, isCustomFB })
+              console.log('[FB DEBUG] FB type check:', { fbTypeKey, isStandardFB, isCustomFB })
 
               if (isStandardFB || isCustomFB) {
                 const instanceInfo: FbInstanceInfo = {
-                  fbTypeName: fbTypeName,
+                  fbTypeName: fbTypeNameRaw, // Keep original name for display
                   programName: pou.data.name,
                   programInstanceName: programInstance.name,
                   fbVariableName: v.name,
@@ -1014,9 +1014,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
                 console.log('[FB DEBUG] Found FB instance:', instanceInfo)
 
-                const existingInstances = fbDebugInstancesMap.get(fbTypeName) || []
+                // Use uppercase key for consistent lookups
+                const existingInstances = fbDebugInstancesMap.get(fbTypeKey) || []
                 existingInstances.push(instanceInfo)
-                fbDebugInstancesMap.set(fbTypeName, existingInstances)
+                fbDebugInstancesMap.set(fbTypeKey, existingInstances)
               }
             })
           })
