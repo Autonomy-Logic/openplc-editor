@@ -591,13 +591,106 @@ const WorkspaceScreen = () => {
       }
     })
 
+    // Process function outputs for FB POUs
+    // Functions inside FB POUs have debug paths like: RES0__INSTANCE0.FB_INSTANCE0._TMP_FUNC_NAME123_OUTPUT
+    project.data.pous.forEach((pou) => {
+      if (pou.type !== 'function-block') return
+      if (pou.data.body.language !== 'ld') return
+
+      const fbLadderFlow = ladderFlows.find((flow) => flow.name === pou.data.name)
+      if (!fbLadderFlow) return
+
+      // Find all instances of this FB in program POUs
+      const instances = project.data.configuration.resource.instances
+      project.data.pous.forEach((programPou) => {
+        if (programPou.type !== 'program') return
+
+        const programInstance = instances.find((inst) => inst.program === programPou.data.name)
+        if (!programInstance) return
+
+        // Find FB instances of this type in the program
+        const fbInstances = programPou.data.variables.filter(
+          (v) => v.type.definition === 'derived' && v.type.value.toUpperCase() === pou.data.name.toUpperCase(),
+        )
+
+        fbInstances.forEach((fbInstance) => {
+          // Process function blocks in the FB's ladder flow
+          fbLadderFlow.rungs.forEach((rung) => {
+            rung.nodes.forEach((node) => {
+              if (node.type !== 'block') return
+
+              const blockData = node.data as {
+                variable?: { name: string }
+                variant?: {
+                  name: string
+                  type: string
+                  variables: Array<{ name: string; class: string; type: { definition: string; value: string } }>
+                }
+                numericId?: string
+                executionControl?: boolean
+              }
+
+              // Only process functions (not function blocks)
+              if (!blockData.variant || blockData.variant.type !== 'function') return
+
+              const blockName = blockData.variant.name.toUpperCase()
+              const numericId = blockData.numericId
+              if (!numericId) return
+
+              let boolOutputs = blockData.variant.variables.filter(
+                (v) =>
+                  (v.class === 'output' || v.class === 'inOut') &&
+                  v.type.definition === 'base-type' &&
+                  v.type.value.toUpperCase() === 'BOOL',
+              )
+
+              // Add ENO if execution control is enabled
+              const hasExecutionControl = blockData.executionControl || false
+              if (hasExecutionControl) {
+                const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+                if (!hasENO) {
+                  boolOutputs = [
+                    ...boolOutputs,
+                    { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+                  ]
+                }
+              }
+
+              boolOutputs.forEach((outputVar) => {
+                // For FB POUs, function temps are nested under the FB instance:
+                // RES0__INSTANCE0.IRRIGATION_MAIN_CONTROLLER0._TMP_EQ_STATE7415072_ENO
+                const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}._TMP_${blockName}${numericId}_${outputVar.name.toUpperCase()}`
+                const index = debugVariableIndexes.get(debugPath)
+
+                if (index !== undefined) {
+                  // The variable name should include the FB instance prefix for composite key matching
+                  const tempVarName = `${fbInstance.name}._TMP_${blockName}${numericId}_${outputVar.name}`
+                  variableInfoMap.set(index, {
+                    pouName: programPou.data.name,
+                    variable: {
+                      name: tempVarName,
+                      type: { definition: 'base-type', value: 'bool' },
+                      class: 'local',
+                      location: '',
+                      documentation: '',
+                      debug: false,
+                    },
+                  })
+                }
+              })
+            })
+          })
+        })
+      })
+    })
+
     variableInfoMapRef.current = variableInfoMap
 
     // Targeted logging for ENO variables to debug FB POU ENO handling
-    // Log only ENO variables for nested FBs to verify they're being mapped correctly
+    // Log ENO variables for nested FBs and function temps
     for (const [index, info] of variableInfoMap.entries()) {
       const nameUpper = info.variable.name.toUpperCase()
-      if (nameUpper.endsWith('.ENO')) {
+      if (nameUpper.endsWith('.ENO') || (nameUpper.includes('_TMP_') && nameUpper.endsWith('_ENO'))) {
         console.log('[ENO MAP]', {
           index,
           pouName: info.pouName,
