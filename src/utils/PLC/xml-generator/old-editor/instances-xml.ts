@@ -1,6 +1,9 @@
 import { PLCConfiguration } from '@root/types/PLC/open-plc'
 import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
 import { PouInstance, TaskXML } from '@root/types/PLC/xml-data/old-editor/task/task-diagram'
+import { VariableXML } from '@root/types/PLC/xml-data/old-editor/variable/variable-diagram'
+
+import { convertTypeToXml } from './type-xml'
 
 export const oldEditorInstanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => {
   const { instances, tasks, globalVariables } = configuration.resource
@@ -31,12 +34,10 @@ export const oldEditorInstanceToXml = (xml: BaseXml, configuration: PLCConfigura
   })
 
   globalVariables.forEach((variable) => {
-    const v = {
+    const v: VariableXML = {
       '@name': variable.name,
-      '@address': variable.location,
-      type: {
-        [variable.type.value.toUpperCase()]: '',
-      },
+      '@address': variable.location || undefined,
+      type: convertTypeToXml(variable.type),
       initialValue: variable.initialValue
         ? {
             simpleValue: {

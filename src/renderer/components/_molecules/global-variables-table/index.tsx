@@ -3,7 +3,12 @@ import { PLCGlobalVariable } from '@root/types/PLC/open-plc'
 import { createColumnHelper } from '@tanstack/react-table'
 
 import { GenericTable } from '../../_atoms/generic-table'
-import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
+import {
+  EditableDocumentationCell,
+  EditableInitialValueCell,
+  EditableLocationCell,
+  EditableNameCell,
+} from './editable-cell'
 import { SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCGlobalVariable>()
@@ -42,12 +47,12 @@ const columns = [
   columnHelper.accessor('location', {
     header: 'Location',
     enableResizing: true,
-    cell: EditableNameCell,
+    cell: EditableLocationCell,
   }),
   columnHelper.accessor('initialValue', {
     header: 'Initial Value',
     enableResizing: true,
-    cell: EditableNameCell,
+    cell: EditableInitialValueCell,
   }),
   columnHelper.accessor('documentation', {
     header: 'Documentation',

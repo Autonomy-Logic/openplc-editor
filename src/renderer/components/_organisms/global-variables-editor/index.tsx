@@ -45,7 +45,16 @@ const GlobalVariablesEditor = () => {
    * Table data and column filters states to keep track of the table data and column filters
    */
   const [tableData, setTableData] = useState<PLCGlobalVariable[]>([])
-  const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData as VariablePLC[]))
+  const [editorCode, setEditorCode] = useState(() => {
+    if (
+      editor.type === 'plc-resource' &&
+      editor.variable.display === 'code' &&
+      typeof editor.variable.code === 'string'
+    ) {
+      return editor.variable.code
+    }
+    return generateIecVariablesToString(tableData as VariablePLC[])
+  })
   const [parseError, setParseError] = useState<string | null>(null)
 
   const [editorVariables, setEditorVariables] = useState<GlobalVariablesTableType>({
@@ -73,8 +82,10 @@ const GlobalVariablesEditor = () => {
   }, [editor, globalVariables])
 
   useEffect(() => {
-    setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
-  }, [tableData])
+    if (editorVariables.display !== 'code') {
+      setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
+    }
+  }, [tableData, editorVariables.display])
 
   /**
    * If the editor name is not the same as the current editor name
