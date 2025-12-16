@@ -1,4 +1,5 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { pinSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
 import {
@@ -10,9 +11,10 @@ import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { isLegalIdentifier, sanitizeVariableInput } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { HighlightedText, InputWithRef } from '../../_atoms'
+import { GenericComboboxCell } from '../../_atoms/generic-table-inputs'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../rename-impact-modal'
 
@@ -216,4 +218,153 @@ const EditableDocumentationCell = ({
   )
 }
 
-export { EditableDocumentationCell, EditableNameCell }
+const EditableInitialValueCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: IEditableCellProps) => {
+  const initialValue = getValue<string>()
+
+  const { searchQuery } = useOpenPLCStore()
+
+  const [cellValue, setCellValue] = useState(initialValue ?? '')
+  const [isEditing, setIsEditing] = useState(false)
+
+  const onBlur = () => {
+    if (cellValue === initialValue) return setIsEditing(false)
+
+    table.options.meta?.updateData(index, id, cellValue)
+    setIsEditing(false)
+  }
+
+  const handleStartEditing = () => {
+    if (!editable) return
+    setIsEditing(true)
+  }
+
+  useEffect(() => {
+    setCellValue(initialValue ?? '')
+  }, [initialValue])
+
+  return isEditing ? (
+    <InputWithRef
+      value={cellValue}
+      onChange={(e) => setCellValue(e.target.value)}
+      onBlur={onBlur}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
+    />
+  ) : (
+    <div
+      onClick={handleStartEditing}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+        'pointer-events-none': !editable,
+      })}
+    >
+      <HighlightedText
+        text={cellValue}
+        searchQuery={searchQuery}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+      />
+    </div>
+  )
+}
+
+const EditableLocationCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: IEditableCellProps) => {
+  const initialValue = getValue<string>()
+  const { toast } = useToast()
+
+  const { searchQuery } = useOpenPLCStore()
+  const existingPins = pinSelectors.usePins()
+
+  const [cellValue, setCellValue] = useState(initialValue ?? '')
+
+  const onBlur = (value: string) => {
+    if (value === initialValue) return
+    const res = table.options.meta?.updateData(index, id, value)
+    if (res?.ok) {
+      setCellValue(value)
+      return
+    }
+    setCellValue(initialValue ?? '')
+    toast({ title: res?.title, description: res?.message, variant: 'fail' })
+  }
+
+  useEffect(() => {
+    setCellValue(initialValue ?? '')
+  }, [initialValue])
+
+  const selectableValues = useCallback(() => {
+    const ainPins = existingPins
+      .filter((pin) => pin.pinType === 'analogInput')
+      .map((pin) => ({
+        id: `${id}-${pin.pin}`,
+        value: pin.address,
+        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+      }))
+    const aoutPins = existingPins
+      .filter((pin) => pin.pinType === 'analogOutput')
+      .map((pin) => ({
+        id: `${id}-${pin.pin}`,
+        value: pin.address,
+        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+      }))
+
+    const dinPins = existingPins
+      .filter((pin) => pin.pinType === 'digitalInput')
+      .map((pin) => ({
+        id: `${id}-${pin.pin}`,
+        value: pin.address,
+        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+      }))
+
+    const doutPins = existingPins
+      .filter((pin) => pin.pinType === 'digitalOutput')
+      .map((pin) => ({
+        id: `${id}-${pin.pin}`,
+        value: pin.address,
+        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+      }))
+
+    return [
+      { label: 'Analog Inputs', options: ainPins },
+      { label: 'Analog Outputs', options: aoutPins },
+      { label: 'Digital Inputs', options: dinPins },
+      { label: 'Digital Outputs', options: doutPins },
+    ]
+  }, [id, existingPins])
+
+  return editable ? (
+    <GenericComboboxCell
+      value={cellValue}
+      onValueChange={(value) => {
+        onBlur(value)
+      }}
+      selectValues={selectableValues()}
+      selected={editable}
+      openOnSelectedOption
+      canAddACustomOption
+    />
+  ) : (
+    <div
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+        'pointer-events-none': !editable,
+      })}
+    >
+      <HighlightedText
+        text={cellValue}
+        searchQuery={searchQuery}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+      />
+    </div>
+  )
+}
+
+export { EditableDocumentationCell, EditableInitialValueCell, EditableLocationCell, EditableNameCell }
