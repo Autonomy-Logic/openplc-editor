@@ -73,8 +73,10 @@ const GlobalVariablesEditor = () => {
   }, [editor, globalVariables])
 
   useEffect(() => {
-    setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
-  }, [tableData])
+    if (editorVariables.display !== 'code') {
+      setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
+    }
+  }, [tableData, editorVariables.display])
 
   /**
    * If the editor name is not the same as the current editor name
