@@ -21,7 +21,7 @@ interface _SearchResult {
       'program' | 'function' | 'function-block',
       Array<{
         name: string
-        language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st'
+        language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st' | 'python' | 'cpp'
         pouType: 'program' | 'function' | 'function-block'
         body: string
         variable: string | null
