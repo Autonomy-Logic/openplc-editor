@@ -379,68 +379,6 @@ const Board = memo(function () {
                   <span className='ml-2 text-xs text-red-600 dark:text-red-400'>● Connection failed</span>
                 )}
               </div>
-              {connectionStatus === 'connected' && timingStats && timingStats.scan_count > 0 && (
-                <div
-                  id='scan-cycle-stats-container'
-                  className='flex w-full flex-col gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-2 dark:border-neutral-700 dark:bg-neutral-900'
-                >
-                  <Label className='text-xs font-semibold text-neutral-950 dark:text-white'>
-                    Scan Cycle Statistics
-                  </Label>
-                  <div className='grid grid-cols-2 gap-x-4 gap-y-1'>
-                    <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-                      Scan Count:{' '}
-                      <span className='font-medium text-neutral-800 dark:text-neutral-200'>
-                        {timingStats.scan_count.toLocaleString()}
-                      </span>
-                    </span>
-                    <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-                      Overruns:{' '}
-                      <span className='font-medium text-neutral-800 dark:text-neutral-200'>{timingStats.overruns}</span>
-                    </span>
-                    {timingStats.scan_time_avg !== null && (
-                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-                        Scan Time (avg):{' '}
-                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
-                          {timingStats.scan_time_avg} us
-                        </span>
-                      </span>
-                    )}
-                    {timingStats.cycle_time_avg !== null && (
-                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-                        Cycle Time (avg):{' '}
-                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
-                          {timingStats.cycle_time_avg} us
-                        </span>
-                      </span>
-                    )}
-                    {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
-                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-                        Scan Time (min/max):{' '}
-                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
-                          {timingStats.scan_time_min}/{timingStats.scan_time_max} us
-                        </span>
-                      </span>
-                    )}
-                    {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
-                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-                        Cycle Time (min/max):{' '}
-                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
-                          {timingStats.cycle_time_min}/{timingStats.cycle_time_max} us
-                        </span>
-                      </span>
-                    )}
-                    {timingStats.cycle_latency_avg !== null && (
-                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-                        Cycle Latency (avg):{' '}
-                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
-                          {timingStats.cycle_latency_avg} us
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
             </>
           ) : (
             <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
@@ -501,21 +439,23 @@ const Board = memo(function () {
               </button>
             </div>
           )}
-          <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
-            <Label id='board-specs-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
-              Specs
-            </Label>
-            <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2'>
-              {Object.entries(availableBoards.get(deviceBoard)?.specs || {}).map(([spec, value]) => (
-                <p
-                  className='text-start font-caption text-cp-sm font-semibold text-neutral-850 dark:text-white'
-                  key={spec}
-                >
-                  {spec}: <span className='font-light text-neutral-600 dark:text-neutral-400'>{value}</span>
-                </p>
-              ))}
+          {!isOpenPLCRuntimeTarget(currentBoardInfo) && (
+            <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
+              <Label id='board-specs-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
+                Specs
+              </Label>
+              <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2'>
+                {Object.entries(availableBoards.get(deviceBoard)?.specs || {}).map(([spec, value]) => (
+                  <p
+                    className='text-start font-caption text-cp-sm font-semibold text-neutral-850 dark:text-white'
+                    key={spec}
+                  >
+                    {spec}: <span className='font-light text-neutral-600 dark:text-neutral-400'>{value}</span>
+                  </p>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <div id='board-preview-container' className='flex h-full w-1/2 items-center justify-center pb-8'>
           <div className='h-[16rem] w-[20rem]'>
@@ -524,32 +464,93 @@ const Board = memo(function () {
         </div>
       </div>
       <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-      <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
-        <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>
-          <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
-            Pin Mapping
-          </h2>
-          <TableActions
-            className='w-fit *:rounded-md *:p-1'
-            actions={[
-              {
-                ariaLabel: 'Add table row button',
-                onClick: createNewPin,
-                icon: <PlusIcon className='!stroke-brand' />,
-                id: 'add-pin-button',
-              },
-              {
-                ariaLabel: 'Remove table row button',
-                onClick: removePin,
-                disabled: currentSelectedPinTableRow === -1,
-                icon: <MinusIcon className='!stroke-brand' />,
-                id: 'remove-pin-button',
-              },
-            ]}
-          />
+      {isOpenPLCRuntimeTarget(currentBoardInfo) ? (
+        connectionStatus === 'connected' &&
+        timingStats &&
+        timingStats.scan_count > 0 && (
+          <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-4'>
+            <h2
+              id='scan-cycle-stats-title'
+              className='select-none text-lg font-medium text-neutral-950 dark:text-white'
+            >
+              Scan Cycle Statistics
+            </h2>
+            <div id='scan-cycle-stats-cards' className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'>
+              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Count</span>
+                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                  {timingStats.scan_count.toLocaleString()}
+                </span>
+              </div>
+              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Overruns</span>
+                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>{timingStats.overruns}</span>
+              </div>
+              {timingStats.scan_time_avg !== null && (
+                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Time (avg)</span>
+                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                    {timingStats.scan_time_avg} <span className='text-sm font-normal'>us</span>
+                  </span>
+                  {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      min: {timingStats.scan_time_min} / max: {timingStats.scan_time_max}
+                    </span>
+                  )}
+                </div>
+              )}
+              {timingStats.cycle_time_avg !== null && (
+                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
+                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                    {timingStats.cycle_time_avg} <span className='text-sm font-normal'>us</span>
+                  </span>
+                  {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      min: {timingStats.cycle_time_min} / max: {timingStats.cycle_time_max}
+                    </span>
+                  )}
+                </div>
+              )}
+              {timingStats.cycle_latency_avg !== null && (
+                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Latency (avg)</span>
+                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                    {timingStats.cycle_latency_avg} <span className='text-sm font-normal'>us</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      ) : (
+        <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
+          <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>
+            <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
+              Pin Mapping
+            </h2>
+            <TableActions
+              className='w-fit *:rounded-md *:p-1'
+              actions={[
+                {
+                  ariaLabel: 'Add table row button',
+                  onClick: createNewPin,
+                  icon: <PlusIcon className='!stroke-brand' />,
+                  id: 'add-pin-button',
+                },
+                {
+                  ariaLabel: 'Remove table row button',
+                  onClick: removePin,
+                  disabled: currentSelectedPinTableRow === -1,
+                  icon: <MinusIcon className='!stroke-brand' />,
+                  id: 'remove-pin-button',
+                },
+              ]}
+            />
+          </div>
+          <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
         </div>
-        <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
-      </div>
+      )}
 
       <Modal open={showPythonWarning} onOpenChange={setShowPythonWarning}>
         <ModalContent className='h-fit w-[500px]'>
