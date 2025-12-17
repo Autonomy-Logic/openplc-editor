@@ -6,7 +6,7 @@ import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
+import type { DeviceActions, RuntimeConnection, TimingStats } from '@root/renderer/store/slices/device/types'
 import { cn, isArduinoTarget, isOpenPLCRuntimeTarget } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -47,11 +47,13 @@ const Board = memo(function () {
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
-  const timingStats = useOpenPLCStore((state): RuntimeConnection['timingStats'] => state.runtimeConnection.timingStats)
+  const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
   const setPlcRuntimeStatus = useOpenPLCStore(
     (state): DeviceActions['setPlcRuntimeStatus'] => state.deviceActions.setPlcRuntimeStatus,
   )
-  const setTimingStats = useOpenPLCStore((state): DeviceActions['setTimingStats'] => state.deviceActions.setTimingStats)
+  const setTimingStats = useOpenPLCStore(
+    (state): ((stats: TimingStats | null) => void) => state.deviceActions.setTimingStats,
+  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
