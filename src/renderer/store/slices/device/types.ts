@@ -5,7 +5,7 @@ import {
   interfaceOptions,
   staticHostConfigurationSchema,
 } from '@root/types/PLC/devices'
-import z from 'zod'
+import { z } from 'zod'
 
 /**
  * The pin mapping is an unique structure that record the pins added by the user.
