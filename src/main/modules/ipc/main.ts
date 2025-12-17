@@ -89,12 +89,15 @@ class MainProcessBridge implements MainIpcModule {
               data += chunk.toString()
             })
             res.on('end', () => {
+              // Extract runtime version from response header
+              const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
+
               if (res.statusCode === 404) {
-                resolve({ hasUsers: false })
+                resolve({ hasUsers: false, runtimeVersion })
               } else if (res.statusCode === 200) {
-                resolve({ hasUsers: true })
+                resolve({ hasUsers: true, runtimeVersion })
               } else {
-                resolve({ hasUsers: false, error: data || `Unexpected status: ${res.statusCode}` })
+                resolve({ hasUsers: false, error: data || `Unexpected status: ${res.statusCode}`, runtimeVersion })
               }
             })
           },
