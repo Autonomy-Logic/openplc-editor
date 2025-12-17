@@ -8,17 +8,36 @@ import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
-  validationContext: 'create-project' | 'open-project' | 'open-recent-project' | 'close-project' | 'close-app'
+  validationContext:
+    | 'create-project'
+    | 'open-project'
+    | 'open-recent-project'
+    | 'open-project-by-path'
+    | 'close-project'
+    | 'close-app'
   recentResponse?: IProjectServiceResponse
+  projectPath?: string
 }
 
-const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }: SaveChangeModalProps) => {
+const SaveChangesModal = ({
+  isOpen,
+  validationContext,
+  recentResponse,
+  projectPath,
+  ...rest
+}: SaveChangeModalProps) => {
   const {
     project,
     deviceDefinitions,
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
-    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject, openRecentProject, saveProject },
+    sharedWorkspaceActions: {
+      clearStatesOnCloseProject,
+      openProject,
+      openRecentProject,
+      openProjectByPath,
+      saveProject,
+    },
   } = useOpenPLCStore()
 
   const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
@@ -51,6 +70,14 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
           return
         }
         openRecentProject(recentResponse)
+        return
+      }
+      case 'open-project-by-path': {
+        if (!projectPath) {
+          console.error('No project path provided for opening project by path.')
+          return
+        }
+        await openProjectByPath(projectPath)
         return
       }
       case 'close-project':

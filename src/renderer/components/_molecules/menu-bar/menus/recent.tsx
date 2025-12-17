@@ -10,8 +10,9 @@ import { MenuClasses } from '../constants'
 
 export const RecentMenu = () => {
   const {
-    workspace: { recent },
+    workspace: { recent, editingState },
     workspaceActions: { setRecent },
+    modalActions: { openModal },
     sharedWorkspaceActions: { openProjectByPath },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
@@ -86,6 +87,24 @@ export const RecentMenu = () => {
   }, [recent])
 
   const handleOpenProjectByPath = async (projectPath: string) => {
+    switch (editingState) {
+      case 'unsaved':
+        openModal('save-changes-project', {
+          validationContext: 'open-project-by-path',
+          projectPath,
+        })
+        return
+      case 'save-request':
+        toast({
+          title: 'Save in progress',
+          description: 'Please wait for the current save operation to complete.',
+          variant: 'warn',
+        })
+        return
+      default:
+        break
+    }
+
     const { success, error } = await openProjectByPath(projectPath)
     if (!success) {
       if (error?.description.includes('Error reading project file.')) {
