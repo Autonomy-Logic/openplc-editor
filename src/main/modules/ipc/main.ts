@@ -358,15 +358,49 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
     try {
-      const result = await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/status', (data: string) => {
-        const response = JSON.parse(data) as { status: string }
-        return response.status
+      const result = await this.makeRuntimeApiRequest<{
+        status: string
+        timing_stats?: {
+          scan_count: number
+          scan_time_min: number | null
+          scan_time_max: number | null
+          scan_time_avg: number | null
+          cycle_time_min: number | null
+          cycle_time_max: number | null
+          cycle_time_avg: number | null
+          cycle_latency_min: number | null
+          cycle_latency_max: number | null
+          cycle_latency_avg: number | null
+          overruns: number
+        }
+      }>(ipAddress, jwtToken, '/api/status', (data: string) => {
+        const response = JSON.parse(data) as {
+          status: string
+          timing_stats?: {
+            scan_count: number
+            scan_time_min: number | null
+            scan_time_max: number | null
+            scan_time_avg: number | null
+            cycle_time_min: number | null
+            cycle_time_max: number | null
+            cycle_time_avg: number | null
+            cycle_latency_min: number | null
+            cycle_latency_max: number | null
+            cycle_latency_avg: number | null
+            overruns: number
+          }
+        }
+        return response
       })
 
-      if (result.success) {
-        return { success: true, status: result.data }
+      if (result.success && result.data) {
+        return {
+          success: true,
+          status: result.data.status,
+          timingStats: result.data.timing_stats,
+        }
       } else {
-        return { success: false, error: result.error }
+        return { success: false, error: !result.success ? result.error : 'Unknown error' }
       }
     } catch (error) {
       return { success: false, error: String(error) }

@@ -47,9 +47,11 @@ const Board = memo(function () {
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  const timingStats = useOpenPLCStore((state): RuntimeConnection['timingStats'] => state.runtimeConnection.timingStats)
   const setPlcRuntimeStatus = useOpenPLCStore(
     (state): DeviceActions['setPlcRuntimeStatus'] => state.deviceActions.setPlcRuntimeStatus,
   )
+  const setTimingStats = useOpenPLCStore((state): DeviceActions['setTimingStats'] => state.deviceActions.setTimingStats)
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -223,6 +225,7 @@ const Board = memo(function () {
             setRuntimeJwtToken(null)
             setRuntimeConnectionStatus('disconnected')
             setPlcRuntimeStatus(null)
+            setTimingStats(null)
           } else {
             setPlcRuntimeStatus('UNKNOWN')
           }
@@ -242,6 +245,12 @@ const Board = memo(function () {
             } else {
               setPlcRuntimeStatus('UNKNOWN')
             }
+            // Update timing stats if available (OpenPLC Runtime v4+)
+            if (result.timingStats) {
+              setTimingStats(result.timingStats)
+            } else {
+              setTimingStats(null)
+            }
           } else {
             handlePollFailure()
           }
@@ -256,6 +265,7 @@ const Board = memo(function () {
       statusInterval = setInterval(() => void pollStatus(), 2500)
     } else {
       setPlcRuntimeStatus(null)
+      setTimingStats(null)
     }
 
     return () => {
@@ -367,6 +377,68 @@ const Board = memo(function () {
                   <span className='ml-2 text-xs text-red-600 dark:text-red-400'>● Connection failed</span>
                 )}
               </div>
+              {connectionStatus === 'connected' && timingStats && timingStats.scan_count > 0 && (
+                <div
+                  id='scan-cycle-stats-container'
+                  className='flex w-full flex-col gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-2 dark:border-neutral-700 dark:bg-neutral-900'
+                >
+                  <Label className='text-xs font-semibold text-neutral-950 dark:text-white'>
+                    Scan Cycle Statistics
+                  </Label>
+                  <div className='grid grid-cols-2 gap-x-4 gap-y-1'>
+                    <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                      Scan Count:{' '}
+                      <span className='font-medium text-neutral-800 dark:text-neutral-200'>
+                        {timingStats.scan_count.toLocaleString()}
+                      </span>
+                    </span>
+                    <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                      Overruns:{' '}
+                      <span className='font-medium text-neutral-800 dark:text-neutral-200'>{timingStats.overruns}</span>
+                    </span>
+                    {timingStats.scan_time_avg !== null && (
+                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                        Scan Time (avg):{' '}
+                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
+                          {timingStats.scan_time_avg} us
+                        </span>
+                      </span>
+                    )}
+                    {timingStats.cycle_time_avg !== null && (
+                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                        Cycle Time (avg):{' '}
+                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
+                          {timingStats.cycle_time_avg} us
+                        </span>
+                      </span>
+                    )}
+                    {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
+                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                        Scan Time (min/max):{' '}
+                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
+                          {timingStats.scan_time_min}/{timingStats.scan_time_max} us
+                        </span>
+                      </span>
+                    )}
+                    {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
+                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                        Cycle Time (min/max):{' '}
+                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
+                          {timingStats.cycle_time_min}/{timingStats.cycle_time_max} us
+                        </span>
+                      </span>
+                    )}
+                    {timingStats.cycle_latency_avg !== null && (
+                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                        Cycle Latency (avg):{' '}
+                        <span className='font-medium text-neutral-800 dark:text-neutral-200'>
+                          {timingStats.cycle_latency_avg} us
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>

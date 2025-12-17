@@ -18,11 +18,28 @@ const devicePinMappingSchema = z.object({
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
+const timingStatsSchema = z.object({
+  scan_count: z.number(),
+  scan_time_min: z.number().nullable(),
+  scan_time_max: z.number().nullable(),
+  scan_time_avg: z.number().nullable(),
+  cycle_time_min: z.number().nullable(),
+  cycle_time_max: z.number().nullable(),
+  cycle_time_avg: z.number().nullable(),
+  cycle_latency_min: z.number().nullable(),
+  cycle_latency_max: z.number().nullable(),
+  cycle_latency_avg: z.number().nullable(),
+  overruns: z.number(),
+})
+
+type TimingStats = z.infer<typeof timingStatsSchema>
+
 const runtimeConnectionSchema = z.object({
   jwtToken: z.string().nullable(),
   connectionStatus: z.enum(['disconnected', 'connecting', 'connected', 'error']),
   plcStatus: z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable(),
   ipAddress: z.string().nullable(),
+  timingStats: timingStatsSchema.nullable(),
 })
 
 type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>
@@ -159,6 +176,7 @@ const deviceActionSchema = z.object({
     .function()
     .args(z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable())
     .returns(z.void()),
+  setTimingStats: z.function().args(timingStatsSchema.nullable()).returns(z.void()),
   setTemporaryDhcpIp: z.function().args(z.string().optional()).returns(z.void()),
 })
 
@@ -176,6 +194,7 @@ export type {
   DeviceSlice,
   DeviceState,
   RuntimeConnection,
+  TimingStats,
 }
 export {
   baudRateOptions,
@@ -187,4 +206,5 @@ export {
   deviceStateSchema,
   interfaceOptions,
   runtimeConnectionSchema,
+  timingStatsSchema,
 }
