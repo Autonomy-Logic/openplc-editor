@@ -36,7 +36,7 @@ type TimingStats = {
   overruns: number
 }
 
-const timingStatsSchema: z.ZodType<TimingStats> = z.object({
+const timingStatsSchema = z.object({
   scan_count: z.number(),
   scan_time_min: z.number().nullable(),
   scan_time_max: z.number().nullable(),
@@ -196,7 +196,9 @@ const deviceActionSchema = z.object({
   setTemporaryDhcpIp: z.function().args(z.string().optional()).returns(z.void()),
 })
 
-type DeviceActions = z.infer<typeof deviceActionSchema>
+type DeviceActions = Omit<z.infer<typeof deviceActionSchema>, 'setTimingStats'> & {
+  setTimingStats: (stats: TimingStats | null) => void
+}
 
 type DeviceSlice = DeviceState & {
   deviceActions: DeviceActions
