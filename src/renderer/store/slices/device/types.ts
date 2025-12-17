@@ -18,7 +18,25 @@ const devicePinMappingSchema = z.object({
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
-const timingStatsSchema = z.object({
+/**
+ * Timing statistics returned by OpenPLC Runtime v4 status API.
+ * Defined as plain TypeScript type to avoid z.infer type resolution issues.
+ */
+type TimingStats = {
+  scan_count: number
+  scan_time_min: number | null
+  scan_time_max: number | null
+  scan_time_avg: number | null
+  cycle_time_min: number | null
+  cycle_time_max: number | null
+  cycle_time_avg: number | null
+  cycle_latency_min: number | null
+  cycle_latency_max: number | null
+  cycle_latency_avg: number | null
+  overruns: number
+}
+
+const timingStatsSchema: z.ZodType<TimingStats> = z.object({
   scan_count: z.number(),
   scan_time_min: z.number().nullable(),
   scan_time_max: z.number().nullable(),
@@ -31,8 +49,6 @@ const timingStatsSchema = z.object({
   cycle_latency_avg: z.number().nullable(),
   overruns: z.number(),
 })
-
-type TimingStats = z.infer<typeof timingStatsSchema>
 
 const runtimeConnectionSchema = z.object({
   jwtToken: z.string().nullable(),
