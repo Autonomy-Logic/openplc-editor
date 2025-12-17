@@ -309,8 +309,24 @@ const rendererProcessBridge = {
   runtimeGetStatus: (
     ipAddress: string,
     jwtToken: string,
-  ): Promise<{ success: boolean; status?: string; error?: string }> =>
-    ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken),
+  ): Promise<{
+    success: boolean
+    status?: string
+    timingStats?: {
+      scan_count: number
+      scan_time_min: number | null
+      scan_time_max: number | null
+      scan_time_avg: number | null
+      cycle_time_min: number | null
+      cycle_time_max: number | null
+      cycle_time_avg: number | null
+      cycle_latency_min: number | null
+      cycle_latency_max: number | null
+      cycle_latency_avg: number | null
+      overruns: number
+    }
+    error?: string
+  }> => ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken),
   runtimeStartPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:start-plc', ipAddress, jwtToken),
   runtimeStopPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>

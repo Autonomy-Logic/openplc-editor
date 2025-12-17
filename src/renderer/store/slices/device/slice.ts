@@ -3,7 +3,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import { defaultDeviceConfiguration } from './data'
-import type { DeviceSlice } from './types'
+import type { DeviceSlice, TimingStats } from './types'
 import {
   checkIfPinIsValid,
   checkIfPinNameIsValid,
@@ -36,6 +36,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     connectionStatus: 'disconnected',
     plcStatus: null,
     ipAddress: null,
+    timingStats: null,
   },
 
   deviceActions: {
@@ -468,6 +469,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
           runtimeConnection.plcStatus = status
+        }),
+      )
+    },
+    setTimingStats: (stats: TimingStats | null): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.timingStats = stats
         }),
       )
     },
