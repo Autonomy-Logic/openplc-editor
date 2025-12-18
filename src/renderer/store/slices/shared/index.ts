@@ -433,6 +433,7 @@ export const createSharedSlice: StateCreator<
         const response = await window.bridge.renamePouFile({
           filePath,
           newFileName: `${newPouName}.json`,
+          fileContent: pou,
         })
         if (!response.success) {
           console.error('Error renaming POU file:', response.error)
