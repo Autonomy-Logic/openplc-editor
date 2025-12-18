@@ -1426,20 +1426,20 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     if (hasSearchResults) {
       setActiveTab('search')
-    } else if (activeTab === 'search') {
-      setActiveTab('console')
+    } else {
+      setActiveTab((prev) => (prev === 'search' ? 'console' : prev))
     }
   }, [hasSearchResults])
 
   useEffect(() => {
-    if (!isDebuggerVisible && activeTab === 'debug') {
-      setActiveTab('console')
+    if (!isDebuggerVisible) {
+      setActiveTab((prev) => (prev === 'debug' ? 'console' : prev))
     }
   }, [isDebuggerVisible])
 
   useEffect(() => {
-    if (!isPlcLogsVisible && activeTab === 'plc-logs') {
-      setActiveTab('console')
+    if (!isPlcLogsVisible) {
+      setActiveTab((prev) => (prev === 'plc-logs' ? 'console' : prev))
     }
   }, [isPlcLogsVisible])
 
