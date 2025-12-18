@@ -24,16 +24,23 @@ const PlcLogs = memo(() => {
   const plcLogs = useOpenPLCStore((state) => state.workspace.plcLogs)
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
 
-  const { isV4, v4Logs, v3LogLines } = useMemo(() => {
+  const { isV4, _v4Logs, v4DisplayLogs, v3LogLines } = useMemo(() => {
     if (isV4Logs(plcLogs)) {
-      return { isV4: true, v4Logs: plcLogs, v3LogLines: [] as string[] }
+      // Filter out DEBUG level logs for display (too verbose), but keep them in _v4Logs for future filtering
+      const displayLogs = plcLogs.filter((entry) => entry.level !== 'DEBUG')
+      return { isV4: true, _v4Logs: plcLogs, v4DisplayLogs: displayLogs, v3LogLines: [] as string[] }
     } else {
       const lines = plcLogs ? plcLogs.split('\n').filter((line: string) => line.trim() !== '') : []
-      return { isV4: false, v4Logs: [] as RuntimeLogEntry[], v3LogLines: lines }
+      return {
+        isV4: false,
+        _v4Logs: [] as RuntimeLogEntry[],
+        v4DisplayLogs: [] as RuntimeLogEntry[],
+        v3LogLines: lines,
+      }
     }
   }, [plcLogs])
 
-  const logCount = isV4 ? v4Logs.length : v3LogLines.length
+  const logCount = isV4 ? v4DisplayLogs.length : v3LogLines.length
 
   useEffect(() => {
     const debouncedScrollToBottomLog = debounce(
@@ -61,7 +68,7 @@ const PlcLogs = memo(() => {
       className='relative h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
     >
       {isV4
-        ? v4Logs.map((entry, index) => (
+        ? v4DisplayLogs.map((entry, index) => (
             <LogComponent
               key={`plc-log-v4-${entry.id ?? index}-${index}`}
               level={mapV4LevelToLogLevel(entry.level)}
