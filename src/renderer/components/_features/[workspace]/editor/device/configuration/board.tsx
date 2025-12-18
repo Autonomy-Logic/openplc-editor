@@ -203,12 +203,23 @@ const Board = memo(function () {
 
       // Validate runtime version matches the selected board target
       const versionValidation = validateRuntimeVersion(deviceBoard, result.runtimeVersion)
-      if (!versionValidation.isValid) {
+
+      // Helper to proceed with connection after validation
+      const proceedWithConnection = () => {
+        if (result.hasUsers) {
+          openModal('runtime-login', null)
+        } else {
+          openModal('runtime-create-user', null)
+        }
+      }
+
+      if (versionValidation.status === 'mismatch') {
+        // Hard error for version mismatch - cannot proceed
         setRuntimeConnectionStatus('error')
         openModal('debugger-message', {
           type: 'error',
           title: 'Runtime Version Mismatch',
-          message: versionValidation.errorMessage || 'Unknown version mismatch error',
+          message: versionValidation.message || 'Unknown version mismatch error',
           buttons: ['OK'],
           onResponse: () => {
             // No action needed, just close the modal
@@ -217,11 +228,30 @@ const Board = memo(function () {
         return
       }
 
-      if (result.hasUsers) {
-        openModal('runtime-login', null)
-      } else {
-        openModal('runtime-create-user', null)
+      if (versionValidation.status === 'missing') {
+        // Warning for older runtimes - allow user to continue anyway
+        // Note: buttons ordered as ['Continue Anyway', 'Cancel'] so Cancel (index 1) is the default
+        // when closing the modal (DebuggerMessageModal calls onResponse with last button index on close)
+        openModal('debugger-message', {
+          type: 'warning',
+          title: 'Older Runtime Detected',
+          message: versionValidation.message || 'Could not detect runtime version.',
+          buttons: ['Continue Anyway', 'Cancel'],
+          onResponse: (buttonIndex: number) => {
+            if (buttonIndex === 0) {
+              // User clicked "Continue Anyway" - proceed with connection
+              proceedWithConnection()
+            } else {
+              // User clicked "Cancel" or closed the modal - stay disconnected
+              setRuntimeConnectionStatus('disconnected')
+            }
+          },
+        })
+        return
       }
+
+      // Version is OK - proceed normally
+      proceedWithConnection()
     } catch (_error) {
       setRuntimeConnectionStatus('error')
     }
