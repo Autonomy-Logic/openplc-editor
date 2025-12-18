@@ -1426,10 +1426,22 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     if (hasSearchResults) {
       setActiveTab('search')
-    } else {
+    } else if (activeTab === 'search') {
       setActiveTab('console')
     }
   }, [hasSearchResults])
+
+  useEffect(() => {
+    if (!isDebuggerVisible && activeTab === 'debug') {
+      setActiveTab('console')
+    }
+  }, [isDebuggerVisible])
+
+  useEffect(() => {
+    if (!isPlcLogsVisible && activeTab === 'plc-logs') {
+      setActiveTab('console')
+    }
+  }, [isPlcLogsVisible])
 
   useEffect(() => {
     const action = isCollapsed ? 'collapse' : 'expand'
