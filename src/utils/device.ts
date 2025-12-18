@@ -65,14 +65,13 @@ export function validateRuntimeVersion(
     }
   }
 
-  // Normalize versions for comparison (both should be lowercase like "v3", "v4")
+  // Normalize detected version for comparison (expectedVersion is already lowercase from getExpectedRuntimeVersion)
   const normalizedDetected = detectedVersion.toLowerCase()
-  const normalizedExpected = expectedVersion.toLowerCase()
 
-  if (normalizedDetected !== normalizedExpected) {
+  if (normalizedDetected !== expectedVersion) {
     return {
       isValid: false,
-      errorMessage: `Runtime version mismatch: Selected "${boardTarget}" but connected to a ${detectedVersion.toUpperCase()} runtime. Please update your device configuration to match the connected runtime.`,
+      errorMessage: `Runtime version mismatch: Selected "${boardTarget}" but connected to a ${normalizedDetected.toUpperCase()} runtime. Please update your device configuration to match the connected runtime.`,
     }
   }
 
