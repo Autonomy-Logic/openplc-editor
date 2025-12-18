@@ -2,6 +2,7 @@
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { ProjectState } from '../../../renderer/store/slices'
@@ -339,8 +340,12 @@ const rendererProcessBridge = {
     data?: { status: string; logs: string[]; exit_code: number | null }
     error?: string
   }> => ipcRenderer.invoke('runtime:get-compilation-status', ipAddress, jwtToken),
-  runtimeGetLogs: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; logs?: string; error?: string }> =>
-    ipcRenderer.invoke('runtime:get-logs', ipAddress, jwtToken),
+  runtimeGetLogs: (
+    ipAddress: string,
+    jwtToken: string,
+    minId?: number,
+  ): Promise<{ success: boolean; logs?: string | RuntimeLogEntry[]; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-logs', ipAddress, jwtToken, minId),
   runtimeClearCredentials: (): Promise<{ success: boolean }> => ipcRenderer.invoke('runtime:clear-credentials'),
   onRuntimeTokenRefreshed: (callback: (_event: IpcRendererEvent, newToken: string) => void) => {
     ipcRenderer.on('runtime:token-refreshed', callback)

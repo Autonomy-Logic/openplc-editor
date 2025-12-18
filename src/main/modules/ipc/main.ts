@@ -2,6 +2,7 @@ import { getProjectPath } from '@root/main/utils'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
@@ -443,14 +444,15 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string, minId?: number) => {
     try {
-      const result = await this.makeRuntimeApiRequest<string>(
+      const endpoint = minId !== undefined ? `/api/runtime-logs?id=${minId}` : '/api/runtime-logs'
+      const result = await this.makeRuntimeApiRequest<string | RuntimeLogEntry[]>(
         ipAddress,
         jwtToken,
-        '/api/runtime-logs',
+        endpoint,
         (data: string) => {
-          const response = JSON.parse(data) as { 'runtime-logs': string }
+          const response = JSON.parse(data) as { 'runtime-logs': string | RuntimeLogEntry[] }
           return response['runtime-logs']
         },
       )

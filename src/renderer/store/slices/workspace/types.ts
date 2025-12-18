@@ -1,5 +1,6 @@
 import type { DebugTreeNode } from '@root/types/debugger'
 import type { FbInstanceInfo } from '@root/types/debugger'
+import type { PlcLogs } from '@root/types/PLC/runtime-logs'
 import { z } from 'zod'
 
 const workspaceProjectTreeLeafSchema = z
@@ -33,7 +34,8 @@ const workspaceStateSchema = z.object({
     fbDebugInstances: z.custom<Map<string, FbInstanceInfo[]>>((val) => val instanceof Map),
     fbSelectedInstance: z.custom<Map<string, string>>((val) => val instanceof Map),
     isPlcLogsVisible: z.boolean(),
-    plcLogs: z.string(),
+    plcLogs: z.custom<PlcLogs>(),
+    plcLogsLastId: z.number().nullable(),
     close: z.object({
       window: z.boolean(),
       app: z.boolean(),
@@ -90,7 +92,10 @@ const workspaceActionsSchema = z.object({
   setFbSelectedInstance: z.function().args(z.string(), z.string()).returns(z.void()),
   clearFbDebugContext: z.function().returns(z.void()),
   setPlcLogsVisible: z.function().args(z.boolean()).returns(z.void()),
-  setPlcLogs: z.function().args(z.string()).returns(z.void()),
+  setPlcLogs: z.function().args(z.custom<PlcLogs>()).returns(z.void()),
+  setPlcLogsLastId: z.function().args(z.number().nullable()).returns(z.void()),
+  appendPlcLogs: z.function().args(z.custom<PlcLogs>()).returns(z.void()),
+  clearPlcLogs: z.function().returns(z.void()),
   toggleDiscardChanges: z.function().returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
