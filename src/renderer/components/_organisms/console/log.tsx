@@ -2,13 +2,16 @@ import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef } from 'react'
 
 const messageClasses = {
+  debug: 'text-neutral-500 dark:text-neutral-400',
   warning: 'text-yellow-600',
   error: 'text-red-500',
   info: 'text-brand-medium dark:text-brand',
 }
 
+export type LogLevel = 'debug' | 'info' | 'warning' | 'error'
+
 type LogComponentProps = ComponentPropsWithoutRef<'p'> & {
-  level?: 'info' | 'warning' | 'error'
+  level?: LogLevel
   message: string
   tstamp: string
 }

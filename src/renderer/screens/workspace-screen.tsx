@@ -1,6 +1,7 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
 import { DebugTreeNode } from '@root/types/debugger'
+import { isV4Logs, LOG_BUFFER_CAP } from '@root/types/PLC/runtime-logs'
 import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -1368,6 +1369,7 @@ const WorkspaceScreen = () => {
     const pollLogs = async (): Promise<void> => {
       const {
         runtimeConnection: { connectionStatus, ipAddress, jwtToken, plcStatus },
+        workspace: { plcLogsLastId, plcLogs },
         workspaceActions,
       } = useOpenPLCStore.getState()
 
@@ -1375,21 +1377,73 @@ const WorkspaceScreen = () => {
         workspaceActions.setPlcLogsVisible(true)
       } else {
         workspaceActions.setPlcLogsVisible(false)
-        workspaceActions.setPlcLogs('')
+        workspaceActions.clearPlcLogs()
         return
       }
 
-      if (ipAddress && jwtToken && plcStatus === 'RUNNING') {
-        try {
-          const result = await window.bridge.runtimeGetLogs(ipAddress, jwtToken)
-          if (result.success && result.logs !== undefined) {
-            workspaceActions.setPlcLogs(result.logs)
+      if (!ipAddress || !jwtToken) {
+        return
+      }
+
+      // Detect if we're connected to v4 runtime (v4 returns array, v3 returns string)
+      // For v4: poll regardless of PLC state
+      // For v3: poll only when PLC is RUNNING
+      const isV4Runtime = isV4Logs(plcLogs) || plcLogs === ''
+
+      // For v3 runtime, only poll when RUNNING
+      if (!isV4Runtime && plcStatus !== 'RUNNING') {
+        return
+      }
+
+      try {
+        // For v4 with existing logs, use incremental fetching
+        const minId = isV4Runtime && plcLogsLastId !== null ? plcLogsLastId + 1 : undefined
+        const result = await window.bridge.runtimeGetLogs(ipAddress, jwtToken, minId)
+
+        if (result.success && result.logs !== undefined) {
+          const newLogs = result.logs
+
+          if (isV4Logs(newLogs)) {
+            // V4 runtime: structured logs with levels
+            if (newLogs.length === 0) {
+              // No new logs
+              return
+            }
+
+            // Detect runtime restart: if any returned ID is less than lastSeenId
+            const hasRestartedRuntime =
+              plcLogsLastId !== null && newLogs.some((log) => log.id !== null && log.id < plcLogsLastId)
+
+            if (hasRestartedRuntime) {
+              // Runtime restarted, clear logs and start fresh
+              // Cap to last LOG_BUFFER_CAP entries if initial fetch is larger
+              const cappedLogs = newLogs.length > LOG_BUFFER_CAP ? newLogs.slice(-LOG_BUFFER_CAP) : newLogs
+              workspaceActions.setPlcLogs(cappedLogs)
+            } else {
+              // Append new logs to existing
+              workspaceActions.appendPlcLogs(newLogs)
+            }
+
+            // Update lastId cursor to the highest ID in the new logs
+            const maxId = newLogs.reduce((max, log) => {
+              if (log.id !== null && log.id > max) {
+                return log.id
+              }
+              return max
+            }, plcLogsLastId ?? -1)
+
+            if (maxId >= 0) {
+              workspaceActions.setPlcLogsLastId(maxId)
+            }
           } else {
-            console.error('Failed to fetch PLC logs:', result.error ?? 'Unknown error')
+            // V3 runtime: plain string logs (no incremental fetching)
+            workspaceActions.setPlcLogs(newLogs)
           }
-        } catch (error: unknown) {
-          console.error('Error polling PLC logs:', String(error))
+        } else {
+          console.error('Failed to fetch PLC logs:', result.error ?? 'Unknown error')
         }
+      } catch (error: unknown) {
+        console.error('Error polling PLC logs:', String(error))
       }
     }
 

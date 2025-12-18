@@ -1,4 +1,5 @@
 import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
+import { isV4Logs, LOG_BUFFER_CAP, PlcLogs } from '@root/types/PLC/runtime-logs'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -28,6 +29,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     fbSelectedInstance: new Map(),
     isPlcLogsVisible: false,
     plcLogs: '',
+    plcLogsLastId: null,
     close: {
       window: false,
       app: false,
@@ -228,10 +230,43 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setPlcLogs: (logs: string): void => {
+    setPlcLogs: (logs: PlcLogs): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.plcLogs = logs
+        }),
+      )
+    },
+    setPlcLogsLastId: (lastId: number | null): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcLogsLastId = lastId
+        }),
+      )
+    },
+    appendPlcLogs: (newLogs: PlcLogs): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          if (isV4Logs(newLogs) && isV4Logs(workspace.plcLogs)) {
+            const combined = [...workspace.plcLogs, ...newLogs]
+            if (combined.length > LOG_BUFFER_CAP) {
+              workspace.plcLogs = combined.slice(-LOG_BUFFER_CAP)
+            } else {
+              workspace.plcLogs = combined
+            }
+          } else if (typeof newLogs === 'string' && typeof workspace.plcLogs === 'string') {
+            workspace.plcLogs = workspace.plcLogs + newLogs
+          } else {
+            workspace.plcLogs = newLogs
+          }
+        }),
+      )
+    },
+    clearPlcLogs: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcLogs = ''
+          workspace.plcLogsLastId = null
         }),
       )
     },
