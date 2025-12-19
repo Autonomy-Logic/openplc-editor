@@ -310,6 +310,7 @@ const rendererProcessBridge = {
   runtimeGetStatus: (
     ipAddress: string,
     jwtToken: string,
+    includeStats?: boolean,
   ): Promise<{
     success: boolean
     status?: string
@@ -327,7 +328,7 @@ const rendererProcessBridge = {
       overruns: number
     }
     error?: string
-  }> => ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken),
+  }> => ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken, includeStats),
   runtimeStartPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:start-plc', ipAddress, jwtToken),
   runtimeStopPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
