@@ -20,7 +20,7 @@ import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 import { useToast } from '../../../[app]/toast/use-toast'
 
 type ElementCardProps = {
-  target: 'function' | 'function-block' | 'program' | 'data-type' | 'server'
+  target: 'function' | 'function-block' | 'program' | 'data-type' | 'server' | 'remote-device'
   closeContainer: Dispatch<SetStateAction<boolean>>
 }
 
@@ -40,10 +40,22 @@ type CreateServerFormProps = {
   protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip'
 }
 
+type CreateRemoteDeviceFormProps = {
+  name: string
+  protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet'
+}
+
 const ServerProtocolSources = [
   { value: 'modbus-tcp', label: 'Modbus/TCP', disabled: false },
   { value: 's7comm', label: 'Siemens S7comm', disabled: true },
   { value: 'ethernet-ip', label: 'EtherNet/IP', disabled: true },
+] as const
+
+const RemoteDeviceProtocolSources = [
+  { value: 'modbus-tcp', label: 'Modbus/TCP', disabled: false },
+  { value: 'ethernet-ip', label: 'EtherNet/IP', disabled: true },
+  { value: 'ethercat', label: 'EtherCAT', disabled: true },
+  { value: 'profinet', label: 'PROFINET', disabled: true },
 ] as const
 
 {
@@ -95,9 +107,17 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   } = useForm<CreateServerFormProps>()
 
   const {
+    control: remoteDeviceControl,
+    register: remoteDeviceRegister,
+    handleSubmit: handleSubmitRemoteDevice,
+    setError: remoteDeviceSetError,
+    formState: { errors: remoteDeviceErrors },
+  } = useForm<CreateRemoteDeviceFormProps>()
+
+  const {
     pouActions: { create },
     datatypeActions: { create: createDatatype },
-    projectActions: { createServer },
+    projectActions: { createServer, createRemoteDevice },
     deviceAvailableOptions: { availableBoards },
   } = useOpenPLCStore()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
@@ -173,6 +193,24 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     toast({
       title: 'Server created successfully',
       description: 'The server has been created',
+      variant: 'default',
+    })
+    closeContainer((prev) => !prev)
+    setIsOpen(false)
+  }
+
+  const handleCreateRemoteDevice: SubmitHandler<CreateRemoteDeviceFormProps> = (data) => {
+    const remoteDeviceWasCreated = createRemoteDevice({ data: { name: data.name, protocol: data.protocol } })
+    if (!remoteDeviceWasCreated.ok) {
+      remoteDeviceSetError('name', {
+        type: 'already-exists',
+      })
+      return
+    }
+
+    toast({
+      title: 'Remote device created successfully',
+      description: 'The remote device has been created',
       variant: 'default',
     })
     closeContainer((prev) => !prev)
@@ -410,6 +448,141 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   side='bottom'
                                 >
                                   {ServerProtocolSources.map((protocol) => {
+                                    return (
+                                      <SelectItem
+                                        key={protocol.value}
+                                        className={cn(
+                                          protocol.disabled
+                                            ? 'cursor-not-allowed opacity-50'
+                                            : 'cursor-pointer hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900',
+                                          'flex w-full items-center px-2 py-[9px] outline-none',
+                                        )}
+                                        value={protocol.value}
+                                        disabled={protocol.disabled}
+                                      >
+                                        <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                          {protocol.label}
+                                        </span>
+                                      </SelectItem>
+                                    )
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            )
+                          }}
+                        />
+                      </div>
+                      <div id='form-button-container' className='flex w-full justify-between'>
+                        <Popover.Close asChild>
+                          <button
+                            type='button'
+                            className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
+                            onClick={handleCancelCreateElement}
+                          >
+                            Cancel
+                          </button>
+                        </Popover.Close>
+                        <button
+                          type='submit'
+                          className={cn(
+                            'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
+                          )}
+                        >
+                          Create
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </>
+            ) : target === 'remote-device' ? (
+              <>
+                <div
+                  id='remote-device-card-label-container'
+                  className='flex h-8 w-full flex-col items-center justify-between'
+                >
+                  <div className='flex w-full select-none items-center gap-2'>
+                    {CreatePouSources[target]}
+                    <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
+                      Remote Device
+                    </p>
+                  </div>
+                  <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
+                </div>
+                {!isRuntimeV4 ? (
+                  <div className='flex flex-col gap-2 py-2'>
+                    <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+                      Remote device configuration is only available for OpenPLC Runtime v4 targets.
+                    </p>
+                    <p className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      Please select OpenPLC Runtime v4 in the Device Configuration to enable this feature.
+                    </p>
+                  </div>
+                ) : (
+                  <div id='remote-device-card-form'>
+                    <form
+                      onSubmit={handleSubmitRemoteDevice(handleCreateRemoteDevice)}
+                      className='flex h-fit w-full select-none flex-col gap-3'
+                    >
+                      <div id='remote-device-name-form-container' className='flex w-full flex-col'>
+                        <label
+                          id='remote-device-name-label'
+                          htmlFor='remote-device-name'
+                          className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
+                        >
+                          Device name:
+                          {remoteDeviceErrors.name?.type === 'required' && <span className='text-red-500'>*</span>}
+                        </label>
+                        <InputWithRef
+                          {...remoteDeviceRegister('name', {
+                            required: true,
+                            minLength: 3,
+                          })}
+                          id='remote-device-name'
+                          type='text'
+                          placeholder='Device name'
+                          className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
+                        />
+                        {remoteDeviceErrors.name?.type === 'already-exists' && (
+                          <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                            * Device name already exists
+                          </span>
+                        )}
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
+                          ** Name must be at least 3 characters
+                        </span>
+                      </div>
+                      <div id='remote-device-protocol-form-container' className='flex w-full flex-col gap-[6px] '>
+                        <label
+                          id='remote-device-protocol-label'
+                          htmlFor='remote-device-protocol'
+                          className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
+                        >
+                          Protocol:
+                          {remoteDeviceErrors.protocol && <span className='text-red-500'>*</span>}
+                        </label>
+                        <Controller
+                          name='protocol'
+                          control={remoteDeviceControl}
+                          rules={{ required: true }}
+                          render={({ field: { value, onChange } }) => {
+                            return (
+                              <Select value={value} onValueChange={onChange}>
+                                <SelectTrigger
+                                  withIndicator
+                                  aria-label='remote-device-protocol'
+                                  placeholder='Select a protocol'
+                                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
+                                />
+                                <SelectContent
+                                  className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                                  sideOffset={5}
+                                  alignOffset={5}
+                                  position='popper'
+                                  align='center'
+                                  side='bottom'
+                                >
+                                  {RemoteDeviceProtocolSources.map((protocol) => {
                                     return (
                                       <SelectItem
                                         key={protocol.value}

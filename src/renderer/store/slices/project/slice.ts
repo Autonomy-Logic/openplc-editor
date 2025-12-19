@@ -1,5 +1,6 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import {
+  ModbusIOPoint,
   PLCArrayDatatype,
   PLCDataType,
   PLCGlobalVariable,
@@ -9,9 +10,76 @@ import {
 } from '@root/types/PLC/open-plc'
 import { isLegalIdentifier } from '@root/utils/keywords'
 import { produce } from 'immer'
+import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
+
+const getFunctionCodeInfo = (
+  functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
+): { type: string; iecPrefix: string; isBit: boolean } => {
+  switch (functionCode) {
+    case '1':
+      return { type: 'Digital Input (Coil Status)', iecPrefix: '%IX', isBit: true }
+    case '2':
+      return { type: 'Digital Input (Discrete Input)', iecPrefix: '%IX', isBit: true }
+    case '3':
+      return { type: 'Analog Input (Holding Register)', iecPrefix: '%IW', isBit: false }
+    case '4':
+      return { type: 'Analog Input (Input Register)', iecPrefix: '%IW', isBit: false }
+    case '5':
+      return { type: 'Digital Output (Single Coil)', iecPrefix: '%QX', isBit: true }
+    case '6':
+      return { type: 'Analog Output (Single Register)', iecPrefix: '%QW', isBit: false }
+    case '15':
+      return { type: 'Digital Output (Multiple Coils)', iecPrefix: '%QX', isBit: true }
+    case '16':
+      return { type: 'Analog Output (Multiple Registers)', iecPrefix: '%QW', isBit: false }
+    default:
+      return { type: 'Unknown', iecPrefix: '%MW', isBit: false }
+  }
+}
+
+const generateIOPoints = (
+  functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
+  length: number,
+  groupName: string,
+  usedAddresses: Set<string>,
+): ModbusIOPoint[] => {
+  const { type, iecPrefix, isBit } = getFunctionCodeInfo(functionCode)
+  const points: ModbusIOPoint[] = []
+
+  let currentAddress = 0
+  for (let i = 0; i < length; i++) {
+    let iecLocation: string
+    if (isBit) {
+      while (true) {
+        iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
+        if (!usedAddresses.has(iecLocation)) break
+        currentAddress++
+      }
+    } else {
+      while (true) {
+        iecLocation = `${iecPrefix}${currentAddress}`
+        if (!usedAddresses.has(iecLocation)) break
+        currentAddress++
+      }
+    }
+
+    points.push({
+      id: uuidv4(),
+      name: `${groupName}_${i}`,
+      type,
+      iecLocation,
+      alias: '',
+    })
+
+    usedAddresses.add(iecLocation)
+    currentAddress++
+  }
+
+  return points
+}
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import { createInstanceValidation, updateInstanceValidation } from './validation/instances'
 import { createTaskValidation, updateTaskValidation } from './validation/tasks'
@@ -1125,6 +1193,306 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (config.enabled !== undefined) server.modbusSlaveConfig.enabled = config.enabled
           if (config.networkInterface !== undefined) server.modbusSlaveConfig.networkInterface = config.networkInterface
           if (config.port !== undefined) server.modbusSlaveConfig.port = config.port
+        }),
+      )
+      return response
+    },
+
+    /**
+     * Remote Device Actions
+     */
+    createRemoteDevice: (remoteDeviceToBeCreated): ProjectResponse => {
+      let response: ProjectResponse = { ok: false, message: 'Internal error' }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            project.data.remoteDevices = []
+          }
+
+          const deviceExists = project.data.remoteDevices.find(
+            (device) => device.name === remoteDeviceToBeCreated.data.name,
+          )
+          const pouExists = project.data.pous.find((pou) => pou.data.name === remoteDeviceToBeCreated.data.name)
+          const dataTypeExists = project.data.dataTypes.find(
+            (datatype) => datatype.name === remoteDeviceToBeCreated.data.name,
+          )
+
+          if (!deviceExists && !pouExists && !dataTypeExists) {
+            project.data.remoteDevices.push(remoteDeviceToBeCreated.data)
+            response = { ok: true, message: 'Remote device created successfully' }
+          } else {
+            toast({
+              title: 'Invalid Remote Device',
+              description: `You can't create a remote device with this name.`,
+              variant: 'fail',
+            })
+          }
+        }),
+      )
+      return response
+    },
+
+    deleteRemoteDevice: (deviceName): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const deviceIndex = project.data.remoteDevices.findIndex((device) => device.name === deviceName)
+          if (deviceIndex === -1) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          const deviceToDelete = project.data.remoteDevices[deviceIndex]
+          if (!project.data.deletedRemoteDevices) {
+            project.data.deletedRemoteDevices = []
+          }
+          project.data.deletedRemoteDevices.push({
+            name: deviceToDelete.name,
+            protocol: deviceToDelete.protocol,
+          })
+          project.data.remoteDevices.splice(deviceIndex, 1)
+        }),
+      )
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: response.message,
+          variant: 'fail',
+        })
+      }
+      return response
+    },
+
+    updateRemoteDeviceName: (oldName, newName): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = project.data.remoteDevices.find((device) => device.name === oldName)
+          if (!device) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          const nameExists = project.data.remoteDevices.find((d) => d.name === newName && d.name !== oldName)
+          const pouExists = project.data.pous.find((pou) => pou.data.name === newName)
+          const dataTypeExists = project.data.dataTypes.find((datatype) => datatype.name === newName)
+          if (nameExists || pouExists || dataTypeExists) {
+            response = { ok: false, message: 'Name already exists' }
+            return
+          }
+          device.name = newName
+        }),
+      )
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: response.message,
+          variant: 'fail',
+        })
+      }
+      return response
+    },
+
+    updateRemoteDeviceConfig: (
+      deviceName: string,
+      config: { host?: string; port?: number; timeout?: number },
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = project.data.remoteDevices.find((device) => device.name === deviceName)
+          if (!device) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          if (device.protocol !== 'modbus-tcp') {
+            response = { ok: false, message: 'Device is not a Modbus/TCP device' }
+            return
+          }
+          if (!device.modbusTcpConfig) {
+            device.modbusTcpConfig = {
+              host: '127.0.0.1',
+              port: 502,
+              timeout: 1000,
+              ioGroups: [],
+            }
+          }
+          if (config.host !== undefined) device.modbusTcpConfig.host = config.host
+          if (config.port !== undefined) device.modbusTcpConfig.port = config.port
+          if (config.timeout !== undefined) device.modbusTcpConfig.timeout = config.timeout
+        }),
+      )
+      return response
+    },
+
+    addIOGroup: (
+      deviceName: string,
+      ioGroup: {
+        id: string
+        name: string
+        functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16'
+        cycleTime: number
+        offset: string
+        length: number
+        errorHandling: 'keep-last-value' | 'set-to-zero'
+      },
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = project.data.remoteDevices.find((device) => device.name === deviceName)
+          if (!device) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          if (device.protocol !== 'modbus-tcp') {
+            response = { ok: false, message: 'Device is not a Modbus/TCP device' }
+            return
+          }
+          if (!device.modbusTcpConfig) {
+            device.modbusTcpConfig = {
+              host: '127.0.0.1',
+              port: 502,
+              timeout: 1000,
+              ioGroups: [],
+            }
+          }
+          const usedAddresses = new Set<string>()
+          for (const remoteDevice of project.data.remoteDevices) {
+            if (remoteDevice.modbusTcpConfig?.ioGroups) {
+              for (const group of remoteDevice.modbusTcpConfig.ioGroups) {
+                for (const point of group.ioPoints) {
+                  usedAddresses.add(point.iecLocation)
+                }
+              }
+            }
+          }
+          const ioPoints = generateIOPoints(ioGroup.functionCode, ioGroup.length, ioGroup.name, usedAddresses)
+          device.modbusTcpConfig.ioGroups.push({
+            ...ioGroup,
+            ioPoints,
+          })
+        }),
+      )
+      return response
+    },
+
+    updateIOGroup: (
+      deviceName: string,
+      ioGroupId: string,
+      updates: {
+        name?: string
+        functionCode?: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16'
+        cycleTime?: number
+        offset?: string
+        length?: number
+        errorHandling?: 'keep-last-value' | 'set-to-zero'
+      },
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = project.data.remoteDevices.find((device) => device.name === deviceName)
+          if (!device || !device.modbusTcpConfig) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          const ioGroup = device.modbusTcpConfig.ioGroups.find((group) => group.id === ioGroupId)
+          if (!ioGroup) {
+            response = { ok: false, message: 'IO Group not found' }
+            return
+          }
+          if (updates.name !== undefined) ioGroup.name = updates.name
+          if (updates.functionCode !== undefined) ioGroup.functionCode = updates.functionCode
+          if (updates.cycleTime !== undefined) ioGroup.cycleTime = updates.cycleTime
+          if (updates.offset !== undefined) ioGroup.offset = updates.offset
+          if (updates.length !== undefined) ioGroup.length = updates.length
+          if (updates.errorHandling !== undefined) ioGroup.errorHandling = updates.errorHandling
+          if (updates.functionCode !== undefined || updates.length !== undefined || updates.name !== undefined) {
+            const usedAddresses = new Set<string>()
+            for (const remoteDevice of project.data.remoteDevices) {
+              if (remoteDevice.modbusTcpConfig?.ioGroups) {
+                for (const group of remoteDevice.modbusTcpConfig.ioGroups) {
+                  if (group.id === ioGroupId) continue
+                  for (const point of group.ioPoints) {
+                    usedAddresses.add(point.iecLocation)
+                  }
+                }
+              }
+            }
+            ioGroup.ioPoints = generateIOPoints(ioGroup.functionCode, ioGroup.length, ioGroup.name, usedAddresses)
+          }
+        }),
+      )
+      return response
+    },
+
+    deleteIOGroup: (deviceName: string, ioGroupId: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = project.data.remoteDevices.find((device) => device.name === deviceName)
+          if (!device || !device.modbusTcpConfig) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          const index = device.modbusTcpConfig.ioGroups.findIndex((group) => group.id === ioGroupId)
+          if (index === -1) {
+            response = { ok: false, message: 'IO Group not found' }
+            return
+          }
+          device.modbusTcpConfig.ioGroups.splice(index, 1)
+        }),
+      )
+      return response
+    },
+
+    updateIOPointAlias: (deviceName: string, ioGroupId: string, ioPointId: string, alias: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = project.data.remoteDevices.find((device) => device.name === deviceName)
+          if (!device || !device.modbusTcpConfig) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          const ioGroup = device.modbusTcpConfig.ioGroups.find((group) => group.id === ioGroupId)
+          if (!ioGroup) {
+            response = { ok: false, message: 'IO Group not found' }
+            return
+          }
+          const ioPoint = ioGroup.ioPoints.find((point) => point.id === ioPointId)
+          if (!ioPoint) {
+            response = { ok: false, message: 'IO Point not found' }
+            return
+          }
+          ioPoint.alias = alias
         }),
       )
       return response

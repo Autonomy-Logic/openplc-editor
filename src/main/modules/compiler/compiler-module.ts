@@ -14,6 +14,7 @@ import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/utils/cpp/generateCBlocksCode'
 import { type CppPouData as CppPouDataHeader, generateCBlocksHeader } from '@root/utils/cpp/generateCBlocksHeader'
+import { generateModbusMasterConfig } from '@root/utils/modbus/generate-modbus-master-config'
 import { generateModbusSlaveConfig } from '@root/utils/modbus/generate-modbus-slave-config'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
@@ -1166,6 +1167,24 @@ class CompilerModule {
     }
   }
 
+  async handleGenerateModbusMasterConfig(
+    sourceTargetFolderPath: string,
+    projectData: ProjectState['data'],
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const modbusMasterConfig = generateModbusMasterConfig(projectData.remoteDevices)
+
+    if (modbusMasterConfig) {
+      const confFolderPath = join(sourceTargetFolderPath, 'conf')
+      await mkdir(confFolderPath, { recursive: true })
+      const configFilePath = join(confFolderPath, 'modbus_master.json')
+      await writeFile(configFilePath, modbusMasterConfig, 'utf-8')
+      handleOutputData('Generated conf/modbus_master.json', 'info')
+    } else {
+      handleOutputData('No Modbus TCP remote devices configured, skipping modbus_master.json generation', 'info')
+    }
+  }
+
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1269,11 +1288,19 @@ class CompilerModule {
     // --- Check for unsupported features on non-v4 targets ---
     const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
     const hasServers = projectData.servers && projectData.servers.length > 0
+    const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
 
     if (!isRuntimeV4 && hasServers) {
       _mainProcessPort.postMessage({
         logLevel: 'warning',
         message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. Modbus Server is only supported on OpenPLC Runtime v4. The server configurations will be ignored during compilation.`,
+      })
+    }
+
+    if (!isRuntimeV4 && hasRemoteDevices) {
+      _mainProcessPort.postMessage({
+        logLevel: 'warning',
+        message: `Warning: Your project contains Remote IO configurations, but the selected target (${boardTarget}) does not support this feature. Remote IO is only supported on OpenPLC Runtime v4. The remote device configurations will be ignored during compilation.`,
       })
     }
 
@@ -1574,6 +1601,11 @@ class CompilerModule {
 
           // Generate Modbus Slave config for Runtime v4
           await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+
+          // Generate Modbus Master config for Runtime v4
+          await this.handleGenerateModbusMasterConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
 

@@ -293,11 +293,58 @@ const PLCServerSchema = z.object({
 })
 type PLCServer = z.infer<typeof PLCServerSchema>
 
+// Remote Device (Modbus Master) types
+const ModbusFunctionCodeSchema = z.enum(['1', '2', '3', '4', '5', '6', '15', '16'])
+type ModbusFunctionCode = z.infer<typeof ModbusFunctionCodeSchema>
+
+const ModbusErrorHandlingSchema = z.enum(['keep-last-value', 'set-to-zero'])
+type ModbusErrorHandling = z.infer<typeof ModbusErrorHandlingSchema>
+
+const ModbusIOPointSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+  iecLocation: z.string(),
+  alias: z.string().optional(),
+})
+type ModbusIOPoint = z.infer<typeof ModbusIOPointSchema>
+
+const ModbusIOGroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  functionCode: ModbusFunctionCodeSchema,
+  cycleTime: z.number(),
+  offset: z.string(),
+  length: z.number(),
+  errorHandling: ModbusErrorHandlingSchema,
+  ioPoints: z.array(ModbusIOPointSchema),
+})
+type ModbusIOGroup = z.infer<typeof ModbusIOGroupSchema>
+
+const ModbusTcpConfigSchema = z.object({
+  host: z.string(),
+  port: z.number(),
+  timeout: z.number(),
+  ioGroups: z.array(ModbusIOGroupSchema),
+})
+type ModbusTcpConfig = z.infer<typeof ModbusTcpConfigSchema>
+
+const PLCRemoteDeviceProtocolSchema = z.enum(['modbus-tcp', 'ethernet-ip', 'ethercat', 'profinet'])
+type PLCRemoteDeviceProtocol = z.infer<typeof PLCRemoteDeviceProtocolSchema>
+
+const PLCRemoteDeviceSchema = z.object({
+  name: z.string(),
+  protocol: PLCRemoteDeviceProtocolSchema,
+  modbusTcpConfig: ModbusTcpConfigSchema.optional(),
+})
+type PLCRemoteDevice = z.infer<typeof PLCRemoteDeviceSchema>
+
 const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(PLCPouSchema),
   configuration: PLCConfigurationSchema,
   servers: z.array(PLCServerSchema).optional(),
+  remoteDevices: z.array(PLCRemoteDeviceSchema).optional(),
   deletedPous: z
     .array(
       z.object({
@@ -312,6 +359,14 @@ const PLCProjectDataSchema = z.object({
       z.object({
         name: z.string(),
         protocol: PLCServerProtocolSchema,
+      }),
+    )
+    .optional(),
+  deletedRemoteDevices: z
+    .array(
+      z.object({
+        name: z.string(),
+        protocol: PLCRemoteDeviceProtocolSchema,
       }),
     )
     .optional(),
@@ -335,7 +390,12 @@ type PLCProject = z.infer<typeof PLCProjectSchema>
 export {
   baseTypeSchema,
   bodySchema,
+  ModbusErrorHandlingSchema,
+  ModbusFunctionCodeSchema,
+  ModbusIOGroupSchema,
+  ModbusIOPointSchema,
   ModbusSlaveConfigSchema,
+  ModbusTcpConfigSchema,
   PLCArrayDatatypeSchema,
   PLCConfigurationSchema,
   PLCDataTypeSchema,
@@ -349,6 +409,8 @@ export {
   PLCProjectDataSchema,
   PLCProjectMetaSchema,
   PLCProjectSchema,
+  PLCRemoteDeviceProtocolSchema,
+  PLCRemoteDeviceSchema,
   PLCServerProtocolSchema,
   PLCServerSchema,
   PLCStructureDatatypeSchema,
@@ -360,7 +422,12 @@ export {
 export type {
   BaseType,
   BodySchema,
+  ModbusErrorHandling,
+  ModbusFunctionCode,
+  ModbusIOGroup,
+  ModbusIOPoint,
   ModbusSlaveConfig,
+  ModbusTcpConfig,
   PLCArrayDatatype,
   PLCConfiguration,
   PLCDataType,
@@ -374,6 +441,8 @@ export type {
   PLCProject,
   PLCProjectData,
   PLCProjectMeta,
+  PLCRemoteDevice,
+  PLCRemoteDeviceProtocol,
   PLCServer,
   PLCServerProtocol,
   PLCStructureDatatype,

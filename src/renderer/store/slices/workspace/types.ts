@@ -4,7 +4,7 @@ import type { PlcLogs } from '@root/types/PLC/runtime-logs'
 import { z } from 'zod'
 
 const workspaceProjectTreeLeafSchema = z
-  .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource', 'server'])
+  .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource', 'server', 'remote-device'])
   .nullable()
 type WorkspaceProjectTreeLeafType = z.infer<typeof workspaceProjectTreeLeafSchema>
 

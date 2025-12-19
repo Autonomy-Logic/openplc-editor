@@ -7,6 +7,7 @@ import {
   PLCPouSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCRemoteDeviceSchema,
   PLCServerSchema,
   PLCStructureVariableSchema,
   PLCTaskSchema,
@@ -91,6 +92,15 @@ const serverDTOSchema = z.object({
   data: PLCServerSchema,
 })
 type ServerDTO = z.infer<typeof serverDTOSchema>
+
+/**
+ * remoteDeviceDTOSchema
+ * - This schema is used to define the DTO for the remote device
+ */
+const remoteDeviceDTOSchema = z.object({
+  data: PLCRemoteDeviceSchema,
+})
+type RemoteDeviceDTO = z.infer<typeof remoteDeviceDTOSchema>
 
 /**
  * =====================================
@@ -318,6 +328,56 @@ const _projectActionsSchema = z.object({
       }),
     )
     .returns(projectResponseSchema),
+
+  /**
+   * Remote Device Actions
+   */
+  createRemoteDevice: z.function().args(remoteDeviceDTOSchema).returns(projectResponseSchema),
+  deleteRemoteDevice: z.function().args(z.string()).returns(projectResponseSchema),
+  updateRemoteDeviceName: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+  updateRemoteDeviceConfig: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        host: z.string().optional(),
+        port: z.number().optional(),
+        timeout: z.number().optional(),
+      }),
+    )
+    .returns(projectResponseSchema),
+  addIOGroup: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        functionCode: z.enum(['1', '2', '3', '4', '5', '6', '15', '16']),
+        cycleTime: z.number(),
+        offset: z.string(),
+        length: z.number(),
+        errorHandling: z.enum(['keep-last-value', 'set-to-zero']),
+      }),
+    )
+    .returns(projectResponseSchema),
+  updateIOGroup: z
+    .function()
+    .args(
+      z.string(),
+      z.string(),
+      z.object({
+        name: z.string().optional(),
+        functionCode: z.enum(['1', '2', '3', '4', '5', '6', '15', '16']).optional(),
+        cycleTime: z.number().optional(),
+        offset: z.string().optional(),
+        length: z.number().optional(),
+        errorHandling: z.enum(['keep-last-value', 'set-to-zero']).optional(),
+      }),
+    )
+    .returns(projectResponseSchema),
+  deleteIOGroup: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+  updateIOPointAlias: z.function().args(z.string(), z.string(), z.string(), z.string()).returns(projectResponseSchema),
 })
 type ProjectActions = z.infer<typeof _projectActionsSchema>
 
@@ -340,6 +400,7 @@ export {
   ProjectResponse,
   ProjectSlice,
   ProjectState,
+  RemoteDeviceDTO,
   ServerDTO,
   TaskDTO,
   VariableDTO,

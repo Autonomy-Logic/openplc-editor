@@ -1,6 +1,11 @@
 import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { DeleteDatatype, DeletePou, DeleteServer } from '@root/renderer/components/_organisms/modals'
+import {
+  DeleteDatatype,
+  DeletePou,
+  DeleteRemoteDevice,
+  DeleteServer,
+} from '@root/renderer/components/_organisms/modals'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '@root/renderer/utils/sync-nodes-with-variables'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
@@ -70,6 +75,10 @@ export type SharedSlice = {
   serverActions: {
     deleteRequest: (serverName: string) => void
     delete: (data: DeleteServer) => Promise<BasicSharedSliceResponse>
+  }
+  remoteDeviceActions: {
+    deleteRequest: (remoteDeviceName: string) => void
+    delete: (data: DeleteRemoteDevice) => Promise<BasicSharedSliceResponse>
   }
   sharedWorkspaceActions: {
     // Clear all states when closing a project
@@ -918,6 +927,54 @@ export const createSharedSlice: StateCreator<
     },
   },
 
+  remoteDeviceActions: {
+    deleteRequest: (remoteDeviceName) => {
+      const remoteDevice = getState().project.data.remoteDevices?.find((d) => d.name === remoteDeviceName)
+      if (!remoteDevice) {
+        toast({
+          title: 'Error',
+          description: `Remote device with name ${remoteDeviceName} not found.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      const modalData: DeleteRemoteDevice = {
+        type: 'remote-device',
+        file: remoteDevice.name,
+        path: `/devices/remote/${remoteDevice.name}.json`,
+      }
+
+      getState().modalActions.openModal('confirm-delete-element', modalData)
+    },
+
+    delete: async (data) => {
+      const deleteResult = getState().projectActions.deleteRemoteDevice(data.file)
+      if (!deleteResult.ok) {
+        return {
+          success: false,
+          error: {
+            title: 'Error',
+            description: deleteResult.message || 'Failed to delete remote device',
+          },
+        }
+      }
+
+      getState().tabsActions.removeTab(data.file)
+      getState().editorActions.removeModel(data.file)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === data.file) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: '',
+          type: null,
+        })
+      }
+
+      return await getState().sharedWorkspaceActions.saveFile(data.file)
+    },
+  },
+
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => {
       getState().editorActions.clearEditor()
@@ -1374,6 +1431,8 @@ export const createSharedSlice: StateCreator<
           pous,
           deviceConfiguration: deviceConfiguration.data,
           devicePinMapping: devicePinMapping.data,
+          servers: project.data.servers,
+          remoteDevices: project.data.remoteDevices,
         },
       })
 
@@ -1381,12 +1440,18 @@ export const createSharedSlice: StateCreator<
         getState().workspaceActions.setEditingState('saved')
         getState().fileActions.setAllToSaved()
         const currentProject = getState().project
-        if (currentProject.data.deletedPous && currentProject.data.deletedPous.length > 0) {
+        if (
+          (currentProject.data.deletedPous && currentProject.data.deletedPous.length > 0) ||
+          (currentProject.data.deletedServers && currentProject.data.deletedServers.length > 0) ||
+          (currentProject.data.deletedRemoteDevices && currentProject.data.deletedRemoteDevices.length > 0)
+        ) {
           getState().projectActions.setProject({
             ...currentProject,
             data: {
               ...currentProject.data,
               deletedPous: [],
+              deletedServers: [],
+              deletedRemoteDevices: [],
             },
           })
         }

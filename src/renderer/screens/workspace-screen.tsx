@@ -4,13 +4,13 @@ import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
 import { isV4Logs, LOG_BUFFER_CAP } from '@root/types/PLC/runtime-logs'
 import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
-import { useEffect, useRef } from 'react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { ExitIcon } from '../assets'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
+import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
@@ -1649,6 +1649,7 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-device' && <DeviceEditor />}
                       {editor['type'] === 'plc-datatype' && <DataTypeEditor dataTypeName={editor.meta.name} />}
                       {editor['type'] === 'plc-server' && <ModbusServerEditor />}
+                      {editor['type'] === 'plc-remote-device' && <RemoteDeviceEditor />}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'

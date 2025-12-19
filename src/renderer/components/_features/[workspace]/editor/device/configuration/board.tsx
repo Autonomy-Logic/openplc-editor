@@ -26,7 +26,7 @@ const Board = memo(function () {
     deviceDefinitions: { compileOnly },
     deviceAvailableOptions: { availableBoards },
     project: {
-      data: { pous, servers },
+      data: { pous, servers, remoteDevices },
     },
   } = useOpenPLCStore()
   const availableCommunicationPorts = boardSelectors.useAvailableCommunicationPorts()
@@ -62,7 +62,11 @@ const Board = memo(function () {
   const [previewImage, setPreviewImage] = useState('')
   const [formattedBoardState, setFormattedBoardState] = useState('')
   const [showPythonWarning, setShowPythonWarning] = useState(false)
-  const [showServerWarning, setShowServerWarning] = useState(false)
+  const [showV4FeaturesWarning, setShowV4FeaturesWarning] = useState(false)
+  const [v4FeaturesAffected, setV4FeaturesAffected] = useState<{ hasServers: boolean; hasRemoteDevices: boolean }>({
+    hasServers: false,
+    hasRemoteDevices: false,
+  })
   const [pendingBoardChange, setPendingBoardChange] = useState<{ board: string; formattedBoard: string } | null>(null)
 
   const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
@@ -169,20 +173,32 @@ const Board = memo(function () {
         return
       }
 
-      // Check if switching to a non-v4 target when servers exist
+      // Check if switching to a non-v4 target when servers or remote devices exist
       const isTargetV4 = isOpenPLCRuntimeV4Target(normalizedBoard)
       const hasServers = servers && servers.length > 0
+      const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
 
-      if (!isTargetV4 && hasServers) {
+      if (!isTargetV4 && (hasServers || hasRemoteDevices)) {
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
-        setShowServerWarning(true)
+        setV4FeaturesAffected({ hasServers: !!hasServers, hasRemoteDevices: !!hasRemoteDevices })
+        setShowV4FeaturesWarning(true)
         return
       }
 
       setFormattedBoardState(board)
       setDeviceBoard(normalizedBoard)
     },
-    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal, pous, servers, availableBoards],
+    [
+      connectionStatus,
+      deviceBoard,
+      setDeviceBoard,
+      setFormattedBoardState,
+      openModal,
+      pous,
+      servers,
+      remoteDevices,
+      availableBoards,
+    ],
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
@@ -641,25 +657,48 @@ const Board = memo(function () {
         </ModalContent>
       </Modal>
 
-      <Modal open={showServerWarning} onOpenChange={setShowServerWarning}>
+      <Modal open={showV4FeaturesWarning} onOpenChange={setShowV4FeaturesWarning}>
         <ModalContent className='h-fit w-[500px]'>
           <ModalHeader>
-            <ModalTitle>Modbus Server Not Supported</ModalTitle>
+            <ModalTitle>
+              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                ? 'Modbus Server and Remote IO Not Supported'
+                : v4FeaturesAffected.hasServers
+                  ? 'Modbus Server Not Supported'
+                  : 'Remote IO Not Supported'}
+            </ModalTitle>
           </ModalHeader>
           <div className='flex flex-col gap-4'>
             <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-              The selected target ({pendingBoardChange?.formattedBoard}) does not support Modbus Server configuration.
+              The selected target ({pendingBoardChange?.formattedBoard}) does not support{' '}
+              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                ? 'Modbus Server and Remote IO configurations'
+                : v4FeaturesAffected.hasServers
+                  ? 'Modbus Server configuration'
+                  : 'Remote IO configuration'}
+              .
             </p>
             <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-              Your project contains Modbus Server configurations that will be disabled during compilation on this
-              target. Modbus Server is only supported on OpenPLC Runtime v4.
+              Your project contains{' '}
+              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                ? 'Modbus Server and Remote IO configurations that will be disabled'
+                : v4FeaturesAffected.hasServers
+                  ? 'Modbus Server configurations that will be disabled'
+                  : 'Remote IO configurations that will be disabled'}{' '}
+              during compilation on this target.{' '}
+              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                ? 'Modbus Server and Remote IO are'
+                : v4FeaturesAffected.hasServers
+                  ? 'Modbus Server is'
+                  : 'Remote IO is'}{' '}
+              only supported on OpenPLC Runtime v4.
             </p>
           </div>
           <ModalFooter className='flex justify-end gap-2'>
             <button
               type='button'
               onClick={() => {
-                setShowServerWarning(false)
+                setShowV4FeaturesWarning(false)
                 setPendingBoardChange(null)
               }}
               className='h-8 rounded-md bg-neutral-100 px-4 font-caption text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-white dark:hover:bg-neutral-800'
@@ -673,7 +712,7 @@ const Board = memo(function () {
                   setFormattedBoardState(pendingBoardChange.formattedBoard)
                   setDeviceBoard(pendingBoardChange.board)
                 }
-                setShowServerWarning(false)
+                setShowV4FeaturesWarning(false)
                 setPendingBoardChange(null)
               }}
               className='h-8 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white hover:bg-brand-medium-dark'
