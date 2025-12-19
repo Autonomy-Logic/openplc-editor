@@ -1266,6 +1266,17 @@ class CompilerModule {
       message: this.getHostHardwareInfo(),
     })
 
+    // --- Check for unsupported features on non-v4 targets ---
+    const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
+    const hasServers = projectData.servers && projectData.servers.length > 0
+
+    if (!isRuntimeV4 && hasServers) {
+      _mainProcessPort.postMessage({
+        logLevel: 'warning',
+        message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. Modbus Server is only supported on OpenPLC Runtime v4. The server configurations will be ignored during compilation.`,
+      })
+    }
+
     // --- Check tools availability ---
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Checking tools availability...' })
 

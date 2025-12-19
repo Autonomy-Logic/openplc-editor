@@ -7,7 +7,13 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { DeviceActions, RuntimeConnection, TimingStats } from '@root/renderer/store/slices/device/types'
-import { cn, isArduinoTarget, isOpenPLCRuntimeTarget, validateRuntimeVersion } from '@root/utils'
+import {
+  cn,
+  isArduinoTarget,
+  isOpenPLCRuntimeTarget,
+  isOpenPLCRuntimeV4Target,
+  validateRuntimeVersion,
+} from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -20,7 +26,7 @@ const Board = memo(function () {
     deviceDefinitions: { compileOnly },
     deviceAvailableOptions: { availableBoards },
     project: {
-      data: { pous },
+      data: { pous, servers },
     },
   } = useOpenPLCStore()
   const availableCommunicationPorts = boardSelectors.useAvailableCommunicationPorts()
@@ -59,6 +65,7 @@ const Board = memo(function () {
   const [previewImage, setPreviewImage] = useState('')
   const [formattedBoardState, setFormattedBoardState] = useState('')
   const [showPythonWarning, setShowPythonWarning] = useState(false)
+  const [showServerWarning, setShowServerWarning] = useState(false)
   const [pendingBoardChange, setPendingBoardChange] = useState<{ board: string; formattedBoard: string } | null>(null)
 
   const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
@@ -165,10 +172,20 @@ const Board = memo(function () {
         return
       }
 
+      // Check if switching to a non-v4 target when servers exist
+      const isTargetV4 = isOpenPLCRuntimeV4Target(normalizedBoard)
+      const hasServers = servers && servers.length > 0
+
+      if (!isTargetV4 && hasServers) {
+        setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
+        setShowServerWarning(true)
+        return
+      }
+
       setFormattedBoardState(board)
       setDeviceBoard(normalizedBoard)
     },
-    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal, pous, availableBoards],
+    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal, pous, servers, availableBoards],
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
@@ -631,6 +648,49 @@ const Board = memo(function () {
                   setDeviceBoard(pendingBoardChange.board)
                 }
                 setShowPythonWarning(false)
+                setPendingBoardChange(null)
+              }}
+              className='h-8 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white hover:bg-brand-medium-dark'
+            >
+              Continue Anyway
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal open={showServerWarning} onOpenChange={setShowServerWarning}>
+        <ModalContent className='h-fit w-[500px]'>
+          <ModalHeader>
+            <ModalTitle>Modbus Server Not Supported</ModalTitle>
+          </ModalHeader>
+          <div className='flex flex-col gap-4'>
+            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+              The selected target ({pendingBoardChange?.formattedBoard}) does not support Modbus Server configuration.
+            </p>
+            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+              Your project contains Modbus Server configurations that will be disabled during compilation on this
+              target. Modbus Server is only supported on OpenPLC Runtime v4.
+            </p>
+          </div>
+          <ModalFooter className='flex justify-end gap-2'>
+            <button
+              type='button'
+              onClick={() => {
+                setShowServerWarning(false)
+                setPendingBoardChange(null)
+              }}
+              className='h-8 rounded-md bg-neutral-100 px-4 font-caption text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-white dark:hover:bg-neutral-800'
+            >
+              Cancel
+            </button>
+            <button
+              type='button'
+              onClick={() => {
+                if (pendingBoardChange) {
+                  setFormattedBoardState(pendingBoardChange.formattedBoard)
+                  setDeviceBoard(pendingBoardChange.board)
+                }
+                setShowServerWarning(false)
                 setPendingBoardChange(null)
               }}
               className='h-8 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white hover:bg-brand-medium-dark'

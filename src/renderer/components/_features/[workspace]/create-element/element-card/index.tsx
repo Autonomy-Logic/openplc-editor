@@ -7,7 +7,12 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { DatatypeDerivationSources } from '@root/renderer/data/sources/data-type'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
-import { cn, ConvertToLangShortenedFormat, isArduinoTarget as checkIsArduinoTarget } from '@root/utils'
+import {
+  cn,
+  ConvertToLangShortenedFormat,
+  isArduinoTarget as checkIsArduinoTarget,
+  isOpenPLCRuntimeV4Target,
+} from '@root/utils'
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
@@ -100,6 +105,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const isArduinoTarget = checkIsArduinoTarget(currentBoardInfo)
+  const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard)
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
     try {
@@ -330,115 +336,126 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
-                <div id='server-card-form'>
-                  <form
-                    onSubmit={handleSubmitServer(handleCreateServer)}
-                    className='flex h-fit w-full select-none flex-col gap-3'
-                  >
-                    <div id='server-name-form-container' className='flex w-full flex-col'>
-                      <label
-                        id='server-name-label'
-                        htmlFor='server-name'
-                        className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
-                      >
-                        Server name:
-                        {serverErrors.name?.type === 'required' && <span className='text-red-500'>*</span>}
-                      </label>
-                      <InputWithRef
-                        {...serverRegister('name', {
-                          required: true,
-                          minLength: 3,
-                        })}
-                        id='server-name'
-                        type='text'
-                        placeholder='Server name'
-                        className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
-                      />
-                      {serverErrors.name?.type === 'already-exists' && (
-                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                          * Server name already exists or protocol already in use
-                        </span>
-                      )}
-                      <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
-                        ** Name must be at least 3 characters
-                      </span>
-                    </div>
-                    <div id='server-protocol-form-container' className='flex w-full flex-col gap-[6px] '>
-                      <label
-                        id='server-protocol-label'
-                        htmlFor='server-protocol'
-                        className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
-                      >
-                        Protocol:
-                        {serverErrors.protocol && <span className='text-red-500'>*</span>}
-                      </label>
-                      <Controller
-                        name='protocol'
-                        control={serverControl}
-                        rules={{ required: true }}
-                        render={({ field: { value, onChange } }) => {
-                          return (
-                            <Select value={value} onValueChange={onChange}>
-                              <SelectTrigger
-                                withIndicator
-                                aria-label='server-protocol'
-                                placeholder='Select a protocol'
-                                className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
-                              />
-                              <SelectContent
-                                className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-                                sideOffset={5}
-                                alignOffset={5}
-                                position='popper'
-                                align='center'
-                                side='bottom'
-                              >
-                                {ServerProtocolSources.map((protocol) => {
-                                  return (
-                                    <SelectItem
-                                      key={protocol.value}
-                                      className={cn(
-                                        protocol.disabled
-                                          ? 'cursor-not-allowed opacity-50'
-                                          : 'cursor-pointer hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900',
-                                        'flex w-full items-center px-2 py-[9px] outline-none',
-                                      )}
-                                      value={protocol.value}
-                                      disabled={protocol.disabled}
-                                    >
-                                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                                        {protocol.label}
-                                      </span>
-                                    </SelectItem>
-                                  )
-                                })}
-                              </SelectContent>
-                            </Select>
-                          )
-                        }}
-                      />
-                    </div>
-                    <div id='form-button-container' className='flex w-full justify-between'>
-                      <Popover.Close asChild>
-                        <button
-                          type='button'
-                          className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
-                          onClick={handleCancelCreateElement}
+                {!isRuntimeV4 ? (
+                  <div className='flex flex-col gap-2 py-2'>
+                    <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+                      Server configuration is only available for OpenPLC Runtime v4 targets.
+                    </p>
+                    <p className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      Please select OpenPLC Runtime v4 in the Device Configuration to enable this feature.
+                    </p>
+                  </div>
+                ) : (
+                  <div id='server-card-form'>
+                    <form
+                      onSubmit={handleSubmitServer(handleCreateServer)}
+                      className='flex h-fit w-full select-none flex-col gap-3'
+                    >
+                      <div id='server-name-form-container' className='flex w-full flex-col'>
+                        <label
+                          id='server-name-label'
+                          htmlFor='server-name'
+                          className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                         >
-                          Cancel
-                        </button>
-                      </Popover.Close>
-                      <button
-                        type='submit'
-                        className={cn(
-                          'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
+                          Server name:
+                          {serverErrors.name?.type === 'required' && <span className='text-red-500'>*</span>}
+                        </label>
+                        <InputWithRef
+                          {...serverRegister('name', {
+                            required: true,
+                            minLength: 3,
+                          })}
+                          id='server-name'
+                          type='text'
+                          placeholder='Server name'
+                          className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
+                        />
+                        {serverErrors.name?.type === 'already-exists' && (
+                          <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                            * Server name already exists or protocol already in use
+                          </span>
                         )}
-                      >
-                        Create
-                      </button>
-                    </div>
-                  </form>
-                </div>
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
+                          ** Name must be at least 3 characters
+                        </span>
+                      </div>
+                      <div id='server-protocol-form-container' className='flex w-full flex-col gap-[6px] '>
+                        <label
+                          id='server-protocol-label'
+                          htmlFor='server-protocol'
+                          className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
+                        >
+                          Protocol:
+                          {serverErrors.protocol && <span className='text-red-500'>*</span>}
+                        </label>
+                        <Controller
+                          name='protocol'
+                          control={serverControl}
+                          rules={{ required: true }}
+                          render={({ field: { value, onChange } }) => {
+                            return (
+                              <Select value={value} onValueChange={onChange}>
+                                <SelectTrigger
+                                  withIndicator
+                                  aria-label='server-protocol'
+                                  placeholder='Select a protocol'
+                                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
+                                />
+                                <SelectContent
+                                  className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                                  sideOffset={5}
+                                  alignOffset={5}
+                                  position='popper'
+                                  align='center'
+                                  side='bottom'
+                                >
+                                  {ServerProtocolSources.map((protocol) => {
+                                    return (
+                                      <SelectItem
+                                        key={protocol.value}
+                                        className={cn(
+                                          protocol.disabled
+                                            ? 'cursor-not-allowed opacity-50'
+                                            : 'cursor-pointer hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900',
+                                          'flex w-full items-center px-2 py-[9px] outline-none',
+                                        )}
+                                        value={protocol.value}
+                                        disabled={protocol.disabled}
+                                      >
+                                        <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                          {protocol.label}
+                                        </span>
+                                      </SelectItem>
+                                    )
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            )
+                          }}
+                        />
+                      </div>
+                      <div id='form-button-container' className='flex w-full justify-between'>
+                        <Popover.Close asChild>
+                          <button
+                            type='button'
+                            className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
+                            onClick={handleCancelCreateElement}
+                          >
+                            Cancel
+                          </button>
+                        </Popover.Close>
+                        <button
+                          type='submit'
+                          className={cn(
+                            'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
+                          )}
+                        >
+                          Create
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
               </>
             ) : (
               <>
