@@ -272,6 +272,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
+    serverActions: { deleteRequest: deleteServerRequest },
     fileActions: { getFile },
   } = useOpenPLCStore()
 
@@ -283,6 +284,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
 
   const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
+  const isServer = useMemo(() => leafLang === 'server', [leafLang])
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -379,10 +381,10 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   }
 
   const handleDeleteFile = () => {
-    if (!isAPou && !isDatatype) {
+    if (!isAPou && !isDatatype && !isServer) {
       toast({
         title: 'Error',
-        description: 'Only POU or datatype files can be deleted.',
+        description: 'Only POU, datatype, or server files can be deleted.',
         variant: 'fail',
       })
       return
@@ -391,7 +393,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     if (!label) {
       toast({
         title: 'Error',
-        description: 'Pou or datatype label is required to delete.',
+        description: 'Label is required to delete.',
         variant: 'fail',
       })
       return
@@ -407,9 +409,14 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       return
     }
 
+    if (isServer) {
+      deleteServerRequest(label)
+      return
+    }
+
     toast({
       title: 'Error',
-      description: 'Only POU or datatype files can be deleted.',
+      description: 'Only POU, datatype, or server files can be deleted.',
       variant: 'fail',
     })
   }

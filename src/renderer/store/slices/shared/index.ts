@@ -1,6 +1,6 @@
 import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
+import { DeleteDatatype, DeletePou, DeleteServer } from '@root/renderer/components/_organisms/modals'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '@root/renderer/utils/sync-nodes-with-variables'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
@@ -66,6 +66,10 @@ export type SharedSlice = {
     delete: (data: DeleteDatatype) => Promise<BasicSharedSliceResponse>
     rename: (datatypeName: string, newDatatypeName: string) => Promise<BasicSharedSliceResponse>
     duplicate: (datatypeName: string) => Promise<BasicSharedSliceResponse>
+  }
+  serverActions: {
+    deleteRequest: (serverName: string) => void
+    delete: (data: DeleteServer) => Promise<BasicSharedSliceResponse>
   }
   sharedWorkspaceActions: {
     // Clear all states when closing a project
@@ -863,6 +867,44 @@ export const createSharedSlice: StateCreator<
       })
 
       return await getState().sharedWorkspaceActions.saveFile(copiedDatatype.name)
+    },
+  },
+
+  serverActions: {
+    deleteRequest: (serverName) => {
+      const server = getState().project.data.servers?.find((s) => s.name === serverName)
+      if (!server) {
+        toast({
+          title: 'Error',
+          description: `Server with name ${serverName} not found.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      const modalData: DeleteServer = {
+        type: 'server',
+        file: server.name,
+        path: `/devices/servers/${server.name}.json`,
+      }
+
+      getState().modalActions.openModal('confirm-delete-element', modalData)
+    },
+
+    delete: async (data) => {
+      getState().projectActions.deleteServer(data.file)
+      getState().tabsActions.removeTab(data.file)
+      getState().editorActions.removeModel(data.file)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === data.file) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: '',
+          type: null,
+        })
+      }
+
+      return await getState().sharedWorkspaceActions.saveFile(data.file)
     },
   },
 
