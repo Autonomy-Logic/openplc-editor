@@ -2,7 +2,10 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { useCallback, useEffect, useRef } from 'react'
 
-// Polling intervals in milliseconds
+// Polling interval for status checks (in milliseconds).
+// Status polling runs at 2s to keep the UI responsive (sidebar start/stop button).
+// Timing stats polling (in board.tsx) runs at 2.5s since stats requests are heavier
+// due to mutex contention on the runtime's critical scan cycle.
 const STATUS_POLL_INTERVAL_MS = 2000
 
 // Auto-disconnect after N consecutive status poll failures
