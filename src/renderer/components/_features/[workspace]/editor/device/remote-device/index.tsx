@@ -350,7 +350,7 @@ const RemoteDeviceEditor = () => {
 
   const [host, setHost] = useState('')
   const [port, setPort] = useState('')
-  const [timeout, setTimeout] = useState('')
+  const [timeoutMs, setTimeoutMs] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -360,11 +360,11 @@ const RemoteDeviceEditor = () => {
     if (remoteDevice?.modbusTcpConfig) {
       setHost(remoteDevice.modbusTcpConfig.host)
       setPort(remoteDevice.modbusTcpConfig.port.toString())
-      setTimeout(remoteDevice.modbusTcpConfig.timeout.toString())
+      setTimeoutMs(remoteDevice.modbusTcpConfig.timeout.toString())
     } else {
       setHost('127.0.0.1')
       setPort('502')
-      setTimeout('1000')
+      setTimeoutMs('1000')
     }
   }, [remoteDevice])
 
@@ -386,12 +386,12 @@ const RemoteDeviceEditor = () => {
   }, [port, deviceName, remoteDevice?.modbusTcpConfig?.port, projectActions, workspaceActions])
 
   const handleTimeoutBlur = useCallback(() => {
-    const timeoutNum = parseInt(timeout, 10)
+    const timeoutNum = parseInt(timeoutMs, 10)
     if (!isNaN(timeoutNum) && timeoutNum !== remoteDevice?.modbusTcpConfig?.timeout) {
       projectActions.updateRemoteDeviceConfig(deviceName, { timeout: timeoutNum })
       workspaceActions.setEditingState('unsaved')
     }
-  }, [timeout, deviceName, remoteDevice?.modbusTcpConfig?.timeout, projectActions, workspaceActions])
+  }, [timeoutMs, deviceName, remoteDevice?.modbusTcpConfig?.timeout, projectActions, workspaceActions])
 
   const handleToggleExpand = useCallback((groupId: string) => {
     setExpandedGroups((prev) => {
@@ -516,8 +516,8 @@ const RemoteDeviceEditor = () => {
           <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Response Timeout (ms)</Label>
           <InputWithRef
             type='number'
-            value={timeout}
-            onChange={(e) => setTimeout(e.target.value)}
+            value={timeoutMs}
+            onChange={(e) => setTimeoutMs(e.target.value)}
             onBlur={handleTimeoutBlur}
             placeholder='1000'
             className={inputStyles}
