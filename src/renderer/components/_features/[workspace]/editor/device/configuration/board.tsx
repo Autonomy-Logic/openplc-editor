@@ -6,7 +6,7 @@ import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { DeviceActions, RuntimeConnection, TimingStats } from '@root/renderer/store/slices/device/types'
+import type { RuntimeConnection, TimingStats } from '@root/renderer/store/slices/device/types'
 import {
   cn,
   isArduinoTarget,
@@ -18,10 +18,10 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
 
-const Board = memo(function () {
-  // Auto-disconnect after 3 consecutive status poll failures (7.5 seconds)
-  const MAX_CONSECUTIVE_FAILURES = 3
+// Polling interval for timing stats (only when device config screen is visible)
+const STATS_POLL_INTERVAL_MS = 2500
 
+const Board = memo(function () {
   const {
     deviceDefinitions: { compileOnly },
     deviceAvailableOptions: { availableBoards },
@@ -54,9 +54,6 @@ const Board = memo(function () {
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
-  const setPlcRuntimeStatus = useOpenPLCStore(
-    (state): DeviceActions['setPlcRuntimeStatus'] => state.deviceActions.setPlcRuntimeStatus,
-  )
   const setTimingStats = useOpenPLCStore(
     (state): ((stats: TimingStats | null) => void) => state.deviceActions.setTimingStats,
   )
@@ -73,8 +70,8 @@ const Board = memo(function () {
 
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
-  const consecutiveFailuresRef = useRef<number>(0)
   const portsReqIdRef = useRef<number>(0)
+  const isStatsPollingRef = useRef(false)
   const [isRefreshingPorts, setIsRefreshingPorts] = useState(false)
 
   const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
@@ -196,7 +193,7 @@ const Board = memo(function () {
 
   const handleConnectToRuntime = useCallback(async () => {
     if (connectionStatus === 'connected') {
-      consecutiveFailuresRef.current = 0
+      // Disconnect - global polling hook will handle resetting failure counter
       setRuntimeJwtToken(null)
       setRuntimeConnectionStatus('disconnected')
       const clearCreds = window.bridge.runtimeClearCredentials as (() => Promise<{ success: boolean }>) | undefined
@@ -274,69 +271,55 @@ const Board = memo(function () {
     }
   }, [runtimeIpAddress, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, openModal, deviceBoard])
 
+  // Poll for timing stats only when device configuration screen is visible
+  // Status polling is handled globally by useRuntimePolling hook in workspace-screen.tsx
   useEffect(() => {
-    let statusInterval: NodeJS.Timeout | null = null
+    let statsInterval: NodeJS.Timeout | null = null
 
-    const pollStatus = async (): Promise<void> => {
-      if (
-        connectionStatus === 'connected' &&
-        runtimeIpAddress &&
-        useOpenPLCStore.getState().runtimeConnection.jwtToken
-      ) {
-        const handlePollFailure = () => {
-          consecutiveFailuresRef.current += 1
-          if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
-            consecutiveFailuresRef.current = 0
-            setRuntimeJwtToken(null)
-            setRuntimeConnectionStatus('disconnected')
-            setPlcRuntimeStatus(null)
-            setTimingStats(null)
-          } else {
-            setPlcRuntimeStatus('UNKNOWN')
-          }
-        }
+    const pollTimingStats = async (): Promise<void> => {
+      // Skip if a poll is already in progress (prevents request backlog)
+      if (isStatsPollingRef.current) return
 
-        try {
-          const result = await window.bridge.runtimeGetStatus(
-            runtimeIpAddress,
-            useOpenPLCStore.getState().runtimeConnection.jwtToken!,
-          )
-          if (result.success && result.status) {
-            consecutiveFailuresRef.current = 0
-            const statusValue = result.status.replace('STATUS:', '').replace('\n', '').trim()
-            const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
-            if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
-              setPlcRuntimeStatus(statusValue as (typeof validStatuses)[number])
-            } else {
-              setPlcRuntimeStatus('UNKNOWN')
-            }
-            // Update timing stats if available (OpenPLC Runtime v4+)
-            if (result.timingStats) {
-              setTimingStats(result.timingStats)
-            } else {
-              setTimingStats(null)
-            }
-          } else {
-            handlePollFailure()
-          }
-        } catch (_error) {
-          handlePollFailure()
+      const currentState = useOpenPLCStore.getState()
+      const { connectionStatus: currentConnectionStatus, jwtToken: currentJwtToken } = currentState.runtimeConnection
+      const currentIpAddress = currentState.deviceDefinitions.configuration.runtimeIpAddress
+
+      if (currentConnectionStatus !== 'connected' || !currentJwtToken || !currentIpAddress) {
+        return
+      }
+
+      isStatsPollingRef.current = true
+
+      try {
+        // Request status WITH timing stats (include_stats=true)
+        const result = await window.bridge.runtimeGetStatus(currentIpAddress, currentJwtToken, true)
+
+        if (result.success && result.timingStats) {
+          setTimingStats(result.timingStats)
         }
+        // Note: We don't handle failures here - global polling handles connection state
+        // We also don't update plcStatus here since global polling already does that
+      } catch {
+        // Silently ignore errors - global polling handles connection failures
+      } finally {
+        isStatsPollingRef.current = false
       }
     }
 
     if (connectionStatus === 'connected') {
-      void pollStatus()
-      statusInterval = setInterval(() => void pollStatus(), 2500)
+      // Initial stats fetch
+      void pollTimingStats()
+      // Start periodic stats polling
+      statsInterval = setInterval(() => void pollTimingStats(), STATS_POLL_INTERVAL_MS)
     } else {
-      setPlcRuntimeStatus(null)
+      // Clear timing stats when disconnected
       setTimingStats(null)
     }
 
     return () => {
-      if (statusInterval) clearInterval(statusInterval)
+      if (statsInterval) clearInterval(statsInterval)
     }
-  }, [connectionStatus, runtimeIpAddress, setPlcRuntimeStatus])
+  }, [connectionStatus, setTimingStats])
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
