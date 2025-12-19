@@ -162,21 +162,21 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateServer: SubmitHandler<CreateServerFormProps> = (data) => {
-    try {
-      const serverWasCreated = createServer({ data: { name: data.name, protocol: data.protocol } })
-      if (!serverWasCreated.ok) throw new TypeError()
-      toast({
-        title: 'Server created successfully',
-        description: 'The server has been created',
-        variant: 'default',
-      })
-      closeContainer((prev) => !prev)
-      setIsOpen(false)
-    } catch (_error) {
+    const serverWasCreated = createServer({ data: { name: data.name, protocol: data.protocol } })
+    if (!serverWasCreated.ok) {
       serverSetError('name', {
         type: 'already-exists',
       })
+      return
     }
+
+    toast({
+      title: 'Server created successfully',
+      description: 'The server has been created',
+      variant: 'default',
+    })
+    closeContainer((prev) => !prev)
+    setIsOpen(false)
   }
 
   const handleMouseEnter = () => {

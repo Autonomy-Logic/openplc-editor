@@ -1041,6 +1041,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response = { ok: false, message: 'Server not found' }
             return
           }
+          const serverToDelete = project.data.servers[serverIndex]
+          if (!project.data.deletedServers) {
+            project.data.deletedServers = []
+          }
+          project.data.deletedServers.push({
+            name: serverToDelete.name,
+            protocol: serverToDelete.protocol,
+          })
           project.data.servers.splice(serverIndex, 1)
         }),
       )
@@ -1110,7 +1118,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (!server.modbusSlaveConfig) {
             server.modbusSlaveConfig = {
               enabled: false,
-              networkInterface: '',
+              networkInterface: '0.0.0.0',
               port: 502,
             }
           }

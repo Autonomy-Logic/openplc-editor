@@ -892,7 +892,17 @@ export const createSharedSlice: StateCreator<
     },
 
     delete: async (data) => {
-      getState().projectActions.deleteServer(data.file)
+      const deleteResult = getState().projectActions.deleteServer(data.file)
+      if (!deleteResult.ok) {
+        return {
+          success: false,
+          error: {
+            title: 'Error',
+            description: deleteResult.message || 'Failed to delete server',
+          },
+        }
+      }
+
       getState().tabsActions.removeTab(data.file)
       getState().editorActions.removeModel(data.file)
 

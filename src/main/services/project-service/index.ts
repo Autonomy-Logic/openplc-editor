@@ -361,16 +361,21 @@ class ProjectService {
     }
 
     // Save servers
-    if (servers && servers.length > 0) {
+    if (
+      (servers && servers.length > 0) ||
+      (projectData.data.deletedServers && projectData.data.deletedServers.length > 0)
+    ) {
       try {
         const serversDir = join(directoryPath, 'devices', 'servers')
         if (!fileOrDirectoryExists(serversDir)) {
           await promises.mkdir(serversDir, { recursive: true })
         }
 
-        for (const server of servers) {
-          const serverFilePath = join(serversDir, `${server.name}.json`)
-          await promises.writeFile(serverFilePath, JSON.stringify(server, null, 2), 'utf-8')
+        if (servers && servers.length > 0) {
+          for (const server of servers) {
+            const serverFilePath = join(serversDir, `${server.name}.json`)
+            await promises.writeFile(serverFilePath, JSON.stringify(server, null, 2), 'utf-8')
+          }
         }
 
         // Handle deleted servers

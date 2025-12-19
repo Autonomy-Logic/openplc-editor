@@ -61,7 +61,7 @@ const ModbusServerEditor = () => {
 
   const handlePortBlur = useCallback(() => {
     const portNum = parseInt(port, 10)
-    if (!isNaN(portNum) && portNum !== server?.modbusSlaveConfig?.port) {
+    if (!isNaN(portNum) && portNum >= 1 && portNum <= 65535 && portNum !== server?.modbusSlaveConfig?.port) {
       projectActions.updateServerConfig(serverName, { port: portNum })
       setEditingState('unsaved')
     }
