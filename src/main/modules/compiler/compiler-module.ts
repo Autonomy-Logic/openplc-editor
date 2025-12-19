@@ -1144,11 +1144,11 @@ class CompilerModule {
     const modbusSlaveConfig = generateModbusSlaveConfig(projectData.servers)
 
     if (modbusSlaveConfig) {
-      const configFilePath = join(sourceTargetFolderPath, 'modbus_slave_config.json')
+      const configFilePath = join(sourceTargetFolderPath, 'modbus_slave.json')
       await writeFile(configFilePath, modbusSlaveConfig, 'utf-8')
-      handleOutputData('Generated modbus_slave_config.json', 'info')
+      handleOutputData('Generated modbus_slave.json', 'info')
     } else {
-      handleOutputData('No Modbus TCP server configured, skipping modbus_slave_config.json generation', 'info')
+      handleOutputData('No Modbus TCP server configured, skipping modbus_slave.json generation', 'info')
     }
   }
 
