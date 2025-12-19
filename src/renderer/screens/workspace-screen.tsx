@@ -1,5 +1,6 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
+import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
 import { isV4Logs, LOG_BUFFER_CAP } from '@root/types/PLC/runtime-logs'
 import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
@@ -65,6 +66,10 @@ const WorkspaceScreen = () => {
   const {
     workspace: { fbSelectedInstance, fbDebugInstances },
   } = useOpenPLCStore()
+
+  // Global runtime status polling - runs continuously while connected to runtime
+  // This ensures the sidebar start/stop button updates correctly from the store
+  useRuntimePolling()
 
   const allDebugVariables = pous.flatMap((pou) => {
     return pou.data.variables

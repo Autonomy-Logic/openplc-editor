@@ -360,8 +360,16 @@ class MainProcessBridge implements MainIpcModule {
     })
   }
 
-  handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeGetStatus = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+    includeStats?: boolean,
+  ) => {
     try {
+      // Build the endpoint path with optional include_stats query parameter
+      const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
+
       const result = await this.makeRuntimeApiRequest<{
         status: string
         timing_stats?: {
@@ -377,7 +385,7 @@ class MainProcessBridge implements MainIpcModule {
           cycle_latency_avg: number | null
           overruns: number
         }
-      }>(ipAddress, jwtToken, '/api/status', (data: string) => {
+      }>(ipAddress, jwtToken, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
           timing_stats?: {
