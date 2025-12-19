@@ -131,6 +131,11 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
         type,
         meta,
       }
+    case 'plc-remote-device':
+      return {
+        type,
+        meta,
+      }
     default:
       return {
         type: 'available',

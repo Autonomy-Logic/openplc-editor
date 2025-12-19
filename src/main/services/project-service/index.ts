@@ -11,7 +11,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
-import { PLCPou, PLCProject, PLCServer } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
@@ -246,11 +246,12 @@ class ProjectService {
       deviceConfiguration: DeviceConfiguration
       devicePinMapping: DevicePin[]
       servers?: PLCServer[]
+      remoteDevices?: PLCRemoteDevice[]
     }
   }): Promise<IProjectServiceResponse> {
     const {
       projectPath,
-      content: { deviceConfiguration, devicePinMapping, projectData, servers },
+      content: { deviceConfiguration, devicePinMapping, projectData, servers, remoteDevices },
     } = data
     if (!projectPath || !projectData) {
       return {
@@ -393,6 +394,52 @@ class ProjectService {
         }
       } catch (error) {
         console.error('Error saving servers:', error)
+        return {
+          success: false,
+          error: {
+            title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
+            description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
+              filePath: directoryPath,
+            }),
+            error,
+          },
+        }
+      }
+    }
+
+    // Save remote devices
+    if (
+      (remoteDevices && remoteDevices.length > 0) ||
+      (projectData.data.deletedRemoteDevices && projectData.data.deletedRemoteDevices.length > 0)
+    ) {
+      try {
+        const remoteDevicesDir = join(directoryPath, 'devices', 'remote')
+        if (!fileOrDirectoryExists(remoteDevicesDir)) {
+          await promises.mkdir(remoteDevicesDir, { recursive: true })
+        }
+
+        if (remoteDevices && remoteDevices.length > 0) {
+          for (const remoteDevice of remoteDevices) {
+            const remoteDeviceFilePath = join(remoteDevicesDir, `${remoteDevice.name}.json`)
+            await promises.writeFile(remoteDeviceFilePath, JSON.stringify(remoteDevice, null, 2), 'utf-8')
+          }
+        }
+
+        // Handle deleted remote devices
+        if (projectData.data.deletedRemoteDevices && projectData.data.deletedRemoteDevices.length > 0) {
+          for (const deletedRemoteDevice of projectData.data.deletedRemoteDevices) {
+            const remoteDeviceFilePath = join(remoteDevicesDir, `${deletedRemoteDevice.name}.json`)
+            try {
+              if (fileOrDirectoryExists(remoteDeviceFilePath)) {
+                await promises.unlink(remoteDeviceFilePath)
+              }
+            } catch (deleteError) {
+              console.error(`Error deleting remote device file ${remoteDeviceFilePath}:`, deleteError)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error saving remote devices:', error)
         return {
           success: false,
           error: {

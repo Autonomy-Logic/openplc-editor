@@ -17,6 +17,8 @@ type IDataToWrite = {
     pous: PLCPou[]
     deviceConfiguration: DeviceConfiguration
     devicePinMapping: DevicePin[]
+    servers?: ProjectState['data']['servers']
+    remoteDevices?: ProjectState['data']['remoteDevices']
   }
 }
 

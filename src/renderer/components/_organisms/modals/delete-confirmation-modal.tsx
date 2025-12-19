@@ -39,6 +39,12 @@ export type DeleteServer = {
   path: string
 }
 
+export type DeleteRemoteDevice = {
+  type: 'remote-device'
+  file: string
+  path: string
+}
+
 export type DeleteLadderRung = {
   type: 'ladder-rung'
   file: string
@@ -49,7 +55,7 @@ export type DeleteLadderRung = {
 
 export type ConfirmDeleteModalProps = {
   isOpen: boolean
-  data: DeletePou | DeleteDatatype | DeleteServer | DeleteLadderRung
+  data: DeletePou | DeleteDatatype | DeleteServer | DeleteRemoteDevice | DeleteLadderRung
 }
 
 const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModalProps) => {
@@ -65,6 +71,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
   const deletePouAction = store.pouActions.delete
   const deleteDatatypeAction = store.datatypeActions.delete
   const deleteServerAction = store.serverActions.delete
+  const deleteRemoteDeviceAction = store.remoteDeviceActions.delete
 
   const handleDeleteLadderRung = (data: DeleteLadderRung) => {
     const { pou, rung } = data
@@ -191,6 +198,27 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
     })
   }
 
+  const handleDeleteRemoteDevice = async (data: DeleteRemoteDevice) => {
+    const { file: targetLabel } = data
+
+    const res = await deleteRemoteDeviceAction(data)
+    if (!res.success) {
+      toast({
+        title: res.error?.title || 'Error deleting remote device',
+        description: res.error?.description || 'An error occurred while deleting the remote device. Please try again.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    closeFile(targetLabel)
+    toast({
+      title: 'Remote device deleted success!',
+      description: `Remote device "${targetLabel}" was successfully deleted.`,
+      variant: 'default',
+    })
+  }
+
   const handleDeleteElement = async (): Promise<void> => {
     try {
       switch (data.type) {
@@ -204,6 +232,10 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
         }
         case 'server': {
           await handleDeleteServer(data)
+          break
+        }
+        case 'remote-device': {
+          await handleDeleteRemoteDevice(data)
           break
         }
         case 'ladder-rung': {

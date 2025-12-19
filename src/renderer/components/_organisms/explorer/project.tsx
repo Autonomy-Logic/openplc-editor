@@ -11,7 +11,7 @@ const Project = () => {
   const {
     searchQuery,
     project: {
-      data: { pous, dataTypes, configuration, servers },
+      data: { pous, dataTypes, configuration, servers, remoteDevices },
       meta: { name },
     },
     projectActions: { updateMetaName },
@@ -254,6 +254,27 @@ const Project = () => {
                       name: server.name,
                       path: `/devices/servers/${server.name}.json`,
                       elementType: { type: 'server', protocol: server.protocol },
+                    })
+                  }
+                />
+              ))}
+          </ProjectTreeBranch>
+
+          {/* Project Remote Devices tree branch */}
+          <ProjectTreeBranch branchTarget='remote-device'>
+            {remoteDevices
+              ?.sort((a, b) => a.name.localeCompare(b.name))
+              .map((device) => (
+                <ProjectTreeLeaf
+                  key={device.name}
+                  leafLang='remoteDevice'
+                  leafType='remote-device'
+                  label={searchQuery ? extractSearchQuery(device.name, searchQuery) : device.name}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: device.name,
+                      path: `/devices/remote/${device.name}.json`,
+                      elementType: { type: 'remote-device', protocol: device.protocol },
                     })
                   }
                 />

@@ -19,6 +19,7 @@ import {
   PLCIcon,
   ProgramIcon,
   PythonIcon,
+  RemoteDeviceIcon,
   ResourceIcon,
   ServerIcon,
   SFCIcon,
@@ -81,7 +82,15 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 }
 
 type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device' | 'server'
+  branchTarget:
+    | 'data-type'
+    | 'function'
+    | 'function-block'
+    | 'program'
+    | 'resource'
+    | 'device'
+    | 'server'
+    | 'remote-device'
   children?: ReactNode
 }
 
@@ -93,11 +102,12 @@ const BranchSources = {
   resource: { BranchIcon: ResourceIcon, label: 'Resource' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
   server: { BranchIcon: ServerIcon, label: 'Servers' },
+  'remote-device': { BranchIcon: RemoteDeviceIcon, label: 'Remote Devices' },
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
-      data: { pous, dataTypes, servers },
+      data: { pous, dataTypes, servers, remoteDevices },
     },
     fileActions: { getFile },
   } = useOpenPLCStore()
@@ -108,7 +118,8 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
     pous.some((pou) => pou.type === branchTarget) ||
     branchTarget === 'device' ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
-    (branchTarget === 'server' && servers !== undefined && servers.length > 0)
+    (branchTarget === 'server' && servers !== undefined && servers.length > 0) ||
+    (branchTarget === 'remote-device' && remoteDevices !== undefined && remoteDevices.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -243,6 +254,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'devConfig'
     | 'devPin'
     | 'server'
+    | 'remoteDevice'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
 }
@@ -262,6 +274,7 @@ const LeafSources = {
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
   server: { LeafIcon: ServerIcon },
+  remoteDevice: { LeafIcon: RemoteDeviceIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
   const {
@@ -273,6 +286,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
     serverActions: { deleteRequest: deleteServerRequest },
+    remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest },
     fileActions: { getFile },
   } = useOpenPLCStore()
 
@@ -285,6 +299,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
   const isServer = useMemo(() => leafLang === 'server', [leafLang])
+  const isRemoteDevice = useMemo(() => leafLang === 'remoteDevice', [leafLang])
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -381,10 +396,10 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   }
 
   const handleDeleteFile = () => {
-    if (!isAPou && !isDatatype && !isServer) {
+    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice) {
       toast({
         title: 'Error',
-        description: 'Only POU, datatype, or server files can be deleted.',
+        description: 'Only POU, datatype, server, or remote device files can be deleted.',
         variant: 'fail',
       })
       return
@@ -414,9 +429,14 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       return
     }
 
+    if (isRemoteDevice) {
+      deleteRemoteDeviceRequest(label)
+      return
+    }
+
     toast({
       title: 'Error',
-      description: 'Only POU, datatype, or server files can be deleted.',
+      description: 'Only POU, datatype, server, or remote device files can be deleted.',
       variant: 'fail',
     })
   }
