@@ -1136,6 +1136,18 @@ class CompilerModule {
     return zipBuffer
   }
 
+  async cleanConfFolder(sourceTargetFolderPath: string, handleOutputData: HandleOutputDataCallback): Promise<void> {
+    const confFolderPath = join(sourceTargetFolderPath, 'conf')
+
+    try {
+      await fs.access(confFolderPath)
+      await fs.rm(confFolderPath, { recursive: true })
+      handleOutputData('Cleaned conf folder from previous compilation', 'info')
+    } catch {
+      handleOutputData('No conf folder to clean', 'info')
+    }
+  }
+
   async handleGenerateModbusSlaveConfig(
     sourceTargetFolderPath: string,
     projectData: ProjectState['data'],
@@ -1144,9 +1156,11 @@ class CompilerModule {
     const modbusSlaveConfig = generateModbusSlaveConfig(projectData.servers)
 
     if (modbusSlaveConfig) {
-      const configFilePath = join(sourceTargetFolderPath, 'modbus_slave.json')
+      const confFolderPath = join(sourceTargetFolderPath, 'conf')
+      await mkdir(confFolderPath, { recursive: true })
+      const configFilePath = join(confFolderPath, 'modbus_slave.json')
       await writeFile(configFilePath, modbusSlaveConfig, 'utf-8')
-      handleOutputData('Generated modbus_slave.json', 'info')
+      handleOutputData('Generated conf/modbus_slave.json', 'info')
     } else {
       handleOutputData('No Modbus TCP server configured, skipping modbus_slave.json generation', 'info')
     }
@@ -1542,6 +1556,11 @@ class CompilerModule {
           filename = 'program.st'
           contentType = 'text/plain'
         } else {
+          // Clean conf folder from previous compilations to avoid stale config files
+          await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+
           // Generate Modbus Slave config for Runtime v4
           await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
