@@ -14,6 +14,7 @@ import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/utils/cpp/generateCBlocksCode'
 import { type CppPouData as CppPouDataHeader, generateCBlocksHeader } from '@root/utils/cpp/generateCBlocksHeader'
+import { generateModbusSlaveConfig } from '@root/utils/modbus/generate-modbus-slave-config'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import { app as electronApp, dialog } from 'electron'
@@ -1135,6 +1136,36 @@ class CompilerModule {
     return zipBuffer
   }
 
+  async cleanConfFolder(sourceTargetFolderPath: string, handleOutputData: HandleOutputDataCallback): Promise<void> {
+    const confFolderPath = join(sourceTargetFolderPath, 'conf')
+
+    try {
+      await fs.access(confFolderPath)
+      await fs.rm(confFolderPath, { recursive: true })
+      handleOutputData('Cleaned conf folder from previous compilation', 'info')
+    } catch {
+      handleOutputData('No conf folder to clean', 'info')
+    }
+  }
+
+  async handleGenerateModbusSlaveConfig(
+    sourceTargetFolderPath: string,
+    projectData: ProjectState['data'],
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const modbusSlaveConfig = generateModbusSlaveConfig(projectData.servers)
+
+    if (modbusSlaveConfig) {
+      const confFolderPath = join(sourceTargetFolderPath, 'conf')
+      await mkdir(confFolderPath, { recursive: true })
+      const configFilePath = join(confFolderPath, 'modbus_slave.json')
+      await writeFile(configFilePath, modbusSlaveConfig, 'utf-8')
+      handleOutputData('Generated conf/modbus_slave.json', 'info')
+    } else {
+      handleOutputData('No Modbus TCP server configured, skipping modbus_slave.json generation', 'info')
+    }
+  }
+
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1234,6 +1265,17 @@ class CompilerModule {
     _mainProcessPort.postMessage({
       message: this.getHostHardwareInfo(),
     })
+
+    // --- Check for unsupported features on non-v4 targets ---
+    const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
+    const hasServers = projectData.servers && projectData.servers.length > 0
+
+    if (!isRuntimeV4 && hasServers) {
+      _mainProcessPort.postMessage({
+        logLevel: 'warning',
+        message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. Modbus Server is only supported on OpenPLC Runtime v4. The server configurations will be ignored during compilation.`,
+      })
+    }
 
     // --- Check tools availability ---
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Checking tools availability...' })
@@ -1525,6 +1567,16 @@ class CompilerModule {
           filename = 'program.st'
           contentType = 'text/plain'
         } else {
+          // Clean conf folder from previous compilations to avoid stale config files
+          await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+
+          // Generate Modbus Slave config for Runtime v4
+          await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+
           _mainProcessPort.postMessage({
             logLevel: 'info',
             message: 'Compressing source files for OpenPLC Runtime v4...',

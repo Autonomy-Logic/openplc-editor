@@ -7,6 +7,7 @@ import {
   PLCPouSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCServerSchema,
   PLCStructureVariableSchema,
   PLCTaskSchema,
   PLCVariableSchema,
@@ -81,6 +82,15 @@ const instanceDTOSchema = z.object({
   data: PLCInstanceSchema,
 })
 type InstanceDTO = z.infer<typeof instanceDTOSchema>
+
+/**
+ * serverDTOSchema
+ * - This schema is used to define the DTO for the server
+ */
+const serverDTOSchema = z.object({
+  data: PLCServerSchema,
+})
+type ServerDTO = z.infer<typeof serverDTOSchema>
 
 /**
  * =====================================
@@ -290,6 +300,24 @@ const _projectActionsSchema = z.object({
     .function()
     .args(z.object({ rowId: z.number(), newIndex: z.number() }))
     .returns(z.void()),
+
+  /**
+   * Server Actions
+   */
+  createServer: z.function().args(serverDTOSchema).returns(projectResponseSchema),
+  deleteServer: z.function().args(z.string()).returns(projectResponseSchema),
+  updateServerName: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+  updateServerConfig: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        enabled: z.boolean().optional(),
+        networkInterface: z.string().optional(),
+        port: z.number().optional(),
+      }),
+    )
+    .returns(projectResponseSchema),
 })
 type ProjectActions = z.infer<typeof _projectActionsSchema>
 
@@ -312,6 +340,7 @@ export {
   ProjectResponse,
   ProjectSlice,
   ProjectState,
+  ServerDTO,
   TaskDTO,
   VariableDTO,
 }

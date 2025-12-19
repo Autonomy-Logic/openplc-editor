@@ -12,6 +12,7 @@ import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
+import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
 import { Search } from '../components/_features/[workspace]/search'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import AboutModal from '../components/_organisms/about-modal'
@@ -1642,6 +1643,7 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-device' && <DeviceEditor />}
                       {editor['type'] === 'plc-datatype' && <DataTypeEditor dataTypeName={editor.meta.name} />}
+                      {editor['type'] === 'plc-server' && <ModbusServerEditor />}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'

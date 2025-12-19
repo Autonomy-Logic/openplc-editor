@@ -33,6 +33,12 @@ export type DeleteDatatype = {
   path: string
 }
 
+export type DeleteServer = {
+  type: 'server'
+  file: string
+  path: string
+}
+
 export type DeleteLadderRung = {
   type: 'ladder-rung'
   file: string
@@ -43,7 +49,7 @@ export type DeleteLadderRung = {
 
 export type ConfirmDeleteModalProps = {
   isOpen: boolean
-  data: DeletePou | DeleteDatatype | DeleteLadderRung
+  data: DeletePou | DeleteDatatype | DeleteServer | DeleteLadderRung
 }
 
 const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModalProps) => {
@@ -58,6 +64,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
   } = store
   const deletePouAction = store.pouActions.delete
   const deleteDatatypeAction = store.datatypeActions.delete
+  const deleteServerAction = store.serverActions.delete
 
   const handleDeleteLadderRung = (data: DeleteLadderRung) => {
     const { pou, rung } = data
@@ -163,6 +170,27 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
     })
   }
 
+  const handleDeleteServer = async (data: DeleteServer) => {
+    const { file: targetLabel } = data
+
+    const res = await deleteServerAction(data)
+    if (!res.success) {
+      toast({
+        title: res.error?.title || 'Error deleting server',
+        description: res.error?.description || 'An error occurred while deleting the server. Please try again.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    closeFile(targetLabel)
+    toast({
+      title: 'Server deleted success!',
+      description: `Server "${targetLabel}" was successfully deleted.`,
+      variant: 'default',
+    })
+  }
+
   const handleDeleteElement = async (): Promise<void> => {
     try {
       switch (data.type) {
@@ -172,6 +200,10 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
         }
         case 'datatype': {
           await handleDeleteDatatype(data)
+          break
+        }
+        case 'server': {
+          await handleDeleteServer(data)
           break
         }
         case 'ladder-rung': {

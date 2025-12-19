@@ -28,6 +28,10 @@ const tabsPropsSchema = z.object({
       type: z.literal('device'),
       derivation: z.enum(['configuration']),
     }),
+    z.object({
+      type: z.literal('server'),
+      protocol: z.enum(['modbus-tcp', 's7comm', 'ethernet-ip']),
+    }),
   ]),
   configuration: z.object({}).optional(),
 })

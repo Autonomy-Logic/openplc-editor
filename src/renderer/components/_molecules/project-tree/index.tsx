@@ -20,6 +20,7 @@ import {
   ProgramIcon,
   PythonIcon,
   ResourceIcon,
+  ServerIcon,
   SFCIcon,
   STIcon,
   StructureIcon,
@@ -80,7 +81,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 }
 
 type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device'
+  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device' | 'server'
   children?: ReactNode
 }
 
@@ -91,11 +92,12 @@ const BranchSources = {
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
   resource: { BranchIcon: ResourceIcon, label: 'Resource' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
+  server: { BranchIcon: ServerIcon, label: 'Servers' },
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
-      data: { pous, dataTypes },
+      data: { pous, dataTypes, servers },
     },
     fileActions: { getFile },
   } = useOpenPLCStore()
@@ -105,7 +107,8 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
   const hasAssociatedPou =
     pous.some((pou) => pou.type === branchTarget) ||
     branchTarget === 'device' ||
-    (branchTarget === 'data-type' && dataTypes.length > 0)
+    (branchTarget === 'data-type' && dataTypes.length > 0) ||
+    (branchTarget === 'server' && servers !== undefined && servers.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -239,6 +242,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'res'
     | 'devConfig'
     | 'devPin'
+    | 'server'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
 }
@@ -257,6 +261,7 @@ const LeafSources = {
   res: { LeafIcon: ResourceIcon },
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
+  server: { LeafIcon: ServerIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
   const {
@@ -267,6 +272,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
+    serverActions: { deleteRequest: deleteServerRequest },
     fileActions: { getFile },
   } = useOpenPLCStore()
 
@@ -278,6 +284,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
 
   const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
+  const isServer = useMemo(() => leafLang === 'server', [leafLang])
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -374,10 +381,10 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   }
 
   const handleDeleteFile = () => {
-    if (!isAPou && !isDatatype) {
+    if (!isAPou && !isDatatype && !isServer) {
       toast({
         title: 'Error',
-        description: 'Only POU or datatype files can be deleted.',
+        description: 'Only POU, datatype, or server files can be deleted.',
         variant: 'fail',
       })
       return
@@ -386,7 +393,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     if (!label) {
       toast({
         title: 'Error',
-        description: 'Pou or datatype label is required to delete.',
+        description: 'Label is required to delete.',
         variant: 'fail',
       })
       return
@@ -402,9 +409,14 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       return
     }
 
+    if (isServer) {
+      deleteServerRequest(label)
+      return
+    }
+
     toast({
       title: 'Error',
-      description: 'Only POU or datatype files can be deleted.',
+      description: 'Only POU, datatype, or server files can be deleted.',
       variant: 'fail',
     })
   }

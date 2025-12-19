@@ -11,7 +11,7 @@ const Project = () => {
   const {
     searchQuery,
     project: {
-      data: { pous, dataTypes, configuration },
+      data: { pous, dataTypes, configuration, servers },
       meta: { name },
     },
     projectActions: { updateMetaName },
@@ -237,6 +237,27 @@ const Project = () => {
                 })
               }
             />
+          </ProjectTreeBranch>
+
+          {/* Project Servers tree branch */}
+          <ProjectTreeBranch branchTarget='server'>
+            {servers
+              ?.sort((a, b) => a.name.localeCompare(b.name))
+              .map((server) => (
+                <ProjectTreeLeaf
+                  key={server.name}
+                  leafLang='server'
+                  leafType='server'
+                  label={searchQuery ? extractSearchQuery(server.name, searchQuery) : server.name}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: server.name,
+                      path: `/devices/servers/${server.name}.json`,
+                      elementType: { type: 'server', protocol: server.protocol },
+                    })
+                  }
+                />
+              ))}
           </ProjectTreeBranch>
         </ProjectTreeRoot>
       </div>

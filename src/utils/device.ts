@@ -40,6 +40,18 @@ export function getExpectedRuntimeVersion(boardTarget: string): string | undefin
 }
 
 /**
+ * Determines if a board target is OpenPLC Runtime v4.
+ * This is used to check if features like Modbus Server and Remote IO are supported.
+ *
+ * @param boardTarget - The board target name (e.g., "OpenPLC Runtime v3", "OpenPLC Runtime v4")
+ * @returns true if the board is OpenPLC Runtime v4, false otherwise
+ */
+export function isOpenPLCRuntimeV4Target(boardTarget: string): boolean {
+  const version = getExpectedRuntimeVersion(boardTarget)
+  return version === 'v4'
+}
+
+/**
  * Result of runtime version validation.
  * - 'ok': Version matches or not a runtime target
  * - 'missing': Runtime didn't report version (older runtime without header)

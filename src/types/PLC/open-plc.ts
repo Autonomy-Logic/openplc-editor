@@ -276,16 +276,42 @@ const PLCConfigurationSchema = z.object({
 })
 type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
 
+const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip'])
+type PLCServerProtocol = z.infer<typeof PLCServerProtocolSchema>
+
+const ModbusSlaveConfigSchema = z.object({
+  enabled: z.boolean(),
+  networkInterface: z.string(),
+  port: z.number(),
+})
+type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
+
+const PLCServerSchema = z.object({
+  name: z.string(),
+  protocol: PLCServerProtocolSchema,
+  modbusSlaveConfig: ModbusSlaveConfigSchema.optional(),
+})
+type PLCServer = z.infer<typeof PLCServerSchema>
+
 const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(PLCPouSchema),
   configuration: PLCConfigurationSchema,
+  servers: z.array(PLCServerSchema).optional(),
   deletedPous: z
     .array(
       z.object({
         name: z.string(),
         type: z.enum(['program', 'function', 'function-block']),
         language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
+      }),
+    )
+    .optional(),
+  deletedServers: z
+    .array(
+      z.object({
+        name: z.string(),
+        protocol: PLCServerProtocolSchema,
       }),
     )
     .optional(),
@@ -309,6 +335,7 @@ type PLCProject = z.infer<typeof PLCProjectSchema>
 export {
   baseTypeSchema,
   bodySchema,
+  ModbusSlaveConfigSchema,
   PLCArrayDatatypeSchema,
   PLCConfigurationSchema,
   PLCDataTypeSchema,
@@ -322,6 +349,8 @@ export {
   PLCProjectDataSchema,
   PLCProjectMetaSchema,
   PLCProjectSchema,
+  PLCServerProtocolSchema,
+  PLCServerSchema,
   PLCStructureDatatypeSchema,
   PLCStructureVariableSchema,
   PLCTaskSchema,
@@ -331,6 +360,7 @@ export {
 export type {
   BaseType,
   BodySchema,
+  ModbusSlaveConfig,
   PLCArrayDatatype,
   PLCConfiguration,
   PLCDataType,
@@ -344,6 +374,8 @@ export type {
   PLCProject,
   PLCProjectData,
   PLCProjectMeta,
+  PLCServer,
+  PLCServerProtocol,
   PLCStructureDatatype,
   PLCStructureVariable,
   PLCTask,
