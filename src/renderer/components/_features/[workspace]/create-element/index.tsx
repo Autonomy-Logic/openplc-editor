@@ -11,11 +11,12 @@ const CreatePLCElement = () => {
     workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
   const [isContainerOpen, setIsContainerOpen] = useState(false)
-  const CreatePLCElementTypes: ('function' | 'function-block' | 'program' | 'data-type')[] = [
+  const CreatePLCElementTypes: ('function' | 'function-block' | 'program' | 'data-type' | 'server')[] = [
     'function',
     'function-block',
     'program',
     'data-type',
+    'server',
   ]
 
   return (

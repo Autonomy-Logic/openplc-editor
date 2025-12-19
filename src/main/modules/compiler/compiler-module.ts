@@ -14,6 +14,7 @@ import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/utils/cpp/generateCBlocksCode'
 import { type CppPouData as CppPouDataHeader, generateCBlocksHeader } from '@root/utils/cpp/generateCBlocksHeader'
+import { generateModbusSlaveConfig } from '@root/utils/modbus/generate-modbus-slave-config'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import { app as electronApp, dialog } from 'electron'
@@ -1135,6 +1136,22 @@ class CompilerModule {
     return zipBuffer
   }
 
+  async handleGenerateModbusSlaveConfig(
+    sourceTargetFolderPath: string,
+    projectData: ProjectState['data'],
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const modbusSlaveConfig = generateModbusSlaveConfig(projectData.servers)
+
+    if (modbusSlaveConfig) {
+      const configFilePath = join(sourceTargetFolderPath, 'modbus_slave_config.json')
+      await writeFile(configFilePath, modbusSlaveConfig, 'utf-8')
+      handleOutputData('Generated modbus_slave_config.json', 'info')
+    } else {
+      handleOutputData('No Modbus TCP server configured, skipping modbus_slave_config.json generation', 'info')
+    }
+  }
+
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1525,6 +1542,11 @@ class CompilerModule {
           filename = 'program.st'
           contentType = 'text/plain'
         } else {
+          // Generate Modbus Slave config for Runtime v4
+          await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+
           _mainProcessPort.postMessage({
             logLevel: 'info',
             message: 'Compressing source files for OpenPLC Runtime v4...',

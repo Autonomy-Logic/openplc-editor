@@ -8,6 +8,7 @@ import {
   LDIcon,
   ProgramIcon,
   PythonIcon,
+  ServerIcon,
   SFCIcon,
   STIcon,
 } from '@root/renderer/assets'
@@ -48,6 +49,7 @@ const CreatePouSources = {
   'function-block': <FunctionBlockIcon size='sm' />,
   program: <ProgramIcon size='sm' />,
   'data-type': <DataTypeIcon size='sm' />,
+  server: <ServerIcon size='sm' />,
 }
 
 export { CreatePouSources, PouLanguageSources }

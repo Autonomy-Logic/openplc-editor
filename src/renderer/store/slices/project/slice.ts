@@ -983,6 +983,144 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+
+    /**
+     * Server Actions
+     */
+    createServer: (serverToBeCreated): ProjectResponse => {
+      let response: ProjectResponse = { ok: false, message: 'Internal error' }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            project.data.servers = []
+          }
+
+          const serverExists = project.data.servers.find((server) => server.name === serverToBeCreated.data.name)
+          const pouExists = project.data.pous.find((pou) => pou.data.name === serverToBeCreated.data.name)
+          const dataTypeExists = project.data.dataTypes.find(
+            (datatype) => datatype.name === serverToBeCreated.data.name,
+          )
+          const protocolExists = project.data.servers.find(
+            (server) => server.protocol === serverToBeCreated.data.protocol,
+          )
+
+          if (protocolExists) {
+            toast({
+              title: 'Invalid Server',
+              description: `A server for this protocol already exists.`,
+              variant: 'fail',
+            })
+            return
+          }
+
+          if (!serverExists && !pouExists && !dataTypeExists) {
+            project.data.servers.push(serverToBeCreated.data)
+            response = { ok: true, message: 'Server created successfully' }
+          } else {
+            toast({
+              title: 'Invalid Server',
+              description: `You can't create a server with this name.`,
+              variant: 'fail',
+            })
+          }
+        }),
+      )
+      return response
+    },
+
+    deleteServer: (serverName): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const serverIndex = project.data.servers.findIndex((server) => server.name === serverName)
+          if (serverIndex === -1) {
+            response = { ok: false, message: 'Server not found' }
+            return
+          }
+          project.data.servers.splice(serverIndex, 1)
+        }),
+      )
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: response.message,
+          variant: 'fail',
+        })
+      }
+      return response
+    },
+
+    updateServerName: (oldName, newName): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === oldName)
+          if (!server) {
+            response = { ok: false, message: 'Server not found' }
+            return
+          }
+          const nameExists = project.data.servers.find((s) => s.name === newName && s.name !== oldName)
+          const pouExists = project.data.pous.find((pou) => pou.data.name === newName)
+          const dataTypeExists = project.data.dataTypes.find((datatype) => datatype.name === newName)
+          if (nameExists || pouExists || dataTypeExists) {
+            response = { ok: false, message: 'Name already exists' }
+            return
+          }
+          server.name = newName
+        }),
+      )
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: response.message,
+          variant: 'fail',
+        })
+      }
+      return response
+    },
+
+    updateServerConfig: (
+      serverName: string,
+      config: { enabled?: boolean; networkInterface?: string; port?: number },
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === serverName)
+          if (!server) {
+            response = { ok: false, message: 'Server not found' }
+            return
+          }
+          if (server.protocol !== 'modbus-tcp') {
+            response = { ok: false, message: 'Server is not a Modbus/TCP server' }
+            return
+          }
+          if (!server.modbusSlaveConfig) {
+            server.modbusSlaveConfig = {
+              enabled: false,
+              networkInterface: '',
+              port: 502,
+            }
+          }
+          if (config.enabled !== undefined) server.modbusSlaveConfig.enabled = config.enabled
+          if (config.networkInterface !== undefined) server.modbusSlaveConfig.networkInterface = config.networkInterface
+          if (config.port !== undefined) server.modbusSlaveConfig.port = config.port
+        }),
+      )
+      return response
+    },
   },
 })
 

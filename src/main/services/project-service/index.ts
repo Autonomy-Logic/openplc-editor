@@ -11,7 +11,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
-import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject, PLCServer } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
@@ -245,11 +245,12 @@ class ProjectService {
       pous: PLCPou[]
       deviceConfiguration: DeviceConfiguration
       devicePinMapping: DevicePin[]
+      servers?: PLCServer[]
     }
   }): Promise<IProjectServiceResponse> {
     const {
       projectPath,
-      content: { deviceConfiguration, devicePinMapping, projectData },
+      content: { deviceConfiguration, devicePinMapping, projectData, servers },
     } = data
     if (!projectPath || !projectData) {
       return {
@@ -356,6 +357,47 @@ class ProjectService {
           }),
           error,
         },
+      }
+    }
+
+    // Save servers
+    if (servers && servers.length > 0) {
+      try {
+        const serversDir = join(directoryPath, 'devices', 'servers')
+        if (!fileOrDirectoryExists(serversDir)) {
+          await promises.mkdir(serversDir, { recursive: true })
+        }
+
+        for (const server of servers) {
+          const serverFilePath = join(serversDir, `${server.name}.json`)
+          await promises.writeFile(serverFilePath, JSON.stringify(server, null, 2), 'utf-8')
+        }
+
+        // Handle deleted servers
+        if (projectData.data.deletedServers && projectData.data.deletedServers.length > 0) {
+          for (const deletedServer of projectData.data.deletedServers) {
+            const serverFilePath = join(serversDir, `${deletedServer.name}.json`)
+            try {
+              if (fileOrDirectoryExists(serverFilePath)) {
+                await promises.unlink(serverFilePath)
+              }
+            } catch (deleteError) {
+              console.error(`Error deleting server file ${serverFilePath}:`, deleteError)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error saving servers:', error)
+        return {
+          success: false,
+          error: {
+            title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
+            description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
+              filePath: directoryPath,
+            }),
+            error,
+          },
+        }
       }
     }
 

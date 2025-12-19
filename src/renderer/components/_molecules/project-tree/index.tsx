@@ -20,6 +20,7 @@ import {
   ProgramIcon,
   PythonIcon,
   ResourceIcon,
+  ServerIcon,
   SFCIcon,
   STIcon,
   StructureIcon,
@@ -80,7 +81,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 }
 
 type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device'
+  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device' | 'server'
   children?: ReactNode
 }
 
@@ -91,11 +92,12 @@ const BranchSources = {
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
   resource: { BranchIcon: ResourceIcon, label: 'Resource' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
+  server: { BranchIcon: ServerIcon, label: 'Servers' },
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
-      data: { pous, dataTypes },
+      data: { pous, dataTypes, servers },
     },
     fileActions: { getFile },
   } = useOpenPLCStore()
@@ -105,7 +107,8 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
   const hasAssociatedPou =
     pous.some((pou) => pou.type === branchTarget) ||
     branchTarget === 'device' ||
-    (branchTarget === 'data-type' && dataTypes.length > 0)
+    (branchTarget === 'data-type' && dataTypes.length > 0) ||
+    (branchTarget === 'server' && servers !== undefined && servers.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -239,6 +242,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'res'
     | 'devConfig'
     | 'devPin'
+    | 'server'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
 }
@@ -257,6 +261,7 @@ const LeafSources = {
   res: { LeafIcon: ResourceIcon },
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
+  server: { LeafIcon: ServerIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
   const {
