@@ -241,8 +241,8 @@ const Project = () => {
 
           {/* Project Servers tree branch */}
           <ProjectTreeBranch branchTarget='server'>
-            {servers
-              ?.sort((a, b) => a.name.localeCompare(b.name))
+            {[...(servers || [])]
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map((server) => (
                 <ProjectTreeLeaf
                   key={server.name}
@@ -262,8 +262,8 @@ const Project = () => {
 
           {/* Project Remote Devices tree branch */}
           <ProjectTreeBranch branchTarget='remote-device'>
-            {remoteDevices
-              ?.sort((a, b) => a.name.localeCompare(b.name))
+            {[...(remoteDevices || [])]
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map((device) => (
                 <ProjectTreeLeaf
                   key={device.name}
