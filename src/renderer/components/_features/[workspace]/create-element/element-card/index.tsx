@@ -118,6 +118,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     pouActions: { create },
     datatypeActions: { create: createDatatype },
     projectActions: { createServer, createRemoteDevice },
+    sharedWorkspaceActions: { openFile },
     deviceAvailableOptions: { availableBoards },
   } = useOpenPLCStore()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
@@ -190,6 +191,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       return
     }
 
+    // Open the newly created server tab
+    openFile({
+      name: data.name,
+      path: `/devices/servers/${data.name}.json`,
+      elementType: { type: 'server', protocol: data.protocol },
+    })
+
     toast({
       title: 'Server created successfully',
       description: 'The server has been created',
@@ -207,6 +215,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       })
       return
     }
+
+    // Open the newly created remote device tab
+    openFile({
+      name: data.name,
+      path: `/devices/remote/${data.name}.json`,
+      elementType: { type: 'remote-device', protocol: data.protocol },
+    })
 
     toast({
       title: 'Remote device created successfully',
