@@ -209,7 +209,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         (variableItem) => variableItem.name.toLowerCase() === variable.name.toLowerCase(),
       )
       if (!selectedVariable) {
-        submitAddVariable({ variableName: valueToSearch })
+        // Don't create a new variable if lookup fails - this prevents accidental variable creation
+        // Variables should only be created when the user explicitly selects "Add variable"
         return
       }
 
