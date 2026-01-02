@@ -856,9 +856,18 @@ class MainProcessBridge implements MainIpcModule {
       await client.connect()
       const targetMd5 = await client.getMd5Hash()
 
-      client.disconnect()
-
       const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+
+      if (connectionType === 'tcp') {
+        client.disconnect()
+      } else {
+        this.debuggerModbusClient = client
+        this.debuggerConnectionType = 'rtu'
+        this.debuggerRtuPort = connectionParams.port!
+        this.debuggerRtuBaudRate = connectionParams.baudRate!
+        this.debuggerRtuSlaveId = connectionParams.slaveId!
+      }
+
       return { success: true, match, targetMd5 }
     } catch (error) {
       client?.disconnect()
@@ -1043,12 +1052,12 @@ class MainProcessBridge implements MainIpcModule {
     },
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (this.debuggerModbusClient) {
-        this.debuggerModbusClient.disconnect()
-        this.debuggerModbusClient = null
-      }
-
       if (connectionType === 'websocket') {
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
@@ -1071,6 +1080,11 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerTargetIp = connectionParams.ipAddress
         this.debuggerJwtToken = connectionParams.jwtToken
       } else if (connectionType === 'tcp') {
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
         if (!connectionParams.ipAddress) {
           return { success: false, error: 'IP address is required for TCP connection' }
         }
@@ -1085,6 +1099,23 @@ class MainProcessBridge implements MainIpcModule {
         if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
           return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
         }
+
+        if (
+          this.debuggerModbusClient &&
+          this.debuggerConnectionType === 'rtu' &&
+          this.debuggerRtuPort === connectionParams.port &&
+          this.debuggerRtuBaudRate === connectionParams.baudRate &&
+          this.debuggerRtuSlaveId === connectionParams.slaveId
+        ) {
+          this.debuggerReconnecting = false
+          return { success: true }
+        }
+
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
         this.debuggerModbusClient = new ModbusRtuClient({
           port: connectionParams.port,
           baudRate: connectionParams.baudRate,
