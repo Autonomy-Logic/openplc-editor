@@ -11,9 +11,16 @@ const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR_GLOBAL: 'global',
 }
 
+// Primary format: name : type AT location := initialValue ; (* documentation *)
 const lineRegex =
   // eslint-disable-next-line no-useless-escape
   /^\s*(?<name>\w+)\s*:\s*(?<type>[\w\s\[\]\.]+?)(?:\s+AT\s+(?<location>[\w\d\._%]+))?\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+
+// Alternate format: name AT location : type := initialValue ; (* documentation *)
+// This format is used by some IEC 61131-3 tools and older versions of OpenPLC Editor
+const alternateLineRegex =
+  // eslint-disable-next-line no-useless-escape
+  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\]\.]+?)(?:\s*:=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 const guessErrorReason = (line: string): string => {
   if (!line.includes(';')) return 'missing semicolon (;) at the end of the declaration'
@@ -58,7 +65,11 @@ export const parseIecStringToVariables = (
 
     if (!currentClass) return
 
-    const match = line.match(lineRegex)
+    // Try primary format first, then fall back to alternate format
+    let match = line.match(lineRegex)
+    if (!match || !match.groups) {
+      match = line.match(alternateLineRegex)
+    }
     if (!match || !match.groups) {
       throw new Error(`Syntax error on line ${lineNumber}: "${line}". Possible cause: ${guessErrorReason(line)}.`)
     }
