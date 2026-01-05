@@ -20,7 +20,7 @@ const lineRegex =
 // This format is used by some IEC 61131-3 tools and older versions of OpenPLC Editor
 const alternateLineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\]\.]+?)(?:\s*:=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\]\.]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 const guessErrorReason = (line: string): string => {
   if (!line.includes(';')) return 'missing semicolon (;) at the end of the declaration'
@@ -67,10 +67,10 @@ export const parseIecStringToVariables = (
 
     // Try primary format first, then fall back to alternate format
     let match = line.match(lineRegex)
-    if (!match || !match.groups) {
+    if (!match?.groups) {
       match = line.match(alternateLineRegex)
     }
-    if (!match || !match.groups) {
+    if (!match?.groups) {
       throw new Error(`Syntax error on line ${lineNumber}: "${line}". Possible cause: ${guessErrorReason(line)}.`)
     }
 
