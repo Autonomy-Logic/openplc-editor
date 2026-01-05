@@ -141,11 +141,6 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
       scrollWhenSelectedIsChanged()
     }, [selectedVariable])
 
-    // Reset keyboard selection when search value changes to prevent stale state
-    useEffect(() => {
-      setSelectedVariable({ positionInArray: -1, variable: { id: '', name: '' } })
-    }, [searchValue])
-
     const scrollWhenSelectedIsChanged = () => {
       if (variablesDivRef.current) {
         const selectedElement = variablesDivRef.current.children[selectedVariable.positionInArray]

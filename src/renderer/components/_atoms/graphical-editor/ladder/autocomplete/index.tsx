@@ -205,7 +205,9 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         return
       }
 
-      const selectedVariable = filteredVariables.find(
+      // Look up in the full variables list, not just filtered ones
+      // This ensures we find the variable even if the filter state changed
+      const selectedVariable = variables.find(
         (variableItem) => variableItem.name.toLowerCase() === variable.name.toLowerCase(),
       )
       if (!selectedVariable) {
