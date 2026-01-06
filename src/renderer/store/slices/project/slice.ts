@@ -1165,7 +1165,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
     updateServerConfig: (
       serverName: string,
-      config: { enabled?: boolean; networkInterface?: string; port?: number },
+      config: {
+        enabled?: boolean
+        networkInterface?: string
+        port?: number
+        bufferMapping?: {
+          holdingRegisters?: { qwCount?: number; mwCount?: number; mdCount?: number; mlCount?: number }
+          coils?: { qxBits?: number; mxBits?: number }
+          discreteInputs?: { ixBits?: number }
+          inputRegisters?: { iwCount?: number }
+        }
+      },
     ): ProjectResponse => {
       let response: ProjectResponse = { ok: true }
       setState(
@@ -1193,6 +1203,48 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (config.enabled !== undefined) server.modbusSlaveConfig.enabled = config.enabled
           if (config.networkInterface !== undefined) server.modbusSlaveConfig.networkInterface = config.networkInterface
           if (config.port !== undefined) server.modbusSlaveConfig.port = config.port
+
+          // Handle buffer mapping updates
+          if (config.bufferMapping !== undefined) {
+            if (!server.modbusSlaveConfig.bufferMapping) {
+              // Initialize with defaults matching runtime BUFFER_SIZE
+              server.modbusSlaveConfig.bufferMapping = {
+                holdingRegisters: { qwCount: 1024, mwCount: 1024, mdCount: 1024, mlCount: 1024 },
+                coils: { qxBits: 8192, mxBits: 0 },
+                discreteInputs: { ixBits: 8192 },
+                inputRegisters: { iwCount: 1024 },
+              }
+            }
+            const bufferMapping = server.modbusSlaveConfig.bufferMapping
+
+            // Update holding registers
+            if (config.bufferMapping.holdingRegisters) {
+              const hr = config.bufferMapping.holdingRegisters
+              if (hr.qwCount !== undefined) bufferMapping.holdingRegisters.qwCount = hr.qwCount
+              if (hr.mwCount !== undefined) bufferMapping.holdingRegisters.mwCount = hr.mwCount
+              if (hr.mdCount !== undefined) bufferMapping.holdingRegisters.mdCount = hr.mdCount
+              if (hr.mlCount !== undefined) bufferMapping.holdingRegisters.mlCount = hr.mlCount
+            }
+
+            // Update coils
+            if (config.bufferMapping.coils) {
+              const c = config.bufferMapping.coils
+              if (c.qxBits !== undefined) bufferMapping.coils.qxBits = c.qxBits
+              if (c.mxBits !== undefined) bufferMapping.coils.mxBits = c.mxBits
+            }
+
+            // Update discrete inputs
+            if (config.bufferMapping.discreteInputs) {
+              const di = config.bufferMapping.discreteInputs
+              if (di.ixBits !== undefined) bufferMapping.discreteInputs.ixBits = di.ixBits
+            }
+
+            // Update input registers
+            if (config.bufferMapping.inputRegisters) {
+              const ir = config.bufferMapping.inputRegisters
+              if (ir.iwCount !== undefined) bufferMapping.inputRegisters.iwCount = ir.iwCount
+            }
+          }
         }),
       )
       return response

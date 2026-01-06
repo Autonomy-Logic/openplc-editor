@@ -279,10 +279,31 @@ type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
 const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip'])
 type PLCServerProtocol = z.infer<typeof PLCServerProtocolSchema>
 
+const ModbusSlaveBufferMappingSchema = z.object({
+  holdingRegisters: z.object({
+    qwCount: z.number(),
+    mwCount: z.number(),
+    mdCount: z.number(),
+    mlCount: z.number(),
+  }),
+  coils: z.object({
+    qxBits: z.number(),
+    mxBits: z.number(),
+  }),
+  discreteInputs: z.object({
+    ixBits: z.number(),
+  }),
+  inputRegisters: z.object({
+    iwCount: z.number(),
+  }),
+})
+type ModbusSlaveBufferMapping = z.infer<typeof ModbusSlaveBufferMappingSchema>
+
 const ModbusSlaveConfigSchema = z.object({
   enabled: z.boolean(),
   networkInterface: z.string(),
   port: z.number(),
+  bufferMapping: ModbusSlaveBufferMappingSchema.optional(),
 })
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
 
@@ -394,6 +415,7 @@ export {
   ModbusFunctionCodeSchema,
   ModbusIOGroupSchema,
   ModbusIOPointSchema,
+  ModbusSlaveBufferMappingSchema,
   ModbusSlaveConfigSchema,
   ModbusTcpConfigSchema,
   PLCArrayDatatypeSchema,
@@ -426,6 +448,7 @@ export type {
   ModbusFunctionCode,
   ModbusIOGroup,
   ModbusIOPoint,
+  ModbusSlaveBufferMapping,
   ModbusSlaveConfig,
   ModbusTcpConfig,
   PLCArrayDatatype,

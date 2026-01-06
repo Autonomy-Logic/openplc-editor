@@ -325,6 +325,34 @@ const _projectActionsSchema = z.object({
         enabled: z.boolean().optional(),
         networkInterface: z.string().optional(),
         port: z.number().optional(),
+        bufferMapping: z
+          .object({
+            holdingRegisters: z
+              .object({
+                qwCount: z.number().optional(),
+                mwCount: z.number().optional(),
+                mdCount: z.number().optional(),
+                mlCount: z.number().optional(),
+              })
+              .optional(),
+            coils: z
+              .object({
+                qxBits: z.number().optional(),
+                mxBits: z.number().optional(),
+              })
+              .optional(),
+            discreteInputs: z
+              .object({
+                ixBits: z.number().optional(),
+              })
+              .optional(),
+            inputRegisters: z
+              .object({
+                iwCount: z.number().optional(),
+              })
+              .optional(),
+          })
+          .optional(),
       }),
     )
     .returns(projectResponseSchema),
