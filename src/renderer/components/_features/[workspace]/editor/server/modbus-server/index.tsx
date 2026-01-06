@@ -134,6 +134,18 @@ const ModbusServerEditor = () => {
   // Buffer mapping state - input registers
   const [iwCount, setIwCount] = useState(DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount.toString())
 
+  // Helper function to reset buffer mapping state to defaults or provided values
+  const setBufferMappingState = useCallback((bufferMapping: typeof DEFAULT_BUFFER_MAPPING = DEFAULT_BUFFER_MAPPING) => {
+    setQwCount(bufferMapping.holdingRegisters.qwCount.toString())
+    setMwCount(bufferMapping.holdingRegisters.mwCount.toString())
+    setMdCount(bufferMapping.holdingRegisters.mdCount.toString())
+    setMlCount(bufferMapping.holdingRegisters.mlCount.toString())
+    setQxBits(bufferMapping.coils.qxBits.toString())
+    setMxBits(bufferMapping.coils.mxBits.toString())
+    setIxBits(bufferMapping.discreteInputs.ixBits.toString())
+    setIwCount(bufferMapping.inputRegisters.iwCount.toString())
+  }, [])
+
   // Accordion state
   const [openSections, setOpenSections] = useState<string[]>(['holding-registers'])
 
@@ -142,30 +154,14 @@ const ModbusServerEditor = () => {
       setEnabled(server.modbusSlaveConfig.enabled)
       setNetworkInterface(server.modbusSlaveConfig.networkInterface || '0.0.0.0')
       setPort(server.modbusSlaveConfig.port.toString())
-
-      const bufferMapping = server.modbusSlaveConfig.bufferMapping || DEFAULT_BUFFER_MAPPING
-      setQwCount(bufferMapping.holdingRegisters.qwCount.toString())
-      setMwCount(bufferMapping.holdingRegisters.mwCount.toString())
-      setMdCount(bufferMapping.holdingRegisters.mdCount.toString())
-      setMlCount(bufferMapping.holdingRegisters.mlCount.toString())
-      setQxBits(bufferMapping.coils.qxBits.toString())
-      setMxBits(bufferMapping.coils.mxBits.toString())
-      setIxBits(bufferMapping.discreteInputs.ixBits.toString())
-      setIwCount(bufferMapping.inputRegisters.iwCount.toString())
+      setBufferMappingState(server.modbusSlaveConfig.bufferMapping || DEFAULT_BUFFER_MAPPING)
     } else {
       setEnabled(false)
       setNetworkInterface('0.0.0.0')
       setPort('502')
-      setQwCount(DEFAULT_BUFFER_MAPPING.holdingRegisters.qwCount.toString())
-      setMwCount(DEFAULT_BUFFER_MAPPING.holdingRegisters.mwCount.toString())
-      setMdCount(DEFAULT_BUFFER_MAPPING.holdingRegisters.mdCount.toString())
-      setMlCount(DEFAULT_BUFFER_MAPPING.holdingRegisters.mlCount.toString())
-      setQxBits(DEFAULT_BUFFER_MAPPING.coils.qxBits.toString())
-      setMxBits(DEFAULT_BUFFER_MAPPING.coils.mxBits.toString())
-      setIxBits(DEFAULT_BUFFER_MAPPING.discreteInputs.ixBits.toString())
-      setIwCount(DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount.toString())
+      setBufferMappingState()
     }
-  }, [server])
+  }, [server, setBufferMappingState])
 
   const handleEnabledChange = useCallback(
     (newEnabled: boolean) => {

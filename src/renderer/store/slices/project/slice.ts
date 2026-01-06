@@ -9,6 +9,7 @@ import {
   PLCVariable,
 } from '@root/types/PLC/open-plc'
 import { isLegalIdentifier } from '@root/utils/keywords'
+import { DEFAULT_BUFFER_MAPPING } from '@root/utils/modbus/generate-modbus-slave-config'
 import { produce } from 'immer'
 import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
@@ -1208,12 +1209,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (config.bufferMapping !== undefined) {
             if (!server.modbusSlaveConfig.bufferMapping) {
               // Initialize with defaults matching runtime BUFFER_SIZE
-              server.modbusSlaveConfig.bufferMapping = {
-                holdingRegisters: { qwCount: 1024, mwCount: 1024, mdCount: 1024, mlCount: 1024 },
-                coils: { qxBits: 8192, mxBits: 0 },
-                discreteInputs: { ixBits: 8192 },
-                inputRegisters: { iwCount: 1024 },
-              }
+              server.modbusSlaveConfig.bufferMapping = structuredClone(DEFAULT_BUFFER_MAPPING)
             }
             const bufferMapping = server.modbusSlaveConfig.bufferMapping
 
