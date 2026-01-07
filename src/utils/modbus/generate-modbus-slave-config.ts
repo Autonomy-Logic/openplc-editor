@@ -1,10 +1,11 @@
 import type { PLCServer } from '@root/types/PLC/open-plc'
 
-interface ModbusSlavePluginConfig {
-  type: string
-  path: string
-  enabled: boolean
-  description: string
+// Default values matching runtime BUFFER_SIZE
+const DEFAULT_BUFFER_MAPPING = {
+  holdingRegisters: { qwCount: 1024, mwCount: 1024, mdCount: 1024, mlCount: 1024 },
+  coils: { qxBits: 8192, mxBits: 0 },
+  discreteInputs: { ixBits: 8192 },
+  inputRegisters: { iwCount: 1024 },
 }
 
 interface ModbusSlaveNetworkConfig {
@@ -12,15 +13,34 @@ interface ModbusSlaveNetworkConfig {
   port: number
 }
 
+interface ModbusSlaveHoldingRegisters {
+  qw_count: number
+  mw_count: number
+  md_count: number
+  ml_count: number
+}
+
+interface ModbusSlaveCoils {
+  qx_bits: number
+  mx_bits: number
+}
+
+interface ModbusSlaveDiscreteInputs {
+  ix_bits: number
+}
+
+interface ModbusSlaveInputRegisters {
+  iw_count: number
+}
+
 interface ModbusSlaveBufferMapping {
-  max_coils: number
-  max_discrete_inputs: number
-  max_holding_registers: number
-  max_input_registers: number
+  holding_registers: ModbusSlaveHoldingRegisters
+  coils: ModbusSlaveCoils
+  discrete_inputs: ModbusSlaveDiscreteInputs
+  input_registers: ModbusSlaveInputRegisters
 }
 
 interface ModbusSlaveConfig {
-  plugin_modbus_slave: ModbusSlavePluginConfig
   network_configuration: ModbusSlaveNetworkConfig
   buffer_mapping: ModbusSlaveBufferMapping
 }
@@ -45,26 +65,44 @@ export const generateModbusSlaveConfig = (servers: PLCServer[] | undefined): str
 
   const { modbusSlaveConfig } = modbusServer
 
+  // Use stored buffer mapping or defaults
+  const bufferMapping = modbusSlaveConfig.bufferMapping || DEFAULT_BUFFER_MAPPING
+
   const config: ModbusSlaveConfig = {
-    plugin_modbus_slave: {
-      type: 'PLUGIN_TYPE_PYTHON',
-      path: 'core/src/drivers/modbus_slave.py',
-      enabled: modbusSlaveConfig.enabled,
-      description: 'Modbus TCP Slave server that exposes OpenPLC buffers',
-    },
     network_configuration: {
       host: modbusSlaveConfig.networkInterface || '0.0.0.0',
       port: modbusSlaveConfig.port || 502,
     },
     buffer_mapping: {
-      max_coils: 8000,
-      max_discrete_inputs: 8000,
-      max_holding_registers: 1000,
-      max_input_registers: 1000,
+      holding_registers: {
+        qw_count: bufferMapping.holdingRegisters.qwCount,
+        mw_count: bufferMapping.holdingRegisters.mwCount,
+        md_count: bufferMapping.holdingRegisters.mdCount,
+        ml_count: bufferMapping.holdingRegisters.mlCount,
+      },
+      coils: {
+        qx_bits: bufferMapping.coils.qxBits,
+        mx_bits: bufferMapping.coils.mxBits,
+      },
+      discrete_inputs: {
+        ix_bits: bufferMapping.discreteInputs.ixBits,
+      },
+      input_registers: {
+        iw_count: bufferMapping.inputRegisters.iwCount,
+      },
     },
   }
 
   return JSON.stringify(config, null, 2)
 }
 
-export type { ModbusSlaveBufferMapping, ModbusSlaveConfig, ModbusSlaveNetworkConfig, ModbusSlavePluginConfig }
+export { DEFAULT_BUFFER_MAPPING }
+export type {
+  ModbusSlaveBufferMapping,
+  ModbusSlaveCoils,
+  ModbusSlaveConfig,
+  ModbusSlaveDiscreteInputs,
+  ModbusSlaveHoldingRegisters,
+  ModbusSlaveInputRegisters,
+  ModbusSlaveNetworkConfig,
+}
