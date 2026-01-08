@@ -30,6 +30,7 @@ interface DimensionsModalProps {
   onRearrangeDimensions: (index: number, direction: 'up' | 'down') => void
   onInputClick: (id: string) => void
   onUpdateDimension: (index: number, value: string) => { ok: boolean }
+  hideTrigger?: boolean
 }
 
 export const DimensionsModal = ({
@@ -48,15 +49,18 @@ export const DimensionsModal = ({
   onUpdateDimension,
   libraryTypes,
   variableTypes,
+  hideTrigger = false,
 }: DimensionsModalProps) => {
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
-      <ModalTrigger
-        onClick={() => onOpenChange(true)}
-        className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
-      >
-        <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
-      </ModalTrigger>
+      {!hideTrigger && (
+        <ModalTrigger
+          onClick={() => onOpenChange(true)}
+          className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
+        >
+          <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
+        </ModalTrigger>
+      )}
       <ModalContent
         onEscapeKeyDown={onCancel}
         onPointerDownOutside={onCancel}

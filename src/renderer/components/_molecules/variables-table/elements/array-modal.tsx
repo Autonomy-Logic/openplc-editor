@@ -191,6 +191,7 @@ export const ArrayModal = ({
       onUpdateDimension={handleUpdateDimension}
       variableTypes={VariableTypes}
       libraryTypes={LibraryTypes}
+      hideTrigger
     />
   )
 }
