@@ -94,143 +94,154 @@ const SelectableTypeCell = ({
   }))
 
   return (
-    <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
-      <PrimitiveDropdown.Trigger asChild disabled={!editable}>
-        <div
-          className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
-            'pointer-events-none': !editable,
-            'cursor-default': !editable || definition === 'derived',
-          })}
-        >
-          <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-            {cellValue === null
-              ? ''
-              : definition === 'array' || definition === 'derived'
-                ? cellValue
-                : _.upperCase(cellValue as unknown as string)}
-          </span>
-        </div>
-      </PrimitiveDropdown.Trigger>
-      <PrimitiveDropdown.Portal>
-        <PrimitiveDropdown.Content
-          side='bottom'
-          sideOffset={-20}
-          className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-        >
-          {filteredVariableValues.map((scope) => (
-            <PrimitiveDropdown.Sub
-              key={scope.definition}
-              onOpenChange={() => setVariableFilters((prev) => ({ ...prev, [scope.definition]: '' }))}
+    <>
+      <ArrayModal
+        variableName={variableName}
+        VariableRow={index}
+        arrayModalIsOpen={arrayModalIsOpen}
+        setArrayModalIsOpen={setArrayModalIsOpen}
+        closeContainer={() => setPoppoverIsOpen(false)}
+      />
+      <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
+        <PrimitiveDropdown.Trigger asChild disabled={!editable}>
+          <div
+            className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
+              'pointer-events-none': !editable,
+              'cursor-default': !editable || definition === 'derived',
+            })}
+          >
+            <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+              {cellValue === null
+                ? ''
+                : definition === 'array' || definition === 'derived'
+                  ? cellValue
+                  : _.upperCase(cellValue as unknown as string)}
+            </span>
+          </div>
+        </PrimitiveDropdown.Trigger>
+        <PrimitiveDropdown.Portal>
+          <PrimitiveDropdown.Content
+            side='bottom'
+            sideOffset={-20}
+            className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+          >
+            {filteredVariableValues.map((scope) => (
+              <PrimitiveDropdown.Sub
+                key={scope.definition}
+                onOpenChange={() => setVariableFilters((prev) => ({ ...prev, [scope.definition]: '' }))}
+              >
+                <PrimitiveDropdown.SubTrigger asChild>
+                  <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'>
+                    <span className='text-xs text-neutral-700 dark:text-neutral-500'>
+                      {_.startCase(scope.definition)}
+                    </span>
+                    <ArrowIcon size='md' direction='right' className='absolute right-1' />
+                  </div>
+                </PrimitiveDropdown.SubTrigger>
+                <PrimitiveDropdown.Portal>
+                  <PrimitiveDropdown.SubContent
+                    sideOffset={5}
+                    className='box max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white dark:bg-neutral-950'
+                  >
+                    <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
+                      <InputWithRef
+                        type='text'
+                        placeholder='Search...'
+                        className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
+                        value={variableFilters[scope.definition]}
+                        onChange={(e) =>
+                          setVariableFilters((prev) => ({
+                            ...prev,
+                            [scope.definition]: e.target.value,
+                          }))
+                        }
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    {scope.values.length > 0 ? (
+                      scope.values.map((value) => (
+                        <PrimitiveDropdown.Item
+                          key={value}
+                          onSelect={() =>
+                            onSelect(scope.definition as PLCStructureVariable['type']['definition'], value)
+                          }
+                          className='flex h-8 items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        >
+                          <span className='text-xs text-neutral-700 dark:text-neutral-500'>{_.upperCase(value)}</span>
+                        </PrimitiveDropdown.Item>
+                      ))
+                    ) : (
+                      <div className='flex h-8 items-center justify-center'>
+                        <span className='text-xs text-neutral-700 dark:text-neutral-500'>
+                          No {_.startCase(scope.definition)} found
+                        </span>
+                      </div>
+                    )}
+                  </PrimitiveDropdown.SubContent>
+                </PrimitiveDropdown.Portal>
+              </PrimitiveDropdown.Sub>
+            ))}
+
+            {filteredLibraryValues.map((scope) => (
+              <PrimitiveDropdown.Sub key={scope.definition} onOpenChange={() => setInputFilter('')}>
+                <PrimitiveDropdown.SubTrigger asChild>
+                  <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'>
+                    <span className='text-xs text-neutral-700 dark:text-neutral-500'>
+                      {_.startCase(scope.definition)}
+                    </span>
+                    <ArrowIcon size='md' direction='right' className='absolute right-1' />
+                  </div>
+                </PrimitiveDropdown.SubTrigger>
+                <PrimitiveDropdown.Portal>
+                  <PrimitiveDropdown.SubContent
+                    sideOffset={5}
+                    className='box max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white dark:bg-neutral-950'
+                  >
+                    <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
+                      <InputWithRef
+                        type='text'
+                        placeholder='Search...'
+                        className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
+                        value={inputFilter}
+                        onChange={(e) => setInputFilter(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    {scope.values.length > 0 ? (
+                      scope.values.map((value) => (
+                        <PrimitiveDropdown.Item
+                          key={value}
+                          onSelect={() => onSelect('derived', value)}
+                          className='flex h-8 items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        >
+                          <span className='text-xs text-neutral-700 dark:text-neutral-500'>{_.upperCase(value)}</span>
+                        </PrimitiveDropdown.Item>
+                      ))
+                    ) : (
+                      <div className='flex h-8 items-center justify-center'>
+                        <span className='text-xs text-neutral-700 dark:text-neutral-500'>
+                          No {_.startCase(scope.definition)} found
+                        </span>
+                      </div>
+                    )}
+                  </PrimitiveDropdown.SubContent>
+                </PrimitiveDropdown.Portal>
+              </PrimitiveDropdown.Sub>
+            ))}
+
+            <PrimitiveDropdown.Item
+              onSelect={() => {
+                setArrayModalIsOpen(true)
+                setPoppoverIsOpen(false)
+              }}
+              className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
             >
-              <PrimitiveDropdown.SubTrigger asChild>
-                <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'>
-                  <span className='text-xs text-neutral-700 dark:text-neutral-500'>
-                    {_.startCase(scope.definition)}
-                  </span>
-                  <ArrowIcon size='md' direction='right' className='absolute right-1' />
-                </div>
-              </PrimitiveDropdown.SubTrigger>
-              <PrimitiveDropdown.Portal>
-                <PrimitiveDropdown.SubContent
-                  sideOffset={5}
-                  className='box max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white dark:bg-neutral-950'
-                >
-                  <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
-                    <InputWithRef
-                      type='text'
-                      placeholder='Search...'
-                      className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
-                      value={variableFilters[scope.definition]}
-                      onChange={(e) =>
-                        setVariableFilters((prev) => ({
-                          ...prev,
-                          [scope.definition]: e.target.value,
-                        }))
-                      }
-                      onKeyDown={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                  {scope.values.length > 0 ? (
-                    scope.values.map((value) => (
-                      <PrimitiveDropdown.Item
-                        key={value}
-                        onSelect={() => onSelect(scope.definition as PLCStructureVariable['type']['definition'], value)}
-                        className='flex h-8 items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      >
-                        <span className='text-xs text-neutral-700 dark:text-neutral-500'>{_.upperCase(value)}</span>
-                      </PrimitiveDropdown.Item>
-                    ))
-                  ) : (
-                    <div className='flex h-8 items-center justify-center'>
-                      <span className='text-xs text-neutral-700 dark:text-neutral-500'>
-                        No {_.startCase(scope.definition)} found
-                      </span>
-                    </div>
-                  )}
-                </PrimitiveDropdown.SubContent>
-              </PrimitiveDropdown.Portal>
-            </PrimitiveDropdown.Sub>
-          ))}
-
-          {filteredLibraryValues.map((scope) => (
-            <PrimitiveDropdown.Sub key={scope.definition} onOpenChange={() => setInputFilter('')}>
-              <PrimitiveDropdown.SubTrigger asChild>
-                <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'>
-                  <span className='text-xs text-neutral-700 dark:text-neutral-500'>
-                    {_.startCase(scope.definition)}
-                  </span>
-                  <ArrowIcon size='md' direction='right' className='absolute right-1' />
-                </div>
-              </PrimitiveDropdown.SubTrigger>
-              <PrimitiveDropdown.Portal>
-                <PrimitiveDropdown.SubContent
-                  sideOffset={5}
-                  className='box max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white dark:bg-neutral-950'
-                >
-                  <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
-                    <InputWithRef
-                      type='text'
-                      placeholder='Search...'
-                      className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
-                      value={inputFilter}
-                      onChange={(e) => setInputFilter(e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                  {scope.values.length > 0 ? (
-                    scope.values.map((value) => (
-                      <PrimitiveDropdown.Item
-                        key={value}
-                        onSelect={() => onSelect('derived', value)}
-                        className='flex h-8 items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      >
-                        <span className='text-xs text-neutral-700 dark:text-neutral-500'>{_.upperCase(value)}</span>
-                      </PrimitiveDropdown.Item>
-                    ))
-                  ) : (
-                    <div className='flex h-8 items-center justify-center'>
-                      <span className='text-xs text-neutral-700 dark:text-neutral-500'>
-                        No {_.startCase(scope.definition)} found
-                      </span>
-                    </div>
-                  )}
-                </PrimitiveDropdown.SubContent>
-              </PrimitiveDropdown.Portal>
-            </PrimitiveDropdown.Sub>
-          ))}
-
-          <PrimitiveDropdown.Item asChild>
-            <ArrayModal
-              variableName={variableName}
-              VariableRow={index}
-              arrayModalIsOpen={arrayModalIsOpen}
-              setArrayModalIsOpen={setArrayModalIsOpen}
-              closeContainer={() => setPoppoverIsOpen(false)}
-            />
-          </PrimitiveDropdown.Item>
-        </PrimitiveDropdown.Content>
-      </PrimitiveDropdown.Portal>
-    </PrimitiveDropdown.Root>
+              <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
+            </PrimitiveDropdown.Item>
+          </PrimitiveDropdown.Content>
+        </PrimitiveDropdown.Portal>
+      </PrimitiveDropdown.Root>
+    </>
   )
 }
 
