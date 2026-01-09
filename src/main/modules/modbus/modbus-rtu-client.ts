@@ -11,7 +11,7 @@ interface ModbusRtuClientOptions {
   timeout: number
 }
 
-const ARDUINO_BOOTLOADER_DELAY_MS = 500
+const ARDUINO_BOOTLOADER_DELAY_MS = 2500
 const MD5_REQUEST_MAX_RETRIES = 3
 const MD5_REQUEST_RETRY_DELAY_MS = 500
 const FRAME_COMPLETE_TIMEOUT_MS = 50
