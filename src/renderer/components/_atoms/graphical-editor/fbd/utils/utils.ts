@@ -38,7 +38,15 @@ export const getFBDPouVariablesRungNodeAndEdges = (
         return undefined
       case 'comment':
         return undefined
+      case 'input-variable':
+      case 'output-variable':
+      case 'inout-variable':
+        // Variable nodes - allow all types including derived (user-defined types)
+        return (node.data as BasicNodeData).variable.name !== undefined
+          ? variable.name.toLowerCase() === (node.data as BasicNodeData).variable.name.toLowerCase()
+          : variable.name === data.variableName
       default:
+        // Other node types - only allow base types (not derived/user-defined)
         return (
           ((node.data as BasicNodeData).variable.name !== undefined
             ? variable.name.toLowerCase() === (node.data as BasicNodeData).variable.name.toLowerCase()
