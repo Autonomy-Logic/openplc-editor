@@ -85,14 +85,12 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
           return {
             values: restrictions.values.length > 0 ? restrictions.values : undefined,
             definition: restrictions.definition.length > 0 ? restrictions.definition : undefined,
-            limitations: ['derived'],
           }
         }
         default:
           return {
             values: undefined,
             definition: undefined,
-            limitations: undefined,
           }
       }
     }, [pou])
@@ -103,9 +101,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             (variable) =>
               variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
               (variableRestrictions.values === undefined ||
-                variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
-              (variableRestrictions.limitations === undefined ||
-                !variableRestrictions.limitations.includes(variable.type.definition)),
+                variableRestrictions.values.includes(variable.type.value.toLowerCase())),
           )
           .sort((a, b) => {
             const aNumber = extractNumberAtEnd(a.name).number
