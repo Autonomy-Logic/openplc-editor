@@ -199,8 +199,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       })
     }
 
-    const submit = ({ variable }: { variable: { name: string } }) => {
-      if (variable.name === 'add') {
+    const submit = ({ variable }: { variable: { id: string; name: string } }) => {
+      if (variable.id === 'add') {
         submitAddVariable({ variableName: valueToSearch })
         return
       }

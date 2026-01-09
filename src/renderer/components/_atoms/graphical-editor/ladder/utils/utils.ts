@@ -36,9 +36,13 @@ export const getLadderPouVariablesRungNodeAndEdges = (
           (node.data as BasicNodeData).variable.name !== undefined &&
           (node.data as BasicNodeData).variable.name.toLowerCase() === variable.name.toLowerCase()
         )
-      // case 'variable':
-      //   return variable.name === data.variableName && variable.type.definition !== 'derived'
+      case 'variable':
+        // Variable nodes connected to block pins - allow all types including derived (user-defined types)
+        return (node.data as BasicNodeData).variable.name !== undefined
+          ? variable.name.toLowerCase() === (node.data as BasicNodeData).variable.name.toLowerCase()
+          : variable.name === data.variableName
       default:
+        // Contacts and coils - only allow base types (not derived/user-defined)
         return (
           ((node.data as BasicNodeData).variable.name !== undefined
             ? variable.name.toLowerCase() === (node.data as BasicNodeData).variable.name.toLowerCase()
