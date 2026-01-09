@@ -128,6 +128,9 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
             const addVariableOption = selectableValues.find((item) => item.type === 'add')
             if (addVariableOption) {
               submitAutocompletion({ variable: addVariableOption.variable })
+            } else {
+              // No 'add' option available; close the autocomplete to provide clear feedback
+              closeModal()
             }
           } else {
             submitAutocompletion({
