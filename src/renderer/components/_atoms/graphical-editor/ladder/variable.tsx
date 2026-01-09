@@ -149,7 +149,9 @@ const VariableElement = (block: VariableProps) => {
       nodeId: id,
       variableName: data.variable.name,
     })
-    if (!rung || !variableNode) return
+    if (!rung || !variableNode) {
+      return
+    }
 
     const variable = variables.selected
     if (!variable || !inputVariableRef) {
