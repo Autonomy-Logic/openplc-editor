@@ -53,7 +53,7 @@ const deviceSelectors = {
 }
 
 const compileOnlySelectors = {
-  useCompileOnly: () => useOpenPLCStore((state) => state.deviceDefinitions.compileOnly),
+  useCompileOnly: () => useOpenPLCStore((state) => state.deviceDefinitions.configuration.compileOnly),
   useSetCompileOnly: () => useOpenPLCStore((state) => state.deviceActions.setCompileOnly),
 }
 

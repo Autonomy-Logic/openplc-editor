@@ -23,7 +23,9 @@ const STATS_POLL_INTERVAL_MS = 2500
 
 const Board = memo(function () {
   const {
-    deviceDefinitions: { compileOnly },
+    deviceDefinitions: {
+      configuration: { compileOnly },
+    },
     deviceAvailableOptions: { availableBoards },
     project: {
       data: { pous, servers, remoteDevices },

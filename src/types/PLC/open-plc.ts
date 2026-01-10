@@ -154,7 +154,7 @@ const PLCVariableSchema = z.object({
   location: z.string(),
   initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
-  debug: z.boolean(),
+  debug: z.boolean().optional(),
 })
 
 type PLCVariable = z.infer<typeof PLCVariableSchema>
@@ -360,12 +360,27 @@ const PLCRemoteDeviceSchema = z.object({
 })
 type PLCRemoteDevice = z.infer<typeof PLCRemoteDeviceSchema>
 
+/**
+ * Schema for storing debug variable flags.
+ * Since POU variables are saved as text files (IEC 61131-3 format) which don't support debug flags,
+ * we store the debug flags separately in project.json.
+ */
+const PLCDebugVariablesSchema = z
+  .object({
+    global: z.array(z.string()).optional(),
+    pous: z.record(z.string(), z.array(z.string())).optional(),
+  })
+  .optional()
+
+type PLCDebugVariables = z.infer<typeof PLCDebugVariablesSchema>
+
 const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(PLCPouSchema),
   configuration: PLCConfigurationSchema,
   servers: z.array(PLCServerSchema).optional(),
   remoteDevices: z.array(PLCRemoteDeviceSchema).optional(),
+  debugVariables: PLCDebugVariablesSchema,
   deletedPous: z
     .array(
       z.object({
@@ -421,6 +436,7 @@ export {
   PLCArrayDatatypeSchema,
   PLCConfigurationSchema,
   PLCDataTypeSchema,
+  PLCDebugVariablesSchema,
   PLCEnumeratedDatatypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
@@ -454,6 +470,7 @@ export type {
   PLCArrayDatatype,
   PLCConfiguration,
   PLCDataType,
+  PLCDebugVariables,
   PLCEnumeratedDatatype,
   PLCFunction,
   PLCFunctionBlock,

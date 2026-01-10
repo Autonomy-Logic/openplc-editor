@@ -106,7 +106,6 @@ const deviceStateSchema = z.object({
   deviceDefinitions: z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
-    compileOnly: z.boolean().default(true),
     temporaryDhcpIp: z.string().optional(),
   }),
   deviceUpdated: z.object({

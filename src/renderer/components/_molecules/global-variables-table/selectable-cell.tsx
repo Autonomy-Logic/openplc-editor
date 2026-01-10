@@ -415,13 +415,14 @@ const SelectableClassCell = ({
 }
 
 const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
-  const initialValue = getValue<boolean>()
+  const initialValue = getValue<boolean | undefined>() ?? false
 
   const [cellValue, setCellValue] = useState(initialValue)
 
   const onClick = () => {
-    setCellValue(!cellValue)
-    table.options.meta?.updateData(index, id, !cellValue)
+    const newValue = !cellValue
+    setCellValue(newValue)
+    table.options.meta?.updateData(index, id, newValue)
   }
 
   useEffect(() => {
