@@ -93,15 +93,19 @@ export const GlobalArrayModal = ({
   const handleRearrangeDimensions = (index: number, direction: 'up' | 'down') => {
     if (direction === 'up') {
       if (index === 0) return
-      const [removed] = dimensions.splice(index, 1)
-      dimensions.splice(index - 1, 0, removed)
+      const newDimensions = [...dimensions]
+      const [removed] = newDimensions.splice(index, 1)
+      newDimensions.splice(index - 1, 0, removed)
+      setDimensions(newDimensions)
       setSelectedInput((index - 1).toString())
       return
     }
 
     if (index === dimensions.length - 1) return
-    const [removed] = dimensions.splice(index, 1)
-    dimensions.splice(index + 1, 0, removed)
+    const newDimensions = [...dimensions]
+    const [removed] = newDimensions.splice(index, 1)
+    newDimensions.splice(index + 1, 0, removed)
+    setDimensions(newDimensions)
     setSelectedInput((index + 1).toString())
   }
 
@@ -139,10 +143,7 @@ export const GlobalArrayModal = ({
     }
     const formatArrayName = `ARRAY [${dimensionToSave.join(', ')}] OF ${typeValue?.toUpperCase()}`
 
-    let isBaseType = false
-    baseTypes.forEach((type) => {
-      if (type === typeValue) isBaseType = true
-    })
+    const isBaseType = baseTypes.includes(typeValue)
 
     updateVariable({
       scope: 'global',
