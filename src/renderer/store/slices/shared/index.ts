@@ -1124,6 +1124,46 @@ export const createSharedSlice: StateCreator<
           pinMapping: devicePinMapping,
         })
 
+        // Restore debug flags from debugVariables
+        // Since POU variables are saved as text files, debug flags are stored separately in project.json
+        const debugVariables = projectData.debugVariables
+        if (debugVariables) {
+          // Restore global variable debug flags
+          if (debugVariables.global && debugVariables.global.length > 0) {
+            const globalVars = getState().project.data.configuration.resource.globalVariables
+            debugVariables.global.forEach((varName) => {
+              const varIndex = globalVars.findIndex((v) => v.name === varName)
+              if (varIndex !== -1) {
+                getState().projectActions.updateVariable({
+                  scope: 'global',
+                  rowId: varIndex,
+                  data: { debug: true },
+                })
+              }
+            })
+          }
+
+          // Restore POU variable debug flags
+          if (debugVariables.pous) {
+            for (const [pouName, varNames] of Object.entries(debugVariables.pous)) {
+              const pou = getState().project.data.pous.find((p) => p.data.name === pouName)
+              if (pou) {
+                varNames.forEach((varName) => {
+                  const varIndex = pou.data.variables.findIndex((v) => v.name === varName)
+                  if (varIndex !== -1) {
+                    getState().projectActions.updateVariable({
+                      scope: 'local',
+                      associatedPou: pouName,
+                      rowId: varIndex,
+                      data: { debug: true },
+                    })
+                  }
+                })
+              }
+            }
+          }
+        }
+
         // Set files in the file slice
         const files: FileSliceDataObject = {}
         pous.forEach((pou) => {
@@ -1424,6 +1464,37 @@ export const createSharedSlice: StateCreator<
       const pous = sanitizedPous
       projectData.data.data.pous = []
 
+      // Collect debug flags from all variables (global and POU variables)
+      // Since POU variables are saved as text files, debug flags need to be stored separately
+      const debugVariables: { global?: string[]; pous?: Record<string, string[]> } = {}
+
+      // Collect global variable debug flags
+      const globalDebugVars = project.data.configuration.resource.globalVariables
+        .filter((v) => v.debug === true)
+        .map((v) => v.name)
+      if (globalDebugVars.length > 0) {
+        debugVariables.global = globalDebugVars
+      }
+
+      // Collect POU variable debug flags
+      const pouDebugVars: Record<string, string[]> = {}
+      for (const pou of project.data.pous) {
+        const debugVars = pou.data.variables.filter((v) => v.debug === true).map((v) => v.name)
+        if (debugVars.length > 0) {
+          pouDebugVars[pou.data.name] = debugVars
+        }
+      }
+      if (Object.keys(pouDebugVars).length > 0) {
+        debugVariables.pous = pouDebugVars
+      }
+
+      // Add debug variables to project data if any exist
+      if (debugVariables.global || debugVariables.pous) {
+        projectData.data.data.debugVariables = debugVariables
+      } else {
+        projectData.data.data.debugVariables = undefined
+      }
+
       const { success, reason } = await window.bridge.saveProject({
         projectPath: project.meta.path,
         content: {
@@ -1653,13 +1724,13 @@ export const createSharedSlice: StateCreator<
               pins: devicePinMapping.data,
               currentSelectedPinTableRow: -1,
             },
-            compileOnly: getState().deviceDefinitions.compileOnly,
           }
           break
         }
         case 'data-type':
         case 'resource': {
-          const projectData = PLCProjectSchema.safeParse(getState().project)
+          const currentProject = getState().project
+          const projectData = PLCProjectSchema.safeParse(currentProject)
           if (!projectData.success) {
             toast({
               title: 'Error saving file',
@@ -1674,12 +1745,35 @@ export const createSharedSlice: StateCreator<
               },
             }
           }
+
+          // Collect debug flags from all variables (global and POU variables)
+          const debugVars: { global?: string[]; pous?: Record<string, string[]> } = {}
+
+          const globalDebugVars = currentProject.data.configuration.resource.globalVariables
+            .filter((v) => v.debug === true)
+            .map((v) => v.name)
+          if (globalDebugVars.length > 0) {
+            debugVars.global = globalDebugVars
+          }
+
+          const pouDebugVars: Record<string, string[]> = {}
+          for (const pou of currentProject.data.pous) {
+            const vars = pou.data.variables.filter((v) => v.debug === true).map((v) => v.name)
+            if (vars.length > 0) {
+              pouDebugVars[pou.data.name] = vars
+            }
+          }
+          if (Object.keys(pouDebugVars).length > 0) {
+            debugVars.pous = pouDebugVars
+          }
+
           // Ensure project.json doesn't contain POUs (POUs live as separate files)
           const sanitizedProject = {
             ...projectData.data,
             data: {
               ...projectData.data.data,
               pous: [],
+              debugVariables: debugVars.global || debugVars.pous ? debugVars : undefined,
             },
           } as PLCProject
           saveContent = sanitizedProject

@@ -26,7 +26,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       pins: [],
       currentSelectedPinTableRow: -1,
     },
-    compileOnly: true, // This flag indicates if the device is set to compile only (no deployment)
   },
   deviceUpdated: {
     updated: false,
@@ -73,7 +72,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pins: [],
             currentSelectedPinTableRow: -1,
           }
-          deviceDefinitions.compileOnly = true
         }),
       )
     },
@@ -439,7 +437,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
-          deviceDefinitions.compileOnly = compileOnly
+          deviceDefinitions.configuration.compileOnly = compileOnly
         }),
       )
     },
@@ -496,6 +494,7 @@ function mergeDeviceConfigWithDefaults(
   return {
     deviceBoard: provided.deviceBoard || defaults.deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
+    compileOnly: provided.compileOnly ?? defaults.compileOnly,
     communicationConfiguration: {
       modbusRTU: {
         ...defaults.communicationConfiguration.modbusRTU,
