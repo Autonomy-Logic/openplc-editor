@@ -143,7 +143,7 @@ export const GlobalArrayModal = ({
     }
     const formatArrayName = `ARRAY [${dimensionToSave.join(', ')}] OF ${typeValue?.toUpperCase()}`
 
-    const isBaseType = baseTypes.includes(typeValue)
+    const isBaseType = (baseTypes as readonly string[]).includes(typeValue)
 
     updateVariable({
       scope: 'global',
