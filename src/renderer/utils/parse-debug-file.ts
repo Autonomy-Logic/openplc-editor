@@ -126,11 +126,37 @@ export function matchVariableWithDebugEntry(
   pouVariableName: string,
   instanceName: string,
   debugVariables: DebugVariable[],
+  variableClass?: string,
 ): number | null {
-  const instanceNameUpper = instanceName.toUpperCase()
   const variableNameUpper = pouVariableName.toUpperCase()
 
+  // For external variables, match against the global variable (CONFIG0__VARNAME)
+  // This ensures forcing an external variable affects the actual global variable
+  if (variableClass === 'external') {
+    const globalPath = `CONFIG0__${variableNameUpper}`
+    const match = debugVariables.find((dv) => dv.name === globalPath)
+    return match ? match.index : null
+  }
+
+  // For regular POU variables, use the instance path (RES0__INSTANCE.VARNAME)
+  const instanceNameUpper = instanceName.toUpperCase()
   const expectedPath = `RES0__${instanceNameUpper}.${variableNameUpper}`
+
+  const match = debugVariables.find((dv) => dv.name === expectedPath)
+
+  return match ? match.index : null
+}
+
+/**
+ * Match a global variable with its debug entry.
+ * Global variables use CONFIG0__ prefix.
+ */
+export function matchGlobalVariableWithDebugEntry(
+  globalVariableName: string,
+  debugVariables: DebugVariable[],
+): number | null {
+  const variableNameUpper = globalVariableName.toUpperCase()
+  const expectedPath = `CONFIG0__${variableNameUpper}`
 
   const match = debugVariables.find((dv) => dv.name === expectedPath)
 

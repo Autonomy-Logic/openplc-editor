@@ -885,7 +885,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             const allVariables = pou.data.variables
 
             allVariables.forEach((v) => {
-              const index = matchVariableWithDebugEntry(v.name, instance.name, parsed.variables)
+              const index = matchVariableWithDebugEntry(v.name, instance.name, parsed.variables, v.class)
               if (index !== null) {
                 const compositeKey = `${pou.data.name}:${v.name}`
                 indexMap.set(compositeKey, index)

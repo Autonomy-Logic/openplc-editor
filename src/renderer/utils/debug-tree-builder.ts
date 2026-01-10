@@ -45,6 +45,21 @@ function logDebugTree(node: DebugTreeNode, indent = 0): void {
 }
 
 /**
+ * Builds the base path for a variable based on whether it's external (global) or local.
+ * External variables use CONFIG0__ prefix, local variables use RES0__INSTANCE. prefix.
+ */
+function buildVariableBasePath(variableName: string, instanceName: string, variableClass?: string): string {
+  const variableNameUpper = variableName.toUpperCase()
+  if (variableClass === 'external') {
+    // External variables reference global variables, which use CONFIG0__ prefix
+    return `CONFIG0__${variableNameUpper}`
+  }
+  // Regular POU variables use RES0__INSTANCE.VARNAME format
+  const instanceNameUpper = instanceName.toUpperCase()
+  return `RES0__${instanceNameUpper}.${variableNameUpper}`
+}
+
+/**
  * Builds a debug tree structure for a PLC variable.
  * Recursively processes complex types (arrays, structs, function blocks).
  *
@@ -62,16 +77,13 @@ export function buildDebugTree(
   debugVariables: DebugVariable[],
   project: PLCProject,
 ): DebugTreeNode {
-  const variableName = variable.name.toUpperCase()
-  const instanceNameUpper = instanceName.toUpperCase()
-
   const compositeKey = `${pouName}:${variable.name}`
 
   let node: DebugTreeNode
 
   if (variable.type.definition === 'base-type') {
     const baseType = variable.type.value.toUpperCase()
-    const fullPath = `RES0__${instanceNameUpper}.${variableName}`
+    const fullPath = buildVariableBasePath(variable.name, instanceName, variable.class)
 
     const debugVar = debugVariables.find((dv) => dv.name === fullPath)
 
@@ -92,7 +104,7 @@ export function buildDebugTree(
   } else {
     node = {
       name: variable.name,
-      fullPath: `RES0__${instanceNameUpper}.${variableName}`,
+      fullPath: buildVariableBasePath(variable.name, instanceName, variable.class),
       compositeKey,
       type: 'UNKNOWN',
       isComplex: false,
@@ -125,11 +137,9 @@ function buildFunctionBlockTree(
 
   const fbTypeName = variable.type.value
   const fbTypeNameUpper = fbTypeName.toUpperCase()
-  const variableName = variable.name.toUpperCase()
-  const instanceNameUpper = instanceName.toUpperCase()
 
   const compositeKey = `${pouName}:${variable.name}`
-  const fullPath = `RES0__${instanceNameUpper}.${variableName}`
+  const fullPath = buildVariableBasePath(variable.name, instanceName, variable.class)
 
   const standardFB = StandardFunctionBlocks.pous.find(
     (pou) => pou.name.toUpperCase() === fbTypeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
@@ -566,11 +576,8 @@ function buildArrayTree(
     throw new Error('Expected array type')
   }
 
-  const variableName = variable.name.toUpperCase()
-  const instanceNameUpper = instanceName.toUpperCase()
-
   const compositeKey = `${pouName}:${variable.name}`
-  const fullPath = `RES0__${instanceNameUpper}.${variableName}`
+  const fullPath = buildVariableBasePath(variable.name, instanceName, variable.class)
 
   const dimensions = variable.type.data.dimensions
   if (dimensions.length === 0) {
@@ -657,11 +664,9 @@ function buildStructTree(
 
   const structTypeName = variable.type.value
   const structTypeNameUpper = structTypeName.toUpperCase()
-  const variableName = variable.name.toUpperCase()
-  const instanceNameUpper = instanceName.toUpperCase()
 
   const compositeKey = `${pouName}:${variable.name}`
-  const fullPath = `RES0__${instanceNameUpper}.${variableName}`
+  const fullPath = buildVariableBasePath(variable.name, instanceName, variable.class)
 
   const structType = project.data.dataTypes.find(
     (dt) => dt.name.toUpperCase() === structTypeNameUpper && dt.derivation === 'structure',
