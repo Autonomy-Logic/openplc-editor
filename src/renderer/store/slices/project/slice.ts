@@ -5,6 +5,7 @@ import {
   PLCDataType,
   PLCGlobalVariable,
   PLCInstance,
+  PLCServer,
   PLCTask,
   PLCVariable,
   S7CommDataBlock,
@@ -46,6 +47,35 @@ const DEFAULT_S7COMM_LOGGING: S7CommLogging = {
   logConnections: true,
   logDataAccess: false,
   logErrors: true,
+}
+
+/**
+ * Initializes protocol-specific configuration for a server.
+ * Extracts protocol initialization logic to reduce complexity in createServer.
+ */
+const initializeServerProtocolConfig = (serverData: PLCServer): PLCServer => {
+  if (serverData.protocol === 'modbus-tcp' && !serverData.modbusSlaveConfig) {
+    return {
+      ...serverData,
+      modbusSlaveConfig: {
+        enabled: false,
+        networkInterface: '0.0.0.0',
+        port: 502,
+      },
+    }
+  }
+  if (serverData.protocol === 's7comm' && !serverData.s7commSlaveConfig) {
+    return {
+      ...serverData,
+      s7commSlaveConfig: {
+        server: { ...DEFAULT_S7COMM_SERVER_SETTINGS },
+        plcIdentity: { ...DEFAULT_S7COMM_PLC_IDENTITY },
+        dataBlocks: [],
+        logging: { ...DEFAULT_S7COMM_LOGGING },
+      },
+    }
+  }
+  return serverData
 }
 
 const getFunctionCodeInfo = (
@@ -1115,22 +1145,8 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
 
           if (!serverExists && !pouExists && !dataTypeExists) {
-            // Initialize protocol-specific config based on protocol type
-            const serverData = { ...serverToBeCreated.data }
-            if (serverData.protocol === 'modbus-tcp' && !serverData.modbusSlaveConfig) {
-              serverData.modbusSlaveConfig = {
-                enabled: false,
-                networkInterface: '0.0.0.0',
-                port: 502,
-              }
-            } else if (serverData.protocol === 's7comm' && !serverData.s7commSlaveConfig) {
-              serverData.s7commSlaveConfig = {
-                server: { ...DEFAULT_S7COMM_SERVER_SETTINGS },
-                plcIdentity: { ...DEFAULT_S7COMM_PLC_IDENTITY },
-                dataBlocks: [],
-                logging: { ...DEFAULT_S7COMM_LOGGING },
-              }
-            }
+            // Initialize protocol-specific config using helper function
+            const serverData = initializeServerProtocolConfig({ ...serverToBeCreated.data })
             project.data.servers.push(serverData)
             response = { ok: true, message: 'Server created successfully' }
           } else {
@@ -1320,20 +1336,8 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               dataBlocks: [],
             }
           }
-          // Update individual fields
-          if (settings.enabled !== undefined) server.s7commSlaveConfig.server.enabled = settings.enabled
-          if (settings.bindAddress !== undefined) server.s7commSlaveConfig.server.bindAddress = settings.bindAddress
-          if (settings.port !== undefined) server.s7commSlaveConfig.server.port = settings.port
-          if (settings.maxClients !== undefined) server.s7commSlaveConfig.server.maxClients = settings.maxClients
-          if (settings.workIntervalMs !== undefined)
-            server.s7commSlaveConfig.server.workIntervalMs = settings.workIntervalMs
-          if (settings.sendTimeoutMs !== undefined)
-            server.s7commSlaveConfig.server.sendTimeoutMs = settings.sendTimeoutMs
-          if (settings.recvTimeoutMs !== undefined)
-            server.s7commSlaveConfig.server.recvTimeoutMs = settings.recvTimeoutMs
-          if (settings.pingTimeoutMs !== undefined)
-            server.s7commSlaveConfig.server.pingTimeoutMs = settings.pingTimeoutMs
-          if (settings.pduSize !== undefined) server.s7commSlaveConfig.server.pduSize = settings.pduSize
+          // Update server settings using Object.assign for cleaner code
+          Object.assign(server.s7commSlaveConfig.server, settings)
         }),
       )
       return response
