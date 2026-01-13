@@ -37,7 +37,7 @@ Compiler.compileProgram()
     ↓ calls handleGenerateS7CommConfig()
 generateS7CommConfig()
     ↓ converts to runtime format
-File: conf/s7comm_config.json
+File: conf/s7comm.json
     ↓ sent to runtime via upload
 Runtime S7Comm Plugin
     ↓ loads configuration
@@ -413,7 +413,7 @@ import type { PLCServer, S7CommSlaveConfig } from '@root/types/PLC/open-plc'
  * Converts camelCase properties to snake_case expected by the C plugin.
  *
  * @param servers - Array of configured PLC servers
- * @returns JSON string for s7comm_config.json or null if no enabled S7Comm server
+ * @returns JSON string for s7comm.json or null if no enabled S7Comm server
  */
 export function generateS7CommConfig(servers: PLCServer[]): string | null {
   const s7commServer = servers.find(
@@ -541,7 +541,7 @@ import { generateS7CommConfig } from '@utils/s7comm'
 ```typescript
 /**
  * Generates the S7Comm server configuration file for the runtime plugin.
- * Creates conf/s7comm_config.json if an S7Comm server is enabled.
+ * Creates conf/s7comm.json if an S7Comm server is enabled.
  */
 async handleGenerateS7CommConfig(
   sourceTargetFolderPath: string,
@@ -554,10 +554,10 @@ async handleGenerateS7CommConfig(
     const confFolderPath = join(sourceTargetFolderPath, 'conf')
     await mkdir(confFolderPath, { recursive: true })
 
-    const configFilePath = join(confFolderPath, 's7comm_config.json')
+    const configFilePath = join(confFolderPath, 's7comm.json')
     await writeFile(configFilePath, s7commConfig, 'utf-8')
 
-    handleOutputData('Generated conf/s7comm_config.json', 'info')
+    handleOutputData('Generated conf/s7comm.json', 'info')
   }
 }
 ```
