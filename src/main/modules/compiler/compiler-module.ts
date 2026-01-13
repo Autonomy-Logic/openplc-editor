@@ -1196,11 +1196,11 @@ class CompilerModule {
     if (s7commConfig) {
       const confFolderPath = join(sourceTargetFolderPath, 'conf')
       await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, 's7comm_config.json')
+      const configFilePath = join(confFolderPath, 's7comm.json')
       await writeFile(configFilePath, s7commConfig, 'utf-8')
-      handleOutputData('Generated conf/s7comm_config.json', 'info')
+      handleOutputData('Generated conf/s7comm.json', 'info')
     } else {
-      handleOutputData('No S7Comm server configured, skipping s7comm_config.json generation', 'info')
+      handleOutputData('No S7Comm server configured, skipping s7comm.json generation', 'info')
     }
   }
 

@@ -70,7 +70,7 @@ interface S7CommRuntimeConfig {
  * Converts camelCase properties to snake_case expected by the C plugin.
  *
  * @param servers - Array of configured PLC servers
- * @returns JSON string for s7comm_config.json or null if no enabled S7Comm server
+ * @returns JSON string for s7comm.json or null if no enabled S7Comm server
  */
 export const generateS7CommConfig = (servers: PLCServer[] | undefined): string | null => {
   if (!servers || servers.length === 0) {
