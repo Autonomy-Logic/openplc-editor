@@ -307,10 +307,105 @@ const ModbusSlaveConfigSchema = z.object({
 })
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
 
+// S7Comm Buffer Type Enumeration
+const S7CommBufferTypeSchema = z.enum([
+  'bool_input',
+  'bool_output',
+  'bool_memory',
+  'byte_input',
+  'byte_output',
+  'int_input',
+  'int_output',
+  'int_memory',
+  'dint_input',
+  'dint_output',
+  'dint_memory',
+  'lint_input',
+  'lint_output',
+  'lint_memory',
+])
+type S7CommBufferType = z.infer<typeof S7CommBufferTypeSchema>
+
+// S7Comm Server Settings Schema
+const S7CommServerSettingsSchema = z.object({
+  enabled: z.boolean(),
+  bindAddress: z.string(),
+  port: z.number().min(1).max(65535),
+  maxClients: z.number().min(1).max(1024),
+  workIntervalMs: z.number().min(1).max(10000),
+  sendTimeoutMs: z.number().min(100).max(60000),
+  recvTimeoutMs: z.number().min(100).max(60000),
+  pingTimeoutMs: z.number().min(1000).max(300000),
+  pduSize: z.number().min(240).max(960),
+})
+type S7CommServerSettings = z.infer<typeof S7CommServerSettingsSchema>
+
+// S7Comm PLC Identity Schema
+const S7CommPlcIdentitySchema = z.object({
+  name: z.string().max(64),
+  moduleType: z.string().max(64),
+  serialNumber: z.string().max(64),
+  copyright: z.string().max(64),
+  moduleName: z.string().max(64),
+})
+type S7CommPlcIdentity = z.infer<typeof S7CommPlcIdentitySchema>
+
+// S7Comm Buffer Mapping Schema
+const S7CommBufferMappingSchema = z.object({
+  type: S7CommBufferTypeSchema,
+  startBuffer: z.number().min(0).max(1023),
+  bitAddressing: z.boolean(),
+})
+type S7CommBufferMapping = z.infer<typeof S7CommBufferMappingSchema>
+
+// S7Comm Data Block Schema
+const S7CommDataBlockSchema = z.object({
+  dbNumber: z.number().min(1).max(65535),
+  description: z.string().max(128),
+  sizeBytes: z.number().min(1).max(65536),
+  mapping: S7CommBufferMappingSchema,
+})
+type S7CommDataBlock = z.infer<typeof S7CommDataBlockSchema>
+
+// S7Comm System Area Schema
+const S7CommSystemAreaSchema = z.object({
+  enabled: z.boolean(),
+  sizeBytes: z.number().min(1).max(65536),
+  mapping: S7CommBufferMappingSchema.optional(),
+})
+type S7CommSystemArea = z.infer<typeof S7CommSystemAreaSchema>
+
+// S7Comm System Areas Container Schema
+const S7CommSystemAreasSchema = z.object({
+  peArea: S7CommSystemAreaSchema.optional(),
+  paArea: S7CommSystemAreaSchema.optional(),
+  mkArea: S7CommSystemAreaSchema.optional(),
+})
+type S7CommSystemAreas = z.infer<typeof S7CommSystemAreasSchema>
+
+// S7Comm Logging Schema
+const S7CommLoggingSchema = z.object({
+  logConnections: z.boolean(),
+  logDataAccess: z.boolean(),
+  logErrors: z.boolean(),
+})
+type S7CommLogging = z.infer<typeof S7CommLoggingSchema>
+
+// Complete S7Comm Slave Config Schema
+const S7CommSlaveConfigSchema = z.object({
+  server: S7CommServerSettingsSchema,
+  plcIdentity: S7CommPlcIdentitySchema.optional(),
+  dataBlocks: z.array(S7CommDataBlockSchema).max(64),
+  systemAreas: S7CommSystemAreasSchema.optional(),
+  logging: S7CommLoggingSchema.optional(),
+})
+type S7CommSlaveConfig = z.infer<typeof S7CommSlaveConfigSchema>
+
 const PLCServerSchema = z.object({
   name: z.string(),
   protocol: PLCServerProtocolSchema,
   modbusSlaveConfig: ModbusSlaveConfigSchema.optional(),
+  s7commSlaveConfig: S7CommSlaveConfigSchema.optional(),
 })
 type PLCServer = z.infer<typeof PLCServerSchema>
 
@@ -455,6 +550,15 @@ export {
   PLCStructureVariableSchema,
   PLCTaskSchema,
   PLCVariableSchema,
+  S7CommBufferMappingSchema,
+  S7CommBufferTypeSchema,
+  S7CommDataBlockSchema,
+  S7CommLoggingSchema,
+  S7CommPlcIdentitySchema,
+  S7CommServerSettingsSchema,
+  S7CommSlaveConfigSchema,
+  S7CommSystemAreaSchema,
+  S7CommSystemAreasSchema,
 }
 
 export type {
@@ -489,4 +593,13 @@ export type {
   PLCStructureVariable,
   PLCTask,
   PLCVariable,
+  S7CommBufferMapping,
+  S7CommBufferType,
+  S7CommDataBlock,
+  S7CommLogging,
+  S7CommPlcIdentity,
+  S7CommServerSettings,
+  S7CommSlaveConfig,
+  S7CommSystemArea,
+  S7CommSystemAreas,
 }

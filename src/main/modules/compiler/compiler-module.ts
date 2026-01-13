@@ -18,6 +18,7 @@ import { generateModbusMasterConfig } from '@root/utils/modbus/generate-modbus-m
 import { generateModbusSlaveConfig } from '@root/utils/modbus/generate-modbus-slave-config'
 import { parsePlcStatus } from '@root/utils/plc-status'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
+import { generateS7CommConfig } from '@root/utils/s7comm'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
@@ -1185,6 +1186,24 @@ class CompilerModule {
     }
   }
 
+  async handleGenerateS7CommConfig(
+    sourceTargetFolderPath: string,
+    projectData: ProjectState['data'],
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const s7commConfig = generateS7CommConfig(projectData.servers)
+
+    if (s7commConfig) {
+      const confFolderPath = join(sourceTargetFolderPath, 'conf')
+      await mkdir(confFolderPath, { recursive: true })
+      const configFilePath = join(confFolderPath, 's7comm_config.json')
+      await writeFile(configFilePath, s7commConfig, 'utf-8')
+      handleOutputData('Generated conf/s7comm_config.json', 'info')
+    } else {
+      handleOutputData('No S7Comm server configured, skipping s7comm_config.json generation', 'info')
+    }
+  }
+
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1606,6 +1625,11 @@ class CompilerModule {
 
           // Generate Modbus Master config for Runtime v4
           await this.handleGenerateModbusMasterConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+
+          // Generate S7Comm config for Runtime v4
+          await this.handleGenerateS7CommConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
 

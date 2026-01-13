@@ -7,6 +7,11 @@ import {
   PLCInstance,
   PLCTask,
   PLCVariable,
+  S7CommDataBlock,
+  S7CommLogging,
+  S7CommPlcIdentity,
+  S7CommServerSettings,
+  S7CommSystemArea,
 } from '@root/types/PLC/open-plc'
 import { isLegalIdentifier } from '@root/utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '@root/utils/modbus/generate-modbus-slave-config'
@@ -15,6 +20,33 @@ import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
+
+// Default S7Comm server configuration
+const DEFAULT_S7COMM_SERVER_SETTINGS: S7CommServerSettings = {
+  enabled: false,
+  bindAddress: '0.0.0.0',
+  port: 102,
+  maxClients: 32,
+  workIntervalMs: 100,
+  sendTimeoutMs: 3000,
+  recvTimeoutMs: 3000,
+  pingTimeoutMs: 10000,
+  pduSize: 480,
+}
+
+const DEFAULT_S7COMM_PLC_IDENTITY: S7CommPlcIdentity = {
+  name: 'OpenPLC Runtime',
+  moduleType: 'CPU 315-2 PN/DP',
+  serialNumber: 'S C-OPENPLC01',
+  copyright: 'OpenPLC Project',
+  moduleName: 'OpenPLC',
+}
+
+const DEFAULT_S7COMM_LOGGING: S7CommLogging = {
+  logConnections: true,
+  logDataAccess: false,
+  logErrors: true,
+}
 
 const getFunctionCodeInfo = (
   functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
@@ -1083,7 +1115,23 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
 
           if (!serverExists && !pouExists && !dataTypeExists) {
-            project.data.servers.push(serverToBeCreated.data)
+            // Initialize protocol-specific config based on protocol type
+            const serverData = { ...serverToBeCreated.data }
+            if (serverData.protocol === 'modbus-tcp' && !serverData.modbusSlaveConfig) {
+              serverData.modbusSlaveConfig = {
+                enabled: false,
+                networkInterface: '0.0.0.0',
+                port: 502,
+              }
+            } else if (serverData.protocol === 's7comm' && !serverData.s7commSlaveConfig) {
+              serverData.s7commSlaveConfig = {
+                server: { ...DEFAULT_S7COMM_SERVER_SETTINGS },
+                plcIdentity: { ...DEFAULT_S7COMM_PLC_IDENTITY },
+                dataBlocks: [],
+                logging: { ...DEFAULT_S7COMM_LOGGING },
+              }
+            }
+            project.data.servers.push(serverData)
             response = { ok: true, message: 'Server created successfully' }
           } else {
             toast({
@@ -1241,6 +1289,247 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               if (ir.iwCount !== undefined) bufferMapping.inputRegisters.iwCount = ir.iwCount
             }
           }
+        }),
+      )
+      return response
+    },
+
+    /**
+     * S7Comm Server Actions
+     */
+    updateS7CommServerSettings: (serverName: string, settings: Partial<S7CommServerSettings>): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === serverName)
+          if (!server) {
+            response = { ok: false, message: 'Server not found' }
+            return
+          }
+          if (server.protocol !== 's7comm') {
+            response = { ok: false, message: 'Server is not an S7Comm server' }
+            return
+          }
+          if (!server.s7commSlaveConfig) {
+            server.s7commSlaveConfig = {
+              server: { ...DEFAULT_S7COMM_SERVER_SETTINGS },
+              dataBlocks: [],
+            }
+          }
+          // Update individual fields
+          if (settings.enabled !== undefined) server.s7commSlaveConfig.server.enabled = settings.enabled
+          if (settings.bindAddress !== undefined) server.s7commSlaveConfig.server.bindAddress = settings.bindAddress
+          if (settings.port !== undefined) server.s7commSlaveConfig.server.port = settings.port
+          if (settings.maxClients !== undefined) server.s7commSlaveConfig.server.maxClients = settings.maxClients
+          if (settings.workIntervalMs !== undefined)
+            server.s7commSlaveConfig.server.workIntervalMs = settings.workIntervalMs
+          if (settings.sendTimeoutMs !== undefined)
+            server.s7commSlaveConfig.server.sendTimeoutMs = settings.sendTimeoutMs
+          if (settings.recvTimeoutMs !== undefined)
+            server.s7commSlaveConfig.server.recvTimeoutMs = settings.recvTimeoutMs
+          if (settings.pingTimeoutMs !== undefined)
+            server.s7commSlaveConfig.server.pingTimeoutMs = settings.pingTimeoutMs
+          if (settings.pduSize !== undefined) server.s7commSlaveConfig.server.pduSize = settings.pduSize
+        }),
+      )
+      return response
+    },
+
+    updateS7CommPlcIdentity: (serverName: string, identity: Partial<S7CommPlcIdentity>): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === serverName)
+          if (!server || server.protocol !== 's7comm' || !server.s7commSlaveConfig) {
+            response = { ok: false, message: 'S7Comm server not found' }
+            return
+          }
+          if (!server.s7commSlaveConfig.plcIdentity) {
+            server.s7commSlaveConfig.plcIdentity = { ...DEFAULT_S7COMM_PLC_IDENTITY }
+          }
+          if (identity.name !== undefined) server.s7commSlaveConfig.plcIdentity.name = identity.name
+          if (identity.moduleType !== undefined) server.s7commSlaveConfig.plcIdentity.moduleType = identity.moduleType
+          if (identity.serialNumber !== undefined)
+            server.s7commSlaveConfig.plcIdentity.serialNumber = identity.serialNumber
+          if (identity.copyright !== undefined) server.s7commSlaveConfig.plcIdentity.copyright = identity.copyright
+          if (identity.moduleName !== undefined) server.s7commSlaveConfig.plcIdentity.moduleName = identity.moduleName
+        }),
+      )
+      return response
+    },
+
+    addS7CommDataBlock: (serverName: string, dataBlock: S7CommDataBlock): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === serverName)
+          if (!server || server.protocol !== 's7comm' || !server.s7commSlaveConfig) {
+            response = { ok: false, message: 'S7Comm server not found' }
+            return
+          }
+          // Check for duplicate DB number
+          const dbExists = server.s7commSlaveConfig.dataBlocks.some((db) => db.dbNumber === dataBlock.dbNumber)
+          if (dbExists) {
+            response = { ok: false, message: `Data block DB${dataBlock.dbNumber} already exists` }
+            toast({
+              title: 'Invalid Data Block',
+              description: `Data block DB${dataBlock.dbNumber} already exists.`,
+              variant: 'fail',
+            })
+            return
+          }
+          // Check max data blocks limit
+          if (server.s7commSlaveConfig.dataBlocks.length >= 64) {
+            response = { ok: false, message: 'Maximum number of data blocks (64) reached' }
+            toast({
+              title: 'Limit Reached',
+              description: 'Maximum number of data blocks (64) reached.',
+              variant: 'fail',
+            })
+            return
+          }
+          server.s7commSlaveConfig.dataBlocks.push(dataBlock)
+        }),
+      )
+      return response
+    },
+
+    updateS7CommDataBlock: (
+      serverName: string,
+      dbNumber: number,
+      updates: Partial<S7CommDataBlock>,
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === serverName)
+          if (!server || server.protocol !== 's7comm' || !server.s7commSlaveConfig) {
+            response = { ok: false, message: 'S7Comm server not found' }
+            return
+          }
+          const dataBlock = server.s7commSlaveConfig.dataBlocks.find((db) => db.dbNumber === dbNumber)
+          if (!dataBlock) {
+            response = { ok: false, message: 'Data block not found' }
+            return
+          }
+          // Check for duplicate DB number if changing
+          if (updates.dbNumber !== undefined && updates.dbNumber !== dbNumber) {
+            const dbExists = server.s7commSlaveConfig.dataBlocks.some((db) => db.dbNumber === updates.dbNumber)
+            if (dbExists) {
+              response = { ok: false, message: `Data block DB${updates.dbNumber} already exists` }
+              toast({
+                title: 'Invalid Data Block',
+                description: `Data block DB${updates.dbNumber} already exists.`,
+                variant: 'fail',
+              })
+              return
+            }
+          }
+          if (updates.dbNumber !== undefined) dataBlock.dbNumber = updates.dbNumber
+          if (updates.description !== undefined) dataBlock.description = updates.description
+          if (updates.sizeBytes !== undefined) dataBlock.sizeBytes = updates.sizeBytes
+          if (updates.mapping !== undefined) dataBlock.mapping = updates.mapping
+        }),
+      )
+      return response
+    },
+
+    removeS7CommDataBlock: (serverName: string, dbNumber: number): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === serverName)
+          if (!server || server.protocol !== 's7comm' || !server.s7commSlaveConfig) {
+            response = { ok: false, message: 'S7Comm server not found' }
+            return
+          }
+          const index = server.s7commSlaveConfig.dataBlocks.findIndex((db) => db.dbNumber === dbNumber)
+          if (index === -1) {
+            response = { ok: false, message: 'Data block not found' }
+            return
+          }
+          server.s7commSlaveConfig.dataBlocks.splice(index, 1)
+        }),
+      )
+      return response
+    },
+
+    updateS7CommSystemArea: (
+      serverName: string,
+      area: 'peArea' | 'paArea' | 'mkArea',
+      config: Partial<S7CommSystemArea>,
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === serverName)
+          if (!server || server.protocol !== 's7comm' || !server.s7commSlaveConfig) {
+            response = { ok: false, message: 'S7Comm server not found' }
+            return
+          }
+          if (!server.s7commSlaveConfig.systemAreas) {
+            server.s7commSlaveConfig.systemAreas = {}
+          }
+          if (!server.s7commSlaveConfig.systemAreas[area]) {
+            server.s7commSlaveConfig.systemAreas[area] = {
+              enabled: false,
+              sizeBytes: 128,
+            }
+          }
+          const systemArea = server.s7commSlaveConfig.systemAreas[area]
+          if (config.enabled !== undefined) systemArea.enabled = config.enabled
+          if (config.sizeBytes !== undefined) systemArea.sizeBytes = config.sizeBytes
+          if (config.mapping !== undefined) systemArea.mapping = config.mapping
+        }),
+      )
+      return response
+    },
+
+    updateS7CommLogging: (serverName: string, logging: Partial<S7CommLogging>): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((server) => server.name === serverName)
+          if (!server || server.protocol !== 's7comm' || !server.s7commSlaveConfig) {
+            response = { ok: false, message: 'S7Comm server not found' }
+            return
+          }
+          if (!server.s7commSlaveConfig.logging) {
+            server.s7commSlaveConfig.logging = { ...DEFAULT_S7COMM_LOGGING }
+          }
+          if (logging.logConnections !== undefined)
+            server.s7commSlaveConfig.logging.logConnections = logging.logConnections
+          if (logging.logDataAccess !== undefined)
+            server.s7commSlaveConfig.logging.logDataAccess = logging.logDataAccess
+          if (logging.logErrors !== undefined) server.s7commSlaveConfig.logging.logErrors = logging.logErrors
         }),
       )
       return response
