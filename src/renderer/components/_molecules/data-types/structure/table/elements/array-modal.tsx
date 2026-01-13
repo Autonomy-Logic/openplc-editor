@@ -67,8 +67,8 @@ export const ArrayModal = ({
   const [typeValue, setTypeValue] = useState<string>('dint')
 
   useEffect(() => {
-    const structure = dataTypes.filter((dataType) => dataType.name === name && dataType.derivation === 'structure')[0]
-    if (structure.derivation !== 'structure') return
+    const structure = dataTypes.filter((dataType) => dataType?.name === name && dataType?.derivation === 'structure')[0]
+    if (!structure || structure.derivation !== 'structure') return
 
     const variable = structure.variable.find((variable) => variable.name === variableName)
     if (!variable) return
@@ -139,7 +139,7 @@ export const ArrayModal = ({
 
     const formattedArrayName = `ARRAY [${dimensionToSave.join(', ')}] OF ${typeValue.toUpperCase()}`
 
-    const structure = dataTypes.find((dataType) => dataType.derivation === 'structure' && dataType.name === name)
+    const structure = dataTypes.find((dataType) => dataType?.derivation === 'structure' && dataType?.name === name)
 
     if (!structure || !('variable' in structure)) {
       toast({

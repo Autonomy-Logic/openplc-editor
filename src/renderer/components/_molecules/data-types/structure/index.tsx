@@ -30,7 +30,7 @@ const StructureDataType = () => {
 
   useEffect(() => {
     const foundDataType = dataTypes.find(
-      (dataType) => dataType.derivation === 'structure' && dataType.name === editor.meta.name,
+      (dataType) => dataType?.derivation === 'structure' && dataType.name === editor.meta.name,
     )
 
     if (foundDataType && 'variable' in foundDataType) {
@@ -41,7 +41,7 @@ const StructureDataType = () => {
   }, [editor, dataTypes])
 
   useEffect(() => {
-    const foundDataType = dataTypes.find((dataType) => dataType.derivation === 'structure')
+    const foundDataType = dataTypes.find((dataType) => dataType?.derivation === 'structure')
     if (editor.type === 'plc-datatype' && foundDataType && 'variable' in foundDataType) {
       const { description, selectedRow } = editor.structure
       setEditorStructure({ description: description, selectedRow: selectedRow })

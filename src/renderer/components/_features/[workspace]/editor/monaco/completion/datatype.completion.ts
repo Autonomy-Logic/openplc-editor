@@ -326,7 +326,7 @@ function getAllEnumValueSuggestions(
   const allEnumValues: monaco.languages.CompletionItem[] = []
 
   customDataTypes
-    .filter((dt) => dt.derivation === 'enumerated')
+    .filter((dt) => dt?.derivation === 'enumerated')
     .forEach((enumDataType) => {
       enumDataType.values.forEach((value, index) => {
         allEnumValues.push({
@@ -353,37 +353,39 @@ function getCustomDataTypeInstanceSuggestions(
   customDataTypes: PLCDataType[],
   range: monaco.IRange,
 ): monaco.languages.CompletionItem[] {
-  return customDataTypes.map((dt) => {
-    let detail = ''
-    let documentation = ''
-    let kind = monaco.languages.CompletionItemKind.Class
+  return customDataTypes
+    .filter((dt) => dt !== undefined)
+    .map((dt) => {
+      let detail = ''
+      let documentation = ''
+      let kind = monaco.languages.CompletionItemKind.Class
 
-    if (dt.derivation === 'structure') {
-      detail = 'Structure Data Type'
-      kind = monaco.languages.CompletionItemKind.Struct
-      documentation = `**${dt.name}** - Structure Data Type\n\nUser-defined structure type\n\n**Fields:**\n${dt.variable.map((v) => `- **${v.name}**: ${v.type.value} (${v.type.definition})`).join('\n')}`
-    } else if (dt.derivation === 'enumerated') {
-      detail = 'Enumerated Data Type'
-      kind = monaco.languages.CompletionItemKind.Enum
-      documentation = `**${dt.name}** - Enumerated Data Type\n\nUser-defined enumerated type\n\n**Values:**\n${dt.values.map((v, i) => `- **${v.description}** (${i})`).join('\n')}`
-    } else if (dt.derivation === 'array') {
-      detail = 'Array Data Type'
-      kind = monaco.languages.CompletionItemKind.Class
-      documentation = `**${dt.name}** - Array Data Type\n\nUser-defined array type`
-    }
+      if (dt.derivation === 'structure') {
+        detail = 'Structure Data Type'
+        kind = monaco.languages.CompletionItemKind.Struct
+        documentation = `**${dt.name}** - Structure Data Type\n\nUser-defined structure type\n\n**Fields:**\n${dt.variable.map((v) => `- **${v.name}**: ${v.type.value} (${v.type.definition})`).join('\n')}`
+      } else if (dt.derivation === 'enumerated') {
+        detail = 'Enumerated Data Type'
+        kind = monaco.languages.CompletionItemKind.Enum
+        documentation = `**${dt.name}** - Enumerated Data Type\n\nUser-defined enumerated type\n\n**Values:**\n${dt.values.map((v, i) => `- **${v.description}** (${i})`).join('\n')}`
+      } else if (dt.derivation === 'array') {
+        detail = 'Array Data Type'
+        kind = monaco.languages.CompletionItemKind.Class
+        documentation = `**${dt.name}** - Array Data Type\n\nUser-defined array type`
+      }
 
-    return {
-      label: dt.name,
-      kind,
-      insertText: dt.name,
-      detail,
-      documentation: {
-        value: documentation,
-      },
-      range,
-      sortText: `2_${dt.name}`, // Lower priority than enum values
-    }
-  })
+      return {
+        label: dt.name,
+        kind,
+        insertText: dt.name,
+        detail,
+        documentation: {
+          value: documentation,
+        },
+        range,
+        sortText: `2_${dt.name}`, // Lower priority than enum values
+      }
+    })
 }
 
 /**

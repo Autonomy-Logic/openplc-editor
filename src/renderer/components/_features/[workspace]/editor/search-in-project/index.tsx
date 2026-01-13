@@ -291,6 +291,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
 
     const filteredDataTypes = data.dataTypes
       .filter((dataType) => {
+        if (!dataType) return false
         const dataTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes('data-type')
         return (
           dataTypeMatchesFilter &&

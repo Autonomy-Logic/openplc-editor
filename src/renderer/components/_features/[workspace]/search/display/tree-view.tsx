@@ -165,7 +165,7 @@ const ProjectSearchTreeNestedBranch = ({
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { BranchIcon, label } = NestedBranchSources[nestedBranchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasAssociatedDataType: boolean = dataTypes.some((dataType) => dataType.derivation === nestedBranchTarget)
+  const hasAssociatedDataType: boolean = dataTypes.some((dataType) => dataType?.derivation === nestedBranchTarget)
   useEffect(() => setBranchIsOpen(hasAssociatedDataType), [hasAssociatedDataType])
 
   return (
