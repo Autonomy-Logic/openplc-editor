@@ -670,7 +670,7 @@ const S7CommServerEditor = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {config.dataBlocks
+                        {[...config.dataBlocks]
                           .sort((a, b) => a.dbNumber - b.dbNumber)
                           .map((db) => (
                             <tr key={db.dbNumber} className='border-t border-neutral-200 dark:border-neutral-700'>
