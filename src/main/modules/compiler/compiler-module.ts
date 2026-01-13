@@ -1191,16 +1191,22 @@ class CompilerModule {
     projectData: ProjectState['data'],
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
-    const s7commConfig = generateS7CommConfig(projectData.servers)
+    try {
+      const s7commConfig = generateS7CommConfig(projectData.servers)
 
-    if (s7commConfig) {
-      const confFolderPath = join(sourceTargetFolderPath, 'conf')
-      await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, 's7comm.json')
-      await writeFile(configFilePath, s7commConfig, 'utf-8')
-      handleOutputData('Generated conf/s7comm.json', 'info')
-    } else {
-      handleOutputData('No S7Comm server configured, skipping s7comm.json generation', 'info')
+      if (s7commConfig) {
+        const confFolderPath = join(sourceTargetFolderPath, 'conf')
+        await mkdir(confFolderPath, { recursive: true })
+        const configFilePath = join(confFolderPath, 's7comm.json')
+        await writeFile(configFilePath, s7commConfig, 'utf-8')
+        handleOutputData('Generated conf/s7comm.json', 'info')
+      } else {
+        handleOutputData('No S7Comm server configured, skipping s7comm.json generation', 'info')
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      handleOutputData(`Failed to generate S7Comm config: ${errorMessage}`, 'error')
+      throw error
     }
   }
 

@@ -405,25 +405,40 @@ const S7CommServerEditor = () => {
 
   const handlePortBlur = useCallback(() => {
     const portNum = parseInt(port, 10)
-    if (!isNaN(portNum) && portNum >= 1 && portNum <= 65535 && portNum !== config?.server.port) {
-      projectActions.updateS7CommServerSettings(serverName, { port: portNum })
-      setEditingState('unsaved')
+    if (!isNaN(portNum) && portNum >= 1 && portNum <= 65535) {
+      if (portNum !== config?.server.port) {
+        projectActions.updateS7CommServerSettings(serverName, { port: portNum })
+        setEditingState('unsaved')
+      }
+    } else {
+      // Reset to last valid value when validation fails
+      setPort((config?.server.port ?? DEFAULT_SERVER_SETTINGS.port).toString())
     }
   }, [port, serverName, config?.server.port, projectActions, setEditingState])
 
   const handleMaxClientsBlur = useCallback(() => {
     const num = parseInt(maxClients, 10)
-    if (!isNaN(num) && num >= 1 && num <= 1024 && num !== config?.server.maxClients) {
-      projectActions.updateS7CommServerSettings(serverName, { maxClients: num })
-      setEditingState('unsaved')
+    if (!isNaN(num) && num >= 1 && num <= 1024) {
+      if (num !== config?.server.maxClients) {
+        projectActions.updateS7CommServerSettings(serverName, { maxClients: num })
+        setEditingState('unsaved')
+      }
+    } else {
+      // Reset to last valid value when validation fails
+      setMaxClients((config?.server.maxClients ?? DEFAULT_SERVER_SETTINGS.maxClients).toString())
     }
   }, [maxClients, serverName, config?.server.maxClients, projectActions, setEditingState])
 
   const handlePduSizeBlur = useCallback(() => {
     const num = parseInt(pduSize, 10)
-    if (!isNaN(num) && num >= 240 && num <= 960 && num !== config?.server.pduSize) {
-      projectActions.updateS7CommServerSettings(serverName, { pduSize: num })
-      setEditingState('unsaved')
+    if (!isNaN(num) && num >= 240 && num <= 960) {
+      if (num !== config?.server.pduSize) {
+        projectActions.updateS7CommServerSettings(serverName, { pduSize: num })
+        setEditingState('unsaved')
+      }
+    } else {
+      // Reset to last valid value when validation fails
+      setPduSize((config?.server.pduSize ?? DEFAULT_SERVER_SETTINGS.pduSize).toString())
     }
   }, [pduSize, serverName, config?.server.pduSize, projectActions, setEditingState])
 
