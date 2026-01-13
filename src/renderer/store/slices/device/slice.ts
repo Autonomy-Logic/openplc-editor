@@ -492,8 +492,9 @@ function mergeDeviceConfigWithDefaults(
   defaults: DeviceConfiguration,
 ): DeviceConfiguration {
   return {
-    deviceBoard: provided.deviceBoard || defaults.deviceBoard,
+    deviceBoard: provided.deviceBoard ?? defaults.deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
+    runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
     compileOnly: provided.compileOnly ?? defaults.compileOnly,
     communicationConfiguration: {
       modbusRTU: {
