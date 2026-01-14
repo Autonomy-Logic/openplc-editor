@@ -47,7 +47,7 @@ type CreateRemoteDeviceFormProps = {
 
 const ServerProtocolSources = [
   { value: 'modbus-tcp', label: 'Modbus/TCP', disabled: false },
-  { value: 's7comm', label: 'Siemens S7comm', disabled: true },
+  { value: 's7comm', label: 'Siemens S7comm', disabled: false },
   { value: 'ethernet-ip', label: 'EtherNet/IP', disabled: true },
 ] as const
 

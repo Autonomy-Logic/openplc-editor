@@ -407,7 +407,7 @@ function expandNestedNode(
   } else if (typeDefinition === 'user-data-type') {
     const typeNameUpper = typeName.toUpperCase()
     const structType = project.data.dataTypes.find(
-      (dt) => dt.name.toUpperCase() === typeNameUpper && dt.derivation === 'structure',
+      (dt) => dt?.name.toUpperCase() === typeNameUpper && dt?.derivation === 'structure',
     )
 
     if (!structType || structType.derivation !== 'structure') {
@@ -669,7 +669,7 @@ function buildStructTree(
   const fullPath = buildVariableBasePath(variable.name, instanceName, variable.class)
 
   const structType = project.data.dataTypes.find(
-    (dt) => dt.name.toUpperCase() === structTypeNameUpper && dt.derivation === 'structure',
+    (dt) => dt?.name.toUpperCase() === structTypeNameUpper && dt?.derivation === 'structure',
   )
 
   if (!structType || structType.derivation !== 'structure') {
