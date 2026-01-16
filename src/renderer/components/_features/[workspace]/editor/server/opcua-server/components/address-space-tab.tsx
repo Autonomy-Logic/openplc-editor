@@ -4,7 +4,13 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/types/PLC/open-plc'
 import { useCallback, useMemo, useState } from 'react'
 
-import { findTreeNodeById, useProjectVariables, type VariableTreeNode } from '../hooks/use-project-variables'
+import {
+  findTreeNodeById,
+  getSelectableDescendantIds,
+  isComplexType,
+  useProjectVariables,
+  type VariableTreeNode,
+} from '../hooks/use-project-variables'
 import { SelectedVariablesList } from './selected-variables-list'
 import { VariableConfigModal } from './variable-config-modal'
 import { VariableTree } from './variable-tree'
@@ -64,11 +70,34 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
           removeOpcUaNode(serverName, existingNode.id)
           onConfigChange()
         }
-        setSelectedVariableIds((prev) => {
-          const next = new Set(prev)
-          next.delete(nodeKey)
-          return next
-        })
+
+        // For complex types, also deselect all children
+        if (isComplexType(node)) {
+          const descendantIds = getSelectableDescendantIds(node)
+          setSelectedVariableIds((prev) => {
+            const next = new Set(prev)
+            next.delete(nodeKey)
+            // Remove all descendant IDs
+            descendantIds.forEach((id) => next.delete(id))
+            return next
+          })
+
+          // Also remove any configured descendant nodes
+          descendantIds.forEach((descendantId) => {
+            const descendantNode = config.addressSpace.nodes.find(
+              (n) => `${n.pouName}-${n.variablePath}` === descendantId,
+            )
+            if (descendantNode) {
+              removeOpcUaNode(serverName, descendantNode.id)
+            }
+          })
+        } else {
+          setSelectedVariableIds((prev) => {
+            const next = new Set(prev)
+            next.delete(nodeKey)
+            return next
+          })
+        }
       } else {
         // Select - open modal to configure
         setEditingVariable(node)
@@ -90,11 +119,23 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
       } else {
         // Add new node
         addOpcUaNode(serverName, nodeConfig)
-        setSelectedVariableIds((prev) => new Set(prev).add(nodeKey))
+
+        // For complex types, also mark all descendants as selected
+        if (editingVariable && isComplexType(editingVariable)) {
+          const descendantIds = getSelectableDescendantIds(editingVariable)
+          setSelectedVariableIds((prev) => {
+            const next = new Set(prev)
+            next.add(nodeKey)
+            descendantIds.forEach((id) => next.add(id))
+            return next
+          })
+        } else {
+          setSelectedVariableIds((prev) => new Set(prev).add(nodeKey))
+        }
       }
       onConfigChange()
     },
-    [serverName, editingConfig, addOpcUaNode, updateOpcUaNode, onConfigChange],
+    [serverName, editingConfig, editingVariable, addOpcUaNode, updateOpcUaNode, onConfigChange],
   )
 
   // Handle edit from selected list

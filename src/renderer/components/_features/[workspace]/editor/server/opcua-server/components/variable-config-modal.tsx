@@ -2,12 +2,12 @@ import { InputWithRef } from '@root/renderer/components/_atoms/input'
 import { Label } from '@root/renderer/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms/select'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
-import type { OpcUaNodeConfig, OpcUaPermissions } from '@root/types/PLC/open-plc'
+import type { OpcUaFieldConfig, OpcUaNodeConfig, OpcUaPermissions } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import type { VariableTreeNode } from '../hooks/use-project-variables'
+import { isComplexType, type VariableTreeNode } from '../hooks/use-project-variables'
 
 interface VariableConfigModalProps {
   isOpen: boolean
@@ -80,6 +80,73 @@ const getNodeType = (node: VariableTreeNode): 'variable' | 'structure' | 'array'
   return 'variable'
 }
 
+/**
+ * Generate default field configs from a structure/FB node
+ */
+const generateDefaultFieldConfigs = (
+  node: VariableTreeNode,
+  parentPermissions: OpcUaPermissions,
+): OpcUaFieldConfig[] => {
+  if (!node.children) return []
+
+  return node.children.map((child) => ({
+    fieldPath: child.variablePath,
+    displayName: child.name,
+    initialValue: getDefaultInitialValue(child.variableType),
+    permissions: { ...parentPermissions },
+  }))
+}
+
+/**
+ * Permission selector component for inline use in tables
+ */
+const PermissionSelect = ({
+  value,
+  onChange,
+  className,
+}: {
+  value: PermissionLevel
+  onChange: (value: PermissionLevel) => void
+  className?: string
+}) => (
+  <Select value={value} onValueChange={(v) => onChange(v as PermissionLevel)}>
+    <SelectTrigger
+      withIndicator
+      placeholder='Select'
+      className={cn(
+        'flex h-[24px] w-[70px] items-center justify-between gap-1 rounded border border-neutral-300 bg-white px-1 font-caption text-[10px] font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300',
+        className,
+      )}
+    />
+    <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+      <SelectItem
+        value='r'
+        className='flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+      >
+        <span className='text-start font-caption text-[10px] font-normal text-neutral-700 dark:text-neutral-100'>
+          R
+        </span>
+      </SelectItem>
+      <SelectItem
+        value='w'
+        className='flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+      >
+        <span className='text-start font-caption text-[10px] font-normal text-neutral-700 dark:text-neutral-100'>
+          W
+        </span>
+      </SelectItem>
+      <SelectItem
+        value='rw'
+        className='flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+      >
+        <span className='text-start font-caption text-[10px] font-normal text-neutral-700 dark:text-neutral-100'>
+          RW
+        </span>
+      </SelectItem>
+    </SelectContent>
+  </Select>
+)
+
 export const VariableConfigModal = ({
   isOpen,
   onClose,
@@ -98,6 +165,14 @@ export const VariableConfigModal = ({
   const [operatorPerm, setOperatorPerm] = useState<PermissionLevel>('r')
   const [engineerPerm, setEngineerPerm] = useState<PermissionLevel>('rw')
 
+  // Field configurations (for structures/arrays)
+  const [fieldConfigs, setFieldConfigs] = useState<OpcUaFieldConfig[]>([])
+
+  // Check if this is a complex type
+  const isStructureOrFb = variable && (variable.type === 'structure' || variable.type === 'function_block')
+  const isArray = variable && variable.type === 'array'
+  const isComplex = variable && isComplexType(variable)
+
   // Initialize form when modal opens or variable changes
   useEffect(() => {
     if (isOpen && variable) {
@@ -111,6 +186,8 @@ export const VariableConfigModal = ({
         setViewerPerm(existingConfig.permissions.viewer)
         setOperatorPerm(existingConfig.permissions.operator)
         setEngineerPerm(existingConfig.permissions.engineer)
+        // Load existing field configs
+        setFieldConfigs(existingConfig.fields || [])
       } else {
         // New configuration - generate defaults
         setNodeId(generateNodeId(variable.pouName, variable.variablePath))
@@ -121,6 +198,9 @@ export const VariableConfigModal = ({
         setViewerPerm('r')
         setOperatorPerm('r')
         setEngineerPerm('rw')
+        // Generate default field configs for complex types
+        const defaultPerms: OpcUaPermissions = { viewer: 'r', operator: 'r', engineer: 'rw' }
+        setFieldConfigs(isComplexType(variable) ? generateDefaultFieldConfigs(variable, defaultPerms) : [])
       }
     }
   }, [isOpen, variable, existingConfig])
@@ -161,6 +241,32 @@ export const VariableConfigModal = ({
 
   const isValid = validationErrors.length === 0
 
+  // Apply parent permissions to all fields
+  const applyPermissionsToAllFields = useCallback(() => {
+    setFieldConfigs((prev) =>
+      prev.map((field) => ({
+        ...field,
+        permissions: {
+          viewer: viewerPerm,
+          operator: operatorPerm,
+          engineer: engineerPerm,
+        },
+      })),
+    )
+  }, [viewerPerm, operatorPerm, engineerPerm])
+
+  // Update a single field's permission
+  const updateFieldPermission = useCallback(
+    (fieldPath: string, role: 'viewer' | 'operator' | 'engineer', value: PermissionLevel) => {
+      setFieldConfigs((prev) =>
+        prev.map((field) =>
+          field.fieldPath === fieldPath ? { ...field, permissions: { ...field.permissions, [role]: value } } : field,
+        ),
+      )
+    },
+    [],
+  )
+
   // Handle save
   const handleSave = useCallback(() => {
     if (!isValid || !variable) return
@@ -198,6 +304,11 @@ export const VariableConfigModal = ({
       initialValue: parsedInitialValue,
       permissions,
       nodeType: getNodeType(variable),
+      // Include field configs for complex types
+      fields: isComplex ? fieldConfigs : undefined,
+      // Include array info if applicable
+      arrayLength: variable.arrayInfo?.totalLength,
+      elementType: variable.arrayInfo?.elementType,
     }
 
     onSave(config)
@@ -214,6 +325,8 @@ export const VariableConfigModal = ({
     operatorPerm,
     engineerPerm,
     existingConfig,
+    isComplex,
+    fieldConfigs,
     onSave,
     onClose,
   ])
@@ -222,7 +335,7 @@ export const VariableConfigModal = ({
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <ModalContent className='h-auto max-h-[90vh] w-[550px]' onClose={onClose}>
+      <ModalContent className={cn('h-auto max-h-[90vh]', isComplex ? 'w-[650px]' : 'w-[550px]')} onClose={onClose}>
         <ModalHeader>
           <ModalTitle>{existingConfig ? 'Edit' : 'Configure'} OPC-UA Node</ModalTitle>
         </ModalHeader>
@@ -458,6 +571,119 @@ export const VariableConfigModal = ({
               Configure access permissions for each user role
             </p>
           </div>
+
+          {/* Array Info */}
+          {isArray && variable?.arrayInfo && (
+            <div className='rounded-lg border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-900 dark:bg-cyan-950'>
+              <h4 className='font-caption text-xs font-semibold text-neutral-950 dark:text-white'>Array Information</h4>
+              <div className='mt-2 grid grid-cols-2 gap-2'>
+                <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+                  <span className='font-medium'>Dimensions:</span> [{variable.arrayInfo.dimensions.join(', ')}]
+                </p>
+                <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+                  <span className='font-medium'>Element Type:</span> {variable.arrayInfo.elementType}
+                </p>
+                <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+                  <span className='font-medium'>Total Elements:</span> {variable.arrayInfo.totalLength}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Structure Info */}
+          {isStructureOrFb && variable?.structureInfo && (
+            <div className='rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950'>
+              <h4 className='font-caption text-xs font-semibold text-neutral-950 dark:text-white'>
+                Structure Information
+              </h4>
+              <div className='mt-2 grid grid-cols-2 gap-2'>
+                <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+                  <span className='font-medium'>Type:</span> {variable.structureInfo.structTypeName}
+                </p>
+                <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+                  <span className='font-medium'>Fields:</span> {variable.structureInfo.fieldCount}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Field Permissions Table (for structures/FBs) */}
+          {isComplex && fieldConfigs.length > 0 && (
+            <div className='flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900'>
+              <div className='flex items-center justify-between'>
+                <h4 className='font-caption text-xs font-semibold text-neutral-950 dark:text-white'>
+                  Field Permissions ({fieldConfigs.length} fields)
+                </h4>
+                <button
+                  type='button'
+                  onClick={applyPermissionsToAllFields}
+                  className='h-[24px] rounded border border-neutral-300 bg-white px-2 font-caption text-[10px] font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+                >
+                  Apply Parent Permissions to All
+                </button>
+              </div>
+
+              {/* Table */}
+              <div className='max-h-[200px] overflow-y-auto rounded border border-neutral-200 dark:border-neutral-700'>
+                <table className='w-full text-xs'>
+                  <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-800'>
+                    <tr>
+                      <th className='px-2 py-1.5 text-left font-medium text-neutral-700 dark:text-neutral-300'>
+                        Field
+                      </th>
+                      <th className='px-2 py-1.5 text-center font-medium text-neutral-700 dark:text-neutral-300'>
+                        Viewer
+                      </th>
+                      <th className='px-2 py-1.5 text-center font-medium text-neutral-700 dark:text-neutral-300'>
+                        Operator
+                      </th>
+                      <th className='px-2 py-1.5 text-center font-medium text-neutral-700 dark:text-neutral-300'>
+                        Engineer
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fieldConfigs.map((field, index) => (
+                      <tr
+                        key={field.fieldPath}
+                        className={cn(
+                          'border-t border-neutral-200 dark:border-neutral-700',
+                          index % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-neutral-50 dark:bg-neutral-850',
+                        )}
+                      >
+                        <td className='px-2 py-1.5'>
+                          <span className='font-medium text-neutral-950 dark:text-white'>{field.displayName}</span>
+                        </td>
+                        <td className='px-2 py-1.5 text-center'>
+                          <PermissionSelect
+                            value={field.permissions.viewer}
+                            onChange={(v) => updateFieldPermission(field.fieldPath, 'viewer', v)}
+                          />
+                        </td>
+                        <td className='px-2 py-1.5 text-center'>
+                          <PermissionSelect
+                            value={field.permissions.operator}
+                            onChange={(v) => updateFieldPermission(field.fieldPath, 'operator', v)}
+                          />
+                        </td>
+                        <td className='px-2 py-1.5 text-center'>
+                          <PermissionSelect
+                            value={field.permissions.engineer}
+                            onChange={(v) => updateFieldPermission(field.fieldPath, 'engineer', v)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <p className='text-xs text-neutral-500 dark:text-neutral-400'>
+                Configure individual permissions for each field. Use "Apply Parent Permissions" to set all fields to
+                match the parent variable.
+              </p>
+            </div>
+          )}
 
           {/* Validation Errors */}
           {validationErrors.length > 0 && (
