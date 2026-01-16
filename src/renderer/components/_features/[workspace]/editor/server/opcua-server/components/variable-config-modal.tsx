@@ -1,0 +1,499 @@
+import { InputWithRef } from '@root/renderer/components/_atoms/input'
+import { Label } from '@root/renderer/components/_atoms/label'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms/select'
+import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
+import type { OpcUaNodeConfig, OpcUaPermissions } from '@root/types/PLC/open-plc'
+import { cn } from '@root/utils'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+
+import type { VariableTreeNode } from '../hooks/use-project-variables'
+
+interface VariableConfigModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSave: (config: OpcUaNodeConfig) => void
+  variable: VariableTreeNode | null
+  existingConfig?: OpcUaNodeConfig
+  existingNodeIds: string[]
+}
+
+const inputStyles =
+  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+
+const textareaStyles =
+  'w-full rounded-md border border-neutral-300 bg-white px-2 py-2 font-caption text-xs text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+
+type PermissionLevel = 'r' | 'w' | 'rw'
+
+/**
+ * Generate a default node ID based on the variable path
+ */
+const generateNodeId = (pouName: string, variablePath: string): string => {
+  const cleanPath = variablePath.replace(/\./g, '.').replace(/\[/g, '_').replace(/\]/g, '')
+  return `PLC.${pouName}.${cleanPath}`
+}
+
+/**
+ * Generate a browse name from the variable path
+ */
+const generateBrowseName = (variablePath: string): string => {
+  const parts = variablePath.split('.')
+  return parts[parts.length - 1] || variablePath
+}
+
+/**
+ * Generate a display name from the variable path
+ */
+const generateDisplayName = (variablePath: string): string => {
+  const parts = variablePath.split('.')
+  const name = parts[parts.length - 1] || variablePath
+  // Convert camelCase/snake_case to Title Case with spaces
+  return name
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^\s+/, '')
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+/**
+ * Get default initial value based on type
+ */
+const getDefaultInitialValue = (variableType?: string): string | number | boolean => {
+  if (!variableType) return 0
+  const type = variableType.toLowerCase()
+
+  if (type === 'bool') return false
+  if (type.includes('real') || type.includes('lreal')) return 0.0
+  if (type.includes('string')) return ''
+  return 0
+}
+
+/**
+ * Determine node type from variable tree node
+ */
+const getNodeType = (node: VariableTreeNode): 'variable' | 'structure' | 'array' => {
+  if (node.type === 'array') return 'array'
+  if (node.type === 'structure' || node.type === 'function_block') return 'structure'
+  return 'variable'
+}
+
+export const VariableConfigModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  variable,
+  existingConfig,
+  existingNodeIds,
+}: VariableConfigModalProps) => {
+  // Form state
+  const [nodeId, setNodeId] = useState('')
+  const [browseName, setBrowseName] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [description, setDescription] = useState('')
+  const [initialValue, setInitialValue] = useState<string>('')
+  const [viewerPerm, setViewerPerm] = useState<PermissionLevel>('r')
+  const [operatorPerm, setOperatorPerm] = useState<PermissionLevel>('r')
+  const [engineerPerm, setEngineerPerm] = useState<PermissionLevel>('rw')
+
+  // Initialize form when modal opens or variable changes
+  useEffect(() => {
+    if (isOpen && variable) {
+      if (existingConfig) {
+        // Editing existing configuration
+        setNodeId(existingConfig.nodeId)
+        setBrowseName(existingConfig.browseName)
+        setDisplayName(existingConfig.displayName)
+        setDescription(existingConfig.description)
+        setInitialValue(String(existingConfig.initialValue))
+        setViewerPerm(existingConfig.permissions.viewer)
+        setOperatorPerm(existingConfig.permissions.operator)
+        setEngineerPerm(existingConfig.permissions.engineer)
+      } else {
+        // New configuration - generate defaults
+        setNodeId(generateNodeId(variable.pouName, variable.variablePath))
+        setBrowseName(generateBrowseName(variable.variablePath))
+        setDisplayName(generateDisplayName(variable.variablePath))
+        setDescription('')
+        setInitialValue(String(getDefaultInitialValue(variable.variableType)))
+        setViewerPerm('r')
+        setOperatorPerm('r')
+        setEngineerPerm('rw')
+      }
+    }
+  }, [isOpen, variable, existingConfig])
+
+  // Validation
+  const validationErrors = useMemo(() => {
+    const errors: string[] = []
+
+    if (!nodeId.trim()) {
+      errors.push('Node ID is required')
+    } else if (nodeId.length > 128) {
+      errors.push('Node ID must be 128 characters or less')
+    } else {
+      // Check for duplicate Node ID (excluding current node if editing)
+      const isDuplicate = existingNodeIds.some((id) => {
+        if (existingConfig && existingConfig.nodeId === id) return false
+        return id.toLowerCase() === nodeId.trim().toLowerCase()
+      })
+      if (isDuplicate) {
+        errors.push('A node with this ID already exists')
+      }
+    }
+
+    if (!browseName.trim()) {
+      errors.push('Browse name is required')
+    } else if (browseName.length > 64) {
+      errors.push('Browse name must be 64 characters or less')
+    }
+
+    if (!displayName.trim()) {
+      errors.push('Display name is required')
+    } else if (displayName.length > 128) {
+      errors.push('Display name must be 128 characters or less')
+    }
+
+    return errors
+  }, [nodeId, browseName, displayName, existingNodeIds, existingConfig])
+
+  const isValid = validationErrors.length === 0
+
+  // Handle save
+  const handleSave = useCallback(() => {
+    if (!isValid || !variable) return
+
+    // Parse initial value based on type
+    let parsedInitialValue: boolean | number | string = initialValue
+    const varType = variable.variableType?.toLowerCase() || ''
+    if (varType === 'bool') {
+      parsedInitialValue = initialValue.toLowerCase() === 'true' || initialValue === '1'
+    } else if (
+      varType.includes('int') ||
+      varType.includes('real') ||
+      varType.includes('word') ||
+      varType.includes('byte')
+    ) {
+      const num = parseFloat(initialValue)
+      parsedInitialValue = isNaN(num) ? 0 : num
+    }
+
+    const permissions: OpcUaPermissions = {
+      viewer: viewerPerm,
+      operator: operatorPerm,
+      engineer: engineerPerm,
+    }
+
+    const config: OpcUaNodeConfig = {
+      id: existingConfig?.id || uuidv4(),
+      pouName: variable.pouName,
+      variablePath: variable.variablePath,
+      variableType: variable.variableType || 'unknown',
+      nodeId: nodeId.trim(),
+      browseName: browseName.trim(),
+      displayName: displayName.trim(),
+      description: description.trim(),
+      initialValue: parsedInitialValue,
+      permissions,
+      nodeType: getNodeType(variable),
+    }
+
+    onSave(config)
+    onClose()
+  }, [
+    isValid,
+    variable,
+    nodeId,
+    browseName,
+    displayName,
+    description,
+    initialValue,
+    viewerPerm,
+    operatorPerm,
+    engineerPerm,
+    existingConfig,
+    onSave,
+    onClose,
+  ])
+
+  if (!variable) return null
+
+  return (
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent className='h-auto max-h-[90vh] w-[550px]' onClose={onClose}>
+        <ModalHeader>
+          <ModalTitle>{existingConfig ? 'Edit' : 'Configure'} OPC-UA Node</ModalTitle>
+        </ModalHeader>
+
+        <div className='flex flex-1 flex-col gap-4 overflow-y-auto'>
+          {/* Variable Info */}
+          <div className='rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900'>
+            <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+              <span className='font-medium'>PLC Variable:</span> {variable.pouName}:{variable.variablePath}
+            </p>
+            <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+              <span className='font-medium'>Type:</span> {variable.variableType || 'Unknown'}
+            </p>
+          </div>
+
+          {/* Node ID */}
+          <div className='flex flex-col gap-2'>
+            <Label className='text-xs font-semibold text-neutral-950 dark:text-white'>Node ID</Label>
+            <InputWithRef
+              type='text'
+              value={nodeId}
+              onChange={(e) => setNodeId(e.target.value)}
+              placeholder='e.g., PLC.Main.MotorSpeed'
+              maxLength={128}
+              className={inputStyles}
+            />
+            <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+              Unique identifier in the OPC-UA address space
+            </span>
+          </div>
+
+          {/* Browse Name & Display Name */}
+          <div className='grid grid-cols-2 gap-4'>
+            <div className='flex flex-col gap-2'>
+              <Label className='text-xs font-semibold text-neutral-950 dark:text-white'>Browse Name</Label>
+              <InputWithRef
+                type='text'
+                value={browseName}
+                onChange={(e) => setBrowseName(e.target.value)}
+                placeholder='e.g., MotorSpeed'
+                maxLength={64}
+                className={inputStyles}
+              />
+            </div>
+            <div className='flex flex-col gap-2'>
+              <Label className='text-xs font-semibold text-neutral-950 dark:text-white'>Display Name</Label>
+              <InputWithRef
+                type='text'
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder='e.g., Motor Speed'
+                maxLength={128}
+                className={inputStyles}
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className='flex flex-col gap-2'>
+            <Label className='text-xs font-semibold text-neutral-950 dark:text-white'>Description</Label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder='Optional description for this node'
+              rows={2}
+              className={textareaStyles}
+            />
+          </div>
+
+          {/* Initial Value */}
+          <div className='flex flex-col gap-2'>
+            <Label className='text-xs font-semibold text-neutral-950 dark:text-white'>Initial Value</Label>
+            <InputWithRef
+              type='text'
+              value={initialValue}
+              onChange={(e) => setInitialValue(e.target.value)}
+              placeholder={variable.variableType?.toLowerCase() === 'bool' ? 'true/false' : '0'}
+              className={inputStyles}
+            />
+            <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+              Default value when the OPC-UA server starts
+            </span>
+          </div>
+
+          {/* Permissions */}
+          <div className='flex flex-col gap-4 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900'>
+            <h4 className='font-caption text-xs font-semibold text-neutral-950 dark:text-white'>Access Permissions</h4>
+
+            <div className='grid grid-cols-3 gap-4'>
+              {/* Viewer Permission */}
+              <div className='flex flex-col gap-2'>
+                <Label className='text-xs text-neutral-700 dark:text-neutral-300'>Viewer</Label>
+                <Select value={viewerPerm} onValueChange={(v) => setViewerPerm(v as PermissionLevel)}>
+                  <SelectTrigger
+                    withIndicator
+                    placeholder='Select'
+                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  />
+                  <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+                    <SelectItem
+                      value='r'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Read Only
+                      </span>
+                    </SelectItem>
+                    <SelectItem
+                      value='w'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Write Only
+                      </span>
+                    </SelectItem>
+                    <SelectItem
+                      value='rw'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Read/Write
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Operator Permission */}
+              <div className='flex flex-col gap-2'>
+                <Label className='text-xs text-neutral-700 dark:text-neutral-300'>Operator</Label>
+                <Select value={operatorPerm} onValueChange={(v) => setOperatorPerm(v as PermissionLevel)}>
+                  <SelectTrigger
+                    withIndicator
+                    placeholder='Select'
+                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  />
+                  <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+                    <SelectItem
+                      value='r'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Read Only
+                      </span>
+                    </SelectItem>
+                    <SelectItem
+                      value='w'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Write Only
+                      </span>
+                    </SelectItem>
+                    <SelectItem
+                      value='rw'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Read/Write
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Engineer Permission */}
+              <div className='flex flex-col gap-2'>
+                <Label className='text-xs text-neutral-700 dark:text-neutral-300'>Engineer</Label>
+                <Select value={engineerPerm} onValueChange={(v) => setEngineerPerm(v as PermissionLevel)}>
+                  <SelectTrigger
+                    withIndicator
+                    placeholder='Select'
+                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  />
+                  <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+                    <SelectItem
+                      value='r'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Read Only
+                      </span>
+                    </SelectItem>
+                    <SelectItem
+                      value='w'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Write Only
+                      </span>
+                    </SelectItem>
+                    <SelectItem
+                      value='rw'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        Read/Write
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <p className='text-xs text-neutral-500 dark:text-neutral-400'>
+              Configure access permissions for each user role
+            </p>
+          </div>
+
+          {/* Validation Errors */}
+          {validationErrors.length > 0 && (
+            <div className='rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950'>
+              <ul className='list-inside list-disc space-y-1'>
+                {validationErrors.map((error, index) => (
+                  <li key={index} className='text-xs text-red-600 dark:text-red-400'>
+                    {error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <ModalFooter className='mt-4 flex justify-end gap-2'>
+          <button
+            type='button'
+            onClick={onClose}
+            className='h-[32px] rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+          >
+            Cancel
+          </button>
+          <button
+            type='button'
+            onClick={handleSave}
+            disabled={!isValid}
+            className={cn(
+              'h-[32px] rounded-md bg-brand px-4 font-caption text-xs font-medium text-white hover:bg-brand-medium-dark',
+              !isValid && 'cursor-not-allowed opacity-50',
+            )}
+          >
+            {existingConfig ? 'Save Changes' : 'Add to Address Space'}
+          </button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  )
+}

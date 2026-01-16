@@ -7,6 +7,7 @@ import type { OpcUaServerConfig } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { AddressSpaceTab } from './components/address-space-tab'
 import { CertificatesTab } from './components/certificates-tab'
 import { SecurityProfilesTab } from './components/security-profiles-tab'
 import { UsersTab } from './components/users-tab'
@@ -47,16 +48,6 @@ const TabItem = ({ value, label, isActive }: { value: string; label: string; isA
   >
     {label}
   </Tabs.Trigger>
-)
-
-// Placeholder component for tabs under development
-const PlaceholderContent = ({ title, description }: { title: string; description: string }) => (
-  <div className='flex h-full flex-col items-center justify-center gap-4 text-center'>
-    <div className='rounded-lg border border-neutral-200 bg-white p-8 dark:border-neutral-800 dark:bg-neutral-900'>
-      <h3 className='mb-2 font-caption text-sm font-semibold text-neutral-950 dark:text-white'>{title}</h3>
-      <p className='max-w-md text-xs text-neutral-600 dark:text-neutral-400'>{description}</p>
-    </div>
-  </div>
 )
 
 export const OpcUaServerEditor = () => {
@@ -202,10 +193,13 @@ export const OpcUaServerEditor = () => {
 
         {/* Address Space Tab */}
         <Tabs.Content value='address-space' className='flex-1 overflow-auto pt-4'>
-          <PlaceholderContent
-            title='Address Space Configuration'
-            description='Select PLC variables to expose via OPC-UA. Browse the project variable tree, select items to publish, and organize them into folders. Variable indices will be resolved during compilation. This will be implemented in Phase 5.'
-          />
+          <div className='flex h-[calc(100vh-280px)] min-h-[400px] flex-col pb-4'>
+            <AddressSpaceTab
+              config={localConfig}
+              serverName={serverName}
+              onConfigChange={() => setEditingState('unsaved')}
+            />
+          </div>
         </Tabs.Content>
       </Tabs.Root>
     </div>

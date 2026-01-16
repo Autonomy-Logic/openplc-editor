@@ -1,5 +1,6 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import type {
+  OpcUaNodeConfig,
   OpcUaSecurityProfile,
   OpcUaServerConfig,
   OpcUaTrustedCertificate,
@@ -1973,6 +1974,126 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             return
           }
           server.opcuaServerConfig.security.trustedClientCertificates.splice(index, 1)
+        }),
+      )
+      return response
+    },
+
+    /**
+     * OPC-UA Address Space Node Actions
+     */
+    updateOpcUaAddressSpaceNamespace: (serverName: string, namespaceUri: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          server.opcuaServerConfig.addressSpace.namespaceUri = namespaceUri
+        }),
+      )
+      return response
+    },
+
+    addOpcUaNode: (serverName: string, node: OpcUaNodeConfig): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          // Check for duplicate node ID
+          const nodeIdExists = server.opcuaServerConfig.addressSpace.nodes.some(
+            (n) => n.nodeId.toLowerCase() === node.nodeId.toLowerCase(),
+          )
+          if (nodeIdExists) {
+            response = { ok: false, message: `A node with ID "${node.nodeId}" already exists` }
+            toast({
+              title: 'Invalid Node',
+              description: `A node with ID "${node.nodeId}" already exists.`,
+              variant: 'fail',
+            })
+            return
+          }
+          server.opcuaServerConfig.addressSpace.nodes.push(node)
+        }),
+      )
+      return response
+    },
+
+    updateOpcUaNode: (serverName: string, nodeId: string, updates: Partial<OpcUaNodeConfig>): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const nodeIndex = server.opcuaServerConfig.addressSpace.nodes.findIndex((n) => n.id === nodeId)
+          if (nodeIndex === -1) {
+            response = { ok: false, message: 'Node not found' }
+            return
+          }
+          // If updating nodeId, check for duplicate
+          if (updates.nodeId) {
+            const currentNode = server.opcuaServerConfig.addressSpace.nodes[nodeIndex]
+            if (updates.nodeId !== currentNode.nodeId) {
+              const nodeIdExists = server.opcuaServerConfig.addressSpace.nodes.some(
+                (n, i) => i !== nodeIndex && n.nodeId.toLowerCase() === updates.nodeId!.toLowerCase(),
+              )
+              if (nodeIdExists) {
+                response = { ok: false, message: `A node with ID "${updates.nodeId}" already exists` }
+                toast({
+                  title: 'Invalid Node ID',
+                  description: `A node with ID "${updates.nodeId}" already exists.`,
+                  variant: 'fail',
+                })
+                return
+              }
+            }
+          }
+          Object.assign(server.opcuaServerConfig.addressSpace.nodes[nodeIndex], updates)
+        }),
+      )
+      return response
+    },
+
+    removeOpcUaNode: (serverName: string, nodeId: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const index = server.opcuaServerConfig.addressSpace.nodes.findIndex((n) => n.id === nodeId)
+          if (index === -1) {
+            response = { ok: false, message: 'Node not found' }
+            return
+          }
+          server.opcuaServerConfig.addressSpace.nodes.splice(index, 1)
         }),
       )
       return response

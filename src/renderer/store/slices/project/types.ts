@@ -1,5 +1,6 @@
 import {
   bodySchema,
+  OpcUaNodeConfigSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
@@ -483,6 +484,17 @@ const _projectActionsSchema = z.object({
     )
     .returns(projectResponseSchema),
   removeOpcUaTrustedCertificate: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+
+  /**
+   * OPC-UA Address Space Node Actions
+   */
+  updateOpcUaAddressSpaceNamespace: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+  addOpcUaNode: z.function().args(z.string(), OpcUaNodeConfigSchema).returns(projectResponseSchema),
+  updateOpcUaNode: z
+    .function()
+    .args(z.string(), z.string(), OpcUaNodeConfigSchema.partial())
+    .returns(projectResponseSchema),
+  removeOpcUaNode: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
 
   /**
    * Remote Device Actions
