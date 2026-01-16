@@ -1,7 +1,7 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import type { OpcUaSecurityProfile, OpcUaServerConfig } from '@root/types/PLC/open-plc'
 import {
   ModbusIOPoint,
-  OpcUaServerConfig,
   PLCArrayDatatype,
   PLCDataType,
   PLCGlobalVariable,
@@ -1636,6 +1636,115 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             server.opcuaServerConfig as unknown as Record<string, unknown>,
             configUpdate as unknown as Record<string, unknown>,
           )
+        }),
+      )
+      return response
+    },
+
+    addOpcUaSecurityProfile: (serverName: string, profile: OpcUaSecurityProfile): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          // Check for duplicate profile name
+          const nameExists = server.opcuaServerConfig.securityProfiles.some(
+            (p) => p.name.toLowerCase() === profile.name.toLowerCase(),
+          )
+          if (nameExists) {
+            response = { ok: false, message: `A security profile named "${profile.name}" already exists` }
+            toast({
+              title: 'Invalid Security Profile',
+              description: `A security profile named "${profile.name}" already exists.`,
+              variant: 'fail',
+            })
+            return
+          }
+          server.opcuaServerConfig.securityProfiles.push(profile)
+        }),
+      )
+      return response
+    },
+
+    updateOpcUaSecurityProfile: (
+      serverName: string,
+      profileId: string,
+      updates: Partial<OpcUaSecurityProfile>,
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const profile = server.opcuaServerConfig.securityProfiles.find((p) => p.id === profileId)
+          if (!profile) {
+            response = { ok: false, message: 'Security profile not found' }
+            return
+          }
+          // Check for duplicate name if changing
+          if (updates.name !== undefined && updates.name.toLowerCase() !== profile.name.toLowerCase()) {
+            const nameExists = server.opcuaServerConfig.securityProfiles.some(
+              (p) => p.id !== profileId && p.name.toLowerCase() === updates.name!.toLowerCase(),
+            )
+            if (nameExists) {
+              response = { ok: false, message: `A security profile named "${updates.name}" already exists` }
+              toast({
+                title: 'Invalid Security Profile',
+                description: `A security profile named "${updates.name}" already exists.`,
+                variant: 'fail',
+              })
+              return
+            }
+          }
+          Object.assign(profile, updates)
+        }),
+      )
+      return response
+    },
+
+    removeOpcUaSecurityProfile: (serverName: string, profileId: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const index = server.opcuaServerConfig.securityProfiles.findIndex((p) => p.id === profileId)
+          if (index === -1) {
+            response = { ok: false, message: 'Security profile not found' }
+            return
+          }
+          // Prevent deleting the last profile
+          if (server.opcuaServerConfig.securityProfiles.length <= 1) {
+            response = { ok: false, message: 'At least one security profile is required' }
+            toast({
+              title: 'Cannot Delete Profile',
+              description: 'At least one security profile must exist.',
+              variant: 'fail',
+            })
+            return
+          }
+          server.opcuaServerConfig.securityProfiles.splice(index, 1)
         }),
       )
       return response

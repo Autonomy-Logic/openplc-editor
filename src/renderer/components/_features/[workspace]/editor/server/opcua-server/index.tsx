@@ -7,6 +7,8 @@ import type { OpcUaServerConfig } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { SecurityProfilesTab } from './components/security-profiles-tab'
+
 /**
  * OPC-UA Server Editor Component
  *
@@ -169,10 +171,13 @@ export const OpcUaServerEditor = () => {
 
         {/* Security Profiles Tab */}
         <Tabs.Content value='security' className='flex-1 overflow-auto pt-4'>
-          <PlaceholderContent
-            title='Security Profiles'
-            description='Configure security policies (None, Basic128Rsa15, Basic256, etc.) and authentication methods (Anonymous, Username/Password, Certificate). This will be implemented in Phase 2.'
-          />
+          <div className='pb-4'>
+            <SecurityProfilesTab
+              config={localConfig}
+              serverName={serverName}
+              onConfigChange={() => setEditingState('unsaved')}
+            />
+          </div>
         </Tabs.Content>
 
         {/* Users Tab */}

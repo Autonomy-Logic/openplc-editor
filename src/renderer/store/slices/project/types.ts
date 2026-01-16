@@ -389,6 +389,37 @@ const _projectActionsSchema = z.object({
    * OPC-UA Server Actions
    */
   updateOpcUaServerConfig: z.function().args(z.string(), z.record(z.unknown())).returns(projectResponseSchema),
+  addOpcUaSecurityProfile: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        enabled: z.boolean(),
+        securityPolicy: z.enum(['None', 'Basic128Rsa15', 'Basic256', 'Basic256Sha256']),
+        securityMode: z.enum(['None', 'Sign', 'SignAndEncrypt']),
+        authMethods: z.array(z.enum(['Anonymous', 'Username', 'Certificate'])),
+      }),
+    )
+    .returns(projectResponseSchema),
+  updateOpcUaSecurityProfile: z
+    .function()
+    .args(
+      z.string(),
+      z.string(),
+      z
+        .object({
+          name: z.string(),
+          enabled: z.boolean(),
+          securityPolicy: z.enum(['None', 'Basic128Rsa15', 'Basic256', 'Basic256Sha256']),
+          securityMode: z.enum(['None', 'Sign', 'SignAndEncrypt']),
+          authMethods: z.array(z.enum(['Anonymous', 'Username', 'Certificate'])),
+        })
+        .partial(),
+    )
+    .returns(projectResponseSchema),
+  removeOpcUaSecurityProfile: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
 
   /**
    * Remote Device Actions
