@@ -1,6 +1,7 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import {
   ModbusIOPoint,
+  OpcUaServerConfig,
   PLCArrayDatatype,
   PLCDataType,
   PLCGlobalVariable,
@@ -49,6 +50,41 @@ const DEFAULT_S7COMM_LOGGING: S7CommLogging = {
   logErrors: true,
 }
 
+// Default OPC-UA server configuration
+const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
+  server: {
+    enabled: false,
+    name: 'OpenPLC OPC UA Server',
+    applicationUri: 'urn:openplc:opcua:server',
+    productUri: 'urn:openplc:runtime',
+    bindAddress: '0.0.0.0',
+    port: 4840,
+    endpointPath: '/openplc/opcua',
+  },
+  securityProfiles: [
+    {
+      id: uuidv4(),
+      name: 'insecure',
+      enabled: true,
+      securityPolicy: 'None',
+      securityMode: 'None',
+      authMethods: ['Anonymous'],
+    },
+  ],
+  security: {
+    serverCertificateStrategy: 'auto_self_signed',
+    serverCertificateCustom: null,
+    serverPrivateKeyCustom: null,
+    trustedClientCertificates: [],
+  },
+  users: [],
+  cycleTimeMs: 100,
+  addressSpace: {
+    namespaceUri: 'urn:openplc:opcua:namespace',
+    nodes: [],
+  },
+}
+
 /**
  * Initializes protocol-specific configuration for a server.
  * Extracts protocol initialization logic to reduce complexity in createServer.
@@ -72,6 +108,18 @@ const initializeServerProtocolConfig = (serverData: PLCServer): PLCServer => {
         plcIdentity: { ...DEFAULT_S7COMM_PLC_IDENTITY },
         dataBlocks: [],
         logging: { ...DEFAULT_S7COMM_LOGGING },
+      },
+    }
+  }
+  if (serverData.protocol === 'opcua' && !serverData.opcuaServerConfig) {
+    return {
+      ...serverData,
+      opcuaServerConfig: {
+        ...DEFAULT_OPCUA_SERVER_CONFIG,
+        securityProfiles: DEFAULT_OPCUA_SERVER_CONFIG.securityProfiles.map((profile) => ({
+          ...profile,
+          id: uuidv4(),
+        })),
       },
     }
   }
@@ -1534,6 +1582,60 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (logging.logDataAccess !== undefined)
             server.s7commSlaveConfig.logging.logDataAccess = logging.logDataAccess
           if (logging.logErrors !== undefined) server.s7commSlaveConfig.logging.logErrors = logging.logErrors
+        }),
+      )
+      return response
+    },
+
+    /**
+     * OPC-UA Server Actions
+     */
+    updateOpcUaServerConfig: (serverName, configUpdate): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server) {
+            response = { ok: false, message: 'Server not found' }
+            return
+          }
+          if (server.protocol !== 'opcua') {
+            response = { ok: false, message: 'Server is not an OPC-UA server' }
+            return
+          }
+          if (!server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA configuration not found' }
+            return
+          }
+
+          // Deep merge the config update
+          const mergeDeep = (target: Record<string, unknown>, source: Record<string, unknown>) => {
+            for (const key of Object.keys(source)) {
+              if (source[key] !== undefined) {
+                if (
+                  source[key] &&
+                  typeof source[key] === 'object' &&
+                  !Array.isArray(source[key]) &&
+                  target[key] &&
+                  typeof target[key] === 'object' &&
+                  !Array.isArray(target[key])
+                ) {
+                  mergeDeep(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>)
+                } else {
+                  target[key] = source[key]
+                }
+              }
+            }
+          }
+
+          mergeDeep(
+            server.opcuaServerConfig as unknown as Record<string, unknown>,
+            configUpdate as unknown as Record<string, unknown>,
+          )
         }),
       )
       return response

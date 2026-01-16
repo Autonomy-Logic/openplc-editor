@@ -37,7 +37,7 @@ type CreateDataTypeFormProps = {
 
 type CreateServerFormProps = {
   name: string
-  protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip'
+  protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'
 }
 
 type CreateRemoteDeviceFormProps = {
@@ -48,6 +48,7 @@ type CreateRemoteDeviceFormProps = {
 const ServerProtocolSources = [
   { value: 'modbus-tcp', label: 'Modbus/TCP', disabled: false },
   { value: 's7comm', label: 'Siemens S7comm', disabled: false },
+  { value: 'opcua', label: 'OPC-UA', disabled: false },
   { value: 'ethernet-ip', label: 'EtherNet/IP', disabled: true },
 ] as const
 

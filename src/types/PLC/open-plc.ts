@@ -276,7 +276,7 @@ const PLCConfigurationSchema = z.object({
 })
 type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
 
-const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip'])
+const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua'])
 type PLCServerProtocol = z.infer<typeof PLCServerProtocolSchema>
 
 const ModbusSlaveBufferMappingSchema = z.object({
@@ -401,11 +401,140 @@ const S7CommSlaveConfigSchema = z.object({
 })
 type S7CommSlaveConfig = z.infer<typeof S7CommSlaveConfigSchema>
 
+// ═══════════════════════════════════════════════════════════════════════════
+// OPC-UA Server Configuration Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+// OPC-UA Security Policy Enumeration
+const OpcUaSecurityPolicySchema = z.enum(['None', 'Basic128Rsa15', 'Basic256', 'Basic256Sha256'])
+type OpcUaSecurityPolicy = z.infer<typeof OpcUaSecurityPolicySchema>
+
+// OPC-UA Security Mode Enumeration
+const OpcUaSecurityModeSchema = z.enum(['None', 'Sign', 'SignAndEncrypt'])
+type OpcUaSecurityMode = z.infer<typeof OpcUaSecurityModeSchema>
+
+// OPC-UA Authentication Method Enumeration
+const OpcUaAuthMethodSchema = z.enum(['Anonymous', 'Username', 'Certificate'])
+type OpcUaAuthMethod = z.infer<typeof OpcUaAuthMethodSchema>
+
+// OPC-UA User Role Enumeration
+const OpcUaUserRoleSchema = z.enum(['viewer', 'operator', 'engineer'])
+type OpcUaUserRole = z.infer<typeof OpcUaUserRoleSchema>
+
+// OPC-UA Security Profile Schema
+const OpcUaSecurityProfileSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(64),
+  enabled: z.boolean(),
+  securityPolicy: OpcUaSecurityPolicySchema,
+  securityMode: OpcUaSecurityModeSchema,
+  authMethods: z.array(OpcUaAuthMethodSchema).min(1),
+})
+type OpcUaSecurityProfile = z.infer<typeof OpcUaSecurityProfileSchema>
+
+// OPC-UA Trusted Certificate Schema
+const OpcUaTrustedCertificateSchema = z.object({
+  id: z.string().min(1).max(64),
+  pem: z.string(),
+  subject: z.string().optional(),
+  validFrom: z.string().optional(),
+  validTo: z.string().optional(),
+  fingerprint: z.string().optional(),
+})
+type OpcUaTrustedCertificate = z.infer<typeof OpcUaTrustedCertificateSchema>
+
+// OPC-UA User Schema
+const OpcUaUserSchema = z.object({
+  id: z.string(),
+  type: z.enum(['password', 'certificate']),
+  username: z.string().nullable(),
+  passwordHash: z.string().nullable(),
+  certificateId: z.string().nullable(),
+  role: OpcUaUserRoleSchema,
+})
+type OpcUaUser = z.infer<typeof OpcUaUserSchema>
+
+// OPC-UA Permissions Schema (per-variable access control)
+const OpcUaPermissionsSchema = z.object({
+  viewer: z.enum(['r', 'w', 'rw']),
+  operator: z.enum(['r', 'w', 'rw']),
+  engineer: z.enum(['r', 'w', 'rw']),
+})
+type OpcUaPermissions = z.infer<typeof OpcUaPermissionsSchema>
+
+// OPC-UA Field Configuration Schema (for structure fields)
+const OpcUaFieldConfigSchema = z.object({
+  fieldPath: z.string(),
+  displayName: z.string(),
+  initialValue: z.union([z.boolean(), z.number(), z.string()]),
+  permissions: OpcUaPermissionsSchema,
+})
+type OpcUaFieldConfig = z.infer<typeof OpcUaFieldConfigSchema>
+
+// OPC-UA Node Configuration Schema (variable/structure/array)
+const OpcUaNodeConfigSchema = z.object({
+  id: z.string(),
+  pouName: z.string(),
+  variablePath: z.string(),
+  variableType: z.string(),
+  nodeId: z.string(),
+  browseName: z.string(),
+  displayName: z.string(),
+  description: z.string(),
+  initialValue: z.union([z.boolean(), z.number(), z.string()]),
+  permissions: OpcUaPermissionsSchema,
+  nodeType: z.enum(['variable', 'structure', 'array']),
+  fields: z.array(OpcUaFieldConfigSchema).optional(),
+  arrayLength: z.number().optional(),
+  elementType: z.string().optional(),
+})
+type OpcUaNodeConfig = z.infer<typeof OpcUaNodeConfigSchema>
+
+// OPC-UA Server Settings Schema
+const OpcUaServerSettingsSchema = z.object({
+  enabled: z.boolean(),
+  name: z.string().max(128),
+  applicationUri: z.string(),
+  productUri: z.string(),
+  bindAddress: z.string(),
+  port: z.number().int().min(1).max(65535),
+  endpointPath: z.string(),
+})
+type OpcUaServerSettings = z.infer<typeof OpcUaServerSettingsSchema>
+
+// OPC-UA Security Configuration Schema
+const OpcUaSecurityConfigSchema = z.object({
+  serverCertificateStrategy: z.enum(['auto_self_signed', 'custom']),
+  serverCertificateCustom: z.string().nullable(),
+  serverPrivateKeyCustom: z.string().nullable(),
+  trustedClientCertificates: z.array(OpcUaTrustedCertificateSchema),
+})
+type OpcUaSecurityConfig = z.infer<typeof OpcUaSecurityConfigSchema>
+
+// OPC-UA Address Space Configuration Schema
+const OpcUaAddressSpaceConfigSchema = z.object({
+  namespaceUri: z.string(),
+  nodes: z.array(OpcUaNodeConfigSchema),
+})
+type OpcUaAddressSpaceConfig = z.infer<typeof OpcUaAddressSpaceConfigSchema>
+
+// Complete OPC-UA Server Configuration Schema
+const OpcUaServerConfigSchema = z.object({
+  server: OpcUaServerSettingsSchema,
+  securityProfiles: z.array(OpcUaSecurityProfileSchema),
+  security: OpcUaSecurityConfigSchema,
+  users: z.array(OpcUaUserSchema),
+  cycleTimeMs: z.number().int().min(10).max(10000),
+  addressSpace: OpcUaAddressSpaceConfigSchema,
+})
+type OpcUaServerConfig = z.infer<typeof OpcUaServerConfigSchema>
+
 const PLCServerSchema = z.object({
   name: z.string(),
   protocol: PLCServerProtocolSchema,
   modbusSlaveConfig: ModbusSlaveConfigSchema.optional(),
   s7commSlaveConfig: S7CommSlaveConfigSchema.optional(),
+  opcuaServerConfig: OpcUaServerConfigSchema.optional(),
 })
 type PLCServer = z.infer<typeof PLCServerSchema>
 
@@ -528,6 +657,20 @@ export {
   ModbusSlaveBufferMappingSchema,
   ModbusSlaveConfigSchema,
   ModbusTcpConfigSchema,
+  OpcUaAddressSpaceConfigSchema,
+  OpcUaAuthMethodSchema,
+  OpcUaFieldConfigSchema,
+  OpcUaNodeConfigSchema,
+  OpcUaPermissionsSchema,
+  OpcUaSecurityConfigSchema,
+  OpcUaSecurityModeSchema,
+  OpcUaSecurityPolicySchema,
+  OpcUaSecurityProfileSchema,
+  OpcUaServerConfigSchema,
+  OpcUaServerSettingsSchema,
+  OpcUaTrustedCertificateSchema,
+  OpcUaUserRoleSchema,
+  OpcUaUserSchema,
   PLCArrayDatatypeSchema,
   PLCConfigurationSchema,
   PLCDataTypeSchema,
@@ -571,6 +714,20 @@ export type {
   ModbusSlaveBufferMapping,
   ModbusSlaveConfig,
   ModbusTcpConfig,
+  OpcUaAddressSpaceConfig,
+  OpcUaAuthMethod,
+  OpcUaFieldConfig,
+  OpcUaNodeConfig,
+  OpcUaPermissions,
+  OpcUaSecurityConfig,
+  OpcUaSecurityMode,
+  OpcUaSecurityPolicy,
+  OpcUaSecurityProfile,
+  OpcUaServerConfig,
+  OpcUaServerSettings,
+  OpcUaTrustedCertificate,
+  OpcUaUser,
+  OpcUaUserRole,
   PLCArrayDatatype,
   PLCConfiguration,
   PLCDataType,

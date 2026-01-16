@@ -386,6 +386,11 @@ const _projectActionsSchema = z.object({
   updateS7CommLogging: z.function().args(z.string(), S7CommLoggingSchema.partial()).returns(projectResponseSchema),
 
   /**
+   * OPC-UA Server Actions
+   */
+  updateOpcUaServerConfig: z.function().args(z.string(), z.record(z.unknown())).returns(projectResponseSchema),
+
+  /**
    * Remote Device Actions
    */
   createRemoteDevice: z.function().args(remoteDeviceDTOSchema).returns(projectResponseSchema),
