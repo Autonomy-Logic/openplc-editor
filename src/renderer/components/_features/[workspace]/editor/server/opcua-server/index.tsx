@@ -7,7 +7,9 @@ import type { OpcUaServerConfig } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { CertificatesTab } from './components/certificates-tab'
 import { SecurityProfilesTab } from './components/security-profiles-tab'
+import { UsersTab } from './components/users-tab'
 
 /**
  * OPC-UA Server Editor Component
@@ -182,18 +184,20 @@ export const OpcUaServerEditor = () => {
 
         {/* Users Tab */}
         <Tabs.Content value='users' className='flex-1 overflow-auto pt-4'>
-          <PlaceholderContent
-            title='User Management'
-            description='Create and manage user accounts with role-based access control (Viewer, Operator, Engineer). Configure permissions for reading, writing, and browsing. This will be implemented in Phase 3.'
-          />
+          <div className='pb-4'>
+            <UsersTab config={localConfig} serverName={serverName} onConfigChange={() => setEditingState('unsaved')} />
+          </div>
         </Tabs.Content>
 
         {/* Certificates Tab */}
         <Tabs.Content value='certificates' className='flex-1 overflow-auto pt-4'>
-          <PlaceholderContent
-            title='Certificate Management'
-            description='Manage server certificates (auto-generated or custom) and trusted client certificates. Configure certificate validation settings. This will be implemented in Phase 4.'
-          />
+          <div className='pb-4'>
+            <CertificatesTab
+              config={localConfig}
+              serverName={serverName}
+              onConfigChange={() => setEditingState('unsaved')}
+            />
+          </div>
         </Tabs.Content>
 
         {/* Address Space Tab */}

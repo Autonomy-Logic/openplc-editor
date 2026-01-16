@@ -422,6 +422,69 @@ const _projectActionsSchema = z.object({
   removeOpcUaSecurityProfile: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
 
   /**
+   * OPC-UA User Actions
+   */
+  addOpcUaUser: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        id: z.string(),
+        type: z.enum(['password', 'certificate']),
+        username: z.string().nullable(),
+        passwordHash: z.string().nullable(),
+        certificateId: z.string().nullable(),
+        role: z.enum(['viewer', 'operator', 'engineer']),
+      }),
+    )
+    .returns(projectResponseSchema),
+  updateOpcUaUser: z
+    .function()
+    .args(
+      z.string(),
+      z.string(),
+      z
+        .object({
+          type: z.enum(['password', 'certificate']),
+          username: z.string().nullable(),
+          passwordHash: z.string().nullable(),
+          certificateId: z.string().nullable(),
+          role: z.enum(['viewer', 'operator', 'engineer']),
+        })
+        .partial(),
+    )
+    .returns(projectResponseSchema),
+  removeOpcUaUser: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+
+  /**
+   * OPC-UA Certificate Actions
+   */
+  updateOpcUaServerCertificateStrategy: z
+    .function()
+    .args(
+      z.string(),
+      z.enum(['auto_self_signed', 'custom']),
+      z.string().nullable().optional(),
+      z.string().nullable().optional(),
+    )
+    .returns(projectResponseSchema),
+  addOpcUaTrustedCertificate: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        id: z.string(),
+        pem: z.string(),
+        subject: z.string().optional(),
+        validFrom: z.string().optional(),
+        validTo: z.string().optional(),
+        fingerprint: z.string().optional(),
+      }),
+    )
+    .returns(projectResponseSchema),
+  removeOpcUaTrustedCertificate: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+
+  /**
    * Remote Device Actions
    */
   createRemoteDevice: z.function().args(remoteDeviceDTOSchema).returns(projectResponseSchema),
