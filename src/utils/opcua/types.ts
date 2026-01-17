@@ -4,6 +4,19 @@
  */
 
 /**
+ * Represents a PLC instance (program instantiation in Resources).
+ * Used to look up the instance name for a given program POU.
+ */
+export interface PLCInstanceInfo {
+  /** Instance name (e.g., "INSTANCE0") - this appears in debug.c */
+  name: string
+  /** Task name this instance runs under */
+  task: string
+  /** Program POU name being instantiated */
+  program: string
+}
+
+/**
  * Represents a debug variable parsed from debug.c
  */
 export interface DebugVariable {

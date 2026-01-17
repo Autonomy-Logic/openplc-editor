@@ -1,6 +1,31 @@
 import type { OpcUaNodeConfig } from '@root/types/PLC/open-plc'
+import {
+  buildDebugPath,
+  buildGlobalDebugPath,
+  type DebugVariableEntry,
+  findDebugVariable,
+  findInstanceName,
+  type PLCInstanceMapping,
+} from '@root/utils/debug-variable-finder'
 
-import type { DebugVariable, ResolvedField } from './types'
+import type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'
+
+/**
+ * Convert debug.c type enum to IEC type name.
+ * debug.c uses types like "INT_ENUM", "BOOL_ENUM", "REAL_ENUM"
+ * but the OPC-UA runtime expects "INT", "BOOL", "REAL".
+ */
+const debugTypeToIecType = (debugType: string): string => {
+  // Remove _ENUM suffix if present
+  if (debugType.endsWith('_ENUM')) {
+    return debugType.slice(0, -5)
+  }
+  // Remove _P_ENUM or _O_ENUM suffix for pointer/output types
+  if (debugType.endsWith('_P_ENUM') || debugType.endsWith('_O_ENUM')) {
+    return debugType.slice(0, -7)
+  }
+  return debugType
+}
 
 /**
  * Custom error class for OPC-UA configuration errors
@@ -17,106 +42,42 @@ export class OpcUaConfigError extends Error {
 }
 
 /**
- * Build the debug path for a program/FB instance variable.
- * Handles nested structures, arrays, and function blocks.
- *
- * @param pouName - Name of the POU (program or FB)
- * @param variablePath - Path to the variable (e.g., "MOTOR_SPEED" or "CTRL.OUTPUT")
- * @returns The expected debug.c path
+ * Convert PLCInstanceInfo to PLCInstanceMapping for the shared utility
  */
-const buildInstancePath = (pouName: string, variablePath: string): string => {
-  // The instance name in debug.c is uppercase
-  // Format: RES0__INSTANCE0.VARIABLE_PATH
-  // Note: INSTANCE0 is typically the program name, but for simplicity we use the standard format
+const toInstanceMapping = (instances: PLCInstanceInfo[]): PLCInstanceMapping[] =>
+  instances.map((inst) => ({ name: inst.name, program: inst.program }))
 
-  const pathParts = variablePath.split('.')
-  let debugPath = `RES0__${pouName.toUpperCase()}`
+/**
+ * Convert DebugVariable to DebugVariableEntry for the shared utility
+ */
+const toDebugEntries = (debugVariables: DebugVariable[]): DebugVariableEntry[] =>
+  debugVariables.map((dv) => ({ name: dv.name, type: dv.type, index: dv.index }))
 
-  for (const part of pathParts) {
-    // Check if this part is an array index like "[0]"
-    if (part.includes('[')) {
-      // Handle array access: VAR[0] -> VAR.value.table[0]
-      const bracketIndex = part.indexOf('[')
-      const varName = part.substring(0, bracketIndex)
-      const arrayIndex = part.substring(bracketIndex)
-      debugPath += `.${varName.toUpperCase()}.value.table${arrayIndex}`
-    } else {
-      debugPath += `.${part.toUpperCase()}`
-    }
+/**
+ * Try to find a debug variable using multiple path strategies.
+ * First tries FB-style paths (no .value.), then structure-style paths (with .value.).
+ * Returns the match and which style worked.
+ */
+const findWithFallback = (
+  debugEntries: DebugVariableEntry[],
+  instanceName: string,
+  fullFieldPath: string,
+): { match: DebugVariableEntry | null; usedStructureStyle: boolean } => {
+  // First try FB-style path (no .value. insertion)
+  const fbPath = buildDebugPath(instanceName, fullFieldPath, { isStructureField: false })
+  const fbMatch = findDebugVariable(debugEntries, fbPath)
+  if (fbMatch) {
+    return { match: fbMatch, usedStructureStyle: false }
   }
 
-  return debugPath
-}
-
-/**
- * Build the debug path for a structure field.
- * Structure fields have ".value." inserted before each field access.
- *
- * @param pouName - Name of the POU
- * @param variablePath - Path including structure and field (e.g., "SENSOR.temperature")
- * @returns The expected debug.c path
- */
-const buildStructFieldPath = (pouName: string, variablePath: string): string => {
-  const pathParts = variablePath.split('.')
-  let debugPath = `RES0__${pouName.toUpperCase()}`
-
-  // First part is the variable name
-  debugPath += `.${pathParts[0].toUpperCase()}`
-
-  // Subsequent parts are fields, need .value. prefix
-  for (let i = 1; i < pathParts.length; i++) {
-    const part = pathParts[i]
-
-    // Check if this part is an array index
-    if (part.includes('[')) {
-      const bracketIndex = part.indexOf('[')
-      const fieldName = part.substring(0, bracketIndex)
-      const arrayIndex = part.substring(bracketIndex)
-
-      if (fieldName) {
-        debugPath += `.value.${fieldName.toUpperCase()}.value.table${arrayIndex}`
-      } else {
-        // Just an array index like "[0]"
-        debugPath += `.value.table${arrayIndex}`
-      }
-    } else {
-      debugPath += `.value.${part.toUpperCase()}`
-    }
+  // Try structure-style path (with .value. insertion)
+  const structPath = buildDebugPath(instanceName, fullFieldPath, { isStructureField: true })
+  const structMatch = findDebugVariable(debugEntries, structPath)
+  if (structMatch) {
+    return { match: structMatch, usedStructureStyle: true }
   }
 
-  return debugPath
-}
-
-/**
- * Build the debug path for an array's first element.
- *
- * @param pouName - Name of the POU
- * @param variablePath - Path to the array variable
- * @returns The expected debug.c path for element [0]
- */
-const buildArrayElementPath = (pouName: string, variablePath: string): string => {
-  // Array elements are stored as VAR.value.table[i]
-  return `RES0__${pouName.toUpperCase()}.${variablePath.toUpperCase()}.value.table[0]`
-}
-
-/**
- * Build the debug path for a global variable.
- * Global variables use CONFIG0__ prefix.
- *
- * @param variablePath - Path to the global variable
- * @returns The expected debug.c path
- */
-const buildGlobalPath = (variablePath: string): string => {
-  return `CONFIG0__${variablePath.toUpperCase()}`
-}
-
-/**
- * Determine if a variable path looks like a structure field access.
- * Structure fields contain dots but aren't arrays or simple FB variables.
- */
-const isStructureFieldPath = (variablePath: string): boolean => {
-  // If it contains a dot and doesn't look like an array element
-  return variablePath.includes('.') && !variablePath.includes('[')
+  return { match: null, usedStructureStyle: false }
 }
 
 /**
@@ -124,66 +85,94 @@ const isStructureFieldPath = (variablePath: string): boolean => {
  *
  * @param node - The OPC-UA node configuration
  * @param debugVariables - Parsed debug variables from debug.c
+ * @param instances - Array of PLC instances from Resources configuration
  * @returns The resolved index
  * @throws OpcUaConfigError if the variable cannot be resolved
  */
-export const resolveVariableIndex = (node: OpcUaNodeConfig, debugVariables: DebugVariable[]): number => {
-  let debugPath: string
+export const resolveVariableIndex = (
+  node: OpcUaNodeConfig,
+  debugVariables: DebugVariable[],
+  instances: PLCInstanceInfo[],
+): number => {
+  const debugEntries = toDebugEntries(debugVariables)
+  const instanceMappings = toInstanceMapping(instances)
 
-  // Determine the debug path based on variable location
+  // Handle global variables
   if (node.pouName === 'GVL' || node.pouName === 'CONFIG' || node.pouName.toUpperCase() === 'GVL') {
-    // Global variable
-    debugPath = buildGlobalPath(node.variablePath)
-  } else if (isStructureFieldPath(node.variablePath)) {
-    // Structure field access
-    debugPath = buildStructFieldPath(node.pouName, node.variablePath)
-  } else {
-    // Simple instance variable
-    debugPath = buildInstancePath(node.pouName, node.variablePath)
-  }
+    const debugPath = buildGlobalDebugPath(node.variablePath)
+    const match = findDebugVariable(debugEntries, debugPath)
 
-  // Find matching entry in debug.c (case-insensitive comparison)
-  const match = debugVariables.find((dv) => dv.name.toUpperCase() === debugPath.toUpperCase())
-
-  if (!match) {
-    // Try alternative paths
-    // Sometimes the path might be simpler without .value. insertions
-    const simplePath = `RES0__${node.pouName.toUpperCase()}.${node.variablePath.toUpperCase()}`
-    const simpleMatch = debugVariables.find((dv) => dv.name.toUpperCase() === simplePath.toUpperCase())
-
-    if (simpleMatch) {
-      return simpleMatch.index
+    if (match) {
+      return match.index
     }
 
     throw new OpcUaConfigError(
       `${node.pouName}:${node.variablePath}`,
       debugPath,
-      `Cannot resolve OPC-UA variable index.\n` +
+      `Cannot resolve OPC-UA global variable index.\n` +
         `  Variable: ${node.pouName}:${node.variablePath}\n` +
-        `  Expected debug path: ${debugPath}\n` +
-        `  This may happen if:\n` +
-        `    - The PLC program was modified after configuring OPC-UA\n` +
-        `    - The variable name is incorrect\n` +
-        `    - The variable was removed from the program\n` +
-        `  Please verify the variable exists in the program.`,
+        `  Expected debug path: ${debugPath}`,
     )
   }
 
-  return match.index
+  // Look up the instance name for this program
+  const instanceName = findInstanceName(node.pouName, instanceMappings)
+
+  if (!instanceName) {
+    throw new OpcUaConfigError(
+      node.pouName,
+      'unknown',
+      `Cannot find instance for program "${node.pouName}" in Resources.\n` +
+        `  Make sure the program is instantiated in the Resources configuration.`,
+    )
+  }
+
+  // Build the debug path - simple path for variables and FB instances (no .value.)
+  const debugPath = buildDebugPath(instanceName, node.variablePath, {
+    isStructureField: false,
+    isArrayElement: false,
+  })
+
+  const match = findDebugVariable(debugEntries, debugPath)
+
+  if (match) {
+    return match.index
+  }
+
+  throw new OpcUaConfigError(
+    `${node.pouName}:${node.variablePath}`,
+    debugPath,
+    `Cannot resolve OPC-UA variable index.\n` +
+      `  Variable: ${node.pouName}:${node.variablePath}\n` +
+      `  Expected debug path: ${debugPath}\n` +
+      `  This may happen if:\n` +
+      `    - The PLC program was modified after configuring OPC-UA\n` +
+      `    - The variable name is incorrect\n` +
+      `    - The variable was removed from the program\n` +
+      `  Please verify the variable exists in the program.`,
+  )
 }
 
 /**
- * Resolve indices for all fields in a structure.
+ * Resolve indices for all fields in a structure or function block instance.
  *
- * @param node - The OPC-UA node configuration for the structure
+ * @param node - The OPC-UA node configuration for the structure/FB
  * @param debugVariables - Parsed debug variables from debug.c
+ * @param instances - Array of PLC instances from Resources configuration
  * @returns Array of resolved fields with indices
  * @throws OpcUaConfigError if any field cannot be resolved
  */
-export const resolveStructureIndices = (node: OpcUaNodeConfig, debugVariables: DebugVariable[]): ResolvedField[] => {
+export const resolveStructureIndices = (
+  node: OpcUaNodeConfig,
+  debugVariables: DebugVariable[],
+  instances: PLCInstanceInfo[],
+): ResolvedField[] => {
+  const debugEntries = toDebugEntries(debugVariables)
+  const instanceMappings = toInstanceMapping(instances)
+
   if (!node.fields || node.fields.length === 0) {
     // If no field configs, try to resolve the structure variable itself
-    const index = resolveVariableIndex(node, debugVariables)
+    const index = resolveVariableIndex(node, debugVariables, instances)
     return [
       {
         name: node.variablePath,
@@ -195,54 +184,64 @@ export const resolveStructureIndices = (node: OpcUaNodeConfig, debugVariables: D
     ]
   }
 
+  // Look up the instance name for this program
+  let instanceName: string | null = null
+  if (node.pouName !== 'GVL' && node.pouName !== 'CONFIG') {
+    instanceName = findInstanceName(node.pouName, instanceMappings)
+    if (!instanceName) {
+      throw new OpcUaConfigError(
+        node.pouName,
+        'unknown',
+        `Cannot find instance for program "${node.pouName}" in Resources.`,
+      )
+    }
+  }
+
   const resolvedFields: ResolvedField[] = []
 
   for (const field of node.fields) {
     // Build the full path for this field
-    const fullFieldPath = `${node.variablePath}.${field.fieldPath}`
-
-    let debugPath: string
-
-    if (node.pouName === 'GVL' || node.pouName === 'CONFIG') {
-      // Global structure field
-      debugPath = buildGlobalPath(fullFieldPath)
+    // Handle case where field.fieldPath already contains the parent variablePath (legacy configs)
+    let fullFieldPath: string
+    if (field.fieldPath.toUpperCase().startsWith(node.variablePath.toUpperCase() + '.')) {
+      // Field path already includes parent, use it directly
+      fullFieldPath = field.fieldPath
     } else {
-      // Instance structure field
-      debugPath = buildStructFieldPath(node.pouName, fullFieldPath)
+      fullFieldPath = `${node.variablePath}.${field.fieldPath}`
     }
 
-    // Find matching entry
-    const match = debugVariables.find((dv) => dv.name.toUpperCase() === debugPath.toUpperCase())
+    let match: DebugVariableEntry | null = null
+    let debugPath: string = ''
+
+    if (node.pouName === 'GVL' || node.pouName === 'CONFIG') {
+      // Global structure/FB field
+      debugPath = buildGlobalDebugPath(fullFieldPath)
+      match = findDebugVariable(debugEntries, debugPath)
+    } else {
+      // Try both FB-style (no .value.) and structure-style (with .value.) paths
+      const result = findWithFallback(debugEntries, instanceName!, fullFieldPath)
+      match = result.match
+      debugPath = result.usedStructureStyle
+        ? buildDebugPath(instanceName!, fullFieldPath, { isStructureField: true })
+        : buildDebugPath(instanceName!, fullFieldPath, { isStructureField: false })
+    }
 
     if (!match) {
-      // Try simpler path
-      const simplePath = `RES0__${node.pouName.toUpperCase()}.${fullFieldPath.toUpperCase()}`
-      const simpleMatch = debugVariables.find((dv) => dv.name.toUpperCase() === simplePath.toUpperCase())
-
-      if (simpleMatch) {
-        resolvedFields.push({
-          name: field.fieldPath,
-          datatype: node.variableType, // Will be refined by caller
-          initialValue: field.initialValue,
-          index: simpleMatch.index,
-          permissions: field.permissions,
-        })
-        continue
-      }
-
       throw new OpcUaConfigError(
         `${node.pouName}:${fullFieldPath}`,
         debugPath,
-        `Cannot resolve OPC-UA structure field index.\n` +
-          `  Structure: ${node.pouName}:${node.variablePath}\n` +
+        `Cannot resolve OPC-UA structure/FB field index.\n` +
+          `  Variable: ${node.pouName}:${node.variablePath}\n` +
           `  Field: ${field.fieldPath}\n` +
-          `  Expected debug path: ${debugPath}`,
+          `  Tried paths:\n` +
+          `    - FB style: ${buildDebugPath(instanceName!, fullFieldPath, { isStructureField: false })}\n` +
+          `    - Struct style: ${buildDebugPath(instanceName!, fullFieldPath, { isStructureField: true })}`,
       )
     }
 
     resolvedFields.push({
       name: field.fieldPath,
-      datatype: match.type || node.variableType,
+      datatype: match.type ? debugTypeToIecType(match.type) : node.variableType,
       initialValue: field.initialValue,
       index: match.index,
       permissions: field.permissions,
@@ -258,45 +257,54 @@ export const resolveStructureIndices = (node: OpcUaNodeConfig, debugVariables: D
  *
  * @param node - The OPC-UA node configuration for the array
  * @param debugVariables - Parsed debug variables from debug.c
+ * @param instances - Array of PLC instances from Resources configuration
  * @returns The index of the first array element
  * @throws OpcUaConfigError if the array cannot be resolved
  */
-export const resolveArrayIndex = (node: OpcUaNodeConfig, debugVariables: DebugVariable[]): number => {
+export const resolveArrayIndex = (
+  node: OpcUaNodeConfig,
+  debugVariables: DebugVariable[],
+  instances: PLCInstanceInfo[],
+): number => {
+  const debugEntries = toDebugEntries(debugVariables)
+  const instanceMappings = toInstanceMapping(instances)
+
   let debugPath: string
 
   if (node.pouName === 'GVL' || node.pouName === 'CONFIG') {
-    // Global array - first element
-    debugPath = `CONFIG0__${node.variablePath.toUpperCase()}.value.table[0]`
+    // Global array - first element: CONFIG0__VAR.value.table[0]
+    debugPath = `${buildGlobalDebugPath(node.variablePath)}.value.table[0]`
   } else {
-    // Instance array - first element
-    debugPath = buildArrayElementPath(node.pouName, node.variablePath)
-  }
+    // Look up the instance name for this program
+    const instanceName = findInstanceName(node.pouName, instanceMappings)
 
-  // Find matching entry
-  const match = debugVariables.find((dv) => dv.name.toUpperCase() === debugPath.toUpperCase())
-
-  if (!match) {
-    // Try alternative: maybe the array path is simpler
-    const simplePath = `RES0__${node.pouName.toUpperCase()}.${node.variablePath.toUpperCase()}[0]`
-    const simpleMatch = debugVariables.find(
-      (dv) =>
-        dv.name.toUpperCase() === simplePath.toUpperCase() ||
-        dv.name.toUpperCase().endsWith(`${node.variablePath.toUpperCase()}.value.table[0]`),
-    )
-
-    if (simpleMatch) {
-      return simpleMatch.index
+    if (!instanceName) {
+      throw new OpcUaConfigError(
+        node.pouName,
+        'unknown',
+        `Cannot find instance for program "${node.pouName}" in Resources.`,
+      )
     }
 
-    throw new OpcUaConfigError(
-      `${node.pouName}:${node.variablePath}`,
-      debugPath,
-      `Cannot resolve OPC-UA array index.\n` +
-        `  Array: ${node.pouName}:${node.variablePath}\n` +
-        `  Expected debug path: ${debugPath}\n` +
-        `  Looking for first element [0] of the array.`,
-    )
+    // Instance array - first element
+    debugPath = buildDebugPath(instanceName, node.variablePath, {
+      isArrayElement: true,
+      arrayIndex: 0,
+    })
   }
 
-  return match.index
+  const match = findDebugVariable(debugEntries, debugPath)
+
+  if (match) {
+    return match.index
+  }
+
+  throw new OpcUaConfigError(
+    `${node.pouName}:${node.variablePath}`,
+    debugPath,
+    `Cannot resolve OPC-UA array index.\n` +
+      `  Array: ${node.pouName}:${node.variablePath}\n` +
+      `  Expected debug path: ${debugPath}\n` +
+      `  Looking for first element [0] of the array.`,
+  )
 }

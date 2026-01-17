@@ -1242,8 +1242,15 @@ class CompilerModule {
         debugContent = ''
       }
 
+      // Get instances from Resources configuration for index resolution
+      const instances = projectData.configuration.resource.instances.map((inst) => ({
+        name: inst.name,
+        task: inst.task,
+        program: inst.program,
+      }))
+
       // Generate the OPC-UA configuration
-      const opcuaJson = generateOpcUaConfig(projectData.servers, debugContent)
+      const opcuaJson = generateOpcUaConfig(projectData.servers, debugContent, instances)
 
       if (opcuaJson) {
         // Ensure conf directory exists

@@ -9,7 +9,7 @@ import type {
 } from '@root/types/PLC/open-plc'
 
 import { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from './resolve-indices'
-import type { DebugVariable } from './types'
+import type { DebugVariable, PLCInstanceInfo } from './types'
 
 /**
  * Runtime configuration interfaces
@@ -186,8 +186,12 @@ const convertPermissions = (permissions: OpcUaPermissions): RuntimeVariablePermi
 /**
  * Resolve a simple variable and build runtime format
  */
-const resolveVariable = (node: OpcUaNodeConfig, debugVariables: DebugVariable[]): RuntimeVariable => {
-  const index = resolveVariableIndex(node, debugVariables)
+const resolveVariable = (
+  node: OpcUaNodeConfig,
+  debugVariables: DebugVariable[],
+  instances: PLCInstanceInfo[],
+): RuntimeVariable => {
+  const index = resolveVariableIndex(node, debugVariables, instances)
 
   return {
     node_id: node.nodeId,
@@ -204,8 +208,12 @@ const resolveVariable = (node: OpcUaNodeConfig, debugVariables: DebugVariable[])
 /**
  * Resolve a structure and build runtime format with field indices
  */
-const resolveStructure = (node: OpcUaNodeConfig, debugVariables: DebugVariable[]): RuntimeStructure => {
-  const resolvedFields = resolveStructureIndices(node, debugVariables)
+const resolveStructure = (
+  node: OpcUaNodeConfig,
+  debugVariables: DebugVariable[],
+  instances: PLCInstanceInfo[],
+): RuntimeStructure => {
+  const resolvedFields = resolveStructureIndices(node, debugVariables, instances)
 
   return {
     node_id: node.nodeId,
@@ -225,8 +233,12 @@ const resolveStructure = (node: OpcUaNodeConfig, debugVariables: DebugVariable[]
 /**
  * Resolve an array and build runtime format
  */
-const resolveArray = (node: OpcUaNodeConfig, debugVariables: DebugVariable[]): RuntimeArray => {
-  const index = resolveArrayIndex(node, debugVariables)
+const resolveArray = (
+  node: OpcUaNodeConfig,
+  debugVariables: DebugVariable[],
+  instances: PLCInstanceInfo[],
+): RuntimeArray => {
+  const index = resolveArrayIndex(node, debugVariables, instances)
 
   return {
     node_id: node.nodeId,
@@ -243,7 +255,11 @@ const resolveArray = (node: OpcUaNodeConfig, debugVariables: DebugVariable[]): R
 /**
  * Build the complete address space configuration
  */
-const buildAddressSpace = (config: OpcUaServerConfig, debugVariables: DebugVariable[]): RuntimeAddressSpace => {
+const buildAddressSpace = (
+  config: OpcUaServerConfig,
+  debugVariables: DebugVariable[],
+  instances: PLCInstanceInfo[],
+): RuntimeAddressSpace => {
   const variables: RuntimeVariable[] = []
   const structures: RuntimeStructure[] = []
   const arrays: RuntimeArray[] = []
@@ -253,13 +269,21 @@ const buildAddressSpace = (config: OpcUaServerConfig, debugVariables: DebugVaria
     try {
       switch (node.nodeType) {
         case 'variable':
-          variables.push(resolveVariable(node, debugVariables))
+          variables.push(resolveVariable(node, debugVariables, instances))
           break
         case 'structure':
-          structures.push(resolveStructure(node, debugVariables))
+          // Structures and FBs are handled the same way - resolve all leaf fields
+          structures.push(resolveStructure(node, debugVariables, instances))
           break
         case 'array':
-          arrays.push(resolveArray(node, debugVariables))
+          // Arrays with fields (complex element types) are treated like structures
+          // because each leaf variable needs individual index resolution
+          if (node.fields && node.fields.length > 0) {
+            structures.push(resolveStructure(node, debugVariables, instances))
+          } else {
+            // Simple arrays of base types
+            arrays.push(resolveArray(node, debugVariables, instances))
+          }
           break
       }
     } catch (error) {
@@ -334,9 +358,14 @@ export const parseDebugFile = (content: string): DebugVariable[] => {
  *
  * @param servers - Array of configured PLC servers
  * @param debugFileContent - Content of the generated debug.c file
+ * @param instances - Array of PLC instances from Resources configuration
  * @returns JSON string for opcua.json or null if no enabled OPC-UA server
  */
-export const generateOpcUaConfig = (servers: PLCServer[] | undefined, debugFileContent: string): string | null => {
+export const generateOpcUaConfig = (
+  servers: PLCServer[] | undefined,
+  debugFileContent: string,
+  instances: PLCInstanceInfo[],
+): string | null => {
   // 1. Find OPC-UA server configuration
   if (!servers || servers.length === 0) {
     return null
@@ -371,7 +400,7 @@ export const generateOpcUaConfig = (servers: PLCServer[] | undefined, debugFileC
       security: buildSecurityConfig(config),
       users: buildUsersConfig(config),
       cycle_time_ms: config.cycleTimeMs,
-      address_space: buildAddressSpace(config, debugVariables),
+      address_space: buildAddressSpace(config, debugVariables, instances),
     },
   }
 
@@ -386,6 +415,7 @@ export const generateOpcUaConfig = (servers: PLCServer[] | undefined, debugFileC
 export const validateOpcUaConfig = (
   config: OpcUaServerConfig,
   debugFileContent: string,
+  instances: PLCInstanceInfo[],
 ): { valid: boolean; errors: string[] } => {
   const errors: string[] = []
 
@@ -408,13 +438,18 @@ export const validateOpcUaConfig = (
     try {
       switch (node.nodeType) {
         case 'variable':
-          resolveVariableIndex(node, debugVariables)
+          resolveVariableIndex(node, debugVariables, instances)
           break
         case 'structure':
-          resolveStructureIndices(node, debugVariables)
+          resolveStructureIndices(node, debugVariables, instances)
           break
         case 'array':
-          resolveArrayIndex(node, debugVariables)
+          // Arrays with fields (complex element types) are validated like structures
+          if (node.fields && node.fields.length > 0) {
+            resolveStructureIndices(node, debugVariables, instances)
+          } else {
+            resolveArrayIndex(node, debugVariables, instances)
+          }
           break
       }
     } catch (error) {

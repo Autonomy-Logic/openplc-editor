@@ -2,24 +2,43 @@ import type { OpcUaServerConfig, PLCServer } from '@root/types/PLC/open-plc'
 
 import { generateOpcUaConfig, parseDebugFile, validateOpcUaConfig } from '../generate-opcua-config'
 import { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from '../resolve-indices'
+import type { PLCInstanceInfo } from '../types'
 
 // Sample debug.c content for testing
+// Uses INSTANCE0 as the instance name (matching the sampleInstances below)
 const sampleDebugContent = `
-#define VAR_COUNT 10
+#define VAR_COUNT 18
 
 debug_vars_t debug_vars[] = {
-  { &(RES0__MAIN.MOTOR_SPEED), INT_ENUM },
-  { &(RES0__MAIN.TEMPERATURE), REAL_ENUM },
-  { &(RES0__MAIN.IS_RUNNING), BOOL_ENUM },
-  { &(RES0__MAIN.SENSOR.value.TEMP), REAL_ENUM },
-  { &(RES0__MAIN.SENSOR.value.PRESSURE), REAL_ENUM },
-  { &(RES0__MAIN.TEMPS.value.table[0]), REAL_ENUM },
-  { &(RES0__MAIN.TEMPS.value.table[1]), REAL_ENUM },
-  { &(RES0__MAIN.TEMPS.value.table[2]), REAL_ENUM },
+  { &(RES0__INSTANCE0.MOTOR_SPEED), INT_ENUM },
+  { &(RES0__INSTANCE0.TEMPERATURE), REAL_ENUM },
+  { &(RES0__INSTANCE0.IS_RUNNING), BOOL_ENUM },
+  { &(RES0__INSTANCE0.SENSOR.value.TEMP), REAL_ENUM },
+  { &(RES0__INSTANCE0.SENSOR.value.PRESSURE), REAL_ENUM },
+  { &(RES0__INSTANCE0.TEMPS.value.table[0]), REAL_ENUM },
+  { &(RES0__INSTANCE0.TEMPS.value.table[1]), REAL_ENUM },
+  { &(RES0__INSTANCE0.TEMPS.value.table[2]), REAL_ENUM },
   { &(CONFIG0__GLOBAL_VAR), INT_ENUM },
   { &(CONFIG0__SYSTEM_STATE), BOOL_ENUM },
+  { &(RES0__INSTANCE0.TIMER0.ET), TIME_ENUM },
+  { &(RES0__INSTANCE0.TIMER0.Q), BOOL_ENUM },
+  { &(RES0__INSTANCE0.NESTED_STRUCT.value.INNER.value.VALUE1), INT_ENUM },
+  { &(RES0__INSTANCE0.NESTED_STRUCT.value.INNER.value.VALUE2), REAL_ENUM },
+  { &(RES0__INSTANCE0.FB_ARRAY.value.table[0].ET), TIME_ENUM },
+  { &(RES0__INSTANCE0.FB_ARRAY.value.table[0].Q), BOOL_ENUM },
+  { &(RES0__INSTANCE0.FB_ARRAY.value.table[1].ET), TIME_ENUM },
+  { &(RES0__INSTANCE0.FB_ARRAY.value.table[1].Q), BOOL_ENUM },
 };
 `
+
+// Sample instances array representing the Resources configuration
+const sampleInstances: PLCInstanceInfo[] = [
+  {
+    name: 'INSTANCE0',
+    task: 'Task0',
+    program: 'main',
+  },
+]
 
 // Sample OPC-UA server configuration
 const createSampleConfig = (): OpcUaServerConfig => ({
@@ -69,9 +88,9 @@ describe('parseDebugFile', () => {
   it('should parse debug variables from debug.c content', () => {
     const variables = parseDebugFile(sampleDebugContent)
 
-    expect(variables).toHaveLength(10)
+    expect(variables).toHaveLength(18)
     expect(variables[0]).toEqual({
-      name: 'RES0__MAIN.MOTOR_SPEED',
+      name: 'RES0__INSTANCE0.MOTOR_SPEED',
       type: 'INT_ENUM',
       index: 0,
     })
@@ -111,7 +130,7 @@ describe('resolveVariableIndex', () => {
       nodeType: 'variable' as const,
     }
 
-    const index = resolveVariableIndex(node, debugVariables)
+    const index = resolveVariableIndex(node, debugVariables, sampleInstances)
     expect(index).toBe(0)
   })
 
@@ -130,7 +149,7 @@ describe('resolveVariableIndex', () => {
       nodeType: 'variable' as const,
     }
 
-    const index = resolveVariableIndex(node, debugVariables)
+    const index = resolveVariableIndex(node, debugVariables, sampleInstances)
     expect(index).toBe(8)
   })
 
@@ -149,7 +168,25 @@ describe('resolveVariableIndex', () => {
       nodeType: 'variable' as const,
     }
 
-    expect(() => resolveVariableIndex(node, debugVariables)).toThrow(OpcUaConfigError)
+    expect(() => resolveVariableIndex(node, debugVariables, sampleInstances)).toThrow(OpcUaConfigError)
+  })
+
+  it('should throw error when program has no instance in Resources', () => {
+    const node = {
+      id: 'test-4',
+      pouName: 'unknown_program',
+      variablePath: 'SOME_VAR',
+      variableType: 'INT',
+      nodeId: 'PLC.Unknown.SomeVar',
+      browseName: 'SomeVar',
+      displayName: 'Some Var',
+      description: '',
+      initialValue: 0,
+      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+      nodeType: 'variable' as const,
+    }
+
+    expect(() => resolveVariableIndex(node, debugVariables, sampleInstances)).toThrow(OpcUaConfigError)
   })
 })
 
@@ -173,7 +210,7 @@ describe('resolveArrayIndex', () => {
       elementType: 'REAL',
     }
 
-    const index = resolveArrayIndex(node, debugVariables)
+    const index = resolveArrayIndex(node, debugVariables, sampleInstances)
     expect(index).toBe(5) // First element [0] is at index 5
   })
 })
@@ -210,16 +247,180 @@ describe('resolveStructureIndices', () => {
       ],
     }
 
-    const resolvedFields = resolveStructureIndices(node, debugVariables)
+    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
     expect(resolvedFields).toHaveLength(2)
     expect(resolvedFields[0].index).toBe(3) // SENSOR.value.TEMP
+    expect(resolvedFields[0].datatype).toBe('REAL') // Converted from REAL_ENUM
     expect(resolvedFields[1].index).toBe(4) // SENSOR.value.PRESSURE
+    expect(resolvedFields[1].datatype).toBe('REAL') // Converted from REAL_ENUM
+  })
+
+  it('should convert debug.c type enums to IEC types', () => {
+    // This test verifies that types like "INT_ENUM", "BOOL_ENUM" are converted to "INT", "BOOL"
+    const node = {
+      id: 'test-fb-types',
+      pouName: 'main',
+      variablePath: 'TIMER0',
+      variableType: 'TON',
+      nodeId: 'PLC.Main.Timer0',
+      browseName: 'Timer0',
+      displayName: 'Timer 0',
+      description: '',
+      initialValue: 0,
+      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+      nodeType: 'structure' as const,
+      fields: [
+        {
+          fieldPath: 'ET',
+          displayName: 'Elapsed Time',
+          initialValue: 0,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+        {
+          fieldPath: 'Q',
+          displayName: 'Output',
+          initialValue: false,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+      ],
+    }
+
+    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
+    // TIME_ENUM should be converted to TIME
+    expect(resolvedFields[0].datatype).toBe('TIME')
+    // BOOL_ENUM should be converted to BOOL
+    expect(resolvedFields[1].datatype).toBe('BOOL')
+  })
+
+  it('should resolve function block with expanded leaf fields', () => {
+    // FB instance with its leaf variables expanded (like TON with ET and Q)
+    const node = {
+      id: 'test-fb-1',
+      pouName: 'main',
+      variablePath: 'TIMER0',
+      variableType: 'TON',
+      nodeId: 'PLC.Main.Timer0',
+      browseName: 'Timer0',
+      displayName: 'Timer 0',
+      description: '',
+      initialValue: 0,
+      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+      nodeType: 'structure' as const, // FBs use 'structure' nodeType
+      fields: [
+        {
+          fieldPath: 'ET',
+          displayName: 'Elapsed Time',
+          initialValue: 0,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+        {
+          fieldPath: 'Q',
+          displayName: 'Output',
+          initialValue: false,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+      ],
+    }
+
+    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
+    expect(resolvedFields).toHaveLength(2)
+    expect(resolvedFields[0].index).toBe(10) // TIMER0.ET (FB-style path, no .value.)
+    expect(resolvedFields[1].index).toBe(11) // TIMER0.Q
+  })
+
+  it('should resolve nested structure with deep field paths', () => {
+    // Nested structure: NESTED_STRUCT.INNER.VALUE1, NESTED_STRUCT.INNER.VALUE2
+    const node = {
+      id: 'test-nested-1',
+      pouName: 'main',
+      variablePath: 'NESTED_STRUCT',
+      variableType: 'OuterStruct',
+      nodeId: 'PLC.Main.NestedStruct',
+      browseName: 'NestedStruct',
+      displayName: 'Nested Structure',
+      description: '',
+      initialValue: 0,
+      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+      nodeType: 'structure' as const,
+      fields: [
+        {
+          fieldPath: 'INNER.VALUE1',
+          displayName: 'Inner Value 1',
+          initialValue: 0,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+        {
+          fieldPath: 'INNER.VALUE2',
+          displayName: 'Inner Value 2',
+          initialValue: 0.0,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+      ],
+    }
+
+    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
+    expect(resolvedFields).toHaveLength(2)
+    expect(resolvedFields[0].index).toBe(12) // NESTED_STRUCT.value.INNER.value.VALUE1
+    expect(resolvedFields[1].index).toBe(13) // NESTED_STRUCT.value.INNER.value.VALUE2
+  })
+
+  it('should resolve array of FBs with expanded leaf fields', () => {
+    // Array of FBs: FB_ARRAY[0].ET, FB_ARRAY[0].Q, FB_ARRAY[1].ET, FB_ARRAY[1].Q
+    const node = {
+      id: 'test-fb-array-1',
+      pouName: 'main',
+      variablePath: 'FB_ARRAY',
+      variableType: 'ARRAY[0..1] OF TON',
+      nodeId: 'PLC.Main.FbArray',
+      browseName: 'FbArray',
+      displayName: 'FB Array',
+      description: '',
+      initialValue: 0,
+      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+      nodeType: 'array' as const,
+      arrayLength: 2,
+      elementType: 'TON',
+      fields: [
+        {
+          fieldPath: '[0].ET',
+          displayName: '[0] Elapsed Time',
+          initialValue: 0,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+        {
+          fieldPath: '[0].Q',
+          displayName: '[0] Output',
+          initialValue: false,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+        {
+          fieldPath: '[1].ET',
+          displayName: '[1] Elapsed Time',
+          initialValue: 0,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+        {
+          fieldPath: '[1].Q',
+          displayName: '[1] Output',
+          initialValue: false,
+          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
+        },
+      ],
+    }
+
+    // Arrays with fields are treated like structures for resolution
+    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
+    expect(resolvedFields).toHaveLength(4)
+    expect(resolvedFields[0].index).toBe(14) // FB_ARRAY[0].ET
+    expect(resolvedFields[1].index).toBe(15) // FB_ARRAY[0].Q
+    expect(resolvedFields[2].index).toBe(16) // FB_ARRAY[1].ET
+    expect(resolvedFields[3].index).toBe(17) // FB_ARRAY[1].Q
   })
 })
 
 describe('generateOpcUaConfig', () => {
   it('should return null when no servers configured', () => {
-    const result = generateOpcUaConfig(undefined, sampleDebugContent)
+    const result = generateOpcUaConfig(undefined, sampleDebugContent, sampleInstances)
     expect(result).toBeNull()
   })
 
@@ -230,7 +431,7 @@ describe('generateOpcUaConfig', () => {
         protocol: 'modbus-tcp',
       },
     ]
-    const result = generateOpcUaConfig(servers, sampleDebugContent)
+    const result = generateOpcUaConfig(servers, sampleDebugContent, sampleInstances)
     expect(result).toBeNull()
   })
 
@@ -246,7 +447,7 @@ describe('generateOpcUaConfig', () => {
       },
     ]
 
-    const result = generateOpcUaConfig(servers, sampleDebugContent)
+    const result = generateOpcUaConfig(servers, sampleDebugContent, sampleInstances)
     expect(result).toBeNull()
   })
 
@@ -276,7 +477,7 @@ describe('generateOpcUaConfig', () => {
       },
     ]
 
-    const result = generateOpcUaConfig(servers, sampleDebugContent)
+    const result = generateOpcUaConfig(servers, sampleDebugContent, sampleInstances)
     expect(result).not.toBeNull()
 
     const parsed = JSON.parse(result!)
@@ -309,7 +510,7 @@ describe('validateOpcUaConfig', () => {
       },
     ]
 
-    const result = validateOpcUaConfig(config, sampleDebugContent)
+    const result = validateOpcUaConfig(config, sampleDebugContent, sampleInstances)
     expect(result.valid).toBe(true)
     expect(result.errors).toHaveLength(0)
   })
@@ -318,7 +519,7 @@ describe('validateOpcUaConfig', () => {
     const config = createSampleConfig()
     config.securityProfiles[0].enabled = false
 
-    const result = validateOpcUaConfig(config, sampleDebugContent)
+    const result = validateOpcUaConfig(config, sampleDebugContent, sampleInstances)
     expect(result.valid).toBe(false)
     expect(result.errors).toContain('At least one security profile must be enabled')
   })
@@ -328,7 +529,7 @@ describe('validateOpcUaConfig', () => {
     config.securityProfiles[0].authMethods = ['Username']
     config.users = []
 
-    const result = validateOpcUaConfig(config, sampleDebugContent)
+    const result = validateOpcUaConfig(config, sampleDebugContent, sampleInstances)
     expect(result.valid).toBe(false)
     expect(result.errors).toContain('Username authentication is enabled but no users are configured')
   })

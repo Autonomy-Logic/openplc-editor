@@ -44,16 +44,28 @@ const generateBrowseName = (variablePath: string): string => {
 
 /**
  * Generate a display name from the variable path
+ * Handles camelCase, snake_case, and ALL_CAPS naming conventions
  */
 const generateDisplayName = (variablePath: string): string => {
   const parts = variablePath.split('.')
   const name = parts[parts.length - 1] || variablePath
-  // Convert camelCase/snake_case to Title Case with spaces
-  return name
-    .replace(/_/g, ' ')
-    .replace(/([A-Z])/g, ' $1')
+
+  // First replace underscores with spaces
+  let result = name.replace(/_/g, ' ')
+
+  // Only add spaces before uppercase letters if the string is NOT all uppercase
+  // This prevents "IRRIGATION MAIN CONTROLLER0" from becoming "I R R I G A T I O N..."
+  const isAllUpperCase = name === name.toUpperCase()
+  if (!isAllUpperCase) {
+    // For camelCase/PascalCase: add space before uppercase letters
+    result = result.replace(/([a-z])([A-Z])/g, '$1 $2')
+  }
+
+  // Convert to Title Case
+  return result
     .replace(/^\s+/, '')
     .split(' ')
+    .filter((word) => word.length > 0)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ')
 }
@@ -81,18 +93,63 @@ const getNodeType = (node: VariableTreeNode): 'variable' | 'structure' | 'array'
 }
 
 /**
- * Generate default field configs from a structure/FB node
+ * Recursively collect all base-type leaf variables from a tree node.
+ * Returns an array of { relativePath, displayName, variableType } for each leaf.
+ */
+const collectLeafVariables = (
+  node: VariableTreeNode,
+  parentPath: string = '',
+): Array<{ relativePath: string; displayName: string; variableType: string }> => {
+  const leaves: Array<{ relativePath: string; displayName: string; variableType: string }> = []
+
+  if (!node.children || node.children.length === 0) {
+    // This node itself is a leaf (base type variable)
+    if (node.type === 'variable' && node.isSelectable) {
+      leaves.push({
+        relativePath: parentPath || node.name,
+        displayName: node.name,
+        variableType: node.variableType || 'unknown',
+      })
+    }
+    return leaves
+  }
+
+  // Recurse into children
+  for (const child of node.children) {
+    const childPath = parentPath ? `${parentPath}.${child.name}` : child.name
+
+    if (child.type === 'variable' && child.isSelectable) {
+      // This is a base-type leaf
+      leaves.push({
+        relativePath: childPath,
+        displayName: child.name,
+        variableType: child.variableType || 'unknown',
+      })
+    } else if (child.children && child.children.length > 0) {
+      // This is a complex type (structure, FB, or array) - recurse
+      const childLeaves = collectLeafVariables(child, childPath)
+      leaves.push(...childLeaves)
+    }
+  }
+
+  return leaves
+}
+
+/**
+ * Generate default field configs from a structure/FB/array node.
+ * Recursively expands to all base-type leaf variables.
+ * The fieldPath is the full relative path from the parent (e.g., "FB1.Q" or "STRUCT.FIELD").
  */
 const generateDefaultFieldConfigs = (
   node: VariableTreeNode,
   parentPermissions: OpcUaPermissions,
 ): OpcUaFieldConfig[] => {
-  if (!node.children) return []
+  const leaves = collectLeafVariables(node)
 
-  return node.children.map((child) => ({
-    fieldPath: child.variablePath,
-    displayName: child.name,
-    initialValue: getDefaultInitialValue(child.variableType),
+  return leaves.map((leaf) => ({
+    fieldPath: leaf.relativePath,
+    displayName: leaf.displayName,
+    initialValue: getDefaultInitialValue(leaf.variableType),
     permissions: { ...parentPermissions },
   }))
 }

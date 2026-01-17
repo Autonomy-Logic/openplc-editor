@@ -22,4 +22,4 @@ export type {
 } from './generate-opcua-config'
 export { generateOpcUaConfig, parseDebugFile, validateOpcUaConfig } from './generate-opcua-config'
 export { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from './resolve-indices'
-export type { DebugVariable, ResolvedField } from './types'
+export type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'

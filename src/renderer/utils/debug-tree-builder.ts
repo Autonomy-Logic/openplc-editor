@@ -4,7 +4,7 @@ import type { PLCProject, PLCVariable } from '@root/types/PLC/open-plc'
 import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import type { DebugVariable } from './parse-debug-file'
 
-const DEBUG_TREE_LOGGING = false
+const DEBUG_TREE_LOGGING = true
 
 /**
  * Normalizes type strings for case-insensitive comparison.

@@ -1,6 +1,23 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { PLCDataType, PLCPou, PLCVariable } from '@root/types/PLC/open-plc'
+import {
+  findFunctionBlockVariables,
+  findStructureVariables,
+  isBaseType,
+  isEnumerationType,
+  isFunctionBlockType,
+  type PouVariable,
+} from '@root/utils/pou-helpers'
 import { useMemo } from 'react'
+
+/**
+ * Type for array data extracted from PLCVariable array type.
+ * This is the shape of the 'data' property when type.definition === 'array'.
+ */
+type ArrayData = {
+  baseType: { definition: 'base-type'; value: string } | { definition: 'user-data-type'; value: string }
+  dimensions: Array<{ dimension: string }>
+}
 
 /**
  * Tree node type for variable tree display
@@ -15,90 +32,30 @@ export interface VariableTreeNode {
   variablePath: string
   isSelectable: boolean
   isExpanded?: boolean
-  // Additional metadata for OPC-UA node configuration
   variableClass?: string
   initialValue?: string | null
-  // Phase 5: Complex types metadata
   arrayInfo?: {
-    dimensions: string[] // e.g., ["1..10"] or ["0..4", "0..2"] for multi-dimensional
-    elementType: string // Base type of array elements
-    totalLength: number // Total number of elements
+    dimensions: string[]
+    elementType: string
+    totalLength: number
   }
   structureInfo?: {
-    structTypeName: string // Name of the structure type
-    fieldCount: number // Number of fields
+    structTypeName: string
+    fieldCount: number
   }
 }
 
 /**
- * Check if a type is a base IEC type (reserved for Phase 5 - Complex Types)
+ * Get the type name from a variable's type field.
  */
-const _isBaseType = (typeName: string): boolean => {
-  const baseTypes = [
-    'bool',
-    'sint',
-    'int',
-    'dint',
-    'lint',
-    'usint',
-    'uint',
-    'udint',
-    'ulint',
-    'real',
-    'lreal',
-    'time',
-    'date',
-    'tod',
-    'dt',
-    'string',
-    'byte',
-    'word',
-    'dword',
-    'lword',
-  ]
-  return baseTypes.includes(typeName.toLowerCase())
+const getTypeName = (variable: { type: { value: string } }): string => {
+  return variable.type.value
 }
 
 /**
- * Check if a type is a standard function block (TON, TOF, CTU, etc.)
- * Reserved for Phase 5 - Complex Types
+ * Get display type string for a variable.
  */
-const _isStandardFunctionBlock = (typeName: string): boolean => {
-  const standardFBs = ['ton', 'tof', 'tp', 'ctu', 'ctd', 'ctud', 'r_trig', 'f_trig', 'sr', 'rs']
-  return standardFBs.includes(typeName.toLowerCase())
-}
-
-/**
- * Find a data type by name in the project's data types
- */
-const findDataType = (typeName: string, dataTypes: PLCDataType[]): PLCDataType | undefined => {
-  return dataTypes.find((dt) => dt.name.toLowerCase() === typeName.toLowerCase())
-}
-
-/**
- * Find a function block by name in the project's POUs
- */
-const findFunctionBlock = (typeName: string, pous: PLCPou[]): PLCPou | undefined => {
-  return pous.find((pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === typeName.toLowerCase())
-}
-
-/**
- * Get the type name from a PLCVariable's type field
- */
-const getTypeName = (variable: PLCVariable | { type: PLCVariable['type']; name: string }): string => {
-  if (variable.type.definition === 'base-type') {
-    return variable.type.value
-  } else if (variable.type.definition === 'array') {
-    return variable.type.value
-  } else {
-    return variable.type.value
-  }
-}
-
-/**
- * Get display type string for a variable
- */
-const getDisplayType = (variable: PLCVariable | { type: PLCVariable['type']; name: string }): string => {
+const _getDisplayType = (variable: PLCVariable | { type: PLCVariable['type']; name: string }): string => {
   if (variable.type.definition === 'base-type') {
     return variable.type.value.toUpperCase()
   } else if (variable.type.definition === 'array' && variable.type.data) {
@@ -108,88 +65,12 @@ const getDisplayType = (variable: PLCVariable | { type: PLCVariable['type']; nam
         ? variable.type.data.baseType.value.toUpperCase()
         : variable.type.data.baseType.value
     return `ARRAY[${dimensions}] OF ${baseType}`
-  } else if (variable.type.definition === 'user-data-type' || variable.type.definition === 'derived') {
-    return variable.type.value
   }
   return variable.type.value
 }
 
 /**
- * Build a tree node for a structure type
- */
-const buildStructureNode = (
-  variable: PLCVariable,
-  pouName: string,
-  dataType: PLCDataType,
-  dataTypes: PLCDataType[],
-  pous: PLCPou[],
-  parentPath: string = '',
-): VariableTreeNode => {
-  if (dataType.derivation !== 'structure') {
-    throw new Error('Expected structure data type')
-  }
-
-  const variablePath = parentPath ? `${parentPath}.${variable.name}` : variable.name
-
-  return {
-    id: `${pouName}-${variablePath}`,
-    name: variable.name,
-    type: 'structure',
-    variableType: dataType.name,
-    pouName,
-    variablePath,
-    isSelectable: true,
-    variableClass: 'class' in variable ? variable.class : undefined,
-    initialValue: variable.initialValue,
-    structureInfo: {
-      structTypeName: dataType.name,
-      fieldCount: dataType.variable.length,
-    },
-    children: dataType.variable.map((field) => {
-      const fieldTypeName = getTypeName(field)
-      const fieldPath = `${variablePath}.${field.name}`
-
-      // Check if field is a nested structure
-      const nestedDataType = findDataType(fieldTypeName, dataTypes)
-      if (nestedDataType && nestedDataType.derivation === 'structure') {
-        return buildStructureNode(
-          { ...field, location: '', documentation: '' } as PLCVariable,
-          pouName,
-          nestedDataType,
-          dataTypes,
-          pous,
-          variablePath,
-        )
-      }
-
-      // Check if field is an array
-      if (field.type.definition === 'array' && field.type.data) {
-        return buildArrayNode(
-          { ...field, location: '', documentation: '' } as PLCVariable,
-          pouName,
-          dataTypes,
-          pous,
-          variablePath,
-        )
-      }
-
-      // Simple variable field
-      return {
-        id: `${pouName}-${fieldPath}`,
-        name: field.name,
-        type: 'variable' as const,
-        variableType: getDisplayType(field),
-        pouName,
-        variablePath: fieldPath,
-        isSelectable: true,
-        initialValue: field.initialValue?.simpleValue?.value,
-      }
-    }),
-  }
-}
-
-/**
- * Parse array dimension string (e.g., "1..10" or "0..5") to get bounds
+ * Parse array dimension string to get bounds.
  */
 const parseArrayDimension = (dimension: string): { min: number; max: number; length: number } => {
   const parts = dimension.split('..')
@@ -198,247 +79,334 @@ const parseArrayDimension = (dimension: string): { min: number; max: number; len
     const max = parseInt(parts[1], 10)
     return { min, max, length: max - min + 1 }
   }
-  // Fallback for single number (length)
   const len = parseInt(dimension, 10) || 1
   return { min: 0, max: len - 1, length: len }
 }
 
-/**
- * Maximum number of array elements to expand in the tree
- * Larger arrays will show as a single selectable node
- */
 const MAX_ARRAY_EXPANSION = 50
 
 /**
- * Build a tree node for an array type
- * Phase 5: Now includes array element expansion for reasonably sized arrays
+ * Recursively build a tree node for any variable type.
+ * This is the universal handler that works with ANY FB (standard or custom).
  */
-const buildArrayNode = (
-  variable: PLCVariable,
+const buildVariableNode = (
+  name: string,
+  typeName: string,
+  typeDefinition: string,
   pouName: string,
+  parentPath: string,
   dataTypes: PLCDataType[],
   pous: PLCPou[],
-  parentPath: string = '',
-): VariableTreeNode => {
-  const variablePath = parentPath ? `${parentPath}.${variable.name}` : variable.name
+  variableClass?: string,
+  initialValue?: PLCVariable['initialValue'],
+  arrayData?: ArrayData,
+): VariableTreeNode | null => {
+  const variablePath = parentPath ? `${parentPath}.${name}` : name
 
-  // Extract array info from type
-  if (variable.type.definition !== 'array' || !variable.type.data) {
-    // Fallback for unexpected type
+  // Filter out enumerations
+  if (isEnumerationType(typeName, dataTypes)) {
+    return null
+  }
+
+  // Handle arrays
+  if (typeDefinition === 'array' && arrayData) {
+    return buildArrayNode(name, pouName, parentPath, dataTypes, pous, variableClass, initialValue, arrayData)
+  }
+
+  // Base type - this is a selectable leaf
+  if (isBaseType(typeName)) {
     return {
       id: `${pouName}-${variablePath}`,
-      name: variable.name,
-      type: 'array',
-      variableType: getDisplayType(variable),
+      name,
+      type: 'variable',
+      variableType: typeName.toUpperCase(),
       pouName,
       variablePath,
       isSelectable: true,
-      variableClass: 'class' in variable ? variable.class : undefined,
-      initialValue: variable.initialValue,
+      variableClass,
+      initialValue,
     }
   }
 
-  const dimensions = variable.type.data.dimensions.map((d) => d.dimension)
-  const elementBaseType = variable.type.data.baseType
+  // Check if it's a structure
+  const structVariables = findStructureVariables(typeName, dataTypes)
+  if (structVariables) {
+    return buildStructureNode(
+      name,
+      typeName,
+      pouName,
+      parentPath,
+      structVariables,
+      dataTypes,
+      pous,
+      variableClass,
+      initialValue,
+    )
+  }
 
-  // Get element type name
+  // Check if it's a function block (standard OR custom - universal lookup)
+  const fbVariables = findFunctionBlockVariables(typeName, pous)
+  if (fbVariables) {
+    return buildFunctionBlockNode(name, typeName, pouName, parentPath, fbVariables, dataTypes, pous, variableClass)
+  }
+
+  // Unknown type - not selectable
+  return null
+}
+
+/**
+ * Build a tree node for a structure type.
+ */
+const buildStructureNode = (
+  name: string,
+  structTypeName: string,
+  pouName: string,
+  parentPath: string,
+  structVariables: PouVariable[],
+  dataTypes: PLCDataType[],
+  pous: PLCPou[],
+  variableClass?: string,
+  initialValue?: PLCVariable['initialValue'],
+): VariableTreeNode => {
+  const variablePath = parentPath ? `${parentPath}.${name}` : name
+
+  const children = structVariables
+    .map((field) => {
+      const fieldTypeName = field.type.value
+      // Use type assertion since PouVariable has a simplified type structure
+      const fieldType = field.type as { definition: string; value: string; data?: ArrayData }
+      const arrayData = fieldType.definition === 'array' && fieldType.data ? fieldType.data : undefined
+      return buildVariableNode(
+        field.name,
+        fieldTypeName,
+        field.type.definition,
+        pouName,
+        variablePath,
+        dataTypes,
+        pous,
+        undefined,
+        undefined,
+        arrayData,
+      )
+    })
+    .filter((node): node is VariableTreeNode => node !== null)
+
+  return {
+    id: `${pouName}-${variablePath}`,
+    name,
+    type: 'structure',
+    variableType: structTypeName,
+    pouName,
+    variablePath,
+    isSelectable: true, // Selectable - will expand to leaf variables during index resolution
+    variableClass,
+    initialValue,
+    structureInfo: {
+      structTypeName: structTypeName,
+      fieldCount: children.length,
+    },
+    children,
+  }
+}
+
+/**
+ * Build a tree node for a function block instance.
+ * Works with ANY FB - standard library or custom user-defined.
+ */
+const buildFunctionBlockNode = (
+  name: string,
+  fbTypeName: string,
+  pouName: string,
+  parentPath: string,
+  fbVariables: PouVariable[],
+  dataTypes: PLCDataType[],
+  pous: PLCPou[],
+  variableClass?: string,
+): VariableTreeNode => {
+  const variablePath = parentPath ? `${parentPath}.${name}` : name
+
+  // Recursively build children for each FB variable
+  const children = fbVariables
+    .map((fbVar) => {
+      const varTypeName = fbVar.type.value
+
+      // Determine the actual type definition
+      // Library FBs may use 'derived-type', project FBs use 'derived' or other values
+      let effectiveDefinition = fbVar.type.definition
+
+      // For 'user-data-type', check if it's actually an FB
+      if (effectiveDefinition === 'user-data-type') {
+        if (isFunctionBlockType(varTypeName, pous)) {
+          effectiveDefinition = 'derived'
+        }
+      }
+
+      // Use type assertion since PouVariable has a simplified type structure
+      const fbVarType = fbVar.type as { definition: string; value: string; data?: ArrayData }
+      const arrayData = effectiveDefinition === 'array' && fbVarType.data ? fbVarType.data : undefined
+      return buildVariableNode(
+        fbVar.name,
+        varTypeName,
+        effectiveDefinition,
+        pouName,
+        variablePath,
+        dataTypes,
+        pous,
+        fbVar.class,
+        undefined,
+        arrayData,
+      )
+    })
+    .filter((node): node is VariableTreeNode => node !== null)
+
+  return {
+    id: `${pouName}-${variablePath}`,
+    name,
+    type: 'function_block',
+    variableType: fbTypeName,
+    pouName,
+    variablePath,
+    isSelectable: true, // Selectable - will expand to leaf variables during index resolution
+    variableClass,
+    children,
+  }
+}
+
+/**
+ * Build a tree node for an array type.
+ */
+const buildArrayNode = (
+  name: string,
+  pouName: string,
+  parentPath: string,
+  dataTypes: PLCDataType[],
+  pous: PLCPou[],
+  variableClass?: string,
+  initialValue?: PLCVariable['initialValue'],
+  arrayData?: ArrayData,
+): VariableTreeNode => {
+  const variablePath = parentPath ? `${parentPath}.${name}` : name
+
+  if (!arrayData) {
+    return {
+      id: `${pouName}-${variablePath}`,
+      name,
+      type: 'array',
+      variableType: 'ARRAY',
+      pouName,
+      variablePath,
+      isSelectable: true,
+      variableClass,
+      initialValue,
+    }
+  }
+
+  const dimensions = arrayData.dimensions.map((d: { dimension: string }) => d.dimension)
+  const elementBaseType = arrayData.baseType
   const elementTypeName =
     elementBaseType.definition === 'base-type' ? elementBaseType.value.toUpperCase() : elementBaseType.value
 
-  // Calculate total length (for multi-dimensional, multiply all dimensions)
   let totalLength = 1
-  const parsedDimensions = dimensions.map((d) => {
+  const parsedDimensions = dimensions.map((d: string) => {
     const parsed = parseArrayDimension(d)
     totalLength *= parsed.length
     return parsed
   })
 
-  // Build array info
-  const arrayInfo = {
-    dimensions,
-    elementType: elementTypeName,
-    totalLength,
+  const arrayInfo = { dimensions, elementType: elementTypeName, totalLength }
+
+  // For arrays of base types, the array itself is selectable
+  const elementsAreBaseType = elementBaseType.definition === 'base-type' && isBaseType(elementBaseType.value)
+  if (elementsAreBaseType) {
+    return {
+      id: `${pouName}-${variablePath}`,
+      name,
+      type: 'array',
+      variableType: `ARRAY[${dimensions.join(', ')}] OF ${elementTypeName}`,
+      pouName,
+      variablePath,
+      isSelectable: true,
+      variableClass,
+      initialValue,
+      arrayInfo,
+    }
   }
 
-  // For single-dimensional arrays with reasonable size, expand elements
+  // For arrays of complex types, expand elements if reasonable size
   const shouldExpand = dimensions.length === 1 && totalLength <= MAX_ARRAY_EXPANSION
-
   let children: VariableTreeNode[] | undefined
 
   if (shouldExpand) {
     const { min, max } = parsedDimensions[0]
-
-    // Check if element type is a structure or FB
-    const elementDataType =
-      elementBaseType.definition !== 'base-type' ? findDataType(elementBaseType.value, dataTypes) : undefined
-    const elementFbPou =
-      elementBaseType.definition !== 'base-type' ? findFunctionBlock(elementBaseType.value, pous) : undefined
-
     children = []
-    for (let i = min; i <= max; i++) {
-      const elementPath = `${variablePath}[${i}]`
 
-      if (elementDataType && elementDataType.derivation === 'structure') {
-        // Array of structures
-        children.push({
-          id: `${pouName}-${elementPath}`,
-          name: `[${i}]`,
-          type: 'structure',
-          variableType: elementTypeName,
-          pouName,
-          variablePath: elementPath,
-          isSelectable: true,
-          structureInfo: {
-            structTypeName: elementDataType.name,
-            fieldCount: elementDataType.variable.length,
-          },
-          children: elementDataType.variable.map((field) => {
-            const fieldPath = `${elementPath}.${field.name}`
-            return {
-              id: `${pouName}-${fieldPath}`,
-              name: field.name,
-              type: 'variable' as const,
-              variableType: getDisplayType(field),
-              pouName,
-              variablePath: fieldPath,
-              isSelectable: true,
-            }
-          }),
-        })
-      } else if (elementFbPou) {
-        // Array of function blocks
-        children.push(
-          buildFunctionBlockNode(
-            {
-              name: `[${i}]`,
-              type: { definition: 'derived', value: elementFbPou.data.name },
-              location: '',
-              documentation: '',
-            } as PLCVariable,
-            pouName,
-            elementFbPou,
-            dataTypes,
-            pous,
-            variablePath,
-          ),
-        )
-      } else {
-        // Array of simple types
-        children.push({
-          id: `${pouName}-${elementPath}`,
-          name: `[${i}]`,
-          type: 'variable',
-          variableType: elementTypeName,
-          pouName,
-          variablePath: elementPath,
-          isSelectable: true,
-        })
+    for (let i = min; i <= max; i++) {
+      const elementNode = buildVariableNode(
+        `[${i}]`,
+        elementTypeName,
+        elementBaseType.definition,
+        pouName,
+        variablePath,
+        dataTypes,
+        pous,
+      )
+      if (elementNode) {
+        children.push(elementNode)
       }
     }
   }
 
   return {
     id: `${pouName}-${variablePath}`,
-    name: variable.name,
+    name,
     type: 'array',
-    variableType: getDisplayType(variable),
+    variableType: `ARRAY[${dimensions.join(', ')}] OF ${elementTypeName}`,
     pouName,
     variablePath,
-    isSelectable: true,
-    variableClass: 'class' in variable ? variable.class : undefined,
-    initialValue: variable.initialValue,
+    isSelectable: true, // Selectable - will expand to leaf variables during index resolution
+    variableClass,
+    initialValue,
     arrayInfo,
     children,
   }
 }
 
 /**
- * Build a tree node for a function block instance
+ * Build a tree node from a PLCVariable.
  */
-const buildFunctionBlockNode = (
-  variable: PLCVariable,
-  pouName: string,
-  fbPou: PLCPou,
-  dataTypes: PLCDataType[],
-  pous: PLCPou[],
-  parentPath: string = '',
-): VariableTreeNode => {
-  if (fbPou.type !== 'function-block') {
-    throw new Error('Expected function block POU')
-  }
-
-  const variablePath = parentPath ? `${parentPath}.${variable.name}` : variable.name
-
-  return {
-    id: `${pouName}-${variablePath}`,
-    name: variable.name,
-    type: 'function_block',
-    variableType: fbPou.data.name,
-    pouName,
-    variablePath,
-    isSelectable: true,
-    variableClass: 'class' in variable ? variable.class : undefined,
-    children: fbPou.data.variables.map((fbVar) => {
-      return buildVariableNode(fbVar, pouName, dataTypes, pous, variablePath)
-    }),
-  }
-}
-
-/**
- * Build a tree node for any variable type
- */
-const buildVariableNode = (
+const buildVariableNodeFromPLC = (
   variable: PLCVariable,
   pouName: string,
   dataTypes: PLCDataType[],
   pous: PLCPou[],
   parentPath: string = '',
-): VariableTreeNode => {
+): VariableTreeNode | null => {
   const typeName = getTypeName(variable)
-  const variablePath = parentPath ? `${parentPath}.${variable.name}` : variable.name
-
-  // Check if it's an array
-  if (variable.type.definition === 'array') {
-    return buildArrayNode(variable, pouName, dataTypes, pous, parentPath)
-  }
-
-  // Check if it's a user-defined structure
-  const dataType = findDataType(typeName, dataTypes)
-  if (dataType && dataType.derivation === 'structure') {
-    return buildStructureNode(variable, pouName, dataType, dataTypes, pous, parentPath)
-  }
-
-  // Check if it's a function block instance
-  const fbPou = findFunctionBlock(typeName, pous)
-  if (fbPou) {
-    return buildFunctionBlockNode(variable, pouName, fbPou, dataTypes, pous, parentPath)
-  }
-
-  // Check if it's a standard function block (TON, TOF, etc.)
-  // For now, we treat standard FBs as simple variables since we don't expose their internal state
-  // This can be expanded in Phase 5
-
-  // Simple variable
-  return {
-    id: `${pouName}-${variablePath}`,
-    name: variable.name,
-    type: 'variable',
-    variableType: getDisplayType(variable),
+  return buildVariableNode(
+    variable.name,
+    typeName,
+    variable.type.definition,
     pouName,
-    variablePath,
-    isSelectable: true,
-    variableClass: variable.class,
-    initialValue: variable.initialValue,
-  }
+    parentPath,
+    dataTypes,
+    pous,
+    variable.class,
+    variable.initialValue,
+    variable.type.definition === 'array' ? variable.type.data : undefined,
+  )
 }
 
 /**
- * Build a tree node for a program POU
+ * Build a tree node for a program POU.
  */
 const buildProgramNode = (pou: PLCPou, dataTypes: PLCDataType[], pous: PLCPou[]): VariableTreeNode => {
   if (pou.type !== 'program') {
     throw new Error('Expected program POU')
   }
+
+  const children = pou.data.variables
+    .map((v) => buildVariableNodeFromPLC(v, pou.data.name, dataTypes, pous))
+    .filter((node): node is VariableTreeNode => node !== null)
 
   return {
     id: `pou-${pou.data.name}`,
@@ -447,18 +415,22 @@ const buildProgramNode = (pou: PLCPou, dataTypes: PLCDataType[], pous: PLCPou[])
     pouName: pou.data.name,
     variablePath: '',
     isSelectable: false,
-    children: pou.data.variables.map((v) => buildVariableNode(v, pou.data.name, dataTypes, pous)),
+    children,
   }
 }
 
 /**
- * Build a tree node for global variables
+ * Build a tree node for global variables.
  */
 const buildGlobalVariablesNode = (
   globalVariables: PLCVariable[],
   dataTypes: PLCDataType[],
   pous: PLCPou[],
 ): VariableTreeNode => {
+  const children = globalVariables
+    .map((v) => buildVariableNodeFromPLC({ ...v, class: 'global' }, 'GVL', dataTypes, pous))
+    .filter((node): node is VariableTreeNode => node !== null)
+
   return {
     id: 'global-variables',
     name: 'GVL (Global Variables)',
@@ -466,13 +438,15 @@ const buildGlobalVariablesNode = (
     pouName: 'GVL',
     variablePath: '',
     isSelectable: false,
-    children: globalVariables.map((v) => buildVariableNode({ ...v, class: 'global' }, 'GVL', dataTypes, pous)),
+    children,
   }
 }
 
 /**
  * Hook to extract variables from the project for OPC-UA address space configuration.
  * Returns a hierarchical tree structure of all selectable variables.
+ * Base types, structures, FBs, and arrays are all selectable.
+ * Complex types (structures, FBs, arrays) are expanded to their leaf variables during index resolution.
  */
 export const useProjectVariables = (): VariableTreeNode[] => {
   const {
@@ -482,14 +456,12 @@ export const useProjectVariables = (): VariableTreeNode[] => {
   return useMemo(() => {
     const nodes: VariableTreeNode[] = []
 
-    // Programs with their variables
     for (const pou of projectData.pous) {
       if (pou.type === 'program') {
         nodes.push(buildProgramNode(pou, projectData.dataTypes, projectData.pous))
       }
     }
 
-    // Global Variables
     const globalVars = projectData.configuration.resource.globalVariables
     if (globalVars && globalVars.length > 0) {
       nodes.push(
@@ -505,119 +477,73 @@ export const useProjectVariables = (): VariableTreeNode[] => {
   }, [projectData.pous, projectData.dataTypes, projectData.configuration.resource.globalVariables])
 }
 
-/**
- * Helper to find a tree node by its ID
- */
+// Helper exports for tree manipulation
+
 export const findTreeNodeById = (nodes: VariableTreeNode[], id: string): VariableTreeNode | undefined => {
   for (const node of nodes) {
-    if (node.id === id) {
-      return node
-    }
+    if (node.id === id) return node
     if (node.children) {
       const found = findTreeNodeById(node.children, id)
-      if (found) {
-        return found
-      }
+      if (found) return found
     }
   }
   return undefined
 }
 
-/**
- * Helper to get all selectable leaf node IDs from a tree
- */
 export const getAllSelectableIds = (nodes: VariableTreeNode[]): string[] => {
   const ids: string[] = []
   const traverse = (node: VariableTreeNode) => {
-    if (node.isSelectable) {
-      ids.push(node.id)
-    }
+    if (node.isSelectable) ids.push(node.id)
     node.children?.forEach(traverse)
   }
   nodes.forEach(traverse)
   return ids
 }
 
-/**
- * Helper to check if a node ID or any of its children are selected
- */
 export const isNodeOrChildrenSelected = (node: VariableTreeNode, selectedIds: Set<string>): boolean => {
-  if (selectedIds.has(node.id)) {
-    return true
-  }
-  if (node.children) {
-    return node.children.some((child) => isNodeOrChildrenSelected(child, selectedIds))
-  }
-  return false
+  if (selectedIds.has(node.id)) return true
+  return node.children?.some((child) => isNodeOrChildrenSelected(child, selectedIds)) ?? false
 }
 
-/**
- * Helper to get all child IDs (including nested children) for a node
- */
 export const getAllChildIds = (node: VariableTreeNode): string[] => {
   const ids: string[] = []
   const traverse = (n: VariableTreeNode) => {
-    if (n.isSelectable) {
-      ids.push(n.id)
-    }
+    if (n.isSelectable) ids.push(n.id)
     n.children?.forEach(traverse)
   }
   traverse(node)
   return ids
 }
 
-/**
- * Phase 5: Get only the selectable descendants (excluding the node itself)
- */
 export const getSelectableDescendantIds = (node: VariableTreeNode): string[] => {
   const ids: string[] = []
   const traverse = (n: VariableTreeNode, isRoot: boolean) => {
-    if (!isRoot && n.isSelectable) {
-      ids.push(n.id)
-    }
+    if (!isRoot && n.isSelectable) ids.push(n.id)
     n.children?.forEach((child) => traverse(child, false))
   }
   traverse(node, true)
   return ids
 }
 
-/**
- * Phase 5: Check if all selectable descendants are selected
- */
 export const areAllChildrenSelected = (node: VariableTreeNode, selectedIds: Set<string>): boolean => {
   const descendantIds = getSelectableDescendantIds(node)
   if (descendantIds.length === 0) return false
   return descendantIds.every((id) => selectedIds.has(id))
 }
 
-/**
- * Phase 5: Check if any selectable descendants are selected
- */
 export const areAnyChildrenSelected = (node: VariableTreeNode, selectedIds: Set<string>): boolean => {
   const descendantIds = getSelectableDescendantIds(node)
   return descendantIds.some((id) => selectedIds.has(id))
 }
 
-/**
- * Phase 5: Selection state for complex types
- */
 export type SelectionState = 'none' | 'some' | 'all'
 
-/**
- * Phase 5: Get the selection state of a node and its descendants
- */
 export const getSelectionState = (node: VariableTreeNode, selectedIds: Set<string>): SelectionState => {
-  // Check if the node itself is selected
-  if (selectedIds.has(node.id)) {
-    return 'all'
-  }
+  if (selectedIds.has(node.id)) return 'all'
 
-  // For nodes with children, check descendants
   if (node.children && node.children.length > 0) {
     const descendantIds = getSelectableDescendantIds(node)
-    if (descendantIds.length === 0) {
-      return 'none'
-    }
+    if (descendantIds.length === 0) return 'none'
 
     const selectedCount = descendantIds.filter((id) => selectedIds.has(id)).length
     if (selectedCount === 0) return 'none'
@@ -628,9 +554,6 @@ export const getSelectionState = (node: VariableTreeNode, selectedIds: Set<strin
   return 'none'
 }
 
-/**
- * Phase 5: Check if a variable type is a complex type (structure, array, or FB)
- */
 export const isComplexType = (node: VariableTreeNode): boolean => {
   return node.type === 'structure' || node.type === 'array' || node.type === 'function_block'
 }
