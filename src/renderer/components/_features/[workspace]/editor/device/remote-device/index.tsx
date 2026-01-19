@@ -351,6 +351,7 @@ const RemoteDeviceEditor = () => {
   const [host, setHost] = useState('')
   const [port, setPort] = useState('')
   const [timeoutMs, setTimeoutMs] = useState('')
+  const [slaveId, setSlaveId] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -361,10 +362,12 @@ const RemoteDeviceEditor = () => {
       setHost(remoteDevice.modbusTcpConfig.host)
       setPort(remoteDevice.modbusTcpConfig.port.toString())
       setTimeoutMs(remoteDevice.modbusTcpConfig.timeout.toString())
+      setSlaveId((remoteDevice.modbusTcpConfig.slaveId ?? 1).toString())
     } else {
       setHost('127.0.0.1')
       setPort('502')
       setTimeoutMs('1000')
+      setSlaveId('1')
     }
   }, [remoteDevice])
 
@@ -392,6 +395,19 @@ const RemoteDeviceEditor = () => {
       workspaceActions.setEditingState('unsaved')
     }
   }, [timeoutMs, deviceName, remoteDevice?.modbusTcpConfig?.timeout, projectActions, workspaceActions])
+
+  const handleSlaveIdBlur = useCallback(() => {
+    const slaveIdNum = parseInt(slaveId, 10)
+    if (
+      !isNaN(slaveIdNum) &&
+      slaveIdNum >= 0 &&
+      slaveIdNum <= 255 &&
+      slaveIdNum !== remoteDevice?.modbusTcpConfig?.slaveId
+    ) {
+      projectActions.updateRemoteDeviceConfig(deviceName, { slaveId: slaveIdNum })
+      workspaceActions.setEditingState('unsaved')
+    }
+  }, [slaveId, deviceName, remoteDevice?.modbusTcpConfig?.slaveId, projectActions, workspaceActions])
 
   const handleToggleExpand = useCallback((groupId: string) => {
     setExpandedGroups((prev) => {
@@ -520,6 +536,19 @@ const RemoteDeviceEditor = () => {
             onChange={(e) => setTimeoutMs(e.target.value)}
             onBlur={handleTimeoutBlur}
             placeholder='1000'
+            className={inputStyles}
+          />
+        </div>
+        <div className='flex items-center gap-2'>
+          <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Slave ID</Label>
+          <InputWithRef
+            type='number'
+            value={slaveId}
+            onChange={(e) => setSlaveId(e.target.value)}
+            onBlur={handleSlaveIdBlur}
+            placeholder='1'
+            min={0}
+            max={255}
             className={inputStyles}
           />
         </div>
