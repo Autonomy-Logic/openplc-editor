@@ -84,6 +84,17 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
       ].filter((variable) => variable !== undefined)
     }, [variables, searchValue])
 
+    const closeModal = () => {
+      setAutocompleteFocus(false)
+      setSelectedVariable({ positionInArray: -1, variable: { id: '', name: '' } })
+      if (setIsOpen) setIsOpen(false)
+    }
+
+    const submitAutocompletion = ({ variable }: { variable: { id: string; name: string } }) => {
+      closeModal()
+      submit({ variable })
+    }
+
     // @ts-expect-error - not all properties are used
     useImperativeHandle(ref, () => {
       return {
@@ -110,7 +121,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
           }
         },
       }
-    }, [selectedVariable, selectableValues, popoverRef, autocompleteFocus])
+    }, [selectedVariable, selectableValues, popoverRef, autocompleteFocus, submitAutocompletion, closeModal])
 
     useEffect(() => {
       switch (keyDown) {
@@ -174,17 +185,6 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
         const selectedElement = variablesDivRef.current.children[selectedVariable.positionInArray]
         selectedElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
-    }
-
-    const closeModal = () => {
-      setAutocompleteFocus(false)
-      setSelectedVariable({ positionInArray: -1, variable: { id: '', name: '' } })
-      if (setIsOpen) setIsOpen(false)
-    }
-
-    const submitAutocompletion = ({ variable }: { variable: { id: string; name: string } }) => {
-      closeModal()
-      submit({ variable })
     }
 
     return (
