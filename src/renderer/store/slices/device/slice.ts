@@ -53,9 +53,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setDeviceDefinitions: ({ configuration, pinMapping }): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
           if (configuration) {
             deviceDefinitions.configuration = mergeDeviceConfigWithDefaults(configuration, defaultDeviceConfiguration)
+            // Sync runtimeIpAddress to runtimeConnection for debugger polling
+            if (deviceDefinitions.configuration.runtimeIpAddress) {
+              runtimeConnection.ipAddress = deviceDefinitions.configuration.runtimeIpAddress
+            }
           }
           if (pinMapping) {
             deviceDefinitions.pinMapping.pins = pinMapping || []
