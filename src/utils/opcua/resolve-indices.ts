@@ -1,4 +1,4 @@
-import type { OpcUaNodeConfig } from '@root/types/PLC/open-plc'
+import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/types/PLC/open-plc'
 import {
   buildDebugPath,
   buildGlobalDebugPath,
@@ -125,12 +125,88 @@ export const resolveVariableIndex = (
 }
 
 /**
+ * Resolve a single field, recursively handling nested fields for complex types.
+ *
+ * @param field - The field configuration
+ * @param parentPath - The full path to the parent (e.g., "IRRIGATION_MAIN_CONTROLLER0")
+ * @param pouName - The POU name (e.g., "MAIN" or "GVL")
+ * @param debugEntries - Converted debug variable entries
+ * @param instanceName - Instance name (null for global variables)
+ * @returns Resolved field with index and possibly nested fields
+ */
+const resolveFieldRecursively = (
+  field: OpcUaFieldConfig,
+  parentPath: string,
+  pouName: string,
+  debugEntries: DebugVariableEntry[],
+  instanceName: string | null,
+): ResolvedField => {
+  // Build the full path for this field
+  const fullFieldPath = `${parentPath}.${field.fieldPath}`
+
+  // If this field has nested fields, it's a complex type (FB or struct)
+  if (field.fields && field.fields.length > 0) {
+    // Recursively resolve nested fields
+    const nestedFields: ResolvedField[] = []
+    for (const nestedField of field.fields) {
+      nestedFields.push(resolveFieldRecursively(nestedField, fullFieldPath, pouName, debugEntries, instanceName))
+    }
+
+    // Complex types have null index - only leaf fields have indices
+    return {
+      name: field.fieldPath,
+      datatype: field.datatype || 'UNKNOWN',
+      initialValue: field.initialValue,
+      index: null,
+      permissions: field.permissions,
+      fields: nestedFields,
+    }
+  }
+
+  // This is a leaf field - resolve its index
+  let match: DebugVariableEntry | null = null
+  let debugPath: string = ''
+
+  if (pouName === 'GVL' || pouName === 'CONFIG') {
+    // Global structure/FB field
+    debugPath = buildGlobalDebugPath(fullFieldPath)
+    match = findDebugVariable(debugEntries, debugPath)
+  } else {
+    // Use shared fallback function - tries FB-style first, then struct-style
+    const result = findDebugVariableWithFallback(debugEntries, instanceName!, fullFieldPath)
+    match = result.match
+    debugPath = result.matchedPath
+  }
+
+  if (!match) {
+    throw new OpcUaConfigError(
+      `${pouName}:${fullFieldPath}`,
+      debugPath,
+      `Cannot resolve OPC-UA structure/FB field index.\n` +
+        `  Field path: ${fullFieldPath}\n` +
+        `  Tried paths:\n` +
+        `    - FB style: ${buildDebugPath(instanceName!, fullFieldPath, { isStructureField: false })}\n` +
+        `    - Struct style: ${buildDebugPath(instanceName!, fullFieldPath, { isStructureField: true })}`,
+    )
+  }
+
+  return {
+    name: field.fieldPath,
+    datatype: match.type ? debugTypeToIecType(match.type) : field.datatype || 'UNKNOWN',
+    initialValue: field.initialValue,
+    index: match.index,
+    permissions: field.permissions,
+  }
+}
+
+/**
  * Resolve indices for all fields in a structure or function block instance.
+ * Supports nested fields for complex types (FBs within FBs, structs within structs).
  *
  * @param node - The OPC-UA node configuration for the structure/FB
  * @param debugVariables - Parsed debug variables from debug.c
  * @param instances - Array of PLC instances from Resources configuration
- * @returns Array of resolved fields with indices
+ * @returns Array of resolved fields with indices (may be hierarchical)
  * @throws OpcUaConfigError if any field cannot be resolved
  */
 export const resolveStructureIndices = (
@@ -171,50 +247,7 @@ export const resolveStructureIndices = (
   const resolvedFields: ResolvedField[] = []
 
   for (const field of node.fields) {
-    // Build the full path for this field
-    // Handle case where field.fieldPath already contains the parent variablePath (legacy configs)
-    let fullFieldPath: string
-    if (field.fieldPath.toUpperCase().startsWith(node.variablePath.toUpperCase() + '.')) {
-      // Field path already includes parent, use it directly
-      fullFieldPath = field.fieldPath
-    } else {
-      fullFieldPath = `${node.variablePath}.${field.fieldPath}`
-    }
-
-    let match: DebugVariableEntry | null = null
-    let debugPath: string = ''
-
-    if (node.pouName === 'GVL' || node.pouName === 'CONFIG') {
-      // Global structure/FB field
-      debugPath = buildGlobalDebugPath(fullFieldPath)
-      match = findDebugVariable(debugEntries, debugPath)
-    } else {
-      // Use shared fallback function - tries FB-style first, then struct-style
-      const result = findDebugVariableWithFallback(debugEntries, instanceName!, fullFieldPath)
-      match = result.match
-      debugPath = result.matchedPath
-    }
-
-    if (!match) {
-      throw new OpcUaConfigError(
-        `${node.pouName}:${fullFieldPath}`,
-        debugPath,
-        `Cannot resolve OPC-UA structure/FB field index.\n` +
-          `  Variable: ${node.pouName}:${node.variablePath}\n` +
-          `  Field: ${field.fieldPath}\n` +
-          `  Tried paths:\n` +
-          `    - FB style: ${buildDebugPath(instanceName!, fullFieldPath, { isStructureField: false })}\n` +
-          `    - Struct style: ${buildDebugPath(instanceName!, fullFieldPath, { isStructureField: true })}`,
-      )
-    }
-
-    resolvedFields.push({
-      name: field.fieldPath,
-      datatype: match.type ? debugTypeToIecType(match.type) : node.variableType,
-      initialValue: field.initialValue,
-      index: match.index,
-      permissions: field.permissions,
-    })
+    resolvedFields.push(resolveFieldRecursively(field, node.variablePath, node.pouName, debugEntries, instanceName))
   }
 
   return resolvedFields

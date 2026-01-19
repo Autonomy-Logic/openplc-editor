@@ -235,12 +235,14 @@ describe('resolveStructureIndices', () => {
         {
           fieldPath: 'TEMP',
           displayName: 'Temperature',
+          datatype: 'REAL',
           initialValue: 0.0,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
         {
           fieldPath: 'PRESSURE',
           displayName: 'Pressure',
+          datatype: 'REAL',
           initialValue: 0.0,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
@@ -273,12 +275,14 @@ describe('resolveStructureIndices', () => {
         {
           fieldPath: 'ET',
           displayName: 'Elapsed Time',
+          datatype: 'TIME',
           initialValue: 0,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
         {
           fieldPath: 'Q',
           displayName: 'Output',
+          datatype: 'BOOL',
           initialValue: false,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
@@ -310,12 +314,14 @@ describe('resolveStructureIndices', () => {
         {
           fieldPath: 'ET',
           displayName: 'Elapsed Time',
+          datatype: 'TIME',
           initialValue: 0,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
         {
           fieldPath: 'Q',
           displayName: 'Output',
+          datatype: 'BOOL',
           initialValue: false,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
@@ -346,12 +352,14 @@ describe('resolveStructureIndices', () => {
         {
           fieldPath: 'INNER.VALUE1',
           displayName: 'Inner Value 1',
+          datatype: 'INT',
           initialValue: 0,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
         {
           fieldPath: 'INNER.VALUE2',
           displayName: 'Inner Value 2',
+          datatype: 'REAL',
           initialValue: 0.0,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
@@ -384,24 +392,28 @@ describe('resolveStructureIndices', () => {
         {
           fieldPath: '[0].ET',
           displayName: '[0] Elapsed Time',
+          datatype: 'TIME',
           initialValue: 0,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
         {
           fieldPath: '[0].Q',
           displayName: '[0] Output',
+          datatype: 'BOOL',
           initialValue: false,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
         {
           fieldPath: '[1].ET',
           displayName: '[1] Elapsed Time',
+          datatype: 'TIME',
           initialValue: 0,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },
         {
           fieldPath: '[1].Q',
           displayName: '[1] Output',
+          datatype: 'BOOL',
           initialValue: false,
           permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
         },

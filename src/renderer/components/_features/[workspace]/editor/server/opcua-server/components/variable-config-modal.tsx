@@ -93,65 +93,44 @@ const getNodeType = (node: VariableTreeNode): 'variable' | 'structure' | 'array'
 }
 
 /**
- * Recursively collect all base-type leaf variables from a tree node.
- * Returns an array of { relativePath, displayName, variableType } for each leaf.
- */
-const collectLeafVariables = (
-  node: VariableTreeNode,
-  parentPath: string = '',
-): Array<{ relativePath: string; displayName: string; variableType: string }> => {
-  const leaves: Array<{ relativePath: string; displayName: string; variableType: string }> = []
-
-  if (!node.children || node.children.length === 0) {
-    // This node itself is a leaf (base type variable)
-    if (node.type === 'variable' && node.isSelectable) {
-      leaves.push({
-        relativePath: parentPath || node.name,
-        displayName: node.name,
-        variableType: node.variableType || 'unknown',
-      })
-    }
-    return leaves
-  }
-
-  // Recurse into children
-  for (const child of node.children) {
-    const childPath = parentPath ? `${parentPath}.${child.name}` : child.name
-
-    if (child.type === 'variable' && child.isSelectable) {
-      // This is a base-type leaf
-      leaves.push({
-        relativePath: childPath,
-        displayName: child.name,
-        variableType: child.variableType || 'unknown',
-      })
-    } else if (child.children && child.children.length > 0) {
-      // This is a complex type (structure, FB, or array) - recurse
-      const childLeaves = collectLeafVariables(child, childPath)
-      leaves.push(...childLeaves)
-    }
-  }
-
-  return leaves
-}
-
-/**
  * Generate default field configs from a structure/FB/array node.
- * Recursively expands to all base-type leaf variables.
- * The fieldPath is the full relative path from the parent (e.g., "FB1.Q" or "STRUCT.FIELD").
+ * Generates hierarchical nested field configs to preserve structure in OPC-UA.
+ * Complex types (FBs, nested structs) become fields with nested fields array.
  */
 const generateDefaultFieldConfigs = (
   node: VariableTreeNode,
   parentPermissions: OpcUaPermissions,
 ): OpcUaFieldConfig[] => {
-  const leaves = collectLeafVariables(node)
+  if (!node.children || node.children.length === 0) {
+    return []
+  }
 
-  return leaves.map((leaf) => ({
-    fieldPath: leaf.relativePath,
-    displayName: leaf.displayName,
-    initialValue: getDefaultInitialValue(leaf.variableType),
-    permissions: { ...parentPermissions },
-  }))
+  return node.children.map((child) => {
+    // Check if this is a leaf variable (base type) or a complex type
+    const isLeaf = child.type === 'variable' && (!child.children || child.children.length === 0)
+
+    if (isLeaf) {
+      // Leaf field - no nested fields
+      return {
+        fieldPath: child.name,
+        displayName: child.name,
+        datatype: child.variableType || 'UNKNOWN',
+        initialValue: getDefaultInitialValue(child.variableType || 'UNKNOWN'),
+        permissions: { ...parentPermissions },
+      }
+    } else {
+      // Complex type (FB, struct, array) - generate nested fields recursively
+      const nestedFields = generateDefaultFieldConfigs(child, parentPermissions)
+      return {
+        fieldPath: child.name,
+        displayName: child.name,
+        datatype: child.variableType || 'UNKNOWN',
+        initialValue: getDefaultInitialValue(child.variableType || 'UNKNOWN'),
+        permissions: { ...parentPermissions },
+        fields: nestedFields.length > 0 ? nestedFields : undefined,
+      }
+    }
+  })
 }
 
 /**

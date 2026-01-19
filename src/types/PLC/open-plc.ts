@@ -463,13 +463,27 @@ const OpcUaPermissionsSchema = z.object({
 type OpcUaPermissions = z.infer<typeof OpcUaPermissionsSchema>
 
 // OPC-UA Field Configuration Schema (for structure fields)
-const OpcUaFieldConfigSchema = z.object({
-  fieldPath: z.string(),
-  displayName: z.string(),
-  initialValue: z.union([z.boolean(), z.number(), z.string()]),
-  permissions: OpcUaPermissionsSchema,
-})
-type OpcUaFieldConfig = z.infer<typeof OpcUaFieldConfigSchema>
+// Uses z.lazy() to support recursive nested fields for complex types (FBs, structs)
+interface OpcUaFieldConfig {
+  fieldPath: string
+  displayName: string
+  /** Data type of the field. Optional for backward compatibility with existing projects. */
+  datatype?: string
+  initialValue: boolean | number | string
+  permissions: OpcUaPermissions
+  /** Nested fields for complex types (FB instances, nested structs). Undefined for leaf fields. */
+  fields?: OpcUaFieldConfig[]
+}
+const OpcUaFieldConfigSchema: z.ZodType<OpcUaFieldConfig> = z.lazy(() =>
+  z.object({
+    fieldPath: z.string(),
+    displayName: z.string(),
+    datatype: z.string().optional(), // Optional for backward compatibility
+    initialValue: z.union([z.boolean(), z.number(), z.string()]),
+    permissions: OpcUaPermissionsSchema,
+    fields: z.array(OpcUaFieldConfigSchema).optional(),
+  }),
+)
 
 // OPC-UA Node Configuration Schema (variable/structure/array)
 const OpcUaNodeConfigSchema = z.object({
