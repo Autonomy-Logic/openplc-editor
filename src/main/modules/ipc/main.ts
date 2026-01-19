@@ -1172,13 +1172,6 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<{ success: boolean; error?: string }> => {
     const buffer = valueBuffer ? Buffer.from(valueBuffer) : undefined
 
-    console.log('[IPC Handler] debugger:set-variable called with:', {
-      variableIndex,
-      force,
-      valueBuffer: buffer?.toString('hex'),
-      connectionType: this.debuggerConnectionType,
-    })
-
     if (this.debuggerConnectionType === 'websocket') {
       if (!this.debuggerWebSocketClient) {
         console.log('[IPC Handler] WebSocket client not connected')

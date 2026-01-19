@@ -4,13 +4,14 @@ import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
-import { matchVariableWithDebugEntry, parseDebugFile } from '@root/renderer/utils/parse-debug-file'
 import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
 import { validateCppCode } from '@root/utils/cpp/validateCppCode'
+import { parseDebugFile } from '@root/utils/debug-parser'
+import { findGlobalVariableIndex, findVariableIndexWithFallback } from '@root/utils/debug-variable-finder'
 
 type CppPouData = {
   name: string
@@ -885,7 +886,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             const allVariables = pou.data.variables
 
             allVariables.forEach((v) => {
-              const index = matchVariableWithDebugEntry(v.name, instance.name, parsed.variables, v.class)
+              // Use fallback to try both FB-style and struct-style paths
+              // This ensures consistent behavior with OPC-UA index resolution
+              const index =
+                v.class === 'external'
+                  ? findGlobalVariableIndex(v.name, parsed.variables)
+                  : findVariableIndexWithFallback(instance.name, v.name, parsed.variables)
               if (index !== null) {
                 const compositeKey = `${pou.data.name}:${v.name}`
                 indexMap.set(compositeKey, index)
