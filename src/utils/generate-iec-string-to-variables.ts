@@ -37,6 +37,49 @@ const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type
   return typeof lib === 'object' && lib !== null && 'pous' in lib && Array.isArray((lib as { pous: unknown }).pous)
 }
 
+/**
+ * Parse an array type string like "ARRAY[1..10] OF INT" or "ARRAY[1..10, 1..5] OF MyStruct"
+ * Returns null if not an array type, otherwise returns the parsed array type definition.
+ */
+const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
+  // Match ARRAY[dimensions] OF baseType
+  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+(.+)$/i)
+  if (!arrayMatch) return null
+
+  const dimensionsStr = arrayMatch[1]
+  const baseTypeStr = arrayMatch[2].trim()
+
+  // Parse dimensions (can be comma-separated for multi-dimensional arrays)
+  const dimensionParts = dimensionsStr.split(',').map((d) => d.trim())
+  const dimensions = dimensionParts.map((dim) => ({ dimension: dim }))
+
+  // Determine the base type definition
+  const baseCheck = baseTypeSchema.safeParse(baseTypeStr.toLowerCase())
+
+  // Build the array type definition
+  if (baseCheck.success) {
+    // Base type is a valid IEC base type
+    return {
+      definition: 'array' as const,
+      value: typeStr, // Keep the full type string as the value
+      data: {
+        baseType: { definition: 'base-type' as const, value: baseCheck.data },
+        dimensions,
+      },
+    }
+  } else {
+    // Base type is a user-defined type (structure, FB, etc.)
+    return {
+      definition: 'array' as const,
+      value: typeStr, // Keep the full type string as the value
+      data: {
+        baseType: { definition: 'user-data-type' as const, value: baseTypeStr },
+        dimensions,
+      },
+    }
+  }
+}
+
 export const parseIecStringToVariables = (
   iecString: string,
   pous?: PLCPou[],
@@ -91,6 +134,22 @@ export const parseIecStringToVariables = (
     }
 
     const parsedType = type.trim()
+
+    // Check if it's an array type first
+    const arrayType = parseArrayType(parsedType)
+    if (arrayType) {
+      variables.push({
+        name: name.trim(),
+        class: currentClass,
+        type: arrayType,
+        location: location ? location.trim() : '',
+        initialValue: initialValue ? initialValue.trim() : null,
+        documentation: documentation ? documentation.trim() : '',
+        debug: false,
+      })
+      return
+    }
+
     const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
 
     const isUserFunctionBlock = pous?.some(

@@ -231,6 +231,15 @@ const resolveStructure = (
 }
 
 /**
+ * Extract the element type from an array type string like "ARRAY[1..10] OF INT"
+ * Returns the element type (e.g., "INT") or the original string if parsing fails.
+ */
+const extractArrayElementType = (arrayTypeStr: string): string => {
+  const match = arrayTypeStr.match(/\bOF\s+(\w+)\s*$/i)
+  return match ? match[1].toUpperCase() : arrayTypeStr
+}
+
+/**
  * Resolve an array and build runtime format
  */
 const resolveArray = (
@@ -240,11 +249,18 @@ const resolveArray = (
 ): RuntimeArray => {
   const index = resolveArrayIndex(node, debugVariables, instances)
 
+  // Get the element type - prefer explicit elementType, otherwise extract from variableType
+  let datatype = node.elementType
+  if (!datatype && node.variableType) {
+    datatype = extractArrayElementType(node.variableType)
+  }
+  datatype = datatype || 'UNKNOWN'
+
   return {
     node_id: node.nodeId,
     browse_name: node.browseName,
     display_name: node.displayName,
-    datatype: node.elementType || node.variableType,
+    datatype,
     length: node.arrayLength || 1,
     initial_value: node.initialValue,
     index,
