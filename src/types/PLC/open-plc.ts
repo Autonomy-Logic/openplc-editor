@@ -441,6 +441,7 @@ const ModbusTcpConfigSchema = z.object({
   host: z.string(),
   port: z.number(),
   timeout: z.number(),
+  slaveId: z.number().int().min(0).max(255).optional(),
   ioGroups: z.array(ModbusIOGroupSchema),
 })
 type ModbusTcpConfig = z.infer<typeof ModbusTcpConfigSchema>

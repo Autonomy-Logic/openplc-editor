@@ -13,6 +13,7 @@ interface ModbusMasterDeviceConfig {
   host: string
   port: number
   timeout_ms: number
+  slave_id: number
   io_points: ModbusMasterIOPoint[]
 }
 
@@ -84,6 +85,7 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
       host: modbusTcpConfig.host,
       port: modbusTcpConfig.port,
       timeout_ms: modbusTcpConfig.timeout,
+      slave_id: modbusTcpConfig.slaveId ?? 1,
       io_points: ioPoints,
     },
   }

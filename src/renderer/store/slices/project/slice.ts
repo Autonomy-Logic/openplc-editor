@@ -1642,7 +1642,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
     updateRemoteDeviceConfig: (
       deviceName: string,
-      config: { host?: string; port?: number; timeout?: number },
+      config: { host?: string; port?: number; timeout?: number; slaveId?: number },
     ): ProjectResponse => {
       let response: ProjectResponse = { ok: true }
       setState(
@@ -1665,12 +1665,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               host: '127.0.0.1',
               port: 502,
               timeout: 1000,
+              slaveId: 1,
               ioGroups: [],
             }
           }
           if (config.host !== undefined) device.modbusTcpConfig.host = config.host
           if (config.port !== undefined) device.modbusTcpConfig.port = config.port
           if (config.timeout !== undefined) device.modbusTcpConfig.timeout = config.timeout
+          if (config.slaveId !== undefined) device.modbusTcpConfig.slaveId = config.slaveId
         }),
       )
       return response
