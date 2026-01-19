@@ -42,8 +42,8 @@ const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type
  * Returns null if not an array type, otherwise returns the parsed array type definition.
  */
 const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
-  // Match ARRAY[dimensions] OF baseType
-  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+(.+)$/i)
+  // Match ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally namespaced)
+  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*)\s*$/i)
   if (!arrayMatch) return null
 
   const dimensionsStr = arrayMatch[1]
@@ -51,7 +51,7 @@ const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
 
   // Parse dimensions (can be comma-separated for multi-dimensional arrays)
   const dimensionParts = dimensionsStr.split(',').map((d) => d.trim())
-  const dimensions = dimensionParts.map((dim) => ({ dimension: dim }))
+  const dimensions = dimensionParts.map((dimensionRange) => ({ dimension: dimensionRange }))
 
   // Determine the base type definition
   const baseCheck = baseTypeSchema.safeParse(baseTypeStr.toLowerCase())

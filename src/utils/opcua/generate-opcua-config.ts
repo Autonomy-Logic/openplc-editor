@@ -235,7 +235,7 @@ const resolveStructure = (
  * Returns the element type (e.g., "INT") or the original string if parsing fails.
  */
 const extractArrayElementType = (arrayTypeStr: string): string => {
-  const match = arrayTypeStr.match(/\bOF\s+(\w+)\s*$/i)
+  const match = arrayTypeStr.match(/\bOF\s+([A-Za-z0-9_:.]+)\s*$/i)
   return match ? match[1].toUpperCase() : arrayTypeStr
 }
 
