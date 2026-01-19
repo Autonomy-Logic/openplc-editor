@@ -4,6 +4,7 @@ import {
   buildGlobalDebugPath,
   type DebugVariableEntry,
   findDebugVariable,
+  findDebugVariableWithFallback,
   findInstanceName,
   type PLCInstanceMapping,
 } from '@root/utils/debug-variable-finder'
@@ -54,33 +55,6 @@ const toDebugEntries = (debugVariables: DebugVariable[]): DebugVariableEntry[] =
   debugVariables.map((dv) => ({ name: dv.name, type: dv.type, index: dv.index }))
 
 /**
- * Try to find a debug variable using multiple path strategies.
- * First tries FB-style paths (no .value.), then structure-style paths (with .value.).
- * Returns the match and which style worked.
- */
-const findWithFallback = (
-  debugEntries: DebugVariableEntry[],
-  instanceName: string,
-  fullFieldPath: string,
-): { match: DebugVariableEntry | null; usedStructureStyle: boolean } => {
-  // First try FB-style path (no .value. insertion)
-  const fbPath = buildDebugPath(instanceName, fullFieldPath, { isStructureField: false })
-  const fbMatch = findDebugVariable(debugEntries, fbPath)
-  if (fbMatch) {
-    return { match: fbMatch, usedStructureStyle: false }
-  }
-
-  // Try structure-style path (with .value. insertion)
-  const structPath = buildDebugPath(instanceName, fullFieldPath, { isStructureField: true })
-  const structMatch = findDebugVariable(debugEntries, structPath)
-  if (structMatch) {
-    return { match: structMatch, usedStructureStyle: true }
-  }
-
-  return { match: null, usedStructureStyle: false }
-}
-
-/**
  * Resolve the index for a simple variable node.
  *
  * @param node - The OPC-UA node configuration
@@ -127,24 +101,21 @@ export const resolveVariableIndex = (
     )
   }
 
-  // Build the debug path - simple path for variables and FB instances (no .value.)
-  const debugPath = buildDebugPath(instanceName, node.variablePath, {
-    isStructureField: false,
-    isArrayElement: false,
-  })
+  // Use shared fallback function - tries FB-style first, then struct-style
+  const result = findDebugVariableWithFallback(debugEntries, instanceName, node.variablePath)
 
-  const match = findDebugVariable(debugEntries, debugPath)
-
-  if (match) {
-    return match.index
+  if (result.match) {
+    return result.match.index
   }
 
   throw new OpcUaConfigError(
     `${node.pouName}:${node.variablePath}`,
-    debugPath,
+    result.matchedPath,
     `Cannot resolve OPC-UA variable index.\n` +
       `  Variable: ${node.pouName}:${node.variablePath}\n` +
-      `  Expected debug path: ${debugPath}\n` +
+      `  Tried paths:\n` +
+      `    - FB style: ${buildDebugPath(instanceName, node.variablePath, { isStructureField: false })}\n` +
+      `    - Struct style: ${buildDebugPath(instanceName, node.variablePath, { isStructureField: true })}\n` +
       `  This may happen if:\n` +
       `    - The PLC program was modified after configuring OPC-UA\n` +
       `    - The variable name is incorrect\n` +
@@ -218,12 +189,10 @@ export const resolveStructureIndices = (
       debugPath = buildGlobalDebugPath(fullFieldPath)
       match = findDebugVariable(debugEntries, debugPath)
     } else {
-      // Try both FB-style (no .value.) and structure-style (with .value.) paths
-      const result = findWithFallback(debugEntries, instanceName!, fullFieldPath)
+      // Use shared fallback function - tries FB-style first, then struct-style
+      const result = findDebugVariableWithFallback(debugEntries, instanceName!, fullFieldPath)
       match = result.match
-      debugPath = result.usedStructureStyle
-        ? buildDebugPath(instanceName!, fullFieldPath, { isStructureField: true })
-        : buildDebugPath(instanceName!, fullFieldPath, { isStructureField: false })
+      debugPath = result.matchedPath
     }
 
     if (!match) {

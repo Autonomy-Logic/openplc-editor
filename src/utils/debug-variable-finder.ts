@@ -3,52 +3,16 @@
  * Used by both the debugger (renderer) and OPC-UA config generator (main).
  */
 
-export interface DebugVariableEntry {
-  /** Full path in debug.c (e.g., "RES0__INSTANCE0.MOTOR_SPEED") */
-  name: string
-  /** IEC type enum (e.g., "INT_ENUM", "BOOL_ENUM") */
-  type: string
-  /** Index in the debug_vars array */
-  index: number
-}
+// Re-export types and parser from canonical debug-parser module
+export { type DebugVariableEntry, parseDebugVariables } from './debug-parser'
+
+import type { DebugVariableEntry } from './debug-parser'
 
 export interface PLCInstanceMapping {
   /** Instance name (e.g., "INSTANCE0") - this appears in debug.c */
   name: string
   /** Program POU name being instantiated */
   program: string
-}
-
-/**
- * Parse the debug.c file content to extract debug variables.
- * This is the canonical parser used by both debugger and OPC-UA.
- */
-export function parseDebugVariables(content: string): DebugVariableEntry[] {
-  const variables: DebugVariableEntry[] = []
-
-  const debugVarsMatch = content.match(/debug_vars\[\]\s*=\s*\{([\s\S]*?)\};/)
-
-  if (!debugVarsMatch) {
-    console.warn('Could not find debug_vars[] array in debug.c')
-    return []
-  }
-
-  const arrayContent = debugVarsMatch[1]
-  const entryRegex = /\{\s*&\(([^)]+)\)\s*,\s*(\w+)\s*\}/g
-
-  let match
-  let index = 0
-
-  while ((match = entryRegex.exec(arrayContent)) !== null) {
-    variables.push({
-      name: match[1].trim(),
-      type: match[2].trim(),
-      index,
-    })
-    index++
-  }
-
-  return variables
 }
 
 /**
@@ -159,6 +123,165 @@ export function findDebugVariable(
 }
 
 /**
+ * Result from findDebugVariableWithFallback indicating which path style worked.
+ */
+export interface DebugVariableFallbackResult {
+  /** The matching debug variable, or null if not found */
+  match: DebugVariableEntry | null
+  /** The path that was used to find the match */
+  matchedPath: string
+  /** Whether the structure-style path (with .value.) was used */
+  usedStructureStyle: boolean
+}
+
+/**
+ * Find a debug variable using multiple path strategies.
+ *
+ * This is the CANONICAL function for resolving variable indices when the type
+ * definition is ambiguous (e.g., user-data-type could be FB or struct).
+ *
+ * The function tries paths in this order:
+ * 1. FB-style path (no .value. insertion) - for function block instances
+ * 2. Structure-style path (with .value. insertion) - for user-defined structures
+ *
+ * Both the debugger and OPC-UA systems MUST use this function to ensure
+ * consistent index resolution across the codebase.
+ *
+ * @param debugVariables - Parsed debug variables from debug.c
+ * @param instanceName - The instance name from Resources
+ * @param fieldPath - The variable path including any nested fields (e.g., "MY_FB.FIELD" or "MY_STRUCT.FIELD")
+ * @returns Result indicating the match and which path style was used
+ */
+export function findDebugVariableWithFallback(
+  debugVariables: DebugVariableEntry[],
+  instanceName: string,
+  fieldPath: string,
+): DebugVariableFallbackResult {
+  // First try FB-style path (no .value. insertion)
+  const fbPath = buildDebugPath(instanceName, fieldPath, { isStructureField: false })
+  const fbMatch = findDebugVariable(debugVariables, fbPath)
+  if (fbMatch) {
+    return { match: fbMatch, matchedPath: fbPath, usedStructureStyle: false }
+  }
+
+  // Try structure-style path (with .value. insertion)
+  const structPath = buildDebugPath(instanceName, fieldPath, { isStructureField: true })
+  const structMatch = findDebugVariable(debugVariables, structPath)
+  if (structMatch) {
+    return { match: structMatch, matchedPath: structPath, usedStructureStyle: true }
+  }
+
+  return { match: null, matchedPath: fbPath, usedStructureStyle: false }
+}
+
+/**
+ * Find the index for a variable using fallback path strategies.
+ *
+ * This is the CANONICAL function for index lookup when the type definition
+ * is ambiguous. Use this instead of findVariableIndex when you're not certain
+ * whether the variable is an FB instance or a structure.
+ *
+ * @param instanceName - The instance name from Resources
+ * @param fieldPath - The variable path
+ * @param debugVariables - Parsed debug variables
+ * @returns The index or null if not found
+ */
+export function findVariableIndexWithFallback(
+  instanceName: string,
+  fieldPath: string,
+  debugVariables: DebugVariableEntry[],
+): number | null {
+  const result = findDebugVariableWithFallback(debugVariables, instanceName, fieldPath)
+  return result.match ? result.match.index : null
+}
+
+/**
+ * Find a debug variable for a field using fallback path strategies.
+ *
+ * This is used during tree traversal when we have a base path and need to
+ * look up a child field. It tries both FB-style (no .value.) and struct-style
+ * (with .value.) paths.
+ *
+ * @param debugVariables - Parsed debug variables from debug.c
+ * @param basePath - The already-built base path (e.g., "RES0__INSTANCE0.MY_VAR")
+ * @param fieldName - The field name to append
+ * @returns Result with match and the path that worked
+ */
+export function findDebugVariableForField(
+  debugVariables: DebugVariableEntry[],
+  basePath: string,
+  fieldName: string,
+): DebugVariableFallbackResult {
+  // Try FB-style path (no .value. insertion)
+  const fbPath = `${basePath}.${fieldName.toUpperCase()}`
+  const fbMatch = findDebugVariable(debugVariables, fbPath)
+  if (fbMatch) {
+    return { match: fbMatch, matchedPath: fbPath, usedStructureStyle: false }
+  }
+
+  // Try struct-style path (with .value. insertion)
+  const structPath = `${basePath}.value.${fieldName.toUpperCase()}`
+  const structMatch = findDebugVariable(debugVariables, structPath)
+  if (structMatch) {
+    return { match: structMatch, matchedPath: structPath, usedStructureStyle: true }
+  }
+
+  return { match: null, matchedPath: fbPath, usedStructureStyle: false }
+}
+
+/**
+ * Look up an index in a map using fallback path strategies.
+ *
+ * This is used when you have a pre-built index map (like debugVariableIndexes)
+ * and need to look up by path, trying both FB-style and struct-style paths.
+ *
+ * @param indexMap - A map from debug paths to indices
+ * @param instanceName - The instance name from Resources
+ * @param fieldPath - The variable path
+ * @returns The index or undefined if not found
+ */
+export function getIndexFromMapWithFallback(
+  indexMap: Map<string, number>,
+  instanceName: string,
+  fieldPath: string,
+): number | undefined {
+  // Try FB-style path (no .value. insertion)
+  const fbPath = buildDebugPath(instanceName, fieldPath, { isStructureField: false })
+  const fbIndex = indexMap.get(fbPath)
+  if (fbIndex !== undefined) return fbIndex
+
+  // Try struct-style path (with .value. insertion)
+  const structPath = buildDebugPath(instanceName, fieldPath, { isStructureField: true })
+  return indexMap.get(structPath)
+}
+
+/**
+ * Look up an index in a map for a field, using fallback path strategies.
+ *
+ * This is used during polling when we have a base path and need to look up
+ * a child field, trying both FB-style and struct-style paths.
+ *
+ * @param indexMap - A map from debug paths to indices
+ * @param basePath - The already-built base path (e.g., "RES0__INSTANCE0.MY_VAR")
+ * @param fieldName - The field name to append
+ * @returns The index or undefined if not found
+ */
+export function getFieldIndexFromMapWithFallback(
+  indexMap: Map<string, number>,
+  basePath: string,
+  fieldName: string,
+): number | undefined {
+  // Try FB-style path (no .value. insertion)
+  const fbPath = `${basePath}.${fieldName.toUpperCase()}`
+  const fbIndex = indexMap.get(fbPath)
+  if (fbIndex !== undefined) return fbIndex
+
+  // Try struct-style path (with .value. insertion)
+  const structPath = `${basePath}.value.${fieldName.toUpperCase()}`
+  return indexMap.get(structPath)
+}
+
+/**
  * Find the index for a program/FB variable.
  *
  * @param instanceName - The instance name from Resources
@@ -193,4 +316,27 @@ export function findGlobalVariableIndex(variablePath: string, debugVariables: De
   const debugPath = buildGlobalDebugPath(variablePath)
   const match = findDebugVariable(debugVariables, debugPath)
   return match ? match.index : null
+}
+
+/**
+ * Build the base debug path prefix for an instance.
+ * Returns "RES0__INSTANCE_NAME" without any variable path.
+ *
+ * @param instanceName - The instance name from Resources (e.g., "INSTANCE0")
+ * @returns The base path prefix (e.g., "RES0__INSTANCE0")
+ */
+export function buildDebugPathPrefix(instanceName: string): string {
+  return `RES0__${instanceName.toUpperCase()}`
+}
+
+/**
+ * Append a child name to an existing debug path.
+ * Handles the uppercase conversion automatically.
+ *
+ * @param basePath - The existing debug path (e.g., "RES0__INSTANCE0.FB_NAME")
+ * @param childName - The child variable/field name to append
+ * @returns The extended path (e.g., "RES0__INSTANCE0.FB_NAME.CHILD_NAME")
+ */
+export function appendToDebugPath(basePath: string, childName: string): string {
+  return `${basePath}.${childName.toUpperCase()}`
 }

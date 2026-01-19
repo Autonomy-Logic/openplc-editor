@@ -510,6 +510,7 @@ const _projectActionsSchema = z.object({
         host: z.string().optional(),
         port: z.number().optional(),
         timeout: z.number().optional(),
+        slaveId: z.number().optional(),
       }),
     )
     .returns(projectResponseSchema),
