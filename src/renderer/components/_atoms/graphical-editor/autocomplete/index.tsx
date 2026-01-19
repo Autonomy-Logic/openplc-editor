@@ -92,8 +92,25 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
         },
         isFocused: autocompleteFocus,
         selectedVariable: selectedVariable,
+        /**
+         * Synchronously triggers the submit action.
+         * Used by parent components to bypass the async keyPressed → keyDown useEffect chain
+         * which can cause race conditions when the autocomplete unmounts on blur.
+         */
+        triggerSubmit: () => {
+          if (selectedVariable.positionInArray === -1) {
+            const addVariableOption = selectableValues.find((item) => item.type === 'add')
+            if (addVariableOption) {
+              submitAutocompletion({ variable: addVariableOption.variable })
+            } else {
+              closeModal()
+            }
+          } else {
+            submitAutocompletion({ variable: selectedVariable.variable })
+          }
+        },
       }
-    }, [selectedVariable, popoverRef, autocompleteFocus])
+    }, [selectedVariable, selectableValues, popoverRef, autocompleteFocus])
 
     useEffect(() => {
       switch (keyDown) {
