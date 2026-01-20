@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
 import type { OpcUaTrustedCertificate, OpcUaUser } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
+import * as bcrypt from 'bcryptjs'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -29,14 +30,11 @@ const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = 
   { value: 'engineer', label: 'Engineer', description: 'Full administrative access' },
 ]
 
-// Simple password hashing using SHA-256 (Web Crypto API)
-// Note: For production, consider using bcrypt or similar
+// Password hashing using bcrypt with cost factor 10
+const BCRYPT_SALT_ROUNDS = 10
+
 const hashPassword = async (password: string): Promise<string> => {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(password)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+  return bcrypt.hash(password, BCRYPT_SALT_ROUNDS)
 }
 
 export const UserModal = ({
