@@ -29,16 +29,20 @@ export interface DebugVariable {
 }
 
 /**
- * Resolved field information for structures
+ * Resolved field information for structures.
+ * Supports nested fields for complex types (FBs, structs within structs).
  */
 export interface ResolvedField {
   name: string
   datatype: string
   initialValue: boolean | number | string
-  index: number
+  /** Index in debug_vars array. Null for complex types that have nested fields. */
+  index: number | null
   permissions: {
     viewer: 'r' | 'w' | 'rw'
     operator: 'r' | 'w' | 'rw'
     engineer: 'r' | 'w' | 'rw'
   }
+  /** Nested fields for complex types (FB instances, nested structs) */
+  fields?: ResolvedField[]
 }

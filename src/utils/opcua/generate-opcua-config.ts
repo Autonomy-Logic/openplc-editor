@@ -74,8 +74,9 @@ interface RuntimeStructureField {
   name: string
   datatype: string
   initial_value: boolean | number | string
-  index: number
+  index: number | null // null for complex types that have nested fields
   permissions: RuntimeVariablePermissions
+  fields?: RuntimeStructureField[] // Nested fields for complex types (FBs, structs)
 }
 
 interface RuntimeStructure {
@@ -206,7 +207,35 @@ const resolveVariable = (
 }
 
 /**
- * Resolve a structure and build runtime format with field indices
+ * Convert a resolved field (with possible nested fields) to runtime format recursively.
+ */
+const convertResolvedFieldToRuntime = (field: {
+  name: string
+  datatype: string
+  initialValue: boolean | number | string
+  index: number | null
+  permissions: { viewer: 'r' | 'w' | 'rw'; operator: 'r' | 'w' | 'rw'; engineer: 'r' | 'w' | 'rw' }
+  fields?: (typeof field)[]
+}): RuntimeStructureField => {
+  const runtimeField: RuntimeStructureField = {
+    name: field.name,
+    datatype: field.datatype,
+    initial_value: field.initialValue,
+    index: field.index,
+    permissions: convertPermissions(field.permissions),
+  }
+
+  // Add nested fields if present (for complex types like FB instances)
+  if (field.fields && field.fields.length > 0) {
+    runtimeField.fields = field.fields.map(convertResolvedFieldToRuntime)
+  }
+
+  return runtimeField
+}
+
+/**
+ * Resolve a structure and build runtime format with field indices.
+ * Supports nested fields for complex types (FBs within FBs, structs within structs).
  */
 const resolveStructure = (
   node: OpcUaNodeConfig,
@@ -220,13 +249,7 @@ const resolveStructure = (
     browse_name: node.browseName,
     display_name: node.displayName,
     description: node.description,
-    fields: resolvedFields.map((field) => ({
-      name: field.name,
-      datatype: field.datatype,
-      initial_value: field.initialValue,
-      index: field.index,
-      permissions: convertPermissions(field.permissions),
-    })),
+    fields: resolvedFields.map(convertResolvedFieldToRuntime),
   }
 }
 
