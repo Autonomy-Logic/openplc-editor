@@ -1555,7 +1555,8 @@ const WorkspaceScreen = () => {
     const variableIndex = debugVariableIndexes.get(keyForIndexLookup)
     if (variableIndex === undefined) return
 
-    if (value === undefined) {
+    if (value === undefined && valueBuffer === undefined) {
+      // Release force
       const result = await window.bridge.debuggerSetVariable(variableIndex, false)
       if (result.success) {
         const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -1563,11 +1564,12 @@ const WorkspaceScreen = () => {
         setDebugForcedVariables(newForcedVariables)
       }
     } else {
-      const buffer = valueBuffer || new Uint8Array([value ? 1 : 0])
+      // Set force - use valueBuffer for non-boolean types, fallback to boolean conversion
+      const buffer = valueBuffer ?? new Uint8Array([value ? 1 : 0])
       const result = await window.bridge.debuggerSetVariable(variableIndex, true, buffer)
       if (result.success) {
         const newForcedVariables = new Map(Array.from(debugForcedVariables))
-        newForcedVariables.set(compositeKey, value)
+        newForcedVariables.set(compositeKey, value ?? true)
         setDebugForcedVariables(newForcedVariables)
       }
     }
