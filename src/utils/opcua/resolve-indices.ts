@@ -141,7 +141,10 @@ const resolveFieldRecursively = (
   debugEntries: DebugVariableEntry[],
   instanceName: string | null,
 ): ResolvedField => {
-  // Build the full path for this field
+  // Build the full path for this field.
+  // Note: This code path only processes new hierarchical configs where field.fieldPath
+  // contains just the field name (e.g., "TON0", "IN"). Legacy flat configs don't have
+  // nested `fields` arrays, so they won't reach this recursive function.
   const fullFieldPath = `${parentPath}.${field.fieldPath}`
 
   // If this field has nested fields, it's a complex type (FB or struct)

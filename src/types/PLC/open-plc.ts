@@ -471,7 +471,7 @@ interface OpcUaFieldConfig {
   datatype?: string
   initialValue: boolean | number | string
   permissions: OpcUaPermissions
-  /** Nested fields for complex types (FB instances, nested structs). Undefined for leaf fields. */
+  /** Nested fields for complex types (FB instances, nested structs). Undefined or empty for leaf fields. */
   fields?: OpcUaFieldConfig[]
 }
 const OpcUaFieldConfigSchema: z.ZodType<OpcUaFieldConfig> = z.lazy(() =>
