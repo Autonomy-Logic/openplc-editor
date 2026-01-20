@@ -16,7 +16,7 @@ type PinTypes = (typeof pinTypes)[number]
  *    - Following the prefix, the address must have a integer number starting with 0
  */
 const devicePinSchema = z.object({
-  pin: z.string().max(6),
+  pin: z.string().min(1),
   pinType: z.enum(pinTypes),
   address: z.string(),
   name: z.string().optional(),
