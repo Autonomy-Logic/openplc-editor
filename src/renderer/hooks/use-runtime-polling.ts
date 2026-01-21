@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef } from 'react'
 
 // Unified polling interval for both status and logs (in milliseconds).
 // Status and logs are fetched together every 2 seconds to minimize runtime load.
-// Timing stats polling (in board.tsx) runs separately at 2.5s since stats requests
-// are heavier due to mutex contention on the runtime's critical scan cycle.
+// Timing stats are included in the status request only when the board settings
+// screen is visible (controlled by the includeTimingStatsInPolling flag).
 const POLL_INTERVAL_MS = 2000
 
 // Number of consecutive poll failures before showing connection lost modal
@@ -23,7 +23,8 @@ const MAX_CONSECUTIVE_FAILURES = 5
  * After MAX_CONSECUTIVE_FAILURES failed poll attempts, the connection is
  * automatically terminated and a warning modal is shown to the user.
  *
- * Timing stats should be polled separately only when the device configuration screen is visible.
+ * Timing stats are included in the status request only when the device configuration
+ * screen is visible (controlled by the includeTimingStatsInPolling flag in the store).
  */
 export const useRuntimePolling = () => {
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
@@ -80,6 +81,7 @@ export const useRuntimePolling = () => {
         connectionStatus: currentConnectionStatus,
         jwtToken: currentJwtToken,
         ipAddress: currentIpAddress,
+        includeTimingStatsInPolling,
       },
       workspace: { plcLogsLastId, plcLogs },
       workspaceActions,
@@ -106,10 +108,9 @@ export const useRuntimePolling = () => {
       const minId = isV4Runtime && plcLogsLastId !== null ? plcLogsLastId + 1 : undefined
 
       // Fetch status and logs in parallel
+      // Include timing stats only when the device configuration screen is visible
       const [statusResult, logsResult] = await Promise.all([
-        // Call runtimeGetStatus WITHOUT include_stats to avoid mutex contention
-        // The device configuration screen will poll with include_stats=true when visible
-        window.bridge.runtimeGetStatus(currentIpAddress, currentJwtToken, false),
+        window.bridge.runtimeGetStatus(currentIpAddress, currentJwtToken, includeTimingStatsInPolling),
         // Fetch logs (incremental for v4 runtime)
         window.bridge.runtimeGetLogs(currentIpAddress, currentJwtToken, minId),
       ])
@@ -128,8 +129,13 @@ export const useRuntimePolling = () => {
           currentPlcStatus = 'UNKNOWN'
           setPlcRuntimeStatus('UNKNOWN')
         }
-        // Note: We don't update timing stats here since we're not requesting them
-        // Timing stats are only updated when the device config screen polls with include_stats=true
+        // Update timing stats if they were requested and returned
+        if (includeTimingStatsInPolling && statusResult.timingStats) {
+          setTimingStats(statusResult.timingStats)
+        } else if (!includeTimingStatsInPolling) {
+          // Clear stale timing stats when no longer polling for them
+          setTimingStats(null)
+        }
       } else {
         handlePollFailure()
         return // Skip logs processing if status failed

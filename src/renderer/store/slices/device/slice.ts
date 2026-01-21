@@ -36,6 +36,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     plcStatus: null,
     ipAddress: null,
     timingStats: null,
+    includeTimingStatsInPolling: false,
   },
 
   deviceActions: {
@@ -478,6 +479,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
           runtimeConnection.timingStats = stats
+        }),
+      )
+    },
+    setIncludeTimingStatsInPolling: (include: boolean): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.includeTimingStatsInPolling = include
         }),
       )
     },
