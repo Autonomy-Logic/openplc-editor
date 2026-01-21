@@ -54,6 +54,10 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
+    'runtime-connection-lost': {
+      open: false,
+      data: null,
+    },
     'debugger-message': {
       open: false,
       data: null,
