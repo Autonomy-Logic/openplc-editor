@@ -87,6 +87,9 @@ export const useRuntimePolling = () => {
         // Update timing stats if they were requested and returned
         if (includeTimingStatsInPolling && result.timingStats) {
           setTimingStats(result.timingStats)
+        } else if (!includeTimingStatsInPolling) {
+          // Clear stale timing stats when no longer polling for them
+          setTimingStats(null)
         }
       } else {
         handlePollFailure()
