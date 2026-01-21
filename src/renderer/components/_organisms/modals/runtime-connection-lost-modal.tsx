@@ -4,19 +4,14 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { Modal, ModalContent } from '../../_molecules/modal'
 
 const RuntimeConnectionLostModal = () => {
-  const { modals, modalActions, deviceActions, runtimeConnection } = useOpenPLCStore()
+  const { modals, modalActions } = useOpenPLCStore()
 
   const isOpen = modals['runtime-connection-lost']?.open || false
-  const ipAddress = runtimeConnection.ipAddress ?? 'Unknown'
+  // Get IP address from modal data (passed when modal was opened, before connection was cleared)
+  const modalData = modals['runtime-connection-lost']?.data as { ipAddress?: string } | undefined
+  const ipAddress = modalData?.ipAddress ?? 'Unknown'
 
-  const handleDisconnect = () => {
-    deviceActions.setRuntimeJwtToken(null)
-    deviceActions.setRuntimeConnectionStatus('disconnected')
-    deviceActions.setPlcRuntimeStatus(null)
-    deviceActions.setTimingStats(null)
-    modalActions.closeModal()
-  }
-
+  // Connection is already cleared when this modal opens, so button just closes the modal
   const handleClose = () => {
     modalActions.closeModal()
   }
@@ -45,16 +40,10 @@ const RuntimeConnectionLostModal = () => {
           </div>
           <div className='flex w-[340px] flex-col gap-2 text-sm'>
             <button
-              onClick={handleDisconnect}
+              onClick={handleClose}
               className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white hover:bg-brand-medium-dark'
             >
-              Disconnect
-            </button>
-            <button
-              onClick={handleClose}
-              className='w-full rounded-md bg-neutral-100 px-4 py-2 font-medium hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
-            >
-              Close
+              OK
             </button>
           </div>
         </div>

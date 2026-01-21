@@ -50,6 +50,10 @@ export const useRuntimePolling = () => {
 
   // Handle connection loss after max failures
   const handleConnectionLost = useCallback(() => {
+    // Capture IP address before clearing connection state
+    const { runtimeConnection } = useOpenPLCStore.getState()
+    const ipAddress = runtimeConnection.ipAddress ?? 'Unknown'
+
     // Stop polling
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current)
@@ -61,8 +65,8 @@ export const useRuntimePolling = () => {
     const { workspaceActions } = useOpenPLCStore.getState()
     workspaceActions.setPlcLogsVisible(false)
     workspaceActions.clearPlcLogs()
-    // Show warning modal
-    openModal('runtime-connection-lost')
+    // Show warning modal with captured IP address
+    openModal('runtime-connection-lost', { ipAddress })
   }, [clearConnectionState, openModal])
 
   // Combined poll for both PLC status and logs
@@ -111,14 +115,17 @@ export const useRuntimePolling = () => {
       ])
 
       // Process status result
+      let currentPlcStatus: string | null = null
       if (statusResult.success && statusResult.status) {
         // Reset failure counter on success
         consecutiveFailuresRef.current = 0
         const statusValue = statusResult.status.replace('STATUS:', '').replace('\n', '').trim()
         const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
         if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
+          currentPlcStatus = statusValue
           setPlcRuntimeStatus(statusValue as NonNullable<RuntimeConnection['plcStatus']>)
         } else {
+          currentPlcStatus = 'UNKNOWN'
           setPlcRuntimeStatus('UNKNOWN')
         }
         // Note: We don't update timing stats here since we're not requesting them
@@ -163,9 +170,8 @@ export const useRuntimePolling = () => {
           }
         } else {
           // V3 runtime: plain string logs (no incremental fetching)
-          // For v3, only update logs when PLC is RUNNING
-          const plcStatus = currentState.runtimeConnection.plcStatus
-          if (plcStatus === 'RUNNING') {
+          // For v3, only update logs when PLC is RUNNING (use freshly fetched status)
+          if (currentPlcStatus === 'RUNNING') {
             workspaceActions.setPlcLogs(newLogs)
           }
         }
