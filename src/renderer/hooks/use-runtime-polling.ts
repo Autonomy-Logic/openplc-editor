@@ -2,10 +2,8 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
 import { useCallback, useEffect, useRef } from 'react'
 
-// Polling interval for status checks (in milliseconds).
-// Status polling runs at 2s to keep the UI responsive (sidebar start/stop button).
-// Timing stats polling (in board.tsx) runs at 2.5s since stats requests are heavier
-// due to mutex contention on the runtime's critical scan cycle.
+// Unified polling interval for status checks (in milliseconds).
+// Status and timing stats are fetched together when needed to reduce duplicate requests.
 const STATUS_POLL_INTERVAL_MS = 2000
 
 // Auto-disconnect after N consecutive status poll failures
@@ -16,8 +14,8 @@ const MAX_CONSECUTIVE_FAILURES = 3
  * This hook should be used at the app level (e.g., in workspace-screen.tsx)
  * to ensure polling runs globally while connected, not just when the device config screen is open.
  *
- * Status polling runs continuously while connected (without timing stats).
- * Timing stats should be polled separately only when the device configuration screen is visible.
+ * Timing stats are included in the status request only when the device configuration
+ * screen is visible (controlled by the includeTimingStatsInPolling flag in the store).
  */
 export const useRuntimePolling = () => {
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
@@ -41,7 +39,7 @@ export const useRuntimePolling = () => {
     setTimingStats(null)
   }, [setRuntimeJwtToken, setRuntimeConnectionStatus, setPlcRuntimeStatus, setTimingStats])
 
-  // Poll for PLC status (without timing stats to avoid mutex contention)
+  // Poll for PLC status (includes timing stats when device config screen is visible)
   const pollStatus = useCallback(async () => {
     // Skip if a poll is already in progress (prevents request backlog)
     if (isPollingRef.current) return
@@ -51,6 +49,7 @@ export const useRuntimePolling = () => {
       connectionStatus: currentConnectionStatus,
       jwtToken: currentJwtToken,
       ipAddress: currentIpAddress,
+      includeTimingStatsInPolling,
     } = currentState.runtimeConnection
 
     if (currentConnectionStatus !== 'connected' || !currentJwtToken || !currentIpAddress) {
@@ -69,9 +68,12 @@ export const useRuntimePolling = () => {
     }
 
     try {
-      // Call runtimeGetStatus WITHOUT include_stats to avoid mutex contention
-      // The device configuration screen will poll with include_stats=true when visible
-      const result = await window.bridge.runtimeGetStatus(currentIpAddress, currentJwtToken, false)
+      // Include timing stats only when the device configuration screen is visible
+      const result = await window.bridge.runtimeGetStatus(
+        currentIpAddress,
+        currentJwtToken,
+        includeTimingStatsInPolling,
+      )
 
       if (result.success && result.status) {
         consecutiveFailuresRef.current = 0
@@ -82,8 +84,10 @@ export const useRuntimePolling = () => {
         } else {
           setPlcRuntimeStatus('UNKNOWN')
         }
-        // Note: We don't update timing stats here since we're not requesting them
-        // Timing stats are only updated when the device config screen polls with include_stats=true
+        // Update timing stats if they were requested and returned
+        if (includeTimingStatsInPolling && result.timingStats) {
+          setTimingStats(result.timingStats)
+        }
       } else {
         handlePollFailure()
       }
@@ -92,7 +96,7 @@ export const useRuntimePolling = () => {
     } finally {
       isPollingRef.current = false
     }
-  }, [clearConnectionState, setPlcRuntimeStatus])
+  }, [clearConnectionState, setPlcRuntimeStatus, setTimingStats])
 
   // Start/stop polling based on connection status
   useEffect(() => {

@@ -18,9 +18,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
 
-// Polling interval for timing stats (only when device config screen is visible)
-const STATS_POLL_INTERVAL_MS = 2500
-
 const Board = memo(function () {
   const {
     deviceDefinitions: {
@@ -56,8 +53,8 @@ const Board = memo(function () {
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
-  const setTimingStats = useOpenPLCStore(
-    (state): ((stats: TimingStats | null) => void) => state.deviceActions.setTimingStats,
+  const setIncludeTimingStatsInPolling = useOpenPLCStore(
+    (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
   )
 
   const [isPressed, setIsPressed] = useState(false)
@@ -77,7 +74,6 @@ const Board = memo(function () {
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
   const portsReqIdRef = useRef<number>(0)
-  const isStatsPollingRef = useRef(false)
   const [isRefreshingPorts, setIsRefreshingPorts] = useState(false)
 
   const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
@@ -289,55 +285,16 @@ const Board = memo(function () {
     }
   }, [runtimeIpAddress, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, openModal, deviceBoard])
 
-  // Poll for timing stats only when device configuration screen is visible
-  // Status polling is handled globally by useRuntimePolling hook in workspace-screen.tsx
+  // Enable timing stats in global polling when this screen is visible
   useEffect(() => {
-    let statsInterval: NodeJS.Timeout | null = null
+    // Set the flag to include timing stats in the global status polling
+    setIncludeTimingStatsInPolling(true)
 
-    const pollTimingStats = async (): Promise<void> => {
-      // Skip if a poll is already in progress (prevents request backlog)
-      if (isStatsPollingRef.current) return
-
-      const currentState = useOpenPLCStore.getState()
-      const { connectionStatus: currentConnectionStatus, jwtToken: currentJwtToken } = currentState.runtimeConnection
-      const currentIpAddress = currentState.deviceDefinitions.configuration.runtimeIpAddress
-
-      if (currentConnectionStatus !== 'connected' || !currentJwtToken || !currentIpAddress) {
-        return
-      }
-
-      isStatsPollingRef.current = true
-
-      try {
-        // Request status WITH timing stats (include_stats=true)
-        const result = await window.bridge.runtimeGetStatus(currentIpAddress, currentJwtToken, true)
-
-        if (result.success && result.timingStats) {
-          setTimingStats(result.timingStats)
-        }
-        // Note: We don't handle failures here - global polling handles connection state
-        // We also don't update plcStatus here since global polling already does that
-      } catch {
-        // Silently ignore errors - global polling handles connection failures
-      } finally {
-        isStatsPollingRef.current = false
-      }
-    }
-
-    if (connectionStatus === 'connected') {
-      // Initial stats fetch
-      void pollTimingStats()
-      // Start periodic stats polling
-      statsInterval = setInterval(() => void pollTimingStats(), STATS_POLL_INTERVAL_MS)
-    } else {
-      // Clear timing stats when disconnected
-      setTimingStats(null)
-    }
-
+    // Clear the flag when leaving this screen
     return () => {
-      if (statsInterval) clearInterval(statsInterval)
+      setIncludeTimingStatsInPolling(false)
     }
-  }, [connectionStatus, setTimingStats])
+  }, [setIncludeTimingStatsInPolling])
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
