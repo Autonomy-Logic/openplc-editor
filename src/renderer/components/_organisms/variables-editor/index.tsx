@@ -771,10 +771,16 @@ const VariablesEditor = () => {
         typeChangedPairsToApply.push(pair)
       }
 
+      // Build a map of debug flags from existing variables
+      const debugByName = new Map(tableData.map((v) => [v.name.toLowerCase(), v.debug ?? false]))
+
+      // Preserve debug flags for renamed variables
+      for (const pair of renamedPairs) {
+        debugByName.set(pair.newName.toLowerCase(), pair.oldVariable.debug ?? false)
+      }
+
       const finalVariables = newVariables.map((newVar) => {
-        // Preserve debug property from existing variable if it exists
-        const existingVariable = tableData.find((v) => v.name.toLowerCase() === newVar.name.toLowerCase())
-        const debug = existingVariable?.debug ?? false
+        const debug = debugByName.get(newVar.name.toLowerCase()) ?? false
 
         const typeChangePair = typeChangedPairs.find((pair) => pair.name.toLowerCase() === newVar.name.toLowerCase())
 
