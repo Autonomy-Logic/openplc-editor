@@ -1,3 +1,4 @@
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
@@ -181,7 +182,14 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         scope: 'local',
         associatedPou: editor.meta.name,
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        toast({
+          title: res.title ?? 'Error',
+          description: res.message ?? 'Failed to create variable',
+          variant: 'fail',
+        })
+        return
+      }
 
       const variable = res.data as PLCVariable | undefined
 
