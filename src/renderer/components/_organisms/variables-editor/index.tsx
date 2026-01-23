@@ -772,6 +772,10 @@ const VariablesEditor = () => {
       }
 
       const finalVariables = newVariables.map((newVar) => {
+        // Preserve debug property from existing variable if it exists
+        const existingVariable = tableData.find((v) => v.name.toLowerCase() === newVar.name.toLowerCase())
+        const debug = existingVariable?.debug ?? false
+
         const typeChangePair = typeChangedPairs.find((pair) => pair.name.toLowerCase() === newVar.name.toLowerCase())
 
         if (typeChangePair) {
@@ -780,11 +784,11 @@ const VariablesEditor = () => {
           )
 
           if (!wasApplied) {
-            return { ...newVar, type: typeChangePair.oldVariable.type }
+            return { ...newVar, type: typeChangePair.oldVariable.type, debug }
           }
         }
 
-        return newVar
+        return { ...newVar, debug }
       })
 
       const response = setPouVariables({
