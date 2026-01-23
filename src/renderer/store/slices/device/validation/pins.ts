@@ -229,7 +229,8 @@ const checkIfPinExists = (pinMap: DevicePin[], name: string) => {
 }
 
 const pinValidation = (name: string) => {
-  const regex = /^(?:\d+|[A-Za-z]+(?:_\d+|_[A-Za-z]+)*|[A-Za-z]+\d*(?:_[A-Za-z]+\d*)*)$/
+  // Allow alphanumeric characters, underscores, and dots. Block spaces, hyphens, and special characters.
+  const regex = /^[A-Za-z0-9_.]+$/
   return regex.test(name)
 }
 
@@ -246,7 +247,7 @@ const checkIfPinIsValid = (pinMap: DevicePin[], name: string | undefined) => {
     return {
       ok: false,
       title: 'Invalid Pin',
-      message: 'Pin must be alphanumeric or use underscores.',
+      message: 'Pin must contain only letters, numbers, underscores, or dots.',
     }
   }
 

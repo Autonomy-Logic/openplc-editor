@@ -2,7 +2,7 @@ import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-con
 import * as Tabs from '@radix-ui/react-tabs'
 import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
-import { isV4Logs, LOG_BUFFER_CAP } from '@root/types/PLC/runtime-logs'
+// Note: Logs polling is now handled by useRuntimePolling hook
 import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
 import {
   appendToDebugPath,
@@ -34,6 +34,7 @@ import {
   ConfirmDeviceSwitchModal,
   DebuggerIpInputModal,
   DebuggerMessageModal,
+  RuntimeConnectionLostModal,
   RuntimeCreateUserModal,
   RuntimeLoginModal,
 } from '../components/_organisms/modals'
@@ -48,7 +49,6 @@ import { useOpenPLCStore } from '../store'
 import { getVariableSize, parseVariableValue } from '../utils/variable-sizes'
 
 const DEBUGGER_POLL_INTERVAL_MS = 200
-const PLC_LOGS_POLL_INTERVAL_MS = 2500
 
 const WorkspaceScreen = () => {
   const {
@@ -1391,102 +1391,8 @@ const WorkspaceScreen = () => {
     }
   }, [isDebuggerVisible])
 
-  useEffect(() => {
-    let logsPollingInterval: NodeJS.Timeout | null = null
-
-    const pollLogs = async (): Promise<void> => {
-      const {
-        runtimeConnection: { connectionStatus, ipAddress, jwtToken, plcStatus },
-        workspace: { plcLogsLastId, plcLogs },
-        workspaceActions,
-      } = useOpenPLCStore.getState()
-
-      if (connectionStatus === 'connected') {
-        workspaceActions.setPlcLogsVisible(true)
-      } else {
-        workspaceActions.setPlcLogsVisible(false)
-        workspaceActions.clearPlcLogs()
-        return
-      }
-
-      if (!ipAddress || !jwtToken) {
-        return
-      }
-
-      // Detect if we're connected to v4 runtime (v4 returns array, v3 returns string)
-      // For v4: poll regardless of PLC state
-      // For v3: poll only when PLC is RUNNING
-      const isV4Runtime = isV4Logs(plcLogs) || plcLogs === ''
-
-      // For v3 runtime, only poll when RUNNING
-      if (!isV4Runtime && plcStatus !== 'RUNNING') {
-        return
-      }
-
-      try {
-        // For v4 with existing logs, use incremental fetching
-        const minId = isV4Runtime && plcLogsLastId !== null ? plcLogsLastId + 1 : undefined
-        const result = await window.bridge.runtimeGetLogs(ipAddress, jwtToken, minId)
-
-        if (result.success && result.logs !== undefined) {
-          const newLogs = result.logs
-
-          if (isV4Logs(newLogs)) {
-            // V4 runtime: structured logs with levels
-            if (newLogs.length === 0) {
-              // No new logs
-              return
-            }
-
-            // Detect runtime restart: if any returned ID is less than lastSeenId
-            const hasRestartedRuntime =
-              plcLogsLastId !== null && newLogs.some((log) => log.id !== null && log.id < plcLogsLastId)
-
-            if (hasRestartedRuntime) {
-              // Runtime restarted, clear logs and start fresh
-              // Cap to last LOG_BUFFER_CAP entries if initial fetch is larger
-              const cappedLogs = newLogs.length > LOG_BUFFER_CAP ? newLogs.slice(-LOG_BUFFER_CAP) : newLogs
-              workspaceActions.setPlcLogs(cappedLogs)
-            } else {
-              // Append new logs to existing
-              workspaceActions.appendPlcLogs(newLogs)
-            }
-
-            // Update lastId cursor to the highest ID in the new logs
-            const maxId = newLogs.reduce((max, log) => {
-              if (log.id !== null && log.id > max) {
-                return log.id
-              }
-              return max
-            }, plcLogsLastId ?? -1)
-
-            if (maxId >= 0) {
-              workspaceActions.setPlcLogsLastId(maxId)
-            }
-          } else {
-            // V3 runtime: plain string logs (no incremental fetching)
-            workspaceActions.setPlcLogs(newLogs)
-          }
-        } else {
-          console.error('Failed to fetch PLC logs:', result.error ?? 'Unknown error')
-        }
-      } catch (error: unknown) {
-        console.error('Error polling PLC logs:', String(error))
-      }
-    }
-
-    void pollLogs()
-
-    logsPollingInterval = setInterval(() => {
-      void pollLogs()
-    }, PLC_LOGS_POLL_INTERVAL_MS)
-
-    return () => {
-      if (logsPollingInterval) {
-        clearInterval(logsPollingInterval)
-      }
-    }
-  }, [])
+  // Note: PLC logs polling is now handled by useRuntimePolling hook
+  // to consolidate status and logs polling into a single interval
 
   type PanelMethods = {
     collapse: () => void
@@ -1577,7 +1483,8 @@ const WorkspaceScreen = () => {
     const variableIndex = debugVariableIndexes.get(keyForIndexLookup)
     if (variableIndex === undefined) return
 
-    if (value === undefined) {
+    if (value === undefined && valueBuffer === undefined) {
+      // Release force
       const result = await window.bridge.debuggerSetVariable(variableIndex, false)
       if (result.success) {
         const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -1585,11 +1492,12 @@ const WorkspaceScreen = () => {
         setDebugForcedVariables(newForcedVariables)
       }
     } else {
-      const buffer = valueBuffer || new Uint8Array([value ? 1 : 0])
+      // Set force - use valueBuffer for non-boolean types, fallback to boolean conversion
+      const buffer = valueBuffer ?? new Uint8Array([value ? 1 : 0])
       const result = await window.bridge.debuggerSetVariable(variableIndex, true, buffer)
       if (result.success) {
         const newForcedVariables = new Map(Array.from(debugForcedVariables))
-        newForcedVariables.set(compositeKey, value)
+        newForcedVariables.set(compositeKey, value ?? true)
         setDebugForcedVariables(newForcedVariables)
       }
     }
@@ -1598,6 +1506,7 @@ const WorkspaceScreen = () => {
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
       <ConfirmDeviceSwitchModal />
+      <RuntimeConnectionLostModal />
       <RuntimeCreateUserModal />
       <RuntimeLoginModal />
       <DebuggerMessageModal />

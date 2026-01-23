@@ -56,6 +56,8 @@ const runtimeConnectionSchema = z.object({
   plcStatus: z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable(),
   ipAddress: z.string().nullable(),
   timingStats: timingStatsSchema.nullable(),
+  // Flag to include timing stats in status polling (set by board.tsx when visible)
+  includeTimingStatsInPolling: z.boolean(),
 })
 
 type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>
@@ -192,11 +194,13 @@ const deviceActionSchema = z.object({
     .args(z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable())
     .returns(z.void()),
   setTimingStats: z.function().args(timingStatsSchema.nullable()).returns(z.void()),
+  setIncludeTimingStatsInPolling: z.function().args(z.boolean()).returns(z.void()),
   setTemporaryDhcpIp: z.function().args(z.string().optional()).returns(z.void()),
 })
 
 type DeviceActions = Omit<z.infer<typeof deviceActionSchema>, 'setTimingStats'> & {
   setTimingStats: (stats: TimingStats | null) => void
+  setIncludeTimingStatsInPolling: (include: boolean) => void
 }
 
 type DeviceSlice = DeviceState & {

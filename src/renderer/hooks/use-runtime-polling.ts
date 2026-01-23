@@ -1,23 +1,30 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
+import { isV4Logs, LOG_BUFFER_CAP } from '@root/types/PLC/runtime-logs'
 import { useCallback, useEffect, useRef } from 'react'
 
-// Polling interval for status checks (in milliseconds).
-// Status polling runs at 2s to keep the UI responsive (sidebar start/stop button).
-// Timing stats polling (in board.tsx) runs at 2.5s since stats requests are heavier
-// due to mutex contention on the runtime's critical scan cycle.
-const STATUS_POLL_INTERVAL_MS = 2000
+// Unified polling interval for both status and logs (in milliseconds).
+// Status and logs are fetched together every 2 seconds to minimize runtime load.
+// Timing stats are included in the status request only when the board settings
+// screen is visible (controlled by the includeTimingStatsInPolling flag).
+const POLL_INTERVAL_MS = 2000
 
-// Auto-disconnect after N consecutive status poll failures
-const MAX_CONSECUTIVE_FAILURES = 3
+// Number of consecutive poll failures before showing connection lost modal
+const MAX_CONSECUTIVE_FAILURES = 5
 
 /**
- * Custom hook that handles runtime status polling.
+ * Custom hook that handles runtime status and logs polling.
  * This hook should be used at the app level (e.g., in workspace-screen.tsx)
  * to ensure polling runs globally while connected, not just when the device config screen is open.
  *
- * Status polling runs continuously while connected (without timing stats).
- * Timing stats should be polled separately only when the device configuration screen is visible.
+ * Both status and logs are polled together in a single interval to reduce
+ * the number of requests to the runtime.
+ *
+ * After MAX_CONSECUTIVE_FAILURES failed poll attempts, the connection is
+ * automatically terminated and a warning modal is shown to the user.
+ *
+ * Timing stats are included in the status request only when the device configuration
+ * screen is visible (controlled by the includeTimingStatsInPolling flag in the store).
  */
 export const useRuntimePolling = () => {
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
@@ -27,8 +34,9 @@ export const useRuntimePolling = () => {
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setTimingStats = useOpenPLCStore((state) => state.deviceActions.setTimingStats)
+  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
 
-  const statusPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const consecutiveFailuresRef = useRef<number>(0)
   const isPollingRef = useRef(false)
 
@@ -41,17 +49,43 @@ export const useRuntimePolling = () => {
     setTimingStats(null)
   }, [setRuntimeJwtToken, setRuntimeConnectionStatus, setPlcRuntimeStatus, setTimingStats])
 
-  // Poll for PLC status (without timing stats to avoid mutex contention)
-  const pollStatus = useCallback(async () => {
+  // Handle connection loss after max failures
+  const handleConnectionLost = useCallback(() => {
+    // Capture IP address before clearing connection state
+    const { runtimeConnection } = useOpenPLCStore.getState()
+    const ipAddress = runtimeConnection.ipAddress ?? 'Unknown'
+
+    // Stop polling
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+    // Clear connection state
+    clearConnectionState()
+    // Hide PLC logs tab and clear logs
+    const { workspaceActions } = useOpenPLCStore.getState()
+    workspaceActions.setPlcLogsVisible(false)
+    workspaceActions.clearPlcLogs()
+    // Show warning modal with captured IP address
+    openModal('runtime-connection-lost', { ipAddress })
+  }, [clearConnectionState, openModal])
+
+  // Combined poll for both PLC status and logs
+  const poll = useCallback(async () => {
     // Skip if a poll is already in progress (prevents request backlog)
     if (isPollingRef.current) return
 
     const currentState = useOpenPLCStore.getState()
     const {
-      connectionStatus: currentConnectionStatus,
-      jwtToken: currentJwtToken,
-      ipAddress: currentIpAddress,
-    } = currentState.runtimeConnection
+      runtimeConnection: {
+        connectionStatus: currentConnectionStatus,
+        jwtToken: currentJwtToken,
+        ipAddress: currentIpAddress,
+        includeTimingStatsInPolling,
+      },
+      workspace: { plcLogsLastId, plcLogs },
+      workspaceActions,
+    } = currentState
 
     if (currentConnectionStatus !== 'connected' || !currentJwtToken || !currentIpAddress) {
       return
@@ -62,67 +96,137 @@ export const useRuntimePolling = () => {
     const handlePollFailure = () => {
       consecutiveFailuresRef.current += 1
       if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
-        clearConnectionState()
+        handleConnectionLost()
       } else {
         setPlcRuntimeStatus('UNKNOWN')
       }
     }
 
     try {
-      // Call runtimeGetStatus WITHOUT include_stats to avoid mutex contention
-      // The device configuration screen will poll with include_stats=true when visible
-      const result = await window.bridge.runtimeGetStatus(currentIpAddress, currentJwtToken, false)
+      // Detect if we're connected to v4 runtime (v4 returns array, v3 returns string)
+      const isV4Runtime = isV4Logs(plcLogs) || plcLogs === ''
+      const minId = isV4Runtime && plcLogsLastId !== null ? plcLogsLastId + 1 : undefined
 
-      if (result.success && result.status) {
+      // Fetch status and logs in parallel
+      // Include timing stats only when the device configuration screen is visible
+      const [statusResult, logsResult] = await Promise.all([
+        window.bridge.runtimeGetStatus(currentIpAddress, currentJwtToken, includeTimingStatsInPolling),
+        // Fetch logs (incremental for v4 runtime)
+        window.bridge.runtimeGetLogs(currentIpAddress, currentJwtToken, minId),
+      ])
+
+      // Process status result
+      let currentPlcStatus: string | null = null
+      if (statusResult.success && statusResult.status) {
+        // Reset failure counter on success
         consecutiveFailuresRef.current = 0
-        const statusValue = result.status.replace('STATUS:', '').replace('\n', '').trim()
+        const statusValue = statusResult.status.replace('STATUS:', '').replace('\n', '').trim()
         const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
         if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
+          currentPlcStatus = statusValue
           setPlcRuntimeStatus(statusValue as NonNullable<RuntimeConnection['plcStatus']>)
         } else {
+          currentPlcStatus = 'UNKNOWN'
           setPlcRuntimeStatus('UNKNOWN')
         }
-        // Note: We don't update timing stats here since we're not requesting them
-        // Timing stats are only updated when the device config screen polls with include_stats=true
+        // Update timing stats if they were requested and returned
+        if (includeTimingStatsInPolling && statusResult.timingStats) {
+          setTimingStats(statusResult.timingStats)
+        } else if (!includeTimingStatsInPolling) {
+          // Clear stale timing stats when no longer polling for them
+          setTimingStats(null)
+        }
       } else {
         handlePollFailure()
+        return // Skip logs processing if status failed
+      }
+
+      // Process logs result
+      if (logsResult.success && logsResult.logs !== undefined) {
+        const newLogs = logsResult.logs
+
+        if (isV4Logs(newLogs)) {
+          // V4 runtime: structured logs with levels
+          if (newLogs.length > 0) {
+            // Detect runtime restart: if any returned ID is less than lastSeenId
+            const hasRestartedRuntime =
+              plcLogsLastId !== null && newLogs.some((log) => log.id !== null && log.id < plcLogsLastId)
+
+            if (hasRestartedRuntime) {
+              // Runtime restarted, clear logs and start fresh
+              // Cap to last LOG_BUFFER_CAP entries if initial fetch is larger
+              const cappedLogs = newLogs.length > LOG_BUFFER_CAP ? newLogs.slice(-LOG_BUFFER_CAP) : newLogs
+              workspaceActions.setPlcLogs(cappedLogs)
+            } else {
+              // Append new logs to existing
+              workspaceActions.appendPlcLogs(newLogs)
+            }
+
+            // Update lastId cursor to the highest ID in the new logs
+            const maxId = newLogs.reduce((max, log) => {
+              if (log.id !== null && log.id > max) {
+                return log.id
+              }
+              return max
+            }, plcLogsLastId ?? -1)
+
+            if (maxId >= 0) {
+              workspaceActions.setPlcLogsLastId(maxId)
+            }
+          }
+        } else {
+          // V3 runtime: plain string logs (no incremental fetching)
+          // For v3, only update logs when PLC is RUNNING (use freshly fetched status)
+          if (currentPlcStatus === 'RUNNING') {
+            workspaceActions.setPlcLogs(newLogs)
+          }
+        }
       }
     } catch {
       handlePollFailure()
     } finally {
       isPollingRef.current = false
     }
-  }, [clearConnectionState, setPlcRuntimeStatus])
+  }, [handleConnectionLost, setPlcRuntimeStatus])
 
   // Start/stop polling based on connection status
   useEffect(() => {
+    const { workspaceActions } = useOpenPLCStore.getState()
+
     if (connectionStatus === 'connected' && jwtToken && runtimeIpAddress) {
       // Reset failure counter on new connection
       consecutiveFailuresRef.current = 0
 
-      // Initial status fetch
-      void pollStatus()
+      // Initial poll
+      void poll()
 
-      // Start periodic status polling
-      statusPollIntervalRef.current = setInterval(() => {
-        void pollStatus()
-      }, STATUS_POLL_INTERVAL_MS)
+      // Start periodic polling (status + logs together)
+      pollIntervalRef.current = setInterval(() => {
+        void poll()
+      }, POLL_INTERVAL_MS)
+
+      // Show PLC logs tab
+      workspaceActions.setPlcLogsVisible(true)
     } else {
       // Stop polling when disconnected
-      if (statusPollIntervalRef.current) {
-        clearInterval(statusPollIntervalRef.current)
-        statusPollIntervalRef.current = null
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
       }
+
+      // Hide PLC logs tab and clear logs
+      workspaceActions.setPlcLogsVisible(false)
+      workspaceActions.clearPlcLogs()
     }
 
     // Cleanup on unmount
     return () => {
-      if (statusPollIntervalRef.current) {
-        clearInterval(statusPollIntervalRef.current)
-        statusPollIntervalRef.current = null
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
       }
     }
-  }, [connectionStatus, jwtToken, runtimeIpAddress, pollStatus])
+  }, [connectionStatus, jwtToken, runtimeIpAddress, poll])
 
   return {
     isConnected: connectionStatus === 'connected',

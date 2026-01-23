@@ -15,7 +15,7 @@ export async function initPythonLSP(monacoModule: typeof monaco): Promise<void> 
       signatureHelp: false,
       diagnostic: true,
       rename: false,
-      findDefinition: true,
+      findDefinition: false,
     },
     diagnosticsInterval: 1000,
   })
