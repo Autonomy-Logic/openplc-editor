@@ -4,7 +4,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
 import type { OpcUaTrustedCertificate, OpcUaUser } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
-import * as bcrypt from 'bcryptjs'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -30,11 +29,44 @@ const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = 
   { value: 'engineer', label: 'Engineer', description: 'Full administrative access' },
 ]
 
-// Password hashing using bcrypt with cost factor 10
-const BCRYPT_SALT_ROUNDS = 10
+// PBKDF2 configuration - matches OpenPLC Runtime's expected format
+// Using PBKDF2 instead of bcrypt for cross-platform compatibility (MSYS2/Windows)
+const PBKDF2_ITERATIONS = 600000 // OWASP recommendation for SHA-256
+const PBKDF2_SALT_LENGTH = 16
+const PBKDF2_HASH_LENGTH = 32 // SHA-256 output length
 
+/**
+ * Hash a password using PBKDF2-HMAC-SHA256.
+ * Format: pbkdf2:sha256:iterations$base64_salt$base64_hash
+ * This format is compatible with OpenPLC Runtime on all platforms.
+ */
 const hashPassword = async (password: string): Promise<string> => {
-  return bcrypt.hash(password, BCRYPT_SALT_ROUNDS)
+  // Generate random salt
+  const salt = crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_LENGTH))
+
+  // Import password as key material
+  const passwordKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, [
+    'deriveBits',
+  ])
+
+  // Derive hash using PBKDF2
+  const hashBuffer = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: PBKDF2_ITERATIONS,
+      hash: 'SHA-256',
+    },
+    passwordKey,
+    PBKDF2_HASH_LENGTH * 8, // bits
+  )
+
+  // Convert to base64
+  const saltB64 = btoa(String.fromCharCode(...salt))
+  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(hashBuffer)))
+
+  // Return in format expected by OpenPLC Runtime
+  return `pbkdf2:sha256:${PBKDF2_ITERATIONS}$${saltB64}$${hashB64}`
 }
 
 export const UserModal = ({
