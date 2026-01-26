@@ -327,6 +327,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Get version
         id: version
         run: |
@@ -342,19 +345,26 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f -name "*" | head -50
 
+      - name: Determine if prerelease
+        id: prerelease
+        run: |
+          if [[ "${{ github.ref }}" == *"beta"* ]] || [[ "${{ github.ref }}" == *"alpha"* ]] || [[ "${{ github.ref }}" == *"rc"* ]]; then
+            echo "flag=--prerelease" >> $GITHUB_OUTPUT
+          else
+            echo "flag=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: OpenPLC Editor v${{ steps.version.outputs.version }}
-          draft: false
-          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
-          generate_release_notes: true
-          files: |
-            artifacts/macos-x64-dmg/*.dmg
-            artifacts/macos-arm64-dmg/*.dmg
-            artifacts/windows-x64-exe/*.exe
-            artifacts/windows-arm64-exe/*.exe
-            artifacts/linux-x64-appimage/*.AppImage
-            artifacts/linux-arm64-appimage/*.AppImage
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "OpenPLC Editor v${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            ${{ steps.prerelease.outputs.flag }} \
+            artifacts/macos-x64-dmg/*.dmg \
+            artifacts/macos-arm64-dmg/*.dmg \
+            artifacts/windows-x64-exe/*.exe \
+            artifacts/windows-arm64-exe/*.exe \
+            artifacts/linux-x64-appimage/*.AppImage \
+            artifacts/linux-arm64-appimage/*.AppImage
