@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Get version
+      - name: Get version and build date
         id: version
         run: |
           if [ -n "${{ github.event.inputs.version }}" ]; then
@@ -44,8 +44,10 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
+          BUILD_DATE=$(date +%Y-%m-%d)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Import Code Signing Certificate
         env:
@@ -73,6 +75,7 @@ jobs:
       - name: Build and package
         env:
           CI: 'true'
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -120,7 +123,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Get version
+      - name: Get version and build date
         id: version
         shell: bash
         run: |
@@ -132,10 +135,14 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
+          BUILD_DATE=$(date +%Y-%m-%d)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Build and package
+        env:
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
         run: npm run package
 
       - name: Upload Windows x64 installer
@@ -164,7 +171,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Get version
+      - name: Get version and build date
         id: version
         shell: bash
         run: |
@@ -176,13 +183,16 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
+          BUILD_DATE=$(date +%Y-%m-%d)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Build and package for ARM64
         run: npx electron-builder --win --arm64
         env:
           CI: 'true'
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
 
       - name: Rename artifact for ARM64
         shell: pwsh
@@ -220,7 +230,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Get version
+      - name: Get version and build date
         id: version
         run: |
           if [ -n "${{ github.event.inputs.version }}" ]; then
@@ -231,10 +241,14 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
+          BUILD_DATE=$(date +%Y-%m-%d)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Build and package
+        env:
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
         run: npm run package
 
       - name: Upload Linux x64 AppImage
@@ -263,7 +277,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Get version
+      - name: Get version and build date
         id: version
         run: |
           if [ -n "${{ github.event.inputs.version }}" ]; then
@@ -274,13 +288,16 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
+          BUILD_DATE=$(date +%Y-%m-%d)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Build and package for ARM64
         run: npx electron-builder --linux --arm64
         env:
           CI: 'true'
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
 
       - name: Rename artifact for ARM64
         run: |
