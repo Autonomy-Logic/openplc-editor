@@ -1,4 +1,5 @@
 import { consoleSelectors } from '@root/renderer/hooks'
+import { formatTimestamp } from '@root/utils'
 import { debounce } from 'lodash'
 import { memo, useEffect, useRef } from 'react'
 
@@ -34,7 +35,7 @@ const Console = memo(() => {
     >
       {logs.length > 0 &&
         logs.map((log) => (
-          <LogComponent key={log.id} level={log.level} message={log.message} tstamp={log.tstamp.toLocaleTimeString()} />
+          <LogComponent key={log.id} level={log.level} message={log.message} tstamp={formatTimestamp(log.tstamp)} />
         ))}
       <div ref={bottomLogRef} id='bottom-log' />
     </div>

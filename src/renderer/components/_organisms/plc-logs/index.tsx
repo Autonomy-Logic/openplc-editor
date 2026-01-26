@@ -1,5 +1,6 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { isV4Logs, RuntimeLogEntry, RuntimeLogLevel } from '@root/types/PLC/runtime-logs'
+import { formatTimestamp } from '@root/utils'
 import { debounce } from 'lodash'
 import { memo, useEffect, useMemo, useRef } from 'react'
 
@@ -73,7 +74,7 @@ const PlcLogs = memo(() => {
               key={`plc-log-v4-${entry.id ?? index}-${index}`}
               level={mapV4LevelToLogLevel(entry.level)}
               message={entry.message}
-              tstamp={entry.timestamp}
+              tstamp={formatTimestamp(entry.timestamp)}
             />
           ))
         : v3LogLines.length > 0 &&
