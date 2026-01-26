@@ -188,11 +188,15 @@ jobs:
           echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
-      - name: Build and package for ARM64
+      - name: Build application
+        env:
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
+        run: npm run build
+
+      - name: Package for ARM64
         run: npx electron-builder --win --arm64
         env:
           CI: 'true'
-          BUILD_DATE: ${{ steps.version.outputs.build_date }}
 
       - name: Rename artifact for ARM64
         shell: pwsh
@@ -293,11 +297,15 @@ jobs:
           echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
-      - name: Build and package for ARM64
+      - name: Build application
+        env:
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
+        run: npm run build
+
+      - name: Package for ARM64
         run: npx electron-builder --linux --arm64
         env:
           CI: 'true'
-          BUILD_DATE: ${{ steps.version.outputs.build_date }}
 
       - name: Rename artifact for ARM64
         run: |
