@@ -216,7 +216,7 @@ jobs:
   # Linux Build - x64
   # =============================================================================
   build-linux-x64:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -263,7 +263,7 @@ jobs:
   # Linux Build - ARM64
   # =============================================================================
   build-linux-arm64:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
