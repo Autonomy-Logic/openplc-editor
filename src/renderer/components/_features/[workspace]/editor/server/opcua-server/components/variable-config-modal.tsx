@@ -30,7 +30,7 @@ type PermissionLevel = 'r' | 'w' | 'rw'
  * Generate a default node ID based on the variable path
  */
 const generateNodeId = (pouName: string, variablePath: string): string => {
-  const cleanPath = variablePath.replace(/\./g, '.').replace(/\[/g, '_').replace(/\]/g, '')
+  const cleanPath = variablePath.replace(/\[/g, '_').replace(/\]/g, '')
   return `PLC.${pouName}.${cleanPath}`
 }
 
@@ -277,30 +277,55 @@ export const VariableConfigModal = ({
 
   const isValid = validationErrors.length === 0
 
-  // Apply parent permissions to all fields
-  const applyPermissionsToAllFields = useCallback(() => {
-    setFieldConfigs((prev) =>
-      prev.map((field) => ({
+  // Helper to recursively apply permissions to all fields including nested ones
+  const applyPermissionsRecursively = useCallback(
+    (fields: OpcUaFieldConfig[], permissions: OpcUaPermissions): OpcUaFieldConfig[] => {
+      return fields.map((field) => ({
         ...field,
-        permissions: {
-          viewer: viewerPerm,
-          operator: operatorPerm,
-          engineer: engineerPerm,
-        },
-      })),
-    )
-  }, [viewerPerm, operatorPerm, engineerPerm])
-
-  // Update a single field's permission
-  const updateFieldPermission = useCallback(
-    (fieldPath: string, role: 'viewer' | 'operator' | 'engineer', value: PermissionLevel) => {
-      setFieldConfigs((prev) =>
-        prev.map((field) =>
-          field.fieldPath === fieldPath ? { ...field, permissions: { ...field.permissions, [role]: value } } : field,
-        ),
-      )
+        permissions: { ...permissions },
+        fields: field.fields ? applyPermissionsRecursively(field.fields, permissions) : undefined,
+      }))
     },
     [],
+  )
+
+  // Apply parent permissions to all fields (including nested)
+  const applyPermissionsToAllFields = useCallback(() => {
+    const permissions: OpcUaPermissions = {
+      viewer: viewerPerm,
+      operator: operatorPerm,
+      engineer: engineerPerm,
+    }
+    setFieldConfigs((prev) => applyPermissionsRecursively(prev, permissions))
+  }, [viewerPerm, operatorPerm, engineerPerm, applyPermissionsRecursively])
+
+  // Helper to recursively update a field's permission by path
+  const updateFieldPermissionRecursively = useCallback(
+    (
+      fields: OpcUaFieldConfig[],
+      fieldPath: string,
+      role: 'viewer' | 'operator' | 'engineer',
+      value: PermissionLevel,
+    ): OpcUaFieldConfig[] => {
+      return fields.map((field) => {
+        if (field.fieldPath === fieldPath) {
+          return { ...field, permissions: { ...field.permissions, [role]: value } }
+        }
+        if (field.fields) {
+          return { ...field, fields: updateFieldPermissionRecursively(field.fields, fieldPath, role, value) }
+        }
+        return field
+      })
+    },
+    [],
+  )
+
+  // Update a single field's permission (searches recursively)
+  const updateFieldPermission = useCallback(
+    (fieldPath: string, role: 'viewer' | 'operator' | 'engineer', value: PermissionLevel) => {
+      setFieldConfigs((prev) => updateFieldPermissionRecursively(prev, fieldPath, role, value))
+    },
+    [updateFieldPermissionRecursively],
   )
 
   // Handle save

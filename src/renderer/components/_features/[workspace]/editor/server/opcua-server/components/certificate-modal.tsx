@@ -31,10 +31,10 @@ const parsePemCertificate = (pem: string): { valid: boolean; subject?: string; e
     return { valid: false, error: 'Certificate must end with "-----END CERTIFICATE-----"' }
   }
 
-  // Extract the base64 content
+  // Extract the base64 content, normalizing CRLF line endings from Windows
   const lines = trimmed.split('\n')
   const contentLines = lines.slice(1, -1)
-  const base64Content = contentLines.join('').trim()
+  const base64Content = contentLines.join('').replace(/\r/g, '').trim()
 
   if (base64Content.length < 100) {
     return { valid: false, error: 'Certificate content appears to be too short' }

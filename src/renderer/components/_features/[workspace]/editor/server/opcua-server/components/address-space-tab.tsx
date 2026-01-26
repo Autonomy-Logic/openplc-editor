@@ -158,15 +158,31 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
       const node = config.addressSpace.nodes.find((n) => n.id === nodeId)
       if (node) {
         removeOpcUaNode(serverName, nodeId)
-        setSelectedVariableIds((prev) => {
-          const next = new Set(prev)
-          next.delete(`${node.pouName}-${node.variablePath}`)
-          return next
-        })
+
+        // Find the tree node to check if it's a complex type with descendants
+        const nodeKey = `${node.pouName}-${node.variablePath}`
+        const treeNode = findTreeNodeById(projectVariables, nodeKey)
+
+        if (treeNode && isComplexType(treeNode)) {
+          // For complex types, also remove all descendant IDs from selection
+          const descendantIds = getSelectableDescendantIds(treeNode)
+          setSelectedVariableIds((prev) => {
+            const next = new Set(prev)
+            next.delete(nodeKey)
+            descendantIds.forEach((id) => next.delete(id))
+            return next
+          })
+        } else {
+          setSelectedVariableIds((prev) => {
+            const next = new Set(prev)
+            next.delete(nodeKey)
+            return next
+          })
+        }
         onConfigChange()
       }
     },
-    [config.addressSpace.nodes, serverName, removeOpcUaNode, onConfigChange],
+    [config.addressSpace.nodes, serverName, removeOpcUaNode, onConfigChange, projectVariables],
   )
 
   return (

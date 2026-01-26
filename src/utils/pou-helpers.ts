@@ -141,6 +141,7 @@ export interface LeafVariable {
  * @param projectPous - Project POUs for looking up custom FBs
  * @param dataTypes - Project data types for looking up structures
  * @param pathPrefix - Current path prefix for building relative paths
+ * @param visited - Set of already visited type names to prevent infinite recursion on circular references
  * @returns Array of leaf variables with their relative paths
  */
 export const findLeafVariables = (
@@ -148,8 +149,17 @@ export const findLeafVariables = (
   projectPous: PLCPou[],
   dataTypes: PLCDataType[],
   pathPrefix: string = '',
+  visited: Set<string> = new Set(),
 ): LeafVariable[] => {
   const leaves: LeafVariable[] = []
+  const typeNameNormalized = typeName.toLowerCase()
+
+  // Prevent infinite recursion on circular type references
+  if (visited.has(typeNameNormalized)) {
+    console.warn(`Circular type reference detected for type: ${typeName}`)
+    return leaves
+  }
+  visited.add(typeNameNormalized)
 
   // Try to find as FB first
   const fbVariables = findFunctionBlockVariables(typeName, projectPous)
@@ -165,7 +175,7 @@ export const findLeafVariables = (
         // Skip for now as arrays need special handling
       } else if (!isEnumerationType(varTypeName, dataTypes)) {
         // Recurse into nested FBs or structures
-        const nestedLeaves = findLeafVariables(varTypeName, projectPous, dataTypes, varPath)
+        const nestedLeaves = findLeafVariables(varTypeName, projectPous, dataTypes, varPath, new Set(visited))
         leaves.push(...nestedLeaves)
       }
     }
@@ -183,7 +193,7 @@ export const findLeafVariables = (
         leaves.push({ relativePath: fieldPath, typeName: fieldTypeName.toUpperCase() })
       } else if (!isEnumerationType(fieldTypeName, dataTypes)) {
         // Recurse into nested types
-        const nestedLeaves = findLeafVariables(fieldTypeName, projectPous, dataTypes, fieldPath)
+        const nestedLeaves = findLeafVariables(fieldTypeName, projectPous, dataTypes, fieldPath, new Set(visited))
         leaves.push(...nestedLeaves)
       }
     }

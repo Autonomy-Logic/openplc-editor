@@ -126,7 +126,12 @@ export const SecurityProfileModal = ({
       })
     } else {
       // If switching from None to a real policy, remove Anonymous and set a valid mode
-      setAuthMethods((prev) => prev.filter((m) => m !== 'Anonymous'))
+      setAuthMethods((prev) => {
+        const filtered = prev.filter((m) => m !== 'Anonymous')
+        // Ensure at least one auth method remains - default to Username if empty
+        if (filtered.length === 0) return ['Username']
+        return filtered
+      })
       setSecurityMode((prev) => (prev === 'None' ? 'SignAndEncrypt' : prev))
     }
   }, [])

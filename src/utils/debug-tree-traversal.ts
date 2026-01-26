@@ -96,10 +96,11 @@ function isFunctionBlock(typeName: string, projectPous: PLCPou[]): boolean {
 }
 
 /**
- * Parse array dimension string (e.g., "1..10") into start and end indices.
+ * Parse array dimension string (e.g., "1..10" or "-5..5") into start and end indices.
+ * IEC 61131-3 allows negative array indices.
  */
 function parseArrayDimension(dimension: string): [number, number] | null {
-  const match = dimension.match(/^(\d+)\.\.(\d+)$/)
+  const match = dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
   if (!match) return null
   return [parseInt(match[1], 10), parseInt(match[2], 10)]
 }
