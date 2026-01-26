@@ -16,6 +16,7 @@ import { merge } from 'webpack-merge'
 
 import checkNodeEnv from '../../scripts/check-node-env'
 import deleteSourceMaps from '../../scripts/delete-source-maps'
+import { getAppInfoDefines } from './webpack.app-info'
 import baseConfig from './webpack.config.base'
 import webpackPaths from './webpack.paths'
 
@@ -149,6 +150,7 @@ const configuration: webpack.Configuration = {
 
     new webpack.DefinePlugin({
       'process.type': '"renderer"',
+      ...getAppInfoDefines(),
     }),
 
     new MonacoEditorWebpackPlugin({
