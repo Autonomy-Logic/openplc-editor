@@ -5,6 +5,16 @@ import { ConsoleSlice, logObjectSchema } from './types'
 
 const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (setState) => ({
   logs: [],
+  filters: {
+    levels: {
+      debug: true,
+      info: true,
+      warning: true,
+      error: true,
+    },
+    searchTerm: '',
+    showRelativeTime: false,
+  },
   consoleActions: {
     addLog: (log) => {
       const parsed = logObjectSchema.parse(log)
@@ -25,6 +35,27 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
       setState(
         produce((state: ConsoleSlice) => {
           state.logs = []
+        }),
+      )
+    },
+    setLevelFilter: (level, enabled) => {
+      setState(
+        produce((state: ConsoleSlice) => {
+          state.filters.levels[level] = enabled
+        }),
+      )
+    },
+    setSearchTerm: (term) => {
+      setState(
+        produce((state: ConsoleSlice) => {
+          state.filters.searchTerm = term
+        }),
+      )
+    },
+    setShowRelativeTime: (enabled) => {
+      setState(
+        produce((state: ConsoleSlice) => {
+          state.filters.showRelativeTime = enabled
         }),
       )
     },
