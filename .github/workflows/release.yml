@@ -319,7 +319,7 @@ jobs:
         run: npm run build
 
       - name: Package for ARM64
-        run: npx electron-builder --linux --publish never
+        run: npx electron-builder --linux --arm64 -c.linux.target.0.arch=arm64 --publish never
         env:
           CI: 'true'
 
