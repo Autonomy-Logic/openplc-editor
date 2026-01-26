@@ -49,6 +49,9 @@ jobs:
           echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
       - name: Import Code Signing Certificate
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
@@ -141,6 +144,9 @@ jobs:
           echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
       - name: Build and package
         env:
           BUILD_DATE: ${{ steps.version.outputs.build_date }}
@@ -188,6 +194,9 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Build application
         env:
@@ -251,6 +260,9 @@ jobs:
           echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
       - name: Build and package
         env:
           BUILD_DATE: ${{ steps.version.outputs.build_date }}
@@ -297,6 +309,9 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Build application
         env:
