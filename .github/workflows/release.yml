@@ -12,7 +12,7 @@ on:
         default: ''
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '20.x'
 
 jobs:
   # =============================================================================
@@ -343,7 +343,7 @@ jobs:
         run: find artifacts -type f -name "*" | head -50
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: OpenPLC Editor v${{ steps.version.outputs.version }}
           draft: false
