@@ -1,4 +1,3 @@
-
 /* eslint-disable */
 const notarize = require('@electron/notarize')
 
@@ -14,13 +13,30 @@ exports.default = async function notarizeMacos(context) {
     return
   }
 
+  // Validate required environment variables
+  const appleId = process.env.APPLE_ID
+  const appleIdPassword = process.env.APPLE_ID_PASSWORD
+  const teamId = process.env.APPLE_TEAM_ID || '66HTP4XT8H'
+
+  if (!appleId || !appleIdPassword) {
+    throw new Error(
+      'Missing required environment variables for notarization. ' +
+        'Please set APPLE_ID and APPLE_ID_PASSWORD.'
+    )
+  }
+
   const appName = context.packager.appInfo.productFilename
+  const appBundleId = `${teamId}.com.autonomylogic.openplceditor`
+
+  console.log(`Notarizing ${appName}.app...`)
 
   await notarize.notarize({
-    appBundleId: '66HTP4XT8H.com.autonomylogic.openplceditor',
+    appBundleId,
     appPath: `${appOutDir}/${appName}.app`,
-    teamId: '66HTP4XT8H',
-    appleId: 'thiago.alves@autonomylogic.com',
-    appleIdPassword: 'INSERT-APP-SPECIFIC-PASSWORD-HERE',
+    teamId,
+    appleId,
+    appleIdPassword,
   })
+
+  console.log(`Successfully notarized ${appName}.app`)
 }

@@ -66,10 +66,12 @@
         "to": "./sources"
       }
     ],
-    "target": {
-      "target": "default",
-      "arch": ["x64"]
-    },
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
     "artifactName": "${productName}_${version}.${ext}"
   },
   "linux": {
@@ -83,7 +85,13 @@
         "to": "./sources"
       }
     ],
-    "target": ["AppImage"],
-    "category": "Development"
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": ["x64"]
+      }
+    ],
+    "category": "Development",
+    "artifactName": "${productName}-${version}.${ext}"
   }
 }
