@@ -1,6 +1,7 @@
+import { CloseIcon } from '@root/renderer/assets/icons/interface/Close'
+import { MagnifierIcon } from '@root/renderer/assets/icons/interface/Magnifier'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { Clock, Search, X } from 'lucide-react'
 import { memo } from 'react'
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error'
@@ -42,7 +43,7 @@ const ConsoleFilters = memo(() => {
 
       {/* Search Input */}
       <div className='relative flex-1'>
-        <Search className='absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500' />
+        <MagnifierIcon className='absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 stroke-neutral-500' />
         <input
           type='text'
           placeholder='Search logs...'
@@ -55,7 +56,7 @@ const ConsoleFilters = memo(() => {
             onClick={() => consoleActions.setSearchTerm('')}
             className='absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300'
           >
-            <X className='h-4 w-4' />
+            <CloseIcon className='h-4 w-4 stroke-current' />
           </button>
         )}
       </div>
@@ -71,7 +72,7 @@ const ConsoleFilters = memo(() => {
         )}
         title={filters.showRelativeTime ? 'Show absolute time' : 'Show relative time'}
       >
-        <Clock className='h-3 w-3' />
+        <span className='text-sm'>🕐</span>
         Relative
       </button>
 
