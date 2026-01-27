@@ -1,4 +1,6 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
+import { ConsoleFilters } from '@components/_organisms/console/filters'
+import { PlcLogsFilters } from '@components/_organisms/plc-logs/filters'
 import * as Tabs from '@radix-ui/react-tabs'
 import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
@@ -1734,7 +1736,22 @@ const WorkspaceScreen = () => {
                         </ResizablePanelGroup>
                       </Tabs.Content>
                     )}
-                    {activeTab === 'console' && <ClearConsoleButton />}
+                    {activeTab === 'console' && (
+                      <>
+                        <div className='absolute right-36 top-1'>
+                          <ConsoleFilters />
+                        </div>
+                        <ClearConsoleButton />
+                      </>
+                    )}
+                    {activeTab === 'plc-logs' && (
+                      <>
+                        <div className='absolute right-36 top-1'>
+                          <PlcLogsFilters />
+                        </div>
+                        <ClearConsoleButton />
+                      </>
+                    )}
                   </Tabs.Root>
                 </ResizablePanel>
               </ResizablePanelGroup>

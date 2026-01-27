@@ -5,7 +5,6 @@ import { debounce } from 'lodash'
 import { memo, useEffect, useMemo, useRef } from 'react'
 
 import { LogComponent, LogLevel } from '../console/log'
-import { PlcLogsFilters } from './filters'
 
 const mapV4LevelToLogLevel = (level: RuntimeLogLevel): LogLevel => {
   switch (level) {
@@ -87,27 +86,24 @@ const PlcLogs = memo(() => {
   }, [logCount])
 
   return (
-    <div className='flex h-full w-full flex-col'>
-      <PlcLogsFilters />
-      <div
-        aria-label='PLC Logs'
-        className='relative flex-1 select-text overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
-      >
-        {isV4
-          ? v4DisplayLogs.map((entry, index) => (
-              <LogComponent
-                key={`plc-log-v4-${entry.id ?? index}-${index}`}
-                level={mapV4LevelToLogLevel(entry.level)}
-                message={entry.message}
-                tstamp={formatTimestamp(entry.timestamp, filters.showRelativeTime)}
-              />
-            ))
-          : v3LogLines.length > 0 &&
-            v3LogLines.map((line, index) => (
-              <LogComponent key={`plc-log-v3-${index}-${line.slice(0, 50)}`} level='info' message={line} tstamp='' />
-            ))}
-        <div ref={bottomLogRef} id='bottom-log' />
-      </div>
+    <div
+      aria-label='PLC Logs'
+      className='relative h-full w-full select-text overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
+    >
+      {isV4
+        ? v4DisplayLogs.map((entry, index) => (
+            <LogComponent
+              key={`plc-log-v4-${entry.id ?? index}-${index}`}
+              level={mapV4LevelToLogLevel(entry.level)}
+              message={entry.message}
+              tstamp={formatTimestamp(entry.timestamp, filters.showRelativeTime)}
+            />
+          ))
+        : v3LogLines.length > 0 &&
+          v3LogLines.map((line, index) => (
+            <LogComponent key={`plc-log-v3-${index}-${line.slice(0, 50)}`} level='info' message={line} tstamp='' />
+          ))}
+      <div ref={bottomLogRef} id='bottom-log' />
     </div>
   )
 })

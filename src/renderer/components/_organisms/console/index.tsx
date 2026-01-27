@@ -4,7 +4,6 @@ import { formatTimestamp } from '@root/utils'
 import { debounce } from 'lodash'
 import { memo, useEffect, useMemo, useRef } from 'react'
 
-import { ConsoleFilters } from './filters'
 import { LogComponent } from './log'
 
 const Console = memo(() => {
@@ -52,23 +51,20 @@ const Console = memo(() => {
   }, [filteredLogs])
 
   return (
-    <div className='flex h-full w-full flex-col'>
-      <ConsoleFilters />
-      <div
-        aria-label='Console'
-        className='relative flex-1 select-text overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
-      >
-        {filteredLogs.length > 0 &&
-          filteredLogs.map((log) => (
-            <LogComponent
-              key={log.id}
-              level={log.level}
-              message={log.message}
-              tstamp={formatTimestamp(log.tstamp, filters.showRelativeTime)}
-            />
-          ))}
-        <div ref={bottomLogRef} id='bottom-log' />
-      </div>
+    <div
+      aria-label='Console'
+      className='relative h-full w-full select-text overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
+    >
+      {filteredLogs.length > 0 &&
+        filteredLogs.map((log) => (
+          <LogComponent
+            key={log.id}
+            level={log.level}
+            message={log.message}
+            tstamp={formatTimestamp(log.tstamp, filters.showRelativeTime)}
+          />
+        ))}
+      <div ref={bottomLogRef} id='bottom-log' />
     </div>
   )
 })
