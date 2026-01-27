@@ -22,7 +22,7 @@ interface AddressSpaceTabProps {
 }
 
 const inputStyles =
-  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
 export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressSpaceTabProps) => {
   const {

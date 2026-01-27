@@ -13,7 +13,7 @@ interface CertificateModalProps {
 }
 
 const inputStyles =
-  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
 const textareaStyles =
   'w-full rounded-md border border-neutral-300 bg-white px-2 py-2 font-mono text-xs text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
@@ -200,7 +200,7 @@ MIIEpDCCAowCCQC7...
             <button
               type='button'
               onClick={handleBrowseFile}
-              className='h-[32px] w-fit rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+              className='h-[32px] w-fit rounded-md border border-neutral-300 bg-white px-4 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
             >
               Browse File...
             </button>
@@ -241,7 +241,7 @@ MIIEpDCCAowCCQC7...
           <button
             type='button'
             onClick={onClose}
-            className='h-[32px] rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+            className='h-[32px] rounded-md border border-neutral-300 bg-white px-4 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
           >
             Cancel
           </button>
@@ -250,7 +250,7 @@ MIIEpDCCAowCCQC7...
             onClick={handleSave}
             disabled={!isValid}
             className={cn(
-              'h-[32px] rounded-md bg-brand px-4 font-caption text-xs font-medium text-white hover:bg-brand-medium-dark',
+              'h-[32px] rounded-md bg-brand px-4 font-caption !text-xs font-medium text-white hover:bg-brand-medium-dark',
               !isValid && 'cursor-not-allowed opacity-50',
             )}
           >

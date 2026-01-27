@@ -115,7 +115,7 @@ export const SecurityProfilesTab = ({ config, serverName, onConfigChange }: Secu
       <button
         type='button'
         onClick={handleAddProfile}
-        className='flex h-[36px] w-fit items-center gap-2 rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+        className='flex h-[36px] w-fit items-center gap-2 rounded-md border border-neutral-300 bg-white px-4 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
       >
         <span className='text-lg leading-none'>+</span>
         Add Security Profile
@@ -163,7 +163,7 @@ export const SecurityProfilesTab = ({ config, serverName, onConfigChange }: Secu
                 <button
                   type='button'
                   onClick={() => handleEditProfile(profile)}
-                  className='h-[28px] rounded-md border border-neutral-300 bg-white px-3 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+                  className='h-[28px] rounded-md border border-neutral-300 bg-white px-3 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
                 >
                   Edit
                 </button>
@@ -172,7 +172,7 @@ export const SecurityProfilesTab = ({ config, serverName, onConfigChange }: Secu
                   onClick={() => handleDeleteProfile(profile.id)}
                   disabled={config.securityProfiles.length <= 1}
                   className={cn(
-                    'h-[28px] rounded-md border border-red-300 bg-white px-3 font-caption text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950',
+                    'h-[28px] rounded-md border border-red-300 bg-white px-3 font-caption !text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950',
                     config.securityProfiles.length <= 1 && 'cursor-not-allowed opacity-50',
                   )}
                 >

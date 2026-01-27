@@ -155,7 +155,7 @@ export const CertificatesTab = ({ config, serverName, onConfigChange }: Certific
             <SelectTrigger
               withIndicator
               placeholder='Select strategy'
-              className='flex h-[30px] w-full max-w-[300px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              className='flex h-[30px] w-full max-w-[300px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
             />
             <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
               <SelectItem
@@ -207,7 +207,7 @@ MIIEpDCCAowCCQC7...
               <button
                 type='button'
                 onClick={handleBrowseCertFile}
-                className='h-[32px] w-fit rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+                className='h-[32px] w-fit rounded-md border border-neutral-300 bg-white px-4 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
               >
                 Browse File...
               </button>
@@ -228,7 +228,7 @@ MIIEvgIBADANBg...
               <button
                 type='button'
                 onClick={handleBrowseKeyFile}
-                className='h-[32px] w-fit rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+                className='h-[32px] w-fit rounded-md border border-neutral-300 bg-white px-4 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
               >
                 Browse File...
               </button>
@@ -250,7 +250,7 @@ MIIEvgIBADANBg...
         <button
           type='button'
           onClick={handleAddCertificate}
-          className='flex h-[36px] w-fit items-center gap-2 rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+          className='flex h-[36px] w-fit items-center gap-2 rounded-md border border-neutral-300 bg-white px-4 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
         >
           <span className='text-lg leading-none'>+</span>
           Add Trusted Certificate
@@ -284,7 +284,7 @@ MIIEvgIBADANBg...
                     <button
                       type='button'
                       onClick={() => handleDeleteCertificate(cert.id)}
-                      className='h-[28px] rounded-md border border-red-300 bg-white px-3 font-caption text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950'
+                      className='h-[28px] rounded-md border border-red-300 bg-white px-3 font-caption !text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950'
                     >
                       Delete
                     </button>

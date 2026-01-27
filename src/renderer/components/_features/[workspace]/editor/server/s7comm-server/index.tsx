@@ -201,7 +201,7 @@ const DataBlockModal = ({ isOpen, onClose, onSave, existingDbNumbers, editingBlo
               onChange={(e) => setDbNumber(e.target.value)}
               min='1'
               max='65535'
-              className='h-[30px] w-32 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              className='h-[30px] w-32 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
             />
           </div>
 
@@ -213,7 +213,7 @@ const DataBlockModal = ({ isOpen, onClose, onSave, existingDbNumbers, editingBlo
               onChange={(e) => setDescription(e.target.value)}
               maxLength={128}
               placeholder='Optional description'
-              className='h-[30px] flex-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              className='h-[30px] flex-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
             />
           </div>
 
@@ -225,7 +225,7 @@ const DataBlockModal = ({ isOpen, onClose, onSave, existingDbNumbers, editingBlo
               onChange={(e) => setSizeBytes(e.target.value)}
               min='1'
               max='65536'
-              className='h-[30px] w-32 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              className='h-[30px] w-32 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
             />
           </div>
 
@@ -235,7 +235,7 @@ const DataBlockModal = ({ isOpen, onClose, onSave, existingDbNumbers, editingBlo
               <SelectTrigger
                 withIndicator
                 placeholder='Select mapping type'
-                className='flex h-[30px] flex-1 items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                className='flex h-[30px] flex-1 items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
                 {BUFFER_TYPE_OPTIONS.map((option) => (
@@ -264,7 +264,7 @@ const DataBlockModal = ({ isOpen, onClose, onSave, existingDbNumbers, editingBlo
               onChange={(e) => setStartBuffer(e.target.value)}
               min='0'
               max='1023'
-              className='h-[30px] w-32 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              className='h-[30px] w-32 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
             />
           </div>
 
@@ -497,7 +497,7 @@ const S7CommServerEditor = () => {
   )
 
   const inputStyles =
-    'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+    'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
   if (protocol !== 's7comm') {
     return (
@@ -565,7 +565,7 @@ const S7CommServerEditor = () => {
                       <SelectTrigger
                         withIndicator
                         placeholder='Select network interface'
-                        className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                        className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                       />
                       <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
                         {NETWORK_INTERFACE_OPTIONS.map((option) => (

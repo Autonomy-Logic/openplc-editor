@@ -76,14 +76,14 @@ export const SelectedVariablesList = ({ nodes, onEdit, onRemove }: SelectedVaria
               <button
                 type='button'
                 onClick={() => onEdit(node)}
-                className='h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+                className='h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
               >
                 Edit
               </button>
               <button
                 type='button'
                 onClick={() => onRemove(node.id)}
-                className='h-[24px] rounded-md border border-red-300 bg-white px-2 font-caption text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950'
+                className='h-[24px] rounded-md border border-red-300 bg-white px-2 font-caption !text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950'
               >
                 Remove
               </button>

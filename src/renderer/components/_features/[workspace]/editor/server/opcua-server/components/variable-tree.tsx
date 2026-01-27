@@ -162,7 +162,7 @@ const TreeNodeRow = ({ node, depth, selectedIds, expandedIds, onToggleExpand, on
         {/* Node name */}
         <span
           className={cn(
-            'font-caption text-xs font-medium',
+            'font-caption !text-xs font-medium',
             node.isSelectable ? 'text-neutral-950 dark:text-white' : 'text-neutral-700 dark:text-neutral-300',
           )}
         >

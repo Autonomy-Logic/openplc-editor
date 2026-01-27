@@ -21,7 +21,7 @@ interface SecurityProfileModalProps {
 }
 
 const inputStyles =
-  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
 const SECURITY_POLICIES: { value: SecurityPolicy; label: string }[] = [
   { value: 'None', label: 'None (No Security)' },
@@ -225,7 +225,7 @@ export const SecurityProfileModal = ({
                 <SelectTrigger
                   withIndicator
                   placeholder='Select policy'
-                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                 />
                 <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
                   {SECURITY_POLICIES.map((option) => (
@@ -258,7 +258,7 @@ export const SecurityProfileModal = ({
                   withIndicator
                   placeholder='Select mode'
                   className={cn(
-                    'flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300',
+                    'flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300',
                     securityPolicy === 'None' && 'cursor-not-allowed opacity-50',
                   )}
                 />
@@ -366,7 +366,7 @@ export const SecurityProfileModal = ({
           <button
             type='button'
             onClick={onClose}
-            className='h-[32px] rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+            className='h-[32px] rounded-md border border-neutral-300 bg-white px-4 font-caption !text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
           >
             Cancel
           </button>
@@ -375,7 +375,7 @@ export const SecurityProfileModal = ({
             onClick={handleSave}
             disabled={!isValid}
             className={cn(
-              'h-[32px] rounded-md bg-brand px-4 font-caption text-xs font-medium text-white hover:bg-brand-medium-dark',
+              'h-[32px] rounded-md bg-brand px-4 font-caption !text-xs font-medium text-white hover:bg-brand-medium-dark',
               !isValid && 'cursor-not-allowed opacity-50',
             )}
           >
