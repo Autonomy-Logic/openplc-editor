@@ -4,6 +4,12 @@ import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
 // Note: Logs polling is now handled by useRuntimePolling hook
 import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
+import {
+  appendToDebugPath,
+  buildDebugPath,
+  getFieldIndexFromMapWithFallback,
+  getIndexFromMapWithFallback,
+} from '@root/utils/debug-variable-finder'
 import { useEffect, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
@@ -13,7 +19,11 @@ import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
-import { ModbusServerEditor, S7CommServerEditor } from '../components/_features/[workspace]/editor/server'
+import {
+  ModbusServerEditor,
+  OpcUaServerEditor,
+  S7CommServerEditor,
+} from '../components/_features/[workspace]/editor/server'
 import { Search } from '../components/_features/[workspace]/search'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import AboutModal from '../components/_organisms/about-modal'
@@ -255,8 +265,8 @@ const WorkspaceScreen = () => {
       fbVariables.forEach((fbVar) => {
         if (fbVar.type.definition === 'base-type') {
           // Base type variable - add to variableInfoMap
-          const debugPath = `${debugPathPrefix}.${fbVar.name.toUpperCase()}`
-          const index = debugVariableIndexes.get(debugPath)
+          // Use fallback to try both FB-style and struct-style paths
+          const index = getFieldIndexFromMapWithFallback(debugVariableIndexes, debugPathPrefix, fbVar.name)
 
           if (index !== undefined) {
             const varName = `${variableNamePrefix}.${fbVar.name}`
@@ -298,7 +308,7 @@ const WorkspaceScreen = () => {
         } else if (fbVar.type.definition === 'derived') {
           // Nested function block - recursively process
           const nestedFBTypeName = fbVar.type.value.toUpperCase()
-          const nestedDebugPath = `${debugPathPrefix}.${fbVar.name.toUpperCase()}`
+          const nestedDebugPath = appendToDebugPath(debugPathPrefix, fbVar.name)
           const nestedVarName = `${variableNamePrefix}.${fbVar.name}`
 
           // Look up the nested FB definition
@@ -332,7 +342,7 @@ const WorkspaceScreen = () => {
         } else if (fbVar.type.definition === 'user-data-type') {
           // Nested struct - recursively process
           const structTypeName = fbVar.type.value
-          const nestedDebugPath = `${debugPathPrefix}.${fbVar.name.toUpperCase()}`
+          const nestedDebugPath = appendToDebugPath(debugPathPrefix, fbVar.name)
           const nestedVarName = `${variableNamePrefix}.${fbVar.name}`
 
           // Check if this is actually a function block (some FBs are defined as user-data-type)
@@ -476,8 +486,12 @@ const WorkspaceScreen = () => {
             }
 
             allBaseTypeVars.forEach((fbVar) => {
-              const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}.${fbVar.name.toUpperCase()}`
-              const index = debugVariableIndexes.get(debugPath)
+              // Use fallback to try both FB-style and struct-style paths
+              const index = getIndexFromMapWithFallback(
+                debugVariableIndexes,
+                programInstance.name,
+                `${fbInstance.name}.${fbVar.name}`,
+              )
 
               if (index !== undefined) {
                 const blockVarName = `${fbInstance.name}.${fbVar.name}`
@@ -523,7 +537,7 @@ const WorkspaceScreen = () => {
               (v) => v.type.definition === 'derived' || v.type.definition === 'user-data-type',
             )
             if (nestedVariables.length > 0) {
-              const debugPathPrefix = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}`
+              const debugPathPrefix = buildDebugPath(programInstance.name, fbInstance.name)
               const variableNamePrefix = fbInstance.name
               processNestedVariables(nestedVariables, pou.data.name, debugPathPrefix, variableNamePrefix)
             }
@@ -573,8 +587,12 @@ const WorkspaceScreen = () => {
                 }
 
                 boolOutputs.forEach((outputVar) => {
-                  const debugPath = `RES0__${programInstance.name.toUpperCase()}._TMP_${blockName}${numericId}_${outputVar.name.toUpperCase()}`
-                  const index = debugVariableIndexes.get(debugPath)
+                  // Use fallback to try both FB-style and struct-style paths
+                  const index = getIndexFromMapWithFallback(
+                    debugVariableIndexes,
+                    programInstance.name,
+                    `_TMP_${blockName}${numericId}_${outputVar.name}`,
+                  )
 
                   if (index !== undefined) {
                     const tempVarName = `_TMP_${blockName}${numericId}_${outputVar.name}`
@@ -622,8 +640,8 @@ const WorkspaceScreen = () => {
       // 1. Process base-type variables of this FB
       const baseTypeVars = fbVariables.filter((v) => v.type.definition === 'base-type')
       baseTypeVars.forEach((fbVar) => {
-        const debugPath = `${debugPathPrefix}.${fbVar.name.toUpperCase()}`
-        const index = debugVariableIndexes.get(debugPath)
+        // Use fallback to try both FB-style and struct-style paths
+        const index = getFieldIndexFromMapWithFallback(debugVariableIndexes, debugPathPrefix, fbVar.name)
 
         if (index !== undefined) {
           const varName = `${variablePathPrefix}.${fbVar.name}`
@@ -734,8 +752,12 @@ const WorkspaceScreen = () => {
               boolOutputs.forEach((outputVar) => {
                 // Debug path uses the full nested path:
                 // RES0__INSTANCE0.FB_B0.FB_A0._TMP_EQ_STATE7415072_ENO
-                const debugPath = `${debugPathPrefix}._TMP_${blockName}${numericId}_${outputVar.name.toUpperCase()}`
-                const index = debugVariableIndexes.get(debugPath)
+                // Use fallback to try both FB-style and struct-style paths
+                const index = getFieldIndexFromMapWithFallback(
+                  debugVariableIndexes,
+                  debugPathPrefix,
+                  `_TMP_${blockName}${numericId}_${outputVar.name}`,
+                )
 
                 if (index !== undefined) {
                   // Variable name includes the full nested path for composite key matching
@@ -772,7 +794,7 @@ const WorkspaceScreen = () => {
 
         if (customFB && customFB.type === 'function-block') {
           // For custom FBs, recursively visit to process their internals
-          const nestedDebugPathPrefix = `${debugPathPrefix}.${nestedFbInstance.name.toUpperCase()}`
+          const nestedDebugPathPrefix = appendToDebugPath(debugPathPrefix, nestedFbInstance.name)
           const nestedVariablePathPrefix = `${variablePathPrefix}.${nestedFbInstance.name}`
           visitFbInstance(customFB, nestedDebugPathPrefix, nestedVariablePathPrefix, programPouName, new Map())
         }
@@ -818,7 +840,7 @@ const WorkspaceScreen = () => {
 
         if (customFB && customFB.type === 'function-block') {
           // For custom FBs, use visitFbInstance to process all internals
-          const debugPathPrefix = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}`
+          const debugPathPrefix = buildDebugPath(programInstance.name, fbInstance.name)
           const variablePathPrefix = fbInstance.name
           visitFbInstance(customFB, debugPathPrefix, variablePathPrefix, programPou.data.name, blockExecutionControlMap)
         }
@@ -1561,6 +1583,7 @@ const WorkspaceScreen = () => {
                         <ModbusServerEditor />
                       )}
                       {editor['type'] === 'plc-server' && editor.meta.protocol === 's7comm' && <S7CommServerEditor />}
+                      {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
                       {editor['type'] === 'plc-remote-device' && <RemoteDeviceEditor />}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup

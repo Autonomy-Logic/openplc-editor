@@ -1,5 +1,6 @@
 import {
   bodySchema,
+  OpcUaNodeConfigSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
@@ -384,6 +385,116 @@ const _projectActionsSchema = z.object({
     .args(z.string(), z.enum(['peArea', 'paArea', 'mkArea']), S7CommSystemAreaSchema.partial())
     .returns(projectResponseSchema),
   updateS7CommLogging: z.function().args(z.string(), S7CommLoggingSchema.partial()).returns(projectResponseSchema),
+
+  /**
+   * OPC-UA Server Actions
+   */
+  updateOpcUaServerConfig: z.function().args(z.string(), z.record(z.unknown())).returns(projectResponseSchema),
+  addOpcUaSecurityProfile: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        enabled: z.boolean(),
+        securityPolicy: z.enum(['None', 'Basic128Rsa15', 'Basic256', 'Basic256Sha256']),
+        securityMode: z.enum(['None', 'Sign', 'SignAndEncrypt']),
+        authMethods: z.array(z.enum(['Anonymous', 'Username', 'Certificate'])),
+      }),
+    )
+    .returns(projectResponseSchema),
+  updateOpcUaSecurityProfile: z
+    .function()
+    .args(
+      z.string(),
+      z.string(),
+      z
+        .object({
+          name: z.string(),
+          enabled: z.boolean(),
+          securityPolicy: z.enum(['None', 'Basic128Rsa15', 'Basic256', 'Basic256Sha256']),
+          securityMode: z.enum(['None', 'Sign', 'SignAndEncrypt']),
+          authMethods: z.array(z.enum(['Anonymous', 'Username', 'Certificate'])),
+        })
+        .partial(),
+    )
+    .returns(projectResponseSchema),
+  removeOpcUaSecurityProfile: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+
+  /**
+   * OPC-UA User Actions
+   */
+  addOpcUaUser: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        id: z.string(),
+        type: z.enum(['password', 'certificate']),
+        username: z.string().nullable(),
+        passwordHash: z.string().nullable(),
+        certificateId: z.string().nullable(),
+        role: z.enum(['viewer', 'operator', 'engineer']),
+      }),
+    )
+    .returns(projectResponseSchema),
+  updateOpcUaUser: z
+    .function()
+    .args(
+      z.string(),
+      z.string(),
+      z
+        .object({
+          type: z.enum(['password', 'certificate']),
+          username: z.string().nullable(),
+          passwordHash: z.string().nullable(),
+          certificateId: z.string().nullable(),
+          role: z.enum(['viewer', 'operator', 'engineer']),
+        })
+        .partial(),
+    )
+    .returns(projectResponseSchema),
+  removeOpcUaUser: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+
+  /**
+   * OPC-UA Certificate Actions
+   */
+  updateOpcUaServerCertificateStrategy: z
+    .function()
+    .args(
+      z.string(),
+      z.enum(['auto_self_signed', 'custom']),
+      z.string().nullable().optional(),
+      z.string().nullable().optional(),
+    )
+    .returns(projectResponseSchema),
+  addOpcUaTrustedCertificate: z
+    .function()
+    .args(
+      z.string(),
+      z.object({
+        id: z.string(),
+        pem: z.string(),
+        subject: z.string().optional(),
+        validFrom: z.string().optional(),
+        validTo: z.string().optional(),
+        fingerprint: z.string().optional(),
+      }),
+    )
+    .returns(projectResponseSchema),
+  removeOpcUaTrustedCertificate: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+
+  /**
+   * OPC-UA Address Space Node Actions
+   */
+  updateOpcUaAddressSpaceNamespace: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
+  addOpcUaNode: z.function().args(z.string(), OpcUaNodeConfigSchema).returns(projectResponseSchema),
+  updateOpcUaNode: z
+    .function()
+    .args(z.string(), z.string(), OpcUaNodeConfigSchema.partial())
+    .returns(projectResponseSchema),
+  removeOpcUaNode: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
 
   /**
    * Remote Device Actions

@@ -362,7 +362,7 @@ const RemoteDeviceEditor = () => {
       setHost(remoteDevice.modbusTcpConfig.host)
       setPort(remoteDevice.modbusTcpConfig.port.toString())
       setTimeoutMs(remoteDevice.modbusTcpConfig.timeout.toString())
-      setSlaveId((remoteDevice.modbusTcpConfig.slaveId ?? 1).toString())
+      setSlaveId(String(remoteDevice.modbusTcpConfig.slaveId ?? 1))
     } else {
       setHost('127.0.0.1')
       setPort('502')

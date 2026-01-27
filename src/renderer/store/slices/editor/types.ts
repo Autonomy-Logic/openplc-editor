@@ -187,7 +187,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
       type: z.literal('plc-server'),
       meta: z.object({
         name: z.string(),
-        protocol: z.enum(['modbus-tcp', 's7comm', 'ethernet-ip']),
+        protocol: z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua']),
       }),
     })
     .extend({
