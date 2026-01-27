@@ -111,8 +111,9 @@ const generateDefaultFieldConfigs = (
 
     if (isLeaf) {
       // Leaf field - no nested fields
+      // Use variablePath for unique identification, name for display
       return {
-        fieldPath: child.name,
+        fieldPath: child.variablePath,
         displayName: child.name,
         datatype: child.variableType || 'UNKNOWN',
         initialValue: getDefaultInitialValue(child.variableType || 'UNKNOWN'),
@@ -121,8 +122,9 @@ const generateDefaultFieldConfigs = (
     } else {
       // Complex type (FB, struct, array) - generate nested fields recursively
       const nestedFields = generateDefaultFieldConfigs(child, parentPermissions)
+      // Use variablePath for unique identification, name for display
       return {
-        fieldPath: child.name,
+        fieldPath: child.variablePath,
         displayName: child.name,
         datatype: child.variableType || 'UNKNOWN',
         initialValue: getDefaultInitialValue(child.variableType || 'UNKNOWN'),
