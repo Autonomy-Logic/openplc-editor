@@ -1,0 +1,293 @@
+================================================================================
+OPENPLC EDITOR - LOG IMPROVEMENTS PROJECT
+PHASE 3 IMPLEMENTATION GUIDE
+================================================================================
+
+PROJECT OVERVIEW:
+-----------------
+Branch: fix/improve-logs
+Jira Card: DOPE-161 - Improve log timestamps on PLC logs and console
+Goal: Improve logging experience with better timestamps, filtering, and UX
+
+================================================================================
+COMPLETED PHASES (Phase 1 & 2)
+================================================================================
+
+PHASE 1 - TIMESTAMP IMPROVEMENTS ✅
+------------------------------------
+Location: Committed on 2026-01-27
+
+Changes Made:
+1. Created unified timestamp utility
+   - File: src/utils/formatTimestamp.ts
+   - Format: YYYY-MM-DD HH:mm:ss.SSS
+   - Support for relative timestamps ("2m ago", "just now")
+   - Handles both Date objects and ISO strings
+
+2. Updated Console logs
+   - File: src/renderer/components/_organisms/console/index.tsx
+   - Applied new timestamp format
+   - Added filtering logic for levels and search
+
+3. Updated PLC logs
+   - File: src/renderer/components/_organisms/plc-logs/index.tsx
+   - Applied consistent timestamp format for v4 logs
+   - Added filtering for v4 and v3 logs
+
+4. Fixed Python LSP error handling
+   - Improved type safety in error messages
+
+Key Features:
+- Consistent timestamps across console and PLC logs
+- Full date visibility (YYYY-MM-DD)
+- Millisecond precision for debugging
+- Relative time display option
+
+PHASE 2 - FILTER IMPROVEMENTS ✅
+---------------------------------
+Location: Committed on 2026-01-27
+
+Changes Made:
+1. Installed lucide-react library
+   - npm package for modern icons
+   - Icons used: Filter, ChevronDown, Search, X
+
+2. Created expandable filter components
+   - File: src/renderer/components/_organisms/console/filters.tsx
+   - File: src/renderer/components/_organisms/plc-logs/filters.tsx
+   - Transformed from inline toolbar to expandable button
+
+3. Extended console store with filter state
+   - File: src/renderer/store/slices/console/types.ts
+   - File: src/renderer/store/slices/console/slice.ts
+   - Added: levels (debug, info, warning, error)
+   - Added: searchTerm (string)
+   - Added: showRelativeTime (boolean)
+
+4. Positioned filters next to Clear Console button
+   - File: src/renderer/screens/workspace-screen.tsx
+   - Absolute positioning: right-36 (filter) and right-2 (clear button)
+   - Applied to both Console and PLC Logs tabs
+
+5. Implemented expandable filter panel
+   - Toggle button with Filter icon
+   - Visual indicators (badge count, color change when active)
+   - Expandable panel (384px wide) with:
+     * Search input with magnifier icon
+     * Log level toggles (Debug, Info, Warning, Error)
+     * Relative time toggle
+   - ChevronDown icon rotates on expand/collapse
+
+6. UI/UX improvements
+   - Removed background contrast from filter group
+   - Removed redundant Clear button from filters
+   - Applied toggle switch pattern matching existing UI
+   - Added proper border and shadow to dropdowns
+   - Consistent styling with board selection component
+
+Key Features:
+- Expandable/collapsible filter panel
+- Active filter indicator badge
+- Log level filtering with toggle switches
+- Text search across messages and timestamps
+- Relative time display toggle
+- Positioned alongside Clear Console button
+- Consistent design patterns
+
+Current File Structure:
+-----------------------
+src/
+├── utils/
+│   └── formatTimestamp.ts (unified timestamp formatting)
+├── renderer/
+│   ├── components/
+│   │   └── _organisms/
+│   │       ├── console/
+│   │       │   ├── filters.tsx (expandable filter component)
+│   │       │   └── index.tsx (console display, removed inline filters)
+│   │       └── plc-logs/
+│   │           ├── filters.tsx (expandable filter component)
+│   │           └── index.tsx (plc logs display, removed inline filters)
+│   ├── screens/
+│   │   └── workspace-screen.tsx (positions filters next to clear button)
+│   └── store/
+│       └── slices/
+│           └── console/
+│               ├── types.ts (filter state types)
+│               └── slice.ts (filter actions)
+
+Dependencies Added:
+-------------------
+- lucide-react: ^0.469.0 (for modern icons)
+
+================================================================================
+PHASE 3 - REMAINING IMPLEMENTATION (TO BE DONE)
+================================================================================
+
+OBJECTIVE:
+----------
+Based on the original Jira card DOPE-161, the following features may still need
+to be implemented. Review and implement as needed:
+
+POTENTIAL FEATURES TO IMPLEMENT:
+---------------------------------
+
+1. LOG EXPORT FUNCTIONALITY
+   - Add export button to download logs
+   - Support formats: .txt, .csv, .json
+   - Include filtered logs only or all logs option
+   - Add timestamp to exported filename
+
+2. LOG PERSISTENCE
+   - Save logs to disk automatically
+   - Load previous session logs on startup
+   - Configurable log retention period
+   - Clear old logs automatically
+
+3. ADVANCED FILTERING
+   - Regular expression search support
+   - Date/time range filtering
+   - Combined filter operators (AND/OR)
+   - Save filter presets
+
+4. PERFORMANCE OPTIMIZATIONS
+   - Virtual scrolling for large log lists
+   - Log entry limit with rotation
+   - Lazy loading for historical logs
+   - Debounced filter updates
+
+5. LOG HIGHLIGHTING
+   - Syntax highlighting for structured logs
+   - Color coding for different log sources
+   - Highlight search matches in logs
+   - Custom highlighting rules
+
+6. ADDITIONAL UX IMPROVEMENTS
+   - Auto-scroll toggle
+   - Copy individual log entries
+   - Select multiple log entries
+   - Keyboard shortcuts for filtering
+   - Log entry timestamps on hover
+
+IMPLEMENTATION NOTES:
+---------------------
+
+Current Store Structure:
+The filter state is in the console slice:
+  - filters.levels: { debug, info, warning, error }
+  - filters.searchTerm: string
+  - filters.showRelativeTime: boolean
+
+Console Actions Available:
+  - setLevelFilter(level, enabled)
+  - setSearchTerm(term)
+  - setShowRelativeTime(enabled)
+  - clearLogs()
+
+Filter Components:
+Both ConsoleFilters and PlcLogsFilters are positioned absolutely:
+  - Position: right-36 (next to Clear Console button at right-2)
+  - Both use same filter state from store
+  - Expandable panel design with toggle button
+
+Design Patterns to Follow:
+- Toggle switches using sr-only checkbox + styled div
+- Input styling: h-[28px], text-xs, border-neutral-300
+- Buttons: rounded-md, px-2.5 py-1.5, consistent hover states
+- Dropdowns: rounded-lg, border-neutral-100, drop-shadow-lg
+- Dark mode support with dark: prefixes
+
+Icons from lucide-react:
+- Filter, ChevronDown, Search, X (already imported)
+- Additional icons available as needed
+
+TESTING CHECKLIST:
+------------------
+Before completing Phase 3:
+☐ Test log filtering by level (all 4 levels)
+☐ Test search functionality with various terms
+☐ Test relative time toggle
+☐ Test filter persistence across tab switches
+☐ Test dark mode compatibility
+☐ Test with large number of logs (performance)
+☐ Test filter clear/reset functionality
+☐ Test expandable panel positioning and z-index
+☐ Test on different screen sizes
+☐ Verify no console errors or warnings
+
+JIRA CARD REFERENCE:
+--------------------
+Card: DOPE-161
+Title: Improve log timestamps on PLC logs and console
+Description: Enhance logging with better timestamps, filtering, and UX
+
+Review the original Jira card for any additional requirements not covered
+in Phase 1 and Phase 2.
+
+DEVELOPMENT COMMANDS:
+---------------------
+npm run start:dev      # Start development server with hot reload
+npm run build          # Build for production
+npm run lint           # Run ESLint check
+npm run lint:fix       # Auto-fix lint issues
+npm run format         # Prettier formatting
+npm run test           # Run tests
+
+GIT WORKFLOW:
+-------------
+Branch: fix/improve-logs
+Base: development
+
+To continue work:
+1. git checkout fix/improve-logs
+2. git pull origin fix/improve-logs
+3. Make changes
+4. git add -A
+5. git commit -m "feat: [description]"
+6. git push origin fix/improve-logs
+
+When complete:
+1. Create PR from fix/improve-logs to development
+2. Update Jira card DOPE-161 to "In Review" or "Done"
+3. Request code review
+
+IMPORTANT FILES TO REVIEW:
+--------------------------
+- src/utils/formatTimestamp.ts
+- src/renderer/components/_organisms/console/filters.tsx
+- src/renderer/components/_organisms/plc-logs/filters.tsx
+- src/renderer/store/slices/console/types.ts
+- src/renderer/store/slices/console/slice.ts
+- src/renderer/screens/workspace-screen.tsx
+
+PROJECT STRUCTURE:
+------------------
+openplc-editor/
+├── src/
+│   ├── main/                 # Electron main process
+│   ├── renderer/             # React renderer process
+│   │   ├── components/       # UI components
+│   │   ├── screens/          # Screen components
+│   │   ├── store/            # Zustand state management
+│   │   └── hooks/            # React hooks
+│   ├── types/                # TypeScript types
+│   └── utils/                # Utility functions
+├── configs/                  # Webpack and build configs
+└── package.json
+
+CONTACT & RESOURCES:
+--------------------
+- GitHub Repo: Autonomy-Logic/openplc-editor
+- Branch: fix/improve-logs
+- Jira Card: DOPE-161
+- Date Started: 2026-01-27
+- Phases Completed: Phase 1 ✅, Phase 2 ✅
+- Remaining: Phase 3 (Review Jira card for specific requirements)
+
+================================================================================
+END OF PHASE 3 IMPLEMENTATION GUIDE
+================================================================================
+
+Last Updated: 2026-01-27
+Status: Phase 1 & 2 Complete, Phase 3 Pending
+Next Steps: Review Jira card DOPE-161, identify Phase 3 requirements, implement
