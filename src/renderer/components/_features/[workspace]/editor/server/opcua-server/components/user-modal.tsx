@@ -1,3 +1,5 @@
+import ViewIcon from '@root/renderer/assets/icons/interface/View'
+import ViewHiddenIcon from '@root/renderer/assets/icons/interface/ViewHidden'
 import { InputWithRef } from '@root/renderer/components/_atoms/input'
 import { Label } from '@root/renderer/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms/select'
@@ -21,7 +23,7 @@ interface UserModalProps {
 }
 
 const inputStyles =
-  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
 const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
   { value: 'viewer', label: 'Viewer', description: 'Read-only access to all variables' },
@@ -216,7 +218,7 @@ export const UserModal = ({
               <SelectTrigger
                 withIndicator
                 placeholder='Select type'
-                className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
                 <SelectItem
@@ -281,9 +283,26 @@ export const UserModal = ({
                   <button
                     type='button'
                     onClick={() => setShowPassword(!showPassword)}
-                    className='absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+                    disabled={!password}
+                    className={cn(
+                      'absolute right-2 top-1/2 -translate-y-1/2',
+                      password
+                        ? 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+                        : 'cursor-not-allowed text-neutral-300 dark:text-neutral-600',
+                    )}
+                    title={
+                      !password
+                        ? 'Enter a password to toggle visibility'
+                        : showPassword
+                          ? 'Hide password'
+                          : 'Show password'
+                    }
                   >
-                    {showPassword ? '🙈' : '👁'}
+                    {showPassword ? (
+                      <ViewHiddenIcon size='sm' className='h-4 w-4 fill-current' />
+                    ) : (
+                      <ViewIcon size='sm' className='h-4 w-4 fill-current' />
+                    )}
                   </button>
                 </div>
               </div>
@@ -320,7 +339,7 @@ export const UserModal = ({
                     <SelectTrigger
                       withIndicator
                       placeholder='Select certificate'
-                      className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                      className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                     />
                     <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
                       {availableCertificates.map((cert) => (
@@ -357,7 +376,7 @@ export const UserModal = ({
                 <SelectTrigger
                   withIndicator
                   placeholder='Select role'
-                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                 />
                 <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
                   {ROLE_OPTIONS.map((option) => (

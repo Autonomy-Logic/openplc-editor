@@ -197,8 +197,7 @@ export const SecurityProfilesTab = ({ config, serverName, onConfigChange }: Secu
 
               {/* Warning for insecure profiles */}
               {profile.securityPolicy === 'None' && profile.enabled && (
-                <div className='mt-2 flex items-start gap-2 rounded bg-amber-50 p-2 dark:bg-amber-950'>
-                  <span className='text-amber-500'>!</span>
+                <div className='mt-2 rounded bg-amber-50 p-2 dark:bg-amber-950'>
                   <p className='text-xs text-amber-700 dark:text-amber-400'>
                     Warning: No encryption or authentication. Use only for development/testing.
                   </p>

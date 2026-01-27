@@ -68,6 +68,7 @@ export * from './interface/Transfer'
 export * from './interface/TrashCan'
 export * from './interface/Video'
 export * from './interface/View'
+export * from './interface/ViewHidden'
 export * from './interface/Zap'
 export * from './interface/ZoomInOut'
 
