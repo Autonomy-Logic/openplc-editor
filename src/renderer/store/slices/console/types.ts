@@ -10,6 +10,8 @@ const logObjectSchema = z.object({
     .default(() => new Date()),
 })
 
+const timestampFormatSchema = z.enum(['full', 'time', 'none'])
+
 const consoleFiltersSchema = z.object({
   levels: z.object({
     debug: z.boolean(),
@@ -18,8 +20,11 @@ const consoleFiltersSchema = z.object({
     error: z.boolean(),
   }),
   searchTerm: z.string(),
-  showRelativeTime: z.boolean(),
+  timestampFormat: timestampFormatSchema,
+  autoScroll: z.boolean(),
 })
+
+type TimestampFormat = z.infer<typeof timestampFormatSchema>
 
 const consoleStateSchema = z.object({
   logs: z.array(logObjectSchema),
@@ -37,7 +42,8 @@ const consoleActionSchema = z.object({
     .args(z.enum(['debug', 'info', 'warning', 'error']), z.boolean())
     .returns(z.void()),
   setSearchTerm: z.function().args(z.string()).returns(z.void()),
-  setShowRelativeTime: z.function().args(z.boolean()).returns(z.void()),
+  setTimestampFormat: z.function().args(timestampFormatSchema).returns(z.void()),
+  setAutoScroll: z.function().args(z.boolean()).returns(z.void()),
 })
 
 type ConsoleActions = z.infer<typeof consoleActionSchema>
@@ -46,6 +52,6 @@ type ConsoleSlice = ConsoleState & {
   consoleActions: ConsoleActions
 }
 
-export { consoleActionSchema, consoleFiltersSchema, consoleStateSchema, logObjectSchema }
+export { consoleActionSchema, consoleFiltersSchema, consoleStateSchema, logObjectSchema, timestampFormatSchema }
 
-export type { ConsoleActions, ConsoleSlice, ConsoleState }
+export type { ConsoleActions, ConsoleSlice, ConsoleState, TimestampFormat }

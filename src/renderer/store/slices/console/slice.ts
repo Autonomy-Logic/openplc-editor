@@ -13,7 +13,8 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
       error: true,
     },
     searchTerm: '',
-    showRelativeTime: false,
+    timestampFormat: 'full',
+    autoScroll: true,
   },
   consoleActions: {
     addLog: (log) => {
@@ -52,10 +53,17 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
         }),
       )
     },
-    setShowRelativeTime: (enabled) => {
+    setTimestampFormat: (format) => {
       setState(
         produce((state: ConsoleSlice) => {
-          state.filters.showRelativeTime = enabled
+          state.filters.timestampFormat = format
+        }),
+      )
+    },
+    setAutoScroll: (enabled) => {
+      setState(
+        produce((state: ConsoleSlice) => {
+          state.filters.autoScroll = enabled
         }),
       )
     },

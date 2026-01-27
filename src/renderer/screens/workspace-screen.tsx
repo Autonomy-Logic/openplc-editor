@@ -1737,20 +1737,16 @@ const WorkspaceScreen = () => {
                       </Tabs.Content>
                     )}
                     {activeTab === 'console' && (
-                      <>
-                        <div className='absolute right-36 top-1'>
-                          <ConsoleFilters />
-                        </div>
+                      <div className='absolute right-2 top-1 flex items-center gap-2'>
+                        <ConsoleFilters />
                         <ClearConsoleButton />
-                      </>
+                      </div>
                     )}
                     {activeTab === 'plc-logs' && (
-                      <>
-                        <div className='absolute right-36 top-1'>
-                          <PlcLogsFilters />
-                        </div>
+                      <div className='absolute right-2 top-1 flex items-center gap-2'>
+                        <PlcLogsFilters />
                         <ClearConsoleButton />
-                      </>
+                      </div>
                     )}
                   </Tabs.Root>
                 </ResizablePanel>

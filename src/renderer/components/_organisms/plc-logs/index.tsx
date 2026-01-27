@@ -25,6 +25,8 @@ const PlcLogs = memo(() => {
   const plcLogs = useOpenPLCStore((state) => state.workspace.plcLogs)
   const filters = useOpenPLCStore((state) => state.filters)
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const userScrolledRef = useRef(false)
 
   const { isV4, _v4Logs, v4DisplayLogs, v3LogLines } = useMemo(() => {
     if (isV4Logs(plcLogs)) {
@@ -65,7 +67,25 @@ const PlcLogs = memo(() => {
 
   const logCount = isV4 ? v4DisplayLogs.length : v3LogLines.length
 
+  // Handle scroll to detect if user has scrolled away from bottom
   useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50
+      userScrolledRef.current = !isAtBottom
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
+    // Only auto-scroll if enabled and user hasn't scrolled away
+    if (!filters.autoScroll || userScrolledRef.current) return
+
     const debouncedScrollToBottomLog = debounce(
       () => {
         if (bottomLogRef.current) {
@@ -83,10 +103,11 @@ const PlcLogs = memo(() => {
     return () => {
       debouncedScrollToBottomLog.cancel()
     }
-  }, [logCount])
+  }, [logCount, filters.autoScroll])
 
   return (
     <div
+      ref={containerRef}
       aria-label='PLC Logs'
       className='relative h-full w-full select-text overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
     >
@@ -96,12 +117,19 @@ const PlcLogs = memo(() => {
               key={`plc-log-v4-${entry.id ?? index}-${index}`}
               level={mapV4LevelToLogLevel(entry.level)}
               message={entry.message}
-              tstamp={formatTimestamp(entry.timestamp, filters.showRelativeTime)}
+              tstamp={formatTimestamp(entry.timestamp, filters.timestampFormat)}
+              searchTerm={filters.searchTerm}
             />
           ))
         : v3LogLines.length > 0 &&
           v3LogLines.map((line, index) => (
-            <LogComponent key={`plc-log-v3-${index}-${line.slice(0, 50)}`} level='info' message={line} tstamp='' />
+            <LogComponent
+              key={`plc-log-v3-${index}-${line.slice(0, 50)}`}
+              level='info'
+              message={line}
+              tstamp=''
+              searchTerm={filters.searchTerm}
+            />
           ))}
       <div ref={bottomLogRef} id='bottom-log' />
     </div>

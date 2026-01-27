@@ -10,6 +10,8 @@ const Console = memo(() => {
   const logs = consoleSelectors.useLogs()
   const filters = useOpenPLCStore((state) => state.filters)
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const userScrolledRef = useRef(false)
 
   // Apply filters to logs
   const filteredLogs = useMemo(() => {
@@ -30,7 +32,25 @@ const Console = memo(() => {
     })
   }, [logs, filters])
 
+  // Handle scroll to detect if user has scrolled away from bottom
   useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50
+      userScrolledRef.current = !isAtBottom
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
+    // Only auto-scroll if enabled and user hasn't scrolled away
+    if (!filters.autoScroll || userScrolledRef.current) return
+
     const debouncedScrollToBottomLog = debounce(
       () => {
         if (bottomLogRef.current) {
@@ -48,10 +68,11 @@ const Console = memo(() => {
     return () => {
       debouncedScrollToBottomLog.cancel()
     }
-  }, [filteredLogs])
+  }, [filteredLogs, filters.autoScroll])
 
   return (
     <div
+      ref={containerRef}
       aria-label='Console'
       className='relative h-full w-full select-text overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
     >
@@ -61,7 +82,8 @@ const Console = memo(() => {
             key={log.id}
             level={log.level}
             message={log.message}
-            tstamp={formatTimestamp(log.tstamp, filters.showRelativeTime)}
+            tstamp={formatTimestamp(log.tstamp, filters.timestampFormat)}
+            searchTerm={filters.searchTerm}
           />
         ))}
       <div ref={bottomLogRef} id='bottom-log' />
