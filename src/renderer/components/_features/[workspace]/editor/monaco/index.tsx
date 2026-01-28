@@ -535,7 +535,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
       initPythonLSP(monacoInstance)
         .then(() => setupPythonLSPForEditor(editorInstance))
-        .catch((err) => console.warn('[Python LSP]', err.message))
+        .catch((err: unknown) => console.warn('[Python LSP]', err instanceof Error ? err.message : err))
     }
 
     if (language === 'cpp' && pou) {
