@@ -14,7 +14,6 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
     },
     searchTerm: '',
     timestampFormat: 'full',
-    autoScroll: true,
   },
   consoleActions: {
     addLog: (log) => {
@@ -57,13 +56,6 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
       setState(
         produce((state: ConsoleSlice) => {
           state.filters.timestampFormat = format
-        }),
-      )
-    },
-    setAutoScroll: (enabled) => {
-      setState(
-        produce((state: ConsoleSlice) => {
-          state.filters.autoScroll = enabled
         }),
       )
     },

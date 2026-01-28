@@ -48,14 +48,14 @@ const Console = memo(() => {
   }, [])
 
   useEffect(() => {
-    // Only auto-scroll if enabled and user hasn't scrolled away
-    if (!filters.autoScroll || userScrolledRef.current) return
+    // Only auto-scroll if user is at the bottom (terminal-like behavior)
+    if (userScrolledRef.current) return
 
     const debouncedScrollToBottomLog = debounce(
       () => {
         if (bottomLogRef.current) {
           bottomLogRef.current.scrollIntoView({
-            behavior: 'smooth',
+            behavior: 'instant',
             block: 'end',
             inline: 'end',
           })
@@ -68,7 +68,7 @@ const Console = memo(() => {
     return () => {
       debouncedScrollToBottomLog.cancel()
     }
-  }, [filteredLogs, filters.autoScroll])
+  }, [filteredLogs])
 
   return (
     <div

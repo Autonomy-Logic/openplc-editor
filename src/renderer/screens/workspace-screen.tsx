@@ -54,9 +54,10 @@ const WorkspaceScreen = () => {
       debugVariableIndexes,
       debugForcedVariables,
       debugExpandedNodes,
+      plcLogs,
     },
     editor,
-    workspaceActions: { toggleCollapse, setDebugForcedVariables, toggleDebugExpandedNode },
+    workspaceActions: { toggleCollapse, setDebugForcedVariables, toggleDebugExpandedNode, clearPlcLogs },
     deviceActions: { setAvailableOptions },
     searchResults,
     project: {
@@ -1745,7 +1746,7 @@ const WorkspaceScreen = () => {
                     {activeTab === 'plc-logs' && (
                       <div className='absolute right-2 top-1 flex items-center gap-2'>
                         <PlcLogsFilters />
-                        <ClearConsoleButton />
+                        <ClearConsoleButton onClear={clearPlcLogs} isEmpty={plcLogs.length === 0} label='Clear logs' />
                       </div>
                     )}
                   </Tabs.Root>

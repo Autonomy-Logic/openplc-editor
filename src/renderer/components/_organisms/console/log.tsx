@@ -1,6 +1,6 @@
 import { cn } from '@root/utils'
 import { Copy } from 'lucide-react'
-import { ComponentPropsWithoutRef, useCallback, useState } from 'react'
+import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
 
 const messageClasses = {
   debug: 'text-neutral-500 dark:text-neutral-400',
@@ -68,11 +68,24 @@ const LogComponent = ({ level, message, tstamp, searchTerm, ...rest }: LogCompon
 
   const fullMessage = level && tstamp ? `[${tstamp}]: ${message}` : message
 
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
+
   const handleCopy = useCallback(() => {
-    void navigator.clipboard.writeText(fullMessage).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
+    navigator.clipboard
+      .writeText(fullMessage)
+      .then(() => {
+        setCopied(true)
+        timeoutRef.current = setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => {
+        setCopied(false)
+      })
   }, [fullMessage])
 
   return (

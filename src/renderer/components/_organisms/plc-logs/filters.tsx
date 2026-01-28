@@ -348,23 +348,6 @@ const PlcLogsFilters = memo(() => {
 
             {/* Settings Section */}
             <div className='space-y-2 border-t border-neutral-200 pt-3 dark:border-neutral-800'>
-              {/* Auto-scroll Toggle */}
-              <div className='flex items-center justify-between'>
-                <span className='text-xs font-medium text-neutral-850 dark:text-neutral-300'>Auto-scroll</span>
-                <button
-                  onClick={() => consoleActions.setAutoScroll(!filters.autoScroll)}
-                  className={cn(
-                    'flex h-7 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
-                    filters.autoScroll
-                      ? 'border-brand bg-brand text-white hover:bg-brand-medium-dark'
-                      : 'border-neutral-300 bg-white text-neutral-850 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-850',
-                  )}
-                  title={filters.autoScroll ? 'Disable auto-scroll' : 'Enable auto-scroll'}
-                >
-                  <span>{filters.autoScroll ? 'On' : 'Off'}</span>
-                </button>
-              </div>
-
               {/* Timestamp Format Dropdown */}
               <div className='flex items-center justify-between'>
                 <span className='text-xs font-medium text-neutral-850 dark:text-neutral-300'>Format</span>

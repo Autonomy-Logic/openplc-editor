@@ -21,7 +21,6 @@ const consoleFiltersSchema = z.object({
   }),
   searchTerm: z.string(),
   timestampFormat: timestampFormatSchema,
-  autoScroll: z.boolean(),
 })
 
 type TimestampFormat = z.infer<typeof timestampFormatSchema>
@@ -43,7 +42,6 @@ const consoleActionSchema = z.object({
     .returns(z.void()),
   setSearchTerm: z.function().args(z.string()).returns(z.void()),
   setTimestampFormat: z.function().args(timestampFormatSchema).returns(z.void()),
-  setAutoScroll: z.function().args(z.boolean()).returns(z.void()),
 })
 
 type ConsoleActions = z.infer<typeof consoleActionSchema>
