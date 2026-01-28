@@ -1325,6 +1325,7 @@ const WorkspaceScreen = () => {
 
           const responseBuffer = new Uint8Array(result.data)
           let bufferOffset = 0
+          let itemsProcessed = 0
 
           for (const index of batch) {
             const varInfo = variableInfoMapRef.current?.get(index)
@@ -1346,15 +1347,14 @@ const WorkspaceScreen = () => {
               bufferOffset += getVariableSize(variable)
             }
 
+            itemsProcessed++
+
             if (index === result.lastIndex) {
-              processedCount = batch.indexOf(index) + processedCount + 1
               break
             }
           }
 
-          if (result.lastIndex === batch[batch.length - 1]) {
-            processedCount += batch.length
-          }
+          processedCount += itemsProcessed
         }
 
         if (isMountedRef.current) {

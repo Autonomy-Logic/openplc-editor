@@ -835,7 +835,7 @@
     "default_dout": "01, 02, 03, 04, 05, 12, 13, 14, 15, 16",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-    "platform": "esp32:esp32:esp32s2",
+    "platform": "esp32:esp32:esp32s2:CDCOnBoot=cdc,USBMode=hwcdc",
     "preview": "esp32.png",
     "source": "esp32.cpp",
     "specs": {
@@ -862,7 +862,7 @@
     "default_dout": "34, 35",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-    "platform": "esp32:esp32:esp32s3",
+    "platform": "esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc",
     "preview": "esp32.png",
     "source": "esp32.cpp",
     "specs": {
