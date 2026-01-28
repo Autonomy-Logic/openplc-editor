@@ -55,8 +55,8 @@ const mapV4LevelToLogLevel = (level: RuntimeLogLevel): LogLevel => {
 }
 
 const PlcLogsFilters = memo(() => {
-  const filters = useOpenPLCStore((state) => state.filters)
-  const consoleActions = useOpenPLCStore((state) => state.consoleActions)
+  const filters = useOpenPLCStore((state) => state.workspace.plcFilters)
+  const workspaceActions = useOpenPLCStore((state) => state.workspaceActions)
   const plcLogs = useOpenPLCStore((state) => state.workspace.plcLogs)
   const [isExpanded, setIsExpanded] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -95,7 +95,7 @@ const PlcLogsFilters = memo(() => {
   }, [isExpanded, showExportMenu])
 
   const toggleLevel = (level: LogLevel) => {
-    consoleActions.setLevelFilter(level, !filters.levels[level])
+    workspaceActions.setPlcLevelFilter(level, !filters.levels[level])
   }
 
   const activeFiltersCount = useMemo(() => {
@@ -296,12 +296,12 @@ const PlcLogsFilters = memo(() => {
                 type='text'
                 placeholder='Search logs...'
                 value={filters.searchTerm}
-                onChange={(e) => consoleActions.setSearchTerm(e.target.value)}
+                onChange={(e) => workspaceActions.setPlcSearchTerm(e.target.value)}
                 className='h-[28px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 pl-8 pr-8 text-xs text-neutral-850 placeholder-neutral-400 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder-neutral-500'
               />
               {filters.searchTerm && (
                 <button
-                  onClick={() => consoleActions.setSearchTerm('')}
+                  onClick={() => workspaceActions.setPlcSearchTerm('')}
                   className='absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
                 >
                   <X className='h-3.5 w-3.5' />
@@ -367,7 +367,7 @@ const PlcLogsFilters = memo(() => {
                         <button
                           key={option.value}
                           onClick={() => {
-                            consoleActions.setTimestampFormat(option.value)
+                            workspaceActions.setPlcTimestampFormat(option.value)
                             setShowFormatMenu(false)
                           }}
                           className={cn(

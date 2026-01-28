@@ -23,7 +23,7 @@ const mapV4LevelToLogLevel = (level: RuntimeLogLevel): LogLevel => {
 
 const PlcLogs = memo(() => {
   const plcLogs = useOpenPLCStore((state) => state.workspace.plcLogs)
-  const filters = useOpenPLCStore((state) => state.filters)
+  const filters = useOpenPLCStore((state) => state.workspace.plcFilters)
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const userScrolledRef = useRef(false)
