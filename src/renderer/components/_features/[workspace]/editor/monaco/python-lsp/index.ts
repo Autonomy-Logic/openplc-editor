@@ -34,5 +34,6 @@ export async function setupPythonLSPForEditor(editor: monaco.editor.IStandaloneC
 export function cleanupPythonLSP(): void {
   if (pyrightProvider) {
     void pyrightProvider.stopDiagnostics()
+    pyrightProvider = null
   }
 }
