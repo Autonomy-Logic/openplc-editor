@@ -521,12 +521,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    if (editor.cursorPosition && language !== 'python' && language !== 'cpp') {
+    if (editor.cursorPosition) {
       editorInstance.setPosition(editor.cursorPosition)
       editorInstance.revealPositionInCenter(editor.cursorPosition)
     }
 
-    if (editor.scrollPosition && language !== 'python' && language !== 'cpp') {
+    if (editor.scrollPosition) {
       editorInstance.setScrollTop(editor.scrollPosition.top)
       editorInstance.setScrollLeft(editor.scrollPosition.left)
     }
@@ -845,7 +845,10 @@ void loop()
           onMount={handleEditorDidMount}
           onChange={handleWriteInPou}
           theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
-          saveViewState={true}
+          // Disabled: view state (cursor/scroll) is managed manually via Zustand store.
+          // Monaco's built-in saveViewState causes "Canceled" errors from WordHighlighter
+          // when restoring state on language switches (e.g., ST to Python).
+          saveViewState={false}
           keepCurrentModel={true}
         />
       </div>
