@@ -559,6 +559,14 @@ type ModbusFunctionCode = z.infer<typeof ModbusFunctionCodeSchema>
 const ModbusErrorHandlingSchema = z.enum(['keep-last-value', 'set-to-zero'])
 type ModbusErrorHandling = z.infer<typeof ModbusErrorHandlingSchema>
 
+// Modbus transport type: TCP/IP or RTU (serial)
+const ModbusTransportTypeSchema = z.enum(['tcp', 'rtu'])
+type ModbusTransportType = z.infer<typeof ModbusTransportTypeSchema>
+
+// Modbus RTU parity settings
+const ModbusParitySchema = z.enum(['N', 'E', 'O'])
+type ModbusParity = z.infer<typeof ModbusParitySchema>
+
 const ModbusIOPointSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -581,8 +589,18 @@ const ModbusIOGroupSchema = z.object({
 type ModbusIOGroup = z.infer<typeof ModbusIOGroupSchema>
 
 const ModbusTcpConfigSchema = z.object({
-  host: z.string(),
-  port: z.number(),
+  // Transport type: 'tcp' (default) or 'rtu' (serial)
+  transport: ModbusTransportTypeSchema.optional(),
+  // TCP-specific fields (optional when using RTU)
+  host: z.string().optional(),
+  port: z.number().optional(),
+  // RTU-specific fields (optional when using TCP)
+  serialPort: z.string().optional(),
+  baudRate: z.number().optional(),
+  parity: ModbusParitySchema.optional(),
+  stopBits: z.number().int().min(1).max(2).optional(),
+  dataBits: z.number().int().min(7).max(8).optional(),
+  // Common fields
   timeout: z.number(),
   slaveId: z.number().int().min(0).max(255).optional(),
   ioGroups: z.array(ModbusIOGroupSchema),
@@ -669,9 +687,11 @@ export {
   ModbusFunctionCodeSchema,
   ModbusIOGroupSchema,
   ModbusIOPointSchema,
+  ModbusParitySchema,
   ModbusSlaveBufferMappingSchema,
   ModbusSlaveConfigSchema,
   ModbusTcpConfigSchema,
+  ModbusTransportTypeSchema,
   OpcUaAddressSpaceConfigSchema,
   OpcUaAuthMethodSchema,
   OpcUaFieldConfigSchema,
@@ -726,9 +746,11 @@ export type {
   ModbusFunctionCode,
   ModbusIOGroup,
   ModbusIOPoint,
+  ModbusParity,
   ModbusSlaveBufferMapping,
   ModbusSlaveConfig,
   ModbusTcpConfig,
+  ModbusTransportType,
   OpcUaAddressSpaceConfig,
   OpcUaAuthMethod,
   OpcUaFieldConfig,

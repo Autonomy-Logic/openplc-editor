@@ -2202,7 +2202,18 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
     updateRemoteDeviceConfig: (
       deviceName: string,
-      config: { host?: string; port?: number; timeout?: number; slaveId?: number },
+      config: {
+        transport?: 'tcp' | 'rtu'
+        host?: string
+        port?: number
+        serialPort?: string
+        baudRate?: number
+        parity?: 'N' | 'E' | 'O'
+        stopBits?: number
+        dataBits?: number
+        timeout?: number
+        slaveId?: number
+      },
     ): ProjectResponse => {
       let response: ProjectResponse = { ok: true }
       setState(
@@ -2222,6 +2233,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
           if (!device.modbusTcpConfig) {
             device.modbusTcpConfig = {
+              transport: 'tcp',
               host: '127.0.0.1',
               port: 502,
               timeout: 1000,
@@ -2229,10 +2241,21 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               ioGroups: [],
             }
           }
-          if (config.host !== undefined) device.modbusTcpConfig.host = config.host
-          if (config.port !== undefined) device.modbusTcpConfig.port = config.port
-          if (config.timeout !== undefined) device.modbusTcpConfig.timeout = config.timeout
-          if (config.slaveId !== undefined) device.modbusTcpConfig.slaveId = config.slaveId
+          const modbusCfg = device.modbusTcpConfig
+          // Transport type
+          if (config.transport !== undefined) modbusCfg.transport = config.transport
+          // TCP fields
+          if (config.host !== undefined) modbusCfg.host = config.host
+          if (config.port !== undefined) modbusCfg.port = config.port
+          // RTU fields
+          if (config.serialPort !== undefined) modbusCfg.serialPort = config.serialPort
+          if (config.baudRate !== undefined) modbusCfg.baudRate = config.baudRate
+          if (config.parity !== undefined) modbusCfg.parity = config.parity
+          if (config.stopBits !== undefined) modbusCfg.stopBits = config.stopBits
+          if (config.dataBits !== undefined) modbusCfg.dataBits = config.dataBits
+          // Common fields
+          if (config.timeout !== undefined) modbusCfg.timeout = config.timeout
+          if (config.slaveId !== undefined) modbusCfg.slaveId = config.slaveId
         }),
       )
       return response
@@ -2268,12 +2291,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
           if (!device.modbusTcpConfig) {
             device.modbusTcpConfig = {
+              transport: 'tcp',
               host: '127.0.0.1',
               port: 502,
               timeout: 1000,
               ioGroups: [],
             }
           }
+          const modbusCfg = device.modbusTcpConfig
           const usedAddresses = new Set<string>()
           for (const remoteDevice of project.data.remoteDevices) {
             if (remoteDevice.modbusTcpConfig?.ioGroups) {
@@ -2285,7 +2310,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             }
           }
           const ioPoints = generateIOPoints(ioGroup.functionCode, ioGroup.length, ioGroup.name, usedAddresses)
-          device.modbusTcpConfig.ioGroups.push({
+          modbusCfg.ioGroups.push({
             ...ioGroup,
             ioPoints,
           })
