@@ -27,6 +27,7 @@ const PlcLogs = memo(() => {
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const userScrolledRef = useRef(false)
+  const v3LogKeysRef = useRef<Map<number, string>>(new Map())
 
   const { isV4, _v4Logs, v4DisplayLogs, v3LogLines } = useMemo(() => {
     if (isV4Logs(plcLogs)) {
@@ -66,6 +67,14 @@ const PlcLogs = memo(() => {
   }, [plcLogs, filters])
 
   const logCount = isV4 ? v4DisplayLogs.length : v3LogLines.length
+
+  // Generate stable UUIDs for v3 log lines
+  const getV3LogKey = (index: number): string => {
+    if (!v3LogKeysRef.current.has(index)) {
+      v3LogKeysRef.current.set(index, crypto.randomUUID())
+    }
+    return v3LogKeysRef.current.get(index)!
+  }
 
   // Handle scroll to detect if user has scrolled away from bottom
   useEffect(() => {
@@ -124,7 +133,7 @@ const PlcLogs = memo(() => {
         : v3LogLines.length > 0 &&
           v3LogLines.map((line, index) => (
             <LogComponent
-              key={`plc-log-v3-${index}-${line.slice(0, 50)}`}
+              key={getV3LogKey(index)}
               level='info'
               message={line}
               tstamp=''
