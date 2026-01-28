@@ -350,6 +350,11 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; logs?: string | RuntimeLogEntry[]; error?: string }> =>
     ipcRenderer.invoke('runtime:get-logs', ipAddress, jwtToken, minId),
   runtimeClearCredentials: (): Promise<{ success: boolean }> => ipcRenderer.invoke('runtime:clear-credentials'),
+  runtimeGetSerialPorts: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-serial-ports', ipAddress, jwtToken),
   onRuntimeTokenRefreshed: (callback: (_event: IpcRendererEvent, newToken: string) => void) => {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)

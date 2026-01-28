@@ -507,8 +507,18 @@ const _projectActionsSchema = z.object({
     .args(
       z.string(),
       z.object({
+        // Transport type
+        transport: z.enum(['tcp', 'rtu']).optional(),
+        // TCP fields
         host: z.string().optional(),
         port: z.number().optional(),
+        // RTU fields
+        serialPort: z.string().optional(),
+        baudRate: z.number().optional(),
+        parity: z.enum(['N', 'E', 'O']).optional(),
+        stopBits: z.number().optional(),
+        dataBits: z.number().optional(),
+        // Common fields
         timeout: z.number().optional(),
         slaveId: z.number().optional(),
       }),
