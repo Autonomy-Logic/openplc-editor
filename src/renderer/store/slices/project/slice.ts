@@ -1,4 +1,11 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import type {
+  OpcUaNodeConfig,
+  OpcUaSecurityProfile,
+  OpcUaServerConfig,
+  OpcUaTrustedCertificate,
+  OpcUaUser,
+} from '@root/types/PLC/open-plc'
 import {
   ModbusIOPoint,
   PLCArrayDatatype,
@@ -49,6 +56,41 @@ const DEFAULT_S7COMM_LOGGING: S7CommLogging = {
   logErrors: true,
 }
 
+// Default OPC-UA server configuration
+const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
+  server: {
+    enabled: false,
+    name: 'OpenPLC OPC UA Server',
+    applicationUri: 'urn:openplc:opcua:server',
+    productUri: 'urn:openplc:runtime',
+    bindAddress: '0.0.0.0',
+    port: 4840,
+    endpointPath: '/openplc/opcua',
+  },
+  securityProfiles: [
+    {
+      id: uuidv4(),
+      name: 'insecure',
+      enabled: true,
+      securityPolicy: 'None',
+      securityMode: 'None',
+      authMethods: ['Anonymous'],
+    },
+  ],
+  security: {
+    serverCertificateStrategy: 'auto_self_signed',
+    serverCertificateCustom: null,
+    serverPrivateKeyCustom: null,
+    trustedClientCertificates: [],
+  },
+  users: [],
+  cycleTimeMs: 100,
+  addressSpace: {
+    namespaceUri: 'urn:openplc:opcua:namespace',
+    nodes: [],
+  },
+}
+
 /**
  * Initializes protocol-specific configuration for a server.
  * Extracts protocol initialization logic to reduce complexity in createServer.
@@ -72,6 +114,18 @@ const initializeServerProtocolConfig = (serverData: PLCServer): PLCServer => {
         plcIdentity: { ...DEFAULT_S7COMM_PLC_IDENTITY },
         dataBlocks: [],
         logging: { ...DEFAULT_S7COMM_LOGGING },
+      },
+    }
+  }
+  if (serverData.protocol === 'opcua' && !serverData.opcuaServerConfig) {
+    return {
+      ...serverData,
+      opcuaServerConfig: {
+        ...DEFAULT_OPCUA_SERVER_CONFIG,
+        securityProfiles: DEFAULT_OPCUA_SERVER_CONFIG.securityProfiles.map((profile) => ({
+          ...profile,
+          id: uuidv4(),
+        })),
       },
     }
   }
@@ -1540,6 +1594,512 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     },
 
     /**
+     * OPC-UA Server Actions
+     */
+    updateOpcUaServerConfig: (serverName, configUpdate): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server) {
+            response = { ok: false, message: 'Server not found' }
+            return
+          }
+          if (server.protocol !== 'opcua') {
+            response = { ok: false, message: 'Server is not an OPC-UA server' }
+            return
+          }
+          if (!server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA configuration not found' }
+            return
+          }
+
+          // Deep merge the config update
+          const mergeDeep = (target: Record<string, unknown>, source: Record<string, unknown>) => {
+            for (const key of Object.keys(source)) {
+              if (source[key] !== undefined) {
+                if (
+                  source[key] &&
+                  typeof source[key] === 'object' &&
+                  !Array.isArray(source[key]) &&
+                  target[key] &&
+                  typeof target[key] === 'object' &&
+                  !Array.isArray(target[key])
+                ) {
+                  mergeDeep(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>)
+                } else {
+                  target[key] = source[key]
+                }
+              }
+            }
+          }
+
+          mergeDeep(
+            server.opcuaServerConfig as unknown as Record<string, unknown>,
+            configUpdate as unknown as Record<string, unknown>,
+          )
+        }),
+      )
+      return response
+    },
+
+    addOpcUaSecurityProfile: (serverName: string, profile: OpcUaSecurityProfile): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          // Check for duplicate profile name
+          const nameExists = server.opcuaServerConfig.securityProfiles.some(
+            (p) => p.name.toLowerCase() === profile.name.toLowerCase(),
+          )
+          if (nameExists) {
+            response = { ok: false, message: `A security profile named "${profile.name}" already exists` }
+            toast({
+              title: 'Invalid Security Profile',
+              description: `A security profile named "${profile.name}" already exists.`,
+              variant: 'fail',
+            })
+            return
+          }
+          server.opcuaServerConfig.securityProfiles.push(profile)
+        }),
+      )
+      return response
+    },
+
+    updateOpcUaSecurityProfile: (
+      serverName: string,
+      profileId: string,
+      updates: Partial<OpcUaSecurityProfile>,
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const profile = server.opcuaServerConfig.securityProfiles.find((p) => p.id === profileId)
+          if (!profile) {
+            response = { ok: false, message: 'Security profile not found' }
+            return
+          }
+          // Check for duplicate name if changing
+          if (updates.name !== undefined && updates.name.toLowerCase() !== profile.name.toLowerCase()) {
+            const nameExists = server.opcuaServerConfig.securityProfiles.some(
+              (p) => p.id !== profileId && p.name.toLowerCase() === updates.name!.toLowerCase(),
+            )
+            if (nameExists) {
+              response = { ok: false, message: `A security profile named "${updates.name}" already exists` }
+              toast({
+                title: 'Invalid Security Profile',
+                description: `A security profile named "${updates.name}" already exists.`,
+                variant: 'fail',
+              })
+              return
+            }
+          }
+          Object.assign(profile, updates)
+        }),
+      )
+      return response
+    },
+
+    removeOpcUaSecurityProfile: (serverName: string, profileId: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const index = server.opcuaServerConfig.securityProfiles.findIndex((p) => p.id === profileId)
+          if (index === -1) {
+            response = { ok: false, message: 'Security profile not found' }
+            return
+          }
+          // Prevent deleting the last profile
+          if (server.opcuaServerConfig.securityProfiles.length <= 1) {
+            response = { ok: false, message: 'At least one security profile is required' }
+            toast({
+              title: 'Cannot Delete Profile',
+              description: 'At least one security profile must exist.',
+              variant: 'fail',
+            })
+            return
+          }
+          server.opcuaServerConfig.securityProfiles.splice(index, 1)
+        }),
+      )
+      return response
+    },
+
+    /**
+     * OPC-UA User Actions
+     */
+    addOpcUaUser: (serverName: string, user: OpcUaUser): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          // Check for duplicate username (for password users)
+          if (user.type === 'password' && user.username) {
+            const usernameExists = server.opcuaServerConfig.users.some(
+              (u) => u.type === 'password' && u.username?.toLowerCase() === user.username?.toLowerCase(),
+            )
+            if (usernameExists) {
+              response = { ok: false, message: `A user with username "${user.username}" already exists` }
+              toast({
+                title: 'Invalid User',
+                description: `A user with username "${user.username}" already exists.`,
+                variant: 'fail',
+              })
+              return
+            }
+          }
+          // Check for duplicate certificate binding (for certificate users)
+          if (user.type === 'certificate' && user.certificateId) {
+            const certBindingExists = server.opcuaServerConfig.users.some(
+              (u) => u.type === 'certificate' && u.certificateId === user.certificateId,
+            )
+            if (certBindingExists) {
+              response = { ok: false, message: `A user is already bound to this certificate` }
+              toast({
+                title: 'Invalid User',
+                description: 'A user is already bound to this certificate.',
+                variant: 'fail',
+              })
+              return
+            }
+          }
+          server.opcuaServerConfig.users.push(user)
+        }),
+      )
+      return response
+    },
+
+    updateOpcUaUser: (serverName: string, userId: string, updates: Partial<OpcUaUser>): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const user = server.opcuaServerConfig.users.find((u) => u.id === userId)
+          if (!user) {
+            response = { ok: false, message: 'User not found' }
+            return
+          }
+          // Check for duplicate username if changing
+          if (updates.username !== undefined && updates.username !== user.username) {
+            const usernameExists = server.opcuaServerConfig.users.some(
+              (u) =>
+                u.id !== userId &&
+                u.type === 'password' &&
+                u.username?.toLowerCase() === updates.username?.toLowerCase(),
+            )
+            if (usernameExists) {
+              response = { ok: false, message: `A user with username "${updates.username}" already exists` }
+              toast({
+                title: 'Invalid User',
+                description: `A user with username "${updates.username}" already exists.`,
+                variant: 'fail',
+              })
+              return
+            }
+          }
+          Object.assign(user, updates)
+        }),
+      )
+      return response
+    },
+
+    removeOpcUaUser: (serverName: string, userId: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const index = server.opcuaServerConfig.users.findIndex((u) => u.id === userId)
+          if (index === -1) {
+            response = { ok: false, message: 'User not found' }
+            return
+          }
+          server.opcuaServerConfig.users.splice(index, 1)
+        }),
+      )
+      return response
+    },
+
+    /**
+     * OPC-UA Certificate Actions
+     */
+    updateOpcUaServerCertificateStrategy: (
+      serverName: string,
+      strategy: 'auto_self_signed' | 'custom',
+      customCert?: string | null,
+      customKey?: string | null,
+    ): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          server.opcuaServerConfig.security.serverCertificateStrategy = strategy
+          if (strategy === 'custom') {
+            server.opcuaServerConfig.security.serverCertificateCustom = customCert ?? null
+            server.opcuaServerConfig.security.serverPrivateKeyCustom = customKey ?? null
+          } else {
+            server.opcuaServerConfig.security.serverCertificateCustom = null
+            server.opcuaServerConfig.security.serverPrivateKeyCustom = null
+          }
+        }),
+      )
+      return response
+    },
+
+    addOpcUaTrustedCertificate: (serverName: string, certificate: OpcUaTrustedCertificate): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          // Check for duplicate certificate ID
+          const idExists = server.opcuaServerConfig.security.trustedClientCertificates.some(
+            (c) => c.id.toLowerCase() === certificate.id.toLowerCase(),
+          )
+          if (idExists) {
+            response = { ok: false, message: `A certificate with ID "${certificate.id}" already exists` }
+            toast({
+              title: 'Invalid Certificate',
+              description: `A certificate with ID "${certificate.id}" already exists.`,
+              variant: 'fail',
+            })
+            return
+          }
+          server.opcuaServerConfig.security.trustedClientCertificates.push(certificate)
+        }),
+      )
+      return response
+    },
+
+    removeOpcUaTrustedCertificate: (serverName: string, certificateId: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          // Check if any user is bound to this certificate
+          const userBound = server.opcuaServerConfig.users.find(
+            (u) => u.type === 'certificate' && u.certificateId === certificateId,
+          )
+          if (userBound) {
+            response = { ok: false, message: 'Cannot delete certificate that is bound to a user' }
+            toast({
+              title: 'Cannot Delete Certificate',
+              description: 'This certificate is bound to a user. Remove the user first.',
+              variant: 'fail',
+            })
+            return
+          }
+          const index = server.opcuaServerConfig.security.trustedClientCertificates.findIndex(
+            (c) => c.id === certificateId,
+          )
+          if (index === -1) {
+            response = { ok: false, message: 'Certificate not found' }
+            return
+          }
+          server.opcuaServerConfig.security.trustedClientCertificates.splice(index, 1)
+        }),
+      )
+      return response
+    },
+
+    /**
+     * OPC-UA Address Space Node Actions
+     */
+    updateOpcUaAddressSpaceNamespace: (serverName: string, namespaceUri: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          server.opcuaServerConfig.addressSpace.namespaceUri = namespaceUri
+        }),
+      )
+      return response
+    },
+
+    addOpcUaNode: (serverName: string, node: OpcUaNodeConfig): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          // Check for duplicate node ID
+          const nodeIdExists = server.opcuaServerConfig.addressSpace.nodes.some(
+            (n) => n.nodeId.toLowerCase() === node.nodeId.toLowerCase(),
+          )
+          if (nodeIdExists) {
+            response = { ok: false, message: `A node with ID "${node.nodeId}" already exists` }
+            toast({
+              title: 'Invalid Node',
+              description: `A node with ID "${node.nodeId}" already exists.`,
+              variant: 'fail',
+            })
+            return
+          }
+          server.opcuaServerConfig.addressSpace.nodes.push(node)
+        }),
+      )
+      return response
+    },
+
+    updateOpcUaNode: (serverName: string, nodeId: string, updates: Partial<OpcUaNodeConfig>): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const nodeIndex = server.opcuaServerConfig.addressSpace.nodes.findIndex((n) => n.id === nodeId)
+          if (nodeIndex === -1) {
+            response = { ok: false, message: 'Node not found' }
+            return
+          }
+          // If updating nodeId, check for duplicate
+          if (updates.nodeId) {
+            const currentNode = server.opcuaServerConfig.addressSpace.nodes[nodeIndex]
+            if (updates.nodeId !== currentNode.nodeId) {
+              const nodeIdExists = server.opcuaServerConfig.addressSpace.nodes.some(
+                (n, i) => i !== nodeIndex && n.nodeId.toLowerCase() === updates.nodeId!.toLowerCase(),
+              )
+              if (nodeIdExists) {
+                response = { ok: false, message: `A node with ID "${updates.nodeId}" already exists` }
+                toast({
+                  title: 'Invalid Node ID',
+                  description: `A node with ID "${updates.nodeId}" already exists.`,
+                  variant: 'fail',
+                })
+                return
+              }
+            }
+          }
+          Object.assign(server.opcuaServerConfig.addressSpace.nodes[nodeIndex], updates)
+        }),
+      )
+      return response
+    },
+
+    removeOpcUaNode: (serverName: string, nodeId: string): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.servers) {
+            response = { ok: false, message: 'No servers found' }
+            return
+          }
+          const server = project.data.servers.find((s) => s.name === serverName)
+          if (!server || server.protocol !== 'opcua' || !server.opcuaServerConfig) {
+            response = { ok: false, message: 'OPC-UA server not found' }
+            return
+          }
+          const index = server.opcuaServerConfig.addressSpace.nodes.findIndex((n) => n.id === nodeId)
+          if (index === -1) {
+            response = { ok: false, message: 'Node not found' }
+            return
+          }
+          server.opcuaServerConfig.addressSpace.nodes.splice(index, 1)
+        }),
+      )
+      return response
+    },
+
+    /**
      * Remote Device Actions
      */
     createRemoteDevice: (remoteDeviceToBeCreated): ProjectResponse => {
@@ -1642,7 +2202,18 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
     updateRemoteDeviceConfig: (
       deviceName: string,
-      config: { host?: string; port?: number; timeout?: number; slaveId?: number },
+      config: {
+        transport?: 'tcp' | 'rtu'
+        host?: string
+        port?: number
+        serialPort?: string
+        baudRate?: number
+        parity?: 'N' | 'E' | 'O'
+        stopBits?: number
+        dataBits?: number
+        timeout?: number
+        slaveId?: number
+      },
     ): ProjectResponse => {
       let response: ProjectResponse = { ok: true }
       setState(
@@ -1662,6 +2233,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
           if (!device.modbusTcpConfig) {
             device.modbusTcpConfig = {
+              transport: 'tcp',
               host: '127.0.0.1',
               port: 502,
               timeout: 1000,
@@ -1669,10 +2241,21 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               ioGroups: [],
             }
           }
-          if (config.host !== undefined) device.modbusTcpConfig.host = config.host
-          if (config.port !== undefined) device.modbusTcpConfig.port = config.port
-          if (config.timeout !== undefined) device.modbusTcpConfig.timeout = config.timeout
-          if (config.slaveId !== undefined) device.modbusTcpConfig.slaveId = config.slaveId
+          const modbusCfg = device.modbusTcpConfig
+          // Transport type
+          if (config.transport !== undefined) modbusCfg.transport = config.transport
+          // TCP fields
+          if (config.host !== undefined) modbusCfg.host = config.host
+          if (config.port !== undefined) modbusCfg.port = config.port
+          // RTU fields
+          if (config.serialPort !== undefined) modbusCfg.serialPort = config.serialPort
+          if (config.baudRate !== undefined) modbusCfg.baudRate = config.baudRate
+          if (config.parity !== undefined) modbusCfg.parity = config.parity
+          if (config.stopBits !== undefined) modbusCfg.stopBits = config.stopBits
+          if (config.dataBits !== undefined) modbusCfg.dataBits = config.dataBits
+          // Common fields
+          if (config.timeout !== undefined) modbusCfg.timeout = config.timeout
+          if (config.slaveId !== undefined) modbusCfg.slaveId = config.slaveId
         }),
       )
       return response
@@ -1708,12 +2291,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
           if (!device.modbusTcpConfig) {
             device.modbusTcpConfig = {
+              transport: 'tcp',
               host: '127.0.0.1',
               port: 502,
               timeout: 1000,
               ioGroups: [],
             }
           }
+          const modbusCfg = device.modbusTcpConfig
           const usedAddresses = new Set<string>()
           for (const remoteDevice of project.data.remoteDevices) {
             if (remoteDevice.modbusTcpConfig?.ioGroups) {
@@ -1725,7 +2310,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             }
           }
           const ioPoints = generateIOPoints(ioGroup.functionCode, ioGroup.length, ioGroup.name, usedAddresses)
-          device.modbusTcpConfig.ioGroups.push({
+          modbusCfg.ioGroups.push({
             ...ioGroup,
             ioPoints,
           })

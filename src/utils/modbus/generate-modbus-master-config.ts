@@ -8,14 +8,33 @@ interface ModbusMasterIOPoint {
   cycle_time_ms: number
 }
 
-interface ModbusMasterDeviceConfig {
+// Base device config with common fields
+interface ModbusMasterDeviceConfigBase {
   type: 'SLAVE'
-  host: string
-  port: number
+  transport: 'tcp' | 'rtu'
   timeout_ms: number
   slave_id: number
   io_points: ModbusMasterIOPoint[]
 }
+
+// TCP-specific config
+interface ModbusMasterTcpDeviceConfig extends ModbusMasterDeviceConfigBase {
+  transport: 'tcp'
+  host: string
+  port: number
+}
+
+// RTU-specific config
+interface ModbusMasterRtuDeviceConfig extends ModbusMasterDeviceConfigBase {
+  transport: 'rtu'
+  serial_port: string
+  baud_rate: number
+  parity: string
+  stop_bits: number
+  data_bits: number
+}
+
+type ModbusMasterDeviceConfig = ModbusMasterTcpDeviceConfig | ModbusMasterRtuDeviceConfig
 
 interface ModbusMasterDevice {
   name: string
@@ -60,8 +79,8 @@ const convertIOGroupToIOPoint = (ioGroup: ModbusIOGroup): ModbusMasterIOPoint =>
 }
 
 /**
- * Converts a PLCRemoteDevice with Modbus TCP configuration to a ModbusMasterDevice
- * for the runtime configuration.
+ * Converts a PLCRemoteDevice with Modbus configuration to a ModbusMasterDevice
+ * for the runtime configuration. Supports both TCP and RTU transports.
  */
 const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMasterDevice | null => {
   if (device.protocol !== 'modbus-tcp' || !device.modbusTcpConfig) {
@@ -77,17 +96,48 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
 
   const ioPoints: ModbusMasterIOPoint[] = ioGroups.map(convertIOGroupToIOPoint)
 
-  return {
-    name: device.name,
-    protocol: 'MODBUS',
-    config: {
-      type: 'SLAVE',
-      host: modbusTcpConfig.host,
-      port: modbusTcpConfig.port,
-      timeout_ms: modbusTcpConfig.timeout,
-      slave_id: modbusTcpConfig.slaveId ?? 1,
-      io_points: ioPoints,
-    },
+  // Determine transport type (defaults to 'tcp' for backward compatibility)
+  const transport = modbusTcpConfig.transport || 'tcp'
+
+  if (transport === 'rtu') {
+    // RTU configuration
+    if (!modbusTcpConfig.serialPort) {
+      // RTU requires a serial port
+      console.warn(`Modbus RTU device "${device.name}" is missing a serial port configuration and will be skipped.`)
+      return null
+    }
+
+    return {
+      name: device.name,
+      protocol: 'MODBUS',
+      config: {
+        type: 'SLAVE',
+        transport: 'rtu',
+        serial_port: modbusTcpConfig.serialPort,
+        baud_rate: modbusTcpConfig.baudRate ?? 9600,
+        parity: modbusTcpConfig.parity ?? 'N',
+        stop_bits: modbusTcpConfig.stopBits ?? 1,
+        data_bits: modbusTcpConfig.dataBits ?? 8,
+        timeout_ms: modbusTcpConfig.timeout,
+        slave_id: modbusTcpConfig.slaveId ?? 1,
+        io_points: ioPoints,
+      },
+    }
+  } else {
+    // TCP configuration (default)
+    return {
+      name: device.name,
+      protocol: 'MODBUS',
+      config: {
+        type: 'SLAVE',
+        transport: 'tcp',
+        host: modbusTcpConfig.host ?? '127.0.0.1',
+        port: modbusTcpConfig.port ?? 502,
+        timeout_ms: modbusTcpConfig.timeout,
+        slave_id: modbusTcpConfig.slaveId ?? 1,
+        io_points: ioPoints,
+      },
+    }
   }
 }
 

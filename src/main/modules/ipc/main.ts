@@ -479,6 +479,37 @@ class MainProcessBridge implements MainIpcModule {
     return { success: true }
   }
 
+  handleRuntimeGetSerialPorts = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> => {
+    try {
+      const result = await this.makeRuntimeApiRequest<{ ports: Array<{ device: string; description?: string }> }>(
+        ipAddress,
+        jwtToken,
+        '/api/serial-ports',
+        (data: string) => {
+          const response = JSON.parse(data) as {
+            ports?: Array<{ device: string; description?: string }>
+            error?: string
+          }
+          if (response.error) {
+            throw new Error(response.error)
+          }
+          return { ports: response.ports || [] }
+        },
+      )
+      if (result.success && result.data) {
+        return { success: true, ports: result.data.ports }
+      } else {
+        return { success: false, error: result.success ? 'No data returned' : result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -557,6 +588,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
     this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
+    this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -1171,13 +1203,6 @@ class MainProcessBridge implements MainIpcModule {
     valueBuffer?: Uint8Array,
   ): Promise<{ success: boolean; error?: string }> => {
     const buffer = valueBuffer ? Buffer.from(valueBuffer) : undefined
-
-    console.log('[IPC Handler] debugger:set-variable called with:', {
-      variableIndex,
-      force,
-      valueBuffer: buffer?.toString('hex'),
-      connectionType: this.debuggerConnectionType,
-    })
 
     if (this.debuggerConnectionType === 'websocket') {
       if (!this.debuggerWebSocketClient) {

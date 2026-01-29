@@ -14,6 +14,7 @@ import webpack from 'webpack'
 import { merge } from 'webpack-merge'
 
 import checkNodeEnv from '../../scripts/check-node-env'
+import { getAppInfoDefines } from './webpack.app-info'
 import baseConfig from './webpack.config.base'
 import webpackPaths from './webpack.paths'
 
@@ -170,6 +171,10 @@ const configuration: ICustomConfiguration = {
      */
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'development',
+    }),
+
+    new webpack.DefinePlugin({
+      ...getAppInfoDefines(),
     }),
 
     new webpack.LoaderOptionsPlugin({

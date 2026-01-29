@@ -126,7 +126,7 @@ const CreateDeviceEditor = (name = 'device', derivation: 'configuration'): Edito
   throw new Error('Invalid derivation value')
 }
 
-const CreateServerEditor = (name: string, protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip'): EditorModel => {
+const CreateServerEditor = (name: string, protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'): EditorModel => {
   const editor = CreateEditorObject({
     type: 'plc-server',
     meta: {
