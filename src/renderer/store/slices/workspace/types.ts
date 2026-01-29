@@ -3,6 +3,18 @@ import type { FbInstanceInfo } from '@root/types/debugger'
 import type { PlcLogs } from '@root/types/PLC/runtime-logs'
 import { z } from 'zod'
 
+const plcFiltersSchema = z.object({
+  levels: z.object({
+    debug: z.boolean(),
+    info: z.boolean(),
+    warning: z.boolean(),
+    error: z.boolean(),
+  }),
+  searchTerm: z.string(),
+  timestampFormat: z.enum(['full', 'time', 'none']),
+})
+type PlcFilters = z.infer<typeof plcFiltersSchema>
+
 const workspaceProjectTreeLeafSchema = z
   .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource', 'server', 'remote-device'])
   .nullable()
@@ -36,6 +48,7 @@ const workspaceStateSchema = z.object({
     isPlcLogsVisible: z.boolean(),
     plcLogs: z.custom<PlcLogs>(),
     plcLogsLastId: z.number().nullable(),
+    plcFilters: plcFiltersSchema,
     close: z.object({
       window: z.boolean(),
       app: z.boolean(),
@@ -96,6 +109,15 @@ const workspaceActionsSchema = z.object({
   setPlcLogsLastId: z.function().args(z.number().nullable()).returns(z.void()),
   appendPlcLogs: z.function().args(z.custom<PlcLogs>()).returns(z.void()),
   clearPlcLogs: z.function().returns(z.void()),
+  setPlcLevelFilter: z
+    .function()
+    .args(z.enum(['debug', 'info', 'warning', 'error']), z.boolean())
+    .returns(z.void()),
+  setPlcSearchTerm: z.function().args(z.string()).returns(z.void()),
+  setPlcTimestampFormat: z
+    .function()
+    .args(z.enum(['full', 'time', 'none']))
+    .returns(z.void()),
   toggleDiscardChanges: z.function().returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
@@ -105,6 +127,7 @@ type WorkspaceSlice = WorkspaceState & {
 }
 
 export {
+  plcFiltersSchema,
   systemConfigsSchema,
   workspaceActionsSchema,
   workspaceProjectTreeLeafSchema,
@@ -112,6 +135,7 @@ export {
   workspaceStateSchema,
 }
 export type {
+  PlcFilters,
   SystemConfigs,
   WorkspaceActions,
   WorkspaceProjectTreeLeafType,

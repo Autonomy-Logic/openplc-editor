@@ -1,4 +1,6 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
+import { ConsoleFilters } from '@components/_organisms/console/filters'
+import { PlcLogsFilters } from '@components/_organisms/plc-logs/filters'
 import * as Tabs from '@radix-ui/react-tabs'
 import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
@@ -62,9 +64,10 @@ const WorkspaceScreen = () => {
       debugVariableIndexes,
       debugForcedVariables,
       debugExpandedNodes,
+      plcLogs,
     },
     editor,
-    workspaceActions: { toggleCollapse, setDebugForcedVariables, toggleDebugExpandedNode },
+    workspaceActions: { toggleCollapse, setDebugForcedVariables, toggleDebugExpandedNode, clearPlcLogs },
     deviceActions: { setAvailableOptions },
     searchResults,
     project: {
@@ -1757,7 +1760,18 @@ const WorkspaceScreen = () => {
                         </ResizablePanelGroup>
                       </Tabs.Content>
                     )}
-                    {activeTab === 'console' && <ClearConsoleButton />}
+                    {activeTab === 'console' && (
+                      <div className='absolute right-2 top-1 flex items-center gap-2'>
+                        <ConsoleFilters />
+                        <ClearConsoleButton />
+                      </div>
+                    )}
+                    {activeTab === 'plc-logs' && (
+                      <div className='absolute right-2 top-1 flex items-center gap-2'>
+                        <PlcLogsFilters />
+                        <ClearConsoleButton onClear={clearPlcLogs} isEmpty={plcLogs.length === 0} label='Clear logs' />
+                      </div>
+                    )}
                   </Tabs.Root>
                 </ResizablePanel>
               </ResizablePanelGroup>

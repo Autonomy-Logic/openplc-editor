@@ -30,6 +30,11 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     isPlcLogsVisible: false,
     plcLogs: '',
     plcLogsLastId: null,
+    plcFilters: {
+      levels: { debug: true, info: true, warning: true, error: true },
+      searchTerm: '',
+      timestampFormat: 'full',
+    },
     close: {
       window: false,
       app: false,
@@ -267,6 +272,27 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.plcLogs = ''
           workspace.plcLogsLastId = null
+        }),
+      )
+    },
+    setPlcLevelFilter: (level: 'debug' | 'info' | 'warning' | 'error', enabled: boolean): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcFilters.levels[level] = enabled
+        }),
+      )
+    },
+    setPlcSearchTerm: (term: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcFilters.searchTerm = term
+        }),
+      )
+    },
+    setPlcTimestampFormat: (format: 'full' | 'time' | 'none'): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcFilters.timestampFormat = format
         }),
       )
     },
