@@ -100,10 +100,15 @@ const GlobalVariablesEditor = () => {
           selectedRow: selectedRow,
           description: description,
         })
-      } else
+      } else if (editor.variable.display === 'code') {
+        const code = editor.variable.code
         setEditorVariables({
           display: editor.variable.display,
         })
+        if (typeof code === 'string') {
+          setEditorCode(code)
+        }
+      }
   }, [editor])
 
   useEffect(() => {
@@ -134,6 +139,7 @@ const GlobalVariablesEditor = () => {
 
     updateModelVariables({
       display: value,
+      code: value === 'code' ? editorCode : undefined,
     })
   }
 
