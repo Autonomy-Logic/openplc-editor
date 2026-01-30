@@ -3,7 +3,7 @@ import { PLCTask } from '@root/types/PLC/open-plc'
 import { WorkspaceResponse } from '../types'
 
 const checkIfTaskExists = (tasks: PLCTask[], name: string) => {
-  return tasks.some((task) => task.name === name)
+  return tasks.some((task) => task.name.toLowerCase() === name.toLowerCase())
 }
 
 const taskNameValidation = (taskName: string) => {
@@ -12,33 +12,40 @@ const taskNameValidation = (taskName: string) => {
   return regex.test(taskName)
 }
 
-const createTaskValidation = (tasks: PLCTask[], name: string) => {
-  if (checkIfTaskExists(tasks, name)) {
-    const regex = /_\d+$/
-    const filteredTasks = tasks.filter((task: PLCTask) => task.name.includes(name.replace(regex, '')))
-    const sortedTasks = filteredTasks.sort((a, b) => {
-      const matchA = a.name.match(regex)
-      const matchB = b.name.match(regex)
-      if (matchA && matchB) {
-        return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
-      }
-      return 0
-    })
-    const biggestTask = sortedTasks[sortedTasks.length - 1].name.match(regex)
-    let number = biggestTask ? parseInt(biggestTask[0].slice(1)) : 0
-    for (let i = sortedTasks.length - 1; i >= 1; i--) {
-      const previousTask = sortedTasks[i].name.match(regex)
-      const previousNumber = previousTask ? parseInt(previousTask[0].slice(1)) : 0
-      const currentTask = sortedTasks[i - 1].name.match(regex)
-      const currentNumber = currentTask ? parseInt(currentTask[0].slice(1)) : 0
-      if (currentNumber !== previousNumber - 1) {
-        number = currentNumber
-      }
-    }
-    const newTaskName = `${name.replace(regex, '')}_${number + 1}`
-    return newTaskName
+const extractNumberAtEnd = (str: string): { number: number; length: number } => {
+  const match = str.match(/(\d+)$/)
+  const number = match ? parseInt(match[0], 10) : -1
+  return {
+    number,
+    length: match ? match[0].length : 0,
   }
-  return name
+}
+
+const createTaskValidation = (tasks: PLCTask[], name: string) => {
+  if (!checkIfTaskExists(tasks, name)) {
+    return name
+  }
+
+  // Extract base name without trailing number
+  const baseName = name.substring(0, name.length - extractNumberAtEnd(name).length)
+
+  // Filter tasks that start with the base name
+  const filteredTasks = tasks.filter((task: PLCTask) => task.name.toLowerCase().startsWith(baseName.toLowerCase()))
+
+  // Sort by the number at the end
+  const sortedTasks = filteredTasks.sort((a, b) => {
+    const numberA = extractNumberAtEnd(a.name).number
+    const numberB = extractNumberAtEnd(b.name).number
+    const sortNumberA = numberA === -1 ? -1 : numberA
+    const sortNumberB = numberB === -1 ? -1 : numberB
+    return sortNumberA - sortNumberB
+  })
+
+  // Get the highest number and increment
+  const biggestNumber =
+    sortedTasks.length > 0 ? extractNumberAtEnd(sortedTasks[sortedTasks.length - 1].name).number : -1
+
+  return `${baseName}${biggestNumber + 1}`
 }
 
 const updateTaskValidation = (tasks: PLCTask[], dataToBeUpdated: Partial<PLCTask>) => {
