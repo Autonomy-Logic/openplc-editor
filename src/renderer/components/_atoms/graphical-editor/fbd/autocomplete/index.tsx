@@ -247,9 +247,11 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         return
       }
 
-      const selectedVariable =
-        filteredVariables.find((variableItem) => variableItem.id === variable.id) ??
-        filteredVariables.find((variableItem) => variableItem.name === variable.name)
+      // Look up by name to ensure correct selection for continuation/connector blocks
+      // (all connection nodes share the same ID, so ID lookup would always match the first item)
+      const selectedVariable = filteredVariables.find(
+        (variableItem) => variableItem.name.toLowerCase() === variable.name.toLowerCase(),
+      )
       if (!selectedVariable) {
         submitAddVariable({ variableName: valueToSearch })
         return
