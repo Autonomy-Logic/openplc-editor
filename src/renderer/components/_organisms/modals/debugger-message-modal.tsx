@@ -14,10 +14,14 @@ const DebuggerMessageModal = () => {
   } | null
 
   const handleButtonClick = (index: number) => {
-    if (modalData?.onResponse) {
-      modalData.onResponse(index)
-    }
+    // Capture callback before closing (closeModal clears data)
+    const onResponse = modalData?.onResponse
+    // Close modal first, then call callback to avoid race condition
+    // when callback opens another modal
     modalActions.closeModal()
+    if (onResponse) {
+      onResponse(index)
+    }
   }
 
   if (!modalData) return null
@@ -41,10 +45,15 @@ const DebuggerMessageModal = () => {
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
-          if (modalData?.onResponse) {
-            modalData.onResponse(modalData.buttons.length - 1)
-          }
+          // Capture callback and button count before closing (closeModal clears data)
+          const onResponse = modalData?.onResponse
+          const lastButtonIndex = modalData?.buttons?.length ? modalData.buttons.length - 1 : 0
+          // Close modal first, then call callback to avoid race condition
+          // when callback opens another modal
           modalActions.closeModal()
+          if (onResponse) {
+            onResponse(lastButtonIndex)
+          }
         }
         modalActions.onOpenChange('debugger-message', open)
       }}

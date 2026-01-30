@@ -196,7 +196,12 @@ function searchWithinPou(
         })
       }
 
-      if (node.type === 'variable') {
+      if (
+        node.type === 'variable' ||
+        node.type === 'input-variable' ||
+        node.type === 'output-variable' ||
+        node.type === 'inout-variable'
+      ) {
         const data = node.data as { variable?: PLCVariable | { name?: string } }
         if (data.variable?.name?.toLowerCase() === normalizedName) {
           references.push({

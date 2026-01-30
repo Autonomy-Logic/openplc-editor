@@ -1,4 +1,3 @@
-// import { PLCVariable } from '@root/types/PLC'
 import { FBDRungState, RungLadderState } from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
 import { PLCPou } from '@root/types/PLC/open-plc'
@@ -10,6 +9,7 @@ import { fbdToXml } from './language/fbd-xml'
 import { ilToXML } from './language/il-xml'
 import { ladderToXml } from './language/ladder-xml'
 import { stToXML } from './language/st-xml'
+import { convertTypeToXml } from './type-xml'
 
 export const oldEditorParseInterface = (pou: PLCPou) => {
   const variables = pou.data.variables
@@ -17,47 +17,9 @@ export const oldEditorParseInterface = (pou: PLCPou) => {
 
   const xml: InterfaceXML = {}
   variables.forEach((variable) => {
-    // const variableIsDerived = variable.type.definition === 'derived' || variable.type.definition === 'user-data-type'
-
-    let vType = {}
-    if (variable.type.definition === 'array') {
-      vType = {
-        array: {
-          dimension: variable.type.data.dimensions.map((dimension) => {
-            const lower = dimension.dimension.split('..')[0]
-            const upper = dimension.dimension.split('..')[1]
-            return {
-              '@lower': lower,
-              '@upper': upper,
-            }
-          }),
-          baseType: {
-            [variable.type.data.baseType.definition === 'user-data-type'
-              ? 'derived'
-              : variable.type.data.baseType.value === 'string'
-                ? variable.type.data.baseType.value
-                : variable.type.data.baseType.value.toUpperCase()]:
-              variable.type.data.baseType.definition === 'user-data-type'
-                ? { '@name': variable.type.data.baseType.value }
-                : '',
-          },
-        },
-      }
-    } else if (variable.type.definition === 'derived' || variable.type.definition === 'user-data-type') {
-      vType = {
-        derived: {
-          '@name': variable.type.value,
-        },
-      }
-    } else {
-      vType = {
-        [variable.type.value === 'string' ? variable.type.value : variable.type.value.toUpperCase()]: '',
-      }
-    }
-
     const v: VariableXML = {
       '@name': variable.name,
-      type: vType,
+      type: convertTypeToXml(variable.type),
     }
 
     if (variable.location) v['@address'] = variable.location

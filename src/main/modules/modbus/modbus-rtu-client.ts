@@ -11,9 +11,10 @@ interface ModbusRtuClientOptions {
   timeout: number
 }
 
-const ARDUINO_BOOTLOADER_DELAY_MS = 500
+const ARDUINO_BOOTLOADER_DELAY_MS = 2500
 const MD5_REQUEST_MAX_RETRIES = 3
 const MD5_REQUEST_RETRY_DELAY_MS = 500
+const FRAME_COMPLETE_TIMEOUT_MS = 50
 
 export class ModbusRtuClient {
   private port: string
@@ -124,10 +125,28 @@ export class ModbusRtuClient {
     }
   }
 
+  private flushInputBuffer(): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.serialPort || !this.serialPort.isOpen) {
+        resolve()
+        return
+      }
+
+      this.serialPort.flush((err: Error | null) => {
+        if (err) {
+          console.warn('Warning: Failed to flush serial port:', err.message)
+        }
+        resolve()
+      })
+    })
+  }
+
   private async sendRequest(request: Buffer): Promise<Buffer> {
     if (!this.serialPort || !this.serialPort.isOpen) {
       throw new Error('Serial port is not open')
     }
+
+    await this.flushInputBuffer()
 
     return new Promise((resolve, reject) => {
       const timeoutHandle = setTimeout(() => {
@@ -147,6 +166,9 @@ export class ModbusRtuClient {
 
         frameCompleteTimeout = setTimeout(() => {
           if (responseBuffer.length < 5) {
+            clearTimeout(timeoutHandle)
+            this.serialPort?.removeListener('data', onData)
+            this.serialPort?.removeListener('error', onError)
             reject(new Error('Response too short'))
             return
           }
@@ -171,7 +193,7 @@ export class ModbusRtuClient {
           responseWithoutCrc.copy(paddedResponse as unknown as Uint8Array, 6)
 
           resolve(paddedResponse)
-        }, 10)
+        }, FRAME_COMPLETE_TIMEOUT_MS)
       }
 
       const onError = (error: Error) => {

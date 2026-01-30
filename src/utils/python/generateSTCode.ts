@@ -41,6 +41,13 @@ const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): 
     inputVars.forEach((variable) => {
       structs += `        ${mapTypeToC(variable.type)} ${variable.name};\n`
     })
+  } else {
+    // Padding field ensures sizeof() >= 1, preventing mmap() failure with size 0.
+    // This allows Python blocks with only output variables (no inputs) to work.
+    // TODO: A more robust fix would also add handling in the runtime's python_loader.c
+    // to gracefully handle size 0 by either skipping shared memory allocation entirely
+    // or using a minimum size of 1 byte when shm_in_size or shm_out_size is 0.
+    structs += '        uint8_t _padding;\n'
   }
   structs += '    } shm_data_in_t;\n'
   structs += '    #pragma pack(pop)\n\n'
@@ -52,6 +59,10 @@ const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): 
     outputVars.forEach((variable) => {
       structs += `        ${mapTypeToC(variable.type)} ${variable.name};\n`
     })
+  } else {
+    // Padding field ensures sizeof() >= 1, preventing mmap() failure with size 0.
+    // This allows Python blocks with only input variables (no outputs) to work.
+    structs += '        uint8_t _padding;\n'
   }
   structs += '    } shm_data_out_t;\n'
 

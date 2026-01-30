@@ -5,6 +5,7 @@ export const defaultDeviceConfiguration: DeviceConfiguration = {
   deviceBoard: 'OpenPLC Runtime v3',
   communicationPort: '',
   runtimeIpAddress: '',
+  compileOnly: false,
   communicationConfiguration: {
     modbusRTU: {
       rtuInterface: 'Serial',

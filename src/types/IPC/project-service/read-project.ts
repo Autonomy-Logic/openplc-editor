@@ -1,5 +1,5 @@
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
+import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '@root/types/PLC/open-plc'
 
 export type IProjectServiceReadFilesResponse = {
   success: boolean
@@ -14,5 +14,7 @@ export type IProjectServiceReadFilesResponse = {
     pous: PLCPou[]
     deviceConfiguration: DeviceConfiguration
     devicePinMapping: DevicePin[]
+    servers?: PLCServer[]
+    remoteDevices?: PLCRemoteDevice[]
   }
 }

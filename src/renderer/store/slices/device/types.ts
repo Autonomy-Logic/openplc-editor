@@ -5,7 +5,7 @@ import {
   interfaceOptions,
   staticHostConfigurationSchema,
 } from '@root/types/PLC/devices'
-import z from 'zod'
+import { z } from 'zod'
 
 /**
  * The pin mapping is an unique structure that record the pins added by the user.
@@ -18,11 +18,46 @@ const devicePinMappingSchema = z.object({
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
+/**
+ * Timing statistics returned by OpenPLC Runtime v4 status API.
+ * Defined as plain TypeScript type to avoid z.infer type resolution issues.
+ */
+type TimingStats = {
+  scan_count: number
+  scan_time_min: number | null
+  scan_time_max: number | null
+  scan_time_avg: number | null
+  cycle_time_min: number | null
+  cycle_time_max: number | null
+  cycle_time_avg: number | null
+  cycle_latency_min: number | null
+  cycle_latency_max: number | null
+  cycle_latency_avg: number | null
+  overruns: number
+}
+
+const timingStatsSchema = z.object({
+  scan_count: z.number(),
+  scan_time_min: z.number().nullable(),
+  scan_time_max: z.number().nullable(),
+  scan_time_avg: z.number().nullable(),
+  cycle_time_min: z.number().nullable(),
+  cycle_time_max: z.number().nullable(),
+  cycle_time_avg: z.number().nullable(),
+  cycle_latency_min: z.number().nullable(),
+  cycle_latency_max: z.number().nullable(),
+  cycle_latency_avg: z.number().nullable(),
+  overruns: z.number(),
+})
+
 const runtimeConnectionSchema = z.object({
   jwtToken: z.string().nullable(),
   connectionStatus: z.enum(['disconnected', 'connecting', 'connected', 'error']),
   plcStatus: z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable(),
   ipAddress: z.string().nullable(),
+  timingStats: timingStatsSchema.nullable(),
+  // Flag to include timing stats in status polling (set by board.tsx when visible)
+  includeTimingStatsInPolling: z.boolean(),
 })
 
 type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>
@@ -73,7 +108,6 @@ const deviceStateSchema = z.object({
   deviceDefinitions: z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
-    compileOnly: z.boolean().default(true),
     temporaryDhcpIp: z.string().optional(),
   }),
   deviceUpdated: z.object({
@@ -159,10 +193,15 @@ const deviceActionSchema = z.object({
     .function()
     .args(z.enum(['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']).nullable())
     .returns(z.void()),
+  setTimingStats: z.function().args(timingStatsSchema.nullable()).returns(z.void()),
+  setIncludeTimingStatsInPolling: z.function().args(z.boolean()).returns(z.void()),
   setTemporaryDhcpIp: z.function().args(z.string().optional()).returns(z.void()),
 })
 
-type DeviceActions = z.infer<typeof deviceActionSchema>
+type DeviceActions = Omit<z.infer<typeof deviceActionSchema>, 'setTimingStats'> & {
+  setTimingStats: (stats: TimingStats | null) => void
+  setIncludeTimingStatsInPolling: (include: boolean) => void
+}
 
 type DeviceSlice = DeviceState & {
   deviceActions: DeviceActions
@@ -176,6 +215,7 @@ export type {
   DeviceSlice,
   DeviceState,
   RuntimeConnection,
+  TimingStats,
 }
 export {
   baudRateOptions,
@@ -187,4 +227,5 @@ export {
   deviceStateSchema,
   interfaceOptions,
   runtimeConnectionSchema,
+  timingStatsSchema,
 }

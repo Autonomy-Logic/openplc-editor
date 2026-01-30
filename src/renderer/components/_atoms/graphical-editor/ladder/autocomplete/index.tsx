@@ -1,3 +1,4 @@
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
@@ -181,7 +182,14 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         scope: 'local',
         associatedPou: editor.meta.name,
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        toast({
+          title: res.title ?? 'Error',
+          description: res.message ?? 'Failed to create variable',
+          variant: 'fail',
+        })
+        return
+      }
 
       const variable = res.data as PLCVariable | undefined
 
@@ -199,17 +207,20 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       })
     }
 
-    const submit = ({ variable }: { variable: { name: string } }) => {
-      if (variable.name === 'add') {
+    const submit = ({ variable }: { variable: { id: string; name: string } }) => {
+      if (variable.id === 'add') {
         submitAddVariable({ variableName: valueToSearch })
         return
       }
 
-      const selectedVariable = filteredVariables.find(
+      // Look up in the full variables list, not just filtered ones
+      // This ensures we find the variable even if the filter state changed
+      const selectedVariable = variables.find(
         (variableItem) => variableItem.name.toLowerCase() === variable.name.toLowerCase(),
       )
       if (!selectedVariable) {
-        submitAddVariable({ variableName: valueToSearch })
+        // Don't create a new variable if lookup fails - this prevents accidental variable creation
+        // Variables should only be created when the user explicitly selects "Add variable"
         return
       }
 

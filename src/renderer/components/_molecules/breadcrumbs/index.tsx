@@ -5,8 +5,9 @@ import { ArrowIcon, ConfigIcon, PLCIcon } from '@process:renderer/assets'
 import { LanguageIcon, LanguageIconType, PouIcon, PouIconType } from '@process:renderer/data'
 import { ArrayIcon, EnumIcon, StructureIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { FbInstanceInfo } from '@root/types/debugger'
 import { startCase } from 'lodash'
-import { ComponentProps } from 'react'
+import { ComponentProps, useCallback, useMemo } from 'react'
 
 type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
   crumb: {
@@ -26,6 +27,8 @@ const Breadcrumbs = () => {
       meta: { name },
       data: { dataTypes },
     },
+    workspace: { isDebuggerVisible, fbDebugInstances, fbSelectedInstance },
+    workspaceActions: { setFbSelectedInstance },
   } = useOpenPLCStore()
 
   const derivationIcons = {
@@ -68,6 +71,34 @@ const Breadcrumbs = () => {
   const typeOrIcon = getPouTypeOrDataTypeOrResource()
   const [icon, text] = getIconOrLanguage()
 
+  // Check if we should show the FB instance dropdown
+  const isFunctionBlock = 'pouType' in meta && meta.pouType === 'function-block'
+  const fbTypeName = meta.name
+  const fbTypeKey = fbTypeName.toUpperCase() // Canonical key for map lookups
+
+  // Get available instances for this FB type
+  const fbInstances = useMemo((): FbInstanceInfo[] => {
+    if (!isFunctionBlock || !isDebuggerVisible) return []
+    return fbDebugInstances.get(fbTypeKey) || []
+  }, [isFunctionBlock, isDebuggerVisible, fbDebugInstances, fbTypeKey])
+
+  // Get currently selected instance key
+  const selectedInstanceKey = useMemo((): string | undefined => {
+    if (!isFunctionBlock || !isDebuggerVisible) return undefined
+    return fbSelectedInstance.get(fbTypeKey)
+  }, [isFunctionBlock, isDebuggerVisible, fbSelectedInstance, fbTypeKey])
+
+  // Handle instance selection change
+  const handleInstanceChange = useCallback(
+    (newKey: string) => {
+      setFbSelectedInstance(fbTypeKey, newKey)
+    },
+    [fbTypeKey, setFbSelectedInstance],
+  )
+
+  // Determine if we should show the instance dropdown
+  const showInstanceDropdown = isFunctionBlock && isDebuggerVisible && fbInstances.length > 0
+
   return (
     <NavigationPanelBreadcrumbs
       crumb={{
@@ -79,6 +110,10 @@ const Breadcrumbs = () => {
         },
       }}
       typeIcon={icon}
+      showInstanceDropdown={showInstanceDropdown}
+      fbInstances={fbInstances}
+      selectedInstanceKey={selectedInstanceKey}
+      onInstanceChange={handleInstanceChange}
     />
   )
 }
@@ -95,11 +130,23 @@ const BreadcrumbItem = ({ Icon, text, isLast }: { Icon: React.ElementType; text:
   </div>
 )
 
+type NavigationPanelBreadcrumbsExtendedProps = INavigationPanelBreadcrumbsProps & {
+  typeIcon?: React.ElementType
+  showInstanceDropdown?: boolean
+  fbInstances?: FbInstanceInfo[]
+  selectedInstanceKey?: string
+  onInstanceChange?: (key: string) => void
+}
+
 export const NavigationPanelBreadcrumbs = ({
   crumb,
   typeIcon,
+  showInstanceDropdown = false,
+  fbInstances = [],
+  selectedInstanceKey,
+  onInstanceChange,
   ...res
-}: INavigationPanelBreadcrumbsProps & { typeIcon?: React.ElementType }) => {
+}: NavigationPanelBreadcrumbsExtendedProps) => {
   const { project_name, pou_to_display } = crumb
   const { name, type, language } = pou_to_display
   const isResource = type[0] === 'resource'
@@ -115,10 +162,26 @@ export const NavigationPanelBreadcrumbs = ({
       {!isResource && (
         <li>
           {typeIcon ? (
-            <BreadcrumbItem Icon={typeIcon} text={name} isLast={true} />
+            <BreadcrumbItem Icon={typeIcon} text={name} isLast={!showInstanceDropdown} />
           ) : (
-            <BreadcrumbItem Icon={LanguageIcon[language[0]]} text={name} isLast={true} />
+            <BreadcrumbItem Icon={LanguageIcon[language[0]]} text={name} isLast={!showInstanceDropdown} />
           )}
+        </li>
+      )}
+      {showInstanceDropdown && fbInstances.length > 0 && (
+        <li className='flex items-center gap-1'>
+          <select
+            value={selectedInstanceKey || ''}
+            onChange={(e) => onInstanceChange?.(e.target.value)}
+            className='h-5 cursor-pointer rounded border border-neutral-300 bg-white px-1 font-caption text-[10px] font-medium text-neutral-850 outline-none focus:border-brand focus:ring-1 focus:ring-brand dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-300'
+            title='Select FB instance to debug'
+          >
+            {fbInstances.map((inst) => (
+              <option key={inst.key} value={inst.key}>
+                {inst.programName}.{inst.fbVariableName}
+              </option>
+            ))}
+          </select>
         </li>
       )}
     </ol>

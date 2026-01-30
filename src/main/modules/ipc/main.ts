@@ -2,6 +2,7 @@ import { getProjectPath } from '@root/main/utils'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
@@ -89,12 +90,15 @@ class MainProcessBridge implements MainIpcModule {
               data += chunk.toString()
             })
             res.on('end', () => {
+              // Extract runtime version from response header
+              const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
+
               if (res.statusCode === 404) {
-                resolve({ hasUsers: false })
+                resolve({ hasUsers: false, runtimeVersion })
               } else if (res.statusCode === 200) {
-                resolve({ hasUsers: true })
+                resolve({ hasUsers: true, runtimeVersion })
               } else {
-                resolve({ hasUsers: false, error: data || `Unexpected status: ${res.statusCode}` })
+                resolve({ hasUsers: false, error: data || `Unexpected status: ${res.statusCode}`, runtimeVersion })
               }
             })
           },
@@ -356,17 +360,59 @@ class MainProcessBridge implements MainIpcModule {
     })
   }
 
-  handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeGetStatus = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+    includeStats?: boolean,
+  ) => {
     try {
-      const result = await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/status', (data: string) => {
-        const response = JSON.parse(data) as { status: string }
-        return response.status
+      // Build the endpoint path with optional include_stats query parameter
+      const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
+
+      const result = await this.makeRuntimeApiRequest<{
+        status: string
+        timing_stats?: {
+          scan_count: number
+          scan_time_min: number | null
+          scan_time_max: number | null
+          scan_time_avg: number | null
+          cycle_time_min: number | null
+          cycle_time_max: number | null
+          cycle_time_avg: number | null
+          cycle_latency_min: number | null
+          cycle_latency_max: number | null
+          cycle_latency_avg: number | null
+          overruns: number
+        }
+      }>(ipAddress, jwtToken, endpoint, (data: string) => {
+        const response = JSON.parse(data) as {
+          status: string
+          timing_stats?: {
+            scan_count: number
+            scan_time_min: number | null
+            scan_time_max: number | null
+            scan_time_avg: number | null
+            cycle_time_min: number | null
+            cycle_time_max: number | null
+            cycle_time_avg: number | null
+            cycle_latency_min: number | null
+            cycle_latency_max: number | null
+            cycle_latency_avg: number | null
+            overruns: number
+          }
+        }
+        return response
       })
 
-      if (result.success) {
-        return { success: true, status: result.data }
+      if (result.success && result.data) {
+        return {
+          success: true,
+          status: result.data.status,
+          timingStats: result.data.timing_stats,
+        }
       } else {
-        return { success: false, error: result.error }
+        return { success: false, error: !result.success ? result.error : 'Unknown error' }
       }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -406,14 +452,15 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string, minId?: number) => {
     try {
-      const result = await this.makeRuntimeApiRequest<string>(
+      const endpoint = minId !== undefined ? `/api/runtime-logs?id=${minId}` : '/api/runtime-logs'
+      const result = await this.makeRuntimeApiRequest<string | RuntimeLogEntry[]>(
         ipAddress,
         jwtToken,
-        '/api/runtime-logs',
+        endpoint,
         (data: string) => {
-          const response = JSON.parse(data) as { 'runtime-logs': string }
+          const response = JSON.parse(data) as { 'runtime-logs': string | RuntimeLogEntry[] }
           return response['runtime-logs']
         },
       )
@@ -430,6 +477,37 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
     this.runtimeCredentials = null
     return { success: true }
+  }
+
+  handleRuntimeGetSerialPorts = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> => {
+    try {
+      const result = await this.makeRuntimeApiRequest<{ ports: Array<{ device: string; description?: string }> }>(
+        ipAddress,
+        jwtToken,
+        '/api/serial-ports',
+        (data: string) => {
+          const response = JSON.parse(data) as {
+            ports?: Array<{ device: string; description?: string }>
+            error?: string
+          }
+          if (response.error) {
+            throw new Error(response.error)
+          }
+          return { ports: response.ports || [] }
+        },
+      )
+      if (result.success && result.data) {
+        return { success: true, ports: result.data.ports }
+      } else {
+        return { success: false, error: result.success ? 'No data returned' : result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -510,6 +588,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
     this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
+    this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -809,9 +888,18 @@ class MainProcessBridge implements MainIpcModule {
       await client.connect()
       const targetMd5 = await client.getMd5Hash()
 
-      client.disconnect()
-
       const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+
+      if (connectionType === 'tcp') {
+        client.disconnect()
+      } else {
+        this.debuggerModbusClient = client
+        this.debuggerConnectionType = 'rtu'
+        this.debuggerRtuPort = connectionParams.port!
+        this.debuggerRtuBaudRate = connectionParams.baudRate!
+        this.debuggerRtuSlaveId = connectionParams.slaveId!
+      }
+
       return { success: true, match, targetMd5 }
     } catch (error) {
       client?.disconnect()
@@ -996,12 +1084,12 @@ class MainProcessBridge implements MainIpcModule {
     },
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (this.debuggerModbusClient) {
-        this.debuggerModbusClient.disconnect()
-        this.debuggerModbusClient = null
-      }
-
       if (connectionType === 'websocket') {
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
@@ -1024,6 +1112,11 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerTargetIp = connectionParams.ipAddress
         this.debuggerJwtToken = connectionParams.jwtToken
       } else if (connectionType === 'tcp') {
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
         if (!connectionParams.ipAddress) {
           return { success: false, error: 'IP address is required for TCP connection' }
         }
@@ -1038,6 +1131,23 @@ class MainProcessBridge implements MainIpcModule {
         if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
           return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
         }
+
+        if (
+          this.debuggerModbusClient &&
+          this.debuggerConnectionType === 'rtu' &&
+          this.debuggerRtuPort === connectionParams.port &&
+          this.debuggerRtuBaudRate === connectionParams.baudRate &&
+          this.debuggerRtuSlaveId === connectionParams.slaveId
+        ) {
+          this.debuggerReconnecting = false
+          return { success: true }
+        }
+
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
         this.debuggerModbusClient = new ModbusRtuClient({
           port: connectionParams.port,
           baudRate: connectionParams.baudRate,
@@ -1093,13 +1203,6 @@ class MainProcessBridge implements MainIpcModule {
     valueBuffer?: Uint8Array,
   ): Promise<{ success: boolean; error?: string }> => {
     const buffer = valueBuffer ? Buffer.from(valueBuffer) : undefined
-
-    console.log('[IPC Handler] debugger:set-variable called with:', {
-      variableIndex,
-      force,
-      valueBuffer: buffer?.toString('hex'),
-      connectionType: this.debuggerConnectionType,
-    })
 
     if (this.debuggerConnectionType === 'websocket') {
       if (!this.debuggerWebSocketClient) {

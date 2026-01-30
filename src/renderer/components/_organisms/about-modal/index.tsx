@@ -19,11 +19,12 @@ const AboutModal = () => {
   const closeModal = () => {
     setModalOpen('aboutOpenPlc', false)
   }
-  const title = 'OpenPLC Editor 4.0.6-beta'
-  const releaseDate = 'Release: 2025-10-01'
+  const title = `OpenPLC Editor ${APP_VERSION}`
+  const releaseDate = `Release: ${BUILD_DATE}`
   const description = 'Open Source IDE for the OpenPLC Runtime, compliant with the IEC 61131-3 international standard.'
-  const copyright = '© 2025 Autonomy Logic'
-  const linkUrl = 'https://autonomylogic.com/'
+  const copyrightYear = new Date().getFullYear()
+  const copyright = `© ${copyrightYear} Autonomy Logic`
+  const linkUrl = 'https://autonomylogic.com'
 
   const handleOpenAboutLink = () => {
     void window.bridge.openExternalLinkAccelerator(linkUrl)

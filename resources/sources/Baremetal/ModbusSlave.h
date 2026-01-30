@@ -9,10 +9,14 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #include <Arduino.h>
 #include "defines.h"
 
-#define bitRead(value, bit) (((value) >> (bit)) & 0x01)
+#ifndef bitRead
+    #define bitRead(value, bit) (((value) >> (bit)) & 0x01)
+#endif
 //#define bitSet(value, bit) ((value) |= (1UL << (bit)))
 //#define bitClear(value, bit) ((value) &= ~(1UL << (bit)))
-#define bitWrite(value, bit, bitvalue) (bitvalue ? bitSet(value, bit) : bitClear(value, bit))
+#ifndef bitWrite
+    #define bitWrite(value, bit, bitvalue) (bitvalue ? bitSet(value, bit) : bitClear(value, bit))
+#endif
 #define COILS           0
 #define INPUTSTATUS     1
 #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega16U4__)

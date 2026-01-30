@@ -1,16 +1,31 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
+import { ConsoleFilters } from '@components/_organisms/console/filters'
+import { PlcLogsFilters } from '@components/_organisms/plc-logs/filters'
 import * as Tabs from '@radix-ui/react-tabs'
+import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
+// Note: Logs polling is now handled by useRuntimePolling hook
 import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
-import { useEffect, useRef } from 'react'
-import { useState } from 'react'
+import {
+  appendToDebugPath,
+  buildDebugPath,
+  getFieldIndexFromMapWithFallback,
+  getIndexFromMapWithFallback,
+} from '@root/utils/debug-variable-finder'
+import { useEffect, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { ExitIcon } from '../assets'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
+import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
+import {
+  ModbusServerEditor,
+  OpcUaServerEditor,
+  S7CommServerEditor,
+} from '../components/_features/[workspace]/editor/server'
 import { Search } from '../components/_features/[workspace]/search'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import AboutModal from '../components/_organisms/about-modal'
@@ -21,6 +36,7 @@ import {
   ConfirmDeviceSwitchModal,
   DebuggerIpInputModal,
   DebuggerMessageModal,
+  RuntimeConnectionLostModal,
   RuntimeCreateUserModal,
   RuntimeLoginModal,
 } from '../components/_organisms/modals'
@@ -35,7 +51,6 @@ import { useOpenPLCStore } from '../store'
 import { getVariableSize, parseVariableValue } from '../utils/variable-sizes'
 
 const DEBUGGER_POLL_INTERVAL_MS = 200
-const PLC_LOGS_POLL_INTERVAL_MS = 2500
 
 const WorkspaceScreen = () => {
   const {
@@ -48,15 +63,26 @@ const WorkspaceScreen = () => {
       debugVariableTree,
       debugVariableIndexes,
       debugForcedVariables,
+      debugExpandedNodes,
+      plcLogs,
     },
     editor,
-    workspaceActions: { toggleCollapse, setDebugForcedVariables },
+    workspaceActions: { toggleCollapse, setDebugForcedVariables, toggleDebugExpandedNode, clearPlcLogs },
     deviceActions: { setAvailableOptions },
     searchResults,
     project: {
       data: { pous },
     },
   } = useOpenPLCStore()
+
+  // Get FB debug context for transforming FB variable keys
+  const {
+    workspace: { fbSelectedInstance, fbDebugInstances },
+  } = useOpenPLCStore()
+
+  // Global runtime status polling - runs continuously while connected to runtime
+  // This ensures the sidebar start/stop button updates correctly from the store
+  useRuntimePolling()
 
   const allDebugVariables = pous.flatMap((pou) => {
     return pou.data.variables
@@ -73,15 +99,39 @@ const WorkspaceScreen = () => {
           typeValue = v.type.value
         }
 
-        const compositeKey = `${pou.data.name}:${v.name}`
+        // For function block POUs, transform the key to use instance context
+        let compositeKey: string
+        let displayName: string
+        if (pou.type === 'function-block') {
+          const fbTypeKey = pou.data.name.toUpperCase() // Canonical key for map lookups
+          const selectedKey = fbSelectedInstance.get(fbTypeKey)
+          const instances = fbDebugInstances.get(fbTypeKey) || []
+          const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+
+          if (selectedInstance) {
+            // Transform to instance context: main:MOTOR_SPEED0.varName
+            compositeKey = `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${v.name}`
+            // Display with full path: main.MOTOR_SPEED0.varName
+            displayName = `${selectedInstance.programName}.${selectedInstance.fbVariableName}.${v.name}`
+          } else {
+            // No instance selected, use original format
+            compositeKey = `${pou.data.name}:${v.name}`
+            displayName = v.name
+          }
+        } else {
+          compositeKey = `${pou.data.name}:${v.name}`
+          displayName = v.name
+        }
+
         const variableValue = debugVariableValues.get(compositeKey)
         const displayValue = variableValue !== undefined ? variableValue : '-'
 
         return {
           pouName: pou.data.name,
-          name: v.name,
+          name: displayName,
           type: typeValue,
           value: displayValue,
+          compositeKey,
         }
       })
   })
@@ -93,18 +143,15 @@ const WorkspaceScreen = () => {
 
   const debugVariables = allDebugVariables.map((v) => {
     const hasConflict = nameOccurrences.get(v.name)! > 1
-    const compositeKey = `${v.pouName}:${v.name}`
     return {
       name: hasConflict ? `[${v.pouName}] ${v.name}` : v.name,
       type: v.type,
       value: v.value,
-      compositeKey,
+      compositeKey: v.compositeKey,
     }
   })
 
-  const watchedCompositeKeys = new Set<string>(
-    pous.flatMap((pou) => pou.data.variables.filter((v) => v.debug === true).map((v) => `${pou.data.name}:${v.name}`)),
-  )
+  const watchedCompositeKeys = new Set<string>(allDebugVariables.map((v) => v.compositeKey))
 
   const forcedKeys = Array.from(debugForcedVariables.keys())
   const allKeys = new Set([...watchedCompositeKeys, ...forcedKeys])
@@ -123,6 +170,7 @@ const WorkspaceScreen = () => {
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const isMountedRef = useRef(true)
+  const graphListRef = useRef<string[]>([])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -130,6 +178,11 @@ const WorkspaceScreen = () => {
       isMountedRef.current = false
     }
   }, [])
+
+  // Keep graphListRef in sync with graphList state for use in polling
+  useEffect(() => {
+    graphListRef.current = graphList
+  }, [graphList])
 
   type VariableInfo = {
     pouName: string
@@ -194,6 +247,167 @@ const WorkspaceScreen = () => {
     }
 
     const variableInfoMap = new Map<number, VariableInfo>()
+
+    // Helper function to ensure ENO variable exists in FB variable list
+    // ENO is always present in debug.c for function blocks but may not be in the type definition
+    const ensureEnoVariable = (
+      fbVars: Array<{ name: string; class: string; type: { definition: string; value: string } }>,
+    ): Array<{ name: string; class: string; type: { definition: string; value: string } }> => {
+      const hasEno = fbVars.some((v) => v.type.definition === 'base-type' && v.name.toUpperCase() === 'ENO')
+      if (hasEno) return fbVars
+      return [...fbVars, { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } }]
+    }
+
+    // Helper function to recursively process nested FB and struct variables
+    const processNestedVariables = (
+      fbVariables: Array<{ name: string; class: string; type: { definition: string; value: string } }>,
+      pouName: string,
+      debugPathPrefix: string,
+      variableNamePrefix: string,
+    ) => {
+      fbVariables.forEach((fbVar) => {
+        if (fbVar.type.definition === 'base-type') {
+          // Base type variable - add to variableInfoMap
+          // Use fallback to try both FB-style and struct-style paths
+          const index = getFieldIndexFromMapWithFallback(debugVariableIndexes, debugPathPrefix, fbVar.name)
+
+          if (index !== undefined) {
+            const varName = `${variableNamePrefix}.${fbVar.name}`
+            variableInfoMap.set(index, {
+              pouName,
+              variable: {
+                name: varName,
+                type: {
+                  definition: 'base-type',
+                  value: fbVar.type.value.toLowerCase() as
+                    | 'bool'
+                    | 'int'
+                    | 'real'
+                    | 'time'
+                    | 'string'
+                    | 'date'
+                    | 'sint'
+                    | 'dint'
+                    | 'lint'
+                    | 'usint'
+                    | 'uint'
+                    | 'udint'
+                    | 'ulint'
+                    | 'lreal'
+                    | 'tod'
+                    | 'dt'
+                    | 'byte'
+                    | 'word'
+                    | 'dword'
+                    | 'lword',
+                },
+                class: 'local',
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+            })
+          }
+        } else if (fbVar.type.definition === 'derived') {
+          // Nested function block - recursively process
+          const nestedFBTypeName = fbVar.type.value.toUpperCase()
+          const nestedDebugPath = appendToDebugPath(debugPathPrefix, fbVar.name)
+          const nestedVarName = `${variableNamePrefix}.${fbVar.name}`
+
+          // Look up the nested FB definition
+          let nestedFBVariables:
+            | Array<{ name: string; class: string; type: { definition: string; value: string } }>
+            | undefined
+
+          const standardFB = StandardFunctionBlocks.pous.find(
+            (fb: { name: string }) => fb.name.toUpperCase() === nestedFBTypeName,
+          )
+          if (standardFB) {
+            nestedFBVariables = ensureEnoVariable(standardFB.variables)
+          } else {
+            const customFB = project.data.pous.find(
+              (p) => p.type === 'function-block' && p.data.name.toUpperCase() === nestedFBTypeName,
+            )
+            if (customFB && customFB.type === 'function-block') {
+              nestedFBVariables = ensureEnoVariable(
+                customFB.data.variables as Array<{
+                  name: string
+                  class: string
+                  type: { definition: string; value: string }
+                }>,
+              )
+            }
+          }
+
+          if (nestedFBVariables) {
+            processNestedVariables(nestedFBVariables, pouName, nestedDebugPath, nestedVarName)
+          }
+        } else if (fbVar.type.definition === 'user-data-type') {
+          // Nested struct - recursively process
+          const structTypeName = fbVar.type.value
+          const nestedDebugPath = appendToDebugPath(debugPathPrefix, fbVar.name)
+          const nestedVarName = `${variableNamePrefix}.${fbVar.name}`
+
+          // Check if this is actually a function block (some FBs are defined as user-data-type)
+          const typeNameUpper = structTypeName.toUpperCase()
+          const isStandardFB = StandardFunctionBlocks.pous.some(
+            (pou: { name: string; type: string }) =>
+              pou.name.toUpperCase() === typeNameUpper &&
+              pou.type.toLowerCase().replace(/[-_]/g, '') === 'functionblock',
+          )
+          const isCustomFB = project.data.pous.some(
+            (pou) => pou.type === 'function-block' && pou.data.name.toUpperCase() === typeNameUpper,
+          )
+
+          if (isStandardFB || isCustomFB) {
+            // It's actually a function block
+            let nestedFBVariables:
+              | Array<{ name: string; class: string; type: { definition: string; value: string } }>
+              | undefined
+
+            const standardFB = StandardFunctionBlocks.pous.find(
+              (fb: { name: string }) => fb.name.toUpperCase() === typeNameUpper,
+            )
+            if (standardFB) {
+              nestedFBVariables = ensureEnoVariable(standardFB.variables)
+            } else {
+              const customFB = project.data.pous.find(
+                (p) => p.type === 'function-block' && p.data.name.toUpperCase() === typeNameUpper,
+              )
+              if (customFB && customFB.type === 'function-block') {
+                nestedFBVariables = ensureEnoVariable(
+                  customFB.data.variables as Array<{
+                    name: string
+                    class: string
+                    type: { definition: string; value: string }
+                  }>,
+                )
+              }
+            }
+
+            if (nestedFBVariables) {
+              processNestedVariables(nestedFBVariables, pouName, nestedDebugPath, nestedVarName)
+            }
+          } else {
+            // It's a struct - look up the struct definition
+            const structType = project.data.dataTypes.find((dt) => dt.name.toUpperCase() === typeNameUpper)
+
+            if (structType && structType.derivation === 'structure') {
+              const structVariables: Array<{
+                name: string
+                class: string
+                type: { definition: string; value: string }
+              }> = structType.variable.map((field) => ({
+                name: field.name,
+                class: 'local' as const,
+                type: { definition: field.type.definition, value: field.type.value },
+              }))
+              processNestedVariables(structVariables, pouName, nestedDebugPath, nestedVarName)
+            }
+          }
+        }
+      })
+    }
 
     project.data.pous.forEach((pou) => {
       if (pou.type !== 'program') return
@@ -275,8 +489,12 @@ const WorkspaceScreen = () => {
             }
 
             allBaseTypeVars.forEach((fbVar) => {
-              const debugPath = `RES0__${programInstance.name.toUpperCase()}.${fbInstance.name.toUpperCase()}.${fbVar.name.toUpperCase()}`
-              const index = debugVariableIndexes.get(debugPath)
+              // Use fallback to try both FB-style and struct-style paths
+              const index = getIndexFromMapWithFallback(
+                debugVariableIndexes,
+                programInstance.name,
+                `${fbInstance.name}.${fbVar.name}`,
+              )
 
               if (index !== undefined) {
                 const blockVarName = `${fbInstance.name}.${fbVar.name}`
@@ -316,6 +534,16 @@ const WorkspaceScreen = () => {
                 })
               }
             })
+
+            // Process nested FB and struct variables recursively
+            const nestedVariables = fbVariables.filter(
+              (v) => v.type.definition === 'derived' || v.type.definition === 'user-data-type',
+            )
+            if (nestedVariables.length > 0) {
+              const debugPathPrefix = buildDebugPath(programInstance.name, fbInstance.name)
+              const variableNamePrefix = fbInstance.name
+              processNestedVariables(nestedVariables, pou.data.name, debugPathPrefix, variableNamePrefix)
+            }
           }
         })
 
@@ -362,8 +590,12 @@ const WorkspaceScreen = () => {
                 }
 
                 boolOutputs.forEach((outputVar) => {
-                  const debugPath = `RES0__${programInstance.name.toUpperCase()}._TMP_${blockName}${numericId}_${outputVar.name.toUpperCase()}`
-                  const index = debugVariableIndexes.get(debugPath)
+                  // Use fallback to try both FB-style and struct-style paths
+                  const index = getIndexFromMapWithFallback(
+                    debugVariableIndexes,
+                    programInstance.name,
+                    `_TMP_${blockName}${numericId}_${outputVar.name}`,
+                  )
 
                   if (index !== undefined) {
                     const tempVarName = `_TMP_${blockName}${numericId}_${outputVar.name}`
@@ -387,7 +619,254 @@ const WorkspaceScreen = () => {
       }
     })
 
+    // Central FB instance visitor that handles ALL variable types at arbitrary nesting depth
+    // This is the unified entry point for processing FB instances, handling:
+    // 1. Base-type variables of the FB
+    // 2. Nested FB/struct variables (via processNestedVariables)
+    // 3. Function temps in ladder (for functions with execution control)
+    // 4. Recursive processing of nested FB instances
+    const visitFbInstance = (
+      fbPou: (typeof project.data.pous)[0],
+      debugPathPrefix: string,
+      variablePathPrefix: string,
+      programPouName: string,
+      _blockExecutionControlMap: Map<string, boolean>,
+    ) => {
+      if (fbPou.type !== 'function-block') return
+
+      const fbVariables = fbPou.data.variables as Array<{
+        name: string
+        class: string
+        type: { definition: string; value: string }
+      }>
+
+      // 1. Process base-type variables of this FB
+      const baseTypeVars = fbVariables.filter((v) => v.type.definition === 'base-type')
+      baseTypeVars.forEach((fbVar) => {
+        // Use fallback to try both FB-style and struct-style paths
+        const index = getFieldIndexFromMapWithFallback(debugVariableIndexes, debugPathPrefix, fbVar.name)
+
+        if (index !== undefined) {
+          const varName = `${variablePathPrefix}.${fbVar.name}`
+          variableInfoMap.set(index, {
+            pouName: programPouName,
+            variable: {
+              name: varName,
+              type: {
+                definition: 'base-type',
+                value: fbVar.type.value.toLowerCase() as
+                  | 'bool'
+                  | 'int'
+                  | 'real'
+                  | 'time'
+                  | 'string'
+                  | 'date'
+                  | 'sint'
+                  | 'dint'
+                  | 'lint'
+                  | 'usint'
+                  | 'uint'
+                  | 'udint'
+                  | 'ulint'
+                  | 'lreal'
+                  | 'tod'
+                  | 'dt'
+                  | 'byte'
+                  | 'word'
+                  | 'dword'
+                  | 'lword',
+              },
+              class: 'local',
+              location: '',
+              documentation: '',
+              debug: false,
+            },
+          })
+        }
+      })
+
+      // 2. Process nested FB and struct variables recursively
+      const nestedVariables = fbVariables.filter(
+        (v) => v.type.definition === 'derived' || v.type.definition === 'user-data-type',
+      )
+      if (nestedVariables.length > 0) {
+        processNestedVariables(nestedVariables, programPouName, debugPathPrefix, variablePathPrefix)
+      }
+
+      // 3. Process function temps in ladder (if this FB has a ladder body)
+      if (fbPou.data.body.language === 'ld') {
+        const fbLadderFlow = ladderFlows.find((flow) => flow.name === fbPou.data.name)
+        if (fbLadderFlow) {
+          // Build execution control map for blocks in this FB's ladder
+          const fbBlockExecutionControlMap = new Map<string, boolean>()
+          fbLadderFlow.rungs.forEach((rung) => {
+            rung.nodes.forEach((node) => {
+              if (node.type === 'block') {
+                const blockData = node.data as { variable?: { name: string }; executionControl?: boolean }
+                if (blockData.variable?.name && blockData.executionControl) {
+                  fbBlockExecutionControlMap.set(blockData.variable.name, true)
+                }
+              }
+            })
+          })
+
+          // Process function blocks in this FB's ladder flow
+          fbLadderFlow.rungs.forEach((rung) => {
+            rung.nodes.forEach((node) => {
+              if (node.type !== 'block') return
+
+              const blockData = node.data as {
+                variable?: { name: string }
+                variant?: {
+                  name: string
+                  type: string
+                  variables: Array<{ name: string; class: string; type: { definition: string; value: string } }>
+                }
+                numericId?: string
+                executionControl?: boolean
+              }
+
+              // Only process functions (not function blocks) for _TMP_ variables
+              if (!blockData.variant || blockData.variant.type !== 'function') return
+
+              const blockName = blockData.variant.name.toUpperCase()
+              const numericId = blockData.numericId
+              if (!numericId) return
+
+              let boolOutputs = blockData.variant.variables.filter(
+                (v) =>
+                  (v.class === 'output' || v.class === 'inOut') &&
+                  v.type.definition === 'base-type' &&
+                  v.type.value.toUpperCase() === 'BOOL',
+              )
+
+              // Add ENO if execution control is enabled
+              const hasExecutionControl = blockData.executionControl || false
+              if (hasExecutionControl) {
+                const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+                if (!hasENO) {
+                  boolOutputs = [
+                    ...boolOutputs,
+                    { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+                  ]
+                }
+              }
+
+              boolOutputs.forEach((outputVar) => {
+                // Debug path uses the full nested path:
+                // RES0__INSTANCE0.FB_B0.FB_A0._TMP_EQ_STATE7415072_ENO
+                // Use fallback to try both FB-style and struct-style paths
+                const index = getFieldIndexFromMapWithFallback(
+                  debugVariableIndexes,
+                  debugPathPrefix,
+                  `_TMP_${blockName}${numericId}_${outputVar.name}`,
+                )
+
+                if (index !== undefined) {
+                  // Variable name includes the full nested path for composite key matching
+                  const tempVarName = `${variablePathPrefix}._TMP_${blockName}${numericId}_${outputVar.name}`
+                  variableInfoMap.set(index, {
+                    pouName: programPouName,
+                    variable: {
+                      name: tempVarName,
+                      type: { definition: 'base-type', value: 'bool' },
+                      class: 'local',
+                      location: '',
+                      documentation: '',
+                      debug: false,
+                    },
+                  })
+                }
+              })
+            })
+          })
+        }
+      }
+
+      // 4. Recursively visit nested FB instances declared as variables
+      // Note: Standard FBs (TON, TOF, etc.) are already handled by processNestedVariables above
+      // Here we only recurse into custom (user-defined) FBs to process their internal ladder/FBD
+      const nestedFbInstances = fbVariables.filter((v) => v.type.definition === 'derived')
+      nestedFbInstances.forEach((nestedFbInstance) => {
+        const nestedFbTypeName = nestedFbInstance.type.value.toUpperCase()
+
+        // Only recurse into custom FBs (user-defined), not standard library FBs
+        const customFB = project.data.pous.find(
+          (p) => p.type === 'function-block' && p.data.name.toUpperCase() === nestedFbTypeName,
+        )
+
+        if (customFB && customFB.type === 'function-block') {
+          // For custom FBs, recursively visit to process their internals
+          const nestedDebugPathPrefix = appendToDebugPath(debugPathPrefix, nestedFbInstance.name)
+          const nestedVariablePathPrefix = `${variablePathPrefix}.${nestedFbInstance.name}`
+          visitFbInstance(customFB, nestedDebugPathPrefix, nestedVariablePathPrefix, programPouName, new Map())
+        }
+      })
+    }
+
+    // Start from program POUs and find all FB instances
+    const instances = project.data.configuration.resource.instances
+    project.data.pous.forEach((programPou) => {
+      if (programPou.type !== 'program') return
+
+      const programInstance = instances.find((inst) => inst.program === programPou.data.name)
+      if (!programInstance) return
+
+      // Build execution control map for blocks in this program's ladder
+      const blockExecutionControlMap = new Map<string, boolean>()
+      if (programPou.data.body.language === 'ld') {
+        const currentLadderFlow = ladderFlows.find((flow) => flow.name === programPou.data.name)
+        if (currentLadderFlow) {
+          currentLadderFlow.rungs.forEach((rung) => {
+            rung.nodes.forEach((node) => {
+              if (node.type === 'block') {
+                const blockData = node.data as { variable?: { name: string }; executionControl?: boolean }
+                if (blockData.variable?.name && blockData.executionControl) {
+                  blockExecutionControlMap.set(blockData.variable.name, true)
+                }
+              }
+            })
+          })
+        }
+      }
+
+      // Find all FB instances in the program
+      const fbInstances = programPou.data.variables.filter((v) => v.type.definition === 'derived')
+
+      fbInstances.forEach((fbInstance) => {
+        const fbTypeName = fbInstance.type.value.toUpperCase()
+
+        // Check if it's a custom FB (user-defined)
+        const customFB = project.data.pous.find(
+          (p) => p.type === 'function-block' && p.data.name.toUpperCase() === fbTypeName,
+        )
+
+        if (customFB && customFB.type === 'function-block') {
+          // For custom FBs, use visitFbInstance to process all internals
+          const debugPathPrefix = buildDebugPath(programInstance.name, fbInstance.name)
+          const variablePathPrefix = fbInstance.name
+          visitFbInstance(customFB, debugPathPrefix, variablePathPrefix, programPou.data.name, blockExecutionControlMap)
+        }
+      })
+    })
+
     variableInfoMapRef.current = variableInfoMap
+
+    // Extend debugVariableIndexes with composite keys from variableInfoMap
+    // This enables force variable functionality for FB POUs by ensuring all
+    // composite keys (like main:IRRIGATION_MAIN_CONTROLLER0.SENSOR_INPUT) are
+    // mapped to their debug indexes. Without this, force handlers can't find
+    // the index for FB variables because debugVariableIndexes only contains
+    // program-level keys (like main:COUNTER) from the initial parsing.
+    const { workspaceActions: wsActions } = useOpenPLCStore.getState()
+    const updatedIndexes = new Map(debugVariableIndexes)
+    variableInfoMap.forEach((varInfo, index) => {
+      const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+      if (!updatedIndexes.has(compositeKey)) {
+        updatedIndexes.set(compositeKey, index)
+      }
+    })
+    wsActions.setDebugVariableIndexes(updatedIndexes)
 
     const pollVariables = async () => {
       if (!isMountedRef.current) return
@@ -401,20 +880,103 @@ const WorkspaceScreen = () => {
 
         const debugVariableKeys = new Set<string>()
 
+        // Get FB debug context for function block POUs
+        const {
+          workspace: { fbSelectedInstance, fbDebugInstances },
+        } = useOpenPLCStore.getState()
+
         currentProject.data.pous.forEach((pou) => {
-          if (pou.type !== 'program') return
-          pou.data.variables
-            .filter((v) => v.debug === true)
-            .forEach((v) => {
-              debugVariableKeys.add(`${pou.data.name}:${v.name}`)
-            })
+          if (pou.type === 'program') {
+            pou.data.variables
+              .filter((v) => v.debug === true)
+              .forEach((v) => {
+                debugVariableKeys.add(`${pou.data.name}:${v.name}`)
+              })
+          } else if (pou.type === 'function-block') {
+            // For function block POUs, transform variable keys using selected instance context
+            const fbTypeKey = pou.data.name.toUpperCase() // Canonical key for map lookups
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (!selectedKey) return // No instance selected, skip
+
+            // Find the instance info for the selected key
+            const instances = fbDebugInstances.get(fbTypeKey) || []
+            const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+            if (!selectedInstance) return // Instance not found, skip
+
+            // Transform FB variable keys to use instance context
+            // e.g., Calculate_PID:IN -> main:MOTOR_SPEED0.IN
+            pou.data.variables
+              .filter((v) => v.debug === true)
+              .forEach((v) => {
+                const transformedKey = `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${v.name}`
+                debugVariableKeys.add(transformedKey)
+              })
+          }
         })
 
+        // Get the current expansion state from the store
+        const {
+          workspace: { debugExpandedNodes },
+        } = useOpenPLCStore.getState()
+
+        // Helper function to check if a nested variable should be polled based on expansion state
+        // A nested variable should be polled if:
+        // 1. It's in the graph list (for real-time plotting), OR
+        // 2. It has a watched ancestor AND all nodes from that ancestor to this variable are expanded
+        // This supports arbitrary nesting depth - e.g., adding TON0 from within an FB POU
+        // creates a watched key like main:IRRIGATION_MAIN_CONTROLLER0.TON0, and its children
+        // (like ET, PT) should be polled when TON0 is expanded
+        const shouldPollNestedVariable = (varName: string, pouName: string, currentGraphList: string[]): boolean => {
+          const parts = varName.split('.')
+          if (parts.length <= 1) return true // Not a nested variable
+
+          // Check if this variable is in the graph list
+          const compositeKey = `${pouName}:${varName}`
+          if (currentGraphList.includes(compositeKey)) {
+            return true
+          }
+
+          // Find the deepest watched ancestor
+          // For example, if varName is 'IRRIGATION_MAIN_CONTROLLER0.TON0.ET':
+          // - Check if 'main:IRRIGATION_MAIN_CONTROLLER0.TON0' is watched (deepest)
+          // - If not, check if 'main:IRRIGATION_MAIN_CONTROLLER0' is watched
+          let watchedAncestorIndex = -1
+          for (let i = parts.length - 1; i >= 1; i--) {
+            const candidatePath = parts.slice(0, i).join('.')
+            const candidateKey = `${pouName}:${candidatePath}`
+            if (debugVariableKeys.has(candidateKey)) {
+              watchedAncestorIndex = i
+              break
+            }
+          }
+
+          // If no ancestor is watched, don't poll this variable
+          if (watchedAncestorIndex === -1) {
+            return false
+          }
+
+          // Check if all nodes from the watched ancestor to this variable are expanded
+          // Start from the watched ancestor (which must be expanded to see its children)
+          for (let i = watchedAncestorIndex; i < parts.length; i++) {
+            const parentPath = parts.slice(0, i).join('.')
+            const parentKey = `${pouName}:${parentPath}`
+            const isParentExpanded = debugExpandedNodes.get(parentKey) ?? false
+            if (!isParentExpanded) {
+              return false
+            }
+          }
+          return true
+        }
+
+        // Add nested variables to polling based on expansion state
+        // This now supports arbitrary nesting depth by finding the deepest watched ancestor
         Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
           if (varInfo.variable.name.includes('.')) {
-            const parentKey = `${varInfo.pouName}:${varInfo.variable.name.split('.')[0]}`
-            if (debugVariableKeys.has(parentKey)) {
-              const childKey = `${varInfo.pouName}:${varInfo.variable.name}`
+            const childKey = `${varInfo.pouName}:${varInfo.variable.name}`
+
+            // Check if this nested variable should be polled based on expansion state
+            // shouldPollNestedVariable now handles finding the watched ancestor internally
+            if (shouldPollNestedVariable(varInfo.variable.name, varInfo.pouName, graphListRef.current)) {
               debugVariableKeys.add(childKey)
             }
           }
@@ -422,6 +984,22 @@ const WorkspaceScreen = () => {
 
         const { editor, ladderFlows } = useOpenPLCStore.getState()
         const currentPou = currentProject.data.pous.find((pou) => pou.data.name === editor.meta.name)
+
+        // Helper to create composite key for current POU, handling FB instance context
+        const makeCompositeKeyForCurrentPou = (variableName: string): string | null => {
+          if (!currentPou) return null
+          if (currentPou.type === 'function-block') {
+            const fbTypeKey = currentPou.data.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (!selectedKey) return null
+            const instances = fbDebugInstances.get(fbTypeKey) || []
+            const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+            if (!selectedInstance) return null
+            return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
+          }
+          return `${currentPou.data.name}:${variableName}`
+        }
+
         if (currentPou && currentPou.data.body.language === 'ld') {
           const currentLadderFlow = ladderFlows.find((flow) => flow.name === editor.meta.name)
           if (currentLadderFlow) {
@@ -438,23 +1016,41 @@ const WorkspaceScreen = () => {
                     nodeData.variable?.type?.definition === 'base-type' &&
                     nodeData.variable?.type?.value?.toUpperCase() === 'BOOL'
                   ) {
-                    const compositeKey = `${currentPou.data.name}:${variableName}`
-                    debugVariableKeys.add(compositeKey)
+                    const compositeKey = makeCompositeKeyForCurrentPou(variableName)
+                    if (compositeKey) {
+                      debugVariableKeys.add(compositeKey)
+                    }
                   }
                 }
               })
             })
           }
 
-          const functionBlockInstances = currentPou.data.variables.filter(
-            (variable) => variable.type.definition === 'derived',
-          )
+          // Get FB instance context for function block POUs
+          let fbInstanceCtx: { programName: string; fbVariableName: string } | null = null
+          if (currentPou.type === 'function-block') {
+            const fbTypeKey = currentPou.data.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (selectedKey) {
+              const instances = fbDebugInstances.get(fbTypeKey) || []
+              const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+              if (selectedInstance) {
+                fbInstanceCtx = {
+                  programName: selectedInstance.programName,
+                  fbVariableName: selectedInstance.fbVariableName,
+                }
+              }
+            }
+          }
 
-          functionBlockInstances.forEach((fbInstance) => {
-            Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+          // For FB POUs, poll nested FB variables using instance context
+          // For program POUs, poll FB instance variables using the standard approach
+          if (currentPou.type === 'function-block' && fbInstanceCtx) {
+            // Poll all nested BOOL variables within the FB instance
+            Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
               if (
-                varInfo.pouName === currentPou.data.name &&
-                varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                varInfo.pouName === fbInstanceCtx.programName &&
+                varInfo.variable.name.startsWith(`${fbInstanceCtx.fbVariableName}.`) &&
                 varInfo.variable.type.definition === 'base-type' &&
                 varInfo.variable.type.value.toLowerCase() === 'bool'
               ) {
@@ -462,11 +1058,29 @@ const WorkspaceScreen = () => {
                 debugVariableKeys.add(compositeKey)
               }
             })
-          })
+          } else {
+            const functionBlockInstances = currentPou.data.variables.filter(
+              (variable) => variable.type.definition === 'derived',
+            )
 
-          const instances = currentProject.data.configuration.resource.instances
-          const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
-          if (programInstance && currentLadderFlow) {
+            functionBlockInstances.forEach((fbInstance) => {
+              Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                if (
+                  varInfo.pouName === currentPou.data.name &&
+                  varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                  varInfo.variable.type.definition === 'base-type' &&
+                  varInfo.variable.type.value.toLowerCase() === 'bool'
+                ) {
+                  const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                  debugVariableKeys.add(compositeKey)
+                }
+              })
+            })
+          }
+
+          // For FB POUs, poll function outputs using instance context
+          // For program POUs, poll function outputs using the standard approach
+          if (currentPou.type === 'function-block' && fbInstanceCtx && currentLadderFlow) {
             currentLadderFlow.rungs.forEach((rung) => {
               rung.nodes.forEach((node) => {
                 if (node.type === 'block') {
@@ -478,7 +1092,8 @@ const WorkspaceScreen = () => {
                   if (blockData.variant?.type === 'function' && blockData.numericId) {
                     Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
                       if (
-                        varInfo.pouName === currentPou.data.name &&
+                        varInfo.pouName === fbInstanceCtx.programName &&
+                        varInfo.variable.name.startsWith(`${fbInstanceCtx.fbVariableName}.`) &&
                         varInfo.variable.name.includes(blockData.numericId!)
                       ) {
                         const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
@@ -489,6 +1104,33 @@ const WorkspaceScreen = () => {
                 }
               })
             })
+          } else {
+            const instances = currentProject.data.configuration.resource.instances
+            const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
+            if (programInstance && currentLadderFlow) {
+              currentLadderFlow.rungs.forEach((rung) => {
+                rung.nodes.forEach((node) => {
+                  if (node.type === 'block') {
+                    const blockData = node.data as {
+                      variant?: { type: string }
+                      numericId?: string
+                    }
+
+                    if (blockData.variant?.type === 'function' && blockData.numericId) {
+                      Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                        if (
+                          varInfo.pouName === currentPou.data.name &&
+                          varInfo.variable.name.includes(blockData.numericId!)
+                        ) {
+                          const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                          debugVariableKeys.add(compositeKey)
+                        }
+                      })
+                    }
+                  }
+                })
+              })
+            }
           }
         }
 
@@ -508,23 +1150,41 @@ const WorkspaceScreen = () => {
                     (v) => v.name.toLowerCase() === variableName.toLowerCase(),
                   )
                   if (variable && variable.type.value.toUpperCase() === 'BOOL') {
-                    const compositeKey = `${currentPou.data.name}:${variableName}`
-                    debugVariableKeys.add(compositeKey)
+                    const compositeKey = makeCompositeKeyForCurrentPou(variableName)
+                    if (compositeKey) {
+                      debugVariableKeys.add(compositeKey)
+                    }
                   }
                 }
               }
             })
           }
 
-          const functionBlockInstances = currentPou.data.variables.filter(
-            (variable) => variable.type.definition === 'derived',
-          )
+          // Get FB instance context for function block POUs (FBD)
+          let fbdFbInstanceCtx: { programName: string; fbVariableName: string } | null = null
+          if (currentPou.type === 'function-block') {
+            const fbTypeKey = currentPou.data.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (selectedKey) {
+              const instances = fbDebugInstances.get(fbTypeKey) || []
+              const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+              if (selectedInstance) {
+                fbdFbInstanceCtx = {
+                  programName: selectedInstance.programName,
+                  fbVariableName: selectedInstance.fbVariableName,
+                }
+              }
+            }
+          }
 
-          functionBlockInstances.forEach((fbInstance) => {
-            Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+          // For FB POUs, poll nested FB variables using instance context
+          // For program POUs, poll FB instance variables using the standard approach
+          if (currentPou.type === 'function-block' && fbdFbInstanceCtx) {
+            // Poll all nested BOOL variables within the FB instance
+            Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
               if (
-                varInfo.pouName === currentPou.data.name &&
-                varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                varInfo.pouName === fbdFbInstanceCtx.programName &&
+                varInfo.variable.name.startsWith(`${fbdFbInstanceCtx.fbVariableName}.`) &&
                 varInfo.variable.type.definition === 'base-type' &&
                 varInfo.variable.type.value.toLowerCase() === 'bool'
               ) {
@@ -532,11 +1192,29 @@ const WorkspaceScreen = () => {
                 debugVariableKeys.add(compositeKey)
               }
             })
-          })
+          } else {
+            const functionBlockInstances = currentPou.data.variables.filter(
+              (variable) => variable.type.definition === 'derived',
+            )
 
-          const instances = currentProject.data.configuration.resource.instances
-          const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
-          if (programInstance && currentFbdFlow) {
+            functionBlockInstances.forEach((fbInstance) => {
+              Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                if (
+                  varInfo.pouName === currentPou.data.name &&
+                  varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                  varInfo.variable.type.definition === 'base-type' &&
+                  varInfo.variable.type.value.toLowerCase() === 'bool'
+                ) {
+                  const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                  debugVariableKeys.add(compositeKey)
+                }
+              })
+            })
+          }
+
+          // For FB POUs, poll function outputs using instance context
+          // For program POUs, poll function outputs using the standard approach
+          if (currentPou.type === 'function-block' && fbdFbInstanceCtx && currentFbdFlow) {
             currentFbdFlow.rung.nodes.forEach((node) => {
               if (node.type === 'block') {
                 const blockData = node.data as {
@@ -547,7 +1225,8 @@ const WorkspaceScreen = () => {
                 if (blockData.variant?.type === 'function' && blockData.numericId) {
                   Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
                     if (
-                      varInfo.pouName === currentPou.data.name &&
+                      varInfo.pouName === fbdFbInstanceCtx.programName &&
+                      varInfo.variable.name.startsWith(`${fbdFbInstanceCtx.fbVariableName}.`) &&
                       varInfo.variable.name.includes(blockData.numericId!)
                     ) {
                       const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
@@ -557,6 +1236,31 @@ const WorkspaceScreen = () => {
                 }
               }
             })
+          } else {
+            const instances = currentProject.data.configuration.resource.instances
+            const programInstance = instances.find((inst) => inst.program === currentPou.data.name)
+            if (programInstance && currentFbdFlow) {
+              currentFbdFlow.rung.nodes.forEach((node) => {
+                if (node.type === 'block') {
+                  const blockData = node.data as {
+                    variant?: { type: string }
+                    numericId?: string
+                  }
+
+                  if (blockData.variant?.type === 'function' && blockData.numericId) {
+                    Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
+                      if (
+                        varInfo.pouName === currentPou.data.name &&
+                        varInfo.variable.name.includes(blockData.numericId!)
+                      ) {
+                        const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                        debugVariableKeys.add(compositeKey)
+                      }
+                    })
+                  }
+                }
+              })
+            }
           }
         }
 
@@ -624,6 +1328,7 @@ const WorkspaceScreen = () => {
 
           const responseBuffer = new Uint8Array(result.data)
           let bufferOffset = 0
+          let itemsProcessed = 0
 
           for (const index of batch) {
             const varInfo = variableInfoMapRef.current?.get(index)
@@ -645,15 +1350,14 @@ const WorkspaceScreen = () => {
               bufferOffset += getVariableSize(variable)
             }
 
+            itemsProcessed++
+
             if (index === result.lastIndex) {
-              processedCount = batch.indexOf(index) + processedCount + 1
               break
             }
           }
 
-          if (result.lastIndex === batch[batch.length - 1]) {
-            processedCount += batch.length
-          }
+          processedCount += itemsProcessed
         }
 
         if (isMountedRef.current) {
@@ -690,49 +1394,8 @@ const WorkspaceScreen = () => {
     }
   }, [isDebuggerVisible])
 
-  useEffect(() => {
-    let logsPollingInterval: NodeJS.Timeout | null = null
-
-    const pollLogs = async (): Promise<void> => {
-      const {
-        runtimeConnection: { connectionStatus, ipAddress, jwtToken, plcStatus },
-        workspaceActions,
-      } = useOpenPLCStore.getState()
-
-      if (connectionStatus === 'connected') {
-        workspaceActions.setPlcLogsVisible(true)
-      } else {
-        workspaceActions.setPlcLogsVisible(false)
-        workspaceActions.setPlcLogs('')
-        return
-      }
-
-      if (ipAddress && jwtToken && plcStatus === 'RUNNING') {
-        try {
-          const result = await window.bridge.runtimeGetLogs(ipAddress, jwtToken)
-          if (result.success && result.logs !== undefined) {
-            workspaceActions.setPlcLogs(result.logs)
-          } else {
-            console.error('Failed to fetch PLC logs:', result.error ?? 'Unknown error')
-          }
-        } catch (error: unknown) {
-          console.error('Error polling PLC logs:', String(error))
-        }
-      }
-    }
-
-    void pollLogs()
-
-    logsPollingInterval = setInterval(() => {
-      void pollLogs()
-    }, PLC_LOGS_POLL_INTERVAL_MS)
-
-    return () => {
-      if (logsPollingInterval) {
-        clearInterval(logsPollingInterval)
-      }
-    }
-  }, [])
+  // Note: PLC logs polling is now handled by useRuntimePolling hook
+  // to consolidate status and logs polling into a single interval
 
   type PanelMethods = {
     collapse: () => void
@@ -755,9 +1418,21 @@ const WorkspaceScreen = () => {
     if (hasSearchResults) {
       setActiveTab('search')
     } else {
-      setActiveTab('console')
+      setActiveTab((prev) => (prev === 'search' ? 'console' : prev))
     }
   }, [hasSearchResults])
+
+  useEffect(() => {
+    if (!isDebuggerVisible) {
+      setActiveTab((prev) => (prev === 'debug' ? 'console' : prev))
+    }
+  }, [isDebuggerVisible])
+
+  useEffect(() => {
+    if (!isPlcLogsVisible) {
+      setActiveTab((prev) => (prev === 'plc-logs' ? 'console' : prev))
+    }
+  }, [isPlcLogsVisible])
 
   useEffect(() => {
     const action = isCollapsed ? 'collapse' : 'expand'
@@ -811,7 +1486,8 @@ const WorkspaceScreen = () => {
     const variableIndex = debugVariableIndexes.get(keyForIndexLookup)
     if (variableIndex === undefined) return
 
-    if (value === undefined) {
+    if (value === undefined && valueBuffer === undefined) {
+      // Release force
       const result = await window.bridge.debuggerSetVariable(variableIndex, false)
       if (result.success) {
         const newForcedVariables = new Map(Array.from(debugForcedVariables))
@@ -819,11 +1495,12 @@ const WorkspaceScreen = () => {
         setDebugForcedVariables(newForcedVariables)
       }
     } else {
-      const buffer = valueBuffer || new Uint8Array([value ? 1 : 0])
+      // Set force - use valueBuffer for non-boolean types, fallback to boolean conversion
+      const buffer = valueBuffer ?? new Uint8Array([value ? 1 : 0])
       const result = await window.bridge.debuggerSetVariable(variableIndex, true, buffer)
       if (result.success) {
         const newForcedVariables = new Map(Array.from(debugForcedVariables))
-        newForcedVariables.set(compositeKey, value)
+        newForcedVariables.set(compositeKey, value ?? true)
         setDebugForcedVariables(newForcedVariables)
       }
     }
@@ -832,6 +1509,7 @@ const WorkspaceScreen = () => {
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
       <ConfirmDeviceSwitchModal />
+      <RuntimeConnectionLostModal />
       <RuntimeCreateUserModal />
       <RuntimeLoginModal />
       <DebuggerMessageModal />
@@ -904,6 +1582,12 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-device' && <DeviceEditor />}
                       {editor['type'] === 'plc-datatype' && <DataTypeEditor dataTypeName={editor.meta.name} />}
+                      {editor['type'] === 'plc-server' && editor.meta.protocol === 'modbus-tcp' && (
+                        <ModbusServerEditor />
+                      )}
+                      {editor['type'] === 'plc-server' && editor.meta.protocol === 's7comm' && <S7CommServerEditor />}
+                      {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
+                      {editor['type'] === 'plc-remote-device' && <RemoteDeviceEditor />}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'
@@ -1042,6 +1726,8 @@ const WorkspaceScreen = () => {
                               debugVariableValues={debugVariableValues}
                               debugVariableIndexes={debugVariableIndexes}
                               debugForcedVariables={debugForcedVariables}
+                              debugExpandedNodes={debugExpandedNodes}
+                              onToggleExpandedNode={toggleDebugExpandedNode}
                               isDebuggerVisible={isDebuggerVisible}
                               onForceVariable={handleForceVariable}
                             />
@@ -1074,7 +1760,18 @@ const WorkspaceScreen = () => {
                         </ResizablePanelGroup>
                       </Tabs.Content>
                     )}
-                    {activeTab === 'console' && <ClearConsoleButton />}
+                    {activeTab === 'console' && (
+                      <div className='absolute right-2 top-1 flex items-center gap-2'>
+                        <ConsoleFilters />
+                        <ClearConsoleButton />
+                      </div>
+                    )}
+                    {activeTab === 'plc-logs' && (
+                      <div className='absolute right-2 top-1 flex items-center gap-2'>
+                        <PlcLogsFilters />
+                        <ClearConsoleButton onClear={clearPlcLogs} isEmpty={plcLogs.length === 0} label='Clear logs' />
+                      </div>
+                    )}
                   </Tabs.Root>
                 </ResizablePanel>
               </ResizablePanelGroup>

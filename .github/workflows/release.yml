@@ -1,0 +1,394 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 4.1.2)'
+        required: false
+        default: ''
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  # =============================================================================
+  # macOS Build - Builds both x64 and arm64
+  # =============================================================================
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get version and build date
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          BUILD_DATE=$(date +%Y-%m-%d)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Import Code Signing Certificate
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          # Create keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Clean up
+          rm $RUNNER_TEMP/certificate.p12
+
+      - name: Build and package
+        env:
+          CI: 'true'
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run package
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create branded DMG files
+        run: |
+          chmod +x ./create_dmg.sh
+          ./create_dmg.sh "${{ steps.version.outputs.version }}"
+
+      - name: Upload macOS x64 DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x64-dmg
+          path: OpenPLC_Editor_${{ steps.version.outputs.version }}.dmg
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload macOS ARM64 DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-dmg
+          path: OpenPLC_Editor_${{ steps.version.outputs.version }}-ARM.dmg
+          retention-days: 30
+          if-no-files-found: error
+
+  # =============================================================================
+  # Windows Build - x64
+  # =============================================================================
+  build-windows-x64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get version and build date
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          BUILD_DATE=$(date +%Y-%m-%d)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Build and package
+        env:
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
+        run: npm run package
+
+      - name: Upload Windows x64 installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-exe
+          path: release/build/*.exe
+          retention-days: 30
+          if-no-files-found: error
+
+  # =============================================================================
+  # Windows Build - ARM64
+  # =============================================================================
+  build-windows-arm64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get version and build date
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          BUILD_DATE=$(date +%Y-%m-%d)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Build application
+        env:
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
+        run: npm run build
+
+      - name: Package for ARM64
+        run: npx electron-builder --win --arm64 --publish never
+        env:
+          CI: 'true'
+
+      - name: Rename artifact for ARM64
+        shell: pwsh
+        run: |
+          $exeFile = Get-ChildItem -Path "release/build" -Filter "*.exe" | Select-Object -First 1
+          if ($exeFile) {
+            $newName = $exeFile.Name -replace '\.exe$', '-ARM64.exe'
+            Rename-Item -Path $exeFile.FullName -NewName $newName
+            Write-Host "Renamed to: $newName"
+          }
+
+      - name: Upload Windows ARM64 installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-arm64-exe
+          path: release/build/*-ARM64.exe
+          retention-days: 30
+          if-no-files-found: error
+
+  # =============================================================================
+  # Linux Build - x64
+  # =============================================================================
+  build-linux-x64:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get version and build date
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          BUILD_DATE=$(date +%Y-%m-%d)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Build and package
+        env:
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
+        run: npm run package
+
+      - name: Upload Linux x64 AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64-appimage
+          path: release/build/*.AppImage
+          retention-days: 30
+          if-no-files-found: error
+
+  # =============================================================================
+  # Linux Build - ARM64
+  # =============================================================================
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get version and build date
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          BUILD_DATE=$(date +%Y-%m-%d)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Build application
+        env:
+          BUILD_DATE: ${{ steps.version.outputs.build_date }}
+        run: npm run build
+
+      - name: Package for ARM64
+        run: npx electron-builder --linux AppImage --arm64 --publish never
+        env:
+          CI: 'true'
+
+      - name: Rename artifact for ARM64
+        run: |
+          for f in release/build/*.AppImage; do
+            if [ -f "$f" ]; then
+              newname="${f%.AppImage}-ARM64.AppImage"
+              mv "$f" "$newname"
+              echo "Renamed to: $newname"
+            fi
+          done
+
+      - name: Upload Linux ARM64 AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64-appimage
+          path: release/build/*-ARM64.AppImage
+          retention-days: 30
+          if-no-files-found: warn  # Warn only since ARM64 binaries may be missing
+
+  # =============================================================================
+  # Create GitHub Release
+  # =============================================================================
+  create-release:
+    needs: [build-macos, build-windows-x64, build-windows-arm64, build-linux-x64, build-linux-arm64]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f -name "*" | head -50
+
+      - name: Determine if prerelease
+        id: prerelease
+        run: |
+          if [[ "${{ github.ref }}" == *"beta"* ]] || [[ "${{ github.ref }}" == *"alpha"* ]] || [[ "${{ github.ref }}" == *"rc"* ]]; then
+            echo "flag=--prerelease" >> $GITHUB_OUTPUT
+          else
+            echo "flag=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "OpenPLC Editor v${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            ${{ steps.prerelease.outputs.flag }} \
+            artifacts/macos-x64-dmg/*.dmg \
+            artifacts/macos-arm64-dmg/*.dmg \
+            artifacts/windows-x64-exe/*.exe \
+            artifacts/windows-arm64-exe/*.exe \
+            artifacts/linux-x64-appimage/*.AppImage \
+            artifacts/linux-arm64-appimage/*.AppImage

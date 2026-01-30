@@ -8,7 +8,9 @@ import {
   ILIcon,
   LDIcon,
   PythonIcon,
+  RemoteDeviceIcon,
   ResourceIcon,
+  ServerIcon,
   SFCIcon,
   STIcon,
   StructureIcon,
@@ -40,6 +42,8 @@ const TabIcons = {
   array: <ArrayIcon className='h-4 w-4 flex-shrink-0' />,
   resource: <ResourceIcon className='h-4 w-4 flex-shrink-0' />,
   configuration: <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
+  server: <ServerIcon className='h-4 w-4 flex-shrink-0' />,
+  'remote-device': <RemoteDeviceIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
 const Tab = (props: ITabProps) => {
@@ -60,7 +64,9 @@ const Tab = (props: ITabProps) => {
     | 'array'
     | 'enumerated'
     | 'structure'
-    | 'configuration' = 'il'
+    | 'configuration'
+    | 'server'
+    | 'remote-device' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
     languageOrDerivation = fileDerivation?.derivation
@@ -74,6 +80,12 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'resource') {
     languageOrDerivation = 'resource'
+  }
+  if (fileDerivation?.type === 'server') {
+    languageOrDerivation = 'server'
+  }
+  if (fileDerivation?.type === 'remote-device') {
+    languageOrDerivation = 'remote-device'
   }
 
   const { file: associatedFile } = getFile({ name: fileName || '' })

@@ -126,6 +126,31 @@ const CreateDeviceEditor = (name = 'device', derivation: 'configuration'): Edito
   throw new Error('Invalid derivation value')
 }
 
+const CreateServerEditor = (name: string, protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'): EditorModel => {
+  const editor = CreateEditorObject({
+    type: 'plc-server',
+    meta: {
+      name,
+      protocol,
+    },
+  })
+  return editor
+}
+
+const CreateRemoteDeviceEditor = (
+  name: string,
+  protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet',
+): EditorModel => {
+  const editor = CreateEditorObject({
+    type: 'plc-remote-device',
+    meta: {
+      name,
+      protocol,
+    },
+  })
+  return editor
+}
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -141,6 +166,10 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateResourceEditor(name)
     case 'device':
       return CreateDeviceEditor(name, elementType.derivation)
+    case 'server':
+      return CreateServerEditor(name, elementType.protocol)
+    case 'remote-device':
+      return CreateRemoteDeviceEditor(name, elementType.protocol)
   }
 }
 

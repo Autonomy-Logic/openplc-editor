@@ -262,6 +262,15 @@ const SelectableTypeCell = ({
             />
           )
         })()}
+      {language !== 'python' && language !== 'cpp' && (
+        <ArrayModal
+          variableName={variableName}
+          VariableRow={index}
+          arrayModalIsOpen={arrayModalIsOpen}
+          setArrayModalIsOpen={setArrayModalIsOpen}
+          closeContainer={() => setPoppoverIsOpen(false)}
+        />
+      )}
       <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
         <PrimitiveDropdown.Trigger
           asChild
@@ -352,14 +361,14 @@ const SelectableTypeCell = ({
             })}
 
             {language !== 'python' && language !== 'cpp' && (
-              <PrimitiveDropdown.Item asChild>
-                <ArrayModal
-                  variableName={variableName}
-                  VariableRow={index}
-                  arrayModalIsOpen={arrayModalIsOpen}
-                  setArrayModalIsOpen={setArrayModalIsOpen}
-                  closeContainer={() => setPoppoverIsOpen(false)}
-                />
+              <PrimitiveDropdown.Item
+                onSelect={() => {
+                  setArrayModalIsOpen(true)
+                  setPoppoverIsOpen(false)
+                }}
+                className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
+              >
+                <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
               </PrimitiveDropdown.Item>
             )}
 

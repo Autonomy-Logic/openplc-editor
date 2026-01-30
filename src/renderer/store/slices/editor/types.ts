@@ -181,6 +181,32 @@ const editorModelSchema = z.discriminatedUnion('type', [
       cursorPosition: cursorPositionSchema.optional(),
       scrollPosition: scrollPositionSchema.optional(),
     }),
+
+  z
+    .object({
+      type: z.literal('plc-server'),
+      meta: z.object({
+        name: z.string(),
+        protocol: z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua']),
+      }),
+    })
+    .extend({
+      cursorPosition: cursorPositionSchema.optional(),
+      scrollPosition: scrollPositionSchema.optional(),
+    }),
+
+  z
+    .object({
+      type: z.literal('plc-remote-device'),
+      meta: z.object({
+        name: z.string(),
+        protocol: z.enum(['modbus-tcp', 'ethernet-ip', 'ethercat', 'profinet']),
+      }),
+    })
+    .extend({
+      cursorPosition: cursorPositionSchema.optional(),
+      scrollPosition: scrollPositionSchema.optional(),
+    }),
 ])
 
 /** This is a zod schema for the editor slice state.

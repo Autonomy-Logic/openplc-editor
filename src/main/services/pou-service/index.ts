@@ -72,10 +72,31 @@ class PouService {
         },
       }
     }
-    const newFilePath = join(dirname(filePath), safeNewFileName)
+
+    // Determine actual file paths by converting .json virtual paths to real language extensions
+    let actualOldFilePath = filePath
+    let actualNewFilePath = join(dirname(filePath), safeNewFileName)
+
+    const isPou =
+      typeof fileContent === 'object' && fileContent !== null && 'type' in fileContent && 'data' in fileContent
+
+    if (isPou) {
+      const pou = fileContent as PLCPou
+      const language = pou.data.body.language
+      const extension = getExtensionFromLanguage(language)
+
+      // Convert .json paths to actual language extension paths
+      if (filePath.endsWith('.json')) {
+        actualOldFilePath = filePath.replace(/\.json$/, extension)
+      }
+      if (safeNewFileName.endsWith('.json')) {
+        const newFileNameWithExtension = safeNewFileName.replace(/\.json$/, extension)
+        actualNewFilePath = join(dirname(filePath), newFileNameWithExtension)
+      }
+    }
 
     try {
-      await promises.access(newFilePath)
+      await promises.access(actualNewFilePath)
       return {
         success: false,
         error: {
@@ -89,18 +110,25 @@ class PouService {
       // No action needed here, just continue
     }
 
-    if (fileContent) {
+    if (fileContent && isPou) {
       try {
-        const isPou =
-          typeof fileContent === 'object' && fileContent !== null && 'type' in fileContent && 'data' in fileContent
-
-        if (isPou) {
-          const pou = fileContent as PLCPou
-          const textContent = serializePouToText(pou)
-          await promises.writeFile(filePath, textContent, 'utf-8')
-        } else {
-          await promises.writeFile(filePath, JSON.stringify(fileContent, null, 2))
+        const pou = fileContent as PLCPou
+        const textContent = serializePouToText(pou)
+        await promises.writeFile(actualOldFilePath, textContent, 'utf-8')
+      } catch (writeError) {
+        console.error(`Error writing content before rename: ${String(writeError)}`)
+        return {
+          success: false,
+          error: {
+            title: 'File Write Error',
+            description: 'Failed to update content before rename',
+            error: writeError as Error,
+          },
         }
+      }
+    } else if (fileContent) {
+      try {
+        await promises.writeFile(actualOldFilePath, JSON.stringify(fileContent, null, 2))
       } catch (writeError) {
         console.error(`Error writing content before rename: ${String(writeError)}`)
         return {
@@ -115,7 +143,7 @@ class PouService {
     }
 
     try {
-      const result = await UserService.renameFile(filePath, newFilePath)
+      const result = await UserService.renameFile(actualOldFilePath, actualNewFilePath)
       if (!result.success) {
         console.error('Error renaming POU file:', result.error)
         return { success: false, error: result.error }
@@ -125,7 +153,7 @@ class PouService {
       return { success: false, error: { title: 'POU Rename Error', description: 'Failed to rename POU file', error } }
     }
 
-    return { success: true, data: { filePath: newFilePath } }
+    return { success: true, data: { filePath: actualNewFilePath } }
   }
 }
 

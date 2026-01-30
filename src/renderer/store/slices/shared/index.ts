@@ -1,6 +1,11 @@
 import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
+import {
+  DeleteDatatype,
+  DeletePou,
+  DeleteRemoteDevice,
+  DeleteServer,
+} from '@root/renderer/components/_organisms/modals'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '@root/renderer/utils/sync-nodes-with-variables'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
@@ -66,6 +71,14 @@ export type SharedSlice = {
     delete: (data: DeleteDatatype) => Promise<BasicSharedSliceResponse>
     rename: (datatypeName: string, newDatatypeName: string) => Promise<BasicSharedSliceResponse>
     duplicate: (datatypeName: string) => Promise<BasicSharedSliceResponse>
+  }
+  serverActions: {
+    deleteRequest: (serverName: string) => void
+    delete: (data: DeleteServer) => Promise<BasicSharedSliceResponse>
+  }
+  remoteDeviceActions: {
+    deleteRequest: (remoteDeviceName: string) => void
+    delete: (data: DeleteRemoteDevice) => Promise<BasicSharedSliceResponse>
   }
   sharedWorkspaceActions: {
     // Clear all states when closing a project
@@ -433,6 +446,7 @@ export const createSharedSlice: StateCreator<
         const response = await window.bridge.renamePouFile({
           filePath,
           newFileName: `${newPouName}.json`,
+          fileContent: pou,
         })
         if (!response.success) {
           console.error('Error renaming POU file:', response.error)
@@ -865,6 +879,102 @@ export const createSharedSlice: StateCreator<
     },
   },
 
+  serverActions: {
+    deleteRequest: (serverName) => {
+      const server = getState().project.data.servers?.find((s) => s.name === serverName)
+      if (!server) {
+        toast({
+          title: 'Error',
+          description: `Server with name ${serverName} not found.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      const modalData: DeleteServer = {
+        type: 'server',
+        file: server.name,
+        path: `/devices/servers/${server.name}.json`,
+      }
+
+      getState().modalActions.openModal('confirm-delete-element', modalData)
+    },
+
+    delete: async (data) => {
+      const deleteResult = getState().projectActions.deleteServer(data.file)
+      if (!deleteResult.ok) {
+        return {
+          success: false,
+          error: {
+            title: 'Error',
+            description: deleteResult.message || 'Failed to delete server',
+          },
+        }
+      }
+
+      getState().tabsActions.removeTab(data.file)
+      getState().editorActions.removeModel(data.file)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === data.file) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: '',
+          type: null,
+        })
+      }
+
+      return await getState().sharedWorkspaceActions.saveFile(data.file)
+    },
+  },
+
+  remoteDeviceActions: {
+    deleteRequest: (remoteDeviceName) => {
+      const remoteDevice = getState().project.data.remoteDevices?.find((d) => d.name === remoteDeviceName)
+      if (!remoteDevice) {
+        toast({
+          title: 'Error',
+          description: `Remote device with name ${remoteDeviceName} not found.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      const modalData: DeleteRemoteDevice = {
+        type: 'remote-device',
+        file: remoteDevice.name,
+        path: `/devices/remote/${remoteDevice.name}.json`,
+      }
+
+      getState().modalActions.openModal('confirm-delete-element', modalData)
+    },
+
+    delete: async (data) => {
+      const deleteResult = getState().projectActions.deleteRemoteDevice(data.file)
+      if (!deleteResult.ok) {
+        return {
+          success: false,
+          error: {
+            title: 'Error',
+            description: deleteResult.message || 'Failed to delete remote device',
+          },
+        }
+      }
+
+      getState().tabsActions.removeTab(data.file)
+      getState().editorActions.removeModel(data.file)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === data.file) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: '',
+          type: null,
+        })
+      }
+
+      return await getState().sharedWorkspaceActions.saveFile(data.file)
+    },
+  },
+
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => {
       getState().editorActions.clearEditor()
@@ -1013,6 +1123,46 @@ export const createSharedSlice: StateCreator<
           configuration: deviceConfiguration,
           pinMapping: devicePinMapping,
         })
+
+        // Restore debug flags from debugVariables
+        // Since POU variables are saved as text files, debug flags are stored separately in project.json
+        const debugVariables = projectData.debugVariables
+        if (debugVariables) {
+          // Restore global variable debug flags
+          if (debugVariables.global && debugVariables.global.length > 0) {
+            const globalVars = getState().project.data.configuration.resource.globalVariables
+            debugVariables.global.forEach((varName) => {
+              const varIndex = globalVars.findIndex((v) => v.name === varName)
+              if (varIndex !== -1) {
+                getState().projectActions.updateVariable({
+                  scope: 'global',
+                  rowId: varIndex,
+                  data: { debug: true },
+                })
+              }
+            })
+          }
+
+          // Restore POU variable debug flags
+          if (debugVariables.pous) {
+            for (const [pouName, varNames] of Object.entries(debugVariables.pous)) {
+              const pou = getState().project.data.pous.find((p) => p.data.name === pouName)
+              if (pou) {
+                varNames.forEach((varName) => {
+                  const varIndex = pou.data.variables.findIndex((v) => v.name === varName)
+                  if (varIndex !== -1) {
+                    getState().projectActions.updateVariable({
+                      scope: 'local',
+                      associatedPou: pouName,
+                      rowId: varIndex,
+                      data: { debug: true },
+                    })
+                  }
+                })
+              }
+            }
+          }
+        }
 
         // Set files in the file slice
         const files: FileSliceDataObject = {}
@@ -1314,6 +1464,37 @@ export const createSharedSlice: StateCreator<
       const pous = sanitizedPous
       projectData.data.data.pous = []
 
+      // Collect debug flags from all variables (global and POU variables)
+      // Since POU variables are saved as text files, debug flags need to be stored separately
+      const debugVariables: { global?: string[]; pous?: Record<string, string[]> } = {}
+
+      // Collect global variable debug flags
+      const globalDebugVars = project.data.configuration.resource.globalVariables
+        .filter((v) => v.debug === true)
+        .map((v) => v.name)
+      if (globalDebugVars.length > 0) {
+        debugVariables.global = globalDebugVars
+      }
+
+      // Collect POU variable debug flags
+      const pouDebugVars: Record<string, string[]> = {}
+      for (const pou of project.data.pous) {
+        const debugVars = pou.data.variables.filter((v) => v.debug === true).map((v) => v.name)
+        if (debugVars.length > 0) {
+          pouDebugVars[pou.data.name] = debugVars
+        }
+      }
+      if (Object.keys(pouDebugVars).length > 0) {
+        debugVariables.pous = pouDebugVars
+      }
+
+      // Add debug variables to project data if any exist
+      if (debugVariables.global || debugVariables.pous) {
+        projectData.data.data.debugVariables = debugVariables
+      } else {
+        projectData.data.data.debugVariables = undefined
+      }
+
       const { success, reason } = await window.bridge.saveProject({
         projectPath: project.meta.path,
         content: {
@@ -1321,6 +1502,8 @@ export const createSharedSlice: StateCreator<
           pous,
           deviceConfiguration: deviceConfiguration.data,
           devicePinMapping: devicePinMapping.data,
+          servers: project.data.servers,
+          remoteDevices: project.data.remoteDevices,
         },
       })
 
@@ -1328,12 +1511,18 @@ export const createSharedSlice: StateCreator<
         getState().workspaceActions.setEditingState('saved')
         getState().fileActions.setAllToSaved()
         const currentProject = getState().project
-        if (currentProject.data.deletedPous && currentProject.data.deletedPous.length > 0) {
+        if (
+          (currentProject.data.deletedPous && currentProject.data.deletedPous.length > 0) ||
+          (currentProject.data.deletedServers && currentProject.data.deletedServers.length > 0) ||
+          (currentProject.data.deletedRemoteDevices && currentProject.data.deletedRemoteDevices.length > 0)
+        ) {
           getState().projectActions.setProject({
             ...currentProject,
             data: {
               ...currentProject.data,
               deletedPous: [],
+              deletedServers: [],
+              deletedRemoteDevices: [],
             },
           })
         }
@@ -1535,13 +1724,13 @@ export const createSharedSlice: StateCreator<
               pins: devicePinMapping.data,
               currentSelectedPinTableRow: -1,
             },
-            compileOnly: getState().deviceDefinitions.compileOnly,
           }
           break
         }
         case 'data-type':
         case 'resource': {
-          const projectData = PLCProjectSchema.safeParse(getState().project)
+          const currentProject = getState().project
+          const projectData = PLCProjectSchema.safeParse(currentProject)
           if (!projectData.success) {
             toast({
               title: 'Error saving file',
@@ -1556,12 +1745,35 @@ export const createSharedSlice: StateCreator<
               },
             }
           }
+
+          // Collect debug flags from all variables (global and POU variables)
+          const debugVars: { global?: string[]; pous?: Record<string, string[]> } = {}
+
+          const globalDebugVars = currentProject.data.configuration.resource.globalVariables
+            .filter((v) => v.debug === true)
+            .map((v) => v.name)
+          if (globalDebugVars.length > 0) {
+            debugVars.global = globalDebugVars
+          }
+
+          const pouDebugVars: Record<string, string[]> = {}
+          for (const pou of currentProject.data.pous) {
+            const vars = pou.data.variables.filter((v) => v.debug === true).map((v) => v.name)
+            if (vars.length > 0) {
+              pouDebugVars[pou.data.name] = vars
+            }
+          }
+          if (Object.keys(pouDebugVars).length > 0) {
+            debugVars.pous = pouDebugVars
+          }
+
           // Ensure project.json doesn't contain POUs (POUs live as separate files)
           const sanitizedProject = {
             ...projectData.data,
             data: {
               ...projectData.data.data,
               pous: [],
+              debugVariables: debugVars.global || debugVars.pous ? debugVars : undefined,
             },
           } as PLCProject
           saveContent = sanitizedProject

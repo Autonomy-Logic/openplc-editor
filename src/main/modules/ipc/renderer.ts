@@ -2,6 +2,7 @@
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { ProjectState } from '../../../renderer/store/slices'
@@ -16,6 +17,8 @@ type IDataToWrite = {
     pous: PLCPou[]
     deviceConfiguration: DeviceConfiguration
     devicePinMapping: DevicePin[]
+    servers?: ProjectState['data']['servers']
+    remoteDevices?: ProjectState['data']['remoteDevices']
   }
 }
 
@@ -292,7 +295,7 @@ const rendererProcessBridge = {
   debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 
   // ===================== RUNTIME API METHODS =====================
-  runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; error?: string }> =>
+  runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),
   runtimeCreateUser: (
     ipAddress: string,
@@ -309,8 +312,25 @@ const rendererProcessBridge = {
   runtimeGetStatus: (
     ipAddress: string,
     jwtToken: string,
-  ): Promise<{ success: boolean; status?: string; error?: string }> =>
-    ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken),
+    includeStats?: boolean,
+  ): Promise<{
+    success: boolean
+    status?: string
+    timingStats?: {
+      scan_count: number
+      scan_time_min: number | null
+      scan_time_max: number | null
+      scan_time_avg: number | null
+      cycle_time_min: number | null
+      cycle_time_max: number | null
+      cycle_time_avg: number | null
+      cycle_latency_min: number | null
+      cycle_latency_max: number | null
+      cycle_latency_avg: number | null
+      overruns: number
+    }
+    error?: string
+  }> => ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken, includeStats),
   runtimeStartPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:start-plc', ipAddress, jwtToken),
   runtimeStopPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
@@ -323,9 +343,18 @@ const rendererProcessBridge = {
     data?: { status: string; logs: string[]; exit_code: number | null }
     error?: string
   }> => ipcRenderer.invoke('runtime:get-compilation-status', ipAddress, jwtToken),
-  runtimeGetLogs: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; logs?: string; error?: string }> =>
-    ipcRenderer.invoke('runtime:get-logs', ipAddress, jwtToken),
+  runtimeGetLogs: (
+    ipAddress: string,
+    jwtToken: string,
+    minId?: number,
+  ): Promise<{ success: boolean; logs?: string | RuntimeLogEntry[]; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-logs', ipAddress, jwtToken, minId),
   runtimeClearCredentials: (): Promise<{ success: boolean }> => ipcRenderer.invoke('runtime:clear-credentials'),
+  runtimeGetSerialPorts: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-serial-ports', ipAddress, jwtToken),
   onRuntimeTokenRefreshed: (callback: (_event: IpcRendererEvent, newToken: string) => void) => {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)

@@ -591,7 +591,7 @@ export const updateLocalVariablesInTokenizer = (localVariables: string[]) => {
 
 export const updateDataTypeVariablesInTokenizer = (customDataTypes: PLCDataType[]) => {
   const isStructure = (dt: PLCDataType): dt is PLCStructureDatatype =>
-    dt.derivation === 'structure' && Array.isArray(dt.variable) && dt.variable.length > 0
+    dt?.derivation === 'structure' && Array.isArray(dt.variable) && dt.variable.length > 0
 
   const allVariableNames = customDataTypes
     .filter(isStructure)
@@ -611,7 +611,7 @@ export const updateDataTypeVariablesInTokenizer = (customDataTypes: PLCDataType[
 
 export const updateEnumValuesInTokenizer = (customDataTypes: PLCDataType[]) => {
   const allEnumValues = customDataTypes
-    .filter((dt) => dt.derivation === 'enumerated' && dt.values.length > 0)
+    .filter((dt) => dt?.derivation === 'enumerated' && dt.values.length > 0)
     .flatMap((dt) => (dt as PLCEnumeratedDatatype).values.map((v) => v.description))
     .filter((value, index, arr) => arr.indexOf(value) === index)
 

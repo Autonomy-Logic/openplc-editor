@@ -85,14 +85,12 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
           return {
             values: restrictions.values.length > 0 ? restrictions.values : undefined,
             definition: restrictions.definition.length > 0 ? restrictions.definition : undefined,
-            limitations: ['derived'],
           }
         }
         default:
           return {
             values: undefined,
             definition: undefined,
-            limitations: undefined,
           }
       }
     }, [pou])
@@ -103,9 +101,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             (variable) =>
               variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
               (variableRestrictions.values === undefined ||
-                variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
-              (variableRestrictions.limitations === undefined ||
-                !variableRestrictions.limitations.includes(variable.type.definition)),
+                variableRestrictions.values.includes(variable.type.value.toLowerCase())),
           )
           .sort((a, b) => {
             const aNumber = extractNumberAtEnd(a.name).number
@@ -198,7 +194,14 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         scope: 'local',
         associatedPou: editor.meta.name,
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        toast({
+          title: res.title ?? 'Error',
+          description: res.message ?? 'Failed to create variable',
+          variant: 'fail',
+        })
+        return
+      }
 
       const variable = res.data as PLCVariable | undefined
 
@@ -244,9 +247,11 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         return
       }
 
-      const selectedVariable =
-        filteredVariables.find((variableItem) => variableItem.id === variable.id) ??
-        filteredVariables.find((variableItem) => variableItem.name === variable.name)
+      // Look up by name to ensure correct selection for continuation/connector blocks
+      // (all connection nodes share the same ID, so ID lookup would always match the first item)
+      const selectedVariable = filteredVariables.find(
+        (variableItem) => variableItem.name.toLowerCase() === variable.name.toLowerCase(),
+      )
       if (!selectedVariable) {
         submitAddVariable({ variableName: valueToSearch })
         return

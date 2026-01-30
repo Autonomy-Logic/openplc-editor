@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const pouSchema = z.object({
   name: z.string(),
-  language: z.enum(['ld', 'sfc', 'fbd', 'il', 'st']),
+  language: z.enum(['ld', 'sfc', 'fbd', 'il', 'st', 'python', 'cpp']),
   pouType: z.enum(['program', 'function', 'function-block']),
   body: z.string(),
   variable: z.string().nullable(),

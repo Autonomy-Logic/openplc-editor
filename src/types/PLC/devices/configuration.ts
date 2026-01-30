@@ -19,6 +19,7 @@ const deviceConfigurationSchema = z.object({
   deviceBoard: z.string(),
   communicationPort: z.string(),
   runtimeIpAddress: z.string().optional(),
+  compileOnly: z.boolean().default(false),
   communicationConfiguration: z.object({
     modbusRTU: z.object({
       rtuInterface: z.enum(interfaceOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.

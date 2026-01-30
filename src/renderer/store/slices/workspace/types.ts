@@ -1,8 +1,22 @@
 import type { DebugTreeNode } from '@root/types/debugger'
+import type { FbInstanceInfo } from '@root/types/debugger'
+import type { PlcLogs } from '@root/types/PLC/runtime-logs'
 import { z } from 'zod'
 
+const plcFiltersSchema = z.object({
+  levels: z.object({
+    debug: z.boolean(),
+    info: z.boolean(),
+    warning: z.boolean(),
+    error: z.boolean(),
+  }),
+  searchTerm: z.string(),
+  timestampFormat: z.enum(['full', 'time', 'none']),
+})
+type PlcFilters = z.infer<typeof plcFiltersSchema>
+
 const workspaceProjectTreeLeafSchema = z
-  .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource'])
+  .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource', 'server', 'remote-device'])
   .nullable()
 type WorkspaceProjectTreeLeafType = z.infer<typeof workspaceProjectTreeLeafSchema>
 
@@ -28,8 +42,13 @@ const workspaceStateSchema = z.object({
     debugVariableValues: z.custom<Map<string, string>>((val) => val instanceof Map),
     debugForcedVariables: z.custom<Map<string, boolean>>((val) => val instanceof Map),
     debugVariableTree: z.custom<Map<string, DebugTreeNode>>((val) => val instanceof Map),
+    debugExpandedNodes: z.custom<Map<string, boolean>>((val) => val instanceof Map),
+    fbDebugInstances: z.custom<Map<string, FbInstanceInfo[]>>((val) => val instanceof Map),
+    fbSelectedInstance: z.custom<Map<string, string>>((val) => val instanceof Map),
     isPlcLogsVisible: z.boolean(),
-    plcLogs: z.string(),
+    plcLogs: z.custom<PlcLogs>(),
+    plcLogsLastId: z.number().nullable(),
+    plcFilters: plcFiltersSchema,
     close: z.object({
       window: z.boolean(),
       app: z.boolean(),
@@ -77,8 +96,28 @@ const workspaceActionsSchema = z.object({
   setDebugVariableValues: z.function().args(z.map(z.string(), z.string())).returns(z.void()),
   setDebugForcedVariables: z.function().args(z.map(z.string(), z.boolean())).returns(z.void()),
   setDebugVariableTree: z.function().args(z.map(z.string(), z.custom<DebugTreeNode>())).returns(z.void()),
+  setDebugExpandedNodes: z.function().args(z.map(z.string(), z.boolean())).returns(z.void()),
+  toggleDebugExpandedNode: z.function().args(z.string()).returns(z.void()),
+  setFbDebugInstances: z
+    .function()
+    .args(z.map(z.string(), z.array(z.custom<FbInstanceInfo>())))
+    .returns(z.void()),
+  setFbSelectedInstance: z.function().args(z.string(), z.string()).returns(z.void()),
+  clearFbDebugContext: z.function().returns(z.void()),
   setPlcLogsVisible: z.function().args(z.boolean()).returns(z.void()),
-  setPlcLogs: z.function().args(z.string()).returns(z.void()),
+  setPlcLogs: z.function().args(z.custom<PlcLogs>()).returns(z.void()),
+  setPlcLogsLastId: z.function().args(z.number().nullable()).returns(z.void()),
+  appendPlcLogs: z.function().args(z.custom<PlcLogs>()).returns(z.void()),
+  clearPlcLogs: z.function().returns(z.void()),
+  setPlcLevelFilter: z
+    .function()
+    .args(z.enum(['debug', 'info', 'warning', 'error']), z.boolean())
+    .returns(z.void()),
+  setPlcSearchTerm: z.function().args(z.string()).returns(z.void()),
+  setPlcTimestampFormat: z
+    .function()
+    .args(z.enum(['full', 'time', 'none']))
+    .returns(z.void()),
   toggleDiscardChanges: z.function().returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
@@ -88,6 +127,7 @@ type WorkspaceSlice = WorkspaceState & {
 }
 
 export {
+  plcFiltersSchema,
   systemConfigsSchema,
   workspaceActionsSchema,
   workspaceProjectTreeLeafSchema,
@@ -95,6 +135,7 @@ export {
   workspaceStateSchema,
 }
 export type {
+  PlcFilters,
   SystemConfigs,
   WorkspaceActions,
   WorkspaceProjectTreeLeafType,

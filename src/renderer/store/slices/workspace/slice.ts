@@ -1,4 +1,5 @@
-import type { DebugTreeNode } from '@root/types/debugger'
+import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
+import { isV4Logs, LOG_BUFFER_CAP, PlcLogs } from '@root/types/PLC/runtime-logs'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -23,8 +24,17 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugVariableValues: new Map(),
     debugForcedVariables: new Map(),
     debugVariableTree: new Map(),
+    debugExpandedNodes: new Map(),
+    fbDebugInstances: new Map(),
+    fbSelectedInstance: new Map(),
     isPlcLogsVisible: false,
     plcLogs: '',
+    plcLogsLastId: null,
+    plcFilters: {
+      levels: { debug: true, info: true, warning: true, error: true },
+      searchTerm: '',
+      timestampFormat: 'full',
+    },
     close: {
       window: false,
       app: false,
@@ -181,6 +191,43 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setDebugExpandedNodes: (expandedNodes: Map<string, boolean>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugExpandedNodes = expandedNodes
+        }),
+      )
+    },
+    toggleDebugExpandedNode: (compositeKey: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const currentValue = workspace.debugExpandedNodes.get(compositeKey) ?? false
+          workspace.debugExpandedNodes.set(compositeKey, !currentValue)
+        }),
+      )
+    },
+    setFbDebugInstances: (instances: Map<string, FbInstanceInfo[]>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.fbDebugInstances = instances
+        }),
+      )
+    },
+    setFbSelectedInstance: (fbTypeName: string, key: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.fbSelectedInstance.set(fbTypeName, key)
+        }),
+      )
+    },
+    clearFbDebugContext: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.fbDebugInstances = new Map()
+          workspace.fbSelectedInstance = new Map()
+        }),
+      )
+    },
     setPlcLogsVisible: (isVisible: boolean): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -188,10 +235,64 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setPlcLogs: (logs: string): void => {
+    setPlcLogs: (logs: PlcLogs): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.plcLogs = logs
+        }),
+      )
+    },
+    setPlcLogsLastId: (lastId: number | null): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcLogsLastId = lastId
+        }),
+      )
+    },
+    appendPlcLogs: (newLogs: PlcLogs): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          if (isV4Logs(newLogs) && isV4Logs(workspace.plcLogs)) {
+            const combined = [...workspace.plcLogs, ...newLogs]
+            if (combined.length > LOG_BUFFER_CAP) {
+              workspace.plcLogs = combined.slice(-LOG_BUFFER_CAP)
+            } else {
+              workspace.plcLogs = combined
+            }
+          } else if (typeof newLogs === 'string' && typeof workspace.plcLogs === 'string') {
+            workspace.plcLogs = workspace.plcLogs + newLogs
+          } else {
+            workspace.plcLogs = newLogs
+          }
+        }),
+      )
+    },
+    clearPlcLogs: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcLogs = ''
+          workspace.plcLogsLastId = null
+        }),
+      )
+    },
+    setPlcLevelFilter: (level: 'debug' | 'info' | 'warning' | 'error', enabled: boolean): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcFilters.levels[level] = enabled
+        }),
+      )
+    },
+    setPlcSearchTerm: (term: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcFilters.searchTerm = term
+        }),
+      )
+    },
+    setPlcTimestampFormat: (format: 'full' | 'time' | 'none'): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.plcFilters.timestampFormat = format
         }),
       )
     },

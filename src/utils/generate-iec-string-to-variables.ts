@@ -11,9 +11,16 @@ const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR_GLOBAL: 'global',
 }
 
+// Primary format: name : type AT location := initialValue ; (* documentation *)
 const lineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)(?:\s+AT\s+(?<location>%[\w\d\._]+))?\s*:\s*(?<type>[\w\s\[\]\.]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)\s*:\s*(?<type>[\w\s\[\]\.]+?)(?:\s+AT\s+(?<location>[\w\d\._%]+))?\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+
+// Alternate format: name AT location : type := initialValue ; (* documentation *)
+// This format is used by some IEC 61131-3 tools and older versions of OpenPLC Editor
+const alternateLineRegex =
+  // eslint-disable-next-line no-useless-escape
+  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\]\.]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 const guessErrorReason = (line: string): string => {
   if (!line.includes(';')) return 'missing semicolon (;) at the end of the declaration'
@@ -28,6 +35,49 @@ const guessErrorReason = (line: string): string => {
  */
 const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type: string }> } => {
   return typeof lib === 'object' && lib !== null && 'pous' in lib && Array.isArray((lib as { pous: unknown }).pous)
+}
+
+/**
+ * Parse an array type string like "ARRAY[1..10] OF INT" or "ARRAY[1..10, 1..5] OF MyStruct"
+ * Returns null if not an array type, otherwise returns the parsed array type definition.
+ */
+const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
+  // Match ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally namespaced)
+  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*)\s*$/i)
+  if (!arrayMatch) return null
+
+  const dimensionsStr = arrayMatch[1]
+  const baseTypeStr = arrayMatch[2].trim()
+
+  // Parse dimensions (can be comma-separated for multi-dimensional arrays)
+  const dimensionParts = dimensionsStr.split(',').map((d) => d.trim())
+  const dimensions = dimensionParts.map((dimensionRange) => ({ dimension: dimensionRange }))
+
+  // Determine the base type definition
+  const baseCheck = baseTypeSchema.safeParse(baseTypeStr.toLowerCase())
+
+  // Build the array type definition
+  if (baseCheck.success) {
+    // Base type is a valid IEC base type
+    return {
+      definition: 'array' as const,
+      value: typeStr, // Keep the full type string as the value
+      data: {
+        baseType: { definition: 'base-type' as const, value: baseCheck.data },
+        dimensions,
+      },
+    }
+  } else {
+    // Base type is a user-defined type (structure, FB, etc.)
+    return {
+      definition: 'array' as const,
+      value: typeStr, // Keep the full type string as the value
+      data: {
+        baseType: { definition: 'user-data-type' as const, value: baseTypeStr },
+        dimensions,
+      },
+    }
+  }
 }
 
 export const parseIecStringToVariables = (
@@ -58,8 +108,12 @@ export const parseIecStringToVariables = (
 
     if (!currentClass) return
 
-    const match = line.match(lineRegex)
-    if (!match || !match.groups) {
+    // Try primary format first, then fall back to alternate format
+    let match = line.match(lineRegex)
+    if (!match?.groups) {
+      match = line.match(alternateLineRegex)
+    }
+    if (!match?.groups) {
       throw new Error(`Syntax error on line ${lineNumber}: "${line}". Possible cause: ${guessErrorReason(line)}.`)
     }
 
@@ -80,6 +134,22 @@ export const parseIecStringToVariables = (
     }
 
     const parsedType = type.trim()
+
+    // Check if it's an array type first
+    const arrayType = parseArrayType(parsedType)
+    if (arrayType) {
+      variables.push({
+        name: name.trim(),
+        class: currentClass,
+        type: arrayType,
+        location: location ? location.trim() : '',
+        initialValue: initialValue ? initialValue.trim() : null,
+        documentation: documentation ? documentation.trim() : '',
+        debug: false,
+      })
+      return
+    }
+
     const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
 
     const isUserFunctionBlock = pous?.some(

@@ -11,12 +11,14 @@ const CreatePLCElement = () => {
     workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
   const [isContainerOpen, setIsContainerOpen] = useState(false)
-  const CreatePLCElementTypes: ('function' | 'function-block' | 'program' | 'data-type')[] = [
-    'function',
-    'function-block',
-    'program',
-    'data-type',
-  ]
+  const CreatePLCElementTypes: (
+    | 'function'
+    | 'function-block'
+    | 'program'
+    | 'data-type'
+    | 'server'
+    | 'remote-device'
+  )[] = ['function', 'function-block', 'program', 'data-type', 'server', 'remote-device']
 
   return (
     <Popover.Root onOpenChange={setIsContainerOpen} open={isContainerOpen && !isDebuggerVisible}>

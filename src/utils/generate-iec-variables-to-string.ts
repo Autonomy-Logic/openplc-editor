@@ -37,13 +37,11 @@ export const generateIecVariablesToString = (variables: PLCVariable[]): string =
       textualDeclaration += `${blockHeader}\n`
 
       groupedVariables[groupName].forEach((v) => {
-        let line = `\t${v.name}`
+        let line = `\t${v.name} : ${v.type.value}`
 
         if (v.location) {
           line += ` AT ${v.location}`
         }
-
-        line += ` : ${v.type.value}`
 
         if (v.initialValue) {
           line += ` := ${v.initialValue}`

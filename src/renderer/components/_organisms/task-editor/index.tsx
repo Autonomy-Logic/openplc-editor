@@ -111,15 +111,34 @@ const TaskEditor = () => {
     handleFileAndWorkspaceSavedState('Resource')
   }
 
+  const getNextTaskName = (existingTasks: PLCTask[]) => {
+    const baseName = 'Task'
+    // Find all tasks that match the pattern "Task" followed by a number
+    const taskNumbers = existingTasks
+      .map((task) => {
+        const match = task.name.match(/^Task(\d+)$/i)
+        return match ? parseInt(match[1], 10) : -1
+      })
+      .filter((num) => num >= 0)
+
+    if (taskNumbers.length === 0) {
+      return 'Task0'
+    }
+
+    // Get the highest number and increment
+    const maxNumber = Math.max(...taskNumbers)
+    return `${baseName}${maxNumber + 1}`
+  }
+
   const handleCreateTask = () => {
     if (editorTasks.display === 'code') return
 
     addSnapshot(editor.meta.name)
 
-    const tasks = taskData.filter((task) => task.name)
+    const filteredTasks = taskData.filter((task) => task.name)
     const selectedRow = parseInt(editorTasks.selectedRow)
 
-    if (tasks.length === 0) {
+    if (filteredTasks.length === 0) {
       createTask({
         data: {
           name: 'Task0',
@@ -137,7 +156,8 @@ const TaskEditor = () => {
       return
     }
 
-    const task: PLCTask = selectedRow === ROWS_NOT_SELECTED ? tasks[tasks.length - 1] : tasks[selectedRow]
+    const task: PLCTask =
+      selectedRow === ROWS_NOT_SELECTED ? filteredTasks[filteredTasks.length - 1] : filteredTasks[selectedRow]
 
     if (!task) {
       console.error('No task found for the selectedRow:', selectedRow)
@@ -147,7 +167,7 @@ const TaskEditor = () => {
     if (selectedRow === ROWS_NOT_SELECTED) {
       createTask({
         data: {
-          name: 'Task0',
+          name: getNextTaskName(filteredTasks),
           triggering: 'Cyclic',
           interval: 'T#20ms',
           priority: 0,
@@ -155,7 +175,7 @@ const TaskEditor = () => {
       })
       updateModelTasks({
         display: 'table',
-        selectedRow: tasks.length,
+        selectedRow: filteredTasks.length,
       })
       handleFileAndWorkspaceSavedState('Resource')
 

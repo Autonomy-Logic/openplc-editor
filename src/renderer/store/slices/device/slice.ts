@@ -3,7 +3,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import { defaultDeviceConfiguration } from './data'
-import type { DeviceSlice } from './types'
+import type { DeviceSlice, TimingStats } from './types'
 import {
   checkIfPinIsValid,
   checkIfPinNameIsValid,
@@ -26,7 +26,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       pins: [],
       currentSelectedPinTableRow: -1,
     },
-    compileOnly: true, // This flag indicates if the device is set to compile only (no deployment)
   },
   deviceUpdated: {
     updated: false,
@@ -36,6 +35,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     connectionStatus: 'disconnected',
     plcStatus: null,
     ipAddress: null,
+    timingStats: null,
+    includeTimingStatsInPolling: false,
   },
 
   deviceActions: {
@@ -53,9 +54,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setDeviceDefinitions: ({ configuration, pinMapping }): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
           if (configuration) {
             deviceDefinitions.configuration = mergeDeviceConfigWithDefaults(configuration, defaultDeviceConfiguration)
+            // Sync runtimeIpAddress to runtimeConnection for debugger polling
+            if (deviceDefinitions.configuration.runtimeIpAddress) {
+              runtimeConnection.ipAddress = deviceDefinitions.configuration.runtimeIpAddress
+            }
           }
           if (pinMapping) {
             deviceDefinitions.pinMapping.pins = pinMapping || []
@@ -72,7 +77,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pins: [],
             currentSelectedPinTableRow: -1,
           }
-          deviceDefinitions.compileOnly = true
         }),
       )
     },
@@ -438,7 +442,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
-          deviceDefinitions.compileOnly = compileOnly
+          deviceDefinitions.configuration.compileOnly = compileOnly
         }),
       )
     },
@@ -471,6 +475,20 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    setTimingStats: (stats: TimingStats | null): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.timingStats = stats
+        }),
+      )
+    },
+    setIncludeTimingStatsInPolling: (include: boolean): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.includeTimingStatsInPolling = include
+        }),
+      )
+    },
     setTemporaryDhcpIp: (ipAddress: string | undefined): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
@@ -486,8 +504,10 @@ function mergeDeviceConfigWithDefaults(
   defaults: DeviceConfiguration,
 ): DeviceConfiguration {
   return {
-    deviceBoard: provided.deviceBoard || defaults.deviceBoard,
+    deviceBoard: provided.deviceBoard ?? defaults.deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
+    runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
+    compileOnly: provided.compileOnly ?? defaults.compileOnly,
     communicationConfiguration: {
       modbusRTU: {
         ...defaults.communicationConfiguration.modbusRTU,

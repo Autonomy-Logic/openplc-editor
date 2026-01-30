@@ -76,11 +76,34 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     searchQuery,
     searchActions: { setSearchNodePosition },
     snapshotActions: { addSnapshot },
-    workspace: { isDebuggerVisible, debugVariableValues },
+    workspace: { isDebuggerVisible, debugVariableValues, fbSelectedInstance, fbDebugInstances },
   } = useOpenPLCStore()
 
   const pouRef = project.data.pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
+
+  // Get FB instance context for function block POUs
+  const fbInstanceContext = useMemo(() => {
+    if (!pouRef || pouRef.type !== 'function-block') return null
+    const fbTypeKey = pouRef.data.name.toUpperCase() // Canonical key for map lookups
+    const selectedKey = fbSelectedInstance.get(fbTypeKey)
+    if (!selectedKey) return null
+    const instances = fbDebugInstances.get(fbTypeKey) || []
+    return instances.find((inst) => inst.key === selectedKey) || null
+  }, [pouRef, fbSelectedInstance, fbDebugInstances])
+
+  // Helper to get composite key for variable lookup, handling FB instance context
+  const getCompositeKey = useCallback(
+    (variableName: string): string => {
+      if (fbInstanceContext) {
+        // For FB POUs, transform to instance context: main:MOTOR_SPEED0.varName
+        return `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.${variableName}`
+      }
+      // For programs, use standard format: pouName:varName
+      return `${editor.meta.name}:${variableName}`
+    },
+    [fbInstanceContext, editor.meta.name],
+  )
 
   const [rungLocal, setRungLocal] = useState<RungLadderState>(rung)
   const [dragging, setDragging] = useState(false)
@@ -111,7 +134,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const variableName = contactData.variable?.name
       if (!variableName) return undefined
 
-      const compositeKey = `${editor.meta.name}:${variableName}`
+      const compositeKey = getCompositeKey(variableName)
       const value = debugVariableValues.get(compositeKey)
       if (value === undefined) return undefined
 
@@ -133,16 +156,20 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }
       if (!sourceHandle) return undefined
 
-      const instances = project.data.configuration.resource.instances
-      const programInstance = instances.find((inst) => inst.program === editor.meta.name)
-      if (!programInstance) return undefined
+      // For program POUs, verify the program instance exists
+      // For FB POUs, skip this check since getCompositeKey already handles instance context
+      if (!fbInstanceContext) {
+        const instances = project.data.configuration.resource.instances
+        const programInstance = instances.find((inst) => inst.program === editor.meta.name)
+        if (!programInstance) return undefined
+      }
 
       if (blockData.variant?.type === 'function-block') {
         const blockVariableName = blockData.variable?.name
         if (!blockVariableName) return undefined
 
         const outputVariableName = `${blockVariableName}.${sourceHandle}`
-        const compositeKey = `${editor.meta.name}:${outputVariableName}`
+        const compositeKey = getCompositeKey(outputVariableName)
         const value = debugVariableValues.get(compositeKey)
 
         if (value === undefined) return undefined
@@ -155,7 +182,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         if (!numericId) return undefined
 
         const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
-        const compositeKey = `${editor.meta.name}:${tempVarName}`
+        const compositeKey = getCompositeKey(tempVarName)
         const value = debugVariableValues.get(compositeKey)
 
         if (value === undefined) return undefined
@@ -221,7 +248,15 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       return edge
     })
-  }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, editor.meta.name, project])
+  }, [
+    rungLocal.edges,
+    rungLocal.nodes,
+    isDebuggerVisible,
+    debugVariableValues,
+    editor.meta.name,
+    project,
+    getCompositeKey,
+  ])
 
   const styledNodes = useMemo(() => {
     const baseNodes = !isDebuggerVisible
@@ -300,6 +335,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     debugVariableValues,
     editor.meta.name,
     project,
+    getCompositeKey,
   ])
 
   /**

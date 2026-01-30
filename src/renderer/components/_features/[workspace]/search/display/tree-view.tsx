@@ -1,6 +1,7 @@
 import {
   ArrayIcon,
   ArrowIcon,
+  CppIcon,
   DataTypeIcon,
   DeviceIcon,
   EnumIcon,
@@ -11,6 +12,7 @@ import {
   LDIcon,
   PLCIcon,
   ProgramIcon,
+  PythonIcon,
   ResourceIcon,
   SFCIcon,
   STIcon,
@@ -163,7 +165,7 @@ const ProjectSearchTreeNestedBranch = ({
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { BranchIcon, label } = NestedBranchSources[nestedBranchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasAssociatedDataType: boolean = dataTypes.some((dataType) => dataType.derivation === nestedBranchTarget)
+  const hasAssociatedDataType: boolean = dataTypes.some((dataType) => dataType?.derivation === nestedBranchTarget)
   useEffect(() => setBranchIsOpen(hasAssociatedDataType), [hasAssociatedDataType])
 
   return (
@@ -209,7 +211,7 @@ const ProjectSearchTreeNestedBranch = ({
 
 type IProjectSearchTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   nested?: boolean
-  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res'
+  leafLang: 'il' | 'st' | 'python' | 'cpp' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res'
   label?: string
   children?: ReactNode
 }
@@ -217,6 +219,8 @@ type IProjectSearchTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
 const LeafSources = {
   il: { LeafIcon: ILIcon },
   st: { LeafIcon: STIcon },
+  python: { LeafIcon: PythonIcon },
+  cpp: { LeafIcon: CppIcon },
   fbd: { LeafIcon: FBDIcon },
   sfc: { LeafIcon: SFCIcon },
   ld: { LeafIcon: LDIcon },

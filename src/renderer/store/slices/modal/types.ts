@@ -13,6 +13,7 @@ const modalTypes = z.enum([
   'quit-application',
   'runtime-create-user',
   'runtime-login',
+  'runtime-connection-lost',
   'debugger-message',
   'debugger-ip-input',
 ])

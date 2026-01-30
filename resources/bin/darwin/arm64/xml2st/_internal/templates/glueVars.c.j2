@@ -106,6 +106,9 @@ extern unsigned long long common_ticktime__;
     static IEC_UINT *(*int_memory_ptr) = NULL;
     static IEC_UDINT *(*dint_memory_ptr) = NULL;
     static IEC_ULINT *(*lint_memory_ptr) = NULL;
+#ifdef OPENPLC_V4
+    static IEC_BOOL *(*bool_memory_ptr)[8] = NULL;
+#endif
 
     void setBufferPointers(IEC_BOOL *input_bool[BUFFER_SIZE][8], IEC_BOOL *output_bool[BUFFER_SIZE][8],
                             IEC_BYTE *input_byte[BUFFER_SIZE], IEC_BYTE *output_byte[BUFFER_SIZE],
@@ -129,6 +132,24 @@ extern unsigned long long common_ticktime__;
         dint_memory_ptr = dint_memory;
         lint_memory_ptr = lint_memory;
     }
+
+#ifdef OPENPLC_V4
+    void setBufferPointers_v4(IEC_BOOL *input_bool[BUFFER_SIZE][8], IEC_BOOL *output_bool[BUFFER_SIZE][8],
+                            IEC_BYTE *input_byte[BUFFER_SIZE], IEC_BYTE *output_byte[BUFFER_SIZE],
+                            IEC_UINT *input_int[BUFFER_SIZE], IEC_UINT *output_int[BUFFER_SIZE],
+                            IEC_UDINT *input_dint[BUFFER_SIZE], IEC_UDINT *output_dint[BUFFER_SIZE],
+                            IEC_ULINT *input_lint[BUFFER_SIZE], IEC_ULINT *output_lint[BUFFER_SIZE],
+                            IEC_UINT *int_memory[BUFFER_SIZE], IEC_UDINT *dint_memory[BUFFER_SIZE],
+                            IEC_ULINT *lint_memory[BUFFER_SIZE], IEC_BOOL *memory_bool[BUFFER_SIZE][8])
+    {
+        // Call the base function to set all standard pointers
+        setBufferPointers(input_bool, output_bool, input_byte, output_byte,
+                          input_int, output_int, input_dint, output_dint,
+                          input_lint, output_lint, int_memory, dint_memory, lint_memory);
+        // Set the v4-specific bool_memory pointer
+        bool_memory_ptr = memory_bool;
+    }
+#endif
 #endif
 
 void glueVars()

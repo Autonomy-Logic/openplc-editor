@@ -6,21 +6,26 @@ import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { DeviceActions, RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { cn, isArduinoTarget, isOpenPLCRuntimeTarget } from '@root/utils'
+import type { RuntimeConnection, TimingStats } from '@root/renderer/store/slices/device/types'
+import {
+  cn,
+  isArduinoTarget,
+  isOpenPLCRuntimeTarget,
+  isOpenPLCRuntimeV4Target,
+  validateRuntimeVersion,
+} from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
-  // Auto-disconnect after 3 consecutive status poll failures (7.5 seconds)
-  const MAX_CONSECUTIVE_FAILURES = 3
-
   const {
-    deviceDefinitions: { compileOnly },
+    deviceDefinitions: {
+      configuration: { compileOnly },
+    },
     deviceAvailableOptions: { availableBoards },
     project: {
-      data: { pous },
+      data: { pous, servers, remoteDevices },
     },
   } = useOpenPLCStore()
   const availableCommunicationPorts = boardSelectors.useAvailableCommunicationPorts()
@@ -47,14 +52,20 @@ const Board = memo(function () {
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
-  const setPlcRuntimeStatus = useOpenPLCStore(
-    (state): DeviceActions['setPlcRuntimeStatus'] => state.deviceActions.setPlcRuntimeStatus,
+  const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
+  const setIncludeTimingStatsInPolling = useOpenPLCStore(
+    (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
   )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
   const [formattedBoardState, setFormattedBoardState] = useState('')
   const [showPythonWarning, setShowPythonWarning] = useState(false)
+  const [showV4FeaturesWarning, setShowV4FeaturesWarning] = useState(false)
+  const [v4FeaturesAffected, setV4FeaturesAffected] = useState<{ hasServers: boolean; hasRemoteDevices: boolean }>({
+    hasServers: false,
+    hasRemoteDevices: false,
+  })
   const [pendingBoardChange, setPendingBoardChange] = useState<{ board: string; formattedBoard: string } | null>(null)
 
   const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
@@ -62,7 +73,6 @@ const Board = memo(function () {
 
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
-  const consecutiveFailuresRef = useRef<number>(0)
   const portsReqIdRef = useRef<number>(0)
   const [isRefreshingPorts, setIsRefreshingPorts] = useState(false)
 
@@ -161,10 +171,32 @@ const Board = memo(function () {
         return
       }
 
+      // Check if switching to a non-v4 target when servers or remote devices exist
+      const isTargetV4 = isOpenPLCRuntimeV4Target(normalizedBoard)
+      const hasServers = servers && servers.length > 0
+      const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
+
+      if (!isTargetV4 && (hasServers || hasRemoteDevices)) {
+        setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
+        setV4FeaturesAffected({ hasServers: !!hasServers, hasRemoteDevices: !!hasRemoteDevices })
+        setShowV4FeaturesWarning(true)
+        return
+      }
+
       setFormattedBoardState(board)
       setDeviceBoard(normalizedBoard)
     },
-    [connectionStatus, deviceBoard, setDeviceBoard, setFormattedBoardState, openModal, pous, availableBoards],
+    [
+      connectionStatus,
+      deviceBoard,
+      setDeviceBoard,
+      setFormattedBoardState,
+      openModal,
+      pous,
+      servers,
+      remoteDevices,
+      availableBoards,
+    ],
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
@@ -175,7 +207,7 @@ const Board = memo(function () {
 
   const handleConnectToRuntime = useCallback(async () => {
     if (connectionStatus === 'connected') {
-      consecutiveFailuresRef.current = 0
+      // Disconnect - global polling hook will handle resetting failure counter
       setRuntimeJwtToken(null)
       setRuntimeConnectionStatus('disconnected')
       const clearCreds = window.bridge.runtimeClearCredentials as (() => Promise<{ success: boolean }>) | undefined
@@ -197,71 +229,72 @@ const Board = memo(function () {
         return
       }
 
-      if (result.hasUsers) {
-        openModal('runtime-login', null)
-      } else {
-        openModal('runtime-create-user', null)
+      // Validate runtime version matches the selected board target
+      const versionValidation = validateRuntimeVersion(deviceBoard, result.runtimeVersion)
+
+      // Helper to proceed with connection after validation
+      const proceedWithConnection = () => {
+        if (result.hasUsers) {
+          openModal('runtime-login', null)
+        } else {
+          openModal('runtime-create-user', null)
+        }
       }
+
+      if (versionValidation.status === 'mismatch') {
+        // Hard error for version mismatch - cannot proceed
+        setRuntimeConnectionStatus('error')
+        openModal('debugger-message', {
+          type: 'error',
+          title: 'Runtime Version Mismatch',
+          message: versionValidation.message || 'Unknown version mismatch error',
+          buttons: ['OK'],
+          onResponse: () => {
+            // No action needed, just close the modal
+          },
+        })
+        return
+      }
+
+      if (versionValidation.status === 'missing') {
+        // Warning for older runtimes - allow user to continue anyway
+        // Note: buttons ordered as ['Continue Anyway', 'Cancel'] so Cancel (index 1) is the default
+        // when closing the modal (DebuggerMessageModal calls onResponse with last button index on close)
+        openModal('debugger-message', {
+          type: 'warning',
+          title: 'Older Runtime Detected',
+          message: versionValidation.message || 'Could not detect runtime version.',
+          buttons: ['Continue Anyway', 'Cancel'],
+          onResponse: (buttonIndex: number) => {
+            if (buttonIndex === 0) {
+              // User clicked "Continue Anyway" - proceed with connection
+              proceedWithConnection()
+            } else {
+              // User clicked "Cancel" or closed the modal - stay disconnected
+              setRuntimeConnectionStatus('disconnected')
+            }
+          },
+        })
+        return
+      }
+
+      // Version is OK - proceed normally
+      proceedWithConnection()
     } catch (_error) {
       setRuntimeConnectionStatus('error')
     }
-  }, [runtimeIpAddress, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, openModal])
+  }, [runtimeIpAddress, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, openModal, deviceBoard])
 
+  // Enable timing stats in global polling when this screen is visible
   useEffect(() => {
-    let statusInterval: NodeJS.Timeout | null = null
+    // Set the flag to include timing stats in the global status polling
+    setIncludeTimingStatsInPolling(true)
 
-    const pollStatus = async (): Promise<void> => {
-      if (
-        connectionStatus === 'connected' &&
-        runtimeIpAddress &&
-        useOpenPLCStore.getState().runtimeConnection.jwtToken
-      ) {
-        const handlePollFailure = () => {
-          consecutiveFailuresRef.current += 1
-          if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
-            consecutiveFailuresRef.current = 0
-            setRuntimeJwtToken(null)
-            setRuntimeConnectionStatus('disconnected')
-            setPlcRuntimeStatus(null)
-          } else {
-            setPlcRuntimeStatus('UNKNOWN')
-          }
-        }
-
-        try {
-          const result = await window.bridge.runtimeGetStatus(
-            runtimeIpAddress,
-            useOpenPLCStore.getState().runtimeConnection.jwtToken!,
-          )
-          if (result.success && result.status) {
-            consecutiveFailuresRef.current = 0
-            const statusValue = result.status.replace('STATUS:', '').replace('\n', '').trim()
-            const validStatuses = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN'] as const
-            if (validStatuses.includes(statusValue as (typeof validStatuses)[number])) {
-              setPlcRuntimeStatus(statusValue as (typeof validStatuses)[number])
-            } else {
-              setPlcRuntimeStatus('UNKNOWN')
-            }
-          } else {
-            handlePollFailure()
-          }
-        } catch (_error) {
-          handlePollFailure()
-        }
-      }
-    }
-
-    if (connectionStatus === 'connected') {
-      void pollStatus()
-      statusInterval = setInterval(() => void pollStatus(), 2500)
-    } else {
-      setPlcRuntimeStatus(null)
-    }
-
+    // Clear the flag when leaving this screen
     return () => {
-      if (statusInterval) clearInterval(statusInterval)
+      setIncludeTimingStatsInPolling(false)
     }
-  }, [connectionStatus, runtimeIpAddress, setPlcRuntimeStatus])
+  }, [setIncludeTimingStatsInPolling])
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
@@ -427,21 +460,23 @@ const Board = memo(function () {
               </button>
             </div>
           )}
-          <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
-            <Label id='board-specs-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
-              Specs
-            </Label>
-            <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2'>
-              {Object.entries(availableBoards.get(deviceBoard)?.specs || {}).map(([spec, value]) => (
-                <p
-                  className='text-start font-caption text-cp-sm font-semibold text-neutral-850 dark:text-white'
-                  key={spec}
-                >
-                  {spec}: <span className='font-light text-neutral-600 dark:text-neutral-400'>{value}</span>
-                </p>
-              ))}
+          {!isOpenPLCRuntimeTarget(currentBoardInfo) && (
+            <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
+              <Label id='board-specs-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
+                Specs
+              </Label>
+              <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2'>
+                {Object.entries(availableBoards.get(deviceBoard)?.specs || {}).map(([spec, value]) => (
+                  <p
+                    className='text-start font-caption text-cp-sm font-semibold text-neutral-850 dark:text-white'
+                    key={spec}
+                  >
+                    {spec}: <span className='font-light text-neutral-600 dark:text-neutral-400'>{value}</span>
+                  </p>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <div id='board-preview-container' className='flex h-full w-1/2 items-center justify-center pb-8'>
           <div className='h-[16rem] w-[20rem]'>
@@ -450,32 +485,93 @@ const Board = memo(function () {
         </div>
       </div>
       <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-      <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
-        <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>
-          <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
-            Pin Mapping
-          </h2>
-          <TableActions
-            className='w-fit *:rounded-md *:p-1'
-            actions={[
-              {
-                ariaLabel: 'Add table row button',
-                onClick: createNewPin,
-                icon: <PlusIcon className='!stroke-brand' />,
-                id: 'add-pin-button',
-              },
-              {
-                ariaLabel: 'Remove table row button',
-                onClick: removePin,
-                disabled: currentSelectedPinTableRow === -1,
-                icon: <MinusIcon className='!stroke-brand' />,
-                id: 'remove-pin-button',
-              },
-            ]}
-          />
+      {isOpenPLCRuntimeTarget(currentBoardInfo) ? (
+        connectionStatus === 'connected' &&
+        timingStats &&
+        timingStats.scan_count > 0 && (
+          <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-4'>
+            <h2
+              id='scan-cycle-stats-title'
+              className='select-none text-lg font-medium text-neutral-950 dark:text-white'
+            >
+              Scan Cycle Statistics
+            </h2>
+            <div id='scan-cycle-stats-cards' className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'>
+              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Count</span>
+                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                  {timingStats.scan_count.toLocaleString()}
+                </span>
+              </div>
+              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Overruns</span>
+                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>{timingStats.overruns}</span>
+              </div>
+              {timingStats.scan_time_avg !== null && (
+                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Time (avg)</span>
+                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                    {timingStats.scan_time_avg} <span className='text-sm font-normal'>us</span>
+                  </span>
+                  {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      min: {timingStats.scan_time_min} / max: {timingStats.scan_time_max}
+                    </span>
+                  )}
+                </div>
+              )}
+              {timingStats.cycle_time_avg !== null && (
+                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
+                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                    {timingStats.cycle_time_avg} <span className='text-sm font-normal'>us</span>
+                  </span>
+                  {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      min: {timingStats.cycle_time_min} / max: {timingStats.cycle_time_max}
+                    </span>
+                  )}
+                </div>
+              )}
+              {timingStats.cycle_latency_avg !== null && (
+                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Latency (avg)</span>
+                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                    {timingStats.cycle_latency_avg} <span className='text-sm font-normal'>us</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      ) : (
+        <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
+          <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>
+            <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
+              Pin Mapping
+            </h2>
+            <TableActions
+              className='w-fit *:rounded-md *:p-1'
+              actions={[
+                {
+                  ariaLabel: 'Add table row button',
+                  onClick: createNewPin,
+                  icon: <PlusIcon className='!stroke-brand' />,
+                  id: 'add-pin-button',
+                },
+                {
+                  ariaLabel: 'Remove table row button',
+                  onClick: removePin,
+                  disabled: currentSelectedPinTableRow === -1,
+                  icon: <MinusIcon className='!stroke-brand' />,
+                  id: 'remove-pin-button',
+                },
+              ]}
+            />
+          </div>
+          <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
         </div>
-        <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
-      </div>
+      )}
 
       <Modal open={showPythonWarning} onOpenChange={setShowPythonWarning}>
         <ModalContent className='h-fit w-[500px]'>
@@ -510,6 +606,72 @@ const Board = memo(function () {
                   setDeviceBoard(pendingBoardChange.board)
                 }
                 setShowPythonWarning(false)
+                setPendingBoardChange(null)
+              }}
+              className='h-8 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white hover:bg-brand-medium-dark'
+            >
+              Continue Anyway
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal open={showV4FeaturesWarning} onOpenChange={setShowV4FeaturesWarning}>
+        <ModalContent className='h-fit w-[500px]'>
+          <ModalHeader>
+            <ModalTitle>
+              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                ? 'Modbus Server and Remote IO Not Supported'
+                : v4FeaturesAffected.hasServers
+                  ? 'Modbus Server Not Supported'
+                  : 'Remote IO Not Supported'}
+            </ModalTitle>
+          </ModalHeader>
+          <div className='flex flex-col gap-4'>
+            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+              The selected target ({pendingBoardChange?.formattedBoard}) does not support{' '}
+              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                ? 'Modbus Server and Remote IO configurations'
+                : v4FeaturesAffected.hasServers
+                  ? 'Modbus Server configuration'
+                  : 'Remote IO configuration'}
+              .
+            </p>
+            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+              Your project contains{' '}
+              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                ? 'Modbus Server and Remote IO configurations that will be disabled'
+                : v4FeaturesAffected.hasServers
+                  ? 'Modbus Server configurations that will be disabled'
+                  : 'Remote IO configurations that will be disabled'}{' '}
+              during compilation on this target.{' '}
+              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                ? 'Modbus Server and Remote IO are'
+                : v4FeaturesAffected.hasServers
+                  ? 'Modbus Server is'
+                  : 'Remote IO is'}{' '}
+              only supported on OpenPLC Runtime v4.
+            </p>
+          </div>
+          <ModalFooter className='flex justify-end gap-2'>
+            <button
+              type='button'
+              onClick={() => {
+                setShowV4FeaturesWarning(false)
+                setPendingBoardChange(null)
+              }}
+              className='h-8 rounded-md bg-neutral-100 px-4 font-caption text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-white dark:hover:bg-neutral-800'
+            >
+              Cancel
+            </button>
+            <button
+              type='button'
+              onClick={() => {
+                if (pendingBoardChange) {
+                  setFormattedBoardState(pendingBoardChange.formattedBoard)
+                  setDeviceBoard(pendingBoardChange.board)
+                }
+                setShowV4FeaturesWarning(false)
                 setPendingBoardChange(null)
               }}
               className='h-8 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white hover:bg-brand-medium-dark'

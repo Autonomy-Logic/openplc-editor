@@ -57,6 +57,7 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
             } else {
               editor.variable = {
                 display: 'code',
+                code: variables.code ?? (editor.variable.display === 'code' ? editor.variable.code : undefined),
               }
             }
           } else if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
@@ -122,6 +123,8 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
             } else {
               targetEditor.variable = {
                 display: 'code',
+                code:
+                  variables.code ?? (targetEditor.variable.display === 'code' ? targetEditor.variable.code : undefined),
               }
             }
           } else if (targetEditor.type === 'plc-textual' || targetEditor.type === 'plc-graphical') {

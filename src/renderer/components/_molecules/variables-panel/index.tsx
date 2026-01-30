@@ -32,6 +32,8 @@ type VariablePanelProps = {
   debugVariableValues?: Map<string, string>
   debugVariableIndexes?: Map<string, number>
   debugForcedVariables?: Map<string, boolean>
+  debugExpandedNodes?: Map<string, boolean>
+  onToggleExpandedNode?: (compositeKey: string) => void
   isDebuggerVisible?: boolean
   onForceVariable?: (
     compositeKey: string,
@@ -50,10 +52,12 @@ const VariablesPanel = ({
   debugVariableValues,
   debugVariableIndexes,
   debugForcedVariables,
+  debugExpandedNodes,
+  onToggleExpandedNode,
   isDebuggerVisible,
   onForceVariable,
 }: VariablePanelProps) => {
-  const [expandedNodes, setExpandedNodes] = useState<Map<string, boolean>>(new Map())
+  const expandedNodes = debugExpandedNodes ?? new Map<string, boolean>()
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     compositeKey: string
@@ -63,6 +67,11 @@ const VariablesPanel = ({
   } | null>(null)
   const [forceValueModalOpen, setForceValueModalOpen] = useState<boolean>(false)
   const [forceValue, setForceValue] = useState<string>('')
+  const [pendingForceContext, setPendingForceContext] = useState<{
+    compositeKey: string
+    lookupKey: string
+    variableType: string
+  } | null>(null)
 
   const getValue = (compositeKey: string): string | undefined => {
     return debugVariableValues?.get(compositeKey)
@@ -79,11 +88,9 @@ const VariablesPanel = ({
   }
 
   const handleToggleExpand = (compositeKey: string) => {
-    setExpandedNodes((prev) => {
-      const newMap = new Map(prev)
-      newMap.set(compositeKey, !newMap.get(compositeKey))
-      return newMap
-    })
+    if (onToggleExpandedNode) {
+      onToggleExpandedNode(compositeKey)
+    }
   }
 
   const updateNodeExpansion = (node: DebugTreeNode): DebugTreeNode => {
@@ -192,24 +199,35 @@ const VariablesPanel = ({
     (e: React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
+      // Save context before popover closes (popover auto-closes on click)
+      if (contextMenuState) {
+        setPendingForceContext({
+          compositeKey: contextMenuState.compositeKey,
+          lookupKey: contextMenuState.lookupKey,
+          variableType: contextMenuState.variableType,
+        })
+      }
       setForceValueModalOpen(true)
-      handleCloseContextMenu()
     },
-    [handleCloseContextMenu],
+    [contextMenuState],
   )
 
   const handleForceValueConfirm = useCallback(() => {
-    if (!contextMenuState || !forceValue.trim() || !onForceVariable) {
+    const closeModal = () => {
       setForceValueModalOpen(false)
       setForceValue('')
+      setPendingForceContext(null)
+    }
+
+    if (!pendingForceContext || !forceValue.trim() || !onForceVariable) {
+      closeModal()
       return
     }
 
-    const variableType = contextMenuState.variableType
+    const variableType = pendingForceContext.variableType
     const typeInfo = getVariableTypeInfo(variableType)
     if (!typeInfo) {
-      setForceValueModalOpen(false)
-      setForceValue('')
+      closeModal()
       return
     }
 
@@ -223,8 +241,7 @@ const VariablesPanel = ({
     if (isStringType) {
       const parsedStringValue: string | null = parseStringValue(forceValue)
       if (parsedStringValue === null) {
-        setForceValueModalOpen(false)
-        setForceValue('')
+        closeModal()
         return
       }
       valueBuffer = stringToBuffer(parsedStringValue)
@@ -232,8 +249,7 @@ const VariablesPanel = ({
     } else if (isFloatType) {
       const parsedFloatValue = parseFloatValue(forceValue, typeInfo.byteSize)
       if (parsedFloatValue === null) {
-        setForceValueModalOpen(false)
-        setForceValue('')
+        closeModal()
         return
       }
       valueBuffer = floatToBuffer(parsedFloatValue, typeInfo.byteSize)
@@ -241,8 +257,7 @@ const VariablesPanel = ({
     } else {
       const parsedIntValue = parseIntegerValue(forceValue, typeInfo)
       if (parsedIntValue === null) {
-        setForceValueModalOpen(false)
-        setForceValue('')
+        closeModal()
         return
       }
       valueBuffer = integerToBuffer(parsedIntValue, typeInfo.byteSize, typeInfo.signed)
@@ -250,26 +265,27 @@ const VariablesPanel = ({
     }
 
     void onForceVariable(
-      contextMenuState.compositeKey,
+      pendingForceContext.compositeKey,
       variableType,
       forcedValueForState,
       valueBuffer,
-      contextMenuState.lookupKey,
+      pendingForceContext.lookupKey,
     )
 
-    setForceValueModalOpen(false)
-    setForceValue('')
-  }, [contextMenuState, forceValue, onForceVariable])
+    closeModal()
+  }, [pendingForceContext, forceValue, onForceVariable])
 
   const handleForceValueCancel = useCallback(() => {
     setForceValueModalOpen(false)
     setForceValue('')
+    setPendingForceContext(null)
   }, [])
 
   const handleForceValueModalChange = useCallback((open: boolean) => {
     setForceValueModalOpen(open)
     if (!open) {
       setForceValue('')
+      setPendingForceContext(null)
     }
   }, [])
 
@@ -455,7 +471,7 @@ const VariablesPanel = ({
           <ModalTitle className='mb-4 text-lg font-semibold'>Force Value</ModalTitle>
 
           <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>
-            Enter the value to force for {contextMenuState?.compositeKey.split(':')[1] || 'this variable'}
+            Enter the value to force for {pendingForceContext?.compositeKey.split(':')[1] || 'this variable'}
           </p>
 
           <div className='flex w-full flex-col gap-4'>

@@ -2,7 +2,15 @@ import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
 import { projectDefaultFilesMapSchema, projectPouDirectories } from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCPou, PLCPouSchema, PLCProject } from '@root/types/PLC/open-plc'
+import {
+  PLCPou,
+  PLCPouSchema,
+  PLCProject,
+  PLCRemoteDevice,
+  PLCRemoteDeviceSchema,
+  PLCServer,
+  PLCServerSchema,
+} from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { migrateProjectToNameTypeSystem, needsMigration } from '@root/utils/migrate-project-to-name-type-system'
@@ -522,11 +530,63 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     }
   })
 
+  /**
+   * Read server config files from the devices/servers directory.
+   * Each server is stored as an individual JSON file.
+   */
+  const serverFiles: PLCServer[] = []
+  const serversDir = join(basePath, 'devices', 'servers')
+  if (fileOrDirectoryExists(serversDir)) {
+    const serverEntries = readdirSync(serversDir, { withFileTypes: true })
+    for (const entry of serverEntries) {
+      if (entry.isFile() && extname(entry.name) === '.json') {
+        const serverFilePath = join(serversDir, entry.name)
+        try {
+          const serverContent = readFileSync(serverFilePath, 'utf-8')
+          const parsedServer = JSON.parse(serverContent)
+          const result = PLCServerSchema.safeParse(parsedServer)
+          if (result.success) {
+            serverFiles.push(result.data)
+          }
+        } catch {
+          // Skip invalid server files
+        }
+      }
+    }
+  }
+
+  /**
+   * Read remote device config files from the devices/remote directory.
+   * Each remote device is stored as an individual JSON file.
+   */
+  const remoteDeviceFiles: PLCRemoteDevice[] = []
+  const remoteDevicesDir = join(basePath, 'devices', 'remote')
+  if (fileOrDirectoryExists(remoteDevicesDir)) {
+    const remoteDeviceEntries = readdirSync(remoteDevicesDir, { withFileTypes: true })
+    for (const entry of remoteDeviceEntries) {
+      if (entry.isFile() && extname(entry.name) === '.json') {
+        const remoteDeviceFilePath = join(remoteDevicesDir, entry.name)
+        try {
+          const remoteDeviceContent = readFileSync(remoteDeviceFilePath, 'utf-8')
+          const parsedRemoteDevice = JSON.parse(remoteDeviceContent)
+          const result = PLCRemoteDeviceSchema.safeParse(parsedRemoteDevice)
+          if (result.success) {
+            remoteDeviceFiles.push(result.data)
+          }
+        } catch {
+          // Skip invalid remote device files
+        }
+      }
+    }
+  }
+
   const returnData: IProjectServiceReadFilesResponse['data'] = {
     project: projectFiles['project.json'] as PLCProject,
     pous: Object.values(pouFiles).map((pou) => pou as PLCPou),
     deviceConfiguration: projectFiles['devices/configuration.json'] as DeviceConfiguration,
     devicePinMapping: projectFiles['devices/pin-mapping.json'] as DevicePin[],
+    servers: serverFiles,
+    remoteDevices: remoteDeviceFiles,
   }
 
   // Check if project needs migration from ID-based to name+type-based system
