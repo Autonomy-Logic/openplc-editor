@@ -50,7 +50,9 @@ jobs:
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Update package.json version
-        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+          cd release/app && npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Import Code Signing Certificate
         env:
@@ -145,7 +147,9 @@ jobs:
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Update package.json version
-        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+          cd release/app && npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Build and package
         env:
@@ -196,7 +200,9 @@ jobs:
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Update package.json version
-        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+          cd release/app && npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Build application
         env:
@@ -261,7 +267,9 @@ jobs:
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Update package.json version
-        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+          cd release/app && npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Build and package
         env:
@@ -311,7 +319,9 @@ jobs:
           echo "Building version: $VERSION (Build date: $BUILD_DATE)"
 
       - name: Update package.json version
-        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+          cd release/app && npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Build application
         env:
