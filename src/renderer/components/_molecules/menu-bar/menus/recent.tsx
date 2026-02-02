@@ -3,18 +3,17 @@ import RecentProjectIcon from '@root/renderer/assets/icons/interface/Recent'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { MenuClasses } from '../constants'
 
 export const RecentMenu = () => {
-  const {
-    workspace: { recent, editingState },
-    workspaceActions: { setRecent },
-    modalActions: { openModal },
-    sharedWorkspaceActions: { openProjectByPath },
-  } = useOpenPLCStore()
+  // Use granular selectors to prevent re-renders from unrelated store updates (e.g., polling)
+  const recent = useOpenPLCStore((state) => state.workspace.recent)
+  const editingState = useOpenPLCStore((state) => state.workspace.editingState)
+  const setRecent = useOpenPLCStore((state) => state.workspaceActions.setRecent)
+  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
+  const openProjectByPath = useOpenPLCStore((state) => state.sharedWorkspaceActions.openProjectByPath)
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
 
   const [recentProjects, setRecentProjects] = useState(recent)

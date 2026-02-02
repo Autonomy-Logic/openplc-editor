@@ -1,17 +1,14 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { i18n } from '@utils/i18n'
-import _ from 'lodash'
 
 import { MenuClasses } from '../constants'
 
 export const DisplayMenu = () => {
-  const {
-    workspace: {
-      systemConfigs: { shouldUseDarkMode },
-    },
-    workspaceActions: { switchAppTheme, toggleCollapse },
-  } = useOpenPLCStore()
+  // Use granular selectors to prevent re-renders from unrelated store updates (e.g., polling)
+  const shouldUseDarkMode = useOpenPLCStore((state) => state.workspace.systemConfigs.shouldUseDarkMode)
+  const switchAppTheme = useOpenPLCStore((state) => state.workspaceActions.switchAppTheme)
+  const toggleCollapse = useOpenPLCStore((state) => state.workspaceActions.toggleCollapse)
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 

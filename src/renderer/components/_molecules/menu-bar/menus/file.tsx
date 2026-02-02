@@ -2,20 +2,22 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useCompiler } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { i18n } from '@utils/i18n'
-import _ from 'lodash'
 
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
-  const {
-    project,
-    workspace,
-    deviceDefinitions,
-    selectedTab,
-    modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, saveProject, saveFile, closeFile },
-  } = useOpenPLCStore()
-  const { editingState } = workspace
+  // Use granular selectors to prevent re-renders from unrelated store updates (e.g., polling)
+  const editingState = useOpenPLCStore((state) => state.workspace.editingState)
+  const project = useOpenPLCStore((state) => state.project)
+  const deviceDefinitions = useOpenPLCStore((state) => state.deviceDefinitions)
+  const selectedTab = useOpenPLCStore((state) => state.selectedTab)
+  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
+  const closeProject = useOpenPLCStore((state) => state.sharedWorkspaceActions.closeProject)
+  const openProject = useOpenPLCStore((state) => state.sharedWorkspaceActions.openProject)
+  const saveProject = useOpenPLCStore((state) => state.sharedWorkspaceActions.saveProject)
+  const saveFile = useOpenPLCStore((state) => state.sharedWorkspaceActions.saveFile)
+  const closeFile = useOpenPLCStore((state) => state.sharedWorkspaceActions.closeFile)
+
   const { handleExportProject } = useCompiler()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
