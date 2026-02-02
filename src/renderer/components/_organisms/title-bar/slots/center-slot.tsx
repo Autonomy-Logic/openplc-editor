@@ -2,41 +2,22 @@ import { OpenPLCIcon } from '@process:renderer/assets/icons/oplc'
 import { useOpenPLCStore } from '@process:renderer/store'
 
 const TitleBarCenterSlot = () => {
-  /**
-   * Get the platform name from the store and check if it's macOS
-   */
-  const {
-    workspace: {
-      systemConfigs: { OS },
-    },
-    project: {
-      meta: { path },
-    },
-  } = useOpenPLCStore()
+  // Use granular selectors to prevent re-renders from unrelated store updates (e.g., polling)
+  const OS = useOpenPLCStore((state) => state.workspace.systemConfigs.OS)
+  const path = useOpenPLCStore((state) => state.project.meta.path)
+
   const isMac = OS === 'darwin'
 
-  /**
-   * Create a template for macOS systems
-   */
-  const DarwinTemplate = () => {
-    return (
-      <>
-        <OpenPLCIcon />
-        <span className='font-caption text-xs font-normal'>OpenPLC Editor</span>
-      </>
-    )
-  }
-  /**
-   * Create a template for windows and other systems
-   */
-  const DefaultTemplate = () =>
-    path === '' ? <span className='font-caption text-xs font-normal'>OpenPLC Editor</span> : <></>
-  /**
-   * Render the appropriate template based on the platform
-   */
   return (
     <div className='oplc-titlebar-drag-region flex flex-1 items-center justify-center gap-2'>
-      {isMac ? <DarwinTemplate /> : <DefaultTemplate />}
+      {isMac ? (
+        <>
+          <OpenPLCIcon />
+          <span className='font-caption text-xs font-normal'>OpenPLC Editor</span>
+        </>
+      ) : (
+        path === '' && <span className='font-caption text-xs font-normal'>OpenPLC Editor</span>
+      )}
     </div>
   )
 }
