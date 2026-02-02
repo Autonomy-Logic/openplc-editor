@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RemoteDeviceIOPoint } from '@root/renderer/utils/remote-device-options'
 import { PLCPou } from '@root/types/PLC/open-plc'
-import { useShallow } from 'zustand/react/shallow'
+import { useMemo } from 'react'
 
 // ===================== Device screen selectors. =====================
 const rtuSelectors = {
@@ -81,35 +81,35 @@ const remoteDeviceSelectors = {
   /**
    * Returns all IO points from all remote devices with their device and group context.
    * Used to populate the location dropdown with remote device aliases.
-   * Uses shallow comparison to prevent unnecessary re-renders when the data hasn't changed.
+   * Uses useMemo to prevent unnecessary recomputations when the data hasn't changed.
    */
-  useRemoteDeviceIOPoints: (): RemoteDeviceIOPoint[] =>
-    useOpenPLCStore(
-      useShallow((state) => {
-        const remoteDevices = state.project.data.remoteDevices
-        if (!remoteDevices) return []
+  useRemoteDeviceIOPoints: (): RemoteDeviceIOPoint[] => {
+    const remoteDevices = useOpenPLCStore((state) => state.project.data.remoteDevices)
 
-        const ioPoints: RemoteDeviceIOPoint[] = []
+    return useMemo(() => {
+      if (!remoteDevices) return []
 
-        for (const device of remoteDevices) {
-          if (!device.modbusTcpConfig?.ioGroups) continue
-          for (const ioGroup of device.modbusTcpConfig.ioGroups) {
-            for (const point of ioGroup.ioPoints) {
-              ioPoints.push({
-                deviceName: device.name,
-                ioGroupName: ioGroup.name,
-                ioPointId: point.id,
-                ioPointName: point.name,
-                ioPointType: point.type,
-                iecLocation: point.iecLocation,
-                alias: point.alias,
-              })
-            }
+      const ioPoints: RemoteDeviceIOPoint[] = []
+
+      for (const device of remoteDevices) {
+        if (!device.modbusTcpConfig?.ioGroups) continue
+        for (const ioGroup of device.modbusTcpConfig.ioGroups) {
+          for (const point of ioGroup.ioPoints) {
+            ioPoints.push({
+              deviceName: device.name,
+              ioGroupName: ioGroup.name,
+              ioPointId: point.id,
+              ioPointName: point.name,
+              ioPointType: point.type,
+              iecLocation: point.iecLocation,
+              alias: point.alias,
+            })
           }
         }
-        return ioPoints
-      }),
-    ),
+      }
+      return ioPoints
+    }, [remoteDevices])
+  },
 }
 
 // ===================== Search selectors. =====================
