@@ -119,6 +119,11 @@ const workspaceSelectors = {
   useEditingState: () => useOpenPLCStore((state) => state.workspace.editingState),
   useSetEditingState: () => useOpenPLCStore((state) => state.workspaceActions.setEditingState),
   useSelectedProjectTreeLeaf: () => useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf),
+  useRecent: () => useOpenPLCStore((state) => state.workspace.recent),
+  useSetRecent: () => useOpenPLCStore((state) => state.workspaceActions.setRecent),
+  useSetModalOpen: () => useOpenPLCStore((state) => state.workspaceActions.setModalOpen),
+  useSwitchAppTheme: () => useOpenPLCStore((state) => state.workspaceActions.switchAppTheme),
+  useToggleCollapse: () => useOpenPLCStore((state) => state.workspaceActions.toggleCollapse),
 }
 
 // ===================== Console selectors. =====================
@@ -141,12 +146,48 @@ const fileSelectors = {
 const sharedSelectors = {
   useHandleFileAndWorkspaceSavedState: () =>
     useOpenPLCStore((state) => state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState),
+  useCloseProject: () => useOpenPLCStore((state) => state.sharedWorkspaceActions.closeProject),
+  useOpenProject: () => useOpenPLCStore((state) => state.sharedWorkspaceActions.openProject),
+  useSaveProject: () => useOpenPLCStore((state) => state.sharedWorkspaceActions.saveProject),
+  useSaveFile: () => useOpenPLCStore((state) => state.sharedWorkspaceActions.saveFile),
+  useCloseFile: () => useOpenPLCStore((state) => state.sharedWorkspaceActions.closeFile),
+  useOpenProjectByPath: () => useOpenPLCStore((state) => state.sharedWorkspaceActions.openProjectByPath),
 }
 
 // ===================== Ladder selectors. =====================
 const ladderSelectors = {
   useGetIsRungOpen: () => useOpenPLCStore((state) => state.editorActions.getIsRungOpen),
   useUpdateModelLadder: () => useOpenPLCStore((state) => state.editorActions.updateModelLadder),
+}
+
+// ===================== Modal selectors. =====================
+const modalSelectors = {
+  useOpenModal: () => useOpenPLCStore((state) => state.modalActions.openModal),
+}
+
+// ===================== Snapshot selectors. =====================
+const snapshotSelectors = {
+  useUndo: () => useOpenPLCStore((state) => state.snapshotActions.undo),
+  useRedo: () => useOpenPLCStore((state) => state.snapshotActions.redo),
+}
+
+// ===================== System config selectors. =====================
+const systemConfigSelectors = {
+  useOS: () => useOpenPLCStore((state) => state.workspace.systemConfigs.OS),
+  useShouldUseDarkMode: () => useOpenPLCStore((state) => state.workspace.systemConfigs.shouldUseDarkMode),
+}
+
+// ===================== Title bar selectors. =====================
+const titleBarSelectors = {
+  useOS: () => useOpenPLCStore((state) => state.workspace.systemConfigs.OS),
+  useProjectPath: () => useOpenPLCStore((state) => state.project.meta.path),
+}
+
+// ===================== Menu selectors. =====================
+const menuSelectors = {
+  useProject: () => useOpenPLCStore((state) => state.project),
+  useDeviceDefinitions: () => useOpenPLCStore((state) => state.deviceDefinitions),
+  useSelectedTab: () => useOpenPLCStore((state) => state.selectedTab),
 }
 
 export {
@@ -159,6 +200,8 @@ export {
   editorSelectors,
   fileSelectors,
   ladderSelectors,
+  menuSelectors,
+  modalSelectors,
   pinSelectors,
   pouSelectors,
   projectSelectors,
@@ -166,8 +209,11 @@ export {
   rtuSelectors,
   searchSelectors,
   sharedSelectors,
+  snapshotSelectors,
   staticHostSelectors,
+  systemConfigSelectors,
   tcpSelectors,
+  titleBarSelectors,
   variablesSelectors,
   workspaceSelectors,
 }

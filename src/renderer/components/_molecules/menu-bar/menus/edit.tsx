@@ -1,16 +1,20 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { useOpenPLCStore } from '@root/renderer/store'
+import {
+  editorSelectors,
+  modalSelectors,
+  snapshotSelectors,
+  workspaceSelectors,
+} from '@root/renderer/hooks/use-store-selectors'
 import { i18n } from '@utils/i18n'
 
 import { MenuClasses } from '../constants'
 
 export const EditMenu = () => {
-  // Use granular selectors to prevent re-renders from unrelated store updates (e.g., polling)
-  const editor = useOpenPLCStore((state) => state.editor)
-  const setModalOpen = useOpenPLCStore((state) => state.workspaceActions.setModalOpen)
-  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
-  const undo = useOpenPLCStore((state) => state.snapshotActions.undo)
-  const redo = useOpenPLCStore((state) => state.snapshotActions.redo)
+  const editor = editorSelectors.useEditorState()
+  const setModalOpen = workspaceSelectors.useSetModalOpen()
+  const openModal = modalSelectors.useOpenModal()
+  const undo = snapshotSelectors.useUndo()
+  const redo = snapshotSelectors.useRedo()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
   const findInProject = () => {

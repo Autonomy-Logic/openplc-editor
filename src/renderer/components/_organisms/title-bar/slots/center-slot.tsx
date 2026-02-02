@@ -1,10 +1,9 @@
 import { OpenPLCIcon } from '@process:renderer/assets/icons/oplc'
-import { useOpenPLCStore } from '@process:renderer/store'
+import { titleBarSelectors } from '@root/renderer/hooks/use-store-selectors'
 
 const TitleBarCenterSlot = () => {
-  // Use granular selectors to prevent re-renders from unrelated store updates (e.g., polling)
-  const OS = useOpenPLCStore((state) => state.workspace.systemConfigs.OS)
-  const path = useOpenPLCStore((state) => state.project.meta.path)
+  const OS = titleBarSelectors.useOS()
+  const path = titleBarSelectors.useProjectPath()
 
   const isMac = OS === 'darwin'
 

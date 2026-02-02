@@ -1,10 +1,9 @@
-import { useOpenPLCStore } from '@process:renderer/store'
+import { titleBarSelectors } from '@root/renderer/hooks/use-store-selectors'
 
 import { WindowControls } from '../../../_molecules/window-controls'
 
 const TitleBarRightSlot = () => {
-  // Use granular selector to prevent re-renders from unrelated store updates (e.g., polling)
-  const OS = useOpenPLCStore((state) => state.workspace.systemConfigs.OS)
+  const OS = titleBarSelectors.useOS()
 
   const isMac = OS === 'darwin'
 
