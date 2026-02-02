@@ -1,20 +1,19 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import RecentProjectIcon from '@root/renderer/assets/icons/interface/Recent'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { useOpenPLCStore } from '@root/renderer/store'
+import { modalSelectors, sharedSelectors, workspaceSelectors } from '@root/renderer/hooks/use-store-selectors'
 import { cn } from '@root/utils'
-import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { MenuClasses } from '../constants'
 
 export const RecentMenu = () => {
-  const {
-    workspace: { recent, editingState },
-    workspaceActions: { setRecent },
-    modalActions: { openModal },
-    sharedWorkspaceActions: { openProjectByPath },
-  } = useOpenPLCStore()
+  const recent = workspaceSelectors.useRecent()
+  const editingState = workspaceSelectors.useEditingState()
+  const setRecent = workspaceSelectors.useSetRecent()
+  const openModal = modalSelectors.useOpenModal()
+  const openProjectByPath = sharedSelectors.useOpenProjectByPath()
+
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
 
   const [recentProjects, setRecentProjects] = useState(recent)
