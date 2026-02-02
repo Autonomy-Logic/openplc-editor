@@ -75,10 +75,12 @@ export type SharedSlice = {
   serverActions: {
     deleteRequest: (serverName: string) => void
     delete: (data: DeleteServer) => Promise<BasicSharedSliceResponse>
+    rename: (serverName: string, newServerName: string) => Promise<BasicSharedSliceResponse>
   }
   remoteDeviceActions: {
     deleteRequest: (remoteDeviceName: string) => void
     delete: (data: DeleteRemoteDevice) => Promise<BasicSharedSliceResponse>
+    rename: (remoteDeviceName: string, newRemoteDeviceName: string) => Promise<BasicSharedSliceResponse>
   }
   sharedWorkspaceActions: {
     // Clear all states when closing a project
@@ -923,7 +925,75 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return await getState().sharedWorkspaceActions.saveFile(data.file)
+      // Mark workspace as unsaved - servers are saved with project.json
+      getState().workspaceActions.setEditingState('unsaved')
+      return Promise.resolve({ success: true })
+    },
+
+    rename: (serverName, newServerName) => {
+      if (serverName === newServerName) {
+        return Promise.resolve({ success: false })
+      }
+
+      if (!(newServerName ?? '').trim()) {
+        toast({ title: 'Error', description: 'New name must be non-empty.', variant: 'fail' })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming server',
+            description: 'New name must be non-empty.',
+          },
+        })
+      }
+
+      const servers = getState().project.data.servers
+      const isServerNameAlreadyUsed = servers?.some((s) => s.name === newServerName)
+      if (isServerNameAlreadyUsed) {
+        toast({
+          title: 'Error renaming server',
+          description: `Server with name ${newServerName} already exists.`,
+          variant: 'fail',
+        })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming server',
+            description: `Server with name ${newServerName} already exists.`,
+          },
+        })
+      }
+
+      const server = servers?.find((s) => s.name === serverName)
+      if (!server) {
+        toast({
+          title: 'Error',
+          description: `Server with name ${serverName} not found.`,
+          variant: 'fail',
+        })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming server',
+            description: `Server with name ${serverName} not found.`,
+          },
+        })
+      }
+
+      getState().projectActions.updateServerName(serverName, newServerName)
+      getState().tabsActions.updateTabName(serverName, newServerName)
+      getState().editorActions.updateEditorName(serverName, newServerName)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === serverName) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: newServerName,
+          type: selectedProjectTreeLeaf.type,
+        })
+      }
+
+      // Mark workspace as unsaved - servers are saved with project.json
+      getState().workspaceActions.setEditingState('unsaved')
+      return Promise.resolve({ success: true })
     },
   },
 
@@ -971,7 +1041,75 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return await getState().sharedWorkspaceActions.saveFile(data.file)
+      // Mark workspace as unsaved - remote devices are saved with project.json
+      getState().workspaceActions.setEditingState('unsaved')
+      return Promise.resolve({ success: true })
+    },
+
+    rename: (remoteDeviceName, newRemoteDeviceName) => {
+      if (remoteDeviceName === newRemoteDeviceName) {
+        return Promise.resolve({ success: false })
+      }
+
+      if (!(newRemoteDeviceName ?? '').trim()) {
+        toast({ title: 'Error', description: 'New name must be non-empty.', variant: 'fail' })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming remote device',
+            description: 'New name must be non-empty.',
+          },
+        })
+      }
+
+      const remoteDevices = getState().project.data.remoteDevices
+      const isRemoteDeviceNameAlreadyUsed = remoteDevices?.some((d) => d.name === newRemoteDeviceName)
+      if (isRemoteDeviceNameAlreadyUsed) {
+        toast({
+          title: 'Error renaming remote device',
+          description: `Remote device with name ${newRemoteDeviceName} already exists.`,
+          variant: 'fail',
+        })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming remote device',
+            description: `Remote device with name ${newRemoteDeviceName} already exists.`,
+          },
+        })
+      }
+
+      const remoteDevice = remoteDevices?.find((d) => d.name === remoteDeviceName)
+      if (!remoteDevice) {
+        toast({
+          title: 'Error',
+          description: `Remote device with name ${remoteDeviceName} not found.`,
+          variant: 'fail',
+        })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming remote device',
+            description: `Remote device with name ${remoteDeviceName} not found.`,
+          },
+        })
+      }
+
+      getState().projectActions.updateRemoteDeviceName(remoteDeviceName, newRemoteDeviceName)
+      getState().tabsActions.updateTabName(remoteDeviceName, newRemoteDeviceName)
+      getState().editorActions.updateEditorName(remoteDeviceName, newRemoteDeviceName)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === remoteDeviceName) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: newRemoteDeviceName,
+          type: selectedProjectTreeLeaf.type,
+        })
+      }
+
+      // Mark workspace as unsaved - remote devices are saved with project.json
+      getState().workspaceActions.setEditingState('unsaved')
+      return Promise.resolve({ success: true })
     },
   },
 
