@@ -153,8 +153,11 @@ export const OpcUaServerEditor = () => {
         </Tabs.List>
 
         {/* General Settings Tab */}
-        <Tabs.Content value='general' className='flex-1 overflow-auto pt-4'>
-          <div className='pb-4'>
+        <Tabs.Content
+          value='general'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <div className='min-h-0 flex-1 overflow-auto pb-4'>
             <GeneralSettingsTab
               config={localConfig}
               onServerUpdate={handleServerSettingsUpdate}
@@ -164,8 +167,11 @@ export const OpcUaServerEditor = () => {
         </Tabs.Content>
 
         {/* Security Profiles Tab */}
-        <Tabs.Content value='security' className='flex-1 overflow-auto pt-4'>
-          <div className='pb-4'>
+        <Tabs.Content
+          value='security'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <div className='min-h-0 flex-1 overflow-auto pb-4'>
             <SecurityProfilesTab
               config={localConfig}
               serverName={serverName}
@@ -175,15 +181,21 @@ export const OpcUaServerEditor = () => {
         </Tabs.Content>
 
         {/* Users Tab */}
-        <Tabs.Content value='users' className='flex-1 overflow-auto pt-4'>
-          <div className='pb-4'>
+        <Tabs.Content
+          value='users'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <div className='min-h-0 flex-1 overflow-auto pb-4'>
             <UsersTab config={localConfig} serverName={serverName} onConfigChange={() => setEditingState('unsaved')} />
           </div>
         </Tabs.Content>
 
         {/* Certificates Tab */}
-        <Tabs.Content value='certificates' className='flex-1 overflow-auto pt-4'>
-          <div className='pb-4'>
+        <Tabs.Content
+          value='certificates'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <div className='min-h-0 flex-1 overflow-auto pb-4'>
             <CertificatesTab
               config={localConfig}
               serverName={serverName}
@@ -193,8 +205,11 @@ export const OpcUaServerEditor = () => {
         </Tabs.Content>
 
         {/* Address Space Tab */}
-        <Tabs.Content value='address-space' className='flex-1 overflow-auto pt-4'>
-          <div className='flex h-[calc(100vh-280px)] min-h-[400px] flex-col pb-4'>
+        <Tabs.Content
+          value='address-space'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <div className='flex min-h-0 flex-1 flex-col pb-4'>
             <AddressSpaceTab
               config={localConfig}
               serverName={serverName}
