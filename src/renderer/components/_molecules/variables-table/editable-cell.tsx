@@ -1,7 +1,8 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
-import { pinSelectors } from '@root/renderer/hooks'
+import { pinSelectors, remoteDeviceSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
+import { buildRemoteDeviceOptionGroups } from '@root/renderer/utils/remote-device-options'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
@@ -436,6 +437,7 @@ const EditableLocationCell = ({
     workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
   const existingPins = pinSelectors.usePins()
+  const remoteIOPoints = remoteDeviceSelectors.useRemoteDeviceIOPoints()
 
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -514,13 +516,16 @@ const EditableLocationCell = ({
         label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
       }))
 
+    const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)
+
     return [
       { label: 'Analog Inputs', options: ainPins },
       { label: 'Analog Outputs', options: aoutPins },
       { label: 'Digital Inputs', options: dinPins },
       { label: 'Digital Outputs', options: doutPins },
+      ...remoteGroups,
     ]
-  }, [id, variable, existingPins])
+  }, [id, variable, existingPins, remoteIOPoints])
 
   return selected ? (
     <GenericComboboxCell
