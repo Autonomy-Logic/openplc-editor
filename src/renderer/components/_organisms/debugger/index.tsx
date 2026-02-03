@@ -78,14 +78,6 @@ const Debugger = ({ graphList }: DebuggerData) => {
     })
   }, [graphList, range, renderTrigger])
 
-  const updateRange = (value: number) => {
-    if (value > 100) {
-      setRange(100)
-    } else {
-      setRange(value)
-    }
-  }
-
   return (
     <div className='h-full w-full text-cp-sm'>
       <div className='flex h-full w-full flex-col gap-1 rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
@@ -95,7 +87,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
               Range
             </span>
             <div className='relative z-[999999] flex gap-2'>
-              <Select.Root onValueChange={(value) => updateRange(Number(value))}>
+              <Select.Root onValueChange={(value) => setRange(Number(value))}>
                 <Select.Trigger
                   value={String(range)}
                   className='bg-neultral-100 flex h-7 w-[88px] items-center justify-between rounded-md border border-neutral-200 px-2 outline-none dark:bg-neutral-900 dark:text-neutral-50'
