@@ -289,6 +289,28 @@
       "Ethernet": "No"
     }
   },
+  "Arduino Uno Q": {
+    "compiler": "arduino-cli",
+    "core": "arduino:zephyr",
+    "default_ain": "A0, A1, A2, A3, A4, A5",
+    "default_aout": "9, 10, 11",
+    "default_din": "2, 3, 4, 5, 6",
+    "default_dout": "7, 8, 12, 13",
+    "platform": "arduino:zephyr:unoq",
+    "preview": "uno.png",
+    "source": "uno_r4.cpp",
+    "specs": {
+      "CPU": "STM32U585 (ARM Cortex-M33) at 160MHz",
+      "RAM": "786 KB",
+      "Flash": "2 MB",
+      "Digital Pins": "14",
+      "Analog Pins": "6",
+      "PWM Pins": "6",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
+  },
   "Arduino Zero (native USB port)": {
     "compiler": "arduino-cli",
     "core": "arduino:samd",
