@@ -552,48 +552,9 @@ typedef struct {
 } SEMA;
 
 
-// Function declarations - always visible for external linkage
-// When IEC_STD_FB_IMPL is defined, definitions follow. Otherwise just declarations.
-#ifndef IEC_STD_FB_IMPL
-// Extern declarations for when implementations are not included
-extern void R_TRIG_init__(R_TRIG *data__, BOOL retain);
-extern void R_TRIG_body__(R_TRIG *data__);
-extern void F_TRIG_init__(F_TRIG *data__, BOOL retain);
-extern void F_TRIG_body__(F_TRIG *data__);
-extern void SR_init__(SR *data__, BOOL retain);
-extern void SR_body__(SR *data__);
-extern void RS_init__(RS *data__, BOOL retain);
-extern void RS_body__(RS *data__);
-extern void CTU_init__(CTU *data__, BOOL retain);
-extern void CTU_body__(CTU *data__);
-extern void CTD_init__(CTD *data__, BOOL retain);
-extern void CTD_body__(CTD *data__);
-extern void CTUD_init__(CTUD *data__, BOOL retain);
-extern void CTUD_body__(CTUD *data__);
-extern void TP_init__(TP *data__, BOOL retain);
-extern void TP_body__(TP *data__);
-extern void TON_init__(TON *data__, BOOL retain);
-extern void TON_body__(TON *data__);
-extern void TOF_init__(TOF *data__, BOOL retain);
-extern void TOF_body__(TOF *data__);
-extern void DERIVATIVE_init__(DERIVATIVE *data__, BOOL retain);
-extern void DERIVATIVE_body__(DERIVATIVE *data__);
-extern void HYSTERESIS_init__(HYSTERESIS *data__, BOOL retain);
-extern void HYSTERESIS_body__(HYSTERESIS *data__);
-extern void INTEGRAL_init__(INTEGRAL *data__, BOOL retain);
-extern void INTEGRAL_body__(INTEGRAL *data__);
-extern void PID_init__(PID *data__, BOOL retain);
-extern void PID_body__(PID *data__);
-extern void RAMP_init__(RAMP *data__, BOOL retain);
-extern void RAMP_body__(RAMP *data__);
-extern void RTC_init__(RTC *data__, BOOL retain);
-extern void RTC_body__(RTC *data__);
-extern void SEMA_init__(SEMA *data__, BOOL retain);
-extern void SEMA_body__(SEMA *data__);
-#else
-// Function definitions - compiled only once
 
-void R_TRIG_init__(R_TRIG *data__, BOOL retain) {
+
+static void R_TRIG_init__(R_TRIG *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CLK,__BOOL_LITERAL(FALSE),retain)
@@ -602,7 +563,7 @@ void R_TRIG_init__(R_TRIG *data__, BOOL retain) {
 }
 
 // Code part
-void R_TRIG_body__(R_TRIG *data__) {
+static void R_TRIG_body__(R_TRIG *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -626,7 +587,7 @@ __end:
 
 
 
-void F_TRIG_init__(F_TRIG *data__, BOOL retain) {
+static void F_TRIG_init__(F_TRIG *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CLK,__BOOL_LITERAL(FALSE),retain)
@@ -635,7 +596,7 @@ void F_TRIG_init__(F_TRIG *data__, BOOL retain) {
 }
 
 // Code part
-void F_TRIG_body__(F_TRIG *data__) {
+static void F_TRIG_body__(F_TRIG *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -659,7 +620,7 @@ __end:
 
 
 
-void SR_init__(SR *data__, BOOL retain) {
+static void SR_init__(SR *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->S1,__BOOL_LITERAL(FALSE),retain)
@@ -668,7 +629,7 @@ void SR_init__(SR *data__, BOOL retain) {
 }
 
 // Code part
-void SR_body__(SR *data__) {
+static void SR_body__(SR *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -691,7 +652,7 @@ __end:
 
 
 
-void RS_init__(RS *data__, BOOL retain) {
+static void RS_init__(RS *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->S,__BOOL_LITERAL(FALSE),retain)
@@ -700,7 +661,7 @@ void RS_init__(RS *data__, BOOL retain) {
 }
 
 // Code part
-void RS_body__(RS *data__) {
+static void RS_body__(RS *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -723,7 +684,7 @@ __end:
 
 
 
-void CTU_init__(CTU *data__, BOOL retain) {
+static void CTU_init__(CTU *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -735,7 +696,7 @@ void CTU_init__(CTU *data__, BOOL retain) {
 }
 
 // Code part
-void CTU_body__(CTU *data__) {
+static void CTU_body__(CTU *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -765,7 +726,7 @@ __end:
 
 
 
-void CTU_DINT_init__(CTU_DINT *data__, BOOL retain) {
+static void CTU_DINT_init__(CTU_DINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -777,7 +738,7 @@ void CTU_DINT_init__(CTU_DINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTU_DINT_body__(CTU_DINT *data__) {
+static void CTU_DINT_body__(CTU_DINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -807,7 +768,7 @@ __end:
 
 
 
-void CTU_LINT_init__(CTU_LINT *data__, BOOL retain) {
+static void CTU_LINT_init__(CTU_LINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -819,7 +780,7 @@ void CTU_LINT_init__(CTU_LINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTU_LINT_body__(CTU_LINT *data__) {
+static void CTU_LINT_body__(CTU_LINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -849,7 +810,7 @@ __end:
 
 
 
-void CTU_UDINT_init__(CTU_UDINT *data__, BOOL retain) {
+static void CTU_UDINT_init__(CTU_UDINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -861,7 +822,7 @@ void CTU_UDINT_init__(CTU_UDINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTU_UDINT_body__(CTU_UDINT *data__) {
+static void CTU_UDINT_body__(CTU_UDINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -891,7 +852,7 @@ __end:
 
 
 
-void CTU_ULINT_init__(CTU_ULINT *data__, BOOL retain) {
+static void CTU_ULINT_init__(CTU_ULINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -903,7 +864,7 @@ void CTU_ULINT_init__(CTU_ULINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTU_ULINT_body__(CTU_ULINT *data__) {
+static void CTU_ULINT_body__(CTU_ULINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -933,7 +894,7 @@ __end:
 
 
 
-void CTD_init__(CTD *data__, BOOL retain) {
+static void CTD_init__(CTD *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CD,__BOOL_LITERAL(FALSE),retain)
@@ -945,7 +906,7 @@ void CTD_init__(CTD *data__, BOOL retain) {
 }
 
 // Code part
-void CTD_body__(CTD *data__) {
+static void CTD_body__(CTD *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -975,7 +936,7 @@ __end:
 
 
 
-void CTD_DINT_init__(CTD_DINT *data__, BOOL retain) {
+static void CTD_DINT_init__(CTD_DINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CD,__BOOL_LITERAL(FALSE),retain)
@@ -987,7 +948,7 @@ void CTD_DINT_init__(CTD_DINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTD_DINT_body__(CTD_DINT *data__) {
+static void CTD_DINT_body__(CTD_DINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1017,7 +978,7 @@ __end:
 
 
 
-void CTD_LINT_init__(CTD_LINT *data__, BOOL retain) {
+static void CTD_LINT_init__(CTD_LINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CD,__BOOL_LITERAL(FALSE),retain)
@@ -1029,7 +990,7 @@ void CTD_LINT_init__(CTD_LINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTD_LINT_body__(CTD_LINT *data__) {
+static void CTD_LINT_body__(CTD_LINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1059,7 +1020,7 @@ __end:
 
 
 
-void CTD_UDINT_init__(CTD_UDINT *data__, BOOL retain) {
+static void CTD_UDINT_init__(CTD_UDINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CD,__BOOL_LITERAL(FALSE),retain)
@@ -1071,7 +1032,7 @@ void CTD_UDINT_init__(CTD_UDINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTD_UDINT_body__(CTD_UDINT *data__) {
+static void CTD_UDINT_body__(CTD_UDINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1101,7 +1062,7 @@ __end:
 
 
 
-void CTD_ULINT_init__(CTD_ULINT *data__, BOOL retain) {
+static void CTD_ULINT_init__(CTD_ULINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CD,__BOOL_LITERAL(FALSE),retain)
@@ -1113,7 +1074,7 @@ void CTD_ULINT_init__(CTD_ULINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTD_ULINT_body__(CTD_ULINT *data__) {
+static void CTD_ULINT_body__(CTD_ULINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1143,7 +1104,7 @@ __end:
 
 
 
-void CTUD_init__(CTUD *data__, BOOL retain) {
+static void CTUD_init__(CTUD *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -1159,7 +1120,7 @@ void CTUD_init__(CTUD *data__, BOOL retain) {
 }
 
 // Code part
-void CTUD_body__(CTUD *data__) {
+static void CTUD_body__(CTUD *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1200,7 +1161,7 @@ __end:
 
 
 
-void CTUD_DINT_init__(CTUD_DINT *data__, BOOL retain) {
+static void CTUD_DINT_init__(CTUD_DINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -1216,7 +1177,7 @@ void CTUD_DINT_init__(CTUD_DINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTUD_DINT_body__(CTUD_DINT *data__) {
+static void CTUD_DINT_body__(CTUD_DINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1257,7 +1218,7 @@ __end:
 
 
 
-void CTUD_LINT_init__(CTUD_LINT *data__, BOOL retain) {
+static void CTUD_LINT_init__(CTUD_LINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -1273,7 +1234,7 @@ void CTUD_LINT_init__(CTUD_LINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTUD_LINT_body__(CTUD_LINT *data__) {
+static void CTUD_LINT_body__(CTUD_LINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1314,7 +1275,7 @@ __end:
 
 
 
-void CTUD_UDINT_init__(CTUD_UDINT *data__, BOOL retain) {
+static void CTUD_UDINT_init__(CTUD_UDINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -1330,7 +1291,7 @@ void CTUD_UDINT_init__(CTUD_UDINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTUD_UDINT_body__(CTUD_UDINT *data__) {
+static void CTUD_UDINT_body__(CTUD_UDINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1371,7 +1332,7 @@ __end:
 
 
 
-void CTUD_ULINT_init__(CTUD_ULINT *data__, BOOL retain) {
+static void CTUD_ULINT_init__(CTUD_ULINT *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CU,__BOOL_LITERAL(FALSE),retain)
@@ -1387,7 +1348,7 @@ void CTUD_ULINT_init__(CTUD_ULINT *data__, BOOL retain) {
 }
 
 // Code part
-void CTUD_ULINT_body__(CTUD_ULINT *data__) {
+static void CTUD_ULINT_body__(CTUD_ULINT *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1428,7 +1389,7 @@ __end:
 
 
 
-void TP_init__(TP *data__, BOOL retain) {
+static void TP_init__(TP *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->IN,__BOOL_LITERAL(FALSE),retain)
@@ -1442,7 +1403,7 @@ void TP_init__(TP *data__, BOOL retain) {
 }
 
 // Code part
-void TP_body__(TP *data__) {
+static void TP_body__(TP *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1488,7 +1449,7 @@ __end:
 
 
 
-void TON_init__(TON *data__, BOOL retain) {
+static void TON_init__(TON *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->IN,__BOOL_LITERAL(FALSE),retain)
@@ -1502,7 +1463,7 @@ void TON_init__(TON *data__, BOOL retain) {
 }
 
 // Code part
-void TON_body__(TON *data__) {
+static void TON_body__(TON *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1550,7 +1511,7 @@ __end:
 
 
 
-void TOF_init__(TOF *data__, BOOL retain) {
+static void TOF_init__(TOF *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->IN,__BOOL_LITERAL(FALSE),retain)
@@ -1564,7 +1525,7 @@ void TOF_init__(TOF *data__, BOOL retain) {
 }
 
 // Code part
-void TOF_body__(TOF *data__) {
+static void TOF_body__(TOF *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1610,7 +1571,7 @@ __end:
 
 
 
-void DERIVATIVE_init__(DERIVATIVE *data__, BOOL retain) {
+static void DERIVATIVE_init__(DERIVATIVE *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->RUN,__BOOL_LITERAL(FALSE),retain)
@@ -1623,7 +1584,7 @@ void DERIVATIVE_init__(DERIVATIVE *data__, BOOL retain) {
 }
 
 // Code part
-void DERIVATIVE_body__(DERIVATIVE *data__) {
+static void DERIVATIVE_body__(DERIVATIVE *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1658,7 +1619,7 @@ __end:
 
 
 
-void HYSTERESIS_init__(HYSTERESIS *data__, BOOL retain) {
+static void HYSTERESIS_init__(HYSTERESIS *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->XIN1,0,retain)
@@ -1668,7 +1629,7 @@ void HYSTERESIS_init__(HYSTERESIS *data__, BOOL retain) {
 }
 
 // Code part
-void HYSTERESIS_body__(HYSTERESIS *data__) {
+static void HYSTERESIS_body__(HYSTERESIS *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1697,7 +1658,7 @@ __end:
 
 
 
-void INTEGRAL_init__(INTEGRAL *data__, BOOL retain) {
+static void INTEGRAL_init__(INTEGRAL *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->RUN,__BOOL_LITERAL(FALSE),retain)
@@ -1710,7 +1671,7 @@ void INTEGRAL_init__(INTEGRAL *data__, BOOL retain) {
 }
 
 // Code part
-void INTEGRAL_body__(INTEGRAL *data__) {
+static void INTEGRAL_body__(INTEGRAL *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1740,7 +1701,7 @@ __end:
 
 
 
-void PID_init__(PID *data__, BOOL retain) {
+static void PID_init__(PID *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->AUTO,__BOOL_LITERAL(FALSE),retain)
@@ -1758,7 +1719,7 @@ void PID_init__(PID *data__, BOOL retain) {
 }
 
 // Code part
-void PID_body__(PID *data__) {
+static void PID_body__(PID *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1792,7 +1753,7 @@ __end:
 
 
 
-void RAMP_init__(RAMP *data__, BOOL retain) {
+static void RAMP_init__(RAMP *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->RUN,__BOOL_LITERAL(FALSE),retain)
@@ -1807,7 +1768,7 @@ void RAMP_init__(RAMP *data__, BOOL retain) {
 }
 
 // Code part
-void RAMP_body__(RAMP *data__) {
+static void RAMP_body__(RAMP *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1847,7 +1808,7 @@ __end:
 
 
 
-void RTC_init__(RTC *data__, BOOL retain) {
+static void RTC_init__(RTC *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->IN,__BOOL_LITERAL(FALSE),retain)
@@ -1860,7 +1821,7 @@ void RTC_init__(RTC *data__, BOOL retain) {
 }
 
 // Code part
-void RTC_body__(RTC *data__) {
+static void RTC_body__(RTC *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1898,7 +1859,7 @@ __end:
 
 
 
-void SEMA_init__(SEMA *data__, BOOL retain) {
+static void SEMA_init__(SEMA *data__, BOOL retain) {
   __INIT_VAR(data__->EN,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->ENO,__BOOL_LITERAL(TRUE),retain)
   __INIT_VAR(data__->CLAIM,__BOOL_LITERAL(FALSE),retain)
@@ -1908,7 +1869,7 @@ void SEMA_init__(SEMA *data__, BOOL retain) {
 }
 
 // Code part
-void SEMA_body__(SEMA *data__) {
+static void SEMA_body__(SEMA *data__) {
   // Control execution
   if (!__GET_VAR(data__->EN)) {
     __SET_VAR(data__->,ENO,,__BOOL_LITERAL(FALSE));
@@ -1928,15 +1889,15 @@ __end:
   return;
 } // SEMA_body__()
 
-#endif // IEC_STD_FB_IMPL
 
-#ifdef IEC_STD_FB_IMPL
 #include "arduino_lib_FB.h"
 
-// Hardware-specific function blocks - only include when the corresponding
-// USE_*_BLOCKS macro is defined. This prevents code bloat on platforms
-// that don't use these modules (especially important for memory-constrained
-// devices like Arduino Uno Q with 128KB LLEXT heap limit).
+// Arduino-specific hardware modules - only included for Arduino builds when
+// the corresponding USE_*_BLOCKS macro is defined. This prevents code bloat
+// on memory-constrained devices (e.g., Arduino Uno Q with 128KB LLEXT heap).
+// The defines.h file auto-defines these macros based on program content.
+#ifdef ARDUINO
+
 #ifdef USE_P1AM_BLOCKS
 #include "p1am_FB.h"
 #endif
@@ -1959,7 +1920,7 @@ __end:
 #include "SL-RP4.h"
 #endif
 
-#endif // IEC_STD_FB_IMPL
+#endif // ARDUINO
 
 // c_blocks.h contains user-defined type definitions needed by all files
 #include "../c_blocks.h"

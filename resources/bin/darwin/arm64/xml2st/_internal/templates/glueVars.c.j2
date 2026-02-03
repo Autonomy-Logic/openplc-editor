@@ -115,7 +115,7 @@ extern unsigned long long common_ticktime__;
                             IEC_UINT *input_int[BUFFER_SIZE], IEC_UINT *output_int[BUFFER_SIZE],
                             IEC_UDINT *input_dint[BUFFER_SIZE], IEC_UDINT *output_dint[BUFFER_SIZE],
                             IEC_ULINT *input_lint[BUFFER_SIZE], IEC_ULINT *output_lint[BUFFER_SIZE],
-                            IEC_UINT *int_memory[BUFFER_SIZE], IEC_UDINT *dint_memory[BUFFER_SIZE], 
+                            IEC_UINT *int_memory[BUFFER_SIZE], IEC_UDINT *dint_memory[BUFFER_SIZE],
                             IEC_ULINT *lint_memory[BUFFER_SIZE])
     {
         bool_input_ptr = input_bool;
@@ -170,3 +170,12 @@ void updateTime()
         __CURRENT_TIME.tv_sec += 1;
     }
 }
+
+// Unity build for Arduino: Include other generated source files to compile as single unit.
+// This ensures static functions are only compiled once, reducing binary size.
+// These files are renamed to .inc to prevent separate compilation by Arduino build system.
+#ifdef ARDUINO
+#include "POUS.inc"
+#include "Res0.inc"
+#include "Config0.inc"
+#endif
