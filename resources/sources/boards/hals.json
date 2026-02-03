@@ -296,9 +296,9 @@
     "default_aout": "9, 10, 11",
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 12, 13",
-    "platform": "arduino:zephyr:unoq:link_mode=static",
+    "platform": "arduino:zephyr:unoq",
     "preview": "uno_q.png",
-    "source": "uno_r4.cpp",
+    "source": "uno_q.cpp",
     "specs": {
       "CPU": "STM32U585 (ARM Cortex-M33) at 160MHz",
       "RAM": "786 KB",
