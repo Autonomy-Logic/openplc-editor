@@ -190,9 +190,7 @@ typedef struct {
 /************************************************************************
  *                            DS18B20                                   *
 ************************************************************************/
-// For Arduino: only include if USE_DS18B20_BLOCK is defined (to reduce binary size)
-// For Runtime: always include (no ARDUINO macro defined)
-#if !defined(ARDUINO) || defined(USE_DS18B20_BLOCK)
+#ifdef USE_DS18B20_BLOCK
 //definition of external functions
 void *init_ds18b20(uint8_t);
 float read_ds18b20(void *, uint8_t);
@@ -366,14 +364,12 @@ static void DS18B20_5_OUT_body__(DS18B20_5_OUT *data__) {
 __end:
   return;
 } // READ_DS18B20_body__()
-#endif // !defined(ARDUINO) || defined(USE_DS18B20_BLOCK)
+#endif // USE_DS18B20_BLOCK
 
 /************************************************************************
  *                         ARDUINO_CLOUD                                *
 ************************************************************************/
-// For Arduino: only include if USE_CLOUD_BLOCKS is defined (to reduce binary size)
-// For Runtime: always include (no ARDUINO macro defined)
-#if !defined(ARDUINO) || defined(USE_CLOUD_BLOCKS)
+#ifdef USE_CLOUD_BLOCKS
 //definition of external functions
 void cloud_begin(char *, char *, char *);
 void cloud_add_bool(char *, int *);
@@ -519,7 +515,7 @@ static void CLOUD_BEGIN_body__(CLOUD_BEGIN *data__) {
 __end:
   return;
 } // CLOUD_BEGIN_body__()
-#endif // !defined(ARDUINO) || defined(USE_CLOUD_BLOCKS)
+#endif // USE_CLOUD_BLOCKS
 
 // FUNCTION_BLOCK PWM_CONTROLLER
 // Data part
@@ -592,9 +588,7 @@ __end:
   return;
 } // PWM_CONTROLLER_body__()
 
-// For Arduino: only include if USE_ARDUINOCAN_BLOCK is defined (to reduce binary size)
-// For Runtime: always include (no ARDUINO macro defined)
-#if !defined(ARDUINO) || defined(USE_ARDUINOCAN_BLOCK)
+#ifdef USE_ARDUINOCAN_BLOCK
 #include <stdbool.h>
 void *init_arduinocan(uint8_t, int);
 bool write_arduinocan(uint32_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t);
@@ -730,7 +724,7 @@ static void ARDUINOCAN_READ_body__(ARDUINOCAN_READ *data__) {
 __end:
   return;
  }
-#endif // !defined(ARDUINO) || defined(USE_ARDUINOCAN_BLOCK)
+#endif // USE_ARDUINOCAN_BLOCK
 /************************************************************************
  *                     END OF ARDUINO LIB BLOCKS                        *
 ************************************************************************/

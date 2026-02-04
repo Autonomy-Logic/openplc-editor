@@ -1,9 +1,5 @@
 //my_custom_library.h – this file contains the C code for the TEST block defined in the "My Custom Library"
 
-// For Arduino: only include if USE_STM32CAN_BLOCK is defined (to reduce binary size)
-// For Runtime: always include (no ARDUINO macro defined)
-#if !defined(ARDUINO) || defined(USE_STM32CAN_BLOCK)
-
 // STM32CAN
 
 typedef struct {
@@ -206,5 +202,3 @@ static void STM32CAN_READ_body__(STM32CAN_READ *data__) {
 __end:
   return;
  }
-
-#endif // !defined(ARDUINO) || defined(USE_STM32CAN_BLOCK)
