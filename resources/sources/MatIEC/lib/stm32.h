@@ -1,4 +1,6 @@
-//my_custom_library.h – this file contains the C code for the TEST block defined in the “My Custom Library”
+//my_custom_library.h – this file contains the C code for the TEST block defined in the "My Custom Library"
+
+#ifdef USE_STM32CAN_BLOCK
 
 // STM32CAN
 
@@ -202,3 +204,5 @@ static void STM32CAN_READ_body__(STM32CAN_READ *data__) {
 __end:
   return;
  }
+
+#endif // USE_STM32CAN_BLOCK

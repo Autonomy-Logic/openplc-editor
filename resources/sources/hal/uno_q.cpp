@@ -86,44 +86,17 @@ void updateOutputBuffers()
  * =============================================================================
  * STUB IMPLEMENTATIONS FOR ZEPHYR LLEXT
  * =============================================================================
- * The following stub functions are required because arduino_lib_FB.h and
- * stm32.h declare extern functions that must be resolved at load time.
- *
- * Note: Stubs for P1AM, MQTT, SM_CARDS, Jaguar, and SL-RP4 are NOT needed
- * because those headers are conditionally included via USE_*_BLOCKS macros.
+ * Most function block headers (DS18B20, Cloud, CAN, P1AM, MQTT, etc.) are now
+ * conditionally included via USE_*_BLOCK macros, so stubs are not needed.
+ * PWM_CONTROLLER is always included (no USE_PWM_BLOCK guard), so it needs a stub.
+ * fwrite is required for __iec_error output redirection.
  * =============================================================================
  */
 
 extern "C" {
 
-// DS18B20 temperature sensor stubs (arduino_lib_FB.h)
-void* init_ds18b20(uint8_t pin) { return nullptr; }
-float read_ds18b20(void* sensor, uint8_t index) { return 0.0f; }
-void request_ds18b20_temperatures(void* sensor) {}
-
-// Cloud stubs (arduino_lib_FB.h)
-void cloud_add_bool(char* name, int* var) {}
-void cloud_add_float(char* name, float* var) {}
-void cloud_add_int(char* name, int* var) {}
-void cloud_begin(char* thing_id, char* ssid, char* pass) {}
-void cloud_update(void) {}
-
-// PWM stubs (arduino_lib_FB.h)
+// PWM stub (arduino_lib_FB.h - always included, no USE_*_BLOCK guard)
 uint8_t set_hardware_pwm(uint8_t pin, float freq, float duty) { return 0; }
-
-// Arduino CAN stubs (arduino_lib_FB.h)
-void* init_arduinocan(uint8_t pin, int baud) { return nullptr; }
-bool write_arduinocan(uint32_t id, uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3,
-                      uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7) { return false; }
-bool write_arduinocan_word(uint32_t id, uint64_t data) { return false; }
-uint64_t read_arduinocan() { return 0; }
-
-// STM32 CAN stubs (stm32.h)
-uint8_t init_stm32can(int baud) { return 0; }
-uint8_t write_stm32can(uint8_t len, uint32_t id, uint8_t d0, uint8_t d1, uint8_t d2,
-                       uint8_t d3, uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7) { return 0; }
-uint8_t read_stm32can(uint32_t* id, uint8_t* d0, uint8_t* d1, uint8_t* d2, uint8_t* d3,
-                      uint8_t* d4, uint8_t* d5, uint8_t* d6, uint8_t* d7) { return 0; }
 
 // stdio stubs (fwrite used by fprintf in __iec_error)
 size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream) {
