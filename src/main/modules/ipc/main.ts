@@ -1,4 +1,14 @@
 import { getProjectPath } from '@root/main/utils'
+import type {
+  EtherCATScanRequest,
+  EtherCATScanResponse,
+  EtherCATServiceStatusResponse,
+  EtherCATTestRequest,
+  EtherCATTestResponse,
+  EtherCATValidateRequest,
+  EtherCATValidateResponse,
+  NetworkInterface,
+} from '@root/types/ethercat'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -510,6 +520,265 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  // ===================== ETHERCAT DISCOVERY HANDLERS =====================
+
+  /**
+   * Get list of network interfaces available for EtherCAT communication
+   */
+  handleEtherCATGetInterfaces = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> => {
+    try {
+      const result = await this.makeRuntimeApiRequest<{ interfaces: NetworkInterface[] }>(
+        ipAddress,
+        jwtToken,
+        '/api/discovery/interfaces',
+        (data: string) => {
+          const response = JSON.parse(data) as { status: string; interfaces: NetworkInterface[] }
+          return { interfaces: response.interfaces || [] }
+        },
+      )
+      if (result.success && result.data) {
+        return { success: true, data: result.data.interfaces }
+      } else {
+        return { success: false, error: result.success ? 'No data returned' : result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Check if EtherCAT discovery service is available on the runtime
+   */
+  handleEtherCATGetStatus = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }> => {
+    try {
+      const result = await this.makeRuntimeApiRequest<EtherCATServiceStatusResponse>(
+        ipAddress,
+        jwtToken,
+        '/api/discovery/ethercat/status',
+        (data: string) => {
+          const response = JSON.parse(data) as EtherCATServiceStatusResponse
+          return response
+        },
+      )
+      if (result.success && result.data) {
+        return { success: true, data: result.data }
+      } else {
+        return { success: false, error: result.success ? 'No data returned' : result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Scan for EtherCAT devices on a network interface
+   */
+  handleEtherCATScan = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+    scanRequest: EtherCATScanRequest,
+  ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> => {
+    try {
+      const postData = JSON.stringify(scanRequest)
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: '/api/discovery/ethercat/scan',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const response = JSON.parse(data) as EtherCATScanResponse
+                  resolve({ success: true, data: response })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else if (res.statusCode === 403) {
+                resolve({ success: false, error: 'Permission denied - CAP_NET_RAW required' })
+              } else if (res.statusCode === 404) {
+                resolve({ success: false, error: 'Interface not found' })
+              } else if (res.statusCode === 503) {
+                resolve({ success: false, error: 'Discovery service not available' })
+              } else if (res.statusCode === 504) {
+                resolve({ success: false, error: 'Scan timeout' })
+              } else {
+                resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
+              }
+            })
+          },
+        )
+        // Use longer timeout for scan operations (scan timeout + buffer)
+        const scanTimeout = (scanRequest.timeout_ms || 5000) + 10000
+        req.setTimeout(scanTimeout, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Test connection to a specific EtherCAT slave
+   */
+  handleEtherCATTest = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+    testRequest: EtherCATTestRequest,
+  ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> => {
+    try {
+      const postData = JSON.stringify(testRequest)
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: '/api/discovery/ethercat/test',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const response = JSON.parse(data) as EtherCATTestResponse
+                  resolve({ success: true, data: response })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else if (res.statusCode === 403) {
+                resolve({ success: false, error: 'Permission denied - CAP_NET_RAW required' })
+              } else if (res.statusCode === 404) {
+                resolve({ success: false, error: 'Interface not found' })
+              } else if (res.statusCode === 503) {
+                resolve({ success: false, error: 'Discovery service not available' })
+              } else if (res.statusCode === 504) {
+                resolve({ success: false, error: 'Connection test timeout' })
+              } else {
+                resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
+              }
+            })
+          },
+        )
+        const testTimeout = (testRequest.timeout_ms || 3000) + 10000
+        req.setTimeout(testTimeout, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Validate an EtherCAT configuration
+   */
+  handleEtherCATValidate = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+    validateRequest: EtherCATValidateRequest,
+  ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> => {
+    try {
+      const postData = JSON.stringify(validateRequest)
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: '/api/discovery/ethercat/validate',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const response = JSON.parse(data) as EtherCATValidateResponse
+                  resolve({ success: true, data: response })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else if (res.statusCode === 400) {
+                resolve({ success: false, error: 'Invalid configuration format' })
+              } else {
+                resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -589,6 +858,13 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+
+    // ===================== ETHERCAT DISCOVERY =====================
+    this.ipcMain.handle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
+    this.ipcMain.handle('ethercat:get-status', this.handleEtherCATGetStatus)
+    this.ipcMain.handle('ethercat:scan', this.handleEtherCATScan)
+    this.ipcMain.handle('ethercat:test', this.handleEtherCATTest)
+    this.ipcMain.handle('ethercat:validate', this.handleEtherCATValidate)
   }
 
   // ===================== HANDLER METHODS =====================

@@ -18,6 +18,7 @@ import { ImperativePanelHandle } from 'react-resizable-panels'
 import { ExitIcon } from '../assets'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
+import { EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
@@ -1587,7 +1588,12 @@ const WorkspaceScreen = () => {
                       )}
                       {editor['type'] === 'plc-server' && editor.meta.protocol === 's7comm' && <S7CommServerEditor />}
                       {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
-                      {editor['type'] === 'plc-remote-device' && <RemoteDeviceEditor />}
+                      {editor['type'] === 'plc-remote-device' && editor.meta.protocol === 'ethercat' && (
+                        <EtherCATEditor />
+                      )}
+                      {editor['type'] === 'plc-remote-device' && editor.meta.protocol !== 'ethercat' && (
+                        <RemoteDeviceEditor />
+                      )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'

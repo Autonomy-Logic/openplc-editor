@@ -1,4 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+import type {
+  EtherCATScanRequest,
+  EtherCATScanResponse,
+  EtherCATServiceStatusResponse,
+  EtherCATTestRequest,
+  EtherCATTestResponse,
+  EtherCATValidateRequest,
+  EtherCATValidateResponse,
+  NetworkInterface,
+} from '@root/types/ethercat'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -359,5 +369,54 @@ const rendererProcessBridge = {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)
   },
+
+  // ===================== ETHERCAT DISCOVERY METHODS =====================
+  /**
+   * Get list of network interfaces available for EtherCAT communication
+   */
+  etherCATGetInterfaces: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> =>
+    ipcRenderer.invoke('ethercat:get-interfaces', ipAddress, jwtToken),
+
+  /**
+   * Check if EtherCAT discovery service is available on the runtime
+   */
+  etherCATGetStatus: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:get-status', ipAddress, jwtToken),
+
+  /**
+   * Scan for EtherCAT devices on a network interface
+   */
+  etherCATScan: (
+    ipAddress: string,
+    jwtToken: string,
+    scanRequest: EtherCATScanRequest,
+  ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:scan', ipAddress, jwtToken, scanRequest),
+
+  /**
+   * Test connection to a specific EtherCAT slave
+   */
+  etherCATTest: (
+    ipAddress: string,
+    jwtToken: string,
+    testRequest: EtherCATTestRequest,
+  ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:test', ipAddress, jwtToken, testRequest),
+
+  /**
+   * Validate an EtherCAT configuration
+   */
+  etherCATValidate: (
+    ipAddress: string,
+    jwtToken: string,
+    validateRequest: EtherCATValidateRequest,
+  ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:validate', ipAddress, jwtToken, validateRequest),
 }
 export default rendererProcessBridge
