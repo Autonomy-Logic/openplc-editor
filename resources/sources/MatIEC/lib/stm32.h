@@ -1,6 +1,8 @@
 //my_custom_library.h – this file contains the C code for the TEST block defined in the "My Custom Library"
 
-#ifdef USE_STM32CAN_BLOCK
+// For Arduino: only include if USE_STM32CAN_BLOCK is defined (to reduce binary size)
+// For Runtime: always include (no ARDUINO macro defined)
+#if !defined(ARDUINO) || defined(USE_STM32CAN_BLOCK)
 
 // STM32CAN
 
@@ -205,4 +207,4 @@ __end:
   return;
  }
 
-#endif // USE_STM32CAN_BLOCK
+#endif // !defined(ARDUINO) || defined(USE_STM32CAN_BLOCK)
