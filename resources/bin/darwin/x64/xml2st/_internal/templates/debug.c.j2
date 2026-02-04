@@ -21,6 +21,12 @@
 
 #include <stdbool.h>
 
+// Include defines.h first for Arduino builds to set USE_*_BLOCKS macros
+// before iec_std_FB.h processes its conditional includes
+#ifdef ARDUINO
+#include "../examples/Baremetal/defines.h"
+#endif
+
 #include "iec_types_all.h"
 #include "POUS.h"
 
