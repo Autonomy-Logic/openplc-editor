@@ -86,111 +86,47 @@ void updateOutputBuffers()
  * =============================================================================
  * STUB IMPLEMENTATIONS FOR ZEPHYR LLEXT
  * =============================================================================
- * The following stub functions are required because the IEC standard library
- * headers declare extern functions for various hardware modules. These
- * declarations create symbol references that must be resolved at load time.
+ * The following stub functions are required because arduino_lib_FB.h and
+ * stm32.h declare extern functions that must be resolved at load time.
  *
- * On Zephyr LLEXT, unresolved symbols cause the module loader to fail.
- * These stubs provide safe no-op implementations that allow the code to load.
+ * Note: Stubs for P1AM, MQTT, SM_CARDS, Jaguar, and SL-RP4 are NOT needed
+ * because those headers are conditionally included via USE_*_BLOCKS macros.
  * =============================================================================
  */
 
 extern "C" {
 
-// ADC/Jaguar stubs
-uint8_t ADC_configure_channel(uint8_t adc_ch, uint8_t adc_type) { return 0; }
-
-// Industrial Shields BAS stubs
-int basGet1WbTemp(uint8_t stack, uint8_t channel, float *val) { if(val) *val = 0; return -1; }
-int basGetDryContacts(uint8_t stack, uint8_t *val) { if(val) *val = 0; return -1; }
-int basGetUniversalIn(uint8_t stack, uint8_t channel, float *val) { if(val) *val = 0; return -1; }
-int basSet0_10Vout(uint8_t stack, uint8_t channel, float val) { return -1; }
-int basSetTriacs(uint8_t stack, uint8_t val) { return -1; }
-
-// Cloud stubs
-void cloud_add_bool(const char* name, uint8_t* var) {}
-void cloud_add_float(const char* name, float* var) {}
-void cloud_add_int(const char* name, int* var) {}
-void cloud_begin(const char* thing_id, const char* ssid, const char* pass) {}
-void cloud_update(void) {}
-
-// MQTT stubs
-int connect_mqtt(const char* broker, int port, const char* client_id) { return -1; }
-int connect_mqtt_auth(const char* broker, int port, const char* client_id, const char* user, const char* pass) { return -1; }
-void mqtt_disconnect(void) {}
-void mqtt_loop(void) {}
-int mqtt_receive(char* topic, int topic_len, char* payload, int payload_len) { return -1; }
-int mqtt_send(const char* topic, const char* payload) { return -1; }
-int mqtt_subscribe(const char* topic) { return -1; }
-int mqtt_unsubscribe(const char* topic) { return -1; }
-
-// Digital I/O module stubs
-uint16_t digIn16Get(uint8_t addr) { return 0; }
-void digIn16Init(uint8_t addr) {}
-uint8_t digIn8Get(uint8_t addr) { return 0; }
-void digIn8Init(uint8_t addr) {}
-void mosfet8Init(uint8_t addr) {}
-void mosfets8Set(uint8_t addr, uint8_t val) {}
-void relay16Init(uint8_t addr) {}
-void relay16Set(uint8_t addr, uint16_t val) {}
-void relay8Init(uint8_t addr) {}
-void relays8Set(uint8_t addr, uint8_t val) {}
-
-// Industrial Shields HOME stubs
-int homeGet1WbTemp(uint8_t stack, uint8_t channel, float *val) { if(val) *val = 0; return -1; }
-int homeGetADC(uint8_t stack, uint8_t channel, float *val) { if(val) *val = 0; return -1; }
-int homeGetOpto(uint8_t stack, uint8_t *val) { if(val) *val = 0; return -1; }
-int homeSet0_10Vout(uint8_t stack, uint8_t channel, float val) { return -1; }
-int homeSetOD(uint8_t stack, uint8_t val) { return -1; }
-int homeSetRelays(uint8_t stack, uint8_t val) { return -1; }
-
-// Industrial Shields IND stubs
-int indGet0_10Vin(uint8_t stack, uint8_t channel, float *val) { if(val) *val = 0; return -1; }
-int indGet1WbTemp(uint8_t stack, uint8_t channel, float *val) { if(val) *val = 0; return -1; }
-int indGet4_20mAin(uint8_t stack, uint8_t channel, float *val) { if(val) *val = 0; return -1; }
-int indGetOptoInputs(uint8_t stack, uint8_t *val) { if(val) *val = 0; return -1; }
-int indSet0_10Vout(uint8_t stack, uint8_t channel, float val) { return -1; }
-int indSet4_20mAout(uint8_t stack, uint8_t channel, float val) { return -1; }
-int indSetLeds(uint8_t stack, uint8_t val) { return -1; }
-int indSetPWMout(uint8_t stack, uint8_t channel, float val) { return -1; }
-
-// DS18B20 temperature sensor stubs
+// DS18B20 temperature sensor stubs (arduino_lib_FB.h)
 void* init_ds18b20(uint8_t pin) { return nullptr; }
-float read_ds18b20(void* sensor) { return 0.0f; }
+float read_ds18b20(void* sensor, uint8_t index) { return 0.0f; }
 void request_ds18b20_temperatures(void* sensor) {}
 
-// CAN bus stubs
-void* init_arduinocan(uint8_t pin) { return nullptr; }
-int read_arduinocan(void* can, uint32_t* id, uint8_t* data, uint8_t* len) { return -1; }
-int write_arduinocan(void* can, uint32_t id, uint8_t* data, uint8_t len) { return -1; }
-int write_arduinocan_word(void* can, uint32_t id, uint16_t word) { return -1; }
-void* init_stm32can(uint8_t pin) { return nullptr; }
-int read_stm32can(void* can, uint32_t* id, uint8_t* data, uint8_t* len) { return -1; }
-int write_stm32can(void* can, uint32_t id, uint8_t* data, uint8_t len) { return -1; }
+// Cloud stubs (arduino_lib_FB.h)
+void cloud_add_bool(char* name, int* var) {}
+void cloud_add_float(char* name, float* var) {}
+void cloud_add_int(char* name, int* var) {}
+void cloud_begin(char* thing_id, char* ssid, char* pass) {}
+void cloud_update(void) {}
 
-// P1AM stubs
-void p1am_init(void) {}
-int p1am_readAnalog(uint8_t slot, uint8_t channel) { return 0; }
-uint32_t p1am_readDiscrete(uint8_t slot, uint8_t channel) { return 0; }
-void p1am_writeDiscrete(uint32_t val, uint8_t slot, uint8_t channel) {}
+// PWM stubs (arduino_lib_FB.h)
+uint8_t set_hardware_pwm(uint8_t pin, float freq, float duty) { return 0; }
 
-// R4I4 module stubs
-uint8_t r4i4GetACInputs(uint8_t addr) { return 0; }
-uint8_t r4i4GetButton(uint8_t addr) { return 0; }
-uint8_t r4i4GetOptoInputs(uint8_t addr) { return 0; }
-float r4i4GetPWMInFill(uint8_t addr, uint8_t channel) { return 0.0f; }
-float r4i4GetPWMInFreq(uint8_t addr, uint8_t channel) { return 0.0f; }
-void r4i4SetRelays(uint8_t addr, uint8_t val) {}
+// Arduino CAN stubs (arduino_lib_FB.h)
+void* init_arduinocan(uint8_t pin, int baud) { return nullptr; }
+bool write_arduinocan(uint32_t id, uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3,
+                      uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7) { return false; }
+bool write_arduinocan_word(uint32_t id, uint64_t data) { return false; }
+uint64_t read_arduinocan() { return 0; }
 
-// RTD temperature sensor stubs
-float rtdGetTemp(uint8_t addr, uint8_t channel) { return 0.0f; }
-
-// PWM stubs
-void set_hardware_pwm(uint8_t pin, uint16_t freq, uint8_t duty) {}
+// STM32 CAN stubs (stm32.h)
+uint8_t init_stm32can(int baud) { return 0; }
+uint8_t write_stm32can(uint8_t len, uint32_t id, uint8_t d0, uint8_t d1, uint8_t d2,
+                       uint8_t d3, uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7) { return 0; }
+uint8_t read_stm32can(uint32_t* id, uint8_t* d0, uint8_t* d1, uint8_t* d2, uint8_t* d3,
+                      uint8_t* d4, uint8_t* d5, uint8_t* d6, uint8_t* d7) { return 0; }
 
 // stdio stubs (fwrite used by fprintf in __iec_error)
 size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream) {
-    // Use printk for error output on Zephyr
     if (stream != nullptr && size > 0 && nmemb > 0) {
         printk("%.*s", (int)(size * nmemb), (const char *)ptr);
     }
