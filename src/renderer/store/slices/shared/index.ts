@@ -369,6 +369,9 @@ export const createSharedSlice: StateCreator<
         })
       }
 
+      // Mark the workspace as unsaved so the save warning dialog is triggered
+      getState().workspaceActions.setEditingState('unsaved')
+
       return Promise.resolve({
         success: true,
       })
