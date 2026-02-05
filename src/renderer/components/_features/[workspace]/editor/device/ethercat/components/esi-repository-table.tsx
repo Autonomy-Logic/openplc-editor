@@ -42,7 +42,7 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll }: ESIReposit
   const totalDevices = repository.reduce((sum, item) => sum + item.devices.length, 0)
 
   return (
-    <div className='flex flex-col gap-2'>
+    <div className='flex flex-1 flex-col gap-2 overflow-hidden'>
       {/* Header with count and clear button */}
       <div className='flex items-center justify-between'>
         <span className='text-xs font-medium text-neutral-700 dark:text-neutral-300'>

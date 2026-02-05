@@ -86,7 +86,7 @@ const ConfiguredDevices = ({ devices, repository, onAddDevice, onRemoveDevice }:
                 Position
               </th>
               <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                I/O
+                Channels (In/Out)
               </th>
               <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>Source</th>
             </tr>

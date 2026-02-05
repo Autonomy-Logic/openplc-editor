@@ -43,7 +43,7 @@ const ConfiguredDeviceRow = ({
     return getDeviceSummary(esiDevice)
   }, [esiDevice])
 
-  const ioSummary = summary ? `${summary.totalInputBytes}B/${summary.totalOutputBytes}B` : '-'
+  const ioSummary = summary ? `${summary.inputChannelCount} / ${summary.outputChannelCount}` : '-'
 
   return (
     <>
