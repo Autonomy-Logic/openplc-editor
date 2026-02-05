@@ -5,6 +5,9 @@
  * Based on the runtime's /api/discovery/* REST API.
  */
 
+// Re-export ESI types
+export * from './esi-types'
+
 // ===================== ENUMS =====================
 
 /**
