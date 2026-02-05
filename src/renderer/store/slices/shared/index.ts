@@ -1032,7 +1032,7 @@ export const createSharedSlice: StateCreator<
 
     handleOpenProjectRequest(data) {
       if (data) {
-        getState().workspaceActions.setEditingState('unsaved')
+        getState().workspaceActions.setEditingState('saved')
 
         const { project, pous, deviceConfiguration, devicePinMapping } = data.content
 
