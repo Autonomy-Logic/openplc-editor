@@ -55,6 +55,17 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
         }),
       )
     },
+    clearSearch: () => {
+      setState(
+        produce((state: SearchSlice) => {
+          state.searchQuery = ''
+          state.searchResults = []
+          state.sensitiveCase = false
+          state.regularExpression = false
+          state.searchNodePosition = { x: 0, y: 0 }
+        }),
+      )
+    },
   },
 })
 

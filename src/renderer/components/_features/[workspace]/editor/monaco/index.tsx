@@ -5,6 +5,7 @@ import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_m
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
+import type { IpcRendererEvent } from 'electron'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -69,6 +70,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
+      meta: { path: projectPath },
       data: {
         pous,
         configuration: {
@@ -87,6 +89,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
+  // Create a unique Monaco path by combining project path with relative path
+  // This prevents Monaco from caching models across different projects with same POU names
+  const uniqueMonacoPath = projectPath ? `${projectPath}${path}` : path
+
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
@@ -94,6 +100,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const pou = openPLCStoreBase.getState().project.data.pous.find((pou) => pou.data.name === name)
     return typeof pou?.data.body.value === 'string' ? pou.data.body.value : ''
   })
+  const watchedFilePathRef = useRef<string | null>(null)
 
   useEffect(() => {
     const pou = pous.find((p) => p.data.name === name)
@@ -153,6 +160,158 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       updateEnumValuesInTokenizer(dataTypes)
     }
   }, [dataTypes, language])
+
+  // File watching for external changes (auto-reload like VSCode)
+  useEffect(() => {
+    const projectPath = openPLCStoreBase.getState().project.meta.path
+    if (!projectPath || !pou) return
+
+    // Determine the correct file extension based on language
+    // POUs are stored as .st, .il, .ld, .fbd, .py, .cpp files
+    const extensionMap: Record<string, string> = {
+      st: '.st',
+      il: '.il',
+      ld: '.ld',
+      fbd: '.fbd',
+      python: '.py',
+      cpp: '.cpp',
+    }
+    const actualExtension = extensionMap[language] || '.st'
+
+    // Construct the correct file path from POU metadata
+    // The path prop can be unreliable (may have old format like /data/pous/program/)
+    // Instead, construct the path from the POU type and name
+    const pouTypeToFolder: Record<string, string> = {
+      program: 'programs',
+      function: 'functions',
+      'function-block': 'function-blocks',
+    }
+    const pouFolder = pouTypeToFolder[pou.type] || 'programs'
+    const pouFileName = `${name}${actualExtension}`
+
+    // Construct full file path for the POU file
+    const fullPath = `${projectPath}/pous/${pouFolder}/${pouFileName}`
+    watchedFilePathRef.current = fullPath
+
+    console.log('[Monaco FileWatch] Starting file watcher for:', fullPath)
+
+    // Start watching the file
+    void (window.bridge as { fileWatchStart: (path: string) => Promise<{ success: boolean; error?: string }> })
+      .fileWatchStart(fullPath)
+      .then((result) => {
+        if (result.success) {
+          console.log('[Monaco FileWatch] Watcher started successfully for:', fullPath)
+        } else {
+          console.error('[Monaco FileWatch] Failed to start watcher:', result.error)
+        }
+      })
+
+    // Listen for external file change events - VSCode-like behavior:
+    // - If file has no unsaved changes: auto-reload silently
+    // - If file has unsaved changes: do nothing (preserve local edits)
+    const handleExternalChange = (_event: IpcRendererEvent, data: { filePath: string }) => {
+      if (data.filePath !== watchedFilePathRef.current) return
+
+      // Check if the file has unsaved local changes
+      const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
+
+      if (isSaved) {
+        // No local changes - auto-reload from disk silently
+        console.log('[Monaco FileWatch] File changed externally, auto-reloading (no local changes)')
+        void reloadFromDisk()
+      } else {
+        // Has local unsaved changes - do nothing to preserve user's work
+        console.log('[Monaco FileWatch] File changed externally, but has local changes - ignoring')
+      }
+    }
+
+    // Function to reload content from disk
+    const reloadFromDisk = async () => {
+      if (!watchedFilePathRef.current) return
+
+      try {
+        const result = await (
+          window.bridge as {
+            fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+          }
+        ).fileReadContent(watchedFilePathRef.current)
+
+        if (result.success && result.content) {
+          const fileContent = result.content
+
+          // For textual languages (ST, IL), extract the body content from the text file
+          let newBodyValue = ''
+
+          if (language === 'st' || language === 'il') {
+            // Find the last END_VAR
+            const endVarRegex = /\bEND_VAR\b/gi
+            let lastEndVarIndex = -1
+            let match: RegExpExecArray | null
+            while ((match = endVarRegex.exec(fileContent)) !== null) {
+              lastEndVarIndex = match.index + match[0].length
+            }
+
+            // Find the END_PROGRAM, END_FUNCTION, or END_FUNCTION_BLOCK
+            const endKeywordRegex = /\b(END_PROGRAM|END_FUNCTION_BLOCK|END_FUNCTION)\b/i
+            const endMatch = fileContent.search(endKeywordRegex)
+
+            if (lastEndVarIndex !== -1 && endMatch !== -1) {
+              newBodyValue = fileContent.slice(lastEndVarIndex, endMatch).trim()
+            } else if (endMatch !== -1) {
+              const declarationRegex = /^.*?\b(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+(?:\s*:\s*\w+)?/i
+              const declarationMatch = fileContent.match(declarationRegex)
+              if (declarationMatch) {
+                const startIndex = declarationMatch[0].length
+                newBodyValue = fileContent.slice(startIndex, endMatch).trim()
+              }
+            }
+          } else if (language === 'python' || language === 'cpp') {
+            const endVarRegex = /\bEND_VAR\b/gi
+            let lastEndVarIndex = -1
+            let match: RegExpExecArray | null
+            while ((match = endVarRegex.exec(fileContent)) !== null) {
+              lastEndVarIndex = match.index + match[0].length
+            }
+
+            if (lastEndVarIndex !== -1) {
+              newBodyValue = fileContent.slice(lastEndVarIndex).trim()
+            } else {
+              const declarationRegex = /^.*?\b(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+(?:\s*:\s*\w+)?/i
+              const declarationMatch = fileContent.match(declarationRegex)
+              if (declarationMatch) {
+                newBodyValue = fileContent.slice(declarationMatch[0].length).trim()
+              }
+            }
+          }
+
+          // Update local state and store
+          setLocalText(newBodyValue)
+          updatePou({ name, content: { language, value: newBodyValue } })
+
+          console.log('[Monaco FileWatch] Content reloaded from disk')
+        }
+      } catch (err) {
+        console.error('[Monaco FileWatch] Failed to reload file:', err)
+      }
+    }
+
+    const cleanup = (
+      window.bridge as {
+        onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
+      }
+    ).onFileExternalChange(handleExternalChange)
+
+    return () => {
+      cleanup()
+      if (watchedFilePathRef.current) {
+        console.log('[Monaco FileWatch] Stopping file watcher for:', watchedFilePathRef.current)
+        void (window.bridge as { fileWatchStop: (path: string) => Promise<{ success: boolean }> }).fileWatchStop(
+          watchedFilePathRef.current,
+        )
+        watchedFilePathRef.current = null
+      }
+    }
+  }, [pou, name, language])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
@@ -517,6 +676,101 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       })
     }
 
+    // Check for external file changes when tab becomes active (editor mounts)
+    // This handles the case where a file was modified while another tab was in focus
+    void (async () => {
+      const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
+      if (!isSaved) return // Has local unsaved changes, don't reload
+
+      const currentPou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+      if (!currentPou) return
+
+      const projectPath = openPLCStoreBase.getState().project.meta.path
+      if (!projectPath) return
+
+      // Construct file path
+      const extensionMap: Record<string, string> = {
+        st: '.st',
+        il: '.il',
+        ld: '.ld',
+        fbd: '.fbd',
+        python: '.py',
+        cpp: '.cpp',
+      }
+      const actualExtension = extensionMap[language] || '.st'
+      const pouTypeToFolder: Record<string, string> = {
+        program: 'programs',
+        function: 'functions',
+        'function-block': 'function-blocks',
+      }
+      const pouFolder = pouTypeToFolder[currentPou.type] || 'programs'
+      const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
+
+      try {
+        const result = await (
+          window.bridge as {
+            fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+          }
+        ).fileReadContent(fullPath)
+
+        if (result.success && result.content) {
+          const fileContent = result.content
+
+          // Extract body content from the file
+          let newBodyValue = ''
+
+          if (language === 'st' || language === 'il') {
+            const endVarRegex = /\bEND_VAR\b/gi
+            let lastEndVarIndex = -1
+            let match: RegExpExecArray | null
+            while ((match = endVarRegex.exec(fileContent)) !== null) {
+              lastEndVarIndex = match.index + match[0].length
+            }
+
+            const endKeywordRegex = /\b(END_PROGRAM|END_FUNCTION_BLOCK|END_FUNCTION)\b/i
+            const endMatch = fileContent.search(endKeywordRegex)
+
+            if (lastEndVarIndex !== -1 && endMatch !== -1) {
+              newBodyValue = fileContent.slice(lastEndVarIndex, endMatch).trim()
+            } else if (endMatch !== -1) {
+              const declarationRegex = /^.*?\b(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+(?:\s*:\s*\w+)?/i
+              const declarationMatch = fileContent.match(declarationRegex)
+              if (declarationMatch) {
+                newBodyValue = fileContent.slice(declarationMatch[0].length, endMatch).trim()
+              }
+            }
+          } else if (language === 'python' || language === 'cpp') {
+            const endVarRegex = /\bEND_VAR\b/gi
+            let lastEndVarIndex = -1
+            let match: RegExpExecArray | null
+            while ((match = endVarRegex.exec(fileContent)) !== null) {
+              lastEndVarIndex = match.index + match[0].length
+            }
+
+            if (lastEndVarIndex !== -1) {
+              newBodyValue = fileContent.slice(lastEndVarIndex).trim()
+            } else {
+              const declarationRegex = /^.*?\b(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+(?:\s*:\s*\w+)?/i
+              const declarationMatch = fileContent.match(declarationRegex)
+              if (declarationMatch) {
+                newBodyValue = fileContent.slice(declarationMatch[0].length).trim()
+              }
+            }
+          }
+
+          // Only update if content is different from what we have
+          const currentBodyValue = typeof currentPou.data.body.value === 'string' ? currentPou.data.body.value : ''
+          if (newBodyValue !== currentBodyValue) {
+            console.log('[Monaco] Tab activated - reloading external changes')
+            setLocalText(newBodyValue)
+            updatePou({ name, content: { language, value: newBodyValue } })
+          }
+        }
+      } catch (err) {
+        console.error('[Monaco] Failed to check for external changes on mount:', err)
+      }
+    })()
+
     if (searchQuery) {
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
@@ -833,12 +1087,12 @@ void loop()
 
   return (
     <>
-      <div id='editor drop handler' className='oplc-monaco-wrapper h-full w-full' onDrop={handleDrop}>
+      <div id='editor drop handler' className='oplc-monaco-wrapper relative h-full w-full' onDrop={handleDrop}>
         <PrimitiveEditor
           options={monacoEditorUserOptions}
           height='100%'
           width='100%'
-          path={path}
+          path={uniqueMonacoPath}
           language={language}
           defaultValue={''}
           value={localText}

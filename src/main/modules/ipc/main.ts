@@ -6,6 +6,7 @@ import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
+import { readFile, stat, unwatchFile, watchFile } from 'fs'
 import type { IncomingMessage } from 'http'
 import https from 'https'
 import { join } from 'path'
@@ -49,6 +50,8 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerJwtToken: string | null = null
   private runtimeCredentials: { ipAddress: string; username: string; password: string } | null = null
   private tokenRefreshInFlight: Promise<{ success: boolean; accessToken?: string; error?: string }> | null = null
+  // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
+  private fileWatchers: Map<string, { lastMtime: number }> = new Map()
 
   constructor({
     ipcMain,
@@ -589,6 +592,12 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+
+    // ===================== FILE WATCHER =====================
+    this.ipcMain.handle('file:watch-start', this.handleFileWatchStart)
+    this.ipcMain.handle('file:watch-stop', this.handleFileWatchStop)
+    this.ipcMain.handle('file:watch-stop-all', this.handleFileWatchStopAll)
+    this.ipcMain.handle('file:read-content', this.handleFileReadContent)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -1233,6 +1242,97 @@ class MainProcessBridge implements MainIpcModule {
       console.error('[IPC Handler] Modbus setVariable error:', error)
       return { success: false, error: String(error) }
     }
+  }
+
+  // ===================== FILE WATCHER HANDLERS =====================
+  // Using watchFile (polling-based) instead of watch for better macOS compatibility
+  // fs.watch can fail when editors use "safe write" (write to temp file, then rename)
+  handleFileWatchStart = (
+    _event: IpcMainInvokeEvent,
+    filePath: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    return new Promise((resolve) => {
+      // Check if already watching this file
+      if (this.fileWatchers.has(filePath)) {
+        console.log('[FileWatcher] Already watching:', filePath)
+        resolve({ success: true })
+        return
+      }
+
+      // Get initial mtime
+      stat(filePath, (statErr, stats) => {
+        if (statErr) {
+          console.error('[FileWatcher] Failed to stat file:', filePath, statErr.message)
+          resolve({ success: false, error: `Failed to stat file: ${statErr.message}` })
+          return
+        }
+
+        const initialMtime = stats.mtimeMs
+        console.log('[FileWatcher] Starting watcher for:', filePath, 'initial mtime:', initialMtime)
+
+        try {
+          // Use watchFile with 1 second polling interval for reliability
+          watchFile(filePath, { interval: 1000 }, (curr, prev) => {
+            const watcherData = this.fileWatchers.get(filePath)
+            if (!watcherData) return
+
+            // Check if file was modified (mtime changed)
+            if (curr.mtimeMs > prev.mtimeMs && curr.mtimeMs > watcherData.lastMtime) {
+              console.log('[FileWatcher] File changed:', filePath, 'new mtime:', curr.mtimeMs)
+              watcherData.lastMtime = curr.mtimeMs
+              // Notify renderer of file change
+              this.mainWindow?.webContents.send('file:external-change', { filePath })
+            }
+          })
+
+          this.fileWatchers.set(filePath, {
+            lastMtime: initialMtime,
+          })
+
+          resolve({ success: true })
+        } catch (error) {
+          console.error('[FileWatcher] Failed to start watcher:', filePath, error)
+          resolve({ success: false, error: `Failed to watch file: ${String(error)}` })
+        }
+      })
+    })
+  }
+
+  handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): Promise<{ success: boolean }> => {
+    return new Promise((resolve) => {
+      if (this.fileWatchers.has(filePath)) {
+        console.log('[FileWatcher] Stopping watcher for:', filePath)
+        unwatchFile(filePath)
+        this.fileWatchers.delete(filePath)
+      }
+      resolve({ success: true })
+    })
+  }
+
+  handleFileWatchStopAll = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    return new Promise((resolve) => {
+      console.log('[FileWatcher] Stopping all watchers, count:', this.fileWatchers.size)
+      for (const [filePath] of this.fileWatchers) {
+        unwatchFile(filePath)
+      }
+      this.fileWatchers.clear()
+      resolve({ success: true })
+    })
+  }
+
+  handleFileReadContent = (
+    _event: IpcMainInvokeEvent,
+    filePath: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> => {
+    return new Promise((resolve) => {
+      readFile(filePath, 'utf-8', (err, content) => {
+        if (err) {
+          resolve({ success: false, error: `Failed to read file: ${err.message}` })
+        } else {
+          resolve({ success: true, content })
+        }
+      })
+    })
   }
 
   // ===================== EVENT HANDLERS =====================

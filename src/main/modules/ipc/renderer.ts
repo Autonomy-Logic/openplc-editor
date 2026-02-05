@@ -359,5 +359,17 @@ const rendererProcessBridge = {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)
   },
+
+  // ===================== FILE WATCHER METHODS =====================
+  fileWatchStart: (filePath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('file:watch-start', filePath),
+  fileWatchStop: (filePath: string): Promise<{ success: boolean }> => ipcRenderer.invoke('file:watch-stop', filePath),
+  fileWatchStopAll: (): Promise<{ success: boolean }> => ipcRenderer.invoke('file:watch-stop-all'),
+  fileReadContent: (filePath: string): Promise<{ success: boolean; content?: string; error?: string }> =>
+    ipcRenderer.invoke('file:read-content', filePath),
+  onFileExternalChange: (callback: (_event: IpcRendererEvent, data: { filePath: string }) => void) => {
+    ipcRenderer.on('file:external-change', callback)
+    return () => ipcRenderer.removeListener('file:external-change', callback)
+  },
 }
 export default rendererProcessBridge

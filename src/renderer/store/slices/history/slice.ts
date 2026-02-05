@@ -103,6 +103,20 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
 
     undo: (_pouName: string) => {},
     redo: (_pouName: string) => {},
+    clearHistory: () => {
+      setState(
+        produce(({ history }: HistorySlice) => {
+          // Reset history to initial state, clearing all undo/redo stacks
+          for (const key of Object.keys(history)) {
+            delete history[key]
+          }
+          history['default-history'] = {
+            past: [],
+            future: [],
+          }
+        }),
+      )
+    },
   },
 })
 

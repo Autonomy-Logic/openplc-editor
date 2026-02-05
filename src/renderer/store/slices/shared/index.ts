@@ -23,6 +23,7 @@ import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-va
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
 import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import * as monaco from 'monaco-editor'
 import { StateCreator } from 'zustand'
 
 import { ConsoleSlice } from '../console'
@@ -37,6 +38,7 @@ import { duplicateLadderRung } from '../ladder/utils'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
 import { ProjectSlice, ProjectState } from '../project'
+import { SearchSlice } from '../search'
 import { TabsProps, TabsSlice } from '../tabs'
 import { CreateEditorObjectFromTab } from '../tabs/utils'
 import { WorkspaceSlice } from '../workspace'
@@ -97,7 +99,10 @@ export type SharedSlice = {
     // File operations
     openFile: (data: TabsProps) => BasicSharedSliceResponse
     closeFile: (name: string) => BasicSharedSliceResponse
+    forceCloseFile: (name: string) => BasicSharedSliceResponse
     saveFile: (name: string) => Promise<BasicSharedSliceResponse>
+    saveAndCloseFile: (name: string) => Promise<BasicSharedSliceResponse>
+    discardAndCloseFile: (name: string) => Promise<BasicSharedSliceResponse>
     // File and workspace saved state management
     handleFileAndWorkspaceSavedState: (name: string) => void
   }
@@ -140,6 +145,7 @@ export const createSharedSlice: StateCreator<
     FileSlice &
     ConsoleSlice &
     HistorySlice &
+    SearchSlice &
     SharedSlice,
   [],
   [],
@@ -287,11 +293,12 @@ export const createSharedSlice: StateCreator<
       if (propsToCreatePou.type !== 'program')
         getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
 
-      // Add the file to the file slice
+      // Add the file to the file slice (marked as new since it was just created)
       getState().fileActions.addFile({
         name: propsToCreatePou.name,
         type: propsToCreatePou.type,
         filePath: pouPath,
+        isNew: true,
       })
 
       // Add and set the editor
@@ -671,11 +678,12 @@ export const createSharedSlice: StateCreator<
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
       getState().projectActions.createDatatype({ data: propsToCreateDatatype })
 
-      // Add the file to the file slice
+      // Add the file to the file slice (marked as new since it was just created)
       getState().fileActions.addFile({
         name: propsToCreateDatatype.name,
         type: 'data-type',
         filePath: `/project.json`,
+        isNew: true,
       })
 
       // Add and set the editor
@@ -977,6 +985,16 @@ export const createSharedSlice: StateCreator<
 
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => {
+      // Stop all file watchers before clearing state
+      void (window.bridge as { fileWatchStopAll: () => Promise<{ success: boolean }> }).fileWatchStopAll()
+
+      // Dispose all Monaco editor models to prevent stale content from being cached
+      // This ensures that when a new project is opened, Monaco will use fresh content
+      const allModels = monaco.editor.getModels()
+      allModels.forEach((model) => {
+        model.dispose()
+      })
+
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
@@ -987,6 +1005,10 @@ export const createSharedSlice: StateCreator<
       getState().workspaceActions.clearWorkspace()
       getState().fileActions.clearFiles()
       getState().consoleActions.clearLogs()
+      // Clear additional slices to ensure complete state reset on project close
+      getState().historyActions.clearHistory()
+      ;(getState().searchActions as { clearSearch: () => void }).clearSearch()
+      getState().modalActions.closeModal()
       window.bridge.rebuildMenu()
     },
 
@@ -1602,7 +1624,21 @@ export const createSharedSlice: StateCreator<
       return { success: true }
     },
     closeFile: (name) => {
-      // Remove the tab from the tabs slice
+      // Check if file has unsaved changes
+      const isSaved = getState().fileActions.getSavedState({ name })
+
+      if (!isSaved) {
+        // File has unsaved changes - show save prompt modal
+        getState().modalActions.openModal('save-changes-file', { fileName: name })
+        return { success: false }
+      }
+
+      // File is saved, proceed with close
+      return getState().sharedWorkspaceActions.forceCloseFile(name)
+    },
+
+    forceCloseFile: (name) => {
+      // Remove the tab from the tabs slice (no saved check)
       getState().tabsActions.removeTab(name)
 
       // Check if there are any remaining tabs
@@ -1621,7 +1657,7 @@ export const createSharedSlice: StateCreator<
         return { success: true }
       }
 
-      // If there is no next tab, set the editor to available
+      // If there are remaining tabs, select the last one
       const editor = getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
       getState().editorActions.setEditor(editor)
       getState().tabsActions.setSelectedTab(nextTab.name)
@@ -1632,6 +1668,176 @@ export const createSharedSlice: StateCreator<
 
       return { success: true }
     },
+    saveAndCloseFile: async (name) => {
+      // Save the file first
+      const saveResult = await getState().sharedWorkspaceActions.saveFile(name)
+      if (!saveResult.success) {
+        return saveResult
+      }
+      // Close the file after successful save
+      return getState().sharedWorkspaceActions.forceCloseFile(name)
+    },
+
+    discardAndCloseFile: async (name) => {
+      const { file } = getState().fileActions.getFile({ name })
+      if (!file) {
+        return {
+          success: false,
+          error: { title: 'Error discarding changes', description: `File with name ${name} does not exist.` },
+        }
+      }
+
+      // If this is a newly created file that was never saved, delete it completely
+      if (file.isNew && (file.type === 'program' || file.type === 'function' || file.type === 'function-block')) {
+        const projectPath = getState().project.meta.path
+        const typeDir =
+          file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+
+        // Get the POU to determine the correct file extension
+        const pou = getState().project.data.pous.find((p) => p.data.name === name)
+        const extension = pou ? getExtensionFromLanguage(pou.data.body.language) : '.st'
+        const filePath = `${projectPath}/pous/${typeDir}/${name}${extension}`
+
+        // Delete the file from disk
+        try {
+          await window.bridge.deletePouFile(filePath)
+        } catch (err) {
+          console.error('Error deleting new POU file:', err)
+        }
+
+        // Remove from all state slices (similar to pouActions.delete)
+        getState().projectActions.deletePou(name)
+        getState().ladderFlowActions.removeLadderFlow(name)
+        getState().fbdFlowActions.removeFBDFlow(name)
+        getState().tabsActions.removeTab(name)
+        getState().editorActions.removeModel(name)
+        getState().libraryActions.removeUserLibrary(name)
+        getState().fileActions.removeFile({ name })
+
+        // Update selected project tree leaf if needed
+        const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+        if (selectedProjectTreeLeaf.label === name) {
+          getState().workspaceActions.setSelectedProjectTreeLeaf({
+            label: '',
+            type: null,
+          })
+        }
+
+        // Select the next available tab
+        const filteredTabs = getState().tabs
+        const nextTab = filteredTabs[filteredTabs.length - 1]
+        if (nextTab) {
+          const editor =
+            getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
+          getState().editorActions.setEditor(editor)
+          getState().tabsActions.setSelectedTab(nextTab.name)
+          getState().workspaceActions.setSelectedProjectTreeLeaf({
+            label: nextTab.name,
+            type: nextTab.elementType.type,
+          })
+        } else {
+          getState().editorActions.setEditor({
+            type: 'available',
+            meta: { name: '' },
+          })
+          getState().tabsActions.setSelectedTab('')
+        }
+
+        return { success: true }
+      }
+
+      // If this is a newly created datatype that was never saved, remove it from state
+      // (Datatypes are stored in project.json, so no file deletion needed)
+      if (file.isNew && file.type === 'data-type') {
+        getState().projectActions.deleteDatatype(name)
+        getState().tabsActions.removeTab(name)
+        getState().editorActions.removeModel(name)
+        getState().libraryActions.removeUserLibrary(name)
+        getState().fileActions.removeFile({ name })
+
+        // Update selected project tree leaf if needed
+        const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+        if (selectedProjectTreeLeaf.label === name) {
+          getState().workspaceActions.setSelectedProjectTreeLeaf({
+            label: '',
+            type: null,
+          })
+        }
+
+        // Select the next available tab
+        const filteredTabs = getState().tabs
+        const nextTab = filteredTabs[filteredTabs.length - 1]
+        if (nextTab) {
+          const editor =
+            getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
+          getState().editorActions.setEditor(editor)
+          getState().tabsActions.setSelectedTab(nextTab.name)
+          getState().workspaceActions.setSelectedProjectTreeLeaf({
+            label: nextTab.name,
+            type: nextTab.elementType.type,
+          })
+        } else {
+          getState().editorActions.setEditor({
+            type: 'available',
+            meta: { name: '' },
+          })
+          getState().tabsActions.setSelectedTab('')
+        }
+
+        return { success: true }
+      }
+
+      // For existing files (not new), reload content from disk
+      if (file.type === 'program' || file.type === 'function' || file.type === 'function-block') {
+        const projectPath = getState().project.meta.path
+        const typeDir =
+          file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+        const filePath = `${projectPath}/pous/${typeDir}/${name}.json`
+
+        try {
+          const readResult = await (
+            window.bridge as {
+              fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+            }
+          ).fileReadContent(filePath)
+          if (!readResult.success || !readResult.content) {
+            console.error('Failed to read file from disk:', readResult.error)
+            // If we can't read the file, just close it without reloading
+            getState().fileActions.updateFile({ name, saved: true })
+            return getState().sharedWorkspaceActions.forceCloseFile(name)
+          }
+
+          // Parse the JSON content
+          const pouData = JSON.parse(readResult.content) as PLCPou
+
+          // Update the POU in the store with the content from disk
+          const existingPou = getState().project.data.pous.find((p) => p.data.name === name)
+          if (existingPou) {
+            // Update the POU body using applyPouSnapshot which handles all body types correctly
+            getState().projectActions.applyPouSnapshot(name, pouData.data.variables, pouData.data.body)
+
+            // Update ladder/FBD flows if applicable
+            if (pouData.data.language === 'ld' && pouData.data.body.language === 'ld') {
+              getState().ladderFlowActions.removeLadderFlow(name)
+              getState().ladderFlowActions.addLadderFlow(pouData.data.body.value as LadderFlowType)
+            } else if (pouData.data.language === 'fbd' && pouData.data.body.language === 'fbd') {
+              getState().fbdFlowActions.removeFBDFlow(name)
+              getState().fbdFlowActions.addFBDFlow(pouData.data.body.value as FBDFlowType)
+            }
+          }
+        } catch (err) {
+          console.error('Error parsing POU file:', err)
+          // If parsing fails, just close without reloading
+        }
+      }
+
+      // Mark the file as saved (discarding changes means we're reverting to saved state)
+      getState().fileActions.updateFile({ name, saved: true })
+
+      // Close the file
+      return getState().sharedWorkspaceActions.forceCloseFile(name)
+    },
+
     saveFile: async (name) => {
       const { file } = getState().fileActions.getFile({ name: name })
       if (!file) {
@@ -1851,6 +2057,7 @@ export const createSharedSlice: StateCreator<
       getState().fileActions.updateFile({
         name,
         saved: true,
+        isNew: false, // File is no longer "new" after being explicitly saved
       })
 
       toast({

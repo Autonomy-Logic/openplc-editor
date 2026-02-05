@@ -9,6 +9,7 @@ const fileSliceDataSchema = z.object({
   type: fileSliceTypeSchema,
   filePath: z.string(),
   saved: z.boolean(),
+  isNew: z.boolean().optional(),
 })
 type FileSliceData = z.infer<typeof fileSliceDataSchema>
 
@@ -31,6 +32,7 @@ const fileSliceActionsSchema = z.object({
         name: z.string(),
         type: fileSliceTypeSchema,
         filePath: z.string(),
+        isNew: z.boolean().optional(),
       }),
     )
     .returns(z.boolean()),
@@ -50,6 +52,7 @@ const fileSliceActionsSchema = z.object({
         saved: z.boolean().optional(),
         filePath: z.string().optional(),
         newName: z.string().optional(),
+        isNew: z.boolean().optional(),
       }),
     )
     .returns(z.void()),
