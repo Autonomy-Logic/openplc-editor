@@ -228,6 +228,17 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    removeDebugVariable: (compositeKey: string): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugVariableIndexes.delete(compositeKey)
+          workspace.debugVariableValues.delete(compositeKey)
+          workspace.debugForcedVariables.delete(compositeKey)
+          workspace.debugVariableTree.delete(compositeKey)
+          workspace.debugExpandedNodes.delete(compositeKey)
+        }),
+      )
+    },
     setPlcLogsVisible: (isVisible: boolean): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {

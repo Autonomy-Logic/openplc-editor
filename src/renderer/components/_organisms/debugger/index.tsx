@@ -144,7 +144,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
         </div>
         <div className='chart-content flex h-auto w-full flex-col gap-2 overflow-y-auto overflow-x-hidden'>
           {renderSeries.map(({ name, points, isBool }) => (
-            <LineChart key={name} data={points} isBool={isBool} />
+            <LineChart key={name} data={points} isBool={isBool} range={range} />
           ))}
         </div>
       </div>

@@ -1,6 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useCallback, useMemo } from 'react'
-import type { Props as ChartOptions } from 'react-apexcharts'
 import Chart from 'react-apexcharts'
 
 type Point = { t: number; y: number }
@@ -8,9 +7,10 @@ type Point = { t: number; y: number }
 type ChartProps = {
   data: Point[]
   isBool: boolean
+  range: number
 }
 
-const LineChart = ({ data, isBool }: ChartProps) => {
+const LineChart = ({ data, isBool, range }: ChartProps) => {
   const {
     workspace: {
       systemConfigs: { shouldUseDarkMode },
@@ -29,16 +29,13 @@ const LineChart = ({ data, isBool }: ChartProps) => {
         border: '#DDE2E8',
       }
 
-  const oldestTime = data.length > 0 ? data[0].t : Date.now()
-
-  const seriesData = useMemo(
-    () =>
-      data.map((p) => ({
-        x: (p.t - oldestTime) / 1000,
-        y: isBool ? (p.y ? 1 : 0) : p.y,
-      })),
-    [data, oldestTime, isBool],
-  )
+  const seriesData = useMemo(() => {
+    const currentTime = Date.now()
+    return data.map((p) => ({
+      x: (p.t - currentTime) / 1000,
+      y: isBool ? (p.y ? 1 : 0) : p.y,
+    }))
+  }, [data, isBool])
 
   const yMinMax = useMemo(() => {
     if (isBool) return { min: 0, max: 1 }
@@ -60,16 +57,11 @@ const LineChart = ({ data, isBool }: ChartProps) => {
     return value.toFixed(0)
   }, [])
 
-  const chartData: ChartOptions = {
-    series: [
-      {
-        data: seriesData,
-      },
-    ],
-    options: {
+  const chartOptions = useMemo(
+    () => ({
       chart: {
         id: 'realtime',
-        type: 'line',
+        type: 'line' as const,
         toolbar: {
           show: false,
         },
@@ -77,8 +69,42 @@ const LineChart = ({ data, isBool }: ChartProps) => {
           enabled: false,
         },
       },
+      tooltip: {
+        enabled: true,
+        followCursor: false,
+        intersect: false,
+        fixed: {
+          enabled: true,
+          position: 'topRight' as const,
+          offsetX: 0,
+          offsetY: 0,
+        },
+        marker: {
+          show: false,
+        },
+      },
+      states: {
+        hover: {
+          filter: {
+            type: 'none' as const,
+          },
+        },
+        active: {
+          filter: {
+            type: 'none' as const,
+          },
+        },
+      },
+      markers: {
+        size: 0,
+        hover: {
+          sizeOffset: 0,
+        },
+      },
       xaxis: {
-        type: 'numeric',
+        type: 'numeric' as const,
+        min: -range,
+        max: 0,
         labels: {
           show: false,
         },
@@ -95,7 +121,7 @@ const LineChart = ({ data, isBool }: ChartProps) => {
         },
       },
       stroke: {
-        curve: isBool ? 'stepline' : 'straight',
+        curve: isBool ? ('stepline' as const) : ('straight' as const),
         width: 2,
         colors: [graphColors.stroke],
       },
@@ -117,12 +143,22 @@ const LineChart = ({ data, isBool }: ChartProps) => {
           },
         },
       },
-    },
-  }
+    }),
+    [yMinMax.min, yMinMax.max, isBool, yAxisFormatter, graphColors.stroke, graphColors.row, graphColors.border, range],
+  )
+
+  const chartSeries = useMemo(
+    () => [
+      {
+        data: seriesData,
+      },
+    ],
+    [seriesData],
+  )
 
   return (
     <div className='w-full'>
-      <Chart width={'100%'} options={chartData.options} series={chartData.series} height={115} type='line' />
+      <Chart width={'100%'} options={chartOptions} series={chartSeries} height={115} type='line' />
     </div>
   )
 }
