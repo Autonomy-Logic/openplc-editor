@@ -1017,9 +1017,11 @@ export const createSharedSlice: StateCreator<
 
     closeProject: () => {
       const editingState = getState().workspace.editingState
-      const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved(editingState)
+      const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved()
 
-      if (!isFilesSaved && editingState === 'unsaved') {
+      // Show save dialog if there are unsaved file changes OR the workspace has unsaved changes
+      // (e.g., POU deletions mark editingState as 'unsaved' even though no files are modified)
+      if (!isFilesSaved || editingState === 'unsaved') {
         getState().modalActions.openModal('save-changes-project', {
           validationContext: 'close-project',
         })
