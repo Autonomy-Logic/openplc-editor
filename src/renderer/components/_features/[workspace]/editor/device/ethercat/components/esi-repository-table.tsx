@@ -5,8 +5,8 @@ import { useCallback, useState } from 'react'
 
 type ESIRepositoryTableProps = {
   repository: ESIRepositoryItem[]
-  onRemoveItem: (itemId: string) => void
-  onClearAll: () => void
+  onRemoveItem: (itemId: string) => void | Promise<void>
+  onClearAll: () => void | Promise<void>
 }
 
 /**
@@ -49,7 +49,7 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll }: ESIReposit
           Loaded Files ({repository.length}) - {totalDevices} device(s)
         </span>
         <button
-          onClick={onClearAll}
+          onClick={() => void onClearAll()}
           className='text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300'
         >
           Clear All
@@ -83,7 +83,7 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll }: ESIReposit
                 item={item}
                 isExpanded={expandedItems.has(item.id)}
                 onToggleExpand={() => handleToggleExpand(item.id)}
-                onRemove={() => onRemoveItem(item.id)}
+                onRemove={() => void onRemoveItem(item.id)}
               />
             ))}
           </tbody>

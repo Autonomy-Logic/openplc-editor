@@ -1,3 +1,4 @@
+import { ESIService } from '@root/main/services/esi-service'
 import { getProjectPath } from '@root/main/utils'
 import type {
   EtherCATScanRequest,
@@ -9,6 +10,7 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/types/ethercat'
+import type { ESIRepositoryItem } from '@root/types/ethercat/esi-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -48,6 +50,7 @@ class MainProcessBridge implements MainIpcModule {
   pouService
   compilerModule
   hardwareModule
+  private esiService = new ESIService()
   private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
   private debuggerWebSocketClient: WebSocketDebugClient | null = null
   private debuggerTargetIp: string | null = null
@@ -779,6 +782,132 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  // ===================== ESI REPOSITORY HANDLERS =====================
+
+  /**
+   * Load ESI repository index from project
+   */
+  handleESILoadRepositoryIndex = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+  ): Promise<{
+    success: boolean
+    data?: {
+      version: number
+      items: Array<{
+        id: string
+        filename: string
+        vendorId: string
+        vendorName: string
+        deviceCount: number
+        loadedAt: number
+        warnings?: string[]
+      }>
+    } | null
+    error?: string
+  }> => {
+    try {
+      const index = await this.esiService.loadRepositoryIndex(projectPath)
+      return { success: true, data: index }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Save ESI repository index to project
+   */
+  handleESISaveRepositoryIndex = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    items: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      return await this.esiService.saveRepositoryIndex(projectPath, items)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Save an ESI XML file to project
+   */
+  handleESISaveXmlFile = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    itemId: string,
+    xmlContent: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      return await this.esiService.saveXmlFile(projectPath, itemId, xmlContent)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Load an ESI XML file from project
+   */
+  handleESILoadXmlFile = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    itemId: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> => {
+    try {
+      return await this.esiService.loadXmlFile(projectPath, itemId)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Delete an ESI XML file from project
+   */
+  handleESIDeleteXmlFile = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    itemId: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      return await this.esiService.deleteXmlFile(projectPath, itemId)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Save a complete ESI repository item (XML + update index)
+   */
+  handleESISaveRepositoryItem = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    item: ESIRepositoryItem,
+    xmlContent: string,
+    existingItems: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      return await this.esiService.saveRepositoryItem(projectPath, item, xmlContent, existingItems)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Delete an ESI repository item (XML + update index)
+   */
+  handleESIDeleteRepositoryItem = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    itemId: string,
+    existingItems: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      return await this.esiService.deleteRepositoryItem(projectPath, itemId, existingItems)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -865,6 +994,15 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('ethercat:scan', this.handleEtherCATScan)
     this.ipcMain.handle('ethercat:test', this.handleEtherCATTest)
     this.ipcMain.handle('ethercat:validate', this.handleEtherCATValidate)
+
+    // ===================== ESI REPOSITORY =====================
+    this.ipcMain.handle('esi:load-repository-index', this.handleESILoadRepositoryIndex)
+    this.ipcMain.handle('esi:save-repository-index', this.handleESISaveRepositoryIndex)
+    this.ipcMain.handle('esi:save-xml-file', this.handleESISaveXmlFile)
+    this.ipcMain.handle('esi:load-xml-file', this.handleESILoadXmlFile)
+    this.ipcMain.handle('esi:delete-xml-file', this.handleESIDeleteXmlFile)
+    this.ipcMain.handle('esi:save-repository-item', this.handleESISaveRepositoryItem)
+    this.ipcMain.handle('esi:delete-repository-item', this.handleESIDeleteRepositoryItem)
   }
 
   // ===================== HANDLER METHODS =====================

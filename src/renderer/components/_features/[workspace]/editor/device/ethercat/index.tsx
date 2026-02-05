@@ -10,7 +10,8 @@ import type {
 } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
 import { countMatchedDevices, getBestMatchQuality, matchDevicesToRepository } from '@root/utils/ethercat/device-matcher'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { parseESI } from '@root/utils/ethercat/esi-parser'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { ConfiguredDevices } from './components/configured-devices'
@@ -30,9 +31,10 @@ type EditorTab = 'repository' | 'discovery' | 'configured'
  * - Viewing and configuring added devices (Configured Devices tab)
  */
 const EtherCATEditor = () => {
-  const { editor, runtimeConnection } = useOpenPLCStore()
+  const { editor, runtimeConnection, project } = useOpenPLCStore()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
+  const projectPath = project.meta.path
 
   // Runtime connection state
   const { connectionStatus, jwtToken, ipAddress } = runtimeConnection
@@ -43,6 +45,9 @@ const EtherCATEditor = () => {
 
   // Repository state
   const [repository, setRepository] = useState<ESIRepositoryItem[]>([])
+  const [isLoadingRepository, setIsLoadingRepository] = useState(false)
+  const [_repositoryError, setRepositoryError] = useState<string | null>(null)
+  const repositoryLoadedRef = useRef(false)
 
   // Configured devices state
   const [configuredDevices, setConfiguredDevices] = useState<ConfiguredEtherCATDevice[]>([])
@@ -165,6 +170,69 @@ const EtherCATEditor = () => {
       setIsScanning(false)
     }
   }, [isConnectedToRuntime, ipAddress, jwtToken, selectedInterface])
+
+  // Load ESI repository from disk when component mounts
+  useEffect(() => {
+    const loadRepository = async () => {
+      if (!projectPath || repositoryLoadedRef.current) return
+
+      setIsLoadingRepository(true)
+      setRepositoryError(null)
+
+      try {
+        // Load the repository index from disk
+        const indexResult = await window.bridge.esiLoadRepositoryIndex(projectPath)
+
+        if (!indexResult.success || !indexResult.data) {
+          // No repository exists yet - that's okay
+          repositoryLoadedRef.current = true
+          setIsLoadingRepository(false)
+          return
+        }
+
+        // For each item in the index, load and parse the XML file
+        const loadedItems: ESIRepositoryItem[] = []
+
+        for (const indexItem of indexResult.data.items) {
+          const { id, filename, loadedAt, warnings: indexWarnings } = indexItem
+
+          try {
+            const xmlResult = await window.bridge.esiLoadXmlFile(projectPath, id)
+
+            if (xmlResult.success && xmlResult.content) {
+              // Re-parse the XML to get full device information
+              const content: string = xmlResult.content
+              const fname: string = filename
+              const parseResult = parseESI(content, fname)
+
+              if (parseResult.success && parseResult.data) {
+                loadedItems.push({
+                  id,
+                  filename,
+                  vendor: parseResult.data.vendor,
+                  devices: parseResult.data.devices,
+                  loadedAt,
+                  warnings: parseResult.warnings || indexWarnings,
+                })
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to load ESI file ${filename}:`, err)
+          }
+        }
+
+        setRepository(loadedItems)
+        repositoryLoadedRef.current = true
+      } catch (error) {
+        console.error('Failed to load ESI repository:', error)
+        setRepositoryError(String(error))
+      } finally {
+        setIsLoadingRepository(false)
+      }
+    }
+
+    void loadRepository()
+  }, [projectPath])
 
   // Check service status and fetch interfaces when runtime connection changes
   useEffect(() => {
@@ -326,7 +394,14 @@ const EtherCATEditor = () => {
       </div>
 
       {/* Repository Tab */}
-      {activeTab === 'repository' && <ESIRepository repository={repository} onRepositoryChange={setRepository} />}
+      {activeTab === 'repository' && (
+        <ESIRepository
+          repository={repository}
+          onRepositoryChange={setRepository}
+          projectPath={projectPath}
+          isLoading={isLoadingRepository}
+        />
+      )}
 
       {/* Discovery Tab */}
       {activeTab === 'discovery' && (

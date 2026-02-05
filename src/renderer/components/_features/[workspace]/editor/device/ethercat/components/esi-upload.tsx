@@ -6,7 +6,7 @@ import { useCallback, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 type ESIUploadProps = {
-  onFilesLoaded: (results: Array<{ result: ESIParseResult; filename: string }>) => void
+  onFilesLoaded: (results: Array<{ result: ESIParseResult; filename: string; xmlContent: string }>) => void
   repositoryCount?: number
   isLoading?: boolean
 }
@@ -31,6 +31,7 @@ const ESIUpload = ({ onFilesLoaded, repositoryCount = 0, isLoading = false }: ES
           {
             result: { success: false, error: 'No XML files found. Please upload .xml ESI files.' },
             filename: '',
+            xmlContent: '',
           },
         ])
         return
@@ -38,18 +39,19 @@ const ESIUpload = ({ onFilesLoaded, repositoryCount = 0, isLoading = false }: ES
 
       setProcessingCount(xmlFiles.length)
 
-      const results: Array<{ result: ESIParseResult; filename: string }> = []
+      const results: Array<{ result: ESIParseResult; filename: string; xmlContent: string }> = []
 
       for (const file of xmlFiles) {
         try {
           const text = await file.text()
           const result = parseESI(text, file.name)
-          results.push({ result, filename: file.name })
+          results.push({ result, filename: file.name, xmlContent: text })
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : 'Failed to read file'
           results.push({
             result: { success: false, error: errorMessage },
             filename: file.name,
+            xmlContent: '',
           })
         }
       }
@@ -167,7 +169,9 @@ const ESIUpload = ({ onFilesLoaded, repositoryCount = 0, isLoading = false }: ES
 /**
  * Convert parse results to repository items
  */
-export function parseResultsToRepositoryItems(results: Array<{ result: ESIParseResult; filename: string }>): {
+export function parseResultsToRepositoryItems(
+  results: Array<{ result: ESIParseResult; filename: string; xmlContent: string }>,
+): {
   items: ESIRepositoryItem[]
   errors: Array<{ filename: string; error: string }>
 } {

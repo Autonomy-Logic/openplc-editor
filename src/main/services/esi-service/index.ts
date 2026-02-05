@@ -1,0 +1,258 @@
+import { fileOrDirectoryExists } from '@root/main/utils'
+import type { ESIRepositoryItem } from '@root/types/ethercat/esi-types'
+import { promises } from 'fs'
+import { join } from 'path'
+
+/**
+ * ESI Repository Index stored in devices/esi/repository.json
+ */
+interface ESIRepositoryIndex {
+  version: number
+  items: Array<{
+    id: string
+    filename: string
+    vendorId: string
+    vendorName: string
+    deviceCount: number
+    loadedAt: number
+    warnings?: string[]
+  }>
+}
+
+/**
+ * Response type for ESI service operations
+ */
+interface ESIServiceResponse {
+  success: boolean
+  error?: string
+}
+
+/**
+ * ESI Service - Handles persistence of ESI XML files in the project
+ *
+ * ESI files are stored in the project's devices/esi/ directory.
+ * Each XML file is saved with its UUID as filename.
+ * A repository.json index file tracks all loaded ESI files.
+ */
+class ESIService {
+  private readonly ESI_DIR = 'devices/esi'
+  private readonly REPOSITORY_FILE = 'repository.json'
+
+  /**
+   * Get the ESI directory path for a project
+   */
+  private getEsiDir(projectPath: string): string {
+    const basePath = projectPath.endsWith('/project.json') ? projectPath.slice(0, -'/project.json'.length) : projectPath
+    return join(basePath, this.ESI_DIR)
+  }
+
+  /**
+   * Get the repository index file path
+   */
+  private getRepositoryPath(projectPath: string): string {
+    return join(this.getEsiDir(projectPath), this.REPOSITORY_FILE)
+  }
+
+  /**
+   * Get the path for an ESI XML file
+   */
+  private getXmlPath(projectPath: string, itemId: string): string {
+    return join(this.getEsiDir(projectPath), `${itemId}.xml`)
+  }
+
+  /**
+   * Ensure the ESI directory exists
+   */
+  private async ensureEsiDir(projectPath: string): Promise<void> {
+    const esiDir = this.getEsiDir(projectPath)
+    if (!fileOrDirectoryExists(esiDir)) {
+      await promises.mkdir(esiDir, { recursive: true })
+    }
+  }
+
+  /**
+   * Load the ESI repository index from disk
+   */
+  async loadRepositoryIndex(projectPath: string): Promise<ESIRepositoryIndex | null> {
+    const repoPath = this.getRepositoryPath(projectPath)
+
+    if (!fileOrDirectoryExists(repoPath)) {
+      return null
+    }
+
+    try {
+      const content = await promises.readFile(repoPath, 'utf-8')
+      const index = JSON.parse(content) as ESIRepositoryIndex
+      return index
+    } catch (error) {
+      console.error('Error reading ESI repository index:', error)
+      return null
+    }
+  }
+
+  /**
+   * Save the ESI repository index to disk
+   */
+  async saveRepositoryIndex(projectPath: string, items: ESIRepositoryItem[]): Promise<ESIServiceResponse> {
+    try {
+      await this.ensureEsiDir(projectPath)
+
+      const index: ESIRepositoryIndex = {
+        version: 1,
+        items: items.map((item) => ({
+          id: item.id,
+          filename: item.filename,
+          vendorId: item.vendor.id,
+          vendorName: item.vendor.name,
+          deviceCount: item.devices.length,
+          loadedAt: item.loadedAt,
+          warnings: item.warnings,
+        })),
+      }
+
+      const repoPath = this.getRepositoryPath(projectPath)
+      await promises.writeFile(repoPath, JSON.stringify(index, null, 2), 'utf-8')
+
+      return { success: true }
+    } catch (error) {
+      console.error('Error saving ESI repository index:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to save repository index',
+      }
+    }
+  }
+
+  /**
+   * Save an ESI XML file to disk
+   */
+  async saveXmlFile(projectPath: string, itemId: string, xmlContent: string): Promise<ESIServiceResponse> {
+    try {
+      await this.ensureEsiDir(projectPath)
+
+      const xmlPath = this.getXmlPath(projectPath, itemId)
+      await promises.writeFile(xmlPath, xmlContent, 'utf-8')
+
+      return { success: true }
+    } catch (error) {
+      console.error('Error saving ESI XML file:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to save XML file',
+      }
+    }
+  }
+
+  /**
+   * Load an ESI XML file from disk
+   */
+  async loadXmlFile(
+    projectPath: string,
+    itemId: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> {
+    try {
+      const xmlPath = this.getXmlPath(projectPath, itemId)
+
+      if (!fileOrDirectoryExists(xmlPath)) {
+        return { success: false, error: 'XML file not found' }
+      }
+
+      const content = await promises.readFile(xmlPath, 'utf-8')
+      return { success: true, content }
+    } catch (error) {
+      console.error('Error loading ESI XML file:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to load XML file',
+      }
+    }
+  }
+
+  /**
+   * Delete an ESI XML file from disk
+   */
+  async deleteXmlFile(projectPath: string, itemId: string): Promise<ESIServiceResponse> {
+    try {
+      const xmlPath = this.getXmlPath(projectPath, itemId)
+
+      if (fileOrDirectoryExists(xmlPath)) {
+        await promises.unlink(xmlPath)
+      }
+
+      return { success: true }
+    } catch (error) {
+      console.error('Error deleting ESI XML file:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete XML file',
+      }
+    }
+  }
+
+  /**
+   * Save a complete ESI repository item (XML + update index)
+   */
+  async saveRepositoryItem(
+    projectPath: string,
+    item: ESIRepositoryItem,
+    xmlContent: string,
+    existingItems: ESIRepositoryItem[],
+  ): Promise<ESIServiceResponse> {
+    // Save the XML file
+    const xmlResult = await this.saveXmlFile(projectPath, item.id, xmlContent)
+    if (!xmlResult.success) {
+      return xmlResult
+    }
+
+    // Update the index with the new item
+    const updatedItems = [...existingItems.filter((i) => i.id !== item.id), item]
+    return this.saveRepositoryIndex(projectPath, updatedItems)
+  }
+
+  /**
+   * Delete a repository item (XML + update index)
+   */
+  async deleteRepositoryItem(
+    projectPath: string,
+    itemId: string,
+    existingItems: ESIRepositoryItem[],
+  ): Promise<ESIServiceResponse> {
+    // Delete the XML file
+    const deleteResult = await this.deleteXmlFile(projectPath, itemId)
+    if (!deleteResult.success) {
+      return deleteResult
+    }
+
+    // Update the index without the deleted item
+    const updatedItems = existingItems.filter((i) => i.id !== itemId)
+    return this.saveRepositoryIndex(projectPath, updatedItems)
+  }
+
+  /**
+   * Check if ESI directory exists for a project
+   */
+  hasEsiDirectory(projectPath: string): boolean {
+    return fileOrDirectoryExists(this.getEsiDir(projectPath))
+  }
+
+  /**
+   * Get list of XML files in the ESI directory
+   */
+  async listXmlFiles(projectPath: string): Promise<string[]> {
+    const esiDir = this.getEsiDir(projectPath)
+
+    if (!fileOrDirectoryExists(esiDir)) {
+      return []
+    }
+
+    try {
+      const entries = await promises.readdir(esiDir)
+      return entries.filter((entry) => entry.endsWith('.xml'))
+    } catch {
+      return []
+    }
+  }
+}
+
+export { ESIService }
+export type { ESIRepositoryIndex, ESIServiceResponse }
