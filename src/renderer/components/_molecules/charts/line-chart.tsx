@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useId, useMemo } from 'react'
 import Chart from 'react-apexcharts'
 
 type Point = { t: number; y: number }
@@ -8,34 +8,58 @@ type ChartProps = {
   data: Point[]
   isBool: boolean
   range: number
+  now: number
+  startTime: number
+  label?: string
 }
 
-const LineChart = ({ data, isBool, range }: ChartProps) => {
+/**
+ * Calculate a "nice" tick interval for the x-axis based on the range.
+ * Returns an interval that produces approximately 5-6 evenly spaced ticks
+ * with round numbers (e.g., every 2s, 5s, 10s, 30s, 1min, 2min).
+ */
+const getNiceTickInterval = (range: number): number => {
+  const rawInterval = range / 5
+
+  // Nice intervals for time (in seconds)
+  const niceIntervals = [0.5, 1, 2, 5, 10, 15, 20, 30, 60, 120, 180, 300, 600]
+
+  // Find the smallest nice interval that's >= raw interval
+  for (const interval of niceIntervals) {
+    if (interval >= rawInterval) {
+      return interval
+    }
+  }
+  return niceIntervals[niceIntervals.length - 1]
+}
+
+const LineChart = ({ data, isBool, range, now, startTime, label }: ChartProps) => {
+  const chartId = useId()
   const {
     workspace: {
       systemConfigs: { shouldUseDarkMode },
     },
   } = useOpenPLCStore()
 
-  const graphColors = shouldUseDarkMode
-    ? {
-        stroke: '#B4D0FE',
-        row: '#2E3038',
-        border: '#3A3F4A',
-      }
-    : {
-        stroke: '#0464FB',
-        row: '#F5F7F8',
-        border: '#DDE2E8',
-      }
+  const graphColors = useMemo(
+    () =>
+      shouldUseDarkMode
+        ? { stroke: '#B4D0FE', row: '#2E3038', border: '#3A3F4A' }
+        : { stroke: '#0464FB', row: '#F5F7F8', border: '#DDE2E8' },
+    [shouldUseDarkMode],
+  )
 
-  const seriesData = useMemo(() => {
-    const currentTime = Date.now()
-    return data.map((p) => ({
-      x: (p.t - currentTime) / 1000,
-      y: isBool ? (p.y ? 1 : 0) : p.y,
-    }))
-  }, [data, isBool])
+  // Calculate elapsed time from debugger start
+  const elapsedSeconds = (now - startTime) / 1000
+
+  const seriesData = useMemo(
+    () =>
+      data.map((p) => ({
+        x: (p.t - startTime) / 1000, // X is elapsed seconds since start
+        y: isBool ? (p.y ? 1 : 0) : p.y,
+      })),
+    [data, isBool, startTime],
+  )
 
   const yMinMax = useMemo(() => {
     if (isBool) return { min: 0, max: 1 }
@@ -57,10 +81,14 @@ const LineChart = ({ data, isBool, range }: ChartProps) => {
     return value.toFixed(0)
   }, [])
 
+  // Calculate nice tick interval and amount based on range
+  const tickInterval = useMemo(() => getNiceTickInterval(range), [range])
+  const tickAmount = useMemo(() => Math.ceil(range / tickInterval), [range, tickInterval])
+
   const chartOptions = useMemo(
     () => ({
       chart: {
-        id: 'realtime',
+        id: chartId,
         type: 'line' as const,
         toolbar: {
           show: false,
@@ -70,18 +98,7 @@ const LineChart = ({ data, isBool, range }: ChartProps) => {
         },
       },
       tooltip: {
-        enabled: true,
-        followCursor: false,
-        intersect: false,
-        fixed: {
-          enabled: true,
-          position: 'topRight' as const,
-          offsetX: 0,
-          offsetY: 0,
-        },
-        marker: {
-          show: false,
-        },
+        enabled: false,
       },
       states: {
         hover: {
@@ -103,11 +120,28 @@ const LineChart = ({ data, isBool, range }: ChartProps) => {
       },
       xaxis: {
         type: 'numeric' as const,
-        min: -range,
-        max: 0,
+        min: Math.max(0, elapsedSeconds - range),
+        max: elapsedSeconds,
         labels: {
-          show: false,
+          show: true,
+          formatter: (value: string) => {
+            const secs = Number(value)
+            // For sub-second intervals, show decimal
+            if (tickInterval < 1) {
+              if (secs < 60) return `${secs.toFixed(1)}s`
+              const mins = Math.floor(secs / 60)
+              const remainingSecs = secs % 60
+              return remainingSecs > 0 ? `${mins}m${remainingSecs.toFixed(1)}s` : `${mins}m`
+            }
+            // For whole second intervals
+            const roundedSecs = Math.round(secs)
+            if (roundedSecs < 60) return `${roundedSecs}s`
+            const mins = Math.floor(roundedSecs / 60)
+            const remainingSecs = roundedSecs % 60
+            return remainingSecs > 0 ? `${mins}m${remainingSecs}s` : `${mins}m`
+          },
         },
+        tickAmount: tickAmount,
       },
       yaxis: {
         min: yMinMax.min,
@@ -144,7 +178,20 @@ const LineChart = ({ data, isBool, range }: ChartProps) => {
         },
       },
     }),
-    [yMinMax.min, yMinMax.max, isBool, yAxisFormatter, graphColors.stroke, graphColors.row, graphColors.border, range],
+    [
+      chartId,
+      yMinMax.min,
+      yMinMax.max,
+      isBool,
+      yAxisFormatter,
+      graphColors.stroke,
+      graphColors.row,
+      graphColors.border,
+      range,
+      elapsedSeconds,
+      tickInterval,
+      tickAmount,
+    ],
   )
 
   const chartSeries = useMemo(
@@ -157,7 +204,12 @@ const LineChart = ({ data, isBool, range }: ChartProps) => {
   )
 
   return (
-    <div className='w-full'>
+    <div className='relative w-full'>
+      {label && (
+        <div className='absolute left-10 top-1 z-10 rounded bg-neutral-100/80 px-1.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-400'>
+          {label}
+        </div>
+      )}
       <Chart width={'100%'} options={chartOptions} series={chartSeries} height={115} type='line' />
     </div>
   )

@@ -13,11 +13,14 @@ type DebuggerData = {
 type Point = { t: number; y: number }
 type SeriesEntry = { points: Point[]; isBool: boolean; compositeKey: string }
 
+const MAX_BUFFER_SECONDS = 600 // Keep 10 minutes of data regardless of displayed range
+
 const Debugger = ({ graphList }: DebuggerData) => {
   const [isPaused, setIsPaused] = useState(false)
   const [range, setRange] = useState(10)
   const [renderTrigger, setRenderTrigger] = useState(0)
   const historiesRef = useRef<Map<string, SeriesEntry>>(new Map())
+  const startTimeRef = useRef<number | null>(null)
 
   const {
     workspace: { debugVariableValues },
@@ -38,6 +41,10 @@ const Debugger = ({ graphList }: DebuggerData) => {
   useEffect(() => {
     if (isPaused) return
     const now = Date.now()
+    // Set start time on first data
+    if (startTimeRef.current === null) {
+      startTimeRef.current = now
+    }
     const set = historiesRef.current
     for (const [, entry] of set) {
       const raw = entry.compositeKey ? debugVariableValues.get(entry.compositeKey) : undefined
@@ -56,8 +63,9 @@ const Debugger = ({ graphList }: DebuggerData) => {
       }
       if (y !== null) {
         entry.points.push({ t: now, y })
-        const cutoff = now - range * 1000
-        const validStartIndex = entry.points.findIndex((p) => p.t >= cutoff)
+        // Trim based on max buffer, not displayed range
+        const bufferCutoff = now - MAX_BUFFER_SECONDS * 1000
+        const validStartIndex = entry.points.findIndex((p) => p.t >= bufferCutoff)
         if (validStartIndex === -1) {
           entry.points.length = 0
         } else if (validStartIndex > 0) {
@@ -66,16 +74,21 @@ const Debugger = ({ graphList }: DebuggerData) => {
       }
     }
     setRenderTrigger((prev) => prev + 1)
-  }, [debugVariableValues, isPaused, range])
+  }, [debugVariableValues, isPaused])
 
   const renderSeries = useMemo(() => {
     const now = Date.now()
+    const startTime = startTimeRef.current ?? now
     const cutoff = now - range * 1000
-    return graphList.map((compositeKey) => {
-      const entry = historiesRef.current.get(compositeKey)
-      const points = entry ? entry.points.filter((p) => p.t >= cutoff) : []
-      return { name: compositeKey, points, isBool: entry?.isBool ?? false }
-    })
+    return {
+      now,
+      startTime,
+      series: graphList.map((compositeKey) => {
+        const entry = historiesRef.current.get(compositeKey)
+        const points = entry ? entry.points.filter((p) => p.t >= cutoff) : []
+        return { name: compositeKey, points, isBool: entry?.isBool ?? false }
+      }),
+    }
   }, [graphList, range, renderTrigger])
 
   return (
@@ -143,8 +156,16 @@ const Debugger = ({ graphList }: DebuggerData) => {
           </div>
         </div>
         <div className='chart-content flex h-auto w-full flex-col gap-2 overflow-y-auto overflow-x-hidden'>
-          {renderSeries.map(({ name, points, isBool }) => (
-            <LineChart key={name} data={points} isBool={isBool} range={range} />
+          {renderSeries.series.map(({ name, points, isBool }) => (
+            <LineChart
+              key={name}
+              data={points}
+              isBool={isBool}
+              range={range}
+              now={renderSeries.now}
+              startTime={renderSeries.startTime}
+              label={name}
+            />
           ))}
         </div>
       </div>
