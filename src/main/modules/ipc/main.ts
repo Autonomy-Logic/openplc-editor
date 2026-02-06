@@ -6,7 +6,7 @@ import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
-import { readFile, stat, unwatchFile, watchFile } from 'fs'
+import { readFile, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingMessage } from 'http'
 import https from 'https'
 import { join } from 'path'
@@ -622,8 +622,23 @@ class MainProcessBridge implements MainIpcModule {
       console.error('Error getting project path:', error)
     }
   }
-  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) =>
-    await this.projectService.saveFile(filePath, content)
+  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) => {
+    const result = await this.projectService.saveFile(filePath, content)
+    if (result.success) {
+      // Update lastMtime for any watched files to suppress self-trigger
+      for (const [watchedPath, watcherData] of this.fileWatchers) {
+        try {
+          const stats = statSync(watchedPath)
+          if (stats.mtimeMs > watcherData.lastMtime) {
+            watcherData.lastMtime = stats.mtimeMs
+          }
+        } catch {
+          /* file may not exist */
+        }
+      }
+    }
+    return result
+  }
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
@@ -1298,26 +1313,22 @@ class MainProcessBridge implements MainIpcModule {
     })
   }
 
-  handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): Promise<{ success: boolean }> => {
-    return new Promise((resolve) => {
-      if (this.fileWatchers.has(filePath)) {
-        console.log('[FileWatcher] Stopping watcher for:', filePath)
-        unwatchFile(filePath)
-        this.fileWatchers.delete(filePath)
-      }
-      resolve({ success: true })
-    })
+  handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): { success: boolean } => {
+    if (this.fileWatchers.has(filePath)) {
+      console.log('[FileWatcher] Stopping watcher for:', filePath)
+      unwatchFile(filePath)
+      this.fileWatchers.delete(filePath)
+    }
+    return { success: true }
   }
 
-  handleFileWatchStopAll = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
-    return new Promise((resolve) => {
-      console.log('[FileWatcher] Stopping all watchers, count:', this.fileWatchers.size)
-      for (const [filePath] of this.fileWatchers) {
-        unwatchFile(filePath)
-      }
-      this.fileWatchers.clear()
-      resolve({ success: true })
-    })
+  handleFileWatchStopAll = (_event: IpcMainInvokeEvent): { success: boolean } => {
+    console.log('[FileWatcher] Stopping all watchers, count:', this.fileWatchers.size)
+    for (const [filePath] of this.fileWatchers) {
+      unwatchFile(filePath)
+    }
+    this.fileWatchers.clear()
+    return { success: true }
   }
 
   handleFileReadContent = (

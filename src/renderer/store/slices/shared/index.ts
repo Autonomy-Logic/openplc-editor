@@ -23,6 +23,11 @@ import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-va
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
 import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import {
+  parseGraphicalPouFromString,
+  parseHybridPouFromString,
+  parseTextualPouFromString,
+} from '@root/utils/PLC/pou-text-parser'
 import * as monaco from 'monaco-editor'
 import { StateCreator } from 'zustand'
 
@@ -934,7 +939,9 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return await getState().sharedWorkspaceActions.saveFile(data.file)
+      const saveResult = await getState().sharedWorkspaceActions.saveFile(data.file)
+      getState().fileActions.removeFile({ name: data.file })
+      return saveResult
     },
   },
 
@@ -982,7 +989,9 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return await getState().sharedWorkspaceActions.saveFile(data.file)
+      const saveResult = await getState().sharedWorkspaceActions.saveFile(data.file)
+      getState().fileActions.removeFile({ name: data.file })
+      return saveResult
     },
   },
 
@@ -1207,6 +1216,26 @@ export const createSharedSlice: StateCreator<
             saved: true,
           }
         })
+        const servers = getState().project.data.servers
+        if (servers) {
+          servers.forEach((server) => {
+            files[server.name] = {
+              type: 'server',
+              filePath: `/project.json`,
+              saved: true,
+            }
+          })
+        }
+        const remoteDevices = getState().project.data.remoteDevices
+        if (remoteDevices) {
+          remoteDevices.forEach((device) => {
+            files[device.name] = {
+              type: 'remote-device',
+              filePath: `/project.json`,
+              saved: true,
+            }
+          })
+        }
         files['Resource'] = {
           type: 'resource',
           filePath: `/project.json`,
@@ -1792,33 +1821,109 @@ export const createSharedSlice: StateCreator<
         return { success: true }
       }
 
+      // If this is a newly created server that was never saved, remove it from state
+      if (file.isNew && file.type === 'server') {
+        getState().projectActions.deleteServer(name)
+        getState().tabsActions.removeTab(name)
+        getState().editorActions.removeModel(name)
+        getState().fileActions.removeFile({ name })
+
+        const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+        if (selectedProjectTreeLeaf.label === name) {
+          getState().workspaceActions.setSelectedProjectTreeLeaf({ label: '', type: null })
+        }
+
+        const filteredTabs = getState().tabs
+        const nextTab = filteredTabs[filteredTabs.length - 1]
+        if (nextTab) {
+          const editor =
+            getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
+          getState().editorActions.setEditor(editor)
+          getState().tabsActions.setSelectedTab(nextTab.name)
+          getState().workspaceActions.setSelectedProjectTreeLeaf({
+            label: nextTab.name,
+            type: nextTab.elementType.type,
+          })
+        } else {
+          getState().editorActions.setEditor({ type: 'available', meta: { name: '' } })
+          getState().tabsActions.setSelectedTab('')
+        }
+
+        return { success: true }
+      }
+
+      // If this is a newly created remote device that was never saved, remove it from state
+      if (file.isNew && file.type === 'remote-device') {
+        getState().projectActions.deleteRemoteDevice(name)
+        getState().tabsActions.removeTab(name)
+        getState().editorActions.removeModel(name)
+        getState().fileActions.removeFile({ name })
+
+        const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+        if (selectedProjectTreeLeaf.label === name) {
+          getState().workspaceActions.setSelectedProjectTreeLeaf({ label: '', type: null })
+        }
+
+        const filteredTabs = getState().tabs
+        const nextTab = filteredTabs[filteredTabs.length - 1]
+        if (nextTab) {
+          const editor =
+            getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
+          getState().editorActions.setEditor(editor)
+          getState().tabsActions.setSelectedTab(nextTab.name)
+          getState().workspaceActions.setSelectedProjectTreeLeaf({
+            label: nextTab.name,
+            type: nextTab.elementType.type,
+          })
+        } else {
+          getState().editorActions.setEditor({ type: 'available', meta: { name: '' } })
+          getState().tabsActions.setSelectedTab('')
+        }
+
+        return { success: true }
+      }
+
       // For existing files (not new), reload content from disk
       if (file.type === 'program' || file.type === 'function' || file.type === 'function-block') {
         const projectPath = getState().project.meta.path
-        const typeDir =
-          file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
-        const filePath = `${projectPath}/pous/${typeDir}/${name}.json`
+        const existingPou = getState().project.data.pous.find((p) => p.data.name === name)
 
-        try {
-          const readResult = await (
-            window.bridge as {
-              fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+        if (existingPou) {
+          const pouLanguage = existingPou.data.body.language
+          const extension = getExtensionFromLanguage(pouLanguage)
+          const typeDir =
+            file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+          const filePath = `${projectPath}/pous/${typeDir}/${name}${extension}`
+
+          try {
+            const readResult: { success: boolean; content?: string; error?: string } = await (
+              window.bridge as {
+                fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+              }
+            ).fileReadContent(filePath)
+            if (!readResult.success || !readResult.content) {
+              console.error('Failed to read file from disk:', readResult.error)
+              // If we can't read the file, just close it without reloading
+              getState().fileActions.updateFile({ name, saved: true })
+              return getState().sharedWorkspaceActions.forceCloseFile(name)
             }
-          ).fileReadContent(filePath)
-          if (!readResult.success || !readResult.content) {
-            console.error('Failed to read file from disk:', readResult.error)
-            // If we can't read the file, just close it without reloading
-            getState().fileActions.updateFile({ name, saved: true })
-            return getState().sharedWorkspaceActions.forceCloseFile(name)
-          }
 
-          // Parse the JSON content
-          const pouData = JSON.parse(readResult.content) as PLCPou
+            // Parse the text content using the appropriate parser
+            const fileContent: string = readResult.content
+            let pouData: PLCPou
+            if (pouLanguage === 'st' || pouLanguage === 'il') {
+              pouData = parseTextualPouFromString(fileContent, pouLanguage, file.type)
+            } else if (pouLanguage === 'python' || pouLanguage === 'cpp') {
+              pouData = parseHybridPouFromString(fileContent, pouLanguage, file.type)
+            } else if (pouLanguage === 'ld' || pouLanguage === 'fbd') {
+              pouData = parseGraphicalPouFromString(fileContent, pouLanguage, file.type)
+            } else {
+              console.error('Unsupported POU language:', pouLanguage)
+              getState().fileActions.updateFile({ name, saved: true })
+              return getState().sharedWorkspaceActions.forceCloseFile(name)
+            }
 
-          // Update the POU in the store with the content from disk
-          const existingPou = getState().project.data.pous.find((p) => p.data.name === name)
-          if (existingPou) {
-            // Update the POU body using applyPouSnapshot which handles all body types correctly
+            // Update the POU in the store with the content from disk
             getState().projectActions.applyPouSnapshot(name, pouData.data.variables, pouData.data.body)
 
             // Update ladder/FBD flows if applicable
@@ -1829,10 +1934,10 @@ export const createSharedSlice: StateCreator<
               getState().fbdFlowActions.removeFBDFlow(name)
               getState().fbdFlowActions.addFBDFlow(pouData.data.body.value as FBDFlowType)
             }
+          } catch (err) {
+            console.error('Error parsing POU file:', err)
+            // If parsing fails, just close without reloading
           }
-        } catch (err) {
-          console.error('Error parsing POU file:', err)
-          // If parsing fails, just close without reloading
         }
       }
 
@@ -1939,7 +2044,9 @@ export const createSharedSlice: StateCreator<
           break
         }
         case 'data-type':
-        case 'resource': {
+        case 'resource':
+        case 'server':
+        case 'remote-device': {
           const currentProject = getState().project
           const projectData = PLCProjectSchema.safeParse(currentProject)
           if (!projectData.success) {
@@ -2037,6 +2144,8 @@ export const createSharedSlice: StateCreator<
         }
         case 'data-type':
         case 'resource':
+        case 'server':
+        case 'remote-device':
           saveResponse = await window.bridge.saveFile(`${projectFilePath}/project.json`, saveContent)
           break
         default:

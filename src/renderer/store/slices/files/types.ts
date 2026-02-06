@@ -1,7 +1,7 @@
 import z from 'zod'
 
 const fileSliceTypeSchema = z
-  .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource'])
+  .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource', 'server', 'remote-device'])
   .nullable()
 type FileSliceType = z.infer<typeof fileSliceTypeSchema>
 

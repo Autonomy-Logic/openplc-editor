@@ -5,6 +5,8 @@ import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_m
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
+import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import { parseHybridPouFromString, parseTextualPouFromString } from '@root/utils/PLC/pou-text-parser'
 import type { IpcRendererEvent } from 'electron'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -53,6 +55,22 @@ type monacoEditorOptionsType = monaco.editor.IStandaloneEditorConstructionOption
 
 type SnippetController = {
   insert: (snippet: string, options?: unknown) => void
+}
+
+// window.bridge type doesn't resolve in the renderer webpack context for file-watcher methods,
+// so we define the shape we need here and cast once.
+type FileWatchBridge = {
+  fileWatchStart: (path: string) => Promise<{ success: boolean; error?: string }>
+  fileWatchStop: (path: string) => Promise<{ success: boolean }>
+  fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+  onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
+}
+const fileBridge = window.bridge as unknown as FileWatchBridge
+
+const POU_TYPE_TO_FOLDER: Record<string, string> = {
+  program: 'programs',
+  function: 'functions',
+  'function-block': 'function-blocks',
 }
 
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
@@ -166,45 +184,23 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const projectPath = openPLCStoreBase.getState().project.meta.path
     if (!projectPath || !pou) return
 
-    // Determine the correct file extension based on language
-    // POUs are stored as .st, .il, .ld, .fbd, .py, .cpp files
-    const extensionMap: Record<string, string> = {
-      st: '.st',
-      il: '.il',
-      ld: '.ld',
-      fbd: '.fbd',
-      python: '.py',
-      cpp: '.cpp',
-    }
-    const actualExtension = extensionMap[language] || '.st'
-
-    // Construct the correct file path from POU metadata
-    // The path prop can be unreliable (may have old format like /data/pous/program/)
-    // Instead, construct the path from the POU type and name
-    const pouTypeToFolder: Record<string, string> = {
-      program: 'programs',
-      function: 'functions',
-      'function-block': 'function-blocks',
-    }
-    const pouFolder = pouTypeToFolder[pou.type] || 'programs'
-    const pouFileName = `${name}${actualExtension}`
+    const actualExtension = getExtensionFromLanguage(language)
+    const pouFolder = POU_TYPE_TO_FOLDER[pou.type] || 'programs'
 
     // Construct full file path for the POU file
-    const fullPath = `${projectPath}/pous/${pouFolder}/${pouFileName}`
+    const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
     watchedFilePathRef.current = fullPath
 
     console.log('[Monaco FileWatch] Starting file watcher for:', fullPath)
 
     // Start watching the file
-    void (window.bridge as { fileWatchStart: (path: string) => Promise<{ success: boolean; error?: string }> })
-      .fileWatchStart(fullPath)
-      .then((result) => {
-        if (result.success) {
-          console.log('[Monaco FileWatch] Watcher started successfully for:', fullPath)
-        } else {
-          console.error('[Monaco FileWatch] Failed to start watcher:', result.error)
-        }
-      })
+    void fileBridge.fileWatchStart(fullPath).then((result) => {
+      if (result.success) {
+        console.log('[Monaco FileWatch] Watcher started successfully for:', fullPath)
+      } else {
+        console.error('[Monaco FileWatch] Failed to start watcher:', result.error)
+      }
+    })
 
     // Listen for external file change events - VSCode-like behavior:
     // - If file has no unsaved changes: auto-reload silently
@@ -230,59 +226,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       if (!watchedFilePathRef.current) return
 
       try {
-        const result = await (
-          window.bridge as {
-            fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
-          }
-        ).fileReadContent(watchedFilePathRef.current)
+        const result = await fileBridge.fileReadContent(watchedFilePathRef.current)
 
         if (result.success && result.content) {
-          const fileContent = result.content
-
-          // For textual languages (ST, IL), extract the body content from the text file
-          let newBodyValue = ''
-
-          if (language === 'st' || language === 'il') {
-            // Find the last END_VAR
-            const endVarRegex = /\bEND_VAR\b/gi
-            let lastEndVarIndex = -1
-            let match: RegExpExecArray | null
-            while ((match = endVarRegex.exec(fileContent)) !== null) {
-              lastEndVarIndex = match.index + match[0].length
-            }
-
-            // Find the END_PROGRAM, END_FUNCTION, or END_FUNCTION_BLOCK
-            const endKeywordRegex = /\b(END_PROGRAM|END_FUNCTION_BLOCK|END_FUNCTION)\b/i
-            const endMatch = fileContent.search(endKeywordRegex)
-
-            if (lastEndVarIndex !== -1 && endMatch !== -1) {
-              newBodyValue = fileContent.slice(lastEndVarIndex, endMatch).trim()
-            } else if (endMatch !== -1) {
-              const declarationRegex = /^.*?\b(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+(?:\s*:\s*\w+)?/i
-              const declarationMatch = fileContent.match(declarationRegex)
-              if (declarationMatch) {
-                const startIndex = declarationMatch[0].length
-                newBodyValue = fileContent.slice(startIndex, endMatch).trim()
-              }
-            }
-          } else if (language === 'python' || language === 'cpp') {
-            const endVarRegex = /\bEND_VAR\b/gi
-            let lastEndVarIndex = -1
-            let match: RegExpExecArray | null
-            while ((match = endVarRegex.exec(fileContent)) !== null) {
-              lastEndVarIndex = match.index + match[0].length
-            }
-
-            if (lastEndVarIndex !== -1) {
-              newBodyValue = fileContent.slice(lastEndVarIndex).trim()
-            } else {
-              const declarationRegex = /^.*?\b(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+(?:\s*:\s*\w+)?/i
-              const declarationMatch = fileContent.match(declarationRegex)
-              if (declarationMatch) {
-                newBodyValue = fileContent.slice(declarationMatch[0].length).trim()
-              }
-            }
-          }
+          const parsedPou =
+            language === 'st' || language === 'il'
+              ? parseTextualPouFromString(result.content, language, pou.type)
+              : parseHybridPouFromString(result.content, language, pou.type)
+          const newBodyValue = typeof parsedPou.data.body.value === 'string' ? parsedPou.data.body.value : ''
 
           // Update local state and store
           setLocalText(newBodyValue)
@@ -295,19 +246,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       }
     }
 
-    const cleanup = (
-      window.bridge as {
-        onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
-      }
-    ).onFileExternalChange(handleExternalChange)
+    const cleanup = fileBridge.onFileExternalChange(handleExternalChange)
 
     return () => {
       cleanup()
       if (watchedFilePathRef.current) {
         console.log('[Monaco FileWatch] Stopping file watcher for:', watchedFilePathRef.current)
-        void (window.bridge as { fileWatchStop: (path: string) => Promise<{ success: boolean }> }).fileWatchStop(
-          watchedFilePathRef.current,
-        )
+        void fileBridge.fileWatchStop(watchedFilePathRef.current)
         watchedFilePathRef.current = null
       }
     }
@@ -663,6 +608,20 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     if (!editorInstance || !monacoInstance) return
 
+    // Force-sync cached Monaco model with the store value.
+    // @monaco-editor/react's useUpdate skips the value→model sync on initial mount,
+    // so when keepCurrentModel=true a stale model from a previous session may persist
+    // (e.g. after "Don't Save" → reopen). At this point the onChange listener hasn't
+    // been wired up yet, so setValue won't trigger handleWriteInPou.
+    const model = editorInstance.getModel()
+    if (model) {
+      const storePou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+      const storeBodyValue = typeof storePou?.data.body.value === 'string' ? storePou.data.body.value : ''
+      if (model.getValue() !== storeBodyValue) {
+        model.setValue(storeBodyValue)
+      }
+    }
+
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
 
@@ -689,74 +648,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       if (!projectPath) return
 
       // Construct file path
-      const extensionMap: Record<string, string> = {
-        st: '.st',
-        il: '.il',
-        ld: '.ld',
-        fbd: '.fbd',
-        python: '.py',
-        cpp: '.cpp',
-      }
-      const actualExtension = extensionMap[language] || '.st'
-      const pouTypeToFolder: Record<string, string> = {
-        program: 'programs',
-        function: 'functions',
-        'function-block': 'function-blocks',
-      }
-      const pouFolder = pouTypeToFolder[currentPou.type] || 'programs'
+      const actualExtension = getExtensionFromLanguage(language)
+      const pouFolder = POU_TYPE_TO_FOLDER[currentPou.type] || 'programs'
       const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
 
       try {
-        const result = await (
-          window.bridge as {
-            fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
-          }
-        ).fileReadContent(fullPath)
+        const result = await fileBridge.fileReadContent(fullPath)
 
         if (result.success && result.content) {
-          const fileContent = result.content
-
-          // Extract body content from the file
-          let newBodyValue = ''
-
-          if (language === 'st' || language === 'il') {
-            const endVarRegex = /\bEND_VAR\b/gi
-            let lastEndVarIndex = -1
-            let match: RegExpExecArray | null
-            while ((match = endVarRegex.exec(fileContent)) !== null) {
-              lastEndVarIndex = match.index + match[0].length
-            }
-
-            const endKeywordRegex = /\b(END_PROGRAM|END_FUNCTION_BLOCK|END_FUNCTION)\b/i
-            const endMatch = fileContent.search(endKeywordRegex)
-
-            if (lastEndVarIndex !== -1 && endMatch !== -1) {
-              newBodyValue = fileContent.slice(lastEndVarIndex, endMatch).trim()
-            } else if (endMatch !== -1) {
-              const declarationRegex = /^.*?\b(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+(?:\s*:\s*\w+)?/i
-              const declarationMatch = fileContent.match(declarationRegex)
-              if (declarationMatch) {
-                newBodyValue = fileContent.slice(declarationMatch[0].length, endMatch).trim()
-              }
-            }
-          } else if (language === 'python' || language === 'cpp') {
-            const endVarRegex = /\bEND_VAR\b/gi
-            let lastEndVarIndex = -1
-            let match: RegExpExecArray | null
-            while ((match = endVarRegex.exec(fileContent)) !== null) {
-              lastEndVarIndex = match.index + match[0].length
-            }
-
-            if (lastEndVarIndex !== -1) {
-              newBodyValue = fileContent.slice(lastEndVarIndex).trim()
-            } else {
-              const declarationRegex = /^.*?\b(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+(?:\s*:\s*\w+)?/i
-              const declarationMatch = fileContent.match(declarationRegex)
-              if (declarationMatch) {
-                newBodyValue = fileContent.slice(declarationMatch[0].length).trim()
-              }
-            }
-          }
+          const parsedPou =
+            language === 'st' || language === 'il'
+              ? parseTextualPouFromString(result.content, language, currentPou.type)
+              : parseHybridPouFromString(result.content, language, currentPou.type)
+          const newBodyValue = typeof parsedPou.data.body.value === 'string' ? parsedPou.data.body.value : ''
 
           // Only update if content is different from what we have
           const currentBodyValue = typeof currentPou.data.body.value === 'string' ? currentPou.data.body.value : ''
@@ -1087,7 +991,7 @@ void loop()
 
   return (
     <>
-      <div id='editor drop handler' className='oplc-monaco-wrapper relative h-full w-full' onDrop={handleDrop}>
+      <div id='editor drop handler' className='oplc-monaco-wrapper h-full w-full' onDrop={handleDrop}>
         <PrimitiveEditor
           options={monacoEditorUserOptions}
           height='100%'
