@@ -7,6 +7,7 @@ type ESIRepositoryTableProps = {
   repository: ESIRepositoryItemLight[]
   onRemoveItem: (itemId: string) => void | Promise<void>
   onClearAll: () => void | Promise<void>
+  isLoading?: boolean
 }
 
 /**
@@ -14,7 +15,7 @@ type ESIRepositoryTableProps = {
  *
  * Displays loaded ESI files with expandable rows showing contained devices.
  */
-const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll }: ESIRepositoryTableProps) => {
+const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll, isLoading = false }: ESIRepositoryTableProps) => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
 
   const handleToggleExpand = useCallback((itemId: string) => {
@@ -50,9 +51,10 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll }: ESIReposit
         </span>
         <button
           onClick={() => void onClearAll()}
-          className='text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300'
+          disabled={isLoading}
+          className='text-xs text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300'
         >
-          Clear All
+          {isLoading ? 'Clearing...' : 'Clear All'}
         </button>
       </div>
 

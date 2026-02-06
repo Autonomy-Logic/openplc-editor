@@ -143,7 +143,12 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
 
       {/* Repository Table */}
       <div className='flex flex-1 flex-col overflow-hidden'>
-        <ESIRepositoryTable repository={repository} onRemoveItem={handleRemoveItem} onClearAll={handleClearAll} />
+        <ESIRepositoryTable
+          repository={repository}
+          onRemoveItem={handleRemoveItem}
+          onClearAll={handleClearAll}
+          isLoading={isSaving}
+        />
       </div>
     </div>
   )
