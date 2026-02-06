@@ -1,13 +1,13 @@
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/renderer/components/_molecules/modal'
-import type { ESIDevice, ESIDeviceRef, ESIRepositoryItem } from '@root/types/ethercat/esi-types'
+import type { ESIDeviceRef, ESIDeviceSummary, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
 import { useCallback, useMemo, useState } from 'react'
 
 type DeviceBrowserModalProps = {
   isOpen: boolean
   onClose: () => void
-  onSelectDevice: (ref: ESIDeviceRef, device: ESIDevice, repoItem: ESIRepositoryItem) => void
-  repository: ESIRepositoryItem[]
+  onSelectDevice: (ref: ESIDeviceRef, device: ESIDeviceSummary, repoItem: ESIRepositoryItemLight) => void
+  repository: ESIRepositoryItemLight[]
 }
 
 /**
@@ -29,8 +29,8 @@ const DeviceBrowserModal = ({ isOpen, onClose, onSelectDevice, repository }: Dev
         vendorId: string
         vendorName: string
         devices: Array<{
-          repoItem: ESIRepositoryItem
-          device: ESIDevice
+          repoItem: ESIRepositoryItemLight
+          device: ESIDeviceSummary
           deviceIndex: number
         }>
       }

@@ -8,7 +8,7 @@ import type { EtherCATDevice } from '@root/types/ethercat'
 import type {
   DeviceMatch,
   DeviceMatchQuality,
-  ESIRepositoryItem,
+  ESIRepositoryItemLight,
   ScannedDeviceMatch,
 } from '@root/types/ethercat/esi-types'
 
@@ -58,7 +58,7 @@ function getMatchQuality(
 /**
  * Find all matches for a single scanned device in the repository
  */
-function findMatchesForDevice(scannedDevice: EtherCATDevice, repository: ESIRepositoryItem[]): DeviceMatch[] {
+function findMatchesForDevice(scannedDevice: EtherCATDevice, repository: ESIRepositoryItemLight[]): DeviceMatch[] {
   const matches: DeviceMatch[] = []
 
   for (const repoItem of repository) {
@@ -105,7 +105,7 @@ function findMatchesForDevice(scannedDevice: EtherCATDevice, repository: ESIRepo
  */
 export function matchDevicesToRepository(
   scannedDevices: EtherCATDevice[],
-  repository: ESIRepositoryItem[],
+  repository: ESIRepositoryItemLight[],
 ): ScannedDeviceMatch[] {
   return scannedDevices.map((device) => {
     const matches = findMatchesForDevice(device, repository)

@@ -265,6 +265,33 @@ export interface ESIParseResult {
   warnings?: string[]
 }
 
+// ===================== DEVICE SUMMARY (lightweight) =====================
+
+/**
+ * Lightweight device metadata without PDOs/SM/FMMU.
+ * Used for repository listing and device matching without full parsing.
+ */
+export interface ESIDeviceSummary {
+  /** Device type information */
+  type: ESIDeviceType
+  /** Device name */
+  name: string
+  /** Group name (category) */
+  groupName?: string
+  /** Physics type (e.g., "YY") */
+  physics?: string
+  /** Pre-computed count of non-padding TxPDO entries */
+  inputChannelCount: number
+  /** Pre-computed count of non-padding RxPDO entries */
+  outputChannelCount: number
+  /** Pre-computed total input bytes */
+  totalInputBytes: number
+  /** Pre-computed total output bytes */
+  totalOutputBytes: number
+  /** Additional description */
+  description?: string
+}
+
 // ===================== REPOSITORY =====================
 
 /**
@@ -279,6 +306,25 @@ export interface ESIRepositoryItem {
   vendor: ESIVendor
   /** Devices contained in this file */
   devices: ESIDevice[]
+  /** Timestamp when this file was loaded */
+  loadedAt: number
+  /** Parsing warnings (non-fatal issues) */
+  warnings?: string[]
+}
+
+/**
+ * Lightweight repository item with device summaries instead of full ESIDevice objects.
+ * Used for UI display and matching without loading full PDO data.
+ */
+export interface ESIRepositoryItemLight {
+  /** Unique identifier for this repository item */
+  id: string
+  /** Original filename */
+  filename: string
+  /** Vendor information */
+  vendor: ESIVendor
+  /** Lightweight device summaries */
+  devices: ESIDeviceSummary[]
   /** Timestamp when this file was loaded */
   loadedAt: number
   /** Parsing warnings (non-fatal issues) */
@@ -336,8 +382,8 @@ export interface DeviceMatch {
   deviceIndex: number
   /** Quality of the match */
   matchQuality: DeviceMatchQuality
-  /** The matched ESI device */
-  esiDevice: ESIDevice
+  /** The matched ESI device (lightweight summary) */
+  esiDevice: ESIDeviceSummary
 }
 
 /**

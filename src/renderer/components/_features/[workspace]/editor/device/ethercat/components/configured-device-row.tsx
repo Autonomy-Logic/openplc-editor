@@ -1,12 +1,11 @@
 import { ArrowIcon } from '@root/renderer/assets/icons'
-import type { ConfiguredEtherCATDevice, ESIDevice, ESIRepositoryItem } from '@root/types/ethercat/esi-types'
+import type { ConfiguredEtherCATDevice, ESIDeviceSummary, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
-import { getDeviceSummary } from '@root/utils/ethercat/esi-parser'
 import { useMemo } from 'react'
 
 type ConfiguredDeviceRowProps = {
   device: ConfiguredEtherCATDevice
-  repository: ESIRepositoryItem[]
+  repository: ESIRepositoryItemLight[]
   isExpanded: boolean
   onToggleExpand: () => void
   isSelected: boolean
@@ -27,8 +26,8 @@ const ConfiguredDeviceRow = ({
   isSelected,
   onSelect,
 }: ConfiguredDeviceRowProps) => {
-  // Resolve the ESI device from repository
-  const esiDevice = useMemo<ESIDevice | null>(() => {
+  // Resolve the ESI device summary from repository
+  const esiDevice = useMemo<ESIDeviceSummary | null>(() => {
     const repoItem = repository.find((r) => r.id === device.esiDeviceRef.repositoryItemId)
     if (!repoItem) return null
     return repoItem.devices[device.esiDeviceRef.deviceIndex] || null
@@ -38,12 +37,7 @@ const ConfiguredDeviceRow = ({
     return repository.find((r) => r.id === device.esiDeviceRef.repositoryItemId)
   }, [repository, device.esiDeviceRef.repositoryItemId])
 
-  const summary = useMemo(() => {
-    if (!esiDevice) return null
-    return getDeviceSummary(esiDevice)
-  }, [esiDevice])
-
-  const ioSummary = summary ? `${summary.inputChannelCount} / ${summary.outputChannelCount}` : '-'
+  const ioSummary = esiDevice ? `${esiDevice.inputChannelCount} / ${esiDevice.outputChannelCount}` : '-'
 
   return (
     <>
@@ -127,15 +121,15 @@ const ConfiguredDeviceRow = ({
                       <span className='text-neutral-700 dark:text-neutral-300'>{esiDevice.groupName}</span>
                     </div>
                   )}
-                  {summary && (
+                  {esiDevice && (
                     <>
                       <div>
                         <span className='text-neutral-500 dark:text-neutral-400'>Input Channels:</span>{' '}
-                        <span className='text-neutral-700 dark:text-neutral-300'>{summary.inputChannelCount}</span>
+                        <span className='text-neutral-700 dark:text-neutral-300'>{esiDevice.inputChannelCount}</span>
                       </div>
                       <div>
                         <span className='text-neutral-500 dark:text-neutral-400'>Output Channels:</span>{' '}
-                        <span className='text-neutral-700 dark:text-neutral-300'>{summary.outputChannelCount}</span>
+                        <span className='text-neutral-700 dark:text-neutral-300'>{esiDevice.outputChannelCount}</span>
                       </div>
                     </>
                   )}

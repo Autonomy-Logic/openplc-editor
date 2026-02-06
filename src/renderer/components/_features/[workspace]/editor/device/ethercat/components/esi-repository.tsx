@@ -1,14 +1,14 @@
-import type { ESIParseResult, ESIRepositoryItem } from '@root/types/ethercat/esi-types'
+import type { ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { useCallback, useState } from 'react'
 
 import { ESIRepositoryTable } from './esi-repository-table'
-import { ESIUpload, parseResultsToRepositoryItems } from './esi-upload'
+import { ESIUpload } from './esi-upload'
 
 type ESIServiceResponse = { success: boolean; error?: string }
 
 type ESIRepositoryProps = {
-  repository: ESIRepositoryItem[]
-  onRepositoryChange: (repository: ESIRepositoryItem[]) => void
+  repository: ESIRepositoryItemLight[]
+  onRepositoryChange: (repository: ESIRepositoryItemLight[]) => void
   projectPath: string
   isLoading?: boolean
 }
@@ -18,75 +18,19 @@ type ESIRepositoryProps = {
  *
  * Manages the ESI file repository with upload and display functionality.
  * Combines upload zone with repository table.
- * Automatically persists changes to disk.
+ * Files are parsed and saved in the main process; this component receives ready items.
  */
 const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading = false }: ESIRepositoryProps) => {
   const [uploadErrors, setUploadErrors] = useState<Array<{ filename: string; error: string }>>([])
   const [isSaving, setIsSaving] = useState(false)
 
   const handleFilesLoaded = useCallback(
-    async (results: Array<{ result: ESIParseResult; filename: string; xmlContent: string }>) => {
-      const { items, errors } = parseResultsToRepositoryItems(results)
-
-      // Add new items to existing repository (avoiding duplicates by filename)
-      const existingFilenames = new Set(repository.map((r) => r.filename))
-      const newItems = items.filter((item) => !existingFilenames.has(item.filename))
-
-      if (newItems.length > 0) {
-        setIsSaving(true)
-
-        // Save each new item to disk
-        const saveErrors: Array<{ filename: string; error: string }> = []
-        const savedItems: ESIRepositoryItem[] = []
-
-        for (let i = 0; i < newItems.length; i++) {
-          const item = newItems[i]
-          // Find the corresponding XML content from the results
-          const resultEntry = results.find(
-            (r) => r.result.success && r.result.data && r.result.data.filename === item.filename,
-          )
-
-          if (resultEntry && resultEntry.xmlContent) {
-            try {
-              const saveResult: ESIServiceResponse = await window.bridge.esiSaveRepositoryItem(
-                projectPath,
-                item,
-                resultEntry.xmlContent,
-                [...repository, ...savedItems],
-              )
-
-              if (saveResult.success) {
-                savedItems.push(item)
-              } else {
-                saveErrors.push({
-                  filename: item.filename,
-                  error: saveResult.error ?? 'Failed to save file',
-                })
-              }
-            } catch (err) {
-              saveErrors.push({
-                filename: item.filename,
-                error: String(err),
-              })
-            }
-          }
-        }
-
-        setIsSaving(false)
-
-        // Update repository with successfully saved items
-        if (savedItems.length > 0) {
-          onRepositoryChange([...repository, ...savedItems])
-        }
-
-        // Show errors for failed files (both parse errors and save errors)
-        setUploadErrors([...errors, ...saveErrors])
-      } else {
-        // Show only parse errors
-        setUploadErrors(errors)
-      }
+    (items: ESIRepositoryItemLight[], errors?: Array<{ filename: string; error: string }>) => {
+      // Items are already parsed and saved by the main process
+      onRepositoryChange(items)
+      setUploadErrors(errors ?? [])
     },
-    [repository, onRepositoryChange, projectPath],
+    [onRepositoryChange],
   )
 
   const handleRemoveItem = useCallback(
@@ -94,10 +38,16 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
       setIsSaving(true)
 
       try {
-        const result: ESIServiceResponse = await window.bridge.esiDeleteRepositoryItem(projectPath, itemId, repository)
+        // We still use the old delete IPC since it works for both v1/v2
+        const result: ESIServiceResponse = await window.bridge.esiDeleteXmlFile(projectPath, itemId)
 
         if (result.success) {
-          onRepositoryChange(repository.filter((item) => item.id !== itemId))
+          const updatedRepo = repository.filter((item) => item.id !== itemId)
+          // Re-save the v2 index
+          await window.bridge.esiMigrateRepository(projectPath).catch(() => {
+            // Fallback: just update state
+          })
+          onRepositoryChange(updatedRepo)
         } else {
           console.error('Failed to delete ESI item:', result.error)
         }
@@ -114,22 +64,19 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
     setIsSaving(true)
 
     try {
-      // Delete all items from disk
-      for (const item of repository) {
-        await (window.bridge.esiDeleteXmlFile(projectPath, item.id) as Promise<ESIServiceResponse>)
+      const result: ESIServiceResponse = await window.bridge.esiClearRepository(projectPath)
+      if (result.success) {
+        onRepositoryChange([])
+        setUploadErrors([])
+      } else {
+        console.error('Failed to clear ESI repository:', result.error)
       }
-
-      // Save empty repository index
-      await (window.bridge.esiSaveRepositoryIndex(projectPath, []) as Promise<ESIServiceResponse>)
-
-      onRepositoryChange([])
-      setUploadErrors([])
     } catch (err) {
       console.error('Error clearing ESI repository:', err)
     } finally {
       setIsSaving(false)
     }
-  }, [repository, onRepositoryChange, projectPath])
+  }, [onRepositoryChange, projectPath])
 
   const handleDismissError = useCallback((filename: string) => {
     setUploadErrors((prev) => prev.filter((e) => e.filename !== filename))
@@ -141,9 +88,10 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
     <div className='flex flex-1 flex-col gap-4 overflow-hidden'>
       {/* Upload Area */}
       <ESIUpload
-        onFilesLoaded={(results) => void handleFilesLoaded(results)}
-        repositoryCount={repository.length}
+        onFilesLoaded={handleFilesLoaded}
+        repository={repository}
         isLoading={isProcessing}
+        projectPath={projectPath}
       />
 
       {/* Error Messages */}

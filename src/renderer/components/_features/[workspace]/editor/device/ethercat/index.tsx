@@ -3,14 +3,13 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
 import type {
   ConfiguredEtherCATDevice,
-  ESIDevice,
   ESIDeviceRef,
-  ESIRepositoryItem,
+  ESIDeviceSummary,
+  ESIRepositoryItemLight,
   ScannedDeviceMatch,
 } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
 import { countMatchedDevices, getBestMatchQuality, matchDevicesToRepository } from '@root/utils/ethercat/device-matcher'
-import { parseESI } from '@root/utils/ethercat/esi-parser'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -43,8 +42,8 @@ const EtherCATEditor = () => {
   // Tab state
   const [activeTab, setActiveTab] = useState<EditorTab>('repository')
 
-  // Repository state
-  const [repository, setRepository] = useState<ESIRepositoryItem[]>([])
+  // Repository state (now lightweight)
+  const [repository, setRepository] = useState<ESIRepositoryItemLight[]>([])
   const [isLoadingRepository, setIsLoadingRepository] = useState(false)
   const [_repositoryError, setRepositoryError] = useState<string | null>(null)
   const repositoryLoadedRef = useRef(false)
@@ -171,7 +170,7 @@ const EtherCATEditor = () => {
     }
   }, [isConnectedToRuntime, ipAddress, jwtToken, selectedInterface])
 
-  // Load ESI repository from disk when component mounts
+  // Load ESI repository from cache (v2) or migrate (v1)
   useEffect(() => {
     const loadRepository = async () => {
       if (!projectPath || repositoryLoadedRef.current) return
@@ -180,48 +179,18 @@ const EtherCATEditor = () => {
       setRepositoryError(null)
 
       try {
-        // Load the repository index from disk
-        const indexResult = await window.bridge.esiLoadRepositoryIndex(projectPath)
+        const result = await window.bridge.esiLoadRepositoryLight(projectPath)
 
-        if (!indexResult.success || !indexResult.data) {
-          // No repository exists yet - that's okay
-          repositoryLoadedRef.current = true
-          setIsLoadingRepository(false)
-          return
-        }
-
-        // For each item in the index, load and parse the XML file
-        const loadedItems: ESIRepositoryItem[] = []
-
-        for (const indexItem of indexResult.data.items) {
-          const { id, filename, loadedAt, warnings: indexWarnings } = indexItem
-
-          try {
-            const xmlResult = await window.bridge.esiLoadXmlFile(projectPath, id)
-
-            if (xmlResult.success && xmlResult.content) {
-              // Re-parse the XML to get full device information
-              const content: string = xmlResult.content
-              const fname: string = filename
-              const parseResult = parseESI(content, fname)
-
-              if (parseResult.success && parseResult.data) {
-                loadedItems.push({
-                  id,
-                  filename,
-                  vendor: parseResult.data.vendor,
-                  devices: parseResult.data.devices,
-                  loadedAt,
-                  warnings: parseResult.warnings || indexWarnings,
-                })
-              }
-            }
-          } catch (err) {
-            console.error(`Failed to load ESI file ${filename}:`, err)
+        if (result.success && result.items) {
+          setRepository(result.items)
+        } else if (result.needsMigration) {
+          // One-time migration from v1 to v2
+          const migrationResult = await window.bridge.esiMigrateRepository(projectPath)
+          if (migrationResult.success && migrationResult.items) {
+            setRepository(migrationResult.items)
           }
         }
 
-        setRepository(loadedItems)
         repositoryLoadedRef.current = true
       } catch (error) {
         console.error('Failed to load ESI repository:', error)
@@ -313,7 +282,7 @@ const EtherCATEditor = () => {
 
   // Handle adding device from browser modal
   const handleAddDeviceFromBrowser = useCallback(
-    (ref: ESIDeviceRef, device: ESIDevice, repoItem: ESIRepositoryItem) => {
+    (ref: ESIDeviceRef, device: ESIDeviceSummary, repoItem: ESIRepositoryItemLight) => {
       const newDevice: ConfiguredEtherCATDevice = {
         id: uuidv4(),
         name: device.name,

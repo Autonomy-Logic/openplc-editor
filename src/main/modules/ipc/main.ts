@@ -1,4 +1,5 @@
 import { ESIService } from '@root/main/services/esi-service'
+import { parseESIDeviceFull } from '@root/main/services/esi-service/esi-parser-main'
 import { getProjectPath } from '@root/main/utils'
 import type {
   EtherCATScanRequest,
@@ -10,7 +11,7 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/types/ethercat'
-import type { ESIRepositoryItem } from '@root/types/ethercat/esi-types'
+import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -908,6 +909,80 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  // ===================== ESI OPTIMIZED HANDLERS =====================
+
+  /**
+   * Parse and save a single ESI file
+   */
+  handleESIParseAndSaveFile = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    filename: string,
+    content: string,
+  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> => {
+    return this.esiService.parseAndSaveFile(projectPath, filename, content)
+  }
+
+  /**
+   * Clear the entire ESI repository
+   */
+  handleESIClearRepository = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    return this.esiService.clearRepository(projectPath)
+  }
+
+  /**
+   * Load a full ESI device on-demand (with PDOs, SM, FMMU)
+   */
+  handleESILoadDeviceFull = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    itemId: string,
+    deviceIndex: number,
+  ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> => {
+    try {
+      const xmlResult = await this.esiService.loadXmlFile(projectPath, itemId)
+      if (!xmlResult.success || !xmlResult.content) {
+        return { success: false, error: xmlResult.error || 'XML file not found' }
+      }
+
+      const result = parseESIDeviceFull(xmlResult.content, deviceIndex)
+      return result
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Load repository as lightweight items (instant from v2 cache)
+   */
+  handleESILoadRepositoryLight = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; needsMigration?: boolean; error?: string }> => {
+    try {
+      return await this.esiService.loadRepositoryLight(projectPath)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Migrate v1 repository to v2 with device summaries
+   */
+  handleESIMigrateRepository = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> => {
+    try {
+      return await this.esiService.migrateRepositoryToV2(projectPath)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {
     // Project-related handlers
@@ -1003,6 +1078,13 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('esi:delete-xml-file', this.handleESIDeleteXmlFile)
     this.ipcMain.handle('esi:save-repository-item', this.handleESISaveRepositoryItem)
     this.ipcMain.handle('esi:delete-repository-item', this.handleESIDeleteRepositoryItem)
+
+    // ===================== ESI OPTIMIZED (v2) =====================
+    this.ipcMain.handle('esi:parse-and-save-file', this.handleESIParseAndSaveFile)
+    this.ipcMain.handle('esi:clear-repository', this.handleESIClearRepository)
+    this.ipcMain.handle('esi:load-device-full', this.handleESILoadDeviceFull)
+    this.ipcMain.handle('esi:load-repository-light', this.handleESILoadRepositoryLight)
+    this.ipcMain.handle('esi:migrate-repository', this.handleESIMigrateRepository)
   }
 
   // ===================== HANDLER METHODS =====================

@@ -1,10 +1,10 @@
 import { ArrowIcon } from '@root/renderer/assets/icons'
-import type { ESIRepositoryItem } from '@root/types/ethercat/esi-types'
+import type { ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
 import { useCallback, useState } from 'react'
 
 type ESIRepositoryTableProps = {
-  repository: ESIRepositoryItem[]
+  repository: ESIRepositoryItemLight[]
   onRemoveItem: (itemId: string) => void | Promise<void>
   onClearAll: () => void | Promise<void>
 }
@@ -94,7 +94,7 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll }: ESIReposit
 }
 
 type RepositoryItemRowProps = {
-  item: ESIRepositoryItem
+  item: ESIRepositoryItemLight
   isExpanded: boolean
   onToggleExpand: () => void
   onRemove: () => void

@@ -1,13 +1,13 @@
 import { MinusIcon, PlusIcon } from '@root/renderer/assets/icons'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
-import type { ConfiguredEtherCATDevice, ESIRepositoryItem } from '@root/types/ethercat/esi-types'
+import type { ConfiguredEtherCATDevice, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { useCallback, useState } from 'react'
 
 import { ConfiguredDeviceRow } from './configured-device-row'
 
 type ConfiguredDevicesProps = {
   devices: ConfiguredEtherCATDevice[]
-  repository: ESIRepositoryItem[]
+  repository: ESIRepositoryItemLight[]
   onAddDevice: () => void
   onRemoveDevice: (deviceId: string) => void
 }
