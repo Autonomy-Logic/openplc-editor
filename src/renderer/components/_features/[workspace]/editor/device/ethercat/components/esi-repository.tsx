@@ -78,9 +78,7 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
     }
   }, [onRepositoryChange, projectPath])
 
-  const handleDismissError = useCallback((filename: string) => {
-    setUploadErrors((prev) => prev.filter((e) => e.filename !== filename))
-  }, [])
+  const [errorsExpanded, setErrorsExpanded] = useState(false)
 
   const isProcessing = isLoading || isSaving
 
@@ -94,42 +92,52 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
         projectPath={projectPath}
       />
 
-      {/* Error Messages */}
+      {/* Error Summary (collapsible) */}
       {uploadErrors.length > 0 && (
-        <div className='flex flex-col gap-2'>
-          {uploadErrors.map((error) => (
-            <div
-              key={error.filename}
-              className='flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20'
-            >
-              <div className='flex items-center gap-2'>
-                <svg
-                  className='h-4 w-4 text-red-500 dark:text-red-400'
-                  fill='none'
-                  viewBox='0 0 24 24'
-                  stroke='currentColor'
-                >
-                  <path
-                    strokeLinecap='round'
-                    strokeLinejoin='round'
-                    strokeWidth={2}
-                    d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
-                  />
-                </svg>
-                <span className='text-sm text-red-700 dark:text-red-300'>
-                  <strong>{error.filename || 'File'}</strong>: {error.error}
-                </span>
-              </div>
-              <button
-                onClick={() => handleDismissError(error.filename)}
-                className='text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300'
+        <div className='shrink-0 rounded-md border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'>
+          <div className='flex items-center justify-between px-3 py-2'>
+            <button onClick={() => setErrorsExpanded((prev) => !prev)} className='flex items-center gap-2'>
+              <svg
+                className='h-4 w-4 text-red-500 dark:text-red-400'
+                fill='none'
+                viewBox='0 0 24 24'
+                stroke='currentColor'
               >
-                <svg className='h-4 w-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
-                </svg>
-              </button>
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                />
+              </svg>
+              <span className='text-sm text-red-700 dark:text-red-300'>
+                {uploadErrors.length} file(s) failed to parse
+              </span>
+              <svg
+                className={`h-3 w-3 text-red-500 transition-transform dark:text-red-400 ${errorsExpanded ? 'rotate-180' : ''}`}
+                fill='none'
+                viewBox='0 0 24 24'
+                stroke='currentColor'
+              >
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 9l-7 7-7-7' />
+              </svg>
+            </button>
+            <button
+              onClick={() => setUploadErrors([])}
+              className='text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300'
+            >
+              Dismiss
+            </button>
+          </div>
+          {errorsExpanded && (
+            <div className='max-h-32 overflow-auto border-t border-red-200 px-3 py-2 dark:border-red-800'>
+              {uploadErrors.map((error) => (
+                <div key={error.filename} className='py-0.5 text-xs text-red-600 dark:text-red-400'>
+                  <strong>{error.filename || 'File'}</strong>: {error.error}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 
