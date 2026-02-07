@@ -51,6 +51,7 @@ const _searchActionsSchema = z.object({
     .function()
     .args(z.object({ x: z.number(), y: z.number() }))
     .returns(z.void()),
+  clearSearch: z.function().returns(z.void()),
 })
 type SearchActions = z.infer<typeof _searchActionsSchema>
 

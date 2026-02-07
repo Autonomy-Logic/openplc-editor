@@ -6,9 +6,10 @@ import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
+import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingMessage } from 'http'
 import https from 'https'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { platform } from 'process'
 
 import { ProjectState } from '../../../renderer/store/slices'
@@ -49,6 +50,10 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerJwtToken: string | null = null
   private runtimeCredentials: { ipAddress: string; username: string; password: string } | null = null
   private tokenRefreshInFlight: Promise<{ success: boolean; accessToken?: string; error?: string }> | null = null
+  // Current project root path used to validate file-watcher IPC calls
+  private currentProjectPath: string | null = null
+  // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
+  private fileWatchers: Map<string, { lastMtime: number }> = new Map()
 
   constructor({
     ipcMain,
@@ -589,6 +594,12 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+
+    // ===================== FILE WATCHER =====================
+    this.ipcMain.handle('file:watch-start', this.handleFileWatchStart)
+    this.ipcMain.handle('file:watch-stop', this.handleFileWatchStop)
+    this.ipcMain.handle('file:watch-stop-all', this.handleFileWatchStopAll)
+    this.ipcMain.handle('file:read-content', this.handleFileReadContent)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -599,6 +610,9 @@ class MainProcessBridge implements MainIpcModule {
   }
   handleProjectOpen = async () => {
     const response = await this.projectService.openProject()
+    if (response.success && response.data?.meta.path) {
+      this.currentProjectPath = response.data.meta.path
+    }
     return response
   }
   handleProjectPathPicker = async (_event: IpcMainInvokeEvent) => {
@@ -613,13 +627,32 @@ class MainProcessBridge implements MainIpcModule {
       console.error('Error getting project path:', error)
     }
   }
-  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) =>
-    await this.projectService.saveFile(filePath, content)
+  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) => {
+    const result = await this.projectService.saveFile(filePath, content)
+    if (result.success) {
+      // Update lastMtime for the saved file's watcher to suppress self-trigger
+      const watcherData = this.fileWatchers.get(filePath)
+      if (watcherData) {
+        try {
+          const stats = statSync(filePath)
+          if (stats.mtimeMs > watcherData.lastMtime) {
+            watcherData.lastMtime = stats.mtimeMs
+          }
+        } catch {
+          /* file may not exist */
+        }
+      }
+    }
+    return result
+  }
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
     try {
       const response = await this.projectService.openProjectByPath(projectPath)
+      if (response.success && response.data?.meta.path) {
+        this.currentProjectPath = response.data.meta.path
+      }
       return response
     } catch (_error) {
       return {
@@ -1233,6 +1266,107 @@ class MainProcessBridge implements MainIpcModule {
       console.error('[IPC Handler] Modbus setVariable error:', error)
       return { success: false, error: String(error) }
     }
+  }
+
+  // ===================== FILE WATCHER HANDLERS =====================
+
+  /**
+   * Validate that a file path is within the current project root.
+   * Resolves symlinks to prevent directory traversal attacks.
+   */
+  private validateFilePath(filePath: string): boolean {
+    if (!this.currentProjectPath) return false
+    try {
+      const resolved = realpathSync(resolve(filePath))
+      const projectRoot = realpathSync(resolve(this.currentProjectPath))
+      return resolved.startsWith(projectRoot + '/') || resolved === projectRoot
+    } catch {
+      // realpathSync fails if the file doesn't exist yet — fall back to resolve only
+      const resolved = resolve(filePath)
+      const projectRoot = resolve(this.currentProjectPath)
+      return resolved.startsWith(projectRoot + '/') || resolved === projectRoot
+    }
+  }
+
+  // Using watchFile (polling-based) instead of watch for better macOS compatibility
+  // fs.watch can fail when editors use "safe write" (write to temp file, then rename)
+  handleFileWatchStart = (
+    _event: IpcMainInvokeEvent,
+    filePath: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!this.validateFilePath(filePath)) {
+      return Promise.resolve({ success: false, error: 'Path is outside the project directory' })
+    }
+
+    return new Promise((res) => {
+      if (this.fileWatchers.has(filePath)) {
+        res({ success: true })
+        return
+      }
+
+      stat(filePath, (statErr, stats) => {
+        if (statErr) {
+          res({ success: false, error: `Failed to stat file: ${statErr.message}` })
+          return
+        }
+
+        const initialMtime = stats.mtimeMs
+
+        try {
+          watchFile(filePath, { interval: 1000 }, (curr, prev) => {
+            const watcherData = this.fileWatchers.get(filePath)
+            if (!watcherData) return
+
+            if (curr.mtimeMs > prev.mtimeMs && curr.mtimeMs > watcherData.lastMtime) {
+              watcherData.lastMtime = curr.mtimeMs
+              this.mainWindow?.webContents.send('file:external-change', { filePath })
+            }
+          })
+
+          this.fileWatchers.set(filePath, { lastMtime: initialMtime })
+          res({ success: true })
+        } catch (error) {
+          res({ success: false, error: `Failed to watch file: ${String(error)}` })
+        }
+      })
+    })
+  }
+
+  handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): { success: boolean; error?: string } => {
+    if (!this.validateFilePath(filePath)) {
+      return { success: false, error: 'Path is outside the project directory' }
+    }
+    if (this.fileWatchers.has(filePath)) {
+      unwatchFile(filePath)
+      this.fileWatchers.delete(filePath)
+    }
+    return { success: true }
+  }
+
+  handleFileWatchStopAll = (_event: IpcMainInvokeEvent): { success: boolean } => {
+    for (const [filePath] of this.fileWatchers) {
+      unwatchFile(filePath)
+    }
+    this.fileWatchers.clear()
+    return { success: true }
+  }
+
+  handleFileReadContent = (
+    _event: IpcMainInvokeEvent,
+    filePath: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> => {
+    if (!this.validateFilePath(filePath)) {
+      return Promise.resolve({ success: false, error: 'Path is outside the project directory' })
+    }
+    return new Promise((res) => {
+      readFile(filePath, 'utf-8', (err, content) => {
+        if (err) {
+          res({ success: false, error: `Failed to read file: ${err.message}` })
+        } else {
+          res({ success: true, content })
+        }
+      })
+    })
   }
 
   // ===================== EVENT HANDLERS =====================
