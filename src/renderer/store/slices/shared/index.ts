@@ -1741,7 +1741,7 @@ export const createSharedSlice: StateCreator<
           const projectPath = getState().project.meta.path
           const pou = getState().project.data.pous.find((p) => p.data.name === name)
           const extension = pou ? getExtensionFromLanguage(pou.data.body.language) : '.st'
-          const filePath = `${projectPath}/pous/${getFolderFromPouType(file.type)}/${name}${extension}`
+          const filePath = `${projectPath}/pous/${getFolderFromPouType(file.type ?? 'program')}/${name}${extension}`
 
           try {
             await window.bridge.deletePouFile(filePath)
@@ -1778,7 +1778,7 @@ export const createSharedSlice: StateCreator<
         if (existingPou) {
           const pouLanguage = existingPou.data.body.language
           const extension = getExtensionFromLanguage(pouLanguage)
-          const filePath = `${projectPath}/pous/${getFolderFromPouType(file.type)}/${name}${extension}`
+          const filePath = `${projectPath}/pous/${getFolderFromPouType(file.type ?? 'program')}/${name}${extension}`
 
           const readResult = await fileBridge.fileReadContent(filePath)
           if (!readResult.success || !readResult.content) {
@@ -1791,12 +1791,13 @@ export const createSharedSlice: StateCreator<
 
           try {
             let pouData: PLCPou
+            const pouType = (file.type ?? 'program') as 'program' | 'function' | 'function-block'
             if (pouLanguage === 'st' || pouLanguage === 'il') {
-              pouData = parseTextualPouFromString(readResult.content, pouLanguage, file.type)
+              pouData = parseTextualPouFromString(readResult.content, pouLanguage, pouType)
             } else if (pouLanguage === 'python' || pouLanguage === 'cpp') {
-              pouData = parseHybridPouFromString(readResult.content, pouLanguage, file.type)
+              pouData = parseHybridPouFromString(readResult.content, pouLanguage, pouType)
             } else if (pouLanguage === 'ld' || pouLanguage === 'fbd') {
-              pouData = parseGraphicalPouFromString(readResult.content, pouLanguage, file.type)
+              pouData = parseGraphicalPouFromString(readResult.content, pouLanguage, pouType)
             } else {
               return {
                 success: false,
@@ -1852,13 +1853,13 @@ export const createSharedSlice: StateCreator<
             const savedServer = projectData.servers?.find((s) => s.name === name)
             if (savedServer) {
               getState().projectActions.deleteServer(name)
-              getState().projectActions.createServer(savedServer)
+              getState().projectActions.createServer({ data: savedServer })
             }
           } else if (file.type === 'remote-device') {
             const savedDevice = projectData.remoteDevices?.find((d) => d.name === name)
             if (savedDevice) {
               getState().projectActions.deleteRemoteDevice(name)
-              getState().projectActions.createRemoteDevice(savedDevice)
+              getState().projectActions.createRemoteDevice({ data: savedDevice })
             }
           }
           // resource: global variables are part of project data configuration
@@ -1918,7 +1919,7 @@ export const createSharedSlice: StateCreator<
             try {
               const language = pouToSave.data.body.language
               const extension = getExtensionFromLanguage(language)
-              const typeDir = getFolderFromPouType(file.type)
+              const typeDir = getFolderFromPouType(file.type ?? 'program')
               computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
             } catch (_error) {
               // If language is not supported, fall back to using the original file.filePath
