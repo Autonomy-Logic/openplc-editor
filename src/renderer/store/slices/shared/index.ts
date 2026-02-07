@@ -22,7 +22,7 @@ import {
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
-import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import { getExtensionFromLanguage, getFolderFromPouType } from '@root/utils/PLC/pou-file-extensions'
 import {
   parseGraphicalPouFromString,
   parseHybridPouFromString,
@@ -48,6 +48,12 @@ import { TabsProps, TabsSlice } from '../tabs'
 import { CreateEditorObjectFromTab } from '../tabs/utils'
 import { WorkspaceSlice } from '../workspace'
 import { CreateEditorObject, CreatePouObject } from './utils'
+
+// Cast window.bridge once for file-watcher methods that don't resolve in the renderer webpack context
+const fileBridge = window.bridge as unknown as {
+  fileWatchStopAll: () => Promise<{ success: boolean }>
+  fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+}
 
 type PropsToCreatePou = {
   name: string
@@ -998,7 +1004,7 @@ export const createSharedSlice: StateCreator<
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => {
       // Stop all file watchers before clearing state
-      void (window.bridge as { fileWatchStopAll: () => Promise<{ success: boolean }> }).fileWatchStopAll()
+      void fileBridge.fileWatchStopAll()
 
       // Dispose all Monaco editor models to prevent stale content from being cached
       // This ensures that when a new project is opened, Monaco will use fresh content
@@ -1019,7 +1025,7 @@ export const createSharedSlice: StateCreator<
       getState().consoleActions.clearLogs()
       // Clear additional slices to ensure complete state reset on project close
       getState().historyActions.clearHistory()
-      ;(getState().searchActions as { clearSearch: () => void }).clearSearch()
+      getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
       window.bridge.rebuildMenu()
     },
@@ -1721,212 +1727,85 @@ export const createSharedSlice: StateCreator<
         }
       }
 
-      // If this is a newly created file that was never saved, delete it completely
-      if (file.isNew && (file.type === 'program' || file.type === 'function' || file.type === 'function-block')) {
-        const projectPath = getState().project.meta.path
-        const typeDir =
-          file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+      const isPouType = file.type === 'program' || file.type === 'function' || file.type === 'function-block'
 
-        // Get the POU to determine the correct file extension
-        const pou = getState().project.data.pous.find((p) => p.data.name === name)
-        const extension = pou ? getExtensionFromLanguage(pou.data.body.language) : '.st'
-        const filePath = `${projectPath}/pous/${typeDir}/${name}${extension}`
-
-        // Delete the file from disk
-        try {
-          await window.bridge.deletePouFile(filePath)
-        } catch (err) {
-          console.error('Error deleting new POU file:', err)
-        }
-
-        // Remove from all state slices (similar to pouActions.delete)
-        getState().projectActions.deletePou(name)
-        getState().ladderFlowActions.removeLadderFlow(name)
-        getState().fbdFlowActions.removeFBDFlow(name)
-        getState().tabsActions.removeTab(name)
-        getState().editorActions.removeModel(name)
-        getState().libraryActions.removeUserLibrary(name)
+      // Helper: remove file from state and select next tab
+      const removeAndClose = () => {
         getState().fileActions.removeFile({ name })
-
-        // Update selected project tree leaf if needed
-        const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
-        if (selectedProjectTreeLeaf.label === name) {
-          getState().workspaceActions.setSelectedProjectTreeLeaf({
-            label: '',
-            type: null,
-          })
-        }
-
-        // Select the next available tab
-        const filteredTabs = getState().tabs
-        const nextTab = filteredTabs[filteredTabs.length - 1]
-        if (nextTab) {
-          const editor =
-            getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
-          getState().editorActions.setEditor(editor)
-          getState().tabsActions.setSelectedTab(nextTab.name)
-          getState().workspaceActions.setSelectedProjectTreeLeaf({
-            label: nextTab.name,
-            type: nextTab.elementType.type,
-          })
-        } else {
-          getState().editorActions.setEditor({
-            type: 'available',
-            meta: { name: '' },
-          })
-          getState().tabsActions.setSelectedTab('')
-        }
-
-        return { success: true }
+        return getState().sharedWorkspaceActions.forceCloseFile(name)
       }
 
-      // If this is a newly created datatype that was never saved, remove it from state
-      // (Datatypes are stored in project.json, so no file deletion needed)
-      if (file.isNew && file.type === 'data-type') {
-        getState().projectActions.deleteDatatype(name)
-        getState().tabsActions.removeTab(name)
-        getState().editorActions.removeModel(name)
-        getState().libraryActions.removeUserLibrary(name)
-        getState().fileActions.removeFile({ name })
+      // --- Newly created files that were never saved: delete from state (and disk for POUs) ---
+      if (file.isNew) {
+        if (isPouType) {
+          const projectPath = getState().project.meta.path
+          const pou = getState().project.data.pous.find((p) => p.data.name === name)
+          const extension = pou ? getExtensionFromLanguage(pou.data.body.language) : '.st'
+          const filePath = `${projectPath}/pous/${getFolderFromPouType(file.type)}/${name}${extension}`
 
-        // Update selected project tree leaf if needed
-        const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
-        if (selectedProjectTreeLeaf.label === name) {
-          getState().workspaceActions.setSelectedProjectTreeLeaf({
-            label: '',
-            type: null,
-          })
+          try {
+            await window.bridge.deletePouFile(filePath)
+          } catch (err) {
+            console.error('Error deleting new POU file:', err)
+          }
+
+          getState().projectActions.deletePou(name)
+          getState().ladderFlowActions.removeLadderFlow(name)
+          getState().fbdFlowActions.removeFBDFlow(name)
+          getState().editorActions.removeModel(name)
+          getState().libraryActions.removeUserLibrary(name)
+        } else if (file.type === 'data-type') {
+          getState().projectActions.deleteDatatype(name)
+          getState().editorActions.removeModel(name)
+          getState().libraryActions.removeUserLibrary(name)
+        } else if (file.type === 'server') {
+          getState().projectActions.deleteServer(name)
+          getState().editorActions.removeModel(name)
+        } else if (file.type === 'remote-device') {
+          getState().projectActions.deleteRemoteDevice(name)
+          getState().editorActions.removeModel(name)
         }
 
-        // Select the next available tab
-        const filteredTabs = getState().tabs
-        const nextTab = filteredTabs[filteredTabs.length - 1]
-        if (nextTab) {
-          const editor =
-            getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
-          getState().editorActions.setEditor(editor)
-          getState().tabsActions.setSelectedTab(nextTab.name)
-          getState().workspaceActions.setSelectedProjectTreeLeaf({
-            label: nextTab.name,
-            type: nextTab.elementType.type,
-          })
-        } else {
-          getState().editorActions.setEditor({
-            type: 'available',
-            meta: { name: '' },
-          })
-          getState().tabsActions.setSelectedTab('')
-        }
-
-        return { success: true }
+        return removeAndClose()
       }
 
-      // If this is a newly created server that was never saved, remove it from state
-      if (file.isNew && file.type === 'server') {
-        getState().projectActions.deleteServer(name)
-        getState().tabsActions.removeTab(name)
-        getState().editorActions.removeModel(name)
-        getState().fileActions.removeFile({ name })
+      // --- Existing files: reload persisted state from disk before closing ---
 
-        const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
-        if (selectedProjectTreeLeaf.label === name) {
-          getState().workspaceActions.setSelectedProjectTreeLeaf({ label: '', type: null })
-        }
-
-        const filteredTabs = getState().tabs
-        const nextTab = filteredTabs[filteredTabs.length - 1]
-        if (nextTab) {
-          const editor =
-            getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
-          getState().editorActions.setEditor(editor)
-          getState().tabsActions.setSelectedTab(nextTab.name)
-          getState().workspaceActions.setSelectedProjectTreeLeaf({
-            label: nextTab.name,
-            type: nextTab.elementType.type,
-          })
-        } else {
-          getState().editorActions.setEditor({ type: 'available', meta: { name: '' } })
-          getState().tabsActions.setSelectedTab('')
-        }
-
-        return { success: true }
-      }
-
-      // If this is a newly created remote device that was never saved, remove it from state
-      if (file.isNew && file.type === 'remote-device') {
-        getState().projectActions.deleteRemoteDevice(name)
-        getState().tabsActions.removeTab(name)
-        getState().editorActions.removeModel(name)
-        getState().fileActions.removeFile({ name })
-
-        const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
-        if (selectedProjectTreeLeaf.label === name) {
-          getState().workspaceActions.setSelectedProjectTreeLeaf({ label: '', type: null })
-        }
-
-        const filteredTabs = getState().tabs
-        const nextTab = filteredTabs[filteredTabs.length - 1]
-        if (nextTab) {
-          const editor =
-            getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
-          getState().editorActions.setEditor(editor)
-          getState().tabsActions.setSelectedTab(nextTab.name)
-          getState().workspaceActions.setSelectedProjectTreeLeaf({
-            label: nextTab.name,
-            type: nextTab.elementType.type,
-          })
-        } else {
-          getState().editorActions.setEditor({ type: 'available', meta: { name: '' } })
-          getState().tabsActions.setSelectedTab('')
-        }
-
-        return { success: true }
-      }
-
-      // For existing files (not new), reload content from disk
-      if (file.type === 'program' || file.type === 'function' || file.type === 'function-block') {
+      if (isPouType) {
         const projectPath = getState().project.meta.path
         const existingPou = getState().project.data.pous.find((p) => p.data.name === name)
 
         if (existingPou) {
           const pouLanguage = existingPou.data.body.language
           const extension = getExtensionFromLanguage(pouLanguage)
-          const typeDir =
-            file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
-          const filePath = `${projectPath}/pous/${typeDir}/${name}${extension}`
+          const filePath = `${projectPath}/pous/${getFolderFromPouType(file.type)}/${name}${extension}`
+
+          const readResult = await fileBridge.fileReadContent(filePath)
+          if (!readResult.success || !readResult.content) {
+            console.error('Failed to read POU file from disk:', readResult.error)
+            return {
+              success: false,
+              error: { title: 'Error discarding changes', description: 'Unable to reload the file from disk.' },
+            }
+          }
 
           try {
-            const readResult: { success: boolean; content?: string; error?: string } = await (
-              window.bridge as {
-                fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
-              }
-            ).fileReadContent(filePath)
-            if (!readResult.success || !readResult.content) {
-              console.error('Failed to read file from disk:', readResult.error)
-              // If we can't read the file, just close it without reloading
-              getState().fileActions.updateFile({ name, saved: true })
-              return getState().sharedWorkspaceActions.forceCloseFile(name)
-            }
-
-            // Parse the text content using the appropriate parser
-            const fileContent: string = readResult.content
             let pouData: PLCPou
             if (pouLanguage === 'st' || pouLanguage === 'il') {
-              pouData = parseTextualPouFromString(fileContent, pouLanguage, file.type)
+              pouData = parseTextualPouFromString(readResult.content, pouLanguage, file.type)
             } else if (pouLanguage === 'python' || pouLanguage === 'cpp') {
-              pouData = parseHybridPouFromString(fileContent, pouLanguage, file.type)
+              pouData = parseHybridPouFromString(readResult.content, pouLanguage, file.type)
             } else if (pouLanguage === 'ld' || pouLanguage === 'fbd') {
-              pouData = parseGraphicalPouFromString(fileContent, pouLanguage, file.type)
+              pouData = parseGraphicalPouFromString(readResult.content, pouLanguage, file.type)
             } else {
-              console.error('Unsupported POU language:', pouLanguage)
-              getState().fileActions.updateFile({ name, saved: true })
-              return getState().sharedWorkspaceActions.forceCloseFile(name)
+              return {
+                success: false,
+                error: { title: 'Error discarding changes', description: `Unsupported POU language: ${pouLanguage}` },
+              }
             }
 
-            // Update the POU in the store with the content from disk
             getState().projectActions.applyPouSnapshot(name, pouData.data.variables, pouData.data.body)
 
-            // Update ladder/FBD flows if applicable
             if (pouData.data.language === 'ld' && pouData.data.body.language === 'ld') {
               getState().ladderFlowActions.removeLadderFlow(name)
               getState().ladderFlowActions.addLadderFlow(pouData.data.body.value as LadderFlowType)
@@ -1936,15 +1815,64 @@ export const createSharedSlice: StateCreator<
             }
           } catch (err) {
             console.error('Error parsing POU file:', err)
-            // If parsing fails, just close without reloading
+            return {
+              success: false,
+              error: { title: 'Error discarding changes', description: 'The file on disk could not be parsed.' },
+            }
+          }
+        }
+      } else if (
+        file.type === 'data-type' ||
+        file.type === 'server' ||
+        file.type === 'remote-device' ||
+        file.type === 'resource'
+      ) {
+        // Non-POU files stored in project.json: re-read project.json and restore the entity
+        const projectPath = getState().project.meta.path
+        const readResult = await fileBridge.fileReadContent(`${projectPath}/project.json`)
+        if (!readResult.success || !readResult.content) {
+          console.error('Failed to read project.json from disk:', readResult.error)
+          return {
+            success: false,
+            error: { title: 'Error discarding changes', description: 'Unable to reload project.json from disk.' },
+          }
+        }
+
+        try {
+          const projectJson = JSON.parse(readResult.content) as PLCProject
+          const projectData = projectJson.data
+
+          if (file.type === 'data-type') {
+            const savedDatatype = projectData.dataTypes.find((dt) => dt.name === name)
+            if (savedDatatype) {
+              getState().projectActions.deleteDatatype(name)
+              getState().projectActions.createDatatype({ data: savedDatatype })
+            }
+          } else if (file.type === 'server') {
+            const savedServer = projectData.servers?.find((s) => s.name === name)
+            if (savedServer) {
+              getState().projectActions.deleteServer(name)
+              getState().projectActions.createServer(savedServer)
+            }
+          } else if (file.type === 'remote-device') {
+            const savedDevice = projectData.remoteDevices?.find((d) => d.name === name)
+            if (savedDevice) {
+              getState().projectActions.deleteRemoteDevice(name)
+              getState().projectActions.createRemoteDevice(savedDevice)
+            }
+          }
+          // resource: global variables are part of project data configuration
+          // Reloading the full project just for resource is heavy; mark as saved and close
+        } catch (err) {
+          console.error('Error parsing project.json:', err)
+          return {
+            success: false,
+            error: { title: 'Error discarding changes', description: 'The project.json file could not be parsed.' },
           }
         }
       }
 
-      // Mark the file as saved (discarding changes means we're reverting to saved state)
       getState().fileActions.updateFile({ name, saved: true })
-
-      // Close the file
       return getState().sharedWorkspaceActions.forceCloseFile(name)
     },
 
@@ -1990,8 +1918,7 @@ export const createSharedSlice: StateCreator<
             try {
               const language = pouToSave.data.body.language
               const extension = getExtensionFromLanguage(language)
-              const typeDir =
-                file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+              const typeDir = getFolderFromPouType(file.type)
               computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
             } catch (_error) {
               // If language is not supported, fall back to using the original file.filePath

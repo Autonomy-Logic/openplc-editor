@@ -5,7 +5,7 @@ import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_m
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
-import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import { getExtensionFromLanguage, getFolderFromPouType } from '@root/utils/PLC/pou-file-extensions'
 import { parseHybridPouFromString, parseTextualPouFromString } from '@root/utils/PLC/pou-text-parser'
 import type { IpcRendererEvent } from 'electron'
 import * as monaco from 'monaco-editor'
@@ -57,20 +57,12 @@ type SnippetController = {
   insert: (snippet: string, options?: unknown) => void
 }
 
-// window.bridge type doesn't resolve in the renderer webpack context for file-watcher methods,
-// so we define the shape we need here and cast once.
-type FileWatchBridge = {
+// Cast window.bridge once for file-watcher methods that don't resolve in the renderer webpack context
+const bridge = window.bridge as unknown as {
   fileWatchStart: (path: string) => Promise<{ success: boolean; error?: string }>
   fileWatchStop: (path: string) => Promise<{ success: boolean }>
   fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
   onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
-}
-const fileBridge = window.bridge as unknown as FileWatchBridge
-
-const POU_TYPE_TO_FOLDER: Record<string, string> = {
-  program: 'programs',
-  function: 'functions',
-  'function-block': 'function-blocks',
 }
 
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
@@ -185,22 +177,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!projectPath || !pou) return
 
     const actualExtension = getExtensionFromLanguage(language)
-    const pouFolder = POU_TYPE_TO_FOLDER[pou.type] || 'programs'
+    const pouFolder = getFolderFromPouType(pou.type)
 
     // Construct full file path for the POU file
     const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
     watchedFilePathRef.current = fullPath
 
-    console.log('[Monaco FileWatch] Starting file watcher for:', fullPath)
-
     // Start watching the file
-    void fileBridge.fileWatchStart(fullPath).then((result) => {
-      if (result.success) {
-        console.log('[Monaco FileWatch] Watcher started successfully for:', fullPath)
-      } else {
-        console.error('[Monaco FileWatch] Failed to start watcher:', result.error)
-      }
-    })
+    void bridge.fileWatchStart(fullPath)
 
     // Listen for external file change events - VSCode-like behavior:
     // - If file has no unsaved changes: auto-reload silently
@@ -212,12 +196,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
 
       if (isSaved) {
-        // No local changes - auto-reload from disk silently
-        console.log('[Monaco FileWatch] File changed externally, auto-reloading (no local changes)')
         void reloadFromDisk()
-      } else {
-        // Has local unsaved changes - do nothing to preserve user's work
-        console.log('[Monaco FileWatch] File changed externally, but has local changes - ignoring')
       }
     }
 
@@ -226,7 +205,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       if (!watchedFilePathRef.current) return
 
       try {
-        const result = await fileBridge.fileReadContent(watchedFilePathRef.current)
+        const result = await bridge.fileReadContent(watchedFilePathRef.current)
 
         if (result.success && result.content) {
           const parsedPou =
@@ -238,21 +217,18 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           // Update local state and store
           setLocalText(newBodyValue)
           updatePou({ name, content: { language, value: newBodyValue } })
-
-          console.log('[Monaco FileWatch] Content reloaded from disk')
         }
       } catch (err) {
         console.error('[Monaco FileWatch] Failed to reload file:', err)
       }
     }
 
-    const cleanup = fileBridge.onFileExternalChange(handleExternalChange)
+    const cleanup = bridge.onFileExternalChange(handleExternalChange)
 
     return () => {
       cleanup()
       if (watchedFilePathRef.current) {
-        console.log('[Monaco FileWatch] Stopping file watcher for:', watchedFilePathRef.current)
-        void fileBridge.fileWatchStop(watchedFilePathRef.current)
+        void bridge.fileWatchStop(watchedFilePathRef.current)
         watchedFilePathRef.current = null
       }
     }
@@ -649,11 +625,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
       // Construct file path
       const actualExtension = getExtensionFromLanguage(language)
-      const pouFolder = POU_TYPE_TO_FOLDER[currentPou.type] || 'programs'
+      const pouFolder = getFolderFromPouType(currentPou.type)
       const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
 
       try {
-        const result = await fileBridge.fileReadContent(fullPath)
+        const result = await bridge.fileReadContent(fullPath)
 
         if (result.success && result.content) {
           const parsedPou =
@@ -665,7 +641,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           // Only update if content is different from what we have
           const currentBodyValue = typeof currentPou.data.body.value === 'string' ? currentPou.data.body.value : ''
           if (newBodyValue !== currentBodyValue) {
-            console.log('[Monaco] Tab activated - reloading external changes')
             setLocalText(newBodyValue)
             updatePou({ name, content: { language, value: newBodyValue } })
           }
