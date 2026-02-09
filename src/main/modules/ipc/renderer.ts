@@ -9,6 +9,7 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/types/ethercat'
+import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -418,5 +419,128 @@ const rendererProcessBridge = {
     validateRequest: EtherCATValidateRequest,
   ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> =>
     ipcRenderer.invoke('ethercat:validate', ipAddress, jwtToken, validateRequest),
+
+  // ===================== ESI REPOSITORY METHODS =====================
+
+  /**
+   * Load ESI repository index from project
+   */
+  esiLoadRepositoryIndex: (
+    projectPath: string,
+  ): Promise<{
+    success: boolean
+    data?: {
+      version: number
+      items: Array<{
+        id: string
+        filename: string
+        vendorId: string
+        vendorName: string
+        deviceCount: number
+        loadedAt: number
+        warnings?: string[]
+      }>
+    } | null
+    error?: string
+  }> => ipcRenderer.invoke('esi:load-repository-index', projectPath),
+
+  /**
+   * Save ESI repository index to project
+   */
+  esiSaveRepositoryIndex: (
+    projectPath: string,
+    items: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:save-repository-index', projectPath, items),
+
+  /**
+   * Save an ESI XML file to project
+   */
+  esiSaveXmlFile: (
+    projectPath: string,
+    itemId: string,
+    xmlContent: string,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:save-xml-file', projectPath, itemId, xmlContent),
+
+  /**
+   * Load an ESI XML file from project
+   */
+  esiLoadXmlFile: (
+    projectPath: string,
+    itemId: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> =>
+    ipcRenderer.invoke('esi:load-xml-file', projectPath, itemId),
+
+  /**
+   * Delete an ESI XML file from project
+   */
+  esiDeleteXmlFile: (projectPath: string, itemId: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:delete-xml-file', projectPath, itemId),
+
+  /**
+   * Save a complete ESI repository item (XML + update index)
+   */
+  esiSaveRepositoryItem: (
+    projectPath: string,
+    item: ESIRepositoryItem,
+    xmlContent: string,
+    existingItems: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:save-repository-item', projectPath, item, xmlContent, existingItems),
+
+  /**
+   * Delete an ESI repository item (XML + update index)
+   */
+  esiDeleteRepositoryItem: (
+    projectPath: string,
+    itemId: string,
+    existingItems: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:delete-repository-item', projectPath, itemId, existingItems),
+
+  // ===================== ESI OPTIMIZED (v2) METHODS =====================
+
+  /**
+   * Parse and save a single ESI file in the main process
+   */
+  esiParseAndSaveFile: (
+    projectPath: string,
+    filename: string,
+    content: string,
+  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> =>
+    ipcRenderer.invoke('esi:parse-and-save-file', projectPath, filename, content),
+
+  /**
+   * Clear the entire ESI repository (bulk delete all files + reset index)
+   */
+  esiClearRepository: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:clear-repository', projectPath),
+
+  /**
+   * Load a full ESI device on-demand (with PDOs, SM, FMMU)
+   */
+  esiLoadDeviceFull: (
+    projectPath: string,
+    itemId: string,
+    deviceIndex: number,
+  ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> =>
+    ipcRenderer.invoke('esi:load-device-full', projectPath, itemId, deviceIndex),
+
+  /**
+   * Load repository as lightweight items (instant from v2 cache)
+   */
+  esiLoadRepositoryLight: (
+    projectPath: string,
+  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; needsMigration?: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:load-repository-light', projectPath),
+
+  /**
+   * Migrate v1 repository to v2 with device summaries
+   */
+  esiMigrateRepository: (
+    projectPath: string,
+  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> =>
+    ipcRenderer.invoke('esi:migrate-repository', projectPath),
 }
 export default rendererProcessBridge
