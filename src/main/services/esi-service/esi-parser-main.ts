@@ -28,7 +28,7 @@ import { XMLParser } from 'fast-xml-parser'
 function parseHexValue(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '0x0'
   const str = String(value)
-  const cleaned = str.replace('#x', '0x').replace('#X', '0x')
+  const cleaned = str.replace(/#x/gi, '0x')
   return cleaned.startsWith('0x') ? cleaned : `0x${cleaned}`
 }
 
@@ -337,9 +337,11 @@ function parseFullDevice(deviceEl: Record<string, unknown>, groups: ESIGroup[]):
   const fmmuElements = ensureArray(
     deviceEl['Fmmu'] as (Record<string, unknown> | string) | (Record<string, unknown> | string)[],
   )
+  const validFmmuTypes: ESIFMMU['type'][] = ['Outputs', 'Inputs', 'MbxState']
   for (const f of fmmuElements) {
     const fmmuText = typeof f === 'string' ? f : getTextValue(f['#text'] ?? f)
-    fmmu.push({ type: (fmmuText || 'Outputs') as ESIFMMU['type'] })
+    const fmmuType = validFmmuTypes.includes(fmmuText as ESIFMMU['type']) ? (fmmuText as ESIFMMU['type']) : 'Outputs'
+    fmmu.push({ type: fmmuType })
   }
 
   // Parse Sync Managers
@@ -406,7 +408,7 @@ function parseFullPdo(pdoEl: Record<string, unknown>): ESIPdo {
   }
 
   return {
-    index: parseHexValue(entryElements.length > 0 ? (pdoEl['Index'] as string | undefined) : undefined),
+    index: parseHexValue(pdoEl['Index'] as string | undefined),
     name: getTextValue(pdoEl['Name']) || 'Unnamed PDO',
     fixed: getTextValue(pdoEl['@_Fixed']).toLowerCase() === 'true',
     mandatory: getTextValue(pdoEl['@_Mandatory']).toLowerCase() === 'true',

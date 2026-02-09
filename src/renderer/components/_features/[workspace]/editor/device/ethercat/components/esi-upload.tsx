@@ -55,6 +55,8 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false, projectPath }
       const newItems: ESIRepositoryItemLight[] = []
       const errors: Array<{ filename: string; error: string }> = []
 
+      const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
+
       // Process files one at a time to avoid memory issues
       for (let i = 0; i < xmlFiles.length; i++) {
         const file = xmlFiles[i]
@@ -66,6 +68,14 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false, projectPath }
           totalFiles: xmlFiles.length,
           percentage: Math.round((i / xmlFiles.length) * 100),
         })
+
+        if (file.size > MAX_FILE_SIZE) {
+          errors.push({
+            filename: file.name,
+            error: `File too large (${Math.round(file.size / 1024 / 1024)}MB). Maximum is 100MB.`,
+          })
+          continue
+        }
 
         try {
           const text = await file.text()

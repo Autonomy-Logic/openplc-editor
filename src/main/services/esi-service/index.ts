@@ -1,7 +1,7 @@
 import { fileOrDirectoryExists } from '@root/main/utils'
 import type { ESIDeviceSummary, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { promises } from 'fs'
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 
 import { parseESILight } from './esi-parser-main'
@@ -47,7 +47,7 @@ class ESIService {
    * Get the ESI directory path for a project
    */
   private getEsiDir(projectPath: string): string {
-    const basePath = projectPath.endsWith('/project.json') ? projectPath.slice(0, -'/project.json'.length) : projectPath
+    const basePath = basename(projectPath) === 'project.json' ? dirname(projectPath) : projectPath
     return join(basePath, this.ESI_DIR)
   }
 
@@ -58,10 +58,15 @@ class ESIService {
     return join(this.getEsiDir(projectPath), this.REPOSITORY_FILE)
   }
 
+  private static readonly UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
   /**
-   * Get the path for an ESI XML file
+   * Get the path for an ESI XML file (validates itemId is a UUID to prevent path traversal)
    */
   private getXmlPath(projectPath: string, itemId: string): string {
+    if (!ESIService.UUID_REGEX.test(itemId)) {
+      throw new Error(`Invalid item ID: ${itemId}`)
+    }
     return join(this.getEsiDir(projectPath), `${itemId}.xml`)
   }
 
@@ -81,15 +86,14 @@ class ESIService {
   async loadRepositoryIndex(projectPath: string): Promise<ESIRepositoryIndex | null> {
     const repoPath = this.getRepositoryPath(projectPath)
 
-    if (!fileOrDirectoryExists(repoPath)) {
-      return null
-    }
-
     try {
       const content = await promises.readFile(repoPath, 'utf-8')
       const index = JSON.parse(content) as ESIRepositoryIndex
       return index
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null
+      }
       console.error('Error reading ESI repository index:', error)
       return null
     }
@@ -191,14 +195,12 @@ class ESIService {
   ): Promise<{ success: boolean; content?: string; error?: string }> {
     try {
       const xmlPath = this.getXmlPath(projectPath, itemId)
-
-      if (!fileOrDirectoryExists(xmlPath)) {
-        return { success: false, error: 'XML file not found' }
-      }
-
       const content = await promises.readFile(xmlPath, 'utf-8')
       return { success: true, content }
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { success: false, error: 'XML file not found' }
+      }
       console.error('Error loading ESI XML file:', error)
       return {
         success: false,
@@ -213,13 +215,12 @@ class ESIService {
   async deleteXmlFile(projectPath: string, itemId: string): Promise<ESIServiceResponse> {
     try {
       const xmlPath = this.getXmlPath(projectPath, itemId)
-
-      if (fileOrDirectoryExists(xmlPath)) {
-        await promises.unlink(xmlPath)
-      }
-
+      await promises.unlink(xmlPath)
       return { success: true }
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { success: true } // already deleted
+      }
       console.error('Error deleting ESI XML file:', error)
       return {
         success: false,
@@ -265,6 +266,29 @@ class ESIService {
     // Update the index without the deleted item
     const updatedItems = existingItems.filter((i) => i.id !== itemId)
     return this.saveRepositoryIndex(projectPath, updatedItems)
+  }
+
+  /**
+   * Delete a repository item and update the v2 index (no re-parsing)
+   */
+  async deleteRepositoryItemV2(projectPath: string, itemId: string): Promise<ESIServiceResponse> {
+    try {
+      // Delete the XML file
+      const deleteResult = await this.deleteXmlFile(projectPath, itemId)
+      if (!deleteResult.success) {
+        return deleteResult
+      }
+
+      // Update the v2 index without the deleted item
+      const currentItems = await this.loadLightItemsFromIndex(projectPath)
+      const updatedItems = currentItems.filter((i) => i.id !== itemId)
+      return this.saveRepositoryIndexV2(projectPath, updatedItems)
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete repository item',
+      }
+    }
   }
 
   /**

@@ -870,7 +870,7 @@ class MainProcessBridge implements MainIpcModule {
     itemId: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      return await this.esiService.deleteXmlFile(projectPath, itemId)
+      return await this.esiService.deleteRepositoryItemV2(projectPath, itemId)
     } catch (error) {
       return { success: false, error: String(error) }
     }
@@ -920,7 +920,11 @@ class MainProcessBridge implements MainIpcModule {
     filename: string,
     content: string,
   ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> => {
-    return this.esiService.parseAndSaveFile(projectPath, filename, content)
+    try {
+      return await this.esiService.parseAndSaveFile(projectPath, filename, content)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   }
 
   /**
@@ -930,7 +934,11 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     projectPath: string,
   ): Promise<{ success: boolean; error?: string }> => {
-    return this.esiService.clearRepository(projectPath)
+    try {
+      return await this.esiService.clearRepository(projectPath)
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   }
 
   /**

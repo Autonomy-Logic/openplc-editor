@@ -38,16 +38,10 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
       setIsSaving(true)
 
       try {
-        // We still use the old delete IPC since it works for both v1/v2
         const result: ESIServiceResponse = await window.bridge.esiDeleteXmlFile(projectPath, itemId)
 
         if (result.success) {
-          const updatedRepo = repository.filter((item) => item.id !== itemId)
-          // Re-save the v2 index
-          await window.bridge.esiMigrateRepository(projectPath).catch(() => {
-            // Fallback: just update state
-          })
-          onRepositoryChange(updatedRepo)
+          onRepositoryChange(repository.filter((item) => item.id !== itemId))
         } else {
           console.error('Failed to delete ESI item:', result.error)
         }

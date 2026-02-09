@@ -17,8 +17,8 @@ import type {
  * Handles formats: "0x1234", "#x1234", "1234"
  */
 function parseHexToNumber(hexString: string): number {
-  const cleaned = hexString.replace('#x', '0x').replace('#X', '0x')
-  return parseInt(cleaned, 16) || 0
+  const cleaned = hexString.replace(/#x/gi, '0x')
+  return Number(cleaned) || 0
 }
 
 /**

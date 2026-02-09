@@ -26,17 +26,8 @@ import type {
  */
 function parseHexValue(value: string | undefined | null): string {
   if (!value) return '0x0'
-  const cleaned = value.replace('#x', '0x').replace('#X', '0x')
+  const cleaned = value.replace(/#x/gi, '0x')
   return cleaned.startsWith('0x') ? cleaned : `0x${cleaned}`
-}
-
-/**
- * Parse hex string to decimal number
- */
-function _hexToNumber(value: string | undefined | null): number {
-  if (!value) return 0
-  const hex = parseHexValue(value)
-  return parseInt(hex, 16) || 0
 }
 
 /**
@@ -81,8 +72,9 @@ function parseGroup(groupElement: Element): ESIGroup {
  */
 function parseFMMU(fmmuElement: Element): ESIFMMU {
   const text = fmmuElement.textContent?.trim() || 'Outputs'
+  const validTypes: ESIFMMU['type'][] = ['Outputs', 'Inputs', 'MbxState']
   return {
-    type: text as ESIFMMU['type'],
+    type: validTypes.includes(text as ESIFMMU['type']) ? (text as ESIFMMU['type']) : 'Outputs',
   }
 }
 

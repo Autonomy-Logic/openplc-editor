@@ -45,7 +45,8 @@ const EtherCATEditor = () => {
   // Repository state (now lightweight)
   const [repository, setRepository] = useState<ESIRepositoryItemLight[]>([])
   const [isLoadingRepository, setIsLoadingRepository] = useState(false)
-  const [_repositoryError, setRepositoryError] = useState<string | null>(null)
+  const [repositoryError, setRepositoryError] = useState<string | null>(null)
+  const [repositoryLoadRetry, setRepositoryLoadRetry] = useState(0)
   const repositoryLoadedRef = useRef(false)
 
   // Configured devices state
@@ -66,7 +67,7 @@ const EtherCATEditor = () => {
   const [scannedDevices, setScannedDevices] = useState<EtherCATDevice[]>([])
   const [isScanning, setIsScanning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
-  const [_scanMessage, setScanMessage] = useState<string>('')
+  const [scanMessage, setScanMessage] = useState<string>('')
   const [scanTimeMs, setScanTimeMs] = useState<number | null>(null)
 
   // Discovery selection state
@@ -183,15 +184,21 @@ const EtherCATEditor = () => {
 
         if (result.success && result.items) {
           setRepository(result.items)
+          repositoryLoadedRef.current = true
         } else if (result.needsMigration) {
           // One-time migration from v1 to v2
           const migrationResult = await window.bridge.esiMigrateRepository(projectPath)
           if (migrationResult.success && migrationResult.items) {
             setRepository(migrationResult.items)
+            repositoryLoadedRef.current = true
+          } else {
+            setRepositoryError(migrationResult.error || 'Failed to migrate repository')
           }
+        } else if (result.error) {
+          setRepositoryError(result.error)
+        } else {
+          repositoryLoadedRef.current = true
         }
-
-        repositoryLoadedRef.current = true
       } catch (error) {
         console.error('Failed to load ESI repository:', error)
         setRepositoryError(String(error))
@@ -201,7 +208,7 @@ const EtherCATEditor = () => {
     }
 
     void loadRepository()
-  }, [projectPath])
+  }, [projectPath, repositoryLoadRetry])
 
   // Check service status and fetch interfaces when runtime connection changes
   useEffect(() => {
@@ -364,12 +371,29 @@ const EtherCATEditor = () => {
 
       {/* Repository Tab */}
       {activeTab === 'repository' && (
-        <ESIRepository
-          repository={repository}
-          onRepositoryChange={setRepository}
-          projectPath={projectPath}
-          isLoading={isLoadingRepository}
-        />
+        <>
+          {repositoryError && (
+            <div className='mb-4 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20'>
+              <p className='text-sm text-red-700 dark:text-red-300'>Failed to load repository: {repositoryError}</p>
+              <button
+                onClick={() => {
+                  setRepositoryError(null)
+                  repositoryLoadedRef.current = false
+                  setRepositoryLoadRetry((c) => c + 1)
+                }}
+                className='text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300'
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          <ESIRepository
+            repository={repository}
+            onRepositoryChange={setRepository}
+            projectPath={projectPath}
+            isLoading={isLoadingRepository}
+          />
+        </>
       )}
 
       {/* Discovery Tab */}
@@ -433,7 +457,9 @@ const EtherCATEditor = () => {
                 </button>
 
                 {scanTimeMs !== null && (
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Completed in {scanTimeMs}ms</span>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                    Completed in {scanTimeMs}ms{scanMessage ? ` — ${scanMessage}` : ''}
+                  </span>
                 )}
               </div>
 
