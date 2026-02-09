@@ -1,6 +1,11 @@
 import { MinusIcon, PlusIcon } from '@root/renderer/assets/icons'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
-import type { ConfiguredEtherCATDevice, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import type {
+  ConfiguredEtherCATDevice,
+  ESIRepositoryItemLight,
+  EtherCATChannelMapping,
+  EtherCATSlaveConfig,
+} from '@root/types/ethercat/esi-types'
 import { useCallback, useState } from 'react'
 
 import { ConfiguredDeviceRow } from './configured-device-row'
@@ -10,6 +15,9 @@ type ConfiguredDevicesProps = {
   repository: ESIRepositoryItemLight[]
   onAddDevice: () => void
   onRemoveDevice: (deviceId: string) => void
+  onUpdateDevice: (deviceId: string, config: EtherCATSlaveConfig) => void
+  projectPath: string
+  onUpdateChannelMappings: (deviceId: string, mappings: EtherCATChannelMapping[]) => void
 }
 
 /**
@@ -17,7 +25,15 @@ type ConfiguredDevicesProps = {
  *
  * Displays the list of configured EtherCAT devices with add/remove functionality.
  */
-const ConfiguredDevices = ({ devices, repository, onAddDevice, onRemoveDevice }: ConfiguredDevicesProps) => {
+const ConfiguredDevices = ({
+  devices,
+  repository,
+  onAddDevice,
+  onRemoveDevice,
+  onUpdateDevice,
+  projectPath,
+  onUpdateChannelMappings,
+}: ConfiguredDevicesProps) => {
   const [expandedDevices, setExpandedDevices] = useState<Set<string>>(new Set())
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
 
@@ -109,6 +125,9 @@ const ConfiguredDevices = ({ devices, repository, onAddDevice, onRemoveDevice }:
                   onToggleExpand={() => handleToggleExpand(device.id)}
                   isSelected={selectedDeviceId === device.id}
                   onSelect={() => setSelectedDeviceId(device.id)}
+                  onUpdateDevice={(config) => onUpdateDevice(device.id, config)}
+                  projectPath={projectPath}
+                  onUpdateChannelMappings={(mappings) => onUpdateChannelMappings(device.id, mappings)}
                 />
               ))
             )}

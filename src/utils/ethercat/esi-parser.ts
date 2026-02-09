@@ -18,6 +18,7 @@ import type {
   ESIPdoEntry,
   ESISyncManager,
   ESIVendor,
+  EtherCATChannelMapping,
 } from '@root/types/ethercat/esi-types'
 
 /**
@@ -333,6 +334,57 @@ export function pdoToChannels(device: ESIDevice): ESIChannel[] {
   }
 
   return channels
+}
+
+/**
+ * Generate an IEC 61131-3 located variable address for a channel.
+ * Direction: input -> %I, output -> %Q
+ * Size prefix based on iecType:
+ *   BOOL -> X (bit addressing): %IX<byte>.<bit>
+ *   BYTE/SINT/USINT -> B: %IB<byte>
+ *   WORD/INT/UINT -> W: %IW<byte>
+ *   DWORD/DINT/UDINT/REAL -> D: %ID<byte>
+ *   LWORD/LINT/ULINT/LREAL -> L: %IL<byte>
+ */
+export function generateIecLocation(channel: ESIChannel): string {
+  const dirPrefix = channel.direction === 'input' ? '%I' : '%Q'
+
+  const iecUpper = channel.iecType.toUpperCase()
+  switch (iecUpper) {
+    case 'BOOL':
+      return `${dirPrefix}X${channel.byteOffset}.${channel.bitOffset % 8}`
+    case 'BYTE':
+    case 'SINT':
+    case 'USINT':
+      return `${dirPrefix}B${channel.byteOffset}`
+    case 'WORD':
+    case 'INT':
+    case 'UINT':
+      return `${dirPrefix}W${channel.byteOffset}`
+    case 'DWORD':
+    case 'DINT':
+    case 'UDINT':
+    case 'REAL':
+      return `${dirPrefix}D${channel.byteOffset}`
+    case 'LWORD':
+    case 'LINT':
+    case 'ULINT':
+    case 'LREAL':
+      return `${dirPrefix}L${channel.byteOffset}`
+    default:
+      return `${dirPrefix}B${channel.byteOffset}`
+  }
+}
+
+/**
+ * Generate default channel mappings with auto-generated IEC addresses for all channels.
+ */
+export function generateDefaultChannelMappings(channels: ESIChannel[]): EtherCATChannelMapping[] {
+  return channels.map((channel) => ({
+    channelId: channel.id,
+    iecLocation: generateIecLocation(channel),
+    userEdited: false,
+  }))
 }
 
 /**

@@ -6,9 +6,12 @@ import type {
   ESIDeviceRef,
   ESIDeviceSummary,
   ESIRepositoryItemLight,
+  EtherCATChannelMapping,
+  EtherCATSlaveConfig,
   ScannedDeviceMatch,
 } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
+import { createDefaultSlaveConfig } from '@root/utils/ethercat/device-config-defaults'
 import { countMatchedDevices, getBestMatchQuality, matchDevicesToRepository } from '@root/utils/ethercat/device-matcher'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
@@ -277,6 +280,8 @@ const EtherCATEditor = () => {
         productCode: bestMatch.esiDevice.type.productCode,
         revisionNo: bestMatch.esiDevice.type.revisionNo,
         addedFrom: 'scan',
+        config: createDefaultSlaveConfig(),
+        channelMappings: [],
       })
     }
 
@@ -298,6 +303,8 @@ const EtherCATEditor = () => {
         productCode: device.type.productCode,
         revisionNo: device.type.revisionNo,
         addedFrom: 'repository',
+        config: createDefaultSlaveConfig(),
+        channelMappings: [],
       }
       setConfiguredDevices((prev) => [...prev, newDevice])
     },
@@ -307,6 +314,16 @@ const EtherCATEditor = () => {
   // Handle removing a configured device
   const handleRemoveDevice = useCallback((deviceId: string) => {
     setConfiguredDevices((prev) => prev.filter((d) => d.id !== deviceId))
+  }, [])
+
+  // Handle updating a configured device's configuration
+  const handleUpdateDevice = useCallback((deviceId: string, config: EtherCATSlaveConfig) => {
+    setConfiguredDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, config } : d)))
+  }, [])
+
+  // Handle updating a configured device's channel mappings
+  const handleUpdateChannelMappings = useCallback((deviceId: string, channelMappings: EtherCATChannelMapping[]) => {
+    setConfiguredDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, channelMappings } : d)))
   }, [])
 
   return (
@@ -512,6 +529,9 @@ const EtherCATEditor = () => {
           repository={repository}
           onAddDevice={() => setIsDeviceBrowserOpen(true)}
           onRemoveDevice={handleRemoveDevice}
+          onUpdateDevice={handleUpdateDevice}
+          projectPath={projectPath}
+          onUpdateChannelMappings={handleUpdateChannelMappings}
         />
       )}
 

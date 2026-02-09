@@ -206,6 +206,7 @@ const configuration: ICustomConfiguration = {
       configType: 'flat',
       extensions: ['ts', 'tsx'],
       eslintPath: 'eslint/use-at-your-own-risk',
+      cache: false,
     }),
   ],
 

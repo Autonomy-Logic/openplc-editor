@@ -1,7 +1,19 @@
 import { ArrowIcon } from '@root/renderer/assets/icons'
-import type { ConfiguredEtherCATDevice, ESIDeviceSummary, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import { Checkbox } from '@root/renderer/components/_atoms/checkbox'
+import { InputWithRef } from '@root/renderer/components/_atoms/input'
+import type {
+  ConfiguredEtherCATDevice,
+  ESIChannel,
+  ESIDeviceSummary,
+  ESIRepositoryItemLight,
+  EtherCATChannelMapping,
+  EtherCATSlaveConfig,
+} from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
-import { useMemo } from 'react'
+import { generateDefaultChannelMappings, pdoToChannels } from '@root/utils/ethercat/esi-parser'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+import { ChannelMappingTable } from './channel-mapping-table'
 
 type ConfiguredDeviceRowProps = {
   device: ConfiguredEtherCATDevice
@@ -10,13 +22,20 @@ type ConfiguredDeviceRowProps = {
   onToggleExpand: () => void
   isSelected: boolean
   onSelect: () => void
+  onUpdateDevice: (config: EtherCATSlaveConfig) => void
+  projectPath: string
+  onUpdateChannelMappings: (mappings: EtherCATChannelMapping[]) => void
 }
+
+const inputClassName =
+  'h-[26px] w-24 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+
+const disabledInputClassName = 'cursor-not-allowed opacity-50'
 
 /**
  * Configured Device Row Component
  *
- * Displays a configured EtherCAT device with expandable details.
- * Follows the IOGroupRow pattern from remote-device editor.
+ * Displays a configured EtherCAT device with expandable details and configuration form.
  */
 const ConfiguredDeviceRow = ({
   device,
@@ -25,6 +44,9 @@ const ConfiguredDeviceRow = ({
   onToggleExpand,
   isSelected,
   onSelect,
+  onUpdateDevice,
+  projectPath,
+  onUpdateChannelMappings,
 }: ConfiguredDeviceRowProps) => {
   // Resolve the ESI device summary from repository
   const esiDevice = useMemo<ESIDeviceSummary | null>(() => {
@@ -38,6 +60,83 @@ const ConfiguredDeviceRow = ({
   }, [repository, device.esiDeviceRef.repositoryItemId])
 
   const ioSummary = esiDevice ? `${esiDevice.inputChannelCount} / ${esiDevice.outputChannelCount}` : '-'
+
+  const config = device.config
+
+  // Channel loading state
+  const [channels, setChannels] = useState<ESIChannel[]>([])
+  const [isLoadingChannels, setIsLoadingChannels] = useState(false)
+  const [channelLoadError, setChannelLoadError] = useState<string | null>(null)
+  const fullDeviceLoadedRef = useRef(false)
+
+  // Load full device data when expanded
+  useEffect(() => {
+    if (!isExpanded || fullDeviceLoadedRef.current) return
+
+    const loadFullDevice = async () => {
+      setIsLoadingChannels(true)
+      setChannelLoadError(null)
+
+      try {
+        const result = await window.bridge.esiLoadDeviceFull(
+          projectPath,
+          device.esiDeviceRef.repositoryItemId,
+          device.esiDeviceRef.deviceIndex,
+        )
+
+        if (result.success && result.device) {
+          const deviceChannels = pdoToChannels(result.device)
+          setChannels(deviceChannels)
+          fullDeviceLoadedRef.current = true
+
+          // Generate default mappings if none exist
+          if (device.channelMappings.length === 0 && deviceChannels.length > 0) {
+            onUpdateChannelMappings(generateDefaultChannelMappings(deviceChannels))
+          }
+        } else {
+          setChannelLoadError(result.error || 'Failed to load device data')
+        }
+      } catch (error) {
+        setChannelLoadError(String(error))
+      } finally {
+        setIsLoadingChannels(false)
+      }
+    }
+
+    void loadFullDevice()
+  }, [isExpanded, projectPath, device.esiDeviceRef, device.channelMappings.length, onUpdateChannelMappings])
+
+  const handleLocationChange = useCallback(
+    (channelId: string, newLocation: string) => {
+      const updated = device.channelMappings.map((m) =>
+        m.channelId === channelId ? { ...m, iecLocation: newLocation, userEdited: true } : m,
+      )
+      onUpdateChannelMappings(updated)
+    },
+    [device.channelMappings, onUpdateChannelMappings],
+  )
+
+  /**
+   * Update a nested section of the config.
+   */
+  const updateConfig = useCallback(
+    <K extends keyof EtherCATSlaveConfig>(section: K, updates: Partial<EtherCATSlaveConfig[K]>) => {
+      onUpdateDevice({
+        ...config,
+        [section]: { ...config[section], ...updates },
+      })
+    },
+    [config, onUpdateDevice],
+  )
+
+  /**
+   * Parse a number input value, returning the parsed int or undefined if invalid.
+   */
+  const parseNumericInput = (value: string, min = 0): number | undefined => {
+    const parsed = parseInt(value, 10)
+    if (isNaN(parsed) || parsed < min) return undefined
+    return parsed
+  }
 
   return (
     <>
@@ -138,17 +237,393 @@ const ConfiguredDeviceRow = ({
             </td>
           </tr>
 
-          {/* Configuration Section (placeholder for future IO mapping) */}
+          {/* Configuration Section */}
           <tr className='border-b border-neutral-100 bg-neutral-50 dark:border-neutral-900 dark:bg-neutral-900/50'>
             <td className='px-2 py-2'></td>
             <td colSpan={5} className='px-2 py-2'>
-              <div className='rounded-md border border-dashed border-neutral-300 bg-neutral-100 p-4 dark:border-neutral-700 dark:bg-neutral-800/50'>
-                <h5 className='mb-1 text-xs font-medium uppercase text-neutral-500 dark:text-neutral-400'>
+              <div className='rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                <h5 className='mb-3 text-xs font-medium uppercase text-neutral-500 dark:text-neutral-400'>
                   Configuration
                 </h5>
-                <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-                  IO mapping and device configuration will be available here.
-                </p>
+                <div className='flex flex-col gap-4'>
+                  {/* Startup Checks */}
+                  <div>
+                    <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Startup Checks</h6>
+                    <div className='flex flex-wrap gap-x-6 gap-y-2'>
+                      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                        <Checkbox
+                          checked={config.startupChecks.checkVendorId}
+                          onCheckedChange={(checked) =>
+                            updateConfig('startupChecks', { checkVendorId: checked === true })
+                          }
+                        />
+                        Verify Vendor ID
+                      </label>
+                      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                        <Checkbox
+                          checked={config.startupChecks.checkProductCode}
+                          onCheckedChange={(checked) =>
+                            updateConfig('startupChecks', { checkProductCode: checked === true })
+                          }
+                        />
+                        Verify Product Code
+                      </label>
+                      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                        <Checkbox
+                          checked={config.startupChecks.checkRevisionNumber}
+                          onCheckedChange={(checked) =>
+                            updateConfig('startupChecks', { checkRevisionNumber: checked === true })
+                          }
+                        />
+                        Verify Revision
+                      </label>
+                      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                        <Checkbox
+                          checked={config.startupChecks.downloadPdoConfig}
+                          onCheckedChange={(checked) =>
+                            updateConfig('startupChecks', { downloadPdoConfig: checked === true })
+                          }
+                        />
+                        Download PDO Config
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Addressing */}
+                  <div>
+                    <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Addressing</h6>
+                    <div className='flex flex-wrap items-center gap-x-6 gap-y-2'>
+                      <div className='flex items-center gap-2'>
+                        <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                          EtherCAT Address
+                        </span>
+                        <InputWithRef
+                          type='number'
+                          value={config.addressing.ethercatAddress}
+                          onChange={(e) => {
+                            const val = parseNumericInput(e.target.value)
+                            if (val !== undefined) updateConfig('addressing', { ethercatAddress: val })
+                          }}
+                          min={0}
+                          max={65535}
+                          className={inputClassName}
+                        />
+                        <span className='text-xs text-neutral-400 dark:text-neutral-500'>0 = auto</span>
+                      </div>
+                      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                        <Checkbox
+                          checked={config.addressing.optionalSlave}
+                          onCheckedChange={(checked) => updateConfig('addressing', { optionalSlave: checked === true })}
+                        />
+                        Optional Slave
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Timeouts */}
+                  <div>
+                    <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Timeouts</h6>
+                    <div className='grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3'>
+                      <div className='flex items-center gap-2'>
+                        <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                          SDO (ms)
+                        </span>
+                        <InputWithRef
+                          type='number'
+                          value={config.timeouts.sdoTimeoutMs}
+                          onChange={(e) => {
+                            const val = parseNumericInput(e.target.value)
+                            if (val !== undefined) updateConfig('timeouts', { sdoTimeoutMs: val })
+                          }}
+                          min={0}
+                          className={inputClassName}
+                        />
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                          I&#8594;P (ms)
+                        </span>
+                        <InputWithRef
+                          type='number'
+                          value={config.timeouts.initToPreOpTimeoutMs}
+                          onChange={(e) => {
+                            const val = parseNumericInput(e.target.value)
+                            if (val !== undefined) updateConfig('timeouts', { initToPreOpTimeoutMs: val })
+                          }}
+                          min={0}
+                          className={inputClassName}
+                        />
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                          P&#8594;S/S&#8594;O (ms)
+                        </span>
+                        <InputWithRef
+                          type='number'
+                          value={config.timeouts.safeOpToOpTimeoutMs}
+                          onChange={(e) => {
+                            const val = parseNumericInput(e.target.value)
+                            if (val !== undefined) updateConfig('timeouts', { safeOpToOpTimeoutMs: val })
+                          }}
+                          min={0}
+                          className={inputClassName}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Watchdog */}
+                  <div>
+                    <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Watchdog</h6>
+                    <div className='flex flex-col gap-2'>
+                      <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+                        <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                          <Checkbox
+                            checked={config.watchdog.smWatchdogEnabled}
+                            onCheckedChange={(checked) =>
+                              updateConfig('watchdog', { smWatchdogEnabled: checked === true })
+                            }
+                          />
+                          SM Watchdog
+                        </label>
+                        <div className='flex items-center gap-2'>
+                          <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                            Time (ms)
+                          </span>
+                          <InputWithRef
+                            type='number'
+                            value={config.watchdog.smWatchdogMs}
+                            disabled={!config.watchdog.smWatchdogEnabled}
+                            onChange={(e) => {
+                              const val = parseNumericInput(e.target.value)
+                              if (val !== undefined) updateConfig('watchdog', { smWatchdogMs: val })
+                            }}
+                            min={0}
+                            className={cn(inputClassName, !config.watchdog.smWatchdogEnabled && disabledInputClassName)}
+                          />
+                        </div>
+                      </div>
+                      <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+                        <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                          <Checkbox
+                            checked={config.watchdog.pdiWatchdogEnabled}
+                            onCheckedChange={(checked) =>
+                              updateConfig('watchdog', { pdiWatchdogEnabled: checked === true })
+                            }
+                          />
+                          PDI Watchdog
+                        </label>
+                        <div className='flex items-center gap-2'>
+                          <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                            Time (ms)
+                          </span>
+                          <InputWithRef
+                            type='number'
+                            value={config.watchdog.pdiWatchdogMs}
+                            disabled={!config.watchdog.pdiWatchdogEnabled}
+                            onChange={(e) => {
+                              const val = parseNumericInput(e.target.value)
+                              if (val !== undefined) updateConfig('watchdog', { pdiWatchdogMs: val })
+                            }}
+                            min={0}
+                            className={cn(
+                              inputClassName,
+                              !config.watchdog.pdiWatchdogEnabled && disabledInputClassName,
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Distributed Clocks (DC) */}
+                  <div>
+                    <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Distributed Clocks (DC)
+                    </h6>
+                    <div className='flex flex-col gap-2'>
+                      {/* DC Enable + Sync Unit Cycle */}
+                      <div className='flex flex-wrap items-center gap-x-6 gap-y-2'>
+                        <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                          <Checkbox
+                            checked={config.distributedClocks.dcEnabled}
+                            onCheckedChange={(checked) =>
+                              updateConfig('distributedClocks', { dcEnabled: checked === true })
+                            }
+                          />
+                          Enable DC
+                        </label>
+                        <div className='flex items-center gap-2'>
+                          <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                            Sync Unit Cycle (us)
+                          </span>
+                          <InputWithRef
+                            type='number'
+                            value={config.distributedClocks.dcSyncUnitCycleUs}
+                            disabled={!config.distributedClocks.dcEnabled}
+                            onChange={(e) => {
+                              const val = parseNumericInput(e.target.value)
+                              if (val !== undefined) updateConfig('distributedClocks', { dcSyncUnitCycleUs: val })
+                            }}
+                            min={0}
+                            className={cn(
+                              inputClassName,
+                              !config.distributedClocks.dcEnabled && disabledInputClassName,
+                            )}
+                          />
+                          <span className='text-xs text-neutral-400 dark:text-neutral-500'>0 = master cycle</span>
+                        </div>
+                      </div>
+
+                      {/* SYNC0 row */}
+                      <div className='flex flex-wrap items-center gap-x-4 gap-y-2 pl-4'>
+                        <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                          <Checkbox
+                            checked={config.distributedClocks.dcSync0Enabled}
+                            disabled={!config.distributedClocks.dcEnabled}
+                            onCheckedChange={(checked) =>
+                              updateConfig('distributedClocks', { dcSync0Enabled: checked === true })
+                            }
+                          />
+                          SYNC0
+                        </label>
+                        <div className='flex items-center gap-2'>
+                          <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                            Cycle (us)
+                          </span>
+                          <InputWithRef
+                            type='number'
+                            value={config.distributedClocks.dcSync0CycleUs}
+                            disabled={!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync0Enabled}
+                            onChange={(e) => {
+                              const val = parseNumericInput(e.target.value)
+                              if (val !== undefined) updateConfig('distributedClocks', { dcSync0CycleUs: val })
+                            }}
+                            min={0}
+                            className={cn(
+                              inputClassName,
+                              (!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync0Enabled) &&
+                                disabledInputClassName,
+                            )}
+                          />
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                            Shift (us)
+                          </span>
+                          <InputWithRef
+                            type='number'
+                            value={config.distributedClocks.dcSync0ShiftUs}
+                            disabled={!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync0Enabled}
+                            onChange={(e) => {
+                              const val = parseNumericInput(e.target.value)
+                              if (val !== undefined) updateConfig('distributedClocks', { dcSync0ShiftUs: val })
+                            }}
+                            min={0}
+                            className={cn(
+                              inputClassName,
+                              (!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync0Enabled) &&
+                                disabledInputClassName,
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      {/* SYNC1 row */}
+                      <div className='flex flex-wrap items-center gap-x-4 gap-y-2 pl-4'>
+                        <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+                          <Checkbox
+                            checked={config.distributedClocks.dcSync1Enabled}
+                            disabled={!config.distributedClocks.dcEnabled}
+                            onCheckedChange={(checked) =>
+                              updateConfig('distributedClocks', { dcSync1Enabled: checked === true })
+                            }
+                          />
+                          SYNC1
+                        </label>
+                        <div className='flex items-center gap-2'>
+                          <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                            Cycle (us)
+                          </span>
+                          <InputWithRef
+                            type='number'
+                            value={config.distributedClocks.dcSync1CycleUs}
+                            disabled={!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync1Enabled}
+                            onChange={(e) => {
+                              const val = parseNumericInput(e.target.value)
+                              if (val !== undefined) updateConfig('distributedClocks', { dcSync1CycleUs: val })
+                            }}
+                            min={0}
+                            className={cn(
+                              inputClassName,
+                              (!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync1Enabled) &&
+                                disabledInputClassName,
+                            )}
+                          />
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
+                            Shift (us)
+                          </span>
+                          <InputWithRef
+                            type='number'
+                            value={config.distributedClocks.dcSync1ShiftUs}
+                            disabled={!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync1Enabled}
+                            onChange={(e) => {
+                              const val = parseNumericInput(e.target.value)
+                              if (val !== undefined) updateConfig('distributedClocks', { dcSync1ShiftUs: val })
+                            }}
+                            min={0}
+                            className={cn(
+                              inputClassName,
+                              (!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync1Enabled) &&
+                                disabledInputClassName,
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          {/* Channel Mappings Section */}
+          <tr className='border-b border-neutral-100 bg-neutral-50 dark:border-neutral-900 dark:bg-neutral-900/50'>
+            <td className='px-2 py-2'></td>
+            <td colSpan={5} className='px-2 py-2'>
+              <div className='rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                <h5 className='mb-3 text-xs font-medium uppercase text-neutral-500 dark:text-neutral-400'>
+                  Channel Mappings
+                </h5>
+
+                {isLoadingChannels && (
+                  <div className='flex items-center gap-2 py-4 text-sm text-neutral-500 dark:text-neutral-400'>
+                    <ArrowIcon size='sm' className='animate-spin stroke-neutral-400' />
+                    Loading channels...
+                  </div>
+                )}
+
+                {channelLoadError && (
+                  <div className='rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'>
+                    {channelLoadError}
+                  </div>
+                )}
+
+                {!isLoadingChannels && !channelLoadError && channels.length === 0 && (
+                  <p className='py-4 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                    No channels available for this device.
+                  </p>
+                )}
+
+                {!isLoadingChannels && !channelLoadError && channels.length > 0 && (
+                  <ChannelMappingTable
+                    channels={channels}
+                    mappings={device.channelMappings}
+                    onLocationChange={handleLocationChange}
+                  />
+                )}
               </div>
             </td>
           </tr>

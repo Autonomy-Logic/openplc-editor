@@ -253,6 +253,20 @@ export interface ESIChannel {
   mappedVariable?: string
 }
 
+// ===================== CHANNEL MAPPING =====================
+
+/**
+ * Mapping of an ESI channel to an IEC 61131-3 located variable address
+ */
+export interface EtherCATChannelMapping {
+  /** Matches ESIChannel.id */
+  channelId: string
+  /** IEC 61131-3 located variable address (e.g., "%IX0.0", "%QW2") */
+  iecLocation: string
+  /** True if the user manually edited this address */
+  userEdited: boolean
+}
+
 // ===================== PARSE RESULT =====================
 
 /**
@@ -363,6 +377,102 @@ export interface ConfiguredEtherCATDevice {
   revisionNo: string
   /** How this device was added */
   addedFrom: 'repository' | 'scan'
+  /** Per-slave configuration settings */
+  config: EtherCATSlaveConfig
+  /** Channel-to-located-variable mappings */
+  channelMappings: EtherCATChannelMapping[]
+}
+
+// ===================== PER-SLAVE CONFIGURATION =====================
+
+/**
+ * Startup identity checks for an EtherCAT slave.
+ * When enabled, the master verifies the slave's identity during startup.
+ */
+export interface EtherCATStartupChecks {
+  /** Verify slave vendor ID matches ESI definition */
+  checkVendorId: boolean
+  /** Verify slave product code matches ESI definition */
+  checkProductCode: boolean
+  /** Verify slave revision number matches ESI definition */
+  checkRevisionNumber: boolean
+  /** Download expected PDO/slot configuration to slave at startup */
+  downloadPdoConfig: boolean
+}
+
+/**
+ * Addressing configuration for an EtherCAT slave.
+ */
+export interface EtherCATAddressing {
+  /** Fixed EtherCAT station address (configured address). 0 = auto-assign from position (1001+) */
+  ethercatAddress: number
+  /** Mark slave as optional - network continues if this slave is absent */
+  optionalSlave: boolean
+}
+
+/**
+ * Timeout settings for an EtherCAT slave.
+ */
+export interface EtherCATTimeouts {
+  /** SDO (Service Data Object) operation timeout in milliseconds */
+  sdoTimeoutMs: number
+  /** Init to Pre-Operational state transition timeout in milliseconds */
+  initToPreOpTimeoutMs: number
+  /** Pre-Op to Safe-Op and Safe-Op to Operational transition timeout in milliseconds */
+  safeOpToOpTimeoutMs: number
+}
+
+/**
+ * Watchdog settings for an EtherCAT slave.
+ */
+export interface EtherCATWatchdog {
+  /** Enable Sync Manager watchdog */
+  smWatchdogEnabled: boolean
+  /** Sync Manager watchdog time in milliseconds */
+  smWatchdogMs: number
+  /** Enable Process Data Interface (PDI) watchdog */
+  pdiWatchdogEnabled: boolean
+  /** PDI watchdog time in milliseconds */
+  pdiWatchdogMs: number
+}
+
+/**
+ * Distributed Clocks (DC) settings for an EtherCAT slave.
+ * DC provides synchronized timing across all slaves in the network.
+ */
+export interface EtherCATDistributedClocks {
+  /** Enable Distributed Clocks for this slave */
+  dcEnabled: boolean
+  /** Base sync unit cycle time in microseconds. 0 = use master cycle time */
+  dcSyncUnitCycleUs: number
+  /** Enable SYNC0 pulse generation */
+  dcSync0Enabled: boolean
+  /** SYNC0 cycle time in microseconds. 0 = use master cycle time */
+  dcSync0CycleUs: number
+  /** SYNC0 shift/offset time in microseconds */
+  dcSync0ShiftUs: number
+  /** Enable SYNC1 pulse generation */
+  dcSync1Enabled: boolean
+  /** SYNC1 cycle time in microseconds. 0 = use master cycle time */
+  dcSync1CycleUs: number
+  /** SYNC1 shift/offset time in microseconds */
+  dcSync1ShiftUs: number
+}
+
+/**
+ * Complete per-slave configuration for a configured EtherCAT device.
+ */
+export interface EtherCATSlaveConfig {
+  /** Identity verification during startup */
+  startupChecks: EtherCATStartupChecks
+  /** Network addressing */
+  addressing: EtherCATAddressing
+  /** Communication timeouts */
+  timeouts: EtherCATTimeouts
+  /** Watchdog settings */
+  watchdog: EtherCATWatchdog
+  /** Distributed Clocks (DC) settings */
+  distributedClocks: EtherCATDistributedClocks
 }
 
 // ===================== DEVICE MATCHING =====================
