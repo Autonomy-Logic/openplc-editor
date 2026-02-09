@@ -18,7 +18,7 @@ const ActivityBarButton = (props: IActivityBarButtonProps) => {
       <div
         className={cn(
           'rounded-md p-[6px] transition-all duration-150 hover:bg-brand-medium dark:hover:bg-neutral-900',
-          isActive && 'bg-brand-medium-dark dark:bg-neutral-800',
+          isActive && 'bg-brand-medium-dark dark:bg-neutral-700',
         )}
       >
         {children}

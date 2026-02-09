@@ -121,7 +121,7 @@ const LineChart = ({ data, isBool, range, now, startTime, label }: ChartProps) =
       xaxis: {
         type: 'numeric' as const,
         min: Math.max(0, elapsedSeconds - range),
-        max: elapsedSeconds,
+        max: Math.max(range, elapsedSeconds),
         labels: {
           show: true,
           formatter: (value: string) => {
