@@ -14,6 +14,7 @@ import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/utils/cpp/generateCBlocksCode'
 import { type CppPouData as CppPouDataHeader, generateCBlocksHeader } from '@root/utils/cpp/generateCBlocksHeader'
+import { generateEthercatConfig } from '@root/utils/ethercat/generate-ethercat-config'
 import { generateModbusMasterConfig } from '@root/utils/modbus/generate-modbus-master-config'
 import { generateModbusSlaveConfig } from '@root/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/utils/opcua'
@@ -1279,6 +1280,24 @@ class CompilerModule {
     }
   }
 
+  async handleGenerateEthercatConfig(
+    sourceTargetFolderPath: string,
+    projectData: ProjectState['data'],
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const ethercatConfig = generateEthercatConfig(projectData.remoteDevices)
+
+    if (ethercatConfig) {
+      const confFolderPath = join(sourceTargetFolderPath, 'conf')
+      await mkdir(confFolderPath, { recursive: true })
+      const configFilePath = join(confFolderPath, 'ethercat.json')
+      await writeFile(configFilePath, ethercatConfig, 'utf-8')
+      handleOutputData('Generated conf/ethercat.json', 'info')
+    } else {
+      handleOutputData('No EtherCAT devices configured, skipping ethercat.json generation', 'info')
+    }
+  }
+
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1710,6 +1729,11 @@ class CompilerModule {
 
           // Generate OPC-UA config for Runtime v4
           await this.handleGenerateOpcUaConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+
+          // Generate EtherCAT config for Runtime v4
+          await this.handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
 

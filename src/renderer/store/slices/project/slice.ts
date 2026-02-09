@@ -1,5 +1,6 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import type {
+  EthercatConfig,
   OpcUaNodeConfig,
   OpcUaSecurityProfile,
   OpcUaServerConfig,
@@ -2256,6 +2257,29 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           // Common fields
           if (config.timeout !== undefined) modbusCfg.timeout = config.timeout
           if (config.slaveId !== undefined) modbusCfg.slaveId = config.slaveId
+        }),
+      )
+      return response
+    },
+
+    updateEthercatConfig: (deviceName: string, ethercatConfig: EthercatConfig): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = project.data.remoteDevices.find((d) => d.name === deviceName)
+          if (!device) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          if (device.protocol !== 'ethercat') {
+            response = { ok: false, message: 'Device is not an EtherCAT device' }
+            return
+          }
+          device.ethercatConfig = ethercatConfig
         }),
       )
       return response

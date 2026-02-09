@@ -610,10 +610,86 @@ type ModbusTcpConfig = z.infer<typeof ModbusTcpConfigSchema>
 const PLCRemoteDeviceProtocolSchema = z.enum(['modbus-tcp', 'ethernet-ip', 'ethercat', 'profinet'])
 type PLCRemoteDeviceProtocol = z.infer<typeof PLCRemoteDeviceProtocolSchema>
 
+// ---- EtherCAT Configuration Schemas ----
+
+const EtherCATChannelMappingSchema = z.object({
+  channelId: z.string(),
+  iecLocation: z.string(),
+  userEdited: z.boolean(),
+})
+
+const ESIDeviceRefSchema = z.object({
+  repositoryItemId: z.string(),
+  deviceIndex: z.number(),
+})
+
+const EtherCATStartupChecksSchema = z.object({
+  checkVendorId: z.boolean(),
+  checkProductCode: z.boolean(),
+  checkRevisionNumber: z.boolean(),
+  downloadPdoConfig: z.boolean(),
+})
+
+const EtherCATAddressingSchema = z.object({
+  ethercatAddress: z.number(),
+  optionalSlave: z.boolean(),
+})
+
+const EtherCATTimeoutsSchema = z.object({
+  sdoTimeoutMs: z.number(),
+  initToPreOpTimeoutMs: z.number(),
+  safeOpToOpTimeoutMs: z.number(),
+})
+
+const EtherCATWatchdogSchema = z.object({
+  smWatchdogEnabled: z.boolean(),
+  smWatchdogMs: z.number(),
+  pdiWatchdogEnabled: z.boolean(),
+  pdiWatchdogMs: z.number(),
+})
+
+const EtherCATDistributedClocksSchema = z.object({
+  dcEnabled: z.boolean(),
+  dcSyncUnitCycleUs: z.number(),
+  dcSync0Enabled: z.boolean(),
+  dcSync0CycleUs: z.number(),
+  dcSync0ShiftUs: z.number(),
+  dcSync1Enabled: z.boolean(),
+  dcSync1CycleUs: z.number(),
+  dcSync1ShiftUs: z.number(),
+})
+
+const EtherCATSlaveConfigSchema = z.object({
+  startupChecks: EtherCATStartupChecksSchema,
+  addressing: EtherCATAddressingSchema,
+  timeouts: EtherCATTimeoutsSchema,
+  watchdog: EtherCATWatchdogSchema,
+  distributedClocks: EtherCATDistributedClocksSchema,
+})
+
+const ConfiguredEtherCATDeviceSchema = z.object({
+  id: z.string(),
+  position: z.number().optional(),
+  name: z.string(),
+  esiDeviceRef: ESIDeviceRefSchema,
+  vendorId: z.string(),
+  productCode: z.string(),
+  revisionNo: z.string(),
+  addedFrom: z.enum(['repository', 'scan']),
+  config: EtherCATSlaveConfigSchema,
+  channelMappings: z.array(EtherCATChannelMappingSchema),
+})
+
+const EthercatConfigSchema = z.object({
+  devices: z.array(ConfiguredEtherCATDeviceSchema),
+})
+type EthercatConfig = z.infer<typeof EthercatConfigSchema>
+
 const PLCRemoteDeviceSchema = z.object({
   name: z.string(),
   protocol: PLCRemoteDeviceProtocolSchema,
   modbusTcpConfig: ModbusTcpConfigSchema.optional(),
+  ethercatConfig: EthercatConfigSchema.optional(),
 })
 type PLCRemoteDevice = z.infer<typeof PLCRemoteDeviceSchema>
 
@@ -683,6 +759,8 @@ type PLCProject = z.infer<typeof PLCProjectSchema>
 export {
   baseTypeSchema,
   bodySchema,
+  ConfiguredEtherCATDeviceSchema,
+  EthercatConfigSchema,
   ModbusErrorHandlingSchema,
   ModbusFunctionCodeSchema,
   ModbusIOGroupSchema,
@@ -742,6 +820,7 @@ export {
 export type {
   BaseType,
   BodySchema,
+  EthercatConfig,
   ModbusErrorHandling,
   ModbusFunctionCode,
   ModbusIOGroup,

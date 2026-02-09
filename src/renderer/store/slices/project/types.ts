@@ -1,5 +1,6 @@
 import {
   bodySchema,
+  EthercatConfigSchema,
   OpcUaNodeConfigSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
@@ -556,6 +557,7 @@ const _projectActionsSchema = z.object({
     .returns(projectResponseSchema),
   deleteIOGroup: z.function().args(z.string(), z.string()).returns(projectResponseSchema),
   updateIOPointAlias: z.function().args(z.string(), z.string(), z.string(), z.string()).returns(projectResponseSchema),
+  updateEthercatConfig: z.function().args(z.string(), EthercatConfigSchema).returns(projectResponseSchema),
 })
 type ProjectActions = z.infer<typeof _projectActionsSchema>
 

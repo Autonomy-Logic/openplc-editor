@@ -33,7 +33,7 @@ type EditorTab = 'repository' | 'discovery' | 'configured'
  * - Viewing and configuring added devices (Configured Devices tab)
  */
 const EtherCATEditor = () => {
-  const { editor, runtimeConnection, project } = useOpenPLCStore()
+  const { editor, runtimeConnection, project, projectActions } = useOpenPLCStore()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
   const projectPath = project.meta.path
@@ -52,8 +52,22 @@ const EtherCATEditor = () => {
   const [repositoryLoadRetry, setRepositoryLoadRetry] = useState(0)
   const repositoryLoadedRef = useRef(false)
 
-  // Configured devices state
-  const [configuredDevices, setConfiguredDevices] = useState<ConfiguredEtherCATDevice[]>([])
+  // Configured devices from Zustand store
+  const remoteDevice = useMemo(() => {
+    return project.data.remoteDevices?.find((d) => d.name === deviceName)
+  }, [project.data.remoteDevices, deviceName])
+
+  const configuredDevices = useMemo(() => {
+    return (remoteDevice?.ethercatConfig?.devices ?? []) as ConfiguredEtherCATDevice[]
+  }, [remoteDevice])
+
+  const syncDevicesToStore = useCallback(
+    (devices: ConfiguredEtherCATDevice[]) => {
+      projectActions.updateEthercatConfig(deviceName, { devices })
+    },
+    [deviceName, projectActions],
+  )
+
   const [isDeviceBrowserOpen, setIsDeviceBrowserOpen] = useState(false)
 
   // Network interfaces state
@@ -226,6 +240,13 @@ const EtherCATEditor = () => {
     }
   }, [isConnectedToRuntime, checkServiceStatus, fetchInterfaces])
 
+  // Initialize ethercatConfig in store if missing
+  useEffect(() => {
+    if (remoteDevice && !remoteDevice.ethercatConfig) {
+      projectActions.updateEthercatConfig(deviceName, { devices: [] })
+    }
+  }, [remoteDevice, deviceName, projectActions])
+
   // Handle device selection from scan
   const handleSelectScannedDevice = useCallback((position: number, selected: boolean) => {
     setSelectedScannedDevices((prev) => {
@@ -286,11 +307,11 @@ const EtherCATEditor = () => {
     }
 
     if (newDevices.length > 0) {
-      setConfiguredDevices((prev) => [...prev, ...newDevices])
+      syncDevicesToStore([...configuredDevices, ...newDevices])
       setSelectedScannedDevices(new Set())
       setActiveTab('configured')
     }
-  }, [selectedScannedDevices, deviceMatches, repository])
+  }, [selectedScannedDevices, deviceMatches, repository, configuredDevices, syncDevicesToStore])
 
   // Handle adding device from browser modal
   const handleAddDeviceFromBrowser = useCallback(
@@ -306,25 +327,34 @@ const EtherCATEditor = () => {
         config: createDefaultSlaveConfig(),
         channelMappings: [],
       }
-      setConfiguredDevices((prev) => [...prev, newDevice])
+      syncDevicesToStore([...configuredDevices, newDevice])
     },
-    [],
+    [configuredDevices, syncDevicesToStore],
   )
 
   // Handle removing a configured device
-  const handleRemoveDevice = useCallback((deviceId: string) => {
-    setConfiguredDevices((prev) => prev.filter((d) => d.id !== deviceId))
-  }, [])
+  const handleRemoveDevice = useCallback(
+    (deviceId: string) => {
+      syncDevicesToStore(configuredDevices.filter((d) => d.id !== deviceId))
+    },
+    [configuredDevices, syncDevicesToStore],
+  )
 
   // Handle updating a configured device's configuration
-  const handleUpdateDevice = useCallback((deviceId: string, config: EtherCATSlaveConfig) => {
-    setConfiguredDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, config } : d)))
-  }, [])
+  const handleUpdateDevice = useCallback(
+    (deviceId: string, config: EtherCATSlaveConfig) => {
+      syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, config } : d)))
+    },
+    [configuredDevices, syncDevicesToStore],
+  )
 
   // Handle updating a configured device's channel mappings
-  const handleUpdateChannelMappings = useCallback((deviceId: string, channelMappings: EtherCATChannelMapping[]) => {
-    setConfiguredDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, channelMappings } : d)))
-  }, [])
+  const handleUpdateChannelMappings = useCallback(
+    (deviceId: string, channelMappings: EtherCATChannelMapping[]) => {
+      syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, channelMappings } : d)))
+    },
+    [configuredDevices, syncDevicesToStore],
+  )
 
   return (
     <div aria-label='EtherCAT editor container' className='flex h-full w-full flex-col overflow-hidden p-4'>
