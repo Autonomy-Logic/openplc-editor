@@ -66,7 +66,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
     ladderFlowActions: { removeRung },
     editorActions: { updateModelVariables },
     modalActions: { onOpenChange, closeModal },
-    sharedWorkspaceActions: { closeFile },
+    sharedWorkspaceActions: { forceCloseFile },
   } = store
   const deletePouAction = store.pouActions.delete
   const deleteDatatypeAction = store.datatypeActions.delete
@@ -148,7 +148,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
       return
     }
 
-    closeFile(targetLabel)
+    forceCloseFile(targetLabel)
     toast({
       title: 'Datatype deleted success!',
       description: `Datatype "${targetLabel}" was successfully deleted.`,
@@ -169,7 +169,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
       return
     }
 
-    closeFile(targetLabel)
+    forceCloseFile(targetLabel)
     toast({
       title: 'POU deleted success!',
       description: `POU "${targetLabel}" was successfully deleted.`,
@@ -190,7 +190,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
       return
     }
 
-    closeFile(targetLabel)
+    forceCloseFile(targetLabel)
     toast({
       title: 'Server deleted success!',
       description: `Server "${targetLabel}" was successfully deleted.`,
@@ -211,7 +211,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
       return
     }
 
-    closeFile(targetLabel)
+    forceCloseFile(targetLabel)
     toast({
       title: 'Remote device deleted success!',
       description: `Remote device "${targetLabel}" was successfully deleted.`,

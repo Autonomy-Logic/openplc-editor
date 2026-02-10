@@ -8,6 +8,12 @@
  * or the source PLC program and regenerate.
  ********************************************************************************/
 
+// Include defines.h first for Arduino builds to set USE_*_BLOCKS macros
+// before iec_std_FB.h processes its conditional includes
+#ifdef ARDUINO
+#include "../examples/Baremetal/defines.h"
+#endif
+
 #include "iec_std_lib.h"
 
 #define __LOCATED_VAR(type, name, ...) type __##name;
@@ -170,3 +176,12 @@ void updateTime()
         __CURRENT_TIME.tv_sec += 1;
     }
 }
+
+// Unity build for Arduino: Include other generated source files to compile as single unit.
+// This ensures static functions are only compiled once, reducing binary size.
+// These files are renamed to .inc to prevent separate compilation by Arduino build system.
+#ifdef ARDUINO
+#include "POUS.inc"
+#include "Res0.inc"
+#include "Config0.inc"
+#endif

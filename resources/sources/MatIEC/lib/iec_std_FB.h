@@ -1890,12 +1890,41 @@ __end:
 } // SEMA_body__()
 
 
+// Arduino-specific hardware modules - only included for Arduino builds.
+// USE_*_BLOCKS macros control which modules are included to reduce binary size
+// on memory-constrained devices (e.g., Arduino Uno Q with 128KB LLEXT heap).
+// The defines.h file auto-defines these macros based on program content.
+#ifdef ARDUINO
+
 #include "arduino_lib_FB.h"
+
+#ifdef USE_P1AM_BLOCKS
 #include "p1am_FB.h"
+#endif
+
+#ifdef USE_STM32CAN_BLOCK
 #include "stm32.h"
+#endif
+
+#ifdef USE_MQTT_BLOCKS
 #include "MQTT.h"
+#endif
+
+#ifdef USE_SM_BLOCKS
 #include "sm_cards.h"
+#endif
+
+#ifdef USE_JAGUAR_BLOCKS
 #include "jaguar.h"
+#endif
+
+#ifdef USE_SLRP4_BLOCKS
 #include "SL-RP4.h"
+#endif
+
+#endif // ARDUINO
+
+// c_blocks.h contains user-defined type definitions needed by all files
 #include "../c_blocks.h"
+
 #endif //_IEC_STD_FB_H

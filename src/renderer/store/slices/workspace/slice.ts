@@ -146,6 +146,25 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
             label: '',
             type: null,
           }
+          // Reset debugger state
+          workspace.isDebuggerVisible = false
+          workspace.debuggerTargetIp = null
+          workspace.debugVariableIndexes = new Map()
+          workspace.debugVariableValues = new Map()
+          workspace.debugForcedVariables = new Map()
+          workspace.debugVariableTree = new Map()
+          workspace.debugExpandedNodes = new Map()
+          workspace.fbDebugInstances = new Map()
+          workspace.fbSelectedInstance = new Map()
+          // Reset PLC logs state
+          workspace.isPlcLogsVisible = false
+          workspace.plcLogs = ''
+          workspace.plcLogsLastId = null
+          workspace.plcFilters = {
+            levels: { debug: true, info: true, warning: true, error: true },
+            searchTerm: '',
+            timestampFormat: 'full',
+          }
         }),
       )
     },

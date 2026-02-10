@@ -875,6 +875,7 @@ class CompilerModule {
   async handlePatchGeneratedFiles(compilationPath: string, handleOutputData: HandleOutputDataCallback) {
     const pousCFilePath = join(compilationPath, 'src', 'POUS.c')
     const res0FilePath = join(compilationPath, 'src', 'Res0.c')
+    const config0FilePath = join(compilationPath, 'src', 'Config0.c')
 
     const pousCContent = await readFile(pousCFilePath, { encoding: 'utf8' })
     const patchedPousCContent = `#include "POUS.h"\n#include "Config0.h"\n\n${pousCContent}`
@@ -886,6 +887,18 @@ class CompilerModule {
 
     await writeFile(res0FilePath, patchedRes0FileContent, { encoding: 'utf8' })
     handleOutputData('Required files patched', 'info')
+
+    // Unity build: Rename .c files to .inc so Arduino build system doesn't compile them separately.
+    // These files are #included by glueVars.c as a single compilation unit to avoid
+    // duplicate static function definitions that cause binary size bloat.
+    const pousIncFilePath = join(compilationPath, 'src', 'POUS.inc')
+    const res0IncFilePath = join(compilationPath, 'src', 'Res0.inc')
+    const config0IncFilePath = join(compilationPath, 'src', 'Config0.inc')
+
+    await fs.rename(pousCFilePath, pousIncFilePath)
+    await fs.rename(res0FilePath, res0IncFilePath)
+    await fs.rename(config0FilePath, config0IncFilePath)
+    handleOutputData('Files renamed to .inc for unity build', 'info')
   }
 
   async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {

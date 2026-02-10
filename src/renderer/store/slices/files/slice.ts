@@ -27,6 +27,7 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
             type: file.type,
             filePath: file.filePath,
             saved: true, // Default to true when adding a new file
+            isNew: file.isNew ?? false, // Track if this is a newly created file
           }
         }),
       )
@@ -40,7 +41,7 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
         }),
       )
     },
-    updateFile: ({ name, saved, filePath, newName }) => {
+    updateFile: ({ name, saved, filePath, newName, isNew }) => {
       setState(
         produce(({ files }: FileSlice) => {
           if (!files[name]) return
@@ -48,6 +49,9 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
           const existingFile = files[name]
           existingFile.saved = saved ?? existingFile.saved
           existingFile.filePath = filePath ?? existingFile.filePath
+          if (isNew !== undefined) {
+            existingFile.isNew = isNew
+          }
 
           if (newName) {
             if (files[newName]) return

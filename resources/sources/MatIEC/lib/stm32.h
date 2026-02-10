@@ -1,4 +1,4 @@
-//my_custom_library.h – this file contains the C code for the TEST block defined in the “My Custom Library”
+//my_custom_library.h – this file contains the C code for the TEST block defined in the "My Custom Library"
 
 // STM32CAN
 
