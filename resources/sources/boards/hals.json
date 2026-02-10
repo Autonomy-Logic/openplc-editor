@@ -776,7 +776,7 @@
     "default_dout": "01, 02, 03, 04, 05, 12, 13, 14, 15, 16",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-    "platform": "esp32:esp32:esp32c3",
+    "platform": "esp32:esp32:esp32c3:CDCOnBoot=cdc",
     "preview": "esp32.png",
     "source": "esp32.cpp",
     "specs": {
