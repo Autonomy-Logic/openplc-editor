@@ -383,16 +383,16 @@ const VariableElement = (block: VariableProps) => {
       return undefined
     }
 
-    const variableType = getVariableType()
-    if (!variableType || variableType.toUpperCase() !== 'BOOL') {
-      return undefined
-    }
-
     const compositeKey = getCompositeKey(data.variable.name)
 
     if (debugForcedVariables.has(compositeKey)) {
       const forcedValue = debugForcedVariables.get(compositeKey)
       return forcedValue ? '#80C000' : '#4080FF'
+    }
+
+    const variableType = getVariableType()
+    if (!variableType || variableType.toUpperCase() !== 'BOOL') {
+      return undefined
     }
 
     const value = debugVariableValues.get(compositeKey)
