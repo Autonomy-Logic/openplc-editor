@@ -667,6 +667,32 @@ const EtherCATSlaveConfigSchema = z.object({
   distributedClocks: EtherCATDistributedClocksSchema,
 })
 
+const PersistedPdoEntrySchema = z.object({
+  index: z.string(),
+  subIndex: z.string(),
+  bitLen: z.number(),
+  name: z.string(),
+  dataType: z.string(),
+})
+
+const PersistedPdoSchema = z.object({
+  index: z.string(),
+  name: z.string(),
+  entries: z.array(PersistedPdoEntrySchema),
+})
+
+const PersistedChannelInfoSchema = z.object({
+  channelId: z.string(),
+  name: z.string(),
+  direction: z.enum(['input', 'output']),
+  pdoIndex: z.string(),
+  entryIndex: z.string(),
+  entrySubIndex: z.string(),
+  dataType: z.string(),
+  bitLen: z.number(),
+  iecType: z.string(),
+})
+
 const ConfiguredEtherCATDeviceSchema = z.object({
   id: z.string(),
   position: z.number().optional(),
@@ -678,6 +704,10 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   addedFrom: z.enum(['repository', 'scan']),
   config: EtherCATSlaveConfigSchema,
   channelMappings: z.array(EtherCATChannelMappingSchema),
+  channelInfo: z.array(PersistedChannelInfoSchema).optional(),
+  rxPdos: z.array(PersistedPdoSchema).optional(),
+  txPdos: z.array(PersistedPdoSchema).optional(),
+  slaveType: z.string().optional(),
 })
 
 const EthercatConfigSchema = z.object({

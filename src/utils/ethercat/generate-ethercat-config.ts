@@ -1,50 +1,157 @@
+import type { ConfiguredEtherCATDevice, PersistedChannelInfo, PersistedPdo } from '@root/types/ethercat/esi-types'
 import type { PLCRemoteDevice } from '@root/types/PLC/open-plc'
 
 // Runtime JSON interfaces (snake_case for plugin consumption)
 
-interface EthercatDcConfig {
-  enabled: boolean
-  sync0_cycle_us?: number
-  sync0_shift_us?: number
-}
-
-interface EthercatPdoEntry {
+interface RuntimePdoEntry {
   index: string
-  address: string
+  subindex: number
+  bit_length: number
+  name: string
+  data_type: string
 }
 
-interface EthercatPdoMapping {
-  inputs?: EthercatPdoEntry[]
-  outputs?: EthercatPdoEntry[]
+interface RuntimePdo {
+  index: string
+  name: string
+  entries: RuntimePdoEntry[]
 }
 
-interface EthercatSlaveJson {
+interface RuntimeChannel {
+  index: number
+  name: string
+  type: string
+  bit_length: number
+  iec_location: string
+  pdo_index: string
+  pdo_entry_index: string
+  pdo_entry_subindex: number
+}
+
+interface RuntimeSlave {
   position: number
   name: string
+  type: string
   vendor_id: string
   product_code: string
   revision: string
-  check_vendor: boolean
-  check_product: boolean
-  dc: EthercatDcConfig
-  pdo_mapping?: EthercatPdoMapping
+  channels: RuntimeChannel[]
+  sdo_configurations: unknown[]
+  rx_pdos: RuntimePdo[]
+  tx_pdos: RuntimePdo[]
 }
 
-interface EthercatMasterJson {
+interface RuntimeMaster {
   interface: string
   cycle_time_us: number
-  dc_enabled: boolean
-  dc_sync_offset_percent: number
 }
 
-interface EthercatConfigJson {
-  master: EthercatMasterJson
-  slaves: EthercatSlaveJson[]
+interface RuntimeDiagnostics {
+  log_connections: boolean
+  log_data_access: boolean
+  log_errors: boolean
+  max_log_entries: number
+  status_update_interval_ms: number
+}
+
+interface RuntimeConfig {
+  master: RuntimeMaster
+  slaves: RuntimeSlave[]
+  diagnostics: RuntimeDiagnostics
+}
+
+interface RuntimeRootEntry {
+  name: string
+  protocol: string
+  config: RuntimeConfig
+}
+
+/**
+ * Converts a hex string (e.g., "0x01") to an integer.
+ */
+function hexToInt(hex: string): number {
+  return parseInt(hex, 16)
+}
+
+/**
+ * Derives the channel type string from direction and bit length.
+ */
+function deriveChannelType(direction: 'input' | 'output', bitLen: number): string {
+  if (direction === 'input') {
+    return bitLen === 1 ? 'digital_input' : 'analog_input'
+  }
+  return bitLen === 1 ? 'digital_output' : 'analog_output'
+}
+
+/**
+ * Converts persisted PDOs to runtime PDO format.
+ * Entries with index "0x0000" are treated as padding.
+ */
+function convertPdos(pdos: PersistedPdo[]): RuntimePdo[] {
+  return pdos.map((pdo) => ({
+    index: pdo.index,
+    name: pdo.name,
+    entries: pdo.entries.map(
+      (entry): RuntimePdoEntry => ({
+        index: entry.index,
+        subindex: hexToInt(entry.subIndex),
+        bit_length: entry.bitLen,
+        name: entry.name,
+        data_type: entry.index === '0x0000' ? 'PAD' : entry.dataType,
+      }),
+    ),
+  }))
+}
+
+/**
+ * Builds runtime channels by joining channelInfo with channelMappings.
+ */
+function buildChannels(
+  channelInfo: PersistedChannelInfo[],
+  channelMappings: { channelId: string; iecLocation: string }[],
+): RuntimeChannel[] {
+  const mappingMap = new Map(channelMappings.map((m) => [m.channelId, m.iecLocation]))
+
+  return channelInfo.map((ch, index) => ({
+    index,
+    name: ch.name,
+    type: deriveChannelType(ch.direction, ch.bitLen),
+    bit_length: ch.bitLen,
+    iec_location: mappingMap.get(ch.channelId) ?? '',
+    pdo_index: ch.pdoIndex,
+    pdo_entry_index: ch.entryIndex,
+    pdo_entry_subindex: hexToInt(ch.entrySubIndex),
+  }))
+}
+
+/**
+ * Builds a runtime slave from a configured device.
+ */
+function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSlave {
+  const position = device.position ?? index
+  const channels = device.channelInfo ? buildChannels(device.channelInfo, device.channelMappings) : []
+  const rxPdos = device.rxPdos ? convertPdos(device.rxPdos) : []
+  const txPdos = device.txPdos ? convertPdos(device.txPdos) : []
+
+  return {
+    position,
+    name: device.name,
+    type: device.slaveType ?? 'coupler',
+    vendor_id: device.vendorId,
+    product_code: device.productCode,
+    revision: device.revisionNo,
+    channels,
+    sdo_configurations: [],
+    rx_pdos: rxPdos,
+    tx_pdos: txPdos,
+  }
 }
 
 /**
  * Generates the EtherCAT plugin configuration JSON from the project's remote devices.
- * Returns null if there are no EtherCAT devices configured.
+ * Produces the exact contract expected by the OpenPLC runtime EtherCAT plugin.
+ *
+ * Output format: array root `[{ name, protocol: "ETHERCAT", config: { master, slaves[], diagnostics } }]`
  *
  * @param remoteDevices - Array of PLCRemoteDevice from the project data
  * @returns The EtherCAT configuration as a JSON string, or null if no devices are configured
@@ -63,43 +170,13 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
   }
 
   // Collect all configured slaves across all EtherCAT remote devices
-  const allSlaves: EthercatSlaveJson[] = []
-  let anyDcEnabled = false
+  const allSlaves: RuntimeSlave[] = []
 
   for (const remoteDevice of ethercatRemoteDevices) {
-    const devices = remoteDevice.ethercatConfig?.devices ?? []
+    const devices = (remoteDevice.ethercatConfig?.devices ?? []) as ConfiguredEtherCATDevice[]
 
     for (let i = 0; i < devices.length; i++) {
-      const device = devices[i]
-      const position = device.position ?? i
-      const dc = device.config.distributedClocks
-
-      if (dc.dcEnabled) {
-        anyDcEnabled = true
-      }
-
-      // Build PDO mapping from channel mappings
-      const pdoMapping = buildPdoMapping(device.channelMappings)
-
-      const slave: EthercatSlaveJson = {
-        position,
-        name: device.name,
-        vendor_id: device.vendorId,
-        product_code: device.productCode,
-        revision: device.revisionNo,
-        check_vendor: device.config.startupChecks.checkVendorId,
-        check_product: device.config.startupChecks.checkProductCode,
-        dc: {
-          enabled: dc.dcEnabled,
-          ...(dc.dcEnabled && {
-            sync0_cycle_us: dc.dcSync0CycleUs,
-            sync0_shift_us: dc.dcSync0ShiftUs,
-          }),
-        },
-        ...(pdoMapping && { pdo_mapping: pdoMapping }),
-      }
-
-      allSlaves.push(slave)
+      allSlaves.push(buildSlave(devices[i], i))
     }
   }
 
@@ -107,59 +184,24 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
     return null
   }
 
-  const config: EthercatConfigJson = {
-    master: {
-      interface: 'eth0',
-      cycle_time_us: 4000,
-      dc_enabled: anyDcEnabled,
-      dc_sync_offset_percent: 20,
+  const rootEntry: RuntimeRootEntry = {
+    name: 'ethercat_master',
+    protocol: 'ETHERCAT',
+    config: {
+      master: {
+        interface: 'eth0',
+        cycle_time_us: 1000,
+      },
+      slaves: allSlaves,
+      diagnostics: {
+        log_connections: true,
+        log_data_access: false,
+        log_errors: true,
+        max_log_entries: 10000,
+        status_update_interval_ms: 500,
+      },
     },
-    slaves: allSlaves,
   }
 
-  return JSON.stringify(config, null, 2)
-}
-
-/**
- * Builds PDO mapping from channel mappings.
- * Groups channel mappings by direction (input/output) based on IEC location prefix.
- */
-const buildPdoMapping = (
-  channelMappings: { channelId: string; iecLocation: string; userEdited: boolean }[],
-): EthercatPdoMapping | null => {
-  if (!channelMappings || channelMappings.length === 0) {
-    return null
-  }
-
-  const inputs: EthercatPdoEntry[] = []
-  const outputs: EthercatPdoEntry[] = []
-
-  for (const mapping of channelMappings) {
-    const loc = mapping.iecLocation
-    // Extract PDO index from channelId (format: "pdo_0x1A00_entry_0x6000_01" or similar)
-    const pdoIndexMatch = mapping.channelId.match(/pdo_(0x[0-9A-Fa-f]+)/)
-    const pdoIndex = pdoIndexMatch ? pdoIndexMatch[1] : '0x0000'
-
-    const entry: EthercatPdoEntry = {
-      index: pdoIndex,
-      address: loc,
-    }
-
-    // IEC location prefix determines direction: %I = input, %Q = output
-    if (loc.startsWith('%I')) {
-      inputs.push(entry)
-    } else if (loc.startsWith('%Q')) {
-      outputs.push(entry)
-    }
-  }
-
-  if (inputs.length === 0 && outputs.length === 0) {
-    return null
-  }
-
-  const result: EthercatPdoMapping = {}
-  if (inputs.length > 0) result.inputs = inputs
-  if (outputs.length > 0) result.outputs = outputs
-
-  return result
+  return JSON.stringify([rootEntry], null, 2)
 }

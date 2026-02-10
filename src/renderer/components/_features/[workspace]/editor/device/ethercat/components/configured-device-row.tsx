@@ -8,12 +8,22 @@ import type {
   ESIRepositoryItemLight,
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
+  PersistedChannelInfo,
+  PersistedPdo,
 } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
+import { enrichDeviceData } from '@root/utils/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/utils/ethercat/esi-parser'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ChannelMappingTable } from './channel-mapping-table'
+
+type EnrichDeviceData = {
+  channelInfo?: PersistedChannelInfo[]
+  rxPdos?: PersistedPdo[]
+  txPdos?: PersistedPdo[]
+  slaveType?: string
+}
 
 type ConfiguredDeviceRowProps = {
   device: ConfiguredEtherCATDevice
@@ -25,6 +35,7 @@ type ConfiguredDeviceRowProps = {
   onUpdateDevice: (config: EtherCATSlaveConfig) => void
   projectPath: string
   onUpdateChannelMappings: (mappings: EtherCATChannelMapping[]) => void
+  onEnrichDevice: (data: EnrichDeviceData) => void
 }
 
 const inputClassName =
@@ -47,6 +58,7 @@ const ConfiguredDeviceRow = ({
   onUpdateDevice,
   projectPath,
   onUpdateChannelMappings,
+  onEnrichDevice,
 }: ConfiguredDeviceRowProps) => {
   // Resolve the ESI device summary from repository
   const esiDevice = useMemo<ESIDeviceSummary | null>(() => {
@@ -93,6 +105,11 @@ const ConfiguredDeviceRow = ({
           if (device.channelMappings.length === 0 && deviceChannels.length > 0) {
             onUpdateChannelMappings(generateDefaultChannelMappings(deviceChannels))
           }
+
+          // Enrich if data is missing (backward compat for projects created before enrichment)
+          if (!device.channelInfo || !device.rxPdos || !device.txPdos) {
+            onEnrichDevice(enrichDeviceData(result.device))
+          }
         } else {
           setChannelLoadError(result.error || 'Failed to load device data')
         }
@@ -104,7 +121,17 @@ const ConfiguredDeviceRow = ({
     }
 
     void loadFullDevice()
-  }, [isExpanded, projectPath, device.esiDeviceRef, device.channelMappings.length, onUpdateChannelMappings])
+  }, [
+    isExpanded,
+    projectPath,
+    device.esiDeviceRef,
+    device.channelMappings.length,
+    device.channelInfo,
+    device.rxPdos,
+    device.txPdos,
+    onUpdateChannelMappings,
+    onEnrichDevice,
+  ])
 
   const handleLocationChange = useCallback(
     (channelId: string, newLocation: string) => {

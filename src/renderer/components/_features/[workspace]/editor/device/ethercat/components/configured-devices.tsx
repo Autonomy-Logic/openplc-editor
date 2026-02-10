@@ -5,10 +5,19 @@ import type {
   ESIRepositoryItemLight,
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
+  PersistedChannelInfo,
+  PersistedPdo,
 } from '@root/types/ethercat/esi-types'
 import { useCallback, useState } from 'react'
 
 import { ConfiguredDeviceRow } from './configured-device-row'
+
+type EnrichDeviceData = {
+  channelInfo?: PersistedChannelInfo[]
+  rxPdos?: PersistedPdo[]
+  txPdos?: PersistedPdo[]
+  slaveType?: string
+}
 
 type ConfiguredDevicesProps = {
   devices: ConfiguredEtherCATDevice[]
@@ -18,6 +27,7 @@ type ConfiguredDevicesProps = {
   onUpdateDevice: (deviceId: string, config: EtherCATSlaveConfig) => void
   projectPath: string
   onUpdateChannelMappings: (deviceId: string, mappings: EtherCATChannelMapping[]) => void
+  onEnrichDevice: (deviceId: string, data: EnrichDeviceData) => void
 }
 
 /**
@@ -33,6 +43,7 @@ const ConfiguredDevices = ({
   onUpdateDevice,
   projectPath,
   onUpdateChannelMappings,
+  onEnrichDevice,
 }: ConfiguredDevicesProps) => {
   const [expandedDevices, setExpandedDevices] = useState<Set<string>>(new Set())
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
@@ -128,6 +139,7 @@ const ConfiguredDevices = ({
                   onUpdateDevice={(config) => onUpdateDevice(device.id, config)}
                   projectPath={projectPath}
                   onUpdateChannelMappings={(mappings) => onUpdateChannelMappings(device.id, mappings)}
+                  onEnrichDevice={(data) => onEnrichDevice(device.id, data)}
                 />
               ))
             )}

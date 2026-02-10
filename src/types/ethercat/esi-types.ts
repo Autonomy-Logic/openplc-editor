@@ -253,6 +253,62 @@ export interface ESIChannel {
   mappedVariable?: string
 }
 
+// ===================== PERSISTED PDO/CHANNEL DATA =====================
+
+/**
+ * Persisted PDO entry - stored in project.json for runtime config generation.
+ * Includes padding entries (index "0x0000") for complete PDO layout.
+ */
+export interface PersistedPdoEntry {
+  /** Entry index (hex, e.g., "0x6000") */
+  index: string
+  /** Entry subindex (hex, e.g., "0x01") */
+  subIndex: string
+  /** Bit length of the data */
+  bitLen: number
+  /** Entry name */
+  name: string
+  /** Data type (e.g., "BOOL", "INT16", "BIT" for padding) */
+  dataType: string
+}
+
+/**
+ * Persisted PDO - stored in project.json for runtime config generation.
+ */
+export interface PersistedPdo {
+  /** PDO index (hex, e.g., "0x1A00") */
+  index: string
+  /** PDO name */
+  name: string
+  /** PDO entries including padding */
+  entries: PersistedPdoEntry[]
+}
+
+/**
+ * Persisted channel info with full metadata from ESI.
+ * Enriches the minimal channelId stored in EtherCATChannelMapping.
+ */
+export interface PersistedChannelInfo {
+  /** Unique channel ID matching ESIChannel.id format */
+  channelId: string
+  /** Channel display name from ESI */
+  name: string
+  /** Channel direction */
+  direction: 'input' | 'output'
+  /** Parent PDO index (hex) */
+  pdoIndex: string
+  /** Entry index (hex) */
+  entryIndex: string
+  /** Entry subindex (hex) */
+  entrySubIndex: string
+  /** ESI data type */
+  dataType: string
+  /** Bit length */
+  bitLen: number
+  /** IEC 61131-3 compatible type */
+  iecType: string
+}
+
 // ===================== CHANNEL MAPPING =====================
 
 /**
@@ -381,6 +437,14 @@ export interface ConfiguredEtherCATDevice {
   config: EtherCATSlaveConfig
   /** Channel-to-located-variable mappings */
   channelMappings: EtherCATChannelMapping[]
+  /** Enriched channel metadata from ESI (persisted for runtime config generation) */
+  channelInfo?: PersistedChannelInfo[]
+  /** RxPDOs with full layout including padding (persisted for runtime config generation) */
+  rxPdos?: PersistedPdo[]
+  /** TxPDOs with full layout including padding (persisted for runtime config generation) */
+  txPdos?: PersistedPdo[]
+  /** Slave device type classification (e.g., "digital_input", "coupler") */
+  slaveType?: string
 }
 
 // ===================== PER-SLAVE CONFIGURATION =====================

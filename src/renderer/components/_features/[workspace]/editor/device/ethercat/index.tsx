@@ -13,6 +13,7 @@ import type {
 import { cn } from '@root/utils'
 import { createDefaultSlaveConfig } from '@root/utils/ethercat/device-config-defaults'
 import { countMatchedDevices, getBestMatchQuality, matchDevicesToRepository } from '@root/utils/ethercat/device-matcher'
+import { enrichDeviceData } from '@root/utils/ethercat/enrich-device-data'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -277,7 +278,7 @@ const EtherCATEditor = () => {
   )
 
   // Add selected scanned devices to configured devices
-  const handleAddSelectedFromScan = useCallback(() => {
+  const handleAddSelectedFromScan = useCallback(async () => {
     const newDevices: ConfiguredEtherCATDevice[] = []
 
     for (const position of selectedScannedDevices) {
@@ -288,6 +289,17 @@ const EtherCATEditor = () => {
       const bestMatch = match.matches[0]
       const repoItem = repository.find((r) => r.id === bestMatch.repositoryItemId)
       if (!repoItem) continue
+
+      // Enrich with full ESI data
+      let enriched = {}
+      const result = await window.bridge.esiLoadDeviceFull(
+        projectPath,
+        bestMatch.repositoryItemId,
+        bestMatch.deviceIndex,
+      )
+      if (result.success && result.device) {
+        enriched = enrichDeviceData(result.device)
+      }
 
       newDevices.push({
         id: uuidv4(),
@@ -303,6 +315,7 @@ const EtherCATEditor = () => {
         addedFrom: 'scan',
         config: createDefaultSlaveConfig(),
         channelMappings: [],
+        ...enriched,
       })
     }
 
@@ -311,11 +324,18 @@ const EtherCATEditor = () => {
       setSelectedScannedDevices(new Set())
       setActiveTab('configured')
     }
-  }, [selectedScannedDevices, deviceMatches, repository, configuredDevices, syncDevicesToStore])
+  }, [selectedScannedDevices, deviceMatches, repository, configuredDevices, syncDevicesToStore, projectPath])
 
   // Handle adding device from browser modal
   const handleAddDeviceFromBrowser = useCallback(
-    (ref: ESIDeviceRef, device: ESIDeviceSummary, repoItem: ESIRepositoryItemLight) => {
+    async (ref: ESIDeviceRef, device: ESIDeviceSummary, repoItem: ESIRepositoryItemLight) => {
+      // Enrich with full ESI data
+      let enriched = {}
+      const result = await window.bridge.esiLoadDeviceFull(projectPath, ref.repositoryItemId, ref.deviceIndex)
+      if (result.success && result.device) {
+        enriched = enrichDeviceData(result.device)
+      }
+
       const newDevice: ConfiguredEtherCATDevice = {
         id: uuidv4(),
         name: device.name,
@@ -326,10 +346,11 @@ const EtherCATEditor = () => {
         addedFrom: 'repository',
         config: createDefaultSlaveConfig(),
         channelMappings: [],
+        ...enriched,
       }
       syncDevicesToStore([...configuredDevices, newDevice])
     },
-    [configuredDevices, syncDevicesToStore],
+    [configuredDevices, syncDevicesToStore, projectPath],
   )
 
   // Handle removing a configured device
@@ -352,6 +373,14 @@ const EtherCATEditor = () => {
   const handleUpdateChannelMappings = useCallback(
     (deviceId: string, channelMappings: EtherCATChannelMapping[]) => {
       syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, channelMappings } : d)))
+    },
+    [configuredDevices, syncDevicesToStore],
+  )
+
+  // Handle enriching a device with persisted ESI data (backward compat for old projects)
+  const handleEnrichDevice = useCallback(
+    (deviceId: string, data: Partial<ConfiguredEtherCATDevice>) => {
+      syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, ...data } : d)))
     },
     [configuredDevices, syncDevicesToStore],
   )
@@ -530,7 +559,7 @@ const EtherCATEditor = () => {
                   </div>
                   {selectedScannedDevices.size > 0 && (
                     <button
-                      onClick={handleAddSelectedFromScan}
+                      onClick={() => void handleAddSelectedFromScan()}
                       className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
                     >
                       Add Selected ({selectedScannedDevices.size})
@@ -562,6 +591,7 @@ const EtherCATEditor = () => {
           onUpdateDevice={handleUpdateDevice}
           projectPath={projectPath}
           onUpdateChannelMappings={handleUpdateChannelMappings}
+          onEnrichDevice={handleEnrichDevice}
         />
       )}
 
@@ -569,7 +599,7 @@ const EtherCATEditor = () => {
       <DeviceBrowserModal
         isOpen={isDeviceBrowserOpen}
         onClose={() => setIsDeviceBrowserOpen(false)}
-        onSelectDevice={handleAddDeviceFromBrowser}
+        onSelectDevice={(...args) => void handleAddDeviceFromBrowser(...args)}
         repository={repository}
       />
     </div>
