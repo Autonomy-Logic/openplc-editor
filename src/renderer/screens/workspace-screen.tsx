@@ -188,7 +188,7 @@ const WorkspaceScreen = () => {
     pouName: string
     variable: (typeof pous)[0]['data']['variables'][0]
   }
-  const variableInfoMapRef = useRef<Map<number, VariableInfo> | null>(null)
+  const variableInfoMapRef = useRef<Map<number, VariableInfo[]> | null>(null)
 
   useEffect(() => {
     const {
@@ -246,7 +246,21 @@ const WorkspaceScreen = () => {
       batchSize = 20
     }
 
-    const variableInfoMap = new Map<number, VariableInfo>()
+    const variableInfoMap = new Map<number, VariableInfo[]>()
+
+    // Helper to add a VariableInfo entry to the map, supporting multiple entries per debug index.
+    // This is critical for global (external) variables that share a single debug index across programs.
+    const addVariableInfo = (index: number, info: VariableInfo) => {
+      const existing = variableInfoMap.get(index)
+      if (existing) {
+        const isDuplicate = existing.some((e) => e.pouName === info.pouName && e.variable.name === info.variable.name)
+        if (!isDuplicate) {
+          existing.push(info)
+        }
+      } else {
+        variableInfoMap.set(index, [info])
+      }
+    }
 
     // Helper function to ensure ENO variable exists in FB variable list
     // ENO is always present in debug.c for function blocks but may not be in the type definition
@@ -273,7 +287,7 @@ const WorkspaceScreen = () => {
 
           if (index !== undefined) {
             const varName = `${variableNamePrefix}.${fbVar.name}`
-            variableInfoMap.set(index, {
+            addVariableInfo(index, {
               pouName,
               variable: {
                 name: varName,
@@ -416,7 +430,7 @@ const WorkspaceScreen = () => {
         const compositeKey = `${pou.data.name}:${v.name}`
         const index = debugVariableIndexes.get(compositeKey)
         if (index !== undefined) {
-          variableInfoMap.set(index, { pouName: pou.data.name, variable: v })
+          addVariableInfo(index, { pouName: pou.data.name, variable: v })
         }
       })
     })
@@ -498,7 +512,7 @@ const WorkspaceScreen = () => {
 
               if (index !== undefined) {
                 const blockVarName = `${fbInstance.name}.${fbVar.name}`
-                variableInfoMap.set(index, {
+                addVariableInfo(index, {
                   pouName: pou.data.name,
                   variable: {
                     name: blockVarName,
@@ -599,7 +613,7 @@ const WorkspaceScreen = () => {
 
                   if (index !== undefined) {
                     const tempVarName = `_TMP_${blockName}${numericId}_${outputVar.name}`
-                    variableInfoMap.set(index, {
+                    addVariableInfo(index, {
                       pouName: pou.data.name,
                       variable: {
                         name: tempVarName,
@@ -648,7 +662,7 @@ const WorkspaceScreen = () => {
 
         if (index !== undefined) {
           const varName = `${variablePathPrefix}.${fbVar.name}`
-          variableInfoMap.set(index, {
+          addVariableInfo(index, {
             pouName: programPouName,
             variable: {
               name: varName,
@@ -765,7 +779,7 @@ const WorkspaceScreen = () => {
                 if (index !== undefined) {
                   // Variable name includes the full nested path for composite key matching
                   const tempVarName = `${variablePathPrefix}._TMP_${blockName}${numericId}_${outputVar.name}`
-                  variableInfoMap.set(index, {
+                  addVariableInfo(index, {
                     pouName: programPouName,
                     variable: {
                       name: tempVarName,
@@ -860,10 +874,12 @@ const WorkspaceScreen = () => {
     // program-level keys (like main:COUNTER) from the initial parsing.
     const { workspaceActions: wsActions } = useOpenPLCStore.getState()
     const updatedIndexes = new Map(debugVariableIndexes)
-    variableInfoMap.forEach((varInfo, index) => {
-      const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-      if (!updatedIndexes.has(compositeKey)) {
-        updatedIndexes.set(compositeKey, index)
+    variableInfoMap.forEach((varInfos, index) => {
+      for (const varInfo of varInfos) {
+        const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+        if (!updatedIndexes.has(compositeKey)) {
+          updatedIndexes.set(compositeKey, index)
+        }
       }
     })
     wsActions.setDebugVariableIndexes(updatedIndexes)
@@ -970,14 +986,16 @@ const WorkspaceScreen = () => {
 
         // Add nested variables to polling based on expansion state
         // This now supports arbitrary nesting depth by finding the deepest watched ancestor
-        Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
-          if (varInfo.variable.name.includes('.')) {
-            const childKey = `${varInfo.pouName}:${varInfo.variable.name}`
+        Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
+          for (const varInfo of varInfos) {
+            if (varInfo.variable.name.includes('.')) {
+              const childKey = `${varInfo.pouName}:${varInfo.variable.name}`
 
-            // Check if this nested variable should be polled based on expansion state
-            // shouldPollNestedVariable now handles finding the watched ancestor internally
-            if (shouldPollNestedVariable(varInfo.variable.name, varInfo.pouName, graphListRef.current)) {
-              debugVariableKeys.add(childKey)
+              // Check if this nested variable should be polled based on expansion state
+              // shouldPollNestedVariable now handles finding the watched ancestor internally
+              if (shouldPollNestedVariable(varInfo.variable.name, varInfo.pouName, graphListRef.current)) {
+                debugVariableKeys.add(childKey)
+              }
             }
           }
         })
@@ -1047,15 +1065,17 @@ const WorkspaceScreen = () => {
           // For program POUs, poll FB instance variables using the standard approach
           if (currentPou.type === 'function-block' && fbInstanceCtx) {
             // Poll all nested BOOL variables within the FB instance
-            Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
-              if (
-                varInfo.pouName === fbInstanceCtx.programName &&
-                varInfo.variable.name.startsWith(`${fbInstanceCtx.fbVariableName}.`) &&
-                varInfo.variable.type.definition === 'base-type' &&
-                varInfo.variable.type.value.toLowerCase() === 'bool'
-              ) {
-                const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-                debugVariableKeys.add(compositeKey)
+            Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
+              for (const varInfo of varInfos) {
+                if (
+                  varInfo.pouName === fbInstanceCtx.programName &&
+                  varInfo.variable.name.startsWith(`${fbInstanceCtx.fbVariableName}.`) &&
+                  varInfo.variable.type.definition === 'base-type' &&
+                  varInfo.variable.type.value.toLowerCase() === 'bool'
+                ) {
+                  const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                  debugVariableKeys.add(compositeKey)
+                }
               }
             })
           } else {
@@ -1064,15 +1084,17 @@ const WorkspaceScreen = () => {
             )
 
             functionBlockInstances.forEach((fbInstance) => {
-              Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
-                if (
-                  varInfo.pouName === currentPou.data.name &&
-                  varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
-                  varInfo.variable.type.definition === 'base-type' &&
-                  varInfo.variable.type.value.toLowerCase() === 'bool'
-                ) {
-                  const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-                  debugVariableKeys.add(compositeKey)
+              Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfos]) => {
+                for (const varInfo of varInfos) {
+                  if (
+                    varInfo.pouName === currentPou.data.name &&
+                    varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                    varInfo.variable.type.definition === 'base-type' &&
+                    varInfo.variable.type.value.toLowerCase() === 'bool'
+                  ) {
+                    const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                    debugVariableKeys.add(compositeKey)
+                  }
                 }
               })
             })
@@ -1090,14 +1112,16 @@ const WorkspaceScreen = () => {
                   }
 
                   if (blockData.variant?.type === 'function' && blockData.numericId) {
-                    Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
-                      if (
-                        varInfo.pouName === fbInstanceCtx.programName &&
-                        varInfo.variable.name.startsWith(`${fbInstanceCtx.fbVariableName}.`) &&
-                        varInfo.variable.name.includes(blockData.numericId!)
-                      ) {
-                        const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-                        debugVariableKeys.add(compositeKey)
+                    Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfos]) => {
+                      for (const varInfo of varInfos) {
+                        if (
+                          varInfo.pouName === fbInstanceCtx.programName &&
+                          varInfo.variable.name.startsWith(`${fbInstanceCtx.fbVariableName}.`) &&
+                          varInfo.variable.name.includes(blockData.numericId!)
+                        ) {
+                          const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                          debugVariableKeys.add(compositeKey)
+                        }
                       }
                     })
                   }
@@ -1117,13 +1141,15 @@ const WorkspaceScreen = () => {
                     }
 
                     if (blockData.variant?.type === 'function' && blockData.numericId) {
-                      Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
-                        if (
-                          varInfo.pouName === currentPou.data.name &&
-                          varInfo.variable.name.includes(blockData.numericId!)
-                        ) {
-                          const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-                          debugVariableKeys.add(compositeKey)
+                      Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfos]) => {
+                        for (const varInfo of varInfos) {
+                          if (
+                            varInfo.pouName === currentPou.data.name &&
+                            varInfo.variable.name.includes(blockData.numericId!)
+                          ) {
+                            const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                            debugVariableKeys.add(compositeKey)
+                          }
                         }
                       })
                     }
@@ -1181,15 +1207,17 @@ const WorkspaceScreen = () => {
           // For program POUs, poll FB instance variables using the standard approach
           if (currentPou.type === 'function-block' && fbdFbInstanceCtx) {
             // Poll all nested BOOL variables within the FB instance
-            Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfo]) => {
-              if (
-                varInfo.pouName === fbdFbInstanceCtx.programName &&
-                varInfo.variable.name.startsWith(`${fbdFbInstanceCtx.fbVariableName}.`) &&
-                varInfo.variable.type.definition === 'base-type' &&
-                varInfo.variable.type.value.toLowerCase() === 'bool'
-              ) {
-                const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-                debugVariableKeys.add(compositeKey)
+            Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
+              for (const varInfo of varInfos) {
+                if (
+                  varInfo.pouName === fbdFbInstanceCtx.programName &&
+                  varInfo.variable.name.startsWith(`${fbdFbInstanceCtx.fbVariableName}.`) &&
+                  varInfo.variable.type.definition === 'base-type' &&
+                  varInfo.variable.type.value.toLowerCase() === 'bool'
+                ) {
+                  const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                  debugVariableKeys.add(compositeKey)
+                }
               }
             })
           } else {
@@ -1198,15 +1226,17 @@ const WorkspaceScreen = () => {
             )
 
             functionBlockInstances.forEach((fbInstance) => {
-              Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
-                if (
-                  varInfo.pouName === currentPou.data.name &&
-                  varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
-                  varInfo.variable.type.definition === 'base-type' &&
-                  varInfo.variable.type.value.toLowerCase() === 'bool'
-                ) {
-                  const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-                  debugVariableKeys.add(compositeKey)
+              Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfos]) => {
+                for (const varInfo of varInfos) {
+                  if (
+                    varInfo.pouName === currentPou.data.name &&
+                    varInfo.variable.name.startsWith(`${fbInstance.name}.`) &&
+                    varInfo.variable.type.definition === 'base-type' &&
+                    varInfo.variable.type.value.toLowerCase() === 'bool'
+                  ) {
+                    const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                    debugVariableKeys.add(compositeKey)
+                  }
                 }
               })
             })
@@ -1223,14 +1253,16 @@ const WorkspaceScreen = () => {
                 }
 
                 if (blockData.variant?.type === 'function' && blockData.numericId) {
-                  Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
-                    if (
-                      varInfo.pouName === fbdFbInstanceCtx.programName &&
-                      varInfo.variable.name.startsWith(`${fbdFbInstanceCtx.fbVariableName}.`) &&
-                      varInfo.variable.name.includes(blockData.numericId!)
-                    ) {
-                      const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-                      debugVariableKeys.add(compositeKey)
+                  Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfos]) => {
+                    for (const varInfo of varInfos) {
+                      if (
+                        varInfo.pouName === fbdFbInstanceCtx.programName &&
+                        varInfo.variable.name.startsWith(`${fbdFbInstanceCtx.fbVariableName}.`) &&
+                        varInfo.variable.name.includes(blockData.numericId!)
+                      ) {
+                        const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                        debugVariableKeys.add(compositeKey)
+                      }
                     }
                   })
                 }
@@ -1248,13 +1280,15 @@ const WorkspaceScreen = () => {
                   }
 
                   if (blockData.variant?.type === 'function' && blockData.numericId) {
-                    Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfo]) => {
-                      if (
-                        varInfo.pouName === currentPou.data.name &&
-                        varInfo.variable.name.includes(blockData.numericId!)
-                      ) {
-                        const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-                        debugVariableKeys.add(compositeKey)
+                    Array.from(variableInfoMapRef.current!.entries()).forEach(([_, varInfos]) => {
+                      for (const varInfo of varInfos) {
+                        if (
+                          varInfo.pouName === currentPou.data.name &&
+                          varInfo.variable.name.includes(blockData.numericId!)
+                        ) {
+                          const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                          debugVariableKeys.add(compositeKey)
+                        }
                       }
                     })
                   }
@@ -1265,10 +1299,12 @@ const WorkspaceScreen = () => {
         }
 
         const allIndexes = Array.from(variableInfoMapRef.current.entries())
-          .filter(([_, varInfo]) => {
-            const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
-            return debugVariableKeys.has(compositeKey)
-          })
+          .filter(([_, varInfos]) =>
+            varInfos.some((varInfo) => {
+              const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+              return debugVariableKeys.has(compositeKey)
+            }),
+          )
           .map(([index, _]) => index)
           .sort((a, b) => a - b)
 
@@ -1331,11 +1367,11 @@ const WorkspaceScreen = () => {
           let itemsProcessed = 0
 
           for (const index of batch) {
-            const varInfo = variableInfoMapRef.current?.get(index)
-            if (!varInfo) continue
+            const varInfos = variableInfoMapRef.current?.get(index)
+            if (!varInfos || varInfos.length === 0) continue
 
-            const { pouName, variable } = varInfo
-            const compositeKey = `${pouName}:${variable.name}`
+            // Use the first entry for parsing (all entries share the same debug index and type)
+            const { variable } = varInfos[0]
 
             if (bufferOffset >= responseBuffer.length) {
               break
@@ -1343,10 +1379,18 @@ const WorkspaceScreen = () => {
 
             try {
               const { value, bytesRead } = parseVariableValue(responseBuffer, bufferOffset, variable)
-              newValues.set(compositeKey, value)
+              // Write the parsed value to ALL composite keys for this index.
+              // This ensures global (external) variables display correctly in every program.
+              for (const varInfo of varInfos) {
+                const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                newValues.set(compositeKey, value)
+              }
               bufferOffset += bytesRead
             } catch {
-              newValues.set(compositeKey, 'ERR')
+              for (const varInfo of varInfos) {
+                const compositeKey = `${varInfo.pouName}:${varInfo.variable.name}`
+                newValues.set(compositeKey, 'ERR')
+              }
               bufferOffset += getVariableSize(variable)
             }
 
