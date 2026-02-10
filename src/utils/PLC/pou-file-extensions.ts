@@ -104,7 +104,7 @@ export const getEndKeyword = (pouType: string): string => {
 export const getFolderFromPouType = (pouType: string): string => {
   const folder = POU_TYPE_TO_FOLDER[pouType]
   if (!folder) {
-    return 'programs'
+    throw new Error(`Unknown POU type: ${pouType}`)
   }
   return folder
 }

@@ -1861,9 +1861,14 @@ export const createSharedSlice: StateCreator<
               getState().projectActions.deleteRemoteDevice(name)
               getState().projectActions.createRemoteDevice({ data: savedDevice })
             }
+          } else if (file.type === 'resource') {
+            const savedResource = projectData.configuration?.resource
+            if (savedResource) {
+              getState().projectActions.setGlobalVariables({ variables: savedResource.globalVariables ?? [] })
+              getState().projectActions.setTasks({ tasks: savedResource.tasks ?? [] })
+              getState().projectActions.setInstances({ instances: savedResource.instances ?? [] })
+            }
           }
-          // resource: global variables are part of project data configuration
-          // Reloading the full project just for resource is heavy; mark as saved and close
         } catch (err) {
           console.error('Error parsing project.json:', err)
           return {
@@ -2119,7 +2124,6 @@ export const createSharedSlice: StateCreator<
 
       // If the file is saved, set the saved to false because it was modified
       if (file?.saved) {
-        console.warn(`File with name ${name} was marked as saved, but it was modified. Marking as unsaved.`)
         getState().fileActions.updateFile({
           name,
           saved: false,
@@ -2401,8 +2405,6 @@ export const createSharedSlice: StateCreator<
       const variables = next.variables as PLCVariable[]
 
       if (variables.length > 0) {
-        console.log(variables.length)
-
         getState().editorActions.updateModelVariables({
           display: 'table',
           selectedRow: variables.length - 1,

@@ -232,7 +232,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         watchedFilePathRef.current = null
       }
     }
-  }, [pou, name, language])
+  }, [pou?.type, name, language])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {

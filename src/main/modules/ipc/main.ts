@@ -9,7 +9,7 @@ import { app, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingMessage } from 'http'
 import https from 'https'
-import { join, resolve } from 'path'
+import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { ProjectState } from '../../../renderer/store/slices'
@@ -1279,12 +1279,12 @@ class MainProcessBridge implements MainIpcModule {
     try {
       const resolved = realpathSync(resolve(filePath))
       const projectRoot = realpathSync(resolve(this.currentProjectPath))
-      return resolved.startsWith(projectRoot + '/') || resolved === projectRoot
+      return resolved.startsWith(projectRoot + sep) || resolved === projectRoot
     } catch {
       // realpathSync fails if the file doesn't exist yet — fall back to resolve only
       const resolved = resolve(filePath)
       const projectRoot = resolve(this.currentProjectPath)
-      return resolved.startsWith(projectRoot + '/') || resolved === projectRoot
+      return resolved.startsWith(projectRoot + sep) || resolved === projectRoot
     }
   }
 
