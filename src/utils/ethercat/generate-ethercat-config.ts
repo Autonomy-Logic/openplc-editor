@@ -169,39 +169,38 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
     return null
   }
 
-  // Collect all configured slaves across all EtherCAT remote devices
-  const allSlaves: RuntimeSlave[] = []
+  // Build one root entry per EtherCAT remote device
+  const rootEntries: RuntimeRootEntry[] = []
 
   for (const remoteDevice of ethercatRemoteDevices) {
     const devices = (remoteDevice.ethercatConfig?.devices ?? []) as ConfiguredEtherCATDevice[]
+    const slaves = devices.map((device, i) => buildSlave(device, i))
 
-    for (let i = 0; i < devices.length; i++) {
-      allSlaves.push(buildSlave(devices[i], i))
-    }
+    if (slaves.length === 0) continue
+
+    rootEntries.push({
+      name: remoteDevice.name || 'ethercat_master',
+      protocol: 'ETHERCAT',
+      config: {
+        master: {
+          interface: remoteDevice.ethercatConfig?.masterConfig?.networkInterface || 'eth0',
+          cycle_time_us: remoteDevice.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000,
+        },
+        slaves,
+        diagnostics: {
+          log_connections: true,
+          log_data_access: false,
+          log_errors: true,
+          max_log_entries: 10000,
+          status_update_interval_ms: 500,
+        },
+      },
+    })
   }
 
-  if (allSlaves.length === 0) {
+  if (rootEntries.length === 0) {
     return null
   }
 
-  const rootEntry: RuntimeRootEntry = {
-    name: 'ethercat_master',
-    protocol: 'ETHERCAT',
-    config: {
-      master: {
-        interface: 'eth0',
-        cycle_time_us: 1000,
-      },
-      slaves: allSlaves,
-      diagnostics: {
-        log_connections: true,
-        log_data_access: false,
-        log_errors: true,
-        max_log_entries: 10000,
-        status_update_interval_ms: 500,
-      },
-    },
-  }
-
-  return JSON.stringify([rootEntry], null, 2)
+  return JSON.stringify(rootEntries, null, 2)
 }

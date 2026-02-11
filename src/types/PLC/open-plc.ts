@@ -710,7 +710,14 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   slaveType: z.string().optional(),
 })
 
+const EtherCATMasterConfigSchema = z.object({
+  networkInterface: z.string(),
+  cycleTimeUs: z.number().int().min(100).max(100000),
+})
+type EtherCATMasterConfig = z.infer<typeof EtherCATMasterConfigSchema>
+
 const EthercatConfigSchema = z.object({
+  masterConfig: EtherCATMasterConfigSchema.optional(),
   devices: z.array(ConfiguredEtherCATDeviceSchema),
 })
 type EthercatConfig = z.infer<typeof EthercatConfigSchema>
@@ -791,6 +798,7 @@ export {
   bodySchema,
   ConfiguredEtherCATDeviceSchema,
   EthercatConfigSchema,
+  EtherCATMasterConfigSchema,
   ModbusErrorHandlingSchema,
   ModbusFunctionCodeSchema,
   ModbusIOGroupSchema,
@@ -851,6 +859,7 @@ export type {
   BaseType,
   BodySchema,
   EthercatConfig,
+  EtherCATMasterConfig,
   ModbusErrorHandling,
   ModbusFunctionCode,
   ModbusIOGroup,

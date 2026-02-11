@@ -1,4 +1,6 @@
 import { ArrowIcon } from '@root/renderer/assets/icons'
+import { InputWithRef } from '@root/renderer/components/_atoms/input'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms/select'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
 import type {
@@ -10,6 +12,7 @@ import type {
   EtherCATSlaveConfig,
   ScannedDeviceMatch,
 } from '@root/types/ethercat/esi-types'
+import type { EtherCATMasterConfig } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { createDefaultSlaveConfig } from '@root/utils/ethercat/device-config-defaults'
 import { countMatchedDevices, getBestMatchQuality, matchDevicesToRepository } from '@root/utils/ethercat/device-matcher'
@@ -62,11 +65,26 @@ const EtherCATEditor = () => {
     return (remoteDevice?.ethercatConfig?.devices ?? []) as ConfiguredEtherCATDevice[]
   }, [remoteDevice])
 
+  const masterConfig = useMemo(() => {
+    return remoteDevice?.ethercatConfig?.masterConfig ?? { networkInterface: 'eth0', cycleTimeUs: 1000 }
+  }, [remoteDevice])
+
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
-      projectActions.updateEthercatConfig(deviceName, { devices })
+      projectActions.updateEthercatConfig(deviceName, { masterConfig, devices })
     },
-    [deviceName, projectActions],
+    [deviceName, projectActions, masterConfig],
+  )
+
+  const handleUpdateMasterConfig = useCallback(
+    (updates: Partial<EtherCATMasterConfig>) => {
+      const newMasterConfig = { ...masterConfig, ...updates }
+      projectActions.updateEthercatConfig(deviceName, {
+        masterConfig: newMasterConfig,
+        devices: configuredDevices,
+      })
+    },
+    [deviceName, projectActions, masterConfig, configuredDevices],
   )
 
   const [isDeviceBrowserOpen, setIsDeviceBrowserOpen] = useState(false)
@@ -244,7 +262,10 @@ const EtherCATEditor = () => {
   // Initialize ethercatConfig in store if missing
   useEffect(() => {
     if (remoteDevice && !remoteDevice.ethercatConfig) {
-      projectActions.updateEthercatConfig(deviceName, { devices: [] })
+      projectActions.updateEthercatConfig(deviceName, {
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000 },
+        devices: [],
+      })
     }
   }, [remoteDevice, deviceName, projectActions])
 
@@ -391,6 +412,94 @@ const EtherCATEditor = () => {
       <div className='mb-4'>
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>EtherCAT Device: {deviceName}</h2>
         <p className='text-sm text-neutral-600 dark:text-neutral-400'>Protocol: EtherCAT</p>
+      </div>
+
+      {/* Master Settings */}
+      <div className='mb-4 flex flex-wrap items-end gap-6 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900'>
+        <span className='text-xs font-semibold text-neutral-700 dark:text-neutral-300'>Master Settings</span>
+        <div className='flex flex-col gap-1'>
+          <span className='text-xs text-neutral-600 dark:text-neutral-400'>Network Interface</span>
+          {isConnectedToRuntime && interfaces.length > 0 ? (
+            <div className='flex items-center gap-2'>
+              <Select
+                value={masterConfig.networkInterface}
+                onValueChange={(value) => handleUpdateMasterConfig({ networkInterface: value })}
+              >
+                <SelectTrigger
+                  withIndicator
+                  placeholder='Select interface'
+                  className='flex h-[26px] w-full min-w-[180px] max-w-[260px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-700 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+                <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+                  {interfaces.map((iface) => (
+                    <SelectItem
+                      key={iface.name}
+                      value={iface.name}
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer flex-col items-start justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        {iface.name}
+                      </span>
+                      {iface.description && (
+                        <span className='text-start font-caption text-[10px] font-normal text-neutral-500 dark:text-neutral-400'>
+                          {iface.description}
+                        </span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                onClick={() => void fetchInterfaces()}
+                disabled={isLoadingInterfaces}
+                className={cn(
+                  'flex h-[26px] w-[26px] items-center justify-center rounded-md border border-neutral-300 bg-white transition-colors',
+                  'hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-950 dark:hover:bg-neutral-800',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+                title='Refresh interfaces'
+              >
+                <ArrowIcon
+                  size='sm'
+                  className={cn('rotate-180 stroke-brand transition-transform', isLoadingInterfaces && 'animate-spin')}
+                />
+              </button>
+            </div>
+          ) : (
+            <InputWithRef
+              type='text'
+              value={masterConfig.networkInterface}
+              onChange={(e) => handleUpdateMasterConfig({ networkInterface: e.target.value })}
+              placeholder='eth0'
+              className='h-[26px] w-36 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+            />
+          )}
+          <span className='text-[10px] text-neutral-500 dark:text-neutral-500'>
+            {isConnectedToRuntime && interfaces.length > 0
+              ? 'Select from runtime interfaces'
+              : 'Interface name on the runtime host (e.g. eth0, enp3s0)'}
+          </span>
+        </div>
+        <div className='flex flex-col gap-1'>
+          <span className='text-xs text-neutral-600 dark:text-neutral-400'>Cycle Time (us)</span>
+          <InputWithRef
+            type='number'
+            value={masterConfig.cycleTimeUs}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10)
+              if (!isNaN(val)) handleUpdateMasterConfig({ cycleTimeUs: val })
+            }}
+            min={100}
+            max={100000}
+            className='h-[26px] w-24 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+          />
+          <span className='text-[10px] text-neutral-500 dark:text-neutral-500'>
+            EtherCAT bus cycle time in microseconds
+          </span>
+        </div>
       </div>
 
       {/* Tabs */}
