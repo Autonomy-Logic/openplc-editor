@@ -494,9 +494,11 @@ const EtherCATEditor = () => {
           <InputWithRef
             type='number'
             value={masterConfig.cycleTimeUs}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10)
-              if (!isNaN(val)) handleUpdateMasterConfig({ cycleTimeUs: val })
+            onChange={(e) => handleUpdateMasterConfig({ cycleTimeUs: Number(e.target.value) })}
+            onBlur={(e) => {
+              const val = Number(e.target.value)
+              if (!val || val < 100) handleUpdateMasterConfig({ cycleTimeUs: 100 })
+              else if (val > 100000) handleUpdateMasterConfig({ cycleTimeUs: 100000 })
             }}
             min={100}
             max={100000}
@@ -511,9 +513,11 @@ const EtherCATEditor = () => {
           <InputWithRef
             type='number'
             value={masterConfig.watchdogTimeoutCycles ?? 3}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10)
-              if (!isNaN(val)) handleUpdateMasterConfig({ watchdogTimeoutCycles: val })
+            onChange={(e) => handleUpdateMasterConfig({ watchdogTimeoutCycles: Number(e.target.value) })}
+            onBlur={(e) => {
+              const val = Number(e.target.value)
+              if (!val || val < 1) handleUpdateMasterConfig({ watchdogTimeoutCycles: 1 })
+              else if (val > 100) handleUpdateMasterConfig({ watchdogTimeoutCycles: 100 })
             }}
             min={1}
             max={100}
