@@ -713,6 +713,7 @@ const ConfiguredEtherCATDeviceSchema = z.object({
 const EtherCATMasterConfigSchema = z.object({
   networkInterface: z.string(),
   cycleTimeUs: z.number().int().min(100).max(100000),
+  watchdogTimeoutCycles: z.number().int().min(1).max(100).optional(),
 })
 type EtherCATMasterConfig = z.infer<typeof EtherCATMasterConfigSchema>
 

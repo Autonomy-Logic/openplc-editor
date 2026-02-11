@@ -44,6 +44,7 @@ interface RuntimeSlave {
 interface RuntimeMaster {
   interface: string
   cycle_time_us: number
+  watchdog_timeout_cycles: number
 }
 
 interface RuntimeDiagnostics {
@@ -185,6 +186,7 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
         master: {
           interface: remoteDevice.ethercatConfig?.masterConfig?.networkInterface || 'eth0',
           cycle_time_us: remoteDevice.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000,
+          watchdog_timeout_cycles: remoteDevice.ethercatConfig?.masterConfig?.watchdogTimeoutCycles ?? 3,
         },
         slaves,
         diagnostics: {

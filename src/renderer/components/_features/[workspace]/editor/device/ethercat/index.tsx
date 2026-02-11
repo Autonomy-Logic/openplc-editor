@@ -66,7 +66,13 @@ const EtherCATEditor = () => {
   }, [remoteDevice])
 
   const masterConfig = useMemo(() => {
-    return remoteDevice?.ethercatConfig?.masterConfig ?? { networkInterface: 'eth0', cycleTimeUs: 1000 }
+    return (
+      remoteDevice?.ethercatConfig?.masterConfig ?? {
+        networkInterface: 'eth0',
+        cycleTimeUs: 1000,
+        watchdogTimeoutCycles: 3,
+      }
+    )
   }, [remoteDevice])
 
   const syncDevicesToStore = useCallback(
@@ -263,7 +269,7 @@ const EtherCATEditor = () => {
   useEffect(() => {
     if (remoteDevice && !remoteDevice.ethercatConfig) {
       projectActions.updateEthercatConfig(deviceName, {
-        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000 },
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, watchdogTimeoutCycles: 3 },
         devices: [],
       })
     }
@@ -498,6 +504,23 @@ const EtherCATEditor = () => {
           />
           <span className='text-[10px] text-neutral-500 dark:text-neutral-500'>
             EtherCAT bus cycle time in microseconds
+          </span>
+        </div>
+        <div className='flex flex-col gap-1'>
+          <span className='text-xs text-neutral-600 dark:text-neutral-400'>Watchdog Timeout (cycles)</span>
+          <InputWithRef
+            type='number'
+            value={masterConfig.watchdogTimeoutCycles ?? 3}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10)
+              if (!isNaN(val)) handleUpdateMasterConfig({ watchdogTimeoutCycles: val })
+            }}
+            min={1}
+            max={100}
+            className='h-[26px] w-24 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+          />
+          <span className='text-[10px] text-neutral-500 dark:text-neutral-500'>
+            Missed cycles before watchdog triggers
           </span>
         </div>
       </div>
