@@ -158,6 +158,7 @@ const GlobalVariablesEditor = () => {
       display: 'table',
       selectedRow: parseInt(editorVariables.selectedRow) + index,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleCreateVariable = () => {
