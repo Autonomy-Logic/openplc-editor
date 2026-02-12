@@ -61,6 +61,23 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
     return map
   }, [mappings])
 
+  // Build a 1-based per-direction index for each channel (stable regardless of filtering)
+  const channelIndexMap = useMemo(() => {
+    const map = new Map<string, number>()
+    let inputIdx = 0
+    let outputIdx = 0
+    for (const ch of channels) {
+      if (ch.direction === 'input') {
+        inputIdx++
+        map.set(ch.id, inputIdx)
+      } else {
+        outputIdx++
+        map.set(ch.id, outputIdx)
+      }
+    }
+    return map
+  }, [channels])
+
   // Filter channels based on direction and search
   const filteredChannels = useMemo(() => {
     return channels.filter((channel) => {
@@ -72,9 +89,6 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
         const search = searchTerm.toLowerCase()
         const mapping = mappingMap.get(channel.id)
         return (
-          channel.name.toLowerCase().includes(search) ||
-          channel.dataType.toLowerCase().includes(search) ||
-          channel.entryIndex.toLowerCase().includes(search) ||
           channel.iecType.toLowerCase().includes(search) ||
           (mapping?.iecLocation.toLowerCase().includes(search) ?? false) ||
           (mapping?.alias?.toLowerCase().includes(search) ?? false)
@@ -144,26 +158,17 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
         <table className='w-full table-fixed'>
           <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
             <tr>
-              <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                Dir
-              </th>
-              <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                Name
+              <th className='w-[8%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                #
               </th>
               <th className='w-[10%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                Index
-              </th>
-              <th className='w-[9%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                Type
-              </th>
-              <th className='w-[6%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                Bits
-              </th>
-              <th className='w-[9%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                IEC Type
+                Dir
               </th>
               <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                IEC Location
+                IEC Type
+              </th>
+              <th className='w-[22%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                Address
               </th>
               <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>Alias</th>
             </tr>
@@ -171,7 +176,7 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
           <tbody>
             {filteredChannels.length === 0 ? (
               <tr>
-                <td colSpan={8} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                <td colSpan={5} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
                   {channels.length === 0 ? 'No channels available' : 'No channels match the current filter'}
                 </td>
               </tr>
@@ -183,6 +188,9 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
                     key={channel.id}
                     className='border-b border-neutral-200 transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50'
                   >
+                    <td className='px-2 py-1.5 text-sm font-medium text-neutral-950 dark:text-neutral-100'>
+                      {channelIndexMap.get(channel.id) ?? ''}
+                    </td>
                     <td className='px-2 py-1.5'>
                       <span
                         className={cn(
@@ -195,17 +203,6 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
                         {channel.direction === 'input' ? 'IN' : 'OUT'}
                       </span>
                     </td>
-                    <td
-                      className='truncate px-2 py-1.5 text-sm font-medium text-neutral-950 dark:text-neutral-100'
-                      title={channel.name}
-                    >
-                      {channel.name}
-                    </td>
-                    <td className='px-2 py-1.5 font-mono text-xs text-neutral-600 dark:text-neutral-400'>
-                      {channel.entryIndex}:{channel.entrySubIndex}
-                    </td>
-                    <td className='px-2 py-1.5 text-xs text-neutral-600 dark:text-neutral-400'>{channel.dataType}</td>
-                    <td className='px-2 py-1.5 text-xs text-neutral-600 dark:text-neutral-400'>{channel.bitLen}</td>
                     <td className='px-2 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                       {channel.iecType}
                     </td>
