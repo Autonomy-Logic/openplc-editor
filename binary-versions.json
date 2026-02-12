@@ -1,0 +1,10 @@
+{
+  "xml2st": {
+    "version": "v4.0.1",
+    "repository": "Autonomy-Logic/xml2st"
+  },
+  "matiec": {
+    "version": "v4.0.4",
+    "repository": "Autonomy-Logic/matiec"
+  }
+}

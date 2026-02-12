@@ -30,8 +30,17 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: resources/bin
+          key: binaries-macOS-${{ hashFiles('binary-versions.json') }}
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Download binaries for x64
+        run: npx ts-node scripts/download-binaries.ts --arch x64
 
       - name: Get version and build date
         id: version
@@ -126,6 +135,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: resources/bin
+          key: binaries-Windows-x64-${{ hashFiles('binary-versions.json') }}
+
       - name: Install dependencies
         run: npm ci
 
@@ -179,8 +194,17 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: resources/bin
+          key: binaries-Windows-arm64-${{ hashFiles('binary-versions.json') }}
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Download binaries for ARM64
+        run: npx ts-node scripts/download-binaries.ts --arch arm64
 
       - name: Get version and build date
         id: version
@@ -247,6 +271,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: resources/bin
+          key: binaries-Linux-x64-${{ hashFiles('binary-versions.json') }}
+
       - name: Install dependencies
         run: npm ci
 
@@ -298,6 +328,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: resources/bin
+          key: binaries-Linux-arm64-${{ hashFiles('binary-versions.json') }}
 
       - name: Install dependencies
         run: npm ci
