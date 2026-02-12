@@ -321,6 +321,8 @@ export interface EtherCATChannelMapping {
   iecLocation: string
   /** True if the user manually edited this address */
   userEdited: boolean
+  /** User-editable alias for this channel mapping */
+  alias?: string
 }
 
 // ===================== PARSE RESULT =====================

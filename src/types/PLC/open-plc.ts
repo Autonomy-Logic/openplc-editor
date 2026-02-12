@@ -616,6 +616,7 @@ const EtherCATChannelMappingSchema = z.object({
   channelId: z.string(),
   iecLocation: z.string(),
   userEdited: z.boolean(),
+  alias: z.string().optional(),
 })
 
 const ESIDeviceRefSchema = z.object({

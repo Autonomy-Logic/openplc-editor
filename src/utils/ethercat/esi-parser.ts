@@ -345,46 +345,125 @@ export function pdoToChannels(device: ESIDevice): ESIChannel[] {
  *   WORD/INT/UINT -> W: %IW<byte>
  *   DWORD/DINT/UDINT/REAL -> D: %ID<byte>
  *   LWORD/LINT/ULINT/LREAL -> L: %IL<byte>
+ *
+ * When `globalBitOffset` is provided, it overrides the channel's own byte/bit offsets
+ * to allow generating globally unique addresses across multiple slaves.
  */
-export function generateIecLocation(channel: ESIChannel): string {
+export function generateIecLocation(channel: ESIChannel, globalBitOffset?: number): string {
   const dirPrefix = channel.direction === 'input' ? '%I' : '%Q'
+
+  const byteOffset = globalBitOffset !== undefined ? Math.floor(globalBitOffset / 8) : channel.byteOffset
+  const bitOffset = globalBitOffset !== undefined ? globalBitOffset % 8 : channel.bitOffset % 8
 
   const iecUpper = channel.iecType.toUpperCase()
   switch (iecUpper) {
     case 'BOOL':
-      return `${dirPrefix}X${channel.byteOffset}.${channel.bitOffset % 8}`
+      return `${dirPrefix}X${byteOffset}.${bitOffset}`
     case 'BYTE':
     case 'SINT':
     case 'USINT':
-      return `${dirPrefix}B${channel.byteOffset}`
+      return `${dirPrefix}B${byteOffset}`
     case 'WORD':
     case 'INT':
     case 'UINT':
-      return `${dirPrefix}W${channel.byteOffset}`
+      return `${dirPrefix}W${byteOffset}`
     case 'DWORD':
     case 'DINT':
     case 'UDINT':
     case 'REAL':
-      return `${dirPrefix}D${channel.byteOffset}`
+      return `${dirPrefix}D${byteOffset}`
     case 'LWORD':
     case 'LINT':
     case 'ULINT':
     case 'LREAL':
-      return `${dirPrefix}L${channel.byteOffset}`
+      return `${dirPrefix}L${byteOffset}`
     default:
-      return `${dirPrefix}B${channel.byteOffset}`
+      return `${dirPrefix}B${byteOffset}`
+  }
+}
+
+/**
+ * Get the size in bits for a channel based on its IEC type.
+ */
+function getChannelBitSize(channel: ESIChannel): number {
+  const iecUpper = channel.iecType.toUpperCase()
+  switch (iecUpper) {
+    case 'BOOL':
+      return 1
+    case 'BYTE':
+    case 'SINT':
+    case 'USINT':
+      return 8
+    case 'WORD':
+    case 'INT':
+    case 'UINT':
+      return 16
+    case 'DWORD':
+    case 'DINT':
+    case 'UDINT':
+    case 'REAL':
+      return 32
+    case 'LWORD':
+    case 'LINT':
+    case 'ULINT':
+    case 'LREAL':
+      return 64
+    default:
+      return 8
   }
 }
 
 /**
  * Generate default channel mappings with auto-generated IEC addresses for all channels.
+ * When `usedAddresses` is provided, addresses are generated to avoid conflicts with
+ * already-used locations from other devices (Modbus or EtherCAT).
  */
-export function generateDefaultChannelMappings(channels: ESIChannel[]): EtherCATChannelMapping[] {
-  return channels.map((channel) => ({
-    channelId: channel.id,
-    iecLocation: generateIecLocation(channel),
-    userEdited: false,
-  }))
+export function generateDefaultChannelMappings(
+  channels: ESIChannel[],
+  usedAddresses?: Set<string>,
+): EtherCATChannelMapping[] {
+  const used = new Set(usedAddresses)
+  const inputChannels = channels.filter((c) => c.direction === 'input')
+  const outputChannels = channels.filter((c) => c.direction === 'output')
+
+  const mappings: EtherCATChannelMapping[] = []
+
+  for (const group of [inputChannels, outputChannels]) {
+    let currentBitOffset = 0
+
+    for (const channel of group) {
+      const bitSize = getChannelBitSize(channel)
+
+      // Align to byte boundary for non-bit types
+      if (bitSize > 1 && currentBitOffset % 8 !== 0) {
+        currentBitOffset = Math.ceil(currentBitOffset / 8) * 8
+      }
+
+      let candidate = generateIecLocation(channel, currentBitOffset)
+
+      // Find a non-conflicting address
+      while (used.has(candidate)) {
+        currentBitOffset += bitSize
+        // Re-align if needed
+        if (bitSize > 1 && currentBitOffset % 8 !== 0) {
+          currentBitOffset = Math.ceil(currentBitOffset / 8) * 8
+        }
+        candidate = generateIecLocation(channel, currentBitOffset)
+      }
+
+      used.add(candidate)
+      mappings.push({
+        channelId: channel.id,
+        iecLocation: candidate,
+        userEdited: false,
+        alias: '',
+      })
+
+      currentBitOffset += bitSize
+    }
+  }
+
+  return mappings
 }
 
 /**

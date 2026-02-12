@@ -36,6 +36,7 @@ type ConfiguredDeviceRowProps = {
   projectPath: string
   onUpdateChannelMappings: (mappings: EtherCATChannelMapping[]) => void
   onEnrichDevice: (data: EnrichDeviceData) => void
+  usedAddresses: Set<string>
 }
 
 const inputClassName =
@@ -59,6 +60,7 @@ const ConfiguredDeviceRow = ({
   projectPath,
   onUpdateChannelMappings,
   onEnrichDevice,
+  usedAddresses,
 }: ConfiguredDeviceRowProps) => {
   // Resolve the ESI device summary from repository
   const esiDevice = useMemo<ESIDeviceSummary | null>(() => {
@@ -74,6 +76,15 @@ const ConfiguredDeviceRow = ({
   const ioSummary = esiDevice ? `${esiDevice.inputChannelCount} / ${esiDevice.outputChannelCount}` : '-'
 
   const config = device.config
+
+  // Compute addresses used by other devices (excluding this device's own mappings)
+  const externalAddresses = useMemo(() => {
+    const filtered = new Set(usedAddresses)
+    for (const mapping of device.channelMappings) {
+      filtered.delete(mapping.iecLocation)
+    }
+    return filtered
+  }, [usedAddresses, device.channelMappings])
 
   // Channel loading state
   const [channels, setChannels] = useState<ESIChannel[]>([])
@@ -103,7 +114,7 @@ const ConfiguredDeviceRow = ({
 
           // Generate default mappings if none exist
           if (device.channelMappings.length === 0 && deviceChannels.length > 0) {
-            onUpdateChannelMappings(generateDefaultChannelMappings(deviceChannels))
+            onUpdateChannelMappings(generateDefaultChannelMappings(deviceChannels, externalAddresses))
           }
 
           // Enrich if data is missing (backward compat for projects created before enrichment)
@@ -131,13 +142,12 @@ const ConfiguredDeviceRow = ({
     device.txPdos,
     onUpdateChannelMappings,
     onEnrichDevice,
+    externalAddresses,
   ])
 
-  const handleLocationChange = useCallback(
-    (channelId: string, newLocation: string) => {
-      const updated = device.channelMappings.map((m) =>
-        m.channelId === channelId ? { ...m, iecLocation: newLocation, userEdited: true } : m,
-      )
+  const handleAliasChange = useCallback(
+    (channelId: string, alias: string) => {
+      const updated = device.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
       onUpdateChannelMappings(updated)
     },
     [device.channelMappings, onUpdateChannelMappings],
@@ -648,7 +658,7 @@ const ConfiguredDeviceRow = ({
                   <ChannelMappingTable
                     channels={channels}
                     mappings={device.channelMappings}
-                    onLocationChange={handleLocationChange}
+                    onAliasChange={handleAliasChange}
                   />
                 )}
               </div>

@@ -28,6 +28,7 @@ type ConfiguredDevicesProps = {
   projectPath: string
   onUpdateChannelMappings: (deviceId: string, mappings: EtherCATChannelMapping[]) => void
   onEnrichDevice: (deviceId: string, data: EnrichDeviceData) => void
+  usedAddresses: Set<string>
 }
 
 /**
@@ -44,6 +45,7 @@ const ConfiguredDevices = ({
   projectPath,
   onUpdateChannelMappings,
   onEnrichDevice,
+  usedAddresses,
 }: ConfiguredDevicesProps) => {
   const [expandedDevices, setExpandedDevices] = useState<Set<string>>(new Set())
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
@@ -140,6 +142,7 @@ const ConfiguredDevices = ({
                   projectPath={projectPath}
                   onUpdateChannelMappings={(mappings) => onUpdateChannelMappings(device.id, mappings)}
                   onEnrichDevice={(data) => onEnrichDevice(device.id, data)}
+                  usedAddresses={usedAddresses}
                 />
               ))
             )}

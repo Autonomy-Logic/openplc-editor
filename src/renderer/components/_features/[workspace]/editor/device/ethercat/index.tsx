@@ -65,6 +65,32 @@ const EtherCATEditor = () => {
     return (remoteDevice?.ethercatConfig?.devices ?? []) as ConfiguredEtherCATDevice[]
   }, [remoteDevice])
 
+  // Collect all IEC addresses used across all remote devices (Modbus + EtherCAT)
+  const usedAddresses = useMemo(() => {
+    const addresses = new Set<string>()
+    const allRemoteDevices = project.data.remoteDevices || []
+
+    for (const rd of allRemoteDevices) {
+      // Modbus devices
+      if (rd.modbusTcpConfig?.ioGroups) {
+        for (const group of rd.modbusTcpConfig.ioGroups) {
+          for (const point of group.ioPoints) {
+            addresses.add(point.iecLocation)
+          }
+        }
+      }
+      // EtherCAT devices
+      if (rd.ethercatConfig?.devices) {
+        for (const dev of rd.ethercatConfig.devices) {
+          for (const mapping of dev.channelMappings) {
+            addresses.add(mapping.iecLocation)
+          }
+        }
+      }
+    }
+    return addresses
+  }, [project.data.remoteDevices])
+
   const masterConfig = useMemo(() => {
     return (
       remoteDevice?.ethercatConfig?.masterConfig ?? {
@@ -728,6 +754,7 @@ const EtherCATEditor = () => {
           projectPath={projectPath}
           onUpdateChannelMappings={handleUpdateChannelMappings}
           onEnrichDevice={handleEnrichDevice}
+          usedAddresses={usedAddresses}
         />
       )}
 

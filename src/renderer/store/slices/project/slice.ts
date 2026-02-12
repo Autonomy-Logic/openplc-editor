@@ -2332,6 +2332,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 }
               }
             }
+            if (remoteDevice.ethercatConfig?.devices) {
+              for (const dev of remoteDevice.ethercatConfig.devices) {
+                for (const mapping of dev.channelMappings) {
+                  usedAddresses.add(mapping.iecLocation)
+                }
+              }
+            }
           }
           const ioPoints = generateIOPoints(ioGroup.functionCode, ioGroup.length, ioGroup.name, usedAddresses)
           modbusCfg.ioGroups.push({
@@ -2386,6 +2393,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                   if (group.id === ioGroupId) continue
                   for (const point of group.ioPoints) {
                     usedAddresses.add(point.iecLocation)
+                  }
+                }
+              }
+              if (remoteDevice.ethercatConfig?.devices) {
+                for (const dev of remoteDevice.ethercatConfig.devices) {
+                  for (const mapping of dev.channelMappings) {
+                    usedAddresses.add(mapping.iecLocation)
                   }
                 }
               }

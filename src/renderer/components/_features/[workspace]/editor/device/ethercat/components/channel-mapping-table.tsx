@@ -1,21 +1,54 @@
 import type { ESIChannel, EtherCATChannelMapping } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 type ChannelMappingTableProps = {
   channels: ESIChannel[]
   mappings: EtherCATChannelMapping[]
-  onLocationChange: (channelId: string, newLocation: string) => void
+  onAliasChange: (channelId: string, newAlias: string) => void
 }
 
 type FilterDirection = 'all' | 'input' | 'output'
 
 /**
+ * Alias cell with local state to avoid re-rendering the entire table on every keystroke.
+ */
+const AliasCell = ({
+  channelId,
+  alias,
+  onAliasChange,
+}: {
+  channelId: string
+  alias: string
+  onAliasChange: (channelId: string, newAlias: string) => void
+}) => {
+  const [localAlias, setLocalAlias] = useState(alias)
+
+  const handleBlur = useCallback(() => {
+    if (localAlias !== alias) {
+      onAliasChange(channelId, localAlias)
+    }
+  }, [channelId, localAlias, alias, onAliasChange])
+
+  return (
+    <input
+      type='text'
+      value={localAlias}
+      onChange={(e) => setLocalAlias(e.target.value)}
+      onBlur={handleBlur}
+      placeholder='Alias'
+      className='h-[24px] w-full rounded border border-neutral-300 bg-white px-1.5 font-mono text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+    />
+  )
+}
+
+/**
  * Channel Mapping Table Component
  *
- * Displays channels with editable IEC 61131-3 located variable addresses.
+ * Displays channels with auto-generated IEC 61131-3 located variable addresses (read-only)
+ * and editable alias column.
  */
-const ChannelMappingTable = ({ channels, mappings, onLocationChange }: ChannelMappingTableProps) => {
+const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappingTableProps) => {
   const [filterDirection, setFilterDirection] = useState<FilterDirection>('all')
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -43,7 +76,8 @@ const ChannelMappingTable = ({ channels, mappings, onLocationChange }: ChannelMa
           channel.dataType.toLowerCase().includes(search) ||
           channel.entryIndex.toLowerCase().includes(search) ||
           channel.iecType.toLowerCase().includes(search) ||
-          (mapping?.iecLocation.toLowerCase().includes(search) ?? false)
+          (mapping?.iecLocation.toLowerCase().includes(search) ?? false) ||
+          (mapping?.alias?.toLowerCase().includes(search) ?? false)
         )
       }
 
@@ -113,30 +147,31 @@ const ChannelMappingTable = ({ channels, mappings, onLocationChange }: ChannelMa
               <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Dir
               </th>
-              <th className='w-[22%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Name
               </th>
-              <th className='w-[12%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[10%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Index
               </th>
-              <th className='w-[10%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[9%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Type
               </th>
-              <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[6%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Bits
               </th>
-              <th className='w-[10%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[9%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 IEC Type
               </th>
-              <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 IEC Location
               </th>
+              <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>Alias</th>
             </tr>
           </thead>
           <tbody>
             {filteredChannels.length === 0 ? (
               <tr>
-                <td colSpan={7} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                <td colSpan={8} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
                   {channels.length === 0 ? 'No channels available' : 'No channels match the current filter'}
                 </td>
               </tr>
@@ -174,19 +209,11 @@ const ChannelMappingTable = ({ channels, mappings, onLocationChange }: ChannelMa
                     <td className='px-2 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                       {channel.iecType}
                     </td>
+                    <td className='px-2 py-1.5 font-mono text-xs text-neutral-600 dark:text-neutral-400'>
+                      {mapping?.iecLocation ?? ''}
+                    </td>
                     <td className='px-2 py-1.5'>
-                      <input
-                        type='text'
-                        value={mapping?.iecLocation ?? ''}
-                        onChange={(e) => onLocationChange(channel.id, e.target.value)}
-                        className={cn(
-                          'h-[24px] w-full rounded border px-1.5 font-mono text-xs outline-none',
-                          'border-neutral-300 bg-white text-neutral-700 focus:border-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300',
-                          mapping?.userEdited &&
-                            'border-amber-400 bg-amber-50 dark:border-amber-600 dark:bg-amber-900/20',
-                        )}
-                        title={mapping?.userEdited ? 'Manually edited' : 'Auto-generated'}
-                      />
+                      <AliasCell channelId={channel.id} alias={mapping?.alias ?? ''} onAliasChange={onAliasChange} />
                     </td>
                   </tr>
                 )
