@@ -164,7 +164,14 @@ export const Coil = (block: CoilProps) => {
     }
 
     const compositeKey = getCompositeKey(data.variable.name)
-    const value = debugVariableValues.get(compositeKey)
+    const isForced = debugForcedVariables.has(compositeKey)
+
+    // When forced, use immediate value from debugForcedVariables (no 200ms poll delay)
+    const value = isForced
+      ? debugForcedVariables.get(compositeKey)
+        ? '1'
+        : '0'
+      : debugVariableValues.get(compositeKey)
 
     if (value === undefined) {
       return undefined
@@ -173,10 +180,8 @@ export const Coil = (block: CoilProps) => {
     const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
     const displayState = data.variant === 'negated' ? !isTrue : isTrue
 
-    const isForced = debugForcedVariables.has(compositeKey)
     if (isForced) {
-      const forcedValue = debugForcedVariables.get(compositeKey)
-      return forcedValue ? '#80C000' : '#4080FF'
+      return displayState ? '#80C000' : '#4080FF'
     }
 
     return displayState ? '#00FF00' : '#0464FB'

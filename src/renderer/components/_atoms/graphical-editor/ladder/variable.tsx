@@ -62,9 +62,26 @@ const VariableElement = (block: VariableProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: { isDebuggerVisible, debugVariableIndexes, debugForcedVariables },
+    workspace: { isDebuggerVisible, debugVariableIndexes, debugForcedVariables, fbSelectedInstance, fbDebugInstances },
     workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
+
+  // Helper to get composite key with FB instance context
+  const getCompositeKey = (variableName: string): string => {
+    const currentPou = pous.find((p) => p.data.name === editor.meta.name)
+    if (currentPou?.type === 'function-block') {
+      const fbTypeKey = currentPou.data.name.toUpperCase()
+      const selectedKey = fbSelectedInstance.get(fbTypeKey)
+      if (selectedKey) {
+        const instances = fbDebugInstances.get(fbTypeKey) || []
+        const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+        if (selectedInstance) {
+          return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
+        }
+      }
+    }
+    return `${editor.meta.name}:${variableName}`
+  }
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -280,7 +297,7 @@ const VariableElement = (block: VariableProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -302,7 +319,7 @@ const VariableElement = (block: VariableProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -324,7 +341,7 @@ const VariableElement = (block: VariableProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -352,7 +369,7 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) {
@@ -446,7 +463,7 @@ const VariableElement = (block: VariableProps) => {
   const variableType = getVariableType()
   const isBoolVariable = variableType?.toUpperCase() === 'BOOL'
 
-  const compositeKey = `${editor.meta.name}:${data.variable.name}`
+  const compositeKey = getCompositeKey(data.variable.name)
   const isForced = debugForcedVariables.has(compositeKey)
   const forcedValue = debugForcedVariables.get(compositeKey)
 
