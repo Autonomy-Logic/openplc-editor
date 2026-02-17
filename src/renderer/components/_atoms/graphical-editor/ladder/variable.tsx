@@ -1,3 +1,4 @@
+import { useDebugCompositeKey } from '@hooks/use-debug-composite-key'
 import * as Popover from '@radix-ui/react-popover'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
@@ -62,26 +63,10 @@ const VariableElement = (block: VariableProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: { isDebuggerVisible, debugVariableIndexes, debugForcedVariables, fbSelectedInstance, fbDebugInstances },
+    workspace: { isDebuggerVisible, debugVariableIndexes, debugForcedVariables },
     workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
-
-  // Helper to get composite key with FB instance context
-  const getCompositeKey = (variableName: string): string => {
-    const currentPou = pous.find((p) => p.data.name === editor.meta.name)
-    if (currentPou?.type === 'function-block') {
-      const fbTypeKey = currentPou.data.name.toUpperCase()
-      const selectedKey = fbSelectedInstance.get(fbTypeKey)
-      if (selectedKey) {
-        const instances = fbDebugInstances.get(fbTypeKey) || []
-        const selectedInstance = instances.find((inst) => inst.key === selectedKey)
-        if (selectedInstance) {
-          return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
-        }
-      }
-    }
-    return `${editor.meta.name}:${variableName}`
-  }
+  const getCompositeKey = useDebugCompositeKey()
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {

@@ -1,3 +1,4 @@
+import { useDebugCompositeKey } from '@hooks/use-debug-composite-key'
 import * as Popover from '@radix-ui/react-popover'
 import {
   DefaultContact,
@@ -93,33 +94,10 @@ export const Contact = (block: ContactProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: {
-      isDebuggerVisible,
-      debugVariableValues,
-      debugVariableIndexes,
-      debugForcedVariables,
-      fbSelectedInstance,
-      fbDebugInstances,
-    },
+    workspace: { isDebuggerVisible, debugVariableValues, debugVariableIndexes, debugForcedVariables },
     workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
-
-  // Helper to get composite key with FB instance context
-  const getCompositeKey = (variableName: string): string => {
-    const currentPou = pous.find((p) => p.data.name === editor.meta.name)
-    if (currentPou?.type === 'function-block') {
-      const fbTypeKey = currentPou.data.name.toUpperCase()
-      const selectedKey = fbSelectedInstance.get(fbTypeKey)
-      if (selectedKey) {
-        const instances = fbDebugInstances.get(fbTypeKey) || []
-        const selectedInstance = instances.find((inst) => inst.key === selectedKey)
-        if (selectedInstance) {
-          return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
-        }
-      }
-    }
-    return `${editor.meta.name}:${variableName}`
-  }
+  const getCompositeKey = useDebugCompositeKey()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
   const [contactVariableValue, setContactVariableValue] = useState<string>(data.variable.name)
