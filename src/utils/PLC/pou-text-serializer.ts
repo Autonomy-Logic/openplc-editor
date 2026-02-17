@@ -82,7 +82,10 @@ export const serializeHybridPouToString = (pou: PLCPou): string => {
     : generateIecVariablesToString(variables as VariablePLC[])
   result += variablesString + '\n'
 
-  result += body.value
+  result += body.value + '\n\n'
+
+  const endKeyword = getEndKeyword(type)
+  result += endKeyword
 
   return result
 }
