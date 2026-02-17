@@ -88,21 +88,42 @@ function parseArgs(): { platform: Platform; arch: Arch; force: boolean } {
 // Cache check
 // ---------------------------------------------------------------------------
 
-function isCacheValid(versions: BinaryVersions, platform: Platform, arch: Arch): boolean {
+function getCachedMetadata(platform: Platform, arch: Arch): CacheMetadata | null {
   const file = cacheFile(platform, arch)
-  if (!fs.existsSync(file)) return false
+  if (!fs.existsSync(file)) return null
 
   try {
-    const cached: CacheMetadata = JSON.parse(fs.readFileSync(file, 'utf-8'))
-    return (
-      cached.xml2st === versions.xml2st.version &&
-      cached.matiec === versions.matiec.version &&
-      cached.platform === platform &&
-      cached.arch === arch
-    )
+    return JSON.parse(fs.readFileSync(file, 'utf-8')) as CacheMetadata
   } catch {
-    return false
+    return null
   }
+}
+
+function needsXml2st(versions: BinaryVersions, cached: CacheMetadata | null, platform: Platform, arch: Arch): boolean {
+  const dir = binDir(platform, arch)
+  const isWindows = platform === 'win32'
+  const isDarwin = platform === 'darwin'
+
+  const xml2stPath = isDarwin
+    ? path.join(dir, 'xml2st', 'xml2st')
+    : path.join(dir, isWindows ? 'xml2st.exe' : 'xml2st')
+
+  if (!fs.existsSync(xml2stPath)) return true
+  if (!cached || cached.xml2st !== versions.xml2st.version) return true
+
+  return false
+}
+
+function needsMatiec(versions: BinaryVersions, cached: CacheMetadata | null, platform: Platform, arch: Arch): boolean {
+  const dir = binDir(platform, arch)
+  const isWindows = platform === 'win32'
+
+  const iec2cPath = path.join(dir, isWindows ? 'iec2c.exe' : 'iec2c')
+
+  if (!fs.existsSync(iec2cPath)) return true
+  if (!cached || cached.matiec !== versions.matiec.version) return true
+
+  return false
 }
 
 function writeCache(versions: BinaryVersions, platform: Platform, arch: Arch): void {
@@ -300,16 +321,29 @@ async function main(): Promise<void> {
 
   console.log(`[download-binaries] platform=${platform} arch=${arch} force=${force}`)
 
-  if (!force && isCacheValid(versions, platform, arch)) {
+  const targetBinDir = binDir(platform, arch)
+  fs.mkdirSync(targetBinDir, { recursive: true })
+
+  const cached = force ? null : getCachedMetadata(platform, arch)
+  const downloadXml2stNeeded = force || needsXml2st(versions, cached, platform, arch)
+  const downloadMatiecNeeded = force || needsMatiec(versions, cached, platform, arch)
+
+  if (!downloadXml2stNeeded && !downloadMatiecNeeded) {
     console.log(`[download-binaries] Binaries up to date for ${platform}-${arch}, skipping.`)
     return
   }
 
-  const targetBinDir = binDir(platform, arch)
-  fs.mkdirSync(targetBinDir, { recursive: true })
+  if (downloadXml2stNeeded) {
+    await downloadXml2st(versions.xml2st, platform, arch, targetBinDir)
+  } else {
+    console.log(`  xml2st ${versions.xml2st.version} already installed, skipping.`)
+  }
 
-  await downloadXml2st(versions.xml2st, platform, arch, targetBinDir)
-  await downloadMatiec(versions.matiec, platform, arch, targetBinDir)
+  if (downloadMatiecNeeded) {
+    await downloadMatiec(versions.matiec, platform, arch, targetBinDir)
+  } else {
+    console.log(`  matiec ${versions.matiec.version} already installed, skipping.`)
+  }
 
   writeCache(versions, platform, arch)
   console.log(`[download-binaries] Done.`)
