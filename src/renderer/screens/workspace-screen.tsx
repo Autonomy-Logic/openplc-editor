@@ -285,6 +285,12 @@ const WorkspaceScreen = () => {
           // Use fallback to try both FB-style and struct-style paths
           const index = getFieldIndexFromMapWithFallback(debugVariableIndexes, debugPathPrefix, fbVar.name)
 
+          if (index === undefined) {
+            console.warn(
+              `[Debugger] Could not resolve index for nested variable: ${debugPathPrefix}.${fbVar.name} (POU: ${pouName})`,
+            )
+          }
+
           if (index !== undefined) {
             const varName = `${variableNamePrefix}.${fbVar.name}`
             addVariableInfo(index, {
@@ -431,6 +437,10 @@ const WorkspaceScreen = () => {
         const index = debugVariableIndexes.get(compositeKey)
         if (index !== undefined) {
           addVariableInfo(index, { pouName: pou.data.name, variable: v })
+        } else {
+          console.warn(
+            `[Debugger] Could not resolve index for program variable: ${compositeKey} (type: ${v.type.value})`,
+          )
         }
       })
     })
@@ -1528,7 +1538,12 @@ const WorkspaceScreen = () => {
   ): Promise<void> => {
     const keyForIndexLookup = lookupKey ?? compositeKey
     const variableIndex = debugVariableIndexes.get(keyForIndexLookup)
-    if (variableIndex === undefined) return
+    if (variableIndex === undefined) {
+      console.warn(
+        `[Debugger] Force variable failed: no index found for key "${keyForIndexLookup}" (compositeKey: "${compositeKey}")`,
+      )
+      return
+    }
 
     if (value === undefined && valueBuffer === undefined) {
       // Release force

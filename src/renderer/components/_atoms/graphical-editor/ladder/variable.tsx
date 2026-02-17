@@ -1,3 +1,4 @@
+import { useDebugCompositeKey } from '@hooks/use-debug-composite-key'
 import * as Popover from '@radix-ui/react-popover'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
@@ -65,6 +66,7 @@ const VariableElement = (block: VariableProps) => {
     workspace: { isDebuggerVisible, debugVariableIndexes, debugForcedVariables },
     workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
+  const getCompositeKey = useDebugCompositeKey()
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -280,7 +282,7 @@ const VariableElement = (block: VariableProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -302,7 +304,7 @@ const VariableElement = (block: VariableProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -324,7 +326,7 @@ const VariableElement = (block: VariableProps) => {
 
     if (!data.variable.name) return
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) return
@@ -352,7 +354,7 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
-    const compositeKey = `${editor.meta.name}:${data.variable.name}`
+    const compositeKey = getCompositeKey(data.variable.name)
     const variableIndex = debugVariableIndexes.get(compositeKey)
 
     if (variableIndex === undefined) {
@@ -446,7 +448,7 @@ const VariableElement = (block: VariableProps) => {
   const variableType = getVariableType()
   const isBoolVariable = variableType?.toUpperCase() === 'BOOL'
 
-  const compositeKey = `${editor.meta.name}:${data.variable.name}`
+  const compositeKey = getCompositeKey(data.variable.name)
   const isForced = debugForcedVariables.has(compositeKey)
   const forcedValue = debugForcedVariables.get(compositeKey)
 

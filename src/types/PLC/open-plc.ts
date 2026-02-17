@@ -633,7 +633,7 @@ type PLCDebugVariables = z.infer<typeof PLCDebugVariablesSchema>
 
 const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
-  pous: z.array(PLCPouSchema),
+  pous: z.array(PLCPouSchema).default([]),
   configuration: PLCConfigurationSchema,
   servers: z.array(PLCServerSchema).optional(),
   remoteDevices: z.array(PLCRemoteDeviceSchema).optional(),
