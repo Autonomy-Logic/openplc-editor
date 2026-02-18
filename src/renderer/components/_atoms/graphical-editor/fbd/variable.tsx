@@ -3,6 +3,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { resolveArrayVariableByName } from '@root/utils/PLC/array-variable-utils'
 import {
   floatToBuffer,
   getVariableTypeInfo,
@@ -303,9 +304,9 @@ const VariableElement = (block: VariableProps) => {
 
     // For variable nodes, allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types
-    let variable: PLCVariable | { name: string } | undefined = (pou.data.variables as PLCVariable[]).find(
-      (v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase(),
-    )
+    let variable: PLCVariable | { name: string } | undefined =
+      (pou.data.variables as PLCVariable[]).find((v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase()) ||
+      resolveArrayVariableByName(pou.data.variables as PLCVariable[], variableNameToSubmit)
     if (!variable) {
       setIsAVariable(false)
       variable = { name: variableNameToSubmit }
