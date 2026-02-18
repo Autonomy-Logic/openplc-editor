@@ -571,6 +571,61 @@ const WorkspaceScreen = () => {
           }
         })
 
+        // Process top-level user-data-type variables (structs and any unresolved FBs)
+        const userDataTypeVars = pou.data.variables.filter((variable) => variable.type.definition === 'user-data-type')
+        userDataTypeVars.forEach((udtVar) => {
+          const typeNameUpper = udtVar.type.value.toUpperCase()
+
+          const isStandardFB = StandardFunctionBlocks.pous.some(
+            (fb: { name: string; type: string }) =>
+              fb.name.toUpperCase() === typeNameUpper && fb.type.toLowerCase().replace(/[-_]/g, '') === 'functionblock',
+          )
+          const isCustomFB = project.data.pous.some(
+            (p) => p.type === 'function-block' && p.data.name.toUpperCase() === typeNameUpper,
+          )
+
+          let variablesToProcess:
+            | Array<{ name: string; class: string; type: { definition: string; value: string } }>
+            | undefined
+
+          if (isStandardFB || isCustomFB) {
+            const standardFB = StandardFunctionBlocks.pous.find(
+              (fb: { name: string }) => fb.name.toUpperCase() === typeNameUpper,
+            )
+            if (standardFB) {
+              variablesToProcess = ensureEnoVariable(standardFB.variables)
+            } else {
+              const customFB = project.data.pous.find(
+                (p) => p.type === 'function-block' && p.data.name.toUpperCase() === typeNameUpper,
+              )
+              if (customFB && customFB.type === 'function-block') {
+                variablesToProcess = ensureEnoVariable(
+                  customFB.data.variables as Array<{
+                    name: string
+                    class: string
+                    type: { definition: string; value: string }
+                  }>,
+                )
+              }
+            }
+          } else {
+            const structType = project.data.dataTypes.find((dt) => dt.name.toUpperCase() === typeNameUpper)
+            if (structType && structType.derivation === 'structure') {
+              variablesToProcess = structType.variable.map((field) => ({
+                name: field.name,
+                class: 'local' as const,
+                type: { definition: field.type.definition, value: field.type.value },
+              }))
+            }
+          }
+
+          if (variablesToProcess) {
+            const debugPathPrefix = buildDebugPath(programInstance.name, udtVar.name)
+            const variableNamePrefix = udtVar.name
+            processNestedVariables(variablesToProcess, pou.data.name, debugPathPrefix, variableNamePrefix)
+          }
+        })
+
         if (pou.data.body.language === 'ld') {
           const currentLadderFlow = ladderFlows.find((flow) => flow.name === pou.data.name)
           if (currentLadderFlow) {

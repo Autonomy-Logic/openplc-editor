@@ -1220,26 +1220,42 @@ export const createSharedSlice: StateCreator<
 
         pous.map((pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type))
 
-        const graphicalPous = [...ladderPous, ...fbdPous]
-        if (graphicalPous.length) {
-          const state = getState()
+        // Reclassify ALL POUs' variables with full context.
+        // The text parser can't determine type definitions accurately since it doesn't have
+        // the full project context. Re-parse with pous, dataTypes, and libraries to correctly
+        // classify FB instances as 'derived' vs structs as 'user-data-type'.
+        {
+          const reclassState = getState()
           const {
             project: {
-              data: { dataTypes },
+              data: { dataTypes: reclassDataTypes },
             },
-            libraries,
-          } = state
+            libraries: reclassLibraries,
+          } = reclassState
 
-          graphicalPous.forEach((pou) => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-            const iecString = generateIecVariablesToString(pou.data.variables as any)
-            const reparsedVariables: PLCVariable[] = parseIecStringToVariables(iecString, pous, dataTypes, libraries)
-            getState().projectActions.setPouVariables({
-              pouName: pou.data.name,
-              variables: reparsedVariables,
-            })
+          pous.forEach((pou) => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+              const iecString = generateIecVariablesToString(pou.data.variables as any)
+              const reparsedVariables: PLCVariable[] = parseIecStringToVariables(
+                iecString,
+                pous,
+                reclassDataTypes,
+                reclassLibraries,
+              )
+              getState().projectActions.setPouVariables({
+                pouName: pou.data.name,
+                variables: reparsedVariables,
+              })
+            } catch (err) {
+              console.error(`[Reclassify] Failed to reclassify variables for POU "${pou.data.name}":`, err)
+            }
           })
+        }
 
+        // Sync graphical POU nodes with reclassified variables
+        const graphicalPous = [...ladderPous, ...fbdPous]
+        if (graphicalPous.length) {
           const freshState = getState()
           const freshLadderFlows = freshState.ladderFlows
           const freshFBDFlows = freshState.fbdFlows
