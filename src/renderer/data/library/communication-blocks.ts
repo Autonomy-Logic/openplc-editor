@@ -28,6 +28,7 @@ const CommunicationBlocks: CommunicationBlocksLibrary = {
         { name: 'CONNECT', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
         { name: 'IP_ADDRESS', class: 'input', type: { definition: 'base-type', value: 'STRING' } },
         { name: 'PORT', class: 'input', type: { definition: 'base-type', value: 'INT' } },
+        { name: 'UDP', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
         { name: 'SOCKET_ID', class: 'output', type: { definition: 'base-type', value: 'INT' } },
       ],
       body: 'SOCKET_ID := 0;',
