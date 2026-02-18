@@ -1234,18 +1234,22 @@ export const createSharedSlice: StateCreator<
           } = reclassState
 
           pous.forEach((pou) => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-            const iecString = generateIecVariablesToString(pou.data.variables as any)
-            const reparsedVariables: PLCVariable[] = parseIecStringToVariables(
-              iecString,
-              pous,
-              reclassDataTypes,
-              reclassLibraries,
-            )
-            getState().projectActions.setPouVariables({
-              pouName: pou.data.name,
-              variables: reparsedVariables,
-            })
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+              const iecString = generateIecVariablesToString(pou.data.variables as any)
+              const reparsedVariables: PLCVariable[] = parseIecStringToVariables(
+                iecString,
+                pous,
+                reclassDataTypes,
+                reclassLibraries,
+              )
+              getState().projectActions.setPouVariables({
+                pouName: pou.data.name,
+                variables: reparsedVariables,
+              })
+            } catch (err) {
+              console.error(`[Reclassify] Failed to reclassify variables for POU "${pou.data.name}":`, err)
+            }
           })
         }
 
