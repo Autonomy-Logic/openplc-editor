@@ -733,6 +733,12 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleGetSystemInfo = () => {
+    const appStore = this.store as unknown as { get: (key: string) => unknown }
+    const savedTheme = appStore.get('theme')
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      nativeTheme.themeSource = savedTheme
+    }
+
     return {
       OS: platform,
       architecture: 'x64',
