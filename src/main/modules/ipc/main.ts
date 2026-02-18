@@ -592,14 +592,18 @@ class MainProcessBridge implements MainIpcModule {
     scanRequest: EtherCATScanRequest,
   ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> => {
     try {
-      const postData = JSON.stringify(scanRequest)
+      const postData = JSON.stringify({
+        plugin: 'ethercat',
+        command: 'scan',
+        params: { interface: scanRequest.interface },
+      })
 
       return new Promise((resolve) => {
         const req = https.request(
           {
             hostname: ipAddress,
             port: this.RUNTIME_API_PORT,
-            path: '/api/discovery/ethercat/scan',
+            path: '/api/plugin-command',
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -616,21 +620,31 @@ class MainProcessBridge implements MainIpcModule {
             res.on('end', () => {
               if (res.statusCode === 200) {
                 try {
-                  const response = JSON.parse(data) as EtherCATScanResponse
+                  const pluginResponse = JSON.parse(data)
+
+                  if (pluginResponse.error) {
+                    resolve({ success: false, error: pluginResponse.error })
+                    return
+                  }
+
+                  const response: EtherCATScanResponse = {
+                    status: pluginResponse.status ?? 'success',
+                    devices: pluginResponse.devices ?? [],
+                    message: pluginResponse.message ?? '',
+                    scan_time_ms: 0,
+                    interface: scanRequest.interface,
+                  }
                   resolve({ success: true, data: response })
                 } catch {
                   resolve({ success: false, error: 'Invalid response format' })
                 }
-              } else if (res.statusCode === 403) {
-                resolve({ success: false, error: 'Permission denied - CAP_NET_RAW required' })
-              } else if (res.statusCode === 404) {
-                resolve({ success: false, error: 'Interface not found' })
-              } else if (res.statusCode === 503) {
-                resolve({ success: false, error: 'Discovery service not available' })
-              } else if (res.statusCode === 504) {
-                resolve({ success: false, error: 'Scan timeout' })
               } else {
-                resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
+                try {
+                  const errorResponse = JSON.parse(data)
+                  resolve({ success: false, error: errorResponse.error || `Unexpected status: ${res.statusCode}` })
+                } catch {
+                  resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
+                }
               }
             })
           },
