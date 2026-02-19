@@ -1081,7 +1081,16 @@ class MainProcessBridge implements MainIpcModule {
 
       this.debuggerReconnecting = true
       try {
-        if (this.debuggerConnectionType === 'tcp') {
+        if (this.debuggerConnectionType === 'simulator') {
+          const virtualPort = new VirtualSerialPort(this.simulatorModule)
+          this.debuggerModbusClient = new ModbusRtuClient({
+            port: 'simulator',
+            baudRate: 115200,
+            slaveId: 1,
+            timeout: 5000,
+            serialPort: virtualPort,
+          })
+        } else if (this.debuggerConnectionType === 'tcp') {
           if (!this.debuggerTargetIp) {
             this.debuggerReconnecting = false
             return { success: false, error: 'No target IP address stored', needsReconnect: true }
