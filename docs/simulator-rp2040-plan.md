@@ -134,7 +134,7 @@ if (isSimulatorTarget(currentBoardInfo)) {
 
 ## 5. Compilation Flow — Handle Simulator Target
 
-### 5a. Compiler Module Changes
+### 5a. Compiler Module Changes (Build Button Only)
 
 **File:** `src/main/modules/compiler/compiler-module.ts`
 
@@ -165,7 +165,7 @@ if (boardRuntimeType === 'simulator') {
 }
 ```
 
-The `compileForDebugger()` method (line 2102) also needs the simulator branch. It follows the same pattern: compile for RP2040, then signal the renderer with the UF2 path instead of trying to upload.
+The `compileForDebugger()` method (line 2102) does **not** need a simulator-specific branch. This function only runs the first-stage compilation (XML → ST → C → debug metadata) and never invokes Arduino CLI or uploads anything. It works as-is for all targets, including the simulator.
 
 ### 5b. IPC Handler Changes
 
@@ -272,108 +272,126 @@ Add to `package.json` dependencies. The package is ~200KB, zero transitive depen
 
 ---
 
-## 7. Modbus RTU Bridge for Simulator
+## 7. Modbus RTU Bridge for Simulator — VirtualSerialPort Approach
 
-### 7a. Virtual Serial Bridge
+### Design Principle
 
-**File:** `src/main/modules/simulator/simulator-modbus-bridge.ts` (NEW)
+Rather than duplicating the Modbus RTU protocol logic in a separate `SimulatorModbusClient` class, we create a `VirtualSerialPort` that mimics the `serialport` npm package's event-based API and adapts rp2040js's UART. The existing `ModbusRtuClient` is then reused unchanged — all CRC calculation, frame assembly, response parsing, retries, and timeout logic stays in one place.
 
-This bridges the existing Modbus RTU protocol logic with the emulated UART. It replaces the physical serial port with virtual byte-level callbacks.
+This avoids code duplication and ensures any future bug fixes to the Modbus RTU protocol automatically apply to both physical hardware and the simulator.
 
-The existing `ModbusRtuClient` (`src/main/modules/modbus/modbus-rtu-client.ts`) is tightly coupled to the `serialport` npm package. Rather than refactoring it, create a **SimulatorModbusClient** that implements the same public interface (`connect`, `disconnect`, `getMd5Hash`, `getVariablesList`, `setVariable`) but routes bytes through the emulated UART instead of a serial port.
+### 7a. VirtualSerialPort
+
+**File:** `src/main/modules/simulator/virtual-serial-port.ts` (NEW)
+
+`ModbusRtuClient.serialPort` is typed as `any` and uses these `serialport` APIs:
+- `on('open', cb)` / `on('data', cb)` / `on('error', cb)` / `once('error', cb)` — events
+- `write(data, callback)` — send bytes
+- `flush(callback)` — flush input buffer
+- `close()` — close port
+- `isOpen` — boolean state
+- `removeListener(event, fn)` — cleanup
+
+`VirtualSerialPort` extends `EventEmitter` and implements all of these, routing bytes through `SimulatorModule.feedByte()` (TX to device) and `SimulatorModule.onUartByte` (RX from device):
 
 ```typescript
-class SimulatorModbusClient {
+import { EventEmitter } from 'events'
+import { SimulatorModule } from './simulator-module'
+
+export class VirtualSerialPort extends EventEmitter {
+  public isOpen = false
   private simulator: SimulatorModule
-  private rxBuffer: number[] = []
-  private responseResolve: ((data: Buffer) => void) | null = null
-  private frameTimeout: NodeJS.Timeout | null = null
 
   constructor(simulator: SimulatorModule) {
+    super()
     this.simulator = simulator
-    // Receive bytes from emulated RP2040's UART TX
-    this.simulator.onUartByte = (byte) => this.handleReceivedByte(byte)
   }
 
-  async connect(): Promise<void> {
-    // No physical port to open. Just wait for firmware to boot.
-    // The RP2040 firmware has a ~2.5s bootloader delay, but in emulation
-    // the UART is ready almost immediately. Add a small delay for safety.
-    await new Promise((resolve) => setTimeout(resolve, 500))
+  open(): void {
+    this.isOpen = true
+    // Wire UART RX: bytes from emulated device → ModbusRtuClient via 'data' events
+    this.simulator.onUartByte = (byte: number) => {
+      this.emit('data', Buffer.from([byte]))
+    }
+    // Emit 'open' asynchronously (matches real SerialPort behavior)
+    process.nextTick(() => this.emit('open'))
   }
 
-  disconnect(): void {
+  write(data: Uint8Array | Buffer, callback?: (err?: Error | null) => void): void {
+    // Send each byte to the emulated UART TX (host → device)
+    for (const byte of data) {
+      this.simulator.feedByte(byte)
+    }
+    callback?.(null)
+  }
+
+  flush(callback?: (err?: Error | null) => void): void {
+    // No hardware buffer to flush in virtual port
+    callback?.(null)
+  }
+
+  close(): void {
+    this.isOpen = false
     this.simulator.onUartByte = null
+    this.removeAllListeners()
   }
-
-  async getMd5Hash(): Promise<string> {
-    // Build Modbus RTU request frame for FC 0x45 (DEBUG_GET_MD5)
-    // Same protocol as ModbusRtuClient but using virtual UART
-    const request = this.buildRequest(0x01, 0x45, Buffer.alloc(0))
-    const response = await this.sendAndReceive(request)
-    return this.parseMd5Response(response)
-  }
-
-  async getVariablesList(indices: number[]): Promise<{...}> {
-    // Same protocol as ModbusRtuClient.getVariablesList
-    // Build FC 0x44 request, send via virtual UART, parse response
-  }
-
-  async setVariable(index: number, force: boolean, value?: Buffer): Promise<{...}> {
-    // Same protocol as ModbusRtuClient.setVariable
-    // Build FC 0x42 request, send via virtual UART, parse response
-  }
-
-  private sendAndReceive(frame: Buffer): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      this.rxBuffer = []
-      this.responseResolve = resolve
-
-      // Send each byte to the emulated UART RX
-      for (const byte of frame) {
-        this.simulator.feedByte(byte)
-      }
-
-      // Timeout for response
-      setTimeout(() => {
-        if (this.responseResolve) {
-          this.responseResolve = null
-          reject(new Error('Simulator Modbus response timeout'))
-        }
-      }, 5000)
-    })
-  }
-
-  private handleReceivedByte(byte: number): void {
-    this.rxBuffer.push(byte)
-
-    // Reset frame completion timeout (50ms gap = end of frame)
-    if (this.frameTimeout) clearTimeout(this.frameTimeout)
-    this.frameTimeout = setTimeout(() => {
-      if (this.responseResolve && this.rxBuffer.length > 0) {
-        this.responseResolve(Buffer.from(this.rxBuffer))
-        this.responseResolve = null
-        this.rxBuffer = []
-      }
-    }, 50)
-  }
-
-  // CRC16, frame building — reuse from existing modbus-rtu-client.ts
-  // Extract shared CRC16/frame utilities into a common module
 }
 ```
 
-### 7b. Shared Modbus RTU Utilities
+**Why byte-by-byte emission works:** `ModbusRtuClient.sendRequest()` already accumulates bytes into `responseBuffer` via `Buffer.concat` and uses a 50ms frame-completion timeout to detect end-of-frame. Each byte resets the timer. Since the emulated CPU processes response bytes in batches (within the same `executeLoop()` tick), they arrive nearly instantly and the 50ms gap correctly signals frame completion.
 
-**File:** `src/main/modules/modbus/modbus-rtu-utils.ts` (NEW)
+**No bootloader delay:** Physical serial ports have a 2.5s bootloader delay after opening. The `VirtualSerialPort` skips this entirely — the emulated UART is ready immediately.
 
-Extract from `modbus-rtu-client.ts`:
-- `calculateCRC16(buffer)` — CRC lookup table and calculation (lines 27-59)
-- `buildRtuFrame(slaveId, functionCode, data)` — frame assembly with CRC
-- `ModbusFunctionCode` enum
-- Response parsing helpers
+### 7b. ModbusRtuClient — Accept Injected Serial Port
 
-Both `ModbusRtuClient` (physical serial) and `SimulatorModbusClient` (virtual UART) will import from this shared module.
+**File:** `src/main/modules/modbus/modbus-rtu-client.ts` (MODIFIED — minimal change)
+
+Add an optional `serialPort` field to the constructor options:
+
+```typescript
+interface ModbusRtuClientOptions {
+  port: string
+  baudRate: number
+  slaveId: number
+  timeout: number
+  serialPort?: any  // Pre-built serial port (e.g. VirtualSerialPort for simulator)
+}
+```
+
+Store it in the constructor and add an early branch in `connect()`:
+
+```typescript
+private injectedSerialPort: any = null
+
+constructor(options: ModbusRtuClientOptions) {
+  this.port = options.port
+  this.baudRate = options.baudRate
+  this.slaveId = options.slaveId
+  this.timeout = options.timeout
+  this.injectedSerialPort = options.serialPort ?? null
+}
+
+async connect(): Promise<void> {
+  // If a pre-built serial port was provided (e.g. VirtualSerialPort), use it directly
+  if (this.injectedSerialPort) {
+    this.serialPort = this.injectedSerialPort
+    return new Promise((resolve, reject) => {
+      this.serialPort.on('open', () => resolve())
+      this.serialPort.on('error', (err: Error) => reject(err))
+      this.serialPort.open()
+    })
+  }
+  // ...existing SerialPort creation code (unchanged)...
+}
+```
+
+This is the **only change** to `ModbusRtuClient`. All protocol logic — `assembleRequest()`, `sendRequest()`, `calculateCrc()`, `getMd5Hash()`, `getVariablesList()`, `setVariable()` — remains untouched and is shared between physical hardware and the simulator.
+
+### 7c. No Separate SimulatorModbusClient or Shared Utils Needed
+
+This approach eliminates:
+- ~~`simulator-modbus-bridge.ts`~~ — not needed, `ModbusRtuClient` is reused directly
+- ~~`modbus-rtu-utils.ts`~~ — not needed, no protocol code to extract/share
 
 ---
 
@@ -393,57 +411,77 @@ handleDebuggerConnect = async (
 ): Promise<{ success: boolean; error?: string }>
 ```
 
-New branch:
+New branch using `ModbusRtuClient` with `VirtualSerialPort` (no separate client class needed):
+
 ```typescript
 case 'simulator':
-  // Create SimulatorModbusClient connected to the running emulator
-  this.debuggerModbusClient = new SimulatorModbusClient(this.simulatorModule)
+  const virtualPort = new VirtualSerialPort(this.simulatorModule)
+  this.debuggerModbusClient = new ModbusRtuClient({
+    port: 'simulator',      // label only, not used for real I/O
+    baudRate: 115200,
+    slaveId: 1,
+    timeout: 5000,
+    serialPort: virtualPort, // injected virtual port
+  })
   await this.debuggerModbusClient.connect()
   break
 ```
 
-The `SimulatorModbusClient` implements the same interface as `ModbusRtuClient`, so all existing debug polling logic (`handleDebuggerGetVariablesList`, `handleDebuggerVerifyMd5`, `handleDebuggerSetVariable`) works unchanged.
+Since `ModbusRtuClient` is used directly, all existing debug polling logic (`handleDebuggerGetVariablesList`, `handleDebuggerVerifyMd5`, `handleDebuggerSetVariable`) works unchanged.
 
-### 8b. Debugger Button — Simulator Flow
+### 8b. Debugger Button — Simulator Flow (Corrected)
 
 **File:** `src/renderer/components/_organisms/workspace-activity-bar/default.tsx`
 
-The `handleDebuggerClick` function (line 377) currently:
-1. Checks if runtime target → requires IP/connection
-2. Checks if arduino target → requires Modbus RTU or TCP enabled
-3. Runs debug compilation
-4. On success, connects debugger with the appropriate connection type
+The debugger button does **not** compile the full firmware. It only runs the first-stage compilation (`compileForDebugger`) to generate debug metadata and extract the MD5 hash. This is already the existing behavior for all targets — `compileForDebugger()` never invokes Arduino CLI or uploads anything.
 
-For the simulator, the flow should be:
-1. Detect `isSimulatorTarget` → skip all connection checks (no IP, no port, no Modbus config)
-2. Run debug compilation (same `runDebugCompilation` call with `boardTarget = 'OpenPLC Simulator'`)
-3. The compilation callback receives `simulatorFirmwarePath` — load into emulator
-4. Wait for emulator to boot (~500ms)
-5. Call `debuggerConnect('simulator', {})` — connects to the already-running emulator's UART
-6. Proceed with MD5 verification and variable polling (all existing code)
+For the simulator, there is one extra check: whether the simulator has firmware loaded. If the user has never pressed Build, the simulator is "empty" and there's nothing to debug.
+
+**Complete simulator debugger flow:**
+
+1. Detect `isSimulatorTarget` → skip all connection parameter checks (no IP, no port, no Modbus config)
+2. **Check if simulator is "empty"** via `window.bridge.simulatorIsRunning()`
+   - If empty (no firmware loaded) → show warning dialog: *"No firmware is running on the simulator. Would you like to build and upload the project first?"*
+     - If user agrees → trigger full build (`runCompileProgram`), which compiles and auto-loads firmware into emulator. After build completes, restart the debugger flow from step 3.
+     - If user declines → abort debugger
+3. Run `compileForDebugger()` (first-stage only: XML → ST → C → debug files). **No simulator-specific branch needed** — this function works as-is for all targets.
+4. Extract local MD5 from generated `program.st` (existing `debuggerReadProgramStMd5`)
+5. Connect to simulator and get its MD5 via `debuggerVerifyMd5('simulator', {}, expectedMd5)` — uses Modbus RTU over virtual UART
+6. **Compare MD5s** (existing logic):
+   - If match → proceed to parse debug.c, build variable tree, connect debugger, start polling
+   - If mismatch → show existing "Program Mismatch" dialog asking user to rebuild/upload. If user agrees, trigger full build and retry MD5 verification. (This is the same dialog that appears for real hardware when the running firmware doesn't match the current project.)
 
 ```typescript
+// In handleDebuggerClick():
 if (isSimulatorTarget(currentBoardInfo)) {
+  // Check if simulator has firmware loaded
+  const running = await window.bridge.simulatorIsRunning()
+  if (!running) {
+    const response = await window.bridge.showMessageDialog({
+      type: 'warning',
+      title: 'Simulator Empty',
+      message: 'No firmware is running on the simulator. Would you like to build and upload the project first?',
+      buttons: ['Build & Upload', 'Cancel'],
+    })
+    if (response === 0) {
+      // Trigger full build (same as build button), then restart debugger flow
+      // ...
+    } else {
+      setIsDebuggerProcessing(false)
+      return
+    }
+  }
   connectionType = 'simulator'
-  // No IP, port, or Modbus config needed
-  // Compilation will produce UF2 and auto-load into emulator
+  // Fall through to normal debug compilation + MD5 verification
 }
 ```
 
-The debug compilation callback:
-```typescript
-if (data.simulatorFirmwarePath) {
-  // Load firmware into simulator
-  await window.bridge.simulatorLoadFirmware(data.simulatorFirmwarePath)
-  // Small delay for firmware boot
-  await new Promise(resolve => setTimeout(resolve, 500))
-}
+### 8c. What Doesn't Change
 
-if (data.closePort) {
-  // Proceed with MD5 verification as usual
-  void handleMd5Verification(projectPath, boardTarget, 'simulator', {}, undefined, false)
-}
-```
+- `compileForDebugger()` — works as-is, no simulator branch needed (first-stage only, no hardware)
+- `handleMd5Verification()` — works as-is once `'simulator'` connection type is supported
+- MD5 mismatch dialog — works as-is (triggers full build + retry)
+- Debug file parsing, variable tree building, debug polling — all unchanged
 
 ---
 
@@ -508,9 +546,8 @@ Create a preview image for the simulator device. Suggestion: a stylized chip/CPU
 | File | Purpose |
 |------|---------|
 | `src/main/modules/simulator/simulator-module.ts` | rp2040js emulator lifecycle management |
-| `src/main/modules/simulator/simulator-modbus-bridge.ts` | Modbus RTU client over virtual UART |
+| `src/main/modules/simulator/virtual-serial-port.ts` | EventEmitter-based serial port mock that routes bytes through emulated UART |
 | `src/main/modules/simulator/bootrom.ts` | Bundled RP2040 bootrom binary |
-| `src/main/modules/modbus/modbus-rtu-utils.ts` | Shared CRC16/frame utilities extracted from modbus-rtu-client |
 | `resources/sources/boards/images/simulator.png` | Device preview image |
 
 ### Modified Files
@@ -522,12 +559,12 @@ Create a preview image for the simulator device. Suggestion: a stylized chip/CPU
 | `src/renderer/store/slices/device/data/constants.ts` | Change default device to "OpenPLC Simulator" |
 | `src/renderer/components/_features/[workspace]/editor/device/configuration/board.tsx` | Hide comm port, pin mapping, IP address, Connect button for simulator |
 | `src/renderer/components/_features/[workspace]/editor/device/configuration/communication.tsx` | Hide Modbus RTU/TCP config for simulator |
-| `src/main/modules/compiler/compiler-module.ts` | Handle `compiler === 'simulator'` in compileProgram/compileForDebugger; force Modbus RTU defines |
+| `src/main/modules/compiler/compiler-module.ts` | Handle `compiler === 'simulator'` in compileProgram (skip upload, return UF2 path); force Modbus RTU defines |
 | `src/main/modules/ipc/main.ts` | Add simulator IPC handlers; add `'simulator'` connection type to debugger |
 | `src/main/modules/ipc/renderer.ts` | Add renderer wrappers for simulator IPC |
 | `src/main/modules/preload/preload.ts` | Expose simulator bridge methods |
-| `src/renderer/components/_organisms/workspace-activity-bar/default.tsx` | Handle simulator in build callback and debugger click |
-| `src/main/modules/modbus/modbus-rtu-client.ts` | Extract CRC16/frame utils to shared module, import from there |
+| `src/renderer/components/_organisms/workspace-activity-bar/default.tsx` | Handle simulator in build callback and debugger click (empty simulator check) |
+| `src/main/modules/modbus/modbus-rtu-client.ts` | Accept optional injected serial port in constructor (for VirtualSerialPort) |
 | `package.json` | Add `rp2040js` dependency |
 
 ---
@@ -545,22 +582,21 @@ Create a preview image for the simulator device. Suggestion: a stylized chip/CPU
 
 ### Phase 2: Compilation (Week 2)
 8. Handle `compiler === 'simulator'` in `compileProgram()` — reuse Arduino CLI compilation for RP2040, skip upload step, return UF2 path
-9. Handle `compiler === 'simulator'` in `compileForDebugger()` — same pattern
-10. Force Modbus RTU defines in generated `defines.h` for simulator
-11. Wire up build button callback to load UF2 into emulator on success
+9. Force Modbus RTU defines in generated `defines.h` for simulator
+10. Wire up build button callback to load UF2 into emulator on success
 
 ### Phase 3: Debugger (Week 3)
-12. Extract shared Modbus RTU utils (CRC16, frame building) to `modbus-rtu-utils.ts`
-13. Implement `SimulatorModbusClient` using virtual UART bridge
-14. Add `'simulator'` connection type to `handleDebuggerConnect`
-15. Wire up debugger button flow for simulator (auto-compile, auto-load, auto-connect)
+11. Create `VirtualSerialPort` (EventEmitter mock adapting rp2040js UART to `serialport` API)
+12. Modify `ModbusRtuClient` to accept optional injected serial port (single constructor change)
+13. Add `'simulator'` connection type to `handleDebuggerConnect` (creates `ModbusRtuClient` + `VirtualSerialPort`)
+14. Wire up debugger button flow for simulator: check if simulator is empty → first-stage compilation → MD5 verification → connect
 
 ### Phase 4: UI Polish (Week 4)
-16. Update board.tsx to show simulator-specific UI (hide irrelevant fields)
-17. Update communication.tsx to show "auto-configured" message
-18. Create simulator preview image
-19. Testing: full flow (new project → build → debugger → see values)
-20. Edge cases: re-compile while running, stop simulator, switch device away from simulator
+15. Update board.tsx to show simulator-specific UI (hide irrelevant fields)
+16. Update communication.tsx to show "auto-configured" message
+17. Create simulator preview image
+18. Testing: full flow (new project → build → debugger → see values)
+19. Edge cases: re-compile while running, stop simulator, switch device away from simulator
 
 ---
 
