@@ -16,7 +16,7 @@ const ArduinoCoreControlSchema = z.array(z.record(z.string(), z.string()))
 type ArduinoCoreControl = z.infer<typeof ArduinoCoreControlSchema>
 
 const BoardInfoSchema = z.object({
-  compiler: z.enum(['arduino-cli', 'openplc-compiler']),
+  compiler: z.enum(['arduino-cli', 'openplc-compiler', 'simulator']),
   core: z.string(),
   default_ain: z.string(),
   default_aout: z.string(),

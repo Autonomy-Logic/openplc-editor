@@ -203,7 +203,7 @@ const rendererProcessBridge = {
     Map<
       string,
       {
-        compiler: 'arduino-cli' | 'openplc-compiler'
+        compiler: 'arduino-cli' | 'openplc-compiler' | 'simulator'
         core: string
         preview: string
         specs: {
@@ -359,6 +359,12 @@ const rendererProcessBridge = {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)
   },
+
+  // ===================== SIMULATOR METHODS =====================
+  simulatorLoadFirmware: (uf2Path: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('simulator:load-firmware', uf2Path),
+  simulatorStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('simulator:stop'),
+  simulatorIsRunning: (): Promise<boolean> => ipcRenderer.invoke('simulator:is-running'),
 
   // ===================== FILE WATCHER METHODS =====================
   fileWatchStart: (filePath: string): Promise<{ success: boolean; error?: string }> =>

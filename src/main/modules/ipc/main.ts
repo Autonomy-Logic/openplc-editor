@@ -18,6 +18,7 @@ import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/m
 import { logger } from '../../services'
 import { ModbusTcpClient } from '../modbus/modbus-client'
 import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
+import { SimulatorModule } from '../simulator/simulator-module'
 import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
 
 type IDataToWrite = {
@@ -43,7 +44,7 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerWebSocketClient: WebSocketDebugClient | null = null
   private debuggerTargetIp: string | null = null
   private debuggerReconnecting: boolean = false
-  private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | null = null
+  private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
   private debuggerRtuPort: string | null = null
   private debuggerRtuBaudRate: number | null = null
   private debuggerRtuSlaveId: number | null = null
@@ -54,6 +55,8 @@ class MainProcessBridge implements MainIpcModule {
   private currentProjectPath: string | null = null
   // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
   private fileWatchers: Map<string, { lastMtime: number }> = new Map()
+  // rp2040js emulator instance for the built-in simulator
+  private simulatorModule = new SimulatorModule()
 
   constructor({
     ipcMain,
@@ -594,6 +597,11 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+
+    // ===================== SIMULATOR =====================
+    this.ipcMain.handle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
+    this.ipcMain.handle('simulator:stop', this.handleSimulatorStop)
+    this.ipcMain.handle('simulator:is-running', this.handleSimulatorIsRunning)
 
     // ===================== FILE WATCHER =====================
     this.ipcMain.handle('file:watch-start', this.handleFileWatchStart)
@@ -1292,6 +1300,29 @@ class MainProcessBridge implements MainIpcModule {
       const projectRoot = resolve(this.currentProjectPath)
       return resolved.startsWith(projectRoot + sep) || resolved === projectRoot
     }
+  }
+
+  // ===================== SIMULATOR HANDLERS =====================
+
+  handleSimulatorLoadFirmware = async (
+    _event: IpcMainInvokeEvent,
+    uf2Path: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await this.simulatorModule.loadAndRun(uf2Path)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  handleSimulatorStop = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    this.simulatorModule.stop()
+    return Promise.resolve({ success: true })
+  }
+
+  handleSimulatorIsRunning = (_event: IpcMainInvokeEvent): Promise<boolean> => {
+    return Promise.resolve(this.simulatorModule.isRunning())
   }
 
   // Using watchFile (polling-based) instead of watch for better macOS compatibility

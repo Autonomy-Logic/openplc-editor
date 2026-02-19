@@ -1,4 +1,29 @@
 {
+  "OpenPLC Simulator": {
+    "compiler": "simulator",
+    "core": "rp2040:rp2040",
+    "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
+    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "default_ain": "26, 27, 28",
+    "default_aout": "4, 5",
+    "default_din": "6, 7, 8, 9, 10, 11, 12, 13",
+    "default_dout": "14, 15, 16, 17, 18, 19, 20, 21",
+    "extra_libraries": [],
+    "platform": "rp2040:rp2040:rpipico",
+    "source": "rp2040pico.cpp",
+    "preview": "simulator.png",
+    "specs": {
+      "CPU": "Emulated RP2040 ARM Cortex-M0+",
+      "RAM": "264 KB",
+      "Flash": "2 MB",
+      "Digital Pins": "26",
+      "Analog Pins": "3",
+      "PWM Pins": "16",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
+  },
   "Arduino Due (native USB port)": {
     "compiler": "arduino-cli",
     "core": "arduino:sam",
