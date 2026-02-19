@@ -2,7 +2,7 @@ import { communicationSelectors } from '@hooks/use-store-selectors'
 import { Checkbox, Label } from '@root/renderer/components/_atoms'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { cn, isOpenPLCRuntimeTarget } from '@root/utils'
+import { cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import { useEffect, useMemo } from 'react'
 
 import { ModbusRTUComponent } from './components/modbus-rtu'
@@ -21,6 +21,7 @@ const Communication = () => {
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const isRuntimeTarget = isOpenPLCRuntimeTarget(currentBoardInfo)
+  const isSimulator = isSimulatorTarget(currentBoardInfo)
 
   const isRTUEnabled = communicationPreferences.enabledRTU
   const isTCPEnabled = communicationPreferences.enabledTCP
@@ -46,6 +47,16 @@ const Communication = () => {
     setCommunicationPreferences({ enableTCP: !isTCPEnabled })
   }
   const memoizedIsModbusTCPEnabled = useMemo(() => isTCPEnabled ?? false, [isTCPEnabled])
+
+  if (isSimulator) {
+    return (
+      <DeviceEditorSlot heading='Communication'>
+        <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+          Modbus RTU is automatically configured for the simulator.
+        </p>
+      </DeviceEditorSlot>
+    )
+  }
 
   return (
     <DeviceEditorSlot heading='Communication'>
