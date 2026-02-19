@@ -6,7 +6,7 @@ import type { RuntimeConnection } from '@root/renderer/store/slices/device/types
 import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
 import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
-import { BufferToStringArray, cn, isOpenPLCRuntimeTarget } from '@root/utils'
+import { BufferToStringArray, cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
 import { validateCppCode } from '@root/utils/cpp/validateCppCode'
@@ -432,13 +432,34 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
 
       let targetIpAddress: string | undefined
-      let connectionType: 'tcp' | 'rtu' | 'websocket' = 'tcp'
+      let connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' = 'tcp'
       let rtuPort: string | undefined
       let rtuBaudRate: number | undefined
       let rtuSlaveId: number | undefined
       let jwtToken: string | undefined
 
-      if (isRuntimeTarget) {
+      if (isSimulatorTarget(currentBoardInfo)) {
+        // Check if simulator has firmware loaded
+        const running = await (window.bridge.simulatorIsRunning as () => Promise<boolean>)()
+        if (!running) {
+          const response = await showDebuggerMessage(
+            'warning',
+            'Simulator Empty',
+            'No firmware is running on the simulator. Would you like to build and upload the project first?',
+            ['Build & Upload', 'Cancel'],
+          )
+          if (response === 0) {
+            // Trigger full build, then restart debugger flow
+            setIsDebuggerProcessing(false)
+            verifyAndCompile()
+            return
+          } else {
+            setIsDebuggerProcessing(false)
+            return
+          }
+        }
+        connectionType = 'simulator'
+      } else if (isRuntimeTarget) {
         const connectionStatus = useOpenPLCStore.getState().runtimeConnection.connectionStatus
         const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress
 
@@ -752,7 +773,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleMd5Verification = async (
     projectPath: string,
     boardTarget: string,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string

@@ -19,6 +19,7 @@ import { logger } from '../../services'
 import { ModbusTcpClient } from '../modbus/modbus-client'
 import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
 import { SimulatorModule } from '../simulator/simulator-module'
+import { VirtualSerialPort } from '../simulator/virtual-serial-port'
 import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
 
 type IDataToWrite = {
@@ -870,7 +871,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -883,7 +884,25 @@ class MainProcessBridge implements MainIpcModule {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
     let wsClient: WebSocketDebugClient | null = null
     try {
-      if (connectionType === 'websocket') {
+      if (connectionType === 'simulator') {
+        const virtualPort = new VirtualSerialPort(this.simulatorModule)
+        client = new ModbusRtuClient({
+          port: 'simulator',
+          baudRate: 115200,
+          slaveId: 1,
+          timeout: 5000,
+          serialPort: virtualPort,
+        })
+        await client.connect()
+        const targetMd5 = await client.getMd5Hash()
+        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+
+        // Keep the client for subsequent debug operations
+        this.debuggerModbusClient = client
+        this.debuggerConnectionType = 'simulator'
+
+        return { success: true, match, targetMd5 }
+      } else if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
@@ -1121,7 +1140,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerConnect = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -1131,7 +1150,22 @@ class MainProcessBridge implements MainIpcModule {
     },
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (connectionType === 'websocket') {
+      if (connectionType === 'simulator') {
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
+        const virtualPort = new VirtualSerialPort(this.simulatorModule)
+        this.debuggerModbusClient = new ModbusRtuClient({
+          port: 'simulator',
+          baudRate: 115200,
+          slaveId: 1,
+          timeout: 5000,
+          serialPort: virtualPort,
+        })
+        await this.debuggerModbusClient.connect()
+      } else if (connectionType === 'websocket') {
         if (this.debuggerModbusClient) {
           this.debuggerModbusClient.disconnect()
           this.debuggerModbusClient = null
