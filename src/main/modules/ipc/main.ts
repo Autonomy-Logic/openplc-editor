@@ -614,10 +614,12 @@ class MainProcessBridge implements MainIpcModule {
   // ===================== HANDLER METHODS =====================
   // Project-related handlers
   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
+    this.simulatorModule.stop()
     const response = await this.projectService.createProject(data)
     return response
   }
   handleProjectOpen = async () => {
+    this.simulatorModule.stop()
     const response = await this.projectService.openProject()
     if (response.success && response.data?.meta.path) {
       this.currentProjectPath = response.data.meta.path
@@ -657,6 +659,7 @@ class MainProcessBridge implements MainIpcModule {
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
+    this.simulatorModule.stop()
     try {
       const response = await this.projectService.openProjectByPath(projectPath)
       if (response.success && response.data?.meta.path) {
@@ -768,6 +771,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleAppQuit = () => {
+    this.simulatorModule.stop()
     if (this.mainWindow) {
       this.mainWindow.destroy()
     }
@@ -832,7 +836,10 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.maximize()
     }
   }
-  handleWindowReload = () => this.mainWindow?.webContents.reload()
+  handleWindowReload = () => {
+    this.simulatorModule.stop()
+    this.mainWindow?.webContents.reload()
+  }
   handleWindowRebuildMenu = () => void this.menuBuilder.buildMenu()
 
   // Hardware handlers
