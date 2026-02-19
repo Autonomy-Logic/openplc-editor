@@ -755,10 +755,17 @@ class CompilerModule {
 
     // 3.2. Device Configuration
     DEFINES_CONTENT += '//Comms Configuration\n'
-    DEFINES_CONTENT += `#define MBSERIAL_IFACE ${modbusRTU.rtuInterface}\n`
-    DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
-    if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
-    if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
+    if (boardRuntime === 'simulator') {
+      // Simulator forces fixed Modbus RTU settings over emulated UART0
+      DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial\n'
+      DEFINES_CONTENT += '#define MBSERIAL_BAUD 115200\n'
+      DEFINES_CONTENT += '#define MBSERIAL_SLAVE 1\n'
+    } else {
+      DEFINES_CONTENT += `#define MBSERIAL_IFACE ${modbusRTU.rtuInterface}\n`
+      DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
+      if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
+      if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
+    }
     if (modbusTCP.tcpMacAddress !== null)
       DEFINES_CONTENT += `#define MBTCP_MAC ${FormatMacAddress(modbusTCP.tcpMacAddress)}\n`
     // OBS: This is giving us an empty string and this is being printed as a space
