@@ -12,14 +12,15 @@ const UF2_MAGIC_START1 = 0x9e5d5157
 const UF2_MAGIC_END = 0x0ab16f30
 const UF2_BLOCK_SIZE = 512
 
-// Execution loop tuning: nanoseconds per CPU cycle at 125 MHz
-const CYCLE_NANOS = 1e9 / 125_000_000 // 8 ns
+// Nominal nanoseconds per CPU cycle at 125 MHz
+const NOMINAL_CYCLE_NANOS = 1e9 / 125_000_000 // 8 ns
 
-// Iterations per batch. The stock Simulator uses 1M which yields ~8 ms of
-// simulated time per batch. With setTimeout(0) scheduling overhead (~1-4 ms
-// in Node.js), the simulation runs noticeably slower than real time.
-// Using setImmediate + a larger batch keeps up with real time.
-const ITERATIONS_PER_BATCH = 4_000_000
+// Iterations per execution batch. Kept at the stock 1M so that each batch
+// yields to the event loop frequently enough for responsive Modbus I/O.
+const ITERATIONS_PER_BATCH = 1_000_000
+
+// How often (in batches) to recalibrate the speed ratio
+const CALIBRATION_INTERVAL = 10
 
 /**
  * Minimal simulation clock that satisfies the RP2040 IClock interface and
@@ -146,16 +147,23 @@ function loadUF2(data: Uint8Array, mcu: RP2040): void {
 /**
  * Manages the rp2040js emulator lifecycle in the main process.
  *
- * Instead of using the stock Simulator class (which uses setTimeout(0) and
- * a 1M-iteration batch that runs ~4x slower than real time in Node.js),
- * we implement our own execution loop with setImmediate and a larger batch
- * size to keep up with wall-clock time.
+ * The OpenPLC firmware busy-waits in loop() checking micros(), so the CPU
+ * never enters WFI. A JavaScript ARM emulator can only execute ~30-40M
+ * instructions/sec, but real-time needs 125M/sec. To compensate, we
+ * dynamically measure the sim-to-wall speed ratio and scale the clock tick
+ * per instruction so that timers fire at real wall-clock time.
  */
 export class SimulatorModule {
   private mcu: RP2040 | null = null
   private clock: SimClock | null = null
   private running = false
   private immediateHandle: ReturnType<typeof setImmediate> | null = null
+
+  // Speed compensation: scale cycleNanos so simulated time matches wall time
+  private cycleNanos = NOMINAL_CYCLE_NANOS
+  private wallStartMs = 0
+  private simStartNanos = 0
+  private batchCount = 0
 
   /** Callback fired for each byte transmitted by the emulated UART0 */
   onUartByte: ((byte: number) => void) | null = null
@@ -182,28 +190,53 @@ export class SimulatorModule {
     // Set program counter to flash start and begin execution
     this.mcu.core.PC = FLASH_START_ADDRESS
     this.running = true
+    this.cycleNanos = NOMINAL_CYCLE_NANOS
+    this.wallStartMs = performance.now()
+    this.simStartNanos = 0
+    this.batchCount = 0
     this.executeBatch()
   }
 
   /**
    * Runs a batch of CPU instructions, then reschedules with setImmediate.
-   * setImmediate fires at the start of the next event-loop iteration,
-   * avoiding the ~1-4 ms minimum delay of setTimeout(0).
+   *
+   * Every CALIBRATION_INTERVAL batches, we measure how much simulated time
+   * has elapsed vs wall time and adjust cycleNanos so the simulation keeps
+   * pace with real time. This compensates for the host CPU being slower
+   * than 125 MHz worth of emulated instructions.
    */
   private executeBatch = (): void => {
     if (!this.running || !this.mcu || !this.clock) return
 
     this.immediateHandle = null
     const { mcu, clock } = this
+    const cn = this.cycleNanos
 
     for (let i = 0; i < ITERATIONS_PER_BATCH && this.running; i++) {
       if (mcu.core.waiting) {
         const { nanosToNextAlarm } = clock
         clock.tick(nanosToNextAlarm)
-        i += nanosToNextAlarm / CYCLE_NANOS
+        i += nanosToNextAlarm / cn
       } else {
         const cycles = mcu.core.executeInstruction()
-        clock.tick(cycles * CYCLE_NANOS)
+        clock.tick(cycles * cn)
+      }
+    }
+
+    // Periodically recalibrate so simulated time tracks wall time
+    this.batchCount++
+    if (this.batchCount % CALIBRATION_INTERVAL === 0) {
+      const wallElapsedMs = performance.now() - this.wallStartMs
+      const simElapsedMs = clock.nanos / 1e6
+
+      if (wallElapsedMs > 100 && simElapsedMs > 0) {
+        const ratio = simElapsedMs / wallElapsedMs
+        // Scale cycleNanos inversely to the ratio: if sim runs at 0.25x,
+        // we need 4x the nanos per cycle to catch up.
+        // Clamp to reasonable bounds (1x-8x nominal) to avoid instability.
+        const correction = 1 / ratio
+        const clamped = Math.max(1, Math.min(8, correction))
+        this.cycleNanos = NOMINAL_CYCLE_NANOS * clamped
       }
     }
 
