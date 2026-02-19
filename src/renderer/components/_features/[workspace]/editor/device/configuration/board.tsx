@@ -90,7 +90,8 @@ const Board = memo(function () {
     const handleDeviceValueAtFirstRender = () => {
       const boardInfos = availableBoards.get(deviceBoard)
       if (boardInfos) {
-        const coreVersionAsString = `${boardInfos.coreVersion ? ` [${boardInfos.coreVersion}]` : ''}`
+        const showVersion = !isSimulatorTarget(boardInfos) && boardInfos.coreVersion
+        const coreVersionAsString = showVersion ? ` [${boardInfos.coreVersion}]` : ''
         const initialBoard = `${deviceBoard}${coreVersionAsString}`
         if (initialBoard === formattedBoardState) return
         setFormattedBoardState(initialBoard)
@@ -342,7 +343,8 @@ const Board = memo(function () {
                 viewportRef={deviceSelectRef}
               >
                 {Array.from(availableBoards.entries()).map(([board, data]) => {
-                  const formattedBoard = `${board}${data.coreVersion ? ` [${data.coreVersion}]` : ''}`
+                  const showVersion = !isSimulatorTarget(data) && data.coreVersion
+                  const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
                   return (
                     <SelectItem
                       key={board}
