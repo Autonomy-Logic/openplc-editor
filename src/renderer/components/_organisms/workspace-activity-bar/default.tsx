@@ -876,7 +876,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       })
 
       const targetDisplay =
-        connectionType === 'tcp' || connectionType === 'websocket' ? targetIpAddress : connectionParams.port
+        connectionType === 'simulator'
+          ? 'simulator'
+          : connectionType === 'tcp' || connectionType === 'websocket'
+            ? targetIpAddress
+            : connectionParams.port
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'info',
