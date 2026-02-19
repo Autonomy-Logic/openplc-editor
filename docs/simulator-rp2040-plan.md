@@ -16,7 +16,7 @@ Add a new entry at the **top** of the JSON (so it appears first in the device dr
 
 ```json
 {
-  "Simulator": {
+  "OpenPLC Simulator": {
     "compiler": "simulator",
     "core": "rp2040:rp2040",
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
@@ -64,11 +64,11 @@ This function will be used across the UI to conditionally hide/show configuratio
 
 **File:** `src/renderer/store/slices/device/data/constants.ts`
 
-Change the default device board from `'OpenPLC Runtime v3'` to `'Simulator'`:
+Change the default device board from `'OpenPLC Runtime v3'` to `'OpenPLC Simulator'`:
 
 ```typescript
 defaultDeviceConfiguration: DeviceConfiguration = {
-  deviceBoard: 'Simulator',  // was 'OpenPLC Runtime v3'
+  deviceBoard: 'OpenPLC Simulator',  // was 'OpenPLC Runtime v3'
   ...rest unchanged...
 }
 ```
@@ -416,7 +416,7 @@ The `handleDebuggerClick` function (line 377) currently:
 
 For the simulator, the flow should be:
 1. Detect `isSimulatorTarget` → skip all connection checks (no IP, no port, no Modbus config)
-2. Run debug compilation (same `runDebugCompilation` call with `boardTarget = 'Simulator'`)
+2. Run debug compilation (same `runDebugCompilation` call with `boardTarget = 'OpenPLC Simulator'`)
 3. The compilation callback receives `simulatorFirmwarePath` — load into emulator
 4. Wait for emulator to boot (~500ms)
 5. Call `debuggerConnect('simulator', {})` — connects to the already-running emulator's UART
@@ -517,9 +517,9 @@ Create a preview image for the simulator device. Suggestion: a stylized chip/CPU
 
 | File | Changes |
 |------|---------|
-| `resources/sources/boards/hals.json` | Add "Simulator" entry at top |
+| `resources/sources/boards/hals.json` | Add "OpenPLC Simulator" entry at top |
 | `src/utils/device.ts` | Add `isSimulatorTarget()` function |
-| `src/renderer/store/slices/device/data/constants.ts` | Change default device to "Simulator" |
+| `src/renderer/store/slices/device/data/constants.ts` | Change default device to "OpenPLC Simulator" |
 | `src/renderer/components/_features/[workspace]/editor/device/configuration/board.tsx` | Hide comm port, pin mapping, IP address, Connect button for simulator |
 | `src/renderer/components/_features/[workspace]/editor/device/configuration/communication.tsx` | Hide Modbus RTU/TCP config for simulator |
 | `src/main/modules/compiler/compiler-module.ts` | Handle `compiler === 'simulator'` in compileProgram/compileForDebugger; force Modbus RTU defines |
@@ -536,9 +536,9 @@ Create a preview image for the simulator device. Suggestion: a stylized chip/CPU
 
 ### Phase 1: Foundation (Week 1)
 1. `npm install rp2040js`
-2. Add "Simulator" entry to `hals.json`
+2. Add "OpenPLC Simulator" entry to `hals.json`
 3. Add `isSimulatorTarget()` to `src/utils/device.ts`
-4. Update default device in constants.ts
+4. Update default device to "OpenPLC Simulator" in constants.ts
 5. Create `SimulatorModule` with basic load/run/stop
 6. Bundle bootrom binary
 7. Add simulator IPC endpoints (load-firmware, stop, is-running)
