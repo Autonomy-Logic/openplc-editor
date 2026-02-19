@@ -2078,7 +2078,14 @@ class CompilerModule {
     // Step 13: Upload program to board or load into simulator
     if (boardRuntime === 'simulator') {
       // For simulator targets, send the UF2 firmware path back to the renderer
-      const uf2Path = join(compilationPath, 'examples', 'Baremetal', 'build', 'rp2040.rp2040.rpipico', 'Baremetal.uf2')
+      const uf2Path = join(
+        compilationPath,
+        'examples',
+        'Baremetal',
+        'build',
+        'rp2040.rp2040.rpipico',
+        'Baremetal.ino.uf2',
+      )
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Compilation successful. Loading firmware into simulator...',
