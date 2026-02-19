@@ -154,7 +154,11 @@ export class SimulatorModule {
   private mcu: RP2040 | null = null
   private clock: SimClock | null = null
   private running = false
-  private immediateHandle: ReturnType<typeof setImmediate> | null = null
+  private timerHandle: ReturnType<typeof setTimeout> | null = null
+
+  // Wall-clock pacing: track start times to keep sim time ≈ wall time
+  private wallStartMs = 0
+  private simStartNanos = 0
 
   /** Callback fired for each byte transmitted by the emulated UART0 */
   onUartByte: ((byte: number) => void) | null = null
@@ -181,21 +185,26 @@ export class SimulatorModule {
     // Set program counter to flash start and begin execution
     this.mcu.core.PC = FLASH_START_ADDRESS
     this.running = true
+    this.wallStartMs = performance.now()
+    this.simStartNanos = 0
     this.executeBatch()
   }
 
   /**
-   * Runs a batch of CPU instructions, then reschedules with setImmediate.
-   * setImmediate fires at the start of the next event-loop iteration,
-   * avoiding the ~1-4 ms minimum delay of setTimeout(0).
+   * Runs a batch of CPU instructions, then reschedules.
    *
    * When the CPU enters WFI (waiting), the loop fast-forwards the clock
    * to the next alarm instead of stepping through idle cycles.
+   *
+   * After each batch, compares simulated time against wall time:
+   * - If sim is ahead: schedules next batch with setTimeout(delay) to
+   *   let wall time catch up, keeping timers accurate.
+   * - If sim is behind or on time: schedules with setTimeout(0).
    */
   private executeBatch = (): void => {
     if (!this.running || !this.mcu || !this.clock) return
 
-    this.immediateHandle = null
+    this.timerHandle = null
     const { mcu, clock } = this
 
     for (let i = 0; i < ITERATIONS_PER_BATCH && this.running; i++) {
@@ -210,7 +219,11 @@ export class SimulatorModule {
     }
 
     if (this.running) {
-      this.immediateHandle = setImmediate(this.executeBatch)
+      // Pace simulation to wall time
+      const simElapsedMs = (clock.nanos - this.simStartNanos) / 1e6
+      const wallElapsedMs = performance.now() - this.wallStartMs
+      const aheadMs = simElapsedMs - wallElapsedMs
+      this.timerHandle = setTimeout(this.executeBatch, aheadMs > 1 ? Math.floor(aheadMs) : 0)
     }
   }
 
@@ -222,9 +235,9 @@ export class SimulatorModule {
   /** Stop the emulator and release resources */
   stop(): void {
     this.running = false
-    if (this.immediateHandle !== null) {
-      clearImmediate(this.immediateHandle)
-      this.immediateHandle = null
+    if (this.timerHandle !== null) {
+      clearTimeout(this.timerHandle)
+      this.timerHandle = null
     }
     if (this.mcu) {
       this.mcu.uart[0].onByte = undefined
