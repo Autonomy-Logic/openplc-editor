@@ -171,6 +171,7 @@ const WorkspaceScreen = () => {
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const isMountedRef = useRef(true)
   const graphListRef = useRef<string[]>([])
+  const batchOffsetRef = useRef<number>(0)
 
   useEffect(() => {
     isMountedRef.current = true
@@ -202,7 +203,7 @@ const WorkspaceScreen = () => {
 
     if (!isDebuggerVisible) {
       if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current)
+        clearTimeout(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
       variableInfoMapRef.current = null
@@ -218,7 +219,7 @@ const WorkspaceScreen = () => {
     if (isRuntimeTarget) {
       if (connectionStatus !== 'connected') {
         if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current)
+          clearTimeout(pollingIntervalRef.current)
           pollingIntervalRef.current = null
         }
         variableInfoMapRef.current = null
@@ -1377,63 +1378,69 @@ const WorkspaceScreen = () => {
           return
         }
 
+        // Single-batch-per-cycle: use batchOffsetRef to track position across poll cycles
+        // Values from previous batches persist because newValues starts as a copy of the current store
         const { workspace: currentWorkspace } = useOpenPLCStore.getState()
         const newValues = new Map<string, string>()
         currentWorkspace.debugVariableValues.forEach((value: string, key: string) => {
           newValues.set(key, value)
         })
+
         let currentBatchSize = batchSize
-        let processedCount = 0
 
-        while (processedCount < allIndexes.length) {
-          const batch = allIndexes.slice(processedCount, processedCount + currentBatchSize)
+        // Clamp batchOffset to valid range (handles list size changes between cycles)
+        let batchOffset = batchOffsetRef.current
+        if (batchOffset >= allIndexes.length) {
+          batchOffset = 0
+        }
 
-          const result = await window.bridge.debuggerGetVariablesList(batch)
+        // Slice one batch from the current offset
+        let batch = allIndexes.slice(batchOffset, batchOffset + currentBatchSize)
 
-          if (!result.success) {
-            if (result.needsReconnect) {
-              const { consoleActions, workspaceActions } = useOpenPLCStore.getState()
+        // First request
+        let result = await window.bridge.debuggerGetVariablesList(batch)
+
+        // Handle ERROR_OUT_OF_MEMORY with retry (halve batch size, retry same offset)
+        while (!result.success && result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > 2) {
+          currentBatchSize = Math.max(2, Math.floor(currentBatchSize / 2))
+          batch = allIndexes.slice(batchOffset, batchOffset + currentBatchSize)
+          result = await window.bridge.debuggerGetVariablesList(batch)
+        }
+
+        if (!result.success) {
+          if (result.needsReconnect) {
+            const { consoleActions, workspaceActions: wsReconnect } = useOpenPLCStore.getState()
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'error',
+              message: `Debugger connection lost: ${result.error || 'Unknown error'}. Attempting to reconnect...`,
+            })
+
+            if (result.error?.includes('Failed to reconnect')) {
+              wsReconnect.setDebuggerVisible(false)
+              wsReconnect.setDebugForcedVariables(new Map())
               consoleActions.addLog({
                 id: crypto.randomUUID(),
                 level: 'error',
-                message: `Debugger connection lost: ${result.error || 'Unknown error'}. Attempting to reconnect...`,
+                message: 'Debugger session closed due to connection failure.',
               })
-
-              if (result.error?.includes('Failed to reconnect')) {
-                workspaceActions.setDebuggerVisible(false)
-                workspaceActions.setDebugForcedVariables(new Map())
-                consoleActions.addLog({
-                  id: crypto.randomUUID(),
-                  level: 'error',
-                  message: 'Debugger session closed due to connection failure.',
-                })
-                return
-              }
-            }
-
-            if (result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > 2) {
-              currentBatchSize = Math.max(2, Math.floor(currentBatchSize / 2))
-              continue
-            } else {
-              break
+              return
             }
           }
+          return
+        }
 
-          if (!result.data || result.lastIndex === undefined) {
-            break
-          }
+        let itemsProcessed = 0
 
-          if (!Array.isArray(result.data)) {
-            break
-          }
-
+        if (result.data && result.lastIndex !== undefined && Array.isArray(result.data)) {
           const responseBuffer = new Uint8Array(result.data)
           let bufferOffset = 0
-          let itemsProcessed = 0
 
           for (const index of batch) {
             const varInfos = variableInfoMapRef.current?.get(index)
-            if (!varInfos || varInfos.length === 0) continue
+            if (!varInfos || varInfos.length === 0) {
+              continue
+            }
 
             // Use the first entry for parsing (all entries share the same debug index and type)
             const { variable } = varInfos[0]
@@ -1465,8 +1472,11 @@ const WorkspaceScreen = () => {
               break
             }
           }
+        }
 
-          processedCount += itemsProcessed
+        // Advance offset for next poll cycle (wraps around)
+        if (itemsProcessed > 0) {
+          batchOffsetRef.current = (batchOffset + itemsProcessed) % allIndexes.length
         }
 
         if (isMountedRef.current) {
@@ -1482,14 +1492,18 @@ const WorkspaceScreen = () => {
       }
     }
 
-    void pollVariables()
-    pollingIntervalRef.current = setInterval(() => {
-      void pollVariables()
-    }, DEBUGGER_POLL_INTERVAL_MS)
+    const schedulePoll = () => {
+      if (!isMountedRef.current) return
+      pollingIntervalRef.current = setTimeout(() => {
+        void pollVariables().finally(() => schedulePoll())
+      }, DEBUGGER_POLL_INTERVAL_MS)
+    }
+    // Fire first poll immediately, then chain
+    void pollVariables().finally(() => schedulePoll())
 
     return () => {
       if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current)
+        clearTimeout(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
       void window.bridge.debuggerDisconnect().catch((error: unknown) => {
