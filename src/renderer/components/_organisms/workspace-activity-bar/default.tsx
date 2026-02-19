@@ -279,6 +279,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: string | Buffer
         plcStatus?: string
         closePort?: boolean
+        simulatorFirmwarePath?: string
       }) => {
         setIsCompiling(true)
 
@@ -310,6 +311,32 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             })
           })
         }
+
+        // Load firmware into simulator when compilation finishes with a UF2 path
+        if (data.simulatorFirmwarePath) {
+          ;(window.bridge.simulatorLoadFirmware as (p: string) => Promise<{ success: boolean; error?: string }>)(
+            data.simulatorFirmwarePath,
+          )
+            .then((result) => {
+              if (result.success) {
+                addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
+              } else {
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'error',
+                  message: `Failed to start simulator: ${result.error}`,
+                })
+              }
+            })
+            .catch((err: unknown) => {
+              addLog({
+                id: crypto.randomUUID(),
+                level: 'error',
+                message: `Simulator error: ${err instanceof Error ? err.message : String(err)}`,
+              })
+            })
+        }
+
         if (data.closePort) {
           setIsCompiling(false)
         }

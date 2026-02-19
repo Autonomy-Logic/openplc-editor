@@ -687,11 +687,13 @@ class CompilerModule {
     projectPath,
     buildMD5Hash,
     boardTarget,
+    boardRuntime,
     _handleOutputData,
   }: {
     projectPath: string
     boardTarget: string
     buildMD5Hash: string
+    boardRuntime: string
     _handleOutputData: HandleOutputDataCallback
   }) {
     let DEFINES_CONTENT: string = ''
@@ -769,7 +771,7 @@ class CompilerModule {
     if (modbusTCP.tcpStaticHostConfiguration.subnet !== null)
       DEFINES_CONTENT += `#define MBTCP_SUBNET ${modbusTCP.tcpStaticHostConfiguration.subnet.replaceAll('.', ',')}\n`
 
-    if (communicationPreferences.enabledRTU) {
+    if (communicationPreferences.enabledRTU || boardRuntime === 'simulator') {
       DEFINES_CONTENT += '#define MBSERIAL\n'
       DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     }
@@ -2019,6 +2021,7 @@ class CompilerModule {
         projectPath: normalizedProjectPath,
         boardTarget,
         buildMD5Hash,
+        boardRuntime,
         _handleOutputData: (data, logLevel) => {
           _mainProcessPort.postMessage({ logLevel, message: data })
         },
@@ -2065,7 +2068,21 @@ class CompilerModule {
       return
     }
 
-    // Step 13: Upload program to board if necessary
+    // Step 13: Upload program to board or load into simulator
+    if (boardRuntime === 'simulator') {
+      // For simulator targets, send the UF2 firmware path back to the renderer
+      const uf2Path = join(compilationPath, 'examples', 'Baremetal', 'build', 'rp2040.rp2040.rpipico', 'Baremetal.uf2')
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'Compilation successful. Loading firmware into simulator...',
+      })
+      _mainProcessPort.postMessage({
+        simulatorFirmwarePath: uf2Path,
+        closePort: true,
+      })
+      return
+    }
+
     if (!compileOnly) {
       _mainProcessPort.postMessage({ logLevel: 'info', message: 'Uploading program to board...' })
       try {
