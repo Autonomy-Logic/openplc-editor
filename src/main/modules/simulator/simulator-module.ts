@@ -1,5 +1,5 @@
 import { readFile } from 'fs/promises'
-import { RP2040, Simulator } from 'rp2040js'
+import { RP2040 } from 'rp2040js'
 
 import { bootromB1 } from './bootrom'
 
@@ -11,6 +11,107 @@ const UF2_MAGIC_START0 = 0x0a324655
 const UF2_MAGIC_START1 = 0x9e5d5157
 const UF2_MAGIC_END = 0x0ab16f30
 const UF2_BLOCK_SIZE = 512
+
+// Execution loop tuning: nanoseconds per CPU cycle at 125 MHz
+const CYCLE_NANOS = 1e9 / 125_000_000 // 8 ns
+
+// Iterations per batch. The stock Simulator uses 1M which yields ~8 ms of
+// simulated time per batch. With setTimeout(0) scheduling overhead (~1-4 ms
+// in Node.js), the simulation runs noticeably slower than real time.
+// Using setImmediate + a larger batch keeps up with real time.
+const ITERATIONS_PER_BATCH = 4_000_000
+
+/**
+ * Minimal simulation clock that satisfies the RP2040 IClock interface and
+ * exposes `tick()` / `nanosToNextAlarm` for the execution loop.
+ * Avoids a deep import from rp2040js internals.
+ */
+class SimClock {
+  readonly frequency: number
+  private nanosCounter = 0
+  private nextAlarm: SimAlarm | null = null
+
+  constructor(frequency = 125e6) {
+    this.frequency = frequency
+  }
+
+  get nanos(): number {
+    return this.nanosCounter
+  }
+
+  createAlarm(callback: () => void): SimAlarm {
+    return new SimAlarm(this, callback)
+  }
+
+  linkAlarm(nanos: number, alarm: SimAlarm): void {
+    alarm.nanos = this.nanos + nanos
+    let item = this.nextAlarm
+    let last: SimAlarm | null = null
+    while (item && item.nanos < alarm.nanos) {
+      last = item
+      item = item.next
+    }
+    if (last) {
+      last.next = alarm
+      alarm.next = item
+    } else {
+      this.nextAlarm = alarm
+      alarm.next = item
+    }
+    alarm.scheduled = true
+  }
+
+  unlinkAlarm(alarm: SimAlarm): void {
+    let item = this.nextAlarm
+    let last: SimAlarm | null = null
+    while (item) {
+      if (item === alarm) {
+        if (last) {
+          last.next = item.next
+        } else {
+          this.nextAlarm = item.next
+        }
+        return
+      }
+      last = item
+      item = item.next
+    }
+  }
+
+  tick(deltaNanos: number): void {
+    const target = this.nanosCounter + deltaNanos
+    let alarm = this.nextAlarm
+    while (alarm && alarm.nanos <= target) {
+      this.nextAlarm = alarm.next
+      this.nanosCounter = alarm.nanos
+      alarm.callback()
+      alarm = this.nextAlarm
+    }
+    this.nanosCounter = target
+  }
+
+  get nanosToNextAlarm(): number {
+    return this.nextAlarm ? this.nextAlarm.nanos - this.nanos : 0
+  }
+}
+
+class SimAlarm {
+  next: SimAlarm | null = null
+  nanos = 0
+  scheduled = false
+  constructor(
+    private readonly clock: SimClock,
+    readonly callback: () => void,
+  ) {}
+  schedule(deltaNanos: number): void {
+    if (this.scheduled) this.cancel()
+    this.clock.linkAlarm(deltaNanos, this)
+  }
+  cancel(): void {
+    this.clock.unlinkAlarm(this)
+    this.scheduled = false
+  }
+}
 
 /**
  * Parses a UF2 firmware binary and writes its payload blocks to the RP2040 flash memory.
@@ -44,11 +145,17 @@ function loadUF2(data: Uint8Array, mcu: RP2040): void {
 
 /**
  * Manages the rp2040js emulator lifecycle in the main process.
- * Uses the Simulator class which properly handles clock ticking, CPU wait states,
- * and timer-based peripherals (UART, etc.).
+ *
+ * Instead of using the stock Simulator class (which uses setTimeout(0) and
+ * a 1M-iteration batch that runs ~4x slower than real time in Node.js),
+ * we implement our own execution loop with setImmediate and a larger batch
+ * size to keep up with wall-clock time.
  */
 export class SimulatorModule {
-  private simulator: Simulator | null = null
+  private mcu: RP2040 | null = null
+  private clock: SimClock | null = null
+  private running = false
+  private immediateHandle: ReturnType<typeof setImmediate> | null = null
 
   /** Callback fired for each byte transmitted by the emulated UART0 */
   onUartByte: ((byte: number) => void) | null = null
@@ -62,38 +169,71 @@ export class SimulatorModule {
 
     const uf2Data = await readFile(uf2Path)
 
-    this.simulator = new Simulator()
-    const mcu = this.simulator.rp2040
-    mcu.loadBootrom(bootromB1)
-    loadUF2(new Uint8Array(uf2Data), mcu)
+    this.clock = new SimClock()
+    this.mcu = new RP2040(this.clock)
+    this.mcu.loadBootrom(bootromB1)
+    loadUF2(new Uint8Array(uf2Data), this.mcu)
 
     // Wire UART0 output to the Modbus RTU bridge callback
-    mcu.uart[0].onByte = (byte: number) => {
+    this.mcu.uart[0].onByte = (byte: number) => {
       this.onUartByte?.(byte)
     }
 
     // Set program counter to flash start and begin execution
-    mcu.core.PC = FLASH_START_ADDRESS
-    this.simulator.execute()
+    this.mcu.core.PC = FLASH_START_ADDRESS
+    this.running = true
+    this.executeBatch()
+  }
+
+  /**
+   * Runs a batch of CPU instructions, then reschedules with setImmediate.
+   * setImmediate fires at the start of the next event-loop iteration,
+   * avoiding the ~1-4 ms minimum delay of setTimeout(0).
+   */
+  private executeBatch = (): void => {
+    if (!this.running || !this.mcu || !this.clock) return
+
+    this.immediateHandle = null
+    const { mcu, clock } = this
+
+    for (let i = 0; i < ITERATIONS_PER_BATCH && this.running; i++) {
+      if (mcu.core.waiting) {
+        const { nanosToNextAlarm } = clock
+        clock.tick(nanosToNextAlarm)
+        i += nanosToNextAlarm / CYCLE_NANOS
+      } else {
+        const cycles = mcu.core.executeInstruction()
+        clock.tick(cycles * CYCLE_NANOS)
+      }
+    }
+
+    if (this.running) {
+      this.immediateHandle = setImmediate(this.executeBatch)
+    }
   }
 
   /** Send a byte to the emulated UART0 RX (host → device) */
   feedByte(byte: number): void {
-    this.simulator?.rp2040.uart[0].feedByte(byte)
+    this.mcu?.uart[0].feedByte(byte)
   }
 
   /** Stop the emulator and release resources */
   stop(): void {
-    if (this.simulator) {
-      this.simulator.stop()
-      this.simulator.rp2040.uart[0].onByte = undefined
-      this.simulator = null
+    this.running = false
+    if (this.immediateHandle !== null) {
+      clearImmediate(this.immediateHandle)
+      this.immediateHandle = null
     }
+    if (this.mcu) {
+      this.mcu.uart[0].onByte = undefined
+      this.mcu = null
+    }
+    this.clock = null
     this.onUartByte = null
   }
 
   /** Check if the emulator is currently running */
   isRunning(): boolean {
-    return this.simulator !== null && this.simulator.executing
+    return this.running
   }
 }
