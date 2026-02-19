@@ -339,4 +339,12 @@ void loop()
         modbusTask();
     }
     #endif
+
+    #ifdef SIMULATOR_MODE
+    // In the emulated RP2040, busy-waiting wastes host CPU executing millions
+    // of useless instructions. WFI sleeps the CPU until the next interrupt
+    // (SysTick at 1ms, UART RX, etc.), allowing the emulator to fast-forward
+    // the clock instead of stepping through every cycle.
+    __asm volatile("wfi");
+    #endif
 }

@@ -758,6 +758,7 @@ class CompilerModule {
     if (boardRuntime === 'simulator') {
       // Simulator forces fixed Modbus RTU settings over emulated UART0.
       // On RP2040, Serial = USB CDC, Serial1 = UART0. rp2040js bridges uart[0].
+      DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
       DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial1\n'
       DEFINES_CONTENT += '#define MBSERIAL_BAUD 115200\n'
       DEFINES_CONTENT += '#define MBSERIAL_SLAVE 1\n'
