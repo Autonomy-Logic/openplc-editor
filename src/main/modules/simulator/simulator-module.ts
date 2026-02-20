@@ -25,9 +25,14 @@ const SLEEP_OPCODE = 0x9588
 // Nanoseconds per CPU cycle at 16 MHz
 const CYCLE_NS = 1e9 / CPU_FREQ_HZ // 62.5 ns
 
-// Iterations per execution batch. Each batch yields to the event loop via
-// setTimeout so that Modbus UART I/O can be processed between batches.
-const ITERATIONS_PER_BATCH = 1_000_000
+// Maximum real (non-skipped) instructions per batch. SLEEP fast-forwards
+// don't count against this budget, so idle periods are essentially free.
+const MAX_REAL_INSTRUCTIONS = 100_000
+
+// Maximum simulated time per batch (in CPU cycles). Prevents runaway
+// batches when the firmware is mostly idle (SLEEP fast-forwards could
+// cover seconds of sim time without hitting the instruction limit).
+const MAX_SIM_CYCLES_PER_BATCH = CPU_FREQ_HZ / 10 // 100ms
 
 // ---------------------------------------------------------------------------
 // ATmega2560 peripheral configs – register addresses are identical to the
@@ -208,6 +213,8 @@ export class SimulatorModule {
    *
    * When the CPU hits a SLEEP opcode, the loop fast-forwards the clock to
    * the next scheduled timer event instead of stepping through idle cycles.
+   * SLEEP fast-forwards don't count against the instruction budget, so idle
+   * periods between scan cycles are essentially free.
    *
    * After each batch, compares simulated time against wall time:
    * - If sim is ahead: schedules next batch with setTimeout(delay) to
@@ -219,23 +226,23 @@ export class SimulatorModule {
 
     this.timerHandle = null
     const { cpu } = this
+    const simCycleCap = cpu.cycles + MAX_SIM_CYCLES_PER_BATCH
+    let realCount = 0
 
-    for (let i = 0; i < ITERATIONS_PER_BATCH && this.running; i++) {
+    while (this.running && realCount < MAX_REAL_INSTRUCTIONS && cpu.cycles < simCycleCap) {
       if (cpu.progMem[cpu.pc] === SLEEP_OPCODE) {
         // Execute the SLEEP instruction (advances PC, adds 1 cycle)
         avrInstruction(cpu)
         // Fast-forward to next scheduled clock event
         const nextEvent = (cpu as unknown as { nextClockEvent: { cycles: number } | null }).nextClockEvent
         if (nextEvent && nextEvent.cycles > cpu.cycles) {
-          const skipped = nextEvent.cycles - cpu.cycles
           cpu.cycles = nextEvent.cycles
-          // Account for fast-forwarded cycles in the batch counter
-          i += skipped
         }
         cpu.tick()
       } else {
         avrInstruction(cpu)
         cpu.tick()
+        realCount++
       }
     }
 
