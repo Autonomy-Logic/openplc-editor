@@ -756,10 +756,10 @@ class CompilerModule {
     // 3.2. Device Configuration
     DEFINES_CONTENT += '//Comms Configuration\n'
     if (boardRuntime === 'simulator') {
-      // Simulator forces fixed Modbus RTU settings over emulated UART0.
-      // On RP2040, Serial = USB CDC, Serial1 = UART0. rp2040js bridges uart[0].
+      // Simulator forces fixed Modbus RTU settings over emulated USART0.
+      // On ATmega2560, Serial = USART0. avr8js bridges usart0.
       DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
-      DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial1\n'
+      DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial\n'
       DEFINES_CONTENT += '#define MBSERIAL_BAUD 115200\n'
       DEFINES_CONTENT += '#define MBSERIAL_SLAVE 1\n'
     } else {
@@ -2079,21 +2079,14 @@ class CompilerModule {
 
     // Step 13: Upload program to board or load into simulator
     if (boardRuntime === 'simulator') {
-      // For simulator targets, send the UF2 firmware path back to the renderer
-      const uf2Path = join(
-        compilationPath,
-        'examples',
-        'Baremetal',
-        'build',
-        'rp2040.rp2040.rpipico',
-        'Baremetal.ino.uf2',
-      )
+      // For simulator targets, send the HEX firmware path back to the renderer
+      const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', 'arduino.avr.mega', 'Baremetal.ino.hex')
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Compilation successful. Loading firmware into simulator...',
       })
       _mainProcessPort.postMessage({
-        simulatorFirmwarePath: uf2Path,
+        simulatorFirmwarePath: hexPath,
         closePort: true,
       })
       return

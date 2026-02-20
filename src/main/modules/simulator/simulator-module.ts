@@ -1,200 +1,213 @@
+import {
+  AVRClock,
+  avrInstruction,
+  AVRTimer,
+  AVRUSART,
+  clockConfig,
+  CPU,
+  timer0Config,
+  timer1Config,
+  timer2Config,
+  usart0Config,
+} from 'avr8js'
 import { readFile } from 'fs/promises'
-import { RP2040 } from 'rp2040js'
 
-import { bootromB1 } from './bootrom'
+// ATmega2560 specs
+const CPU_FREQ_HZ = 16_000_000
+const FLASH_SIZE_BYTES = 256 * 1024
+const SRAM_BYTES = 8448 // 8192 SRAM + 256 extended I/O (CPU adds 0x100 for low regs/IO)
 
-// RP2040 flash starts at 0x10000000 (268435456 decimal)
-const FLASH_START_ADDRESS = 0x10000000
+// SLEEP opcode – the firmware inserts `__asm volatile("sleep")` at the end
+// of each loop() iteration. We detect it before execution and fast-forward
+// the clock to the next timer event, avoiding millions of idle cycles.
+const SLEEP_OPCODE = 0x9588
 
-// UF2 block constants
-const UF2_MAGIC_START0 = 0x0a324655
-const UF2_MAGIC_START1 = 0x9e5d5157
-const UF2_MAGIC_END = 0x0ab16f30
-const UF2_BLOCK_SIZE = 512
-
-// Nanoseconds per CPU cycle at 125 MHz
-const CYCLE_NANOS = 1e9 / 125_000_000 // 8 ns
+// Nanoseconds per CPU cycle at 16 MHz
+const CYCLE_NS = 1e9 / CPU_FREQ_HZ // 62.5 ns
 
 // Iterations per execution batch. Each batch yields to the event loop via
-// setImmediate so that Modbus UART I/O can be processed between batches.
+// setTimeout so that Modbus UART I/O can be processed between batches.
 const ITERATIONS_PER_BATCH = 1_000_000
 
+// ---------------------------------------------------------------------------
+// ATmega2560 peripheral configs – register addresses are identical to the
+// ATmega328p defaults exported by avr8js, only the interrupt vector addresses
+// differ because ATmega2560 has more interrupt sources.
+// Vector addresses are word addresses matching the datasheet.
+// ---------------------------------------------------------------------------
+
+// ATmega2560 vector addresses (word addresses).
+// IMPORTANT: ATmega2560 has TIMER1_COMPC at vector 19 (word 0x26) which
+// ATmega328p lacks. This shifts Timer1 OVF and all subsequent vectors by 2
+// compared to a naive mapping from the ATmega328p table.
+// Vectors verified against avr-objdump of compiled firmware.
+const mega2560Timer0Config = {
+  ...timer0Config,
+  compAInterrupt: 0x2a, // vector 21
+  compBInterrupt: 0x2c, // vector 22
+  ovfInterrupt: 0x2e, // vector 23
+}
+
+const mega2560Timer1Config = {
+  ...timer1Config,
+  captureInterrupt: 0x20, // vector 16
+  compAInterrupt: 0x22, // vector 17
+  compBInterrupt: 0x24, // vector 18
+  // Note: TIMER1_COMPC at vector 19 (0x26) not modeled by avr8js
+  ovfInterrupt: 0x28, // vector 20
+}
+
+const mega2560Timer2Config = {
+  ...timer2Config,
+  compAInterrupt: 0x1a, // vector 13
+  compBInterrupt: 0x1c, // vector 14
+  ovfInterrupt: 0x1e, // vector 15
+}
+
+const mega2560Usart0Config = {
+  ...usart0Config,
+  rxCompleteInterrupt: 0x32, // vector 25
+  dataRegisterEmptyInterrupt: 0x34, // vector 26
+  txCompleteInterrupt: 0x36, // vector 27
+}
+
+// ---------------------------------------------------------------------------
+// Intel HEX parser
+// ---------------------------------------------------------------------------
+
 /**
- * Minimal simulation clock that satisfies the RP2040 IClock interface and
- * exposes `tick()` / `nanosToNextAlarm` for the execution loop.
- * Avoids a deep import from rp2040js internals.
+ * Parses an Intel HEX string into a Uint16Array suitable for the AVR CPU.
+ * Supports record types 00 (data), 01 (EOF), 02 (extended segment address),
+ * and 04 (extended linear address) for flash sizes >64 KB.
  */
-class SimClock {
-  readonly frequency: number
-  private nanosCounter = 0
-  private nextAlarm: SimAlarm | null = null
+function parseIntelHex(hex: string, flashSizeBytes: number): Uint16Array {
+  const flash = new Uint8Array(flashSizeBytes)
+  let extendedAddress = 0
 
-  constructor(frequency = 125e6) {
-    this.frequency = frequency
-  }
+  for (const rawLine of hex.split('\n')) {
+    const line = rawLine.trim()
+    if (!line.startsWith(':')) continue
 
-  get nanos(): number {
-    return this.nanosCounter
-  }
+    const byteCount = parseInt(line.substring(1, 3), 16)
+    const address = parseInt(line.substring(3, 7), 16)
+    const recordType = parseInt(line.substring(7, 9), 16)
 
-  createAlarm(callback: () => void): SimAlarm {
-    return new SimAlarm(this, callback)
-  }
-
-  linkAlarm(nanos: number, alarm: SimAlarm): void {
-    alarm.nanos = this.nanos + nanos
-    let item = this.nextAlarm
-    let last: SimAlarm | null = null
-    while (item && item.nanos < alarm.nanos) {
-      last = item
-      item = item.next
-    }
-    if (last) {
-      last.next = alarm
-      alarm.next = item
-    } else {
-      this.nextAlarm = alarm
-      alarm.next = item
-    }
-    alarm.scheduled = true
-  }
-
-  unlinkAlarm(alarm: SimAlarm): void {
-    let item = this.nextAlarm
-    let last: SimAlarm | null = null
-    while (item) {
-      if (item === alarm) {
-        if (last) {
-          last.next = item.next
-        } else {
-          this.nextAlarm = item.next
+    if (recordType === 0x00) {
+      // Data record
+      const fullAddress = extendedAddress + address
+      for (let i = 0; i < byteCount; i++) {
+        const byte = parseInt(line.substring(9 + i * 2, 11 + i * 2), 16)
+        if (fullAddress + i < flashSizeBytes) {
+          flash[fullAddress + i] = byte
         }
-        return
       }
-      last = item
-      item = item.next
+    } else if (recordType === 0x01) {
+      // End of file
+      break
+    } else if (recordType === 0x02) {
+      // Extended segment address (address << 4)
+      extendedAddress = parseInt(line.substring(9, 13), 16) << 4
+    } else if (recordType === 0x04) {
+      // Extended linear address (upper 16 bits)
+      extendedAddress = parseInt(line.substring(9, 13), 16) << 16
     }
   }
 
-  tick(deltaNanos: number): void {
-    const target = this.nanosCounter + deltaNanos
-    let alarm = this.nextAlarm
-    while (alarm && alarm.nanos <= target) {
-      this.nextAlarm = alarm.next
-      this.nanosCounter = alarm.nanos
-      alarm.callback()
-      alarm = this.nextAlarm
-    }
-    this.nanosCounter = target
+  // Convert byte array to 16-bit little-endian words for the AVR CPU
+  const words = new Uint16Array(flashSizeBytes / 2)
+  for (let i = 0; i < flashSizeBytes; i += 2) {
+    words[i / 2] = flash[i] | (flash[i + 1] << 8)
   }
-
-  get nanosToNextAlarm(): number {
-    return this.nextAlarm ? this.nextAlarm.nanos - this.nanos : 0
-  }
+  return words
 }
 
-class SimAlarm {
-  next: SimAlarm | null = null
-  nanos = 0
-  scheduled = false
-  constructor(
-    private readonly clock: SimClock,
-    readonly callback: () => void,
-  ) {}
-  schedule(deltaNanos: number): void {
-    if (this.scheduled) this.cancel()
-    this.clock.linkAlarm(deltaNanos, this)
-  }
-  cancel(): void {
-    this.clock.unlinkAlarm(this)
-    this.scheduled = false
-  }
-}
+// ---------------------------------------------------------------------------
+// Simulator module
+// ---------------------------------------------------------------------------
 
 /**
- * Parses a UF2 firmware binary and writes its payload blocks to the RP2040 flash memory.
- * UF2 format: 512-byte blocks with magic numbers, target address, and payload data.
- * See https://github.com/microsoft/uf2 for format specification.
- */
-function loadUF2(data: Uint8Array, mcu: RP2040): void {
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
-
-  for (let offset = 0; offset + UF2_BLOCK_SIZE <= data.length; offset += UF2_BLOCK_SIZE) {
-    const magic0 = view.getUint32(offset + 0, true)
-    const magic1 = view.getUint32(offset + 4, true)
-    const magicEnd = view.getUint32(offset + UF2_BLOCK_SIZE - 4, true)
-
-    if (magic0 !== UF2_MAGIC_START0 || magic1 !== UF2_MAGIC_START1 || magicEnd !== UF2_MAGIC_END) {
-      continue // skip invalid blocks
-    }
-
-    const targetAddress = view.getUint32(offset + 12, true)
-    const payloadSize = view.getUint32(offset + 16, true)
-
-    if (payloadSize > 476 || targetAddress < FLASH_START_ADDRESS) {
-      continue // skip blocks outside flash range
-    }
-
-    const flashOffset = targetAddress - FLASH_START_ADDRESS
-    const payload = data.subarray(offset + 32, offset + 32 + payloadSize)
-    mcu.flash.set(payload, flashOffset)
-  }
-}
-
-/**
- * Manages the rp2040js emulator lifecycle in the main process.
+ * Manages the avr8js ATmega2560 emulator lifecycle in the main process.
  *
- * The firmware is compiled with SIMULATOR_MODE which inserts WFI at the end
- * of each loop() iteration. When the CPU hits WFI, the execution loop
- * fast-forwards the clock to the next alarm (typically SysTick at 1ms),
- * avoiding millions of wasted busy-wait instruction cycles and allowing
- * the simulation to run at near real-time speed.
+ * The firmware is compiled with SIMULATOR_MODE which inserts a SLEEP
+ * instruction at the end of each loop() iteration. When the CPU hits SLEEP,
+ * the execution loop fast-forwards the clock to the next timer event
+ * (typically Timer0 overflow at ~1 ms), avoiding millions of wasted
+ * busy-wait instruction cycles and allowing the simulation to run at
+ * near real-time speed.
  */
 export class SimulatorModule {
-  private mcu: RP2040 | null = null
-  private clock: SimClock | null = null
+  private cpu: CPU | null = null
   private running = false
   private timerHandle: ReturnType<typeof setTimeout> | null = null
 
-  // Wall-clock pacing: track start times to keep sim time ≈ wall time
-  private wallStartMs = 0
-  private simStartNanos = 0
+  // Peripherals (kept alive so they process register read/write hooks)
+  private timer0: AVRTimer | null = null
+  private timer1: AVRTimer | null = null
+  private timer2: AVRTimer | null = null
+  private usart0: AVRUSART | null = null
+  private clock: AVRClock | null = null
 
-  /** Callback fired for each byte transmitted by the emulated UART0 */
+  // RX byte queue – avr8js USART accepts one byte at a time (returns false
+  // while rxBusy). Incoming bytes are queued and drained after the firmware
+  // reads UDR (via the read hook), ensuring the RXC ISR processes each byte
+  // before the next one overwrites rxByte.
+  private rxQueue: number[] = []
+
+  // Wall-clock pacing
+  private wallStartMs = 0
+  private simStartCycles = 0
+
+  /** Callback fired for each byte transmitted by the emulated USART0 */
   onUartByte: ((byte: number) => void) | null = null
 
   /**
-   * Loads a UF2 firmware file and starts the emulated RP2040.
+   * Loads an Intel HEX firmware file and starts the emulated ATmega2560.
    * Stops any currently running emulation first.
    */
-  async loadAndRun(uf2Path: string): Promise<void> {
+  async loadAndRun(hexPath: string): Promise<void> {
     this.stop()
 
-    const uf2Data = await readFile(uf2Path)
+    const hexData = await readFile(hexPath, 'utf-8')
+    const progMem = parseIntelHex(hexData, FLASH_SIZE_BYTES)
 
-    this.clock = new SimClock()
-    this.mcu = new RP2040(this.clock)
-    this.mcu.loadBootrom(bootromB1)
-    loadUF2(new Uint8Array(uf2Data), this.mcu)
+    this.cpu = new CPU(progMem, SRAM_BYTES)
 
-    // Wire UART0 output to the Modbus RTU bridge callback
-    this.mcu.uart[0].onByte = (byte: number) => {
+    // Instantiate peripherals – they register read/write hooks on the CPU
+    this.timer0 = new AVRTimer(this.cpu, mega2560Timer0Config)
+    this.timer1 = new AVRTimer(this.cpu, mega2560Timer1Config)
+    this.timer2 = new AVRTimer(this.cpu, mega2560Timer2Config)
+    this.usart0 = new AVRUSART(this.cpu, mega2560Usart0Config, CPU_FREQ_HZ)
+    this.clock = new AVRClock(this.cpu, CPU_FREQ_HZ, clockConfig)
+
+    // Wrap the UDR read hook so that after the firmware reads a received byte,
+    // the next queued byte is fed into the USART. This ensures the RXC ISR
+    // has consumed the current byte before the next one arrives, preventing
+    // rxByte from being silently overwritten when interrupts are disabled
+    // (e.g. while the CPU is inside another ISR like Timer0).
+    const originalUdrReadHook = this.cpu.readHooks[0xc6]
+    this.cpu.readHooks[0xc6] = (addr: number) => {
+      const result = originalUdrReadHook?.(addr)
+      this.drainRxQueue()
+      return result
+    }
+
+    // Wire USART0 TX to the Modbus RTU bridge callback
+    this.usart0.onByteTransmit = (byte: number) => {
       this.onUartByte?.(byte)
     }
 
-    // Set program counter to flash start and begin execution
-    this.mcu.core.PC = FLASH_START_ADDRESS
+    // Begin execution
     this.running = true
     this.wallStartMs = performance.now()
-    this.simStartNanos = 0
+    this.simStartCycles = 0
     this.executeBatch()
   }
 
   /**
    * Runs a batch of CPU instructions, then reschedules.
    *
-   * When the CPU enters WFI (waiting), the loop fast-forwards the clock
-   * to the next alarm instead of stepping through idle cycles.
+   * When the CPU hits a SLEEP opcode, the loop fast-forwards the clock to
+   * the next scheduled timer event instead of stepping through idle cycles.
    *
    * After each batch, compares simulated time against wall time:
    * - If sim is ahead: schedules next batch with setTimeout(delay) to
@@ -202,34 +215,63 @@ export class SimulatorModule {
    * - If sim is behind or on time: schedules with setTimeout(0).
    */
   private executeBatch = (): void => {
-    if (!this.running || !this.mcu || !this.clock) return
+    if (!this.running || !this.cpu) return
 
     this.timerHandle = null
-    const { mcu, clock } = this
+    const { cpu } = this
 
     for (let i = 0; i < ITERATIONS_PER_BATCH && this.running; i++) {
-      if (mcu.core.waiting) {
-        const { nanosToNextAlarm } = clock
-        clock.tick(nanosToNextAlarm)
-        i += nanosToNextAlarm / CYCLE_NANOS
+      if (cpu.progMem[cpu.pc] === SLEEP_OPCODE) {
+        // Execute the SLEEP instruction (advances PC, adds 1 cycle)
+        avrInstruction(cpu)
+        // Fast-forward to next scheduled clock event
+        const nextEvent = (cpu as unknown as { nextClockEvent: { cycles: number } | null }).nextClockEvent
+        if (nextEvent && nextEvent.cycles > cpu.cycles) {
+          const skipped = nextEvent.cycles - cpu.cycles
+          cpu.cycles = nextEvent.cycles
+          // Account for fast-forwarded cycles in the batch counter
+          i += skipped
+        }
+        cpu.tick()
       } else {
-        const cycles = mcu.core.executeInstruction()
-        clock.tick(cycles * CYCLE_NANOS)
+        avrInstruction(cpu)
+        cpu.tick()
       }
     }
 
     if (this.running) {
       // Pace simulation to wall time
-      const simElapsedMs = (clock.nanos - this.simStartNanos) / 1e6
+      const simElapsedMs = ((cpu.cycles - this.simStartCycles) * CYCLE_NS) / 1e6
       const wallElapsedMs = performance.now() - this.wallStartMs
       const aheadMs = simElapsedMs - wallElapsedMs
       this.timerHandle = setTimeout(this.executeBatch, aheadMs > 1 ? Math.floor(aheadMs) : 0)
     }
   }
 
-  /** Send a byte to the emulated UART0 RX (host → device) */
+  /** Send a byte to the emulated USART0 RX (host → device) */
   feedByte(byte: number): void {
-    this.mcu?.uart[0].feedByte(byte)
+    this.rxQueue.push(byte)
+    if (this.rxQueue.length === 1 && this.usart0) {
+      const accepted = this.usart0.writeByte(byte)
+      if (accepted) {
+        this.rxQueue.shift()
+      }
+    }
+  }
+
+  /**
+   * Tries to deliver the next queued byte to the USART. Called after the
+   * firmware reads UDR (via the read hook). This pacing ensures the RXC ISR
+   * processes each byte before the next one arrives, avoiding data loss
+   * from rxByte overwrites.
+   */
+  private drainRxQueue(): void {
+    if (!this.usart0 || this.rxQueue.length === 0) return
+    const byte = this.rxQueue[0]
+    const accepted = this.usart0.writeByte(byte)
+    if (accepted) {
+      this.rxQueue.shift()
+    }
   }
 
   /** Stop the emulator and release resources */
@@ -239,10 +281,15 @@ export class SimulatorModule {
       clearTimeout(this.timerHandle)
       this.timerHandle = null
     }
-    if (this.mcu) {
-      this.mcu.uart[0].onByte = undefined
-      this.mcu = null
+    if (this.usart0) {
+      this.usart0.onByteTransmit = null
+      this.usart0 = null
     }
+    this.rxQueue = []
+    this.cpu = null
+    this.timer0 = null
+    this.timer1 = null
+    this.timer2 = null
     this.clock = null
     this.onUartByte = null
   }

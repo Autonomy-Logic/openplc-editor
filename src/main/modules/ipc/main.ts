@@ -56,7 +56,7 @@ class MainProcessBridge implements MainIpcModule {
   private currentProjectPath: string | null = null
   // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
   private fileWatchers: Map<string, { lastMtime: number }> = new Map()
-  // rp2040js emulator instance for the built-in simulator
+  // avr8js ATmega2560 emulator instance for the built-in simulator
   private simulatorModule = new SimulatorModule()
 
   constructor({
@@ -1356,10 +1356,10 @@ class MainProcessBridge implements MainIpcModule {
 
   handleSimulatorLoadFirmware = async (
     _event: IpcMainInvokeEvent,
-    uf2Path: string,
+    hexPath: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      await this.simulatorModule.loadAndRun(uf2Path)
+      await this.simulatorModule.loadAndRun(hexPath)
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }

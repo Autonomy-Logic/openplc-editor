@@ -361,8 +361,8 @@ const rendererProcessBridge = {
   },
 
   // ===================== SIMULATOR METHODS =====================
-  simulatorLoadFirmware: (uf2Path: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('simulator:load-firmware', uf2Path),
+  simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('simulator:load-firmware', hexPath),
   simulatorStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('simulator:stop'),
   simulatorIsRunning: (): Promise<boolean> => ipcRenderer.invoke('simulator:is-running'),
 

@@ -5,7 +5,7 @@ import { SimulatorModule } from './simulator-module'
 /**
  * A virtual serial port that mimics the `serialport` npm package's event-based API.
  * Routes bytes through SimulatorModule's UART bridge, allowing the existing
- * ModbusRtuClient to communicate with the rp2040js emulator unchanged.
+ * ModbusRtuClient to communicate with the avr8js emulator unchanged.
  */
 export class VirtualSerialPort extends EventEmitter {
   public isOpen = false

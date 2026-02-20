@@ -341,10 +341,10 @@ void loop()
     #endif
 
     #ifdef SIMULATOR_MODE
-    // In the emulated RP2040, busy-waiting wastes host CPU executing millions
-    // of useless instructions. WFI sleeps the CPU until the next interrupt
-    // (SysTick at 1ms, UART RX, etc.), allowing the emulator to fast-forward
-    // the clock instead of stepping through every cycle.
-    __asm volatile("wfi");
+    // In the emulated ATmega2560, busy-waiting wastes host CPU executing
+    // millions of useless instructions. SLEEP (opcode 0x9588) is detected
+    // by the emulator which fast-forwards the clock to the next timer event
+    // instead of stepping through every idle cycle.
+    __asm volatile("sleep");
     #endif
 }
