@@ -32,6 +32,7 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
       display: 'code' | 'table'
       selectedRow?: number
       classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
+      typeFilter?: string
       description?: string
       code?: string
     }) => {
@@ -67,6 +68,7 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
                   classFilter: variables.classFilter ?? editor.variable.classFilter ?? 'All',
+                  typeFilter: variables.typeFilter ?? editor.variable.typeFilter ?? 'All',
                   description: variables.description ?? editor.variable.description ?? '',
                 }
               } else {
@@ -74,6 +76,7 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? '-1',
                   classFilter: variables.classFilter ?? 'All',
+                  typeFilter: variables.typeFilter ?? 'All',
                   description: variables.description ?? '',
                 }
               }
@@ -94,6 +97,7 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
         display: 'code' | 'table'
         selectedRow?: number
         classFilter?: 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp'
+        typeFilter?: string
         description?: string
         code?: string
       },
@@ -134,6 +138,7 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? targetEditor.variable.selectedRow ?? '-1',
                   classFilter: variables.classFilter ?? targetEditor.variable.classFilter ?? 'All',
+                  typeFilter: variables.typeFilter ?? targetEditor.variable.typeFilter ?? 'All',
                   description: variables.description ?? targetEditor.variable.description ?? '',
                 }
               } else {
@@ -141,6 +146,7 @@ export const createEditorSlice: StateCreator<RootState, [], [], EditorSlice> = (
                   display: 'table',
                   selectedRow: variables.selectedRow?.toString() ?? '-1',
                   classFilter: variables.classFilter ?? 'All',
+                  typeFilter: variables.typeFilter ?? 'All',
                   description: variables.description ?? '',
                 }
               }
