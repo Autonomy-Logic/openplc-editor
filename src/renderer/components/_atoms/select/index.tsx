@@ -52,6 +52,7 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
           position={position}
           align={align}
           side={side}
+          {...res}
           onPointerDown={(e) => {
             e.stopPropagation()
             res.onPointerDown?.(e)
@@ -60,7 +61,6 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
             e.stopPropagation()
             res.onPointerUp?.(e)
           }}
-          {...res}
         >
           {/* <PrimitiveSelect.ScrollUpButton>
           <ArrowIcon direction='up' size='sm' className='stroke-brand' />
