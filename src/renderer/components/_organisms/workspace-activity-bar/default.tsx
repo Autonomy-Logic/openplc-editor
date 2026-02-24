@@ -316,7 +316,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           })
         }
 
-        // Load firmware into simulator when compilation finishes with a UF2 path
+        // Load firmware into simulator when compilation finishes with a HEX path
         if (data.simulatorFirmwarePath) {
           ;(window.bridge.simulatorLoadFirmware as (p: string) => Promise<{ success: boolean; error?: string }>)(
             data.simulatorFirmwarePath,

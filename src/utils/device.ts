@@ -29,7 +29,7 @@ export function isOpenPLCRuntimeTarget(boardInfo: AvailableBoardInfo | undefined
 
 /**
  * Determines if a board is the built-in simulator target.
- * The simulator uses an emulated RP2040 and requires no physical hardware.
+ * The simulator uses an emulated ATmega2560 and requires no physical hardware.
  *
  * @param boardInfo - The board information from availableBoards map
  * @returns true if the board is the simulator target, false otherwise

@@ -1015,6 +1015,14 @@ class CompilerModule {
       ]
     }
 
+    if (boardHalsContent['ld_flags']) {
+      buildProjectFlags = [
+        ...buildProjectFlags,
+        '--build-property',
+        `compiler.c.elf.extra_flags=${boardHalsContent['ld_flags'].map((f: string) => f).join(' ')}`,
+      ]
+    }
+
     buildProjectFlags = [
       ...buildProjectFlags,
       '--library',

@@ -35,6 +35,7 @@ const BoardInfoSchema = z.object({
   user_dout: z.string().optional(),
   c_flags: z.array(z.string()).optional(),
   cxx_flags: z.array(z.string()).optional(),
+  ld_flags: z.array(z.string()).optional(),
   arch: z.string().optional(),
 })
 

@@ -15,7 +15,13 @@ import { readFile } from 'fs/promises'
 // ATmega2560 specs
 const CPU_FREQ_HZ = 16_000_000
 const FLASH_SIZE_BYTES = 256 * 1024
-const SRAM_BYTES = 8448 // 8192 SRAM + 256 extended I/O (CPU adds 0x100 for low regs/IO)
+// Expanded SRAM: fill the entire 16-bit address space (64 KB).
+// The CPU constructor adds 0x100 internally for registers + standard I/O (0x00–0xFF).
+// We supply 0xFF00 (65280) to cover extended I/O (0x100–0x1FF) plus usable SRAM
+// (0x200–0xFFFF = 65024 bytes ≈ 63.5 KB). This is the maximum addressable with
+// AVR's 16-bit data pointers. The linker flags in hals.json tell avr-gcc about
+// the expanded space so it actually uses it.
+const SRAM_BYTES = 0xff00
 
 // SLEEP opcode – the firmware inserts `__asm volatile("sleep")` at the end
 // of each loop() iteration. We detect it before execution and fast-forward
@@ -25,9 +31,14 @@ const SLEEP_OPCODE = 0x9588
 // Nanoseconds per CPU cycle at 16 MHz
 const CYCLE_NS = 1e9 / CPU_FREQ_HZ // 62.5 ns
 
-// Iterations per execution batch. Each batch yields to the event loop via
-// setTimeout so that Modbus UART I/O can be processed between batches.
-const ITERATIONS_PER_BATCH = 1_000_000
+// Maximum real (non-skipped) instructions per batch. SLEEP fast-forwards
+// don't count against this budget, so idle periods are essentially free.
+const MAX_REAL_INSTRUCTIONS = 100_000
+
+// Maximum simulated time per batch (in CPU cycles). Prevents runaway
+// batches when the firmware is mostly idle (SLEEP fast-forwards could
+// cover seconds of sim time without hitting the instruction limit).
+const MAX_SIM_CYCLES_PER_BATCH = CPU_FREQ_HZ / 10 // 100ms
 
 // ---------------------------------------------------------------------------
 // ATmega2560 peripheral configs – register addresses are identical to the
@@ -184,8 +195,9 @@ export class SimulatorModule {
     // has consumed the current byte before the next one arrives, preventing
     // rxByte from being silently overwritten when interrupts are disabled
     // (e.g. while the CPU is inside another ISR like Timer0).
-    const originalUdrReadHook = this.cpu.readHooks[0xc6]
-    this.cpu.readHooks[0xc6] = (addr: number) => {
+    const udrAddr = mega2560Usart0Config.UDR
+    const originalUdrReadHook = this.cpu.readHooks[udrAddr]
+    this.cpu.readHooks[udrAddr] = (addr: number) => {
       const result = originalUdrReadHook?.(addr)
       this.drainRxQueue()
       return result
@@ -208,6 +220,8 @@ export class SimulatorModule {
    *
    * When the CPU hits a SLEEP opcode, the loop fast-forwards the clock to
    * the next scheduled timer event instead of stepping through idle cycles.
+   * SLEEP fast-forwards don't count against the instruction budget, so idle
+   * periods between scan cycles are essentially free.
    *
    * After each batch, compares simulated time against wall time:
    * - If sim is ahead: schedules next batch with setTimeout(delay) to
@@ -220,22 +234,37 @@ export class SimulatorModule {
     this.timerHandle = null
     const { cpu } = this
 
-    for (let i = 0; i < ITERATIONS_PER_BATCH && this.running; i++) {
+    // Kick-start the RX delivery chain if bytes are queued.
+    // feedByte() only attempts writeByte when the queue transitions from
+    // empty to non-empty.  If that initial attempt is rejected (rxBusy was
+    // true because a previous byte's clock event hadn't fired yet), no
+    // further delivery attempts happen until drainRxQueue() is called from
+    // the UDR read hook — which itself requires a successful delivery.
+    // Retrying here at the top of each batch breaks that deadlock.
+    if (this.rxQueue.length > 0 && this.usart0) {
+      const byte = this.rxQueue[0]
+      if (this.usart0.writeByte(byte)) {
+        this.rxQueue.shift()
+      }
+    }
+
+    const simCycleCap = cpu.cycles + MAX_SIM_CYCLES_PER_BATCH
+    let realCount = 0
+
+    while (this.running && realCount < MAX_REAL_INSTRUCTIONS && cpu.cycles < simCycleCap) {
       if (cpu.progMem[cpu.pc] === SLEEP_OPCODE) {
         // Execute the SLEEP instruction (advances PC, adds 1 cycle)
         avrInstruction(cpu)
         // Fast-forward to next scheduled clock event
         const nextEvent = (cpu as unknown as { nextClockEvent: { cycles: number } | null }).nextClockEvent
         if (nextEvent && nextEvent.cycles > cpu.cycles) {
-          const skipped = nextEvent.cycles - cpu.cycles
           cpu.cycles = nextEvent.cycles
-          // Account for fast-forwarded cycles in the batch counter
-          i += skipped
         }
         cpu.tick()
       } else {
         avrInstruction(cpu)
         cpu.tick()
+        realCount++
       }
     }
 

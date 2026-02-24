@@ -176,13 +176,22 @@ export class ModbusRtuClient {
     await this.flushInputBuffer()
 
     return new Promise((resolve, reject) => {
+      let responseBuffer = Buffer.alloc(0)
+      let frameCompleteTimeout: NodeJS.Timeout | null = null
+
+      // Forward-declared so the timeout handler can reference them for cleanup
+      const cleanup = () => {
+        this.serialPort?.removeListener('data', onData)
+        this.serialPort?.removeListener('error', onError)
+        if (frameCompleteTimeout) {
+          clearTimeout(frameCompleteTimeout)
+        }
+      }
+
       const timeoutHandle = setTimeout(() => {
+        cleanup()
         reject(new Error('Request timeout'))
       }, this.timeout)
-
-      let responseBuffer = Buffer.alloc(0)
-
-      let frameCompleteTimeout: NodeJS.Timeout | null = null
 
       const onData = (data: Buffer) => {
         responseBuffer = Buffer.concat([responseBuffer, data] as unknown as Uint8Array[])
@@ -192,17 +201,13 @@ export class ModbusRtuClient {
         }
 
         frameCompleteTimeout = setTimeout(() => {
+          clearTimeout(timeoutHandle)
+          cleanup()
+
           if (responseBuffer.length < 5) {
-            clearTimeout(timeoutHandle)
-            this.serialPort?.removeListener('data', onData)
-            this.serialPort?.removeListener('error', onError)
             reject(new Error('Response too short'))
             return
           }
-
-          clearTimeout(timeoutHandle)
-          this.serialPort?.removeListener('data', onData)
-          this.serialPort?.removeListener('error', onError)
 
           const receivedCrc = responseBuffer.readUInt16BE(responseBuffer.length - 2)
           const calculatedCrc = this.calculateCrc(responseBuffer.slice(0, responseBuffer.length - 2))
@@ -222,11 +227,7 @@ export class ModbusRtuClient {
 
       const onError = (error: Error) => {
         clearTimeout(timeoutHandle)
-        if (frameCompleteTimeout) {
-          clearTimeout(frameCompleteTimeout)
-        }
-        this.serialPort?.removeListener('data', onData)
-        this.serialPort?.removeListener('error', onError)
+        cleanup()
         reject(error)
       }
 
@@ -235,8 +236,7 @@ export class ModbusRtuClient {
       this.serialPort!.write(request as unknown as Uint8Array, (error: unknown) => {
         if (error) {
           clearTimeout(timeoutHandle)
-          this.serialPort?.removeListener('data', onData)
-          this.serialPort?.removeListener('error', onError)
+          cleanup()
           const errorMessage =
             typeof error === 'string'
               ? error
