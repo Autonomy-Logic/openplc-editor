@@ -448,7 +448,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       } else {
         // Start: build, load firmware, then auto-connect debugger
         pendingSimulatorDebugRef.current = true
-        void verifyAndCompile()
+        verifyAndCompile().catch(() => {
+          pendingSimulatorDebugRef.current = false
+        })
       }
     } catch (error) {
       pendingSimulatorDebugRef.current = false
@@ -515,7 +517,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
 
     // Build FB instance map
-    const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances, project.data.pous)
+    const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
 
     const fbTypesCount = fbDebugInstancesMap.size
     const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
@@ -1105,7 +1107,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
 
           // Build FB instance map
-          const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances, project.data.pous)
+          const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
 
           const fbTypesCount = fbDebugInstancesMap.size
           const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)

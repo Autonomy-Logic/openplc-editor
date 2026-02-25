@@ -7,7 +7,6 @@
  */
 
 import { StandardFunctionBlocks } from '@root/renderer/data/library/standard-function-blocks'
-import { useOpenPLCStore } from '@root/renderer/store'
 import type { WorkspaceActions } from '@root/renderer/store/slices/workspace/types'
 import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
 import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
@@ -151,11 +150,7 @@ export function buildDebugVariableTreeMap(
  * Uses the canonical `normalizeTypeString` from pou-helpers instead of
  * redefining it inline.
  */
-export function buildFbInstanceMap(
-  pous: PLCPou[],
-  instances: PLCInstance[],
-  projectPous: PLCPou[],
-): Map<string, FbInstanceInfo[]> {
+export function buildFbInstanceMap(pous: PLCPou[], instances: PLCInstance[]): Map<string, FbInstanceInfo[]> {
   const fbDebugInstancesMap = new Map<string, FbInstanceInfo[]>()
 
   pous.forEach((pou) => {
@@ -174,7 +169,7 @@ export function buildFbInstanceMap(
         (sfb) => sfb.name.toUpperCase() === fbTypeKey && normalizeTypeString(sfb.type) === 'functionblock',
       )
 
-      const isCustomFB = projectPous.some(
+      const isCustomFB = pous.some(
         (p) => normalizeTypeString(p.type) === 'functionblock' && p.data.name.toUpperCase() === fbTypeKey,
       )
 
@@ -259,20 +254,4 @@ export async function connectAndActivateDebugger(
   workspaceActions.setDebuggerVisible(true)
 
   return { success: true }
-}
-
-// ---------------------------------------------------------------------------
-// Re-export convenience type for the store snapshot used by callers
-// ---------------------------------------------------------------------------
-
-/** Workspace actions type extracted from the store for use in helper params. */
-export type { WorkspaceActions }
-
-/**
- * Convenience: grab workspaceActions from the Zustand store.
- * Useful inside useEffect callbacks or async functions that don't have
- * the actions in scope.
- */
-export function getWorkspaceActions(): WorkspaceActions {
-  return useOpenPLCStore.getState().workspaceActions
 }
