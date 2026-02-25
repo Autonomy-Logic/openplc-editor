@@ -1,17 +1,21 @@
 import { StopIcon } from '@root/renderer/assets'
-import { StandardFunctionBlocks } from '@root/renderer/data/library/standard-function-blocks'
 import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
-import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
+import {
+  buildDebugVariableTreeMap,
+  buildFbInstanceMap,
+  buildVariableIndexMap,
+  connectAndActivateDebugger,
+  disconnectDebugger,
+} from '@root/renderer/utils/debugger-session'
+import type { DebugTreeNode } from '@root/types/debugger'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
 import { validateCppCode } from '@root/utils/cpp/validateCppCode'
 import { parseDebugFile } from '@root/utils/debug-parser'
-import { findGlobalVariableIndex, findVariableIndexWithFallback } from '@root/utils/debug-variable-finder'
 
 type CppPouData = {
   name: string
@@ -121,11 +125,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // Also clean up debugger state if it was connected via simulator
       const { workspace, workspaceActions } = useOpenPLCStore.getState()
       if (workspace.isDebuggerVisible) {
-        void window.bridge.debuggerDisconnect()
-        workspaceActions.setDebuggerVisible(false)
-        workspaceActions.setDebuggerTargetIp(null)
-        workspaceActions.setDebugForcedVariables(new Map())
-        workspaceActions.clearFbDebugContext()
+        void disconnectDebugger(workspaceActions)
       }
     })
     return cleanup
@@ -440,11 +440,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // Stop: disconnect debugger first, then stop simulator
         const { workspace, workspaceActions } = useOpenPLCStore.getState()
         if (workspace.isDebuggerVisible) {
-          await window.bridge.debuggerDisconnect()
-          workspaceActions.setDebuggerVisible(false)
-          workspaceActions.setDebuggerTargetIp(null)
-          workspaceActions.setDebugForcedVariables(new Map())
-          workspaceActions.clearFbDebugContext()
+          await disconnectDebugger(workspaceActions)
         }
         await (window.bridge.simulatorStop as () => Promise<{ success: boolean }>)()
         setSimulatorRunning(false)
@@ -487,84 +483,28 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
 
     const parsed = parseDebugFile(debugFileResult.content)
-    const indexMap = new Map<string, number>()
     const instances = project.data.configuration.resource.instances
 
-    project.data.pous.forEach((pou) => {
-      if (pou.type !== 'program') return
+    // Build variable index map
+    const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, parsed)
+    for (const w of warnings) {
+      consoleActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
+    }
 
-      const instance = instances.find((inst) => inst.program === pou.data.name)
-      if (!instance) {
-        consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'warning',
-          message: `No instance found for program '${pou.data.name}', skipping debug variable parsing.`,
-        })
-        return
-      }
-
-      pou.data.variables.forEach((v) => {
-        const index =
-          v.class === 'external'
-            ? findGlobalVariableIndex(v.name, parsed.variables)
-            : findVariableIndexWithFallback(instance.name, v.name, parsed.variables)
-        if (index !== null) {
-          const compositeKey = `${pou.data.name}:${v.name}`
-          indexMap.set(compositeKey, index)
-        }
-      })
-    })
-
-    parsed.variables.forEach((debugVar) => {
-      if (!indexMap.has(debugVar.name)) {
-        indexMap.set(debugVar.name, debugVar.index)
-      }
-    })
-
+    // Build debug variable tree
+    let treeMap = new Map<string, DebugTreeNode>()
     try {
-      const trees: DebugTreeNode[] = []
-      const treeMap = new Map<string, DebugTreeNode>()
-      let complexCount = 0
-
-      const addNodeAndChildrenToMap = (node: DebugTreeNode) => {
-        treeMap.set(node.compositeKey, node)
-        if (node.children) {
-          for (const child of node.children) {
-            addNodeAndChildrenToMap(child)
-          }
-        }
-      }
-
-      project.data.pous.forEach((pou) => {
-        if (pou.type !== 'program') return
-
-        const instance = instances.find((inst) => inst.program === pou.data.name)
-        if (!instance) return
-
-        pou.data.variables.forEach((v) => {
-          try {
-            const node = buildDebugTree(v, pou.data.name, instance.name, parsed.variables, project)
-            trees.push(node)
-            addNodeAndChildrenToMap(node)
-            if (node.isComplex) {
-              complexCount++
-            }
-          } catch {
-            // Tree building failed for this variable
-          }
-        })
-      })
-
-      workspaceActions.setDebugVariableTree(treeMap)
+      const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, parsed.variables, project)
+      treeMap = treeResult.treeMap
 
       if (process.env.NODE_ENV === 'development') {
-        ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = trees
+        ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = treeResult.trees
       }
 
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'info',
-        message: `Debug tree builder: Built ${trees.length} trees (${complexCount} complex).`,
+        message: `Debug tree builder: Built ${treeResult.trees.length} trees (${treeResult.complexCount} complex).`,
       })
     } catch {
       consoleActions.addLog({
@@ -574,56 +514,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       })
     }
 
-    // Build FB instance map for function block debugging
-    const fbDebugInstancesMap = new Map<string, FbInstanceInfo[]>()
-
-    const normalizeTypeString = (typeStr: string): string => {
-      return typeStr.toLowerCase().replace(/[-_]/g, '')
-    }
-
-    project.data.pous.forEach((pou) => {
-      if (pou.type !== 'program') return
-
-      const programInstance = instances.find((inst) => inst.program === pou.data.name)
-      if (!programInstance) return
-
-      pou.data.variables.forEach((v) => {
-        if (v.type.definition !== 'derived') return
-
-        const fbTypeNameRaw = v.type.value
-        const fbTypeKey = fbTypeNameRaw.toUpperCase()
-
-        const isStandardFB = StandardFunctionBlocks.pous.some(
-          (sfb) => sfb.name.toUpperCase() === fbTypeKey && normalizeTypeString(sfb.type) === 'functionblock',
-        )
-
-        const isCustomFB = project.data.pous.some(
-          (p) => normalizeTypeString(p.type) === 'functionblock' && p.data.name.toUpperCase() === fbTypeKey,
-        )
-
-        if (isStandardFB || isCustomFB) {
-          const instanceInfo: FbInstanceInfo = {
-            fbTypeName: fbTypeNameRaw,
-            programName: pou.data.name,
-            programInstanceName: programInstance.name,
-            fbVariableName: v.name,
-            key: `${pou.data.name}:${v.name}`,
-          }
-
-          const existingInstances = fbDebugInstancesMap.get(fbTypeKey) || []
-          existingInstances.push(instanceInfo)
-          fbDebugInstancesMap.set(fbTypeKey, existingInstances)
-        }
-      })
-    })
-
-    workspaceActions.setFbDebugInstances(fbDebugInstancesMap)
-
-    fbDebugInstancesMap.forEach((instanceList, fbTypeName) => {
-      if (instanceList.length > 0) {
-        workspaceActions.setFbSelectedInstance(fbTypeName, instanceList[0].key)
-      }
-    })
+    // Build FB instance map
+    const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances, project.data.pous)
 
     const fbTypesCount = fbDebugInstancesMap.size
     const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
@@ -635,7 +527,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       })
     }
 
-    const connectResult: { success: boolean; error?: string } = await window.bridge.debuggerConnect('simulator', {})
+    // Connect and activate debugger
+    const connectResult = await connectAndActivateDebugger(
+      {
+        connectionType: 'simulator',
+        connectionParams: {},
+        indexMap,
+        treeMap,
+        fbDebugInstancesMap,
+      },
+      workspaceActions,
+    )
+
     if (!connectResult.success) {
       consoleActions.addLog({
         id: crypto.randomUUID(),
@@ -645,8 +548,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       return
     }
 
-    workspaceActions.setDebugVariableIndexes(indexMap)
-    workspaceActions.setDebuggerVisible(true)
     consoleActions.addLog({
       id: crypto.randomUUID(),
       level: 'info',
@@ -662,11 +563,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       useOpenPLCStore.getState()
 
     if (workspace.isDebuggerVisible) {
-      const _disconnectResult: { success: boolean } = await window.bridge.debuggerDisconnect()
-      workspaceActions.setDebuggerVisible(false)
-      workspaceActions.setDebuggerTargetIp(null)
-      workspaceActions.setDebugForcedVariables(new Map())
-      workspaceActions.clearFbDebugContext()
+      await disconnectDebugger(workspaceActions)
       return
     }
 
@@ -1174,161 +1071,41 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
         if (debugFileResult.success && debugFileResult.content) {
           const parsed = parseDebugFile(debugFileResult.content)
-          const indexMap = new Map<string, number>()
 
           const { project } = useOpenPLCStore.getState()
           const instances = project.data.configuration.resource.instances
 
-          project.data.pous.forEach((pou) => {
-            if (pou.type !== 'program') return
+          // Build variable index map
+          const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, parsed)
+          for (const w of warnings) {
+            consoleActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
+          }
 
-            const instance = instances.find((inst) => inst.program === pou.data.name)
-            if (!instance) {
-              consoleActions.addLog({
-                id: crypto.randomUUID(),
-                level: 'warning',
-                message: `No instance found for program '${pou.data.name}', skipping debug variable parsing.`,
-              })
-              return
-            }
-
-            const allVariables = pou.data.variables
-
-            allVariables.forEach((v) => {
-              // Use fallback to try both FB-style and struct-style paths
-              // This ensures consistent behavior with OPC-UA index resolution
-              const index =
-                v.class === 'external'
-                  ? findGlobalVariableIndex(v.name, parsed.variables)
-                  : findVariableIndexWithFallback(instance.name, v.name, parsed.variables)
-              if (index !== null) {
-                const compositeKey = `${pou.data.name}:${v.name}`
-                indexMap.set(compositeKey, index)
-              }
-            })
-          })
-
-          parsed.variables.forEach((debugVar) => {
-            if (!indexMap.has(debugVar.name)) {
-              indexMap.set(debugVar.name, debugVar.index)
-            }
-          })
-
+          // Build debug variable tree
+          let treeMap = new Map<string, DebugTreeNode>()
           try {
-            const trees: DebugTreeNode[] = []
-            const treeMap = new Map<string, DebugTreeNode>()
-            let complexCount = 0
-
-            // Helper function to recursively add a node and all its children to the treeMap
-            // This ensures nested FB variables like main:MOTOR_CONTROL0.TON0 are directly accessible
-            const addNodeAndChildrenToMap = (node: DebugTreeNode) => {
-              treeMap.set(node.compositeKey, node)
-              if (node.children) {
-                for (const child of node.children) {
-                  addNodeAndChildrenToMap(child)
-                }
-              }
-            }
-
-            project.data.pous.forEach((pou) => {
-              if (pou.type !== 'program') return
-
-              const instance = instances.find((inst) => inst.program === pou.data.name)
-              if (!instance) {
-                return
-              }
-
-              pou.data.variables.forEach((v) => {
-                try {
-                  const node = buildDebugTree(v, pou.data.name, instance.name, parsed.variables, project)
-                  trees.push(node)
-                  addNodeAndChildrenToMap(node)
-                  if (node.isComplex) {
-                    complexCount++
-                  }
-                } catch {
-                  // Tree building failed for this variable
-                }
-              })
-            })
-
-            workspaceActions.setDebugVariableTree(treeMap)
+            const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, parsed.variables, project)
+            treeMap = treeResult.treeMap
 
             if (process.env.NODE_ENV === 'development') {
-              ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = trees
+              ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = treeResult.trees
             }
 
             consoleActions.addLog({
               id: crypto.randomUUID(),
               level: 'info',
-              message: `Debug tree builder: Built ${trees.length} trees (${complexCount} complex).`,
+              message: `Debug tree builder: Built ${treeResult.trees.length} trees (${treeResult.complexCount} complex).`,
             })
           } catch {
             consoleActions.addLog({
               id: crypto.randomUUID(),
               level: 'warning',
-              message: `Debug tree builder encountered errors.`,
+              message: 'Debug tree builder encountered errors.',
             })
           }
 
-          // Build FB instance map for function block debugging
-          const fbDebugInstancesMap = new Map<string, FbInstanceInfo[]>()
-
-          // Helper function to normalize type strings for comparison
-          const normalizeTypeString = (typeStr: string): string => {
-            return typeStr.toLowerCase().replace(/[-_]/g, '')
-          }
-
-          // Iterate all program POUs to find FB instances
-          project.data.pous.forEach((pou) => {
-            if (pou.type !== 'program') return
-
-            const programInstance = instances.find((inst) => inst.program === pou.data.name)
-            if (!programInstance) return
-
-            // Check each variable in the program to see if it's an FB instance
-            pou.data.variables.forEach((v) => {
-              if (v.type.definition !== 'derived') return
-
-              const fbTypeNameRaw = v.type.value
-              const fbTypeKey = fbTypeNameRaw.toUpperCase() // Canonical key for map lookups
-
-              // Check if this is a standard function block
-              const isStandardFB = StandardFunctionBlocks.pous.some(
-                (sfb) => sfb.name.toUpperCase() === fbTypeKey && normalizeTypeString(sfb.type) === 'functionblock',
-              )
-
-              // Check if this is a custom function block
-              const isCustomFB = project.data.pous.some(
-                (p) => normalizeTypeString(p.type) === 'functionblock' && p.data.name.toUpperCase() === fbTypeKey,
-              )
-
-              if (isStandardFB || isCustomFB) {
-                const instanceInfo: FbInstanceInfo = {
-                  fbTypeName: fbTypeNameRaw, // Keep original name for display
-                  programName: pou.data.name,
-                  programInstanceName: programInstance.name,
-                  fbVariableName: v.name,
-                  key: `${pou.data.name}:${v.name}`,
-                }
-
-                // Use uppercase key for consistent lookups
-                const existingInstances = fbDebugInstancesMap.get(fbTypeKey) || []
-                existingInstances.push(instanceInfo)
-                fbDebugInstancesMap.set(fbTypeKey, existingInstances)
-              }
-            })
-          })
-
-          // Store FB debug instances and set default selections
-          workspaceActions.setFbDebugInstances(fbDebugInstancesMap)
-
-          // Set default selected instance for each FB type (first instance)
-          fbDebugInstancesMap.forEach((instanceList, fbTypeName) => {
-            if (instanceList.length > 0) {
-              workspaceActions.setFbSelectedInstance(fbTypeName, instanceList[0].key)
-            }
-          })
+          // Build FB instance map
+          const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances, project.data.pous)
 
           const fbTypesCount = fbDebugInstancesMap.size
           const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
@@ -1340,10 +1117,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             })
           }
 
-          const connectResult: { success: boolean; error?: string } = await window.bridge.debuggerConnect(
-            connectionType,
-            connectionParams,
+          // Connect and activate debugger
+          const connectResult = await connectAndActivateDebugger(
+            {
+              connectionType,
+              connectionParams,
+              indexMap,
+              treeMap,
+              fbDebugInstancesMap,
+              targetIpAddress,
+              isRuntimeTarget,
+            },
+            workspaceActions,
           )
+
           if (!connectResult.success) {
             consoleActions.addLog({
               id: crypto.randomUUID(),
@@ -1354,11 +1141,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             return
           }
 
-          workspaceActions.setDebugVariableIndexes(indexMap)
-          if (!isRuntimeTarget) {
-            workspaceActions.setDebuggerTargetIp(targetIpAddress ?? null)
-          }
-          workspaceActions.setDebuggerVisible(true)
           consoleActions.addLog({
             id: crypto.randomUUID(),
             level: 'info',
