@@ -6,7 +6,7 @@ import type { RuntimeConnection } from '@root/renderer/store/slices/device/types
 import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
 import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
-import { BufferToStringArray, cn, isOpenPLCRuntimeTarget } from '@root/utils'
+import { BufferToStringArray, cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
 import { validateCppCode } from '@root/utils/cpp/validateCppCode'
@@ -27,7 +27,7 @@ import { parsePlcStatus } from '@root/utils/plc-status'
 import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '@root/utils/python/generateSTCode'
 import { injectPythonCode } from '@root/utils/python/injectPythonCode'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   DebuggerButton,
@@ -85,6 +85,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const [isCompiling, setIsCompiling] = useState(false)
   const [isDebuggerProcessing, setIsDebuggerProcessing] = useState(false)
+  const [simulatorRunning, setSimulatorRunning] = useState(false)
 
   const disabledButtonClass = 'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
@@ -106,6 +107,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
+
+  const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
+  const isCurrentBoardSimulator = isSimulatorTarget(currentBoardInfo)
+
+  // Sync simulatorRunning when the main process stops the simulator
+  // (e.g. on project open/create) so the UI reflects the actual state.
+  useEffect(() => {
+    const cleanup = (window.bridge.onSimulatorStopped as (cb: () => void) => () => void)(() => {
+      setSimulatorRunning(false)
+    })
+    return cleanup
+  }, [])
 
   const applyEarlyCommentWrapping = (projectData: PLCProjectData): PLCProjectData => {
     return {
@@ -279,6 +292,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: string | Buffer
         plcStatus?: string
         closePort?: boolean
+        simulatorFirmwarePath?: string
       }) => {
         setIsCompiling(true)
 
@@ -310,6 +324,33 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             })
           })
         }
+
+        // Load firmware into simulator when compilation finishes with a HEX path
+        if (data.simulatorFirmwarePath) {
+          ;(window.bridge.simulatorLoadFirmware as (p: string) => Promise<{ success: boolean; error?: string }>)(
+            data.simulatorFirmwarePath,
+          )
+            .then((result) => {
+              if (result.success) {
+                setSimulatorRunning(true)
+                addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
+              } else {
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'error',
+                  message: `Failed to start simulator: ${result.error}`,
+                })
+              }
+            })
+            .catch((err: unknown) => {
+              addLog({
+                id: crypto.randomUUID(),
+                level: 'error',
+                message: `Simulator error: ${err instanceof Error ? err.message : String(err)}`,
+              })
+            })
+        }
+
         if (data.closePort) {
           setIsCompiling(false)
         }
@@ -374,6 +415,25 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
   }
 
+  const handleSimulatorControl = async (): Promise<void> => {
+    try {
+      if (simulatorRunning) {
+        await (window.bridge.simulatorStop as () => Promise<{ success: boolean }>)()
+        setSimulatorRunning(false)
+        addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator stopped.' })
+      } else {
+        // Re-build to get a fresh firmware and start the simulator
+        void verifyAndCompile()
+      }
+    } catch (error) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Simulator control error: ${String(error)}`,
+      })
+    }
+  }
+
   const handleDebuggerClick = async () => {
     const { workspace, project, deviceDefinitions, workspaceActions, consoleActions, deviceActions } =
       useOpenPLCStore.getState()
@@ -405,13 +465,34 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
 
       let targetIpAddress: string | undefined
-      let connectionType: 'tcp' | 'rtu' | 'websocket' = 'tcp'
+      let connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' = 'tcp'
       let rtuPort: string | undefined
       let rtuBaudRate: number | undefined
       let rtuSlaveId: number | undefined
       let jwtToken: string | undefined
 
-      if (isRuntimeTarget) {
+      if (isSimulatorTarget(currentBoardInfo)) {
+        // Check if simulator has firmware loaded
+        const running = await (window.bridge.simulatorIsRunning as () => Promise<boolean>)()
+        if (!running) {
+          const response = await showDebuggerMessage(
+            'warning',
+            'Simulator Empty',
+            'No firmware is running on the simulator. Would you like to build and upload the project first?',
+            ['Build & Upload', 'Cancel'],
+          )
+          if (response === 0) {
+            // Trigger full build, then restart debugger flow
+            setIsDebuggerProcessing(false)
+            void verifyAndCompile()
+            return
+          } else {
+            setIsDebuggerProcessing(false)
+            return
+          }
+        }
+        connectionType = 'simulator'
+      } else if (isRuntimeTarget) {
         const connectionStatus = useOpenPLCStore.getState().runtimeConnection.connectionStatus
         const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress
 
@@ -725,7 +806,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleMd5Verification = async (
     projectPath: string,
     boardTarget: string,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -828,7 +909,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       })
 
       const targetDisplay =
-        connectionType === 'tcp' || connectionType === 'websocket' ? targetIpAddress : connectionParams.port
+        connectionType === 'simulator'
+          ? 'simulator'
+          : connectionType === 'tcp' || connectionType === 'websocket'
+            ? targetIpAddress
+            : connectionParams.port
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'info',
@@ -1175,19 +1260,31 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton
         tooltipContent={
-          connectionStatus !== 'connected'
-            ? 'Connect to runtime first'
-            : plcStatus === 'RUNNING'
-              ? 'Stop PLC'
-              : 'Start PLC'
+          isCurrentBoardSimulator
+            ? simulatorRunning
+              ? 'Stop Simulator'
+              : 'Start Simulator'
+            : connectionStatus !== 'connected'
+              ? 'Connect to runtime first'
+              : plcStatus === 'RUNNING'
+                ? 'Stop PLC'
+                : 'Start PLC'
         }
       >
         <PlayButton
-          onClick={() => void handlePlcControl()}
-          disabled={connectionStatus !== 'connected'}
-          className={cn(connectionStatus !== 'connected' ? disabledButtonClass : '')}
+          onClick={isCurrentBoardSimulator ? () => void handleSimulatorControl() : () => void handlePlcControl()}
+          disabled={isCurrentBoardSimulator ? isCompiling : connectionStatus !== 'connected'}
+          className={cn(
+            isCurrentBoardSimulator
+              ? isCompiling
+                ? disabledButtonClass
+                : ''
+              : connectionStatus !== 'connected'
+                ? disabledButtonClass
+                : '',
+          )}
         >
-          {plcStatus === 'RUNNING' ? <StopIcon /> : null}
+          {(isCurrentBoardSimulator ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
         </PlayButton>
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton tooltipContent='Debugger'>

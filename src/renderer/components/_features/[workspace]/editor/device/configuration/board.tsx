@@ -12,6 +12,7 @@ import {
   isArduinoTarget,
   isOpenPLCRuntimeTarget,
   isOpenPLCRuntimeV4Target,
+  isSimulatorTarget,
   validateRuntimeVersion,
 } from '@root/utils'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -89,7 +90,8 @@ const Board = memo(function () {
     const handleDeviceValueAtFirstRender = () => {
       const boardInfos = availableBoards.get(deviceBoard)
       if (boardInfos) {
-        const coreVersionAsString = `${boardInfos.coreVersion ? ` [${boardInfos.coreVersion}]` : ''}`
+        const showVersion = !isSimulatorTarget(boardInfos) && boardInfos.coreVersion
+        const coreVersionAsString = showVersion ? ` [${boardInfos.coreVersion}]` : ''
         const initialBoard = `${deviceBoard}${coreVersionAsString}`
         if (initialBoard === formattedBoardState) return
         setFormattedBoardState(initialBoard)
@@ -298,17 +300,19 @@ const Board = memo(function () {
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
-      <div id='compile-only-container' className='flex select-none items-center gap-2'>
-        <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
-          Compile Only
-        </Label>
-        <Checkbox
-          id='compile-only-checkbox'
-          className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
-          checked={compileOnly}
-          onCheckedChange={handleCompileOnly}
-        />
-      </div>
+      {!isSimulatorTarget(currentBoardInfo) && (
+        <div id='compile-only-container' className='flex select-none items-center gap-2'>
+          <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
+            Compile Only
+          </Label>
+          <Checkbox
+            id='compile-only-checkbox'
+            className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
+            checked={compileOnly}
+            onCheckedChange={handleCompileOnly}
+          />
+        </div>
+      )}
       <div id='board-selection-container' className='flex h-2/5 min-h-[325px] w-full justify-between'>
         <div
           id='board-preferences-container'
@@ -339,7 +343,8 @@ const Board = memo(function () {
                 viewportRef={deviceSelectRef}
               >
                 {Array.from(availableBoards.entries()).map(([board, data]) => {
-                  const formattedBoard = `${board}${data.coreVersion ? ` [${data.coreVersion}]` : ''}`
+                  const showVersion = !isSimulatorTarget(data) && data.coreVersion
+                  const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
                   return (
                     <SelectItem
                       key={board}
@@ -358,7 +363,13 @@ const Board = memo(function () {
               </SelectContent>
             </Select>
           </div>
-          {isOpenPLCRuntimeTarget(currentBoardInfo) ? (
+          {isSimulatorTarget(currentBoardInfo) ? (
+            <div id='simulator-info' className='flex w-full flex-col items-start justify-start gap-4'>
+              <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+                Built-in simulator — no configuration required. Press Build to compile and run.
+              </p>
+            </div>
+          ) : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
             <>
               <div id='runtime-ip-address-field' className='flex w-full items-center justify-start gap-1'>
                 <Label
@@ -460,7 +471,7 @@ const Board = memo(function () {
               </button>
             </div>
           )}
-          {!isOpenPLCRuntimeTarget(currentBoardInfo) && (
+          {!isOpenPLCRuntimeTarget(currentBoardInfo) && !isSimulatorTarget(currentBoardInfo) && (
             <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
               <Label id='board-specs-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
                 Specs
@@ -484,8 +495,10 @@ const Board = memo(function () {
           </div>
         </div>
       </div>
-      <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-      {isOpenPLCRuntimeTarget(currentBoardInfo) ? (
+      {!isSimulatorTarget(currentBoardInfo) && (
+        <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
+      )}
+      {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
         connectionStatus === 'connected' &&
         timingStats &&
         timingStats.scan_count > 0 && (

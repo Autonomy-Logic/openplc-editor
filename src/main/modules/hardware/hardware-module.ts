@@ -182,11 +182,9 @@ class HardwareModule {
         })
       })
     }
-    // TODO: Improve error handling and return type
-    // if (availableBoards.size === 0) {
-    //   return { success: false, data: undefined }
-    // }
-    return availableBoards
+    // Sort boards alphabetically by name
+    const sortedBoards: AvailableBoards = new Map([...availableBoards.entries()].sort(([a], [b]) => a.localeCompare(b)))
+    return sortedBoards
   }
 
   async getBoardImagePreview(image: string) {

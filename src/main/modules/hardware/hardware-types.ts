@@ -13,6 +13,7 @@ const BoardInfoSchema = z.object({
   core: z.string(),
   c_flags: z.array(z.string()).optional(),
   cxx_flags: z.array(z.string()).optional(),
+  ld_flags: z.array(z.string()).optional(),
   default_ain: z.string(),
   default_aout: z.string(),
   default_din: z.string(),

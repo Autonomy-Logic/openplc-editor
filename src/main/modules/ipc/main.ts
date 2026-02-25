@@ -18,6 +18,8 @@ import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/m
 import { logger } from '../../services'
 import { ModbusTcpClient } from '../modbus/modbus-client'
 import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
+import { SimulatorModule } from '../simulator/simulator-module'
+import { VirtualSerialPort } from '../simulator/virtual-serial-port'
 import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
 
 type IDataToWrite = {
@@ -43,7 +45,7 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerWebSocketClient: WebSocketDebugClient | null = null
   private debuggerTargetIp: string | null = null
   private debuggerReconnecting: boolean = false
-  private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | null = null
+  private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
   private debuggerRtuPort: string | null = null
   private debuggerRtuBaudRate: number | null = null
   private debuggerRtuSlaveId: number | null = null
@@ -54,6 +56,8 @@ class MainProcessBridge implements MainIpcModule {
   private currentProjectPath: string | null = null
   // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
   private fileWatchers: Map<string, { lastMtime: number }> = new Map()
+  // avr8js ATmega2560 emulator instance for the built-in simulator
+  private simulatorModule = new SimulatorModule()
 
   constructor({
     ipcMain,
@@ -595,6 +599,11 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
 
+    // ===================== SIMULATOR =====================
+    this.ipcMain.handle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
+    this.ipcMain.handle('simulator:stop', this.handleSimulatorStop)
+    this.ipcMain.handle('simulator:is-running', this.handleSimulatorIsRunning)
+
     // ===================== FILE WATCHER =====================
     this.ipcMain.handle('file:watch-start', this.handleFileWatchStart)
     this.ipcMain.handle('file:watch-stop', this.handleFileWatchStop)
@@ -605,10 +614,12 @@ class MainProcessBridge implements MainIpcModule {
   // ===================== HANDLER METHODS =====================
   // Project-related handlers
   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
+    this.stopSimulatorAndNotify()
     const response = await this.projectService.createProject(data)
     return response
   }
   handleProjectOpen = async () => {
+    this.stopSimulatorAndNotify()
     const response = await this.projectService.openProject()
     if (response.success && response.data?.meta.path) {
       this.currentProjectPath = response.data.meta.path
@@ -648,6 +659,7 @@ class MainProcessBridge implements MainIpcModule {
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
+    this.stopSimulatorAndNotify()
     try {
       const response = await this.projectService.openProjectByPath(projectPath)
       if (response.success && response.data?.meta.path) {
@@ -759,6 +771,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleAppQuit = () => {
+    this.simulatorModule.stop()
     if (this.mainWindow) {
       this.mainWindow.destroy()
     }
@@ -823,7 +836,10 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.maximize()
     }
   }
-  handleWindowReload = () => this.mainWindow?.webContents.reload()
+  handleWindowReload = () => {
+    this.simulatorModule.stop()
+    this.mainWindow?.webContents.reload()
+  }
   handleWindowRebuildMenu = () => void this.menuBuilder.buildMenu()
 
   // Hardware handlers
@@ -862,7 +878,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -875,7 +891,25 @@ class MainProcessBridge implements MainIpcModule {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
     let wsClient: WebSocketDebugClient | null = null
     try {
-      if (connectionType === 'websocket') {
+      if (connectionType === 'simulator') {
+        const virtualPort = new VirtualSerialPort(this.simulatorModule)
+        client = new ModbusRtuClient({
+          port: 'simulator',
+          baudRate: 115200,
+          slaveId: 1,
+          timeout: 5000,
+          serialPort: virtualPort,
+        })
+        await client.connect()
+        const targetMd5 = await client.getMd5Hash()
+        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+
+        // Keep the client for subsequent debug operations
+        this.debuggerModbusClient = client
+        this.debuggerConnectionType = 'simulator'
+
+        return { success: true, match, targetMd5 }
+      } else if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
@@ -1054,7 +1088,16 @@ class MainProcessBridge implements MainIpcModule {
 
       this.debuggerReconnecting = true
       try {
-        if (this.debuggerConnectionType === 'tcp') {
+        if (this.debuggerConnectionType === 'simulator') {
+          const virtualPort = new VirtualSerialPort(this.simulatorModule)
+          this.debuggerModbusClient = new ModbusRtuClient({
+            port: 'simulator',
+            baudRate: 115200,
+            slaveId: 1,
+            timeout: 5000,
+            serialPort: virtualPort,
+          })
+        } else if (this.debuggerConnectionType === 'tcp') {
           if (!this.debuggerTargetIp) {
             this.debuggerReconnecting = false
             return { success: false, error: 'No target IP address stored', needsReconnect: true }
@@ -1113,7 +1156,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerConnect = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -1123,7 +1166,22 @@ class MainProcessBridge implements MainIpcModule {
     },
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (connectionType === 'websocket') {
+      if (connectionType === 'simulator') {
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
+        const virtualPort = new VirtualSerialPort(this.simulatorModule)
+        this.debuggerModbusClient = new ModbusRtuClient({
+          port: 'simulator',
+          baudRate: 115200,
+          slaveId: 1,
+          timeout: 5000,
+          serialPort: virtualPort,
+        })
+        await this.debuggerModbusClient.connect()
+      } else if (connectionType === 'websocket') {
         if (this.debuggerModbusClient) {
           this.debuggerModbusClient.disconnect()
           this.debuggerModbusClient = null
@@ -1292,6 +1350,37 @@ class MainProcessBridge implements MainIpcModule {
       const projectRoot = resolve(this.currentProjectPath)
       return resolved.startsWith(projectRoot + sep) || resolved === projectRoot
     }
+  }
+
+  // ===================== SIMULATOR HANDLERS =====================
+
+  /** Stops the simulator and notifies the renderer so it can update UI state. */
+  private stopSimulatorAndNotify(): void {
+    if (this.simulatorModule.isRunning()) {
+      this.simulatorModule.stop()
+      this.mainWindow?.webContents.send('simulator:stopped')
+    }
+  }
+
+  handleSimulatorLoadFirmware = async (
+    _event: IpcMainInvokeEvent,
+    hexPath: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await this.simulatorModule.loadAndRun(hexPath)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  handleSimulatorStop = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    this.simulatorModule.stop()
+    return Promise.resolve({ success: true })
+  }
+
+  handleSimulatorIsRunning = (_event: IpcMainInvokeEvent): Promise<boolean> => {
+    return Promise.resolve(this.simulatorModule.isRunning())
   }
 
   // Using watchFile (polling-based) instead of watch for better macOS compatibility
