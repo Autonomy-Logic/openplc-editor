@@ -1032,6 +1032,12 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
     needsReconnect?: boolean
   }> => {
+    // If connection type is null, the debugger was intentionally disconnected.
+    // Return a silent failure so the renderer polling ignores it.
+    if (this.debuggerConnectionType === null) {
+      return { success: false, error: 'Debugger not connected' }
+    }
+
     if (this.debuggerConnectionType === 'websocket') {
       if (!this.debuggerWebSocketClient) {
         if (this.debuggerReconnecting) {
