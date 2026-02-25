@@ -365,6 +365,11 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('simulator:load-firmware', hexPath),
   simulatorStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('simulator:stop'),
   simulatorIsRunning: (): Promise<boolean> => ipcRenderer.invoke('simulator:is-running'),
+  onSimulatorStopped: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('simulator:stopped', listener)
+    return () => ipcRenderer.removeListener('simulator:stopped', listener)
+  },
 
   // ===================== FILE WATCHER METHODS =====================
   fileWatchStart: (filePath: string): Promise<{ success: boolean; error?: string }> =>

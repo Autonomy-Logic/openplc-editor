@@ -255,7 +255,9 @@ export class SimulatorModule {
       if (cpu.progMem[cpu.pc] === SLEEP_OPCODE) {
         // Execute the SLEEP instruction (advances PC, adds 1 cycle)
         avrInstruction(cpu)
-        // Fast-forward to next scheduled clock event
+        // Fast-forward to next scheduled clock event.
+        // NOTE: nextClockEvent is private in avr8js — pinned to 0.20.0 in package.json.
+        // If upgrading avr8js, verify this field still exists and has a `cycles` property.
         const nextEvent = (cpu as unknown as { nextClockEvent: { cycles: number } | null }).nextClockEvent
         if (nextEvent && nextEvent.cycles > cpu.cycles) {
           cpu.cycles = nextEvent.cycles

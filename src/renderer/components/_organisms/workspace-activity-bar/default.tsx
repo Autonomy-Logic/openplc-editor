@@ -27,7 +27,7 @@ import { parsePlcStatus } from '@root/utils/plc-status'
 import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '@root/utils/python/generateSTCode'
 import { injectPythonCode } from '@root/utils/python/injectPythonCode'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   DebuggerButton,
@@ -110,6 +110,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isCurrentBoardSimulator = isSimulatorTarget(currentBoardInfo)
+
+  // Sync simulatorRunning when the main process stops the simulator
+  // (e.g. on project open/create) so the UI reflects the actual state.
+  useEffect(() => {
+    const cleanup = (window.bridge.onSimulatorStopped as (cb: () => void) => () => void)(() => {
+      setSimulatorRunning(false)
+    })
+    return cleanup
+  }, [])
 
   const applyEarlyCommentWrapping = (projectData: PLCProjectData): PLCProjectData => {
     return {

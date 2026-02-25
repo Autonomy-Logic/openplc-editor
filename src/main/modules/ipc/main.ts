@@ -614,12 +614,12 @@ class MainProcessBridge implements MainIpcModule {
   // ===================== HANDLER METHODS =====================
   // Project-related handlers
   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
-    this.simulatorModule.stop()
+    this.stopSimulatorAndNotify()
     const response = await this.projectService.createProject(data)
     return response
   }
   handleProjectOpen = async () => {
-    this.simulatorModule.stop()
+    this.stopSimulatorAndNotify()
     const response = await this.projectService.openProject()
     if (response.success && response.data?.meta.path) {
       this.currentProjectPath = response.data.meta.path
@@ -659,7 +659,7 @@ class MainProcessBridge implements MainIpcModule {
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
-    this.simulatorModule.stop()
+    this.stopSimulatorAndNotify()
     try {
       const response = await this.projectService.openProjectByPath(projectPath)
       if (response.success && response.data?.meta.path) {
@@ -1353,6 +1353,14 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   // ===================== SIMULATOR HANDLERS =====================
+
+  /** Stops the simulator and notifies the renderer so it can update UI state. */
+  private stopSimulatorAndNotify(): void {
+    if (this.simulatorModule.isRunning()) {
+      this.simulatorModule.stop()
+      this.mainWindow?.webContents.send('simulator:stopped')
+    }
+  }
 
   handleSimulatorLoadFirmware = async (
     _event: IpcMainInvokeEvent,

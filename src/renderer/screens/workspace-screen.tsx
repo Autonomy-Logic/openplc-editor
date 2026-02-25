@@ -213,6 +213,7 @@ const WorkspaceScreen = () => {
     const boardTarget = deviceDefinitions.configuration.deviceBoard
     const currentBoardInfo = availableBoards.get(boardTarget)
     const isRuntimeTarget = isOpenPLCRuntimeTarget(currentBoardInfo)
+    const isSimulator = isSimulatorTarget(currentBoardInfo)
     const isRTU = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU
     const isTCP = deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP
 
@@ -230,7 +231,7 @@ const WorkspaceScreen = () => {
         console.warn('No runtime IP address configured')
         return
       }
-    } else if (!isSimulatorTarget(currentBoardInfo)) {
+    } else if (!isSimulator) {
       if (isTCP && !debuggerTargetIp) {
         console.warn('No debugger target IP address configured')
         return
@@ -243,7 +244,7 @@ const WorkspaceScreen = () => {
     }
     let batchSize = 60
 
-    if ((isRTU && !isTCP) || isSimulatorTarget(currentBoardInfo)) {
+    if ((isRTU && !isTCP) || isSimulator) {
       batchSize = 20
     }
 
