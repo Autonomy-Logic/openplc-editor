@@ -2087,8 +2087,11 @@ class CompilerModule {
 
     // Step 13: Upload program to board or load into simulator
     if (boardRuntime === 'simulator') {
-      // For simulator targets, send the HEX firmware path back to the renderer
-      const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', 'arduino.avr.mega', 'Baremetal.ino.hex')
+      // For simulator targets, send the HEX firmware path back to the renderer.
+      // Derive the build sub-directory from the platform FQBN (e.g. "arduino:avr:mega" → "arduino.avr.mega")
+      // so it stays in sync with the hals.json entry.
+      const fqbnSubDir = halsContent[boardTarget]['platform'].replaceAll(':', '.')
+      const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', fqbnSubDir, 'Baremetal.ino.hex')
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Compilation successful. Loading firmware into simulator...',
@@ -2097,6 +2100,7 @@ class CompilerModule {
         simulatorFirmwarePath: hexPath,
         closePort: true,
       })
+      _mainProcessPort.close()
       return
     }
 
