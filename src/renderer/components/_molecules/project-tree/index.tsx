@@ -285,8 +285,8 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
-    serverActions: { deleteRequest: deleteServerRequest },
-    remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest },
+    serverActions: { deleteRequest: deleteServerRequest, rename: renameServer },
+    remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
     fileActions: { getFile },
   } = useOpenPLCStore()
 
@@ -324,10 +324,10 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   const handleRenameFile = async (newLabel: string) => {
     setIsEditing(false)
 
-    if (!isAPou && !isDatatype) {
+    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice) {
       toast({
         title: 'Error',
-        description: 'Only POU or datatype files can be renamed.',
+        description: 'Only POU, datatype, server, or remote device files can be renamed.',
         variant: 'fail',
       })
       return
@@ -336,7 +336,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     if (!newLabel || !label) {
       toast({
         title: 'Error',
-        description: 'Pou or datatype label is required to rename.',
+        description: 'Label is required to rename.',
         variant: 'fail',
       })
       return
@@ -352,6 +352,22 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
 
     if (isDatatype) {
       const res = await renameDatatype(label, newLabel)
+      if (!res.success) {
+        setNewLabel(label || '')
+      }
+      return
+    }
+
+    if (isServer) {
+      const res = await renameServer(label, newLabel)
+      if (!res.success) {
+        setNewLabel(label || '')
+      }
+      return
+    }
+
+    if (isRemoteDevice) {
+      const res = await renameRemoteDevice(label, newLabel)
       if (!res.success) {
         setNewLabel(label || '')
       }

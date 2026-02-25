@@ -687,11 +687,13 @@ class CompilerModule {
     projectPath,
     buildMD5Hash,
     boardTarget,
+    boardRuntime,
     _handleOutputData,
   }: {
     projectPath: string
     boardTarget: string
     buildMD5Hash: string
+    boardRuntime: string
     _handleOutputData: HandleOutputDataCallback
   }) {
     let DEFINES_CONTENT: string = ''
@@ -753,10 +755,19 @@ class CompilerModule {
 
     // 3.2. Device Configuration
     DEFINES_CONTENT += '//Comms Configuration\n'
-    DEFINES_CONTENT += `#define MBSERIAL_IFACE ${modbusRTU.rtuInterface}\n`
-    DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
-    if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
-    if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
+    if (boardRuntime === 'simulator') {
+      // Simulator forces fixed Modbus RTU settings over emulated USART0.
+      // On ATmega2560, Serial = USART0. avr8js bridges usart0.
+      DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
+      DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial\n'
+      DEFINES_CONTENT += '#define MBSERIAL_BAUD 115200\n'
+      DEFINES_CONTENT += '#define MBSERIAL_SLAVE 1\n'
+    } else {
+      DEFINES_CONTENT += `#define MBSERIAL_IFACE ${modbusRTU.rtuInterface}\n`
+      DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
+      if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
+      if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
+    }
     if (modbusTCP.tcpMacAddress !== null)
       DEFINES_CONTENT += `#define MBTCP_MAC ${FormatMacAddress(modbusTCP.tcpMacAddress)}\n`
     // OBS: This is giving us an empty string and this is being printed as a space
@@ -769,7 +780,7 @@ class CompilerModule {
     if (modbusTCP.tcpStaticHostConfiguration.subnet !== null)
       DEFINES_CONTENT += `#define MBTCP_SUBNET ${modbusTCP.tcpStaticHostConfiguration.subnet.replaceAll('.', ',')}\n`
 
-    if (communicationPreferences.enabledRTU) {
+    if (communicationPreferences.enabledRTU || boardRuntime === 'simulator') {
       DEFINES_CONTENT += '#define MBSERIAL\n'
       DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     }
@@ -875,6 +886,7 @@ class CompilerModule {
   async handlePatchGeneratedFiles(compilationPath: string, handleOutputData: HandleOutputDataCallback) {
     const pousCFilePath = join(compilationPath, 'src', 'POUS.c')
     const res0FilePath = join(compilationPath, 'src', 'Res0.c')
+    const config0FilePath = join(compilationPath, 'src', 'Config0.c')
 
     const pousCContent = await readFile(pousCFilePath, { encoding: 'utf8' })
     const patchedPousCContent = `#include "POUS.h"\n#include "Config0.h"\n\n${pousCContent}`
@@ -886,6 +898,18 @@ class CompilerModule {
 
     await writeFile(res0FilePath, patchedRes0FileContent, { encoding: 'utf8' })
     handleOutputData('Required files patched', 'info')
+
+    // Unity build: Rename .c files to .inc so Arduino build system doesn't compile them separately.
+    // These files are #included by glueVars.c as a single compilation unit to avoid
+    // duplicate static function definitions that cause binary size bloat.
+    const pousIncFilePath = join(compilationPath, 'src', 'POUS.inc')
+    const res0IncFilePath = join(compilationPath, 'src', 'Res0.inc')
+    const config0IncFilePath = join(compilationPath, 'src', 'Config0.inc')
+
+    await fs.rename(pousCFilePath, pousIncFilePath)
+    await fs.rename(res0FilePath, res0IncFilePath)
+    await fs.rename(config0FilePath, config0IncFilePath)
+    handleOutputData('Files renamed to .inc for unity build', 'info')
   }
 
   async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
@@ -988,6 +1012,14 @@ class CompilerModule {
         ...buildProjectFlags,
         '--build-property',
         `compiler.cpp.extra_flags=${boardHalsContent['cxx_flags'].map((f) => f).join(' ')}`,
+      ]
+    }
+
+    if (boardHalsContent['ld_flags']) {
+      buildProjectFlags = [
+        ...buildProjectFlags,
+        '--build-property',
+        `compiler.c.elf.extra_flags=${boardHalsContent['ld_flags'].map((f: string) => f).join(' ')}`,
       ]
     }
 
@@ -2006,6 +2038,7 @@ class CompilerModule {
         projectPath: normalizedProjectPath,
         boardTarget,
         buildMD5Hash,
+        boardRuntime,
         _handleOutputData: (data, logLevel) => {
           _mainProcessPort.postMessage({ logLevel, message: data })
         },
@@ -2052,7 +2085,25 @@ class CompilerModule {
       return
     }
 
-    // Step 13: Upload program to board if necessary
+    // Step 13: Upload program to board or load into simulator
+    if (boardRuntime === 'simulator') {
+      // For simulator targets, send the HEX firmware path back to the renderer.
+      // Derive the build sub-directory from the platform FQBN (e.g. "arduino:avr:mega" → "arduino.avr.mega")
+      // so it stays in sync with the hals.json entry.
+      const fqbnSubDir = halsContent[boardTarget]['platform'].replaceAll(':', '.')
+      const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', fqbnSubDir, 'Baremetal.ino.hex')
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'Compilation successful. Loading firmware into simulator...',
+      })
+      _mainProcessPort.postMessage({
+        simulatorFirmwarePath: hexPath,
+        closePort: true,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
     if (!compileOnly) {
       _mainProcessPort.postMessage({ logLevel: 'info', message: 'Uploading program to board...' })
       try {

@@ -20,6 +20,15 @@ const POU_TYPE_TO_START_KEYWORD: Record<string, string> = {
 }
 
 /**
+ * POU type to folder name mapping
+ */
+const POU_TYPE_TO_FOLDER: Record<string, string> = {
+  program: 'programs',
+  function: 'functions',
+  'function-block': 'function-blocks',
+}
+
+/**
  * POU type to IEC end keyword mapping
  */
 const POU_TYPE_TO_END_KEYWORD: Record<string, string> = {
@@ -85,4 +94,17 @@ export const getEndKeyword = (pouType: string): string => {
     throw new Error(`Unsupported POU type: ${pouType}`)
   }
   return keyword
+}
+
+/**
+ * Get folder name for a given POU type
+ * @param pouType - The POU type (program, function, function-block)
+ * @returns The folder name (e.g., 'programs', 'functions', 'function-blocks')
+ */
+export const getFolderFromPouType = (pouType: string): string => {
+  const folder = POU_TYPE_TO_FOLDER[pouType]
+  if (!folder) {
+    throw new Error(`Unknown POU type: ${pouType}`)
+  }
+  return folder
 }

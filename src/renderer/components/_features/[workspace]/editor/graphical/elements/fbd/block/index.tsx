@@ -19,6 +19,14 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
+import {
+  assembleVariables,
+  buildNextExtensibleInput,
+  classifyBlockVariables,
+  getMinInputCount,
+  rebuildVariablesForInputCount,
+  removeLastExtensibleInput,
+} from '@root/utils/PLC/extensible-block-variables'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -210,21 +218,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(Number(prevState.inputs) + 1),
     }))
 
-    const firstInput = blockVariant.variables.find((variable) => variable.class === 'input' && variable.name !== 'EN')
-    const defaultInputType = (firstInput || blockVariant.variables[0]).type
-    const blockVariables = [
-      ...blockVariant.variables,
-      {
-        name: 'IN' + (Number(formState.inputs) + 1),
-        class: 'input',
-        type: defaultInputType,
-      },
-    ].filter((variable) => variable.class === 'input')
-
-    const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
-    outputVariable.forEach((variable) => {
-      blockVariables.push(variable)
-    })
+    const newInput = buildNextExtensibleInput(blockVariant.variables)
+    const classified = classifyBlockVariables(blockVariant.variables)
+    classified.extensibleInputs.push(newInput)
+    const blockVariables = assembleVariables(classified) as BlockVariant['variables']
 
     const { height } = getBlockSize({ ...blockVariant, variables: blockVariables } as BlockVariant, {
       x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
@@ -245,30 +242,16 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleInputsDecrement = () => {
-    const minInputs = 2
+    const result = removeLastExtensibleInput(blockVariant.variables, 2)
+    if (!result) return
 
-    const inputVariables = [...blockVariant.variables]
-      .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
-      .slice(0, -1) // negative one excludes the final element
-
-    if (inputVariables.length < minInputs) return
-
+    const nonENCount = result.filter((v) => (v.class === 'input' || v.class === 'inOut') && v.name !== 'EN').length
     setFormState((prevState) => ({
       ...prevState,
-      inputs: String(inputVariables.length),
+      inputs: String(nonENCount),
     }))
 
-    const blockVariables = [...blockVariant.variables].filter((variable) => variable.name === 'EN')
-
-    const outputVariables = [...blockVariant.variables].filter(
-      (variable) => variable.class === 'output' || variable.class === 'inOut',
-    )
-    inputVariables.forEach((variable) => {
-      blockVariables.push(variable)
-    })
-    outputVariables.forEach((variable) => {
-      blockVariables.push(variable)
-    })
+    const blockVariables = result as BlockVariant['variables']
 
     const { height } = getBlockSize(
       { ...blockVariant, variables: blockVariables },
@@ -293,38 +276,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
   const handleInputsSubmit = (e: React.FocusEvent<HTMLInputElement>) => {
     const { value: EventValue } = e.target
-    const libraryBlock = searchLibraryByPouName(libraries, editor, pous, formState.name)
+    const minInputs = getMinInputCount(blockVariant.variables, 2)
 
-    const value = Math.max(
-      libraryBlock
-        ? (libraryBlock as BlockVariant).variables.filter((variable) => variable.class === 'input').length
-        : 2,
-      Math.min(Number(EventValue), maxInputs),
-    )
+    const value = Math.max(minInputs, Math.min(Number(EventValue), maxInputs))
     setFormState((prevState) => ({ ...prevState, inputs: String(value) }))
 
-    const defaultInputType = blockVariant.variables[0].type
-    const blockVariables: BlockVariant['variables'] = []
-
-    if (formState.executionControl) {
-      blockVariables.push({
-        name: 'EN',
-        class: 'input',
-        type: { definition: 'base-type', value: 'BOOL' },
-      })
-    }
-    for (let i = 0; i < value; i++) {
-      blockVariables.push({
-        name: 'IN' + (i + 1),
-        class: 'input',
-        type: defaultInputType,
-      })
-    }
-
-    const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
-    outputVariable.forEach((variable) => {
-      blockVariables.push(variable)
-    })
+    const blockVariables = rebuildVariablesForInputCount(blockVariant.variables, value) as BlockVariant['variables']
 
     const { height } = getBlockSize(
       { ...blockVariant, variables: blockVariables },

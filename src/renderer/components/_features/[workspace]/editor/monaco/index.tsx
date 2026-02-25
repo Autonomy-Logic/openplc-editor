@@ -5,6 +5,9 @@ import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_m
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
+import { getExtensionFromLanguage, getFolderFromPouType } from '@root/utils/PLC/pou-file-extensions'
+import { parseHybridPouFromString, parseTextualPouFromString } from '@root/utils/PLC/pou-text-parser'
+import type { IpcRendererEvent } from 'electron'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -54,6 +57,14 @@ type SnippetController = {
   insert: (snippet: string, options?: unknown) => void
 }
 
+// Cast window.bridge once for file-watcher methods that don't resolve in the renderer webpack context
+const bridge = window.bridge as unknown as {
+  fileWatchStart: (path: string) => Promise<{ success: boolean; error?: string }>
+  fileWatchStop: (path: string) => Promise<{ success: boolean }>
+  fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+  onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
+}
+
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
@@ -69,6 +80,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
+      meta: { path: projectPath },
       data: {
         pous,
         configuration: {
@@ -87,6 +99,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
+  // Create a unique Monaco path by combining project path with relative path
+  // This prevents Monaco from caching models across different projects with same POU names
+  const uniqueMonacoPath = projectPath ? `${projectPath}${path}` : path
+
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
@@ -94,6 +110,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const pou = openPLCStoreBase.getState().project.data.pous.find((pou) => pou.data.name === name)
     return typeof pou?.data.body.value === 'string' ? pou.data.body.value : ''
   })
+  const watchedFilePathRef = useRef<string | null>(null)
 
   useEffect(() => {
     const pou = pous.find((p) => p.data.name === name)
@@ -153,6 +170,69 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       updateEnumValuesInTokenizer(dataTypes)
     }
   }, [dataTypes, language])
+
+  // File watching for external changes (auto-reload like VSCode)
+  useEffect(() => {
+    const projectPath = openPLCStoreBase.getState().project.meta.path
+    if (!projectPath || !pou) return
+
+    const actualExtension = getExtensionFromLanguage(language)
+    const pouFolder = getFolderFromPouType(pou.type)
+
+    // Construct full file path for the POU file
+    const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
+    watchedFilePathRef.current = fullPath
+
+    // Start watching the file
+    void bridge.fileWatchStart(fullPath)
+
+    // Listen for external file change events - VSCode-like behavior:
+    // - If file has no unsaved changes: auto-reload silently
+    // - If file has unsaved changes: do nothing (preserve local edits)
+    const handleExternalChange = (_event: IpcRendererEvent, data: { filePath: string }) => {
+      if (data.filePath !== watchedFilePathRef.current) return
+
+      // Check if the file has unsaved local changes
+      const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
+
+      if (isSaved) {
+        void reloadFromDisk()
+      }
+    }
+
+    // Function to reload content from disk
+    const reloadFromDisk = async () => {
+      if (!watchedFilePathRef.current) return
+
+      try {
+        const result = await bridge.fileReadContent(watchedFilePathRef.current)
+
+        if (result.success && result.content) {
+          const parsedPou =
+            language === 'st' || language === 'il'
+              ? parseTextualPouFromString(result.content, language, pou.type)
+              : parseHybridPouFromString(result.content, language, pou.type)
+          const newBodyValue = typeof parsedPou.data.body.value === 'string' ? parsedPou.data.body.value : ''
+
+          // Update local state and store
+          setLocalText(newBodyValue)
+          updatePou({ name, content: { language, value: newBodyValue } })
+        }
+      } catch (err) {
+        console.error('[Monaco FileWatch] Failed to reload file:', err)
+      }
+    }
+
+    const cleanup = bridge.onFileExternalChange(handleExternalChange)
+
+    return () => {
+      cleanup()
+      if (watchedFilePathRef.current) {
+        void bridge.fileWatchStop(watchedFilePathRef.current)
+        watchedFilePathRef.current = null
+      }
+    }
+  }, [pou?.type, name, language])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
@@ -504,6 +584,20 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     if (!editorInstance || !monacoInstance) return
 
+    // Force-sync cached Monaco model with the store value.
+    // @monaco-editor/react's useUpdate skips the value→model sync on initial mount,
+    // so when keepCurrentModel=true a stale model from a previous session may persist
+    // (e.g. after "Don't Save" → reopen). At this point the onChange listener hasn't
+    // been wired up yet, so setValue won't trigger handleWriteInPou.
+    const model = editorInstance.getModel()
+    if (model) {
+      const storePou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+      const storeBodyValue = typeof storePou?.data.body.value === 'string' ? storePou.data.body.value : ''
+      if (model.getValue() !== storeBodyValue) {
+        model.setValue(storeBodyValue)
+      }
+    }
+
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
 
@@ -516,6 +610,45 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         openPLCStoreBase.getState().editorActions.setMonacoFocused(false)
       })
     }
+
+    // Check for external file changes when tab becomes active (editor mounts)
+    // This handles the case where a file was modified while another tab was in focus
+    void (async () => {
+      const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
+      if (!isSaved) return // Has local unsaved changes, don't reload
+
+      const currentPou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+      if (!currentPou) return
+
+      const projectPath = openPLCStoreBase.getState().project.meta.path
+      if (!projectPath) return
+
+      // Construct file path
+      const actualExtension = getExtensionFromLanguage(language)
+      const pouFolder = getFolderFromPouType(currentPou.type)
+      const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
+
+      try {
+        const result = await bridge.fileReadContent(fullPath)
+
+        if (result.success && result.content) {
+          const parsedPou =
+            language === 'st' || language === 'il'
+              ? parseTextualPouFromString(result.content, language, currentPou.type)
+              : parseHybridPouFromString(result.content, language, currentPou.type)
+          const newBodyValue = typeof parsedPou.data.body.value === 'string' ? parsedPou.data.body.value : ''
+
+          // Only update if content is different from what we have
+          const currentBodyValue = typeof currentPou.data.body.value === 'string' ? currentPou.data.body.value : ''
+          if (newBodyValue !== currentBodyValue) {
+            setLocalText(newBodyValue)
+            updatePou({ name, content: { language, value: newBodyValue } })
+          }
+        }
+      } catch (err) {
+        console.error('[Monaco] Failed to check for external changes on mount:', err)
+      }
+    })()
 
     if (searchQuery) {
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
@@ -838,7 +971,7 @@ void loop()
           options={monacoEditorUserOptions}
           height='100%'
           width='100%'
-          path={path}
+          path={uniqueMonacoPath}
           language={language}
           defaultValue={''}
           value={localText}

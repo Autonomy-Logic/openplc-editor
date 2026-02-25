@@ -37,6 +37,7 @@ const historyActionsSchema = z.object({
   popFutureHistory: z.function().args(z.string()).returns(historySnapshotSchema.optional()),
   undo: z.function().args(z.string()).returns(z.void()),
   redo: z.function().args(z.string()).returns(z.void()),
+  clearHistory: z.function().returns(z.void()),
 })
 
 type HistoryActions = z.infer<typeof historyActionsSchema>

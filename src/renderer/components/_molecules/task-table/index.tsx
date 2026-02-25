@@ -60,6 +60,7 @@ const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps
     },
     projectActions: { updateTask },
     snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   return (
@@ -71,7 +72,11 @@ const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps
       updateData={(rowIndex, columnId, value) => {
         addSnapshot(name)
         // @ts-expect-error - The data value is a literal type that need to be parsed
-        return updateTask({ rowId: rowIndex, data: { [columnId]: value } })
+        const result = updateTask({ rowId: rowIndex, data: { [columnId]: value } })
+        if (result.ok) {
+          handleFileAndWorkspaceSavedState('Resource')
+        }
+        return result
       }}
       tableContext='Tasks'
     />

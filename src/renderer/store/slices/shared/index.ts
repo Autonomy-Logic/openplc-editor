@@ -22,7 +22,13 @@ import {
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
-import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import { getExtensionFromLanguage, getFolderFromPouType } from '@root/utils/PLC/pou-file-extensions'
+import {
+  parseGraphicalPouFromString,
+  parseHybridPouFromString,
+  parseTextualPouFromString,
+} from '@root/utils/PLC/pou-text-parser'
+import * as monaco from 'monaco-editor'
 import { StateCreator } from 'zustand'
 
 import { ConsoleSlice } from '../console'
@@ -37,10 +43,17 @@ import { duplicateLadderRung } from '../ladder/utils'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
 import { ProjectSlice, ProjectState } from '../project'
+import { SearchSlice } from '../search'
 import { TabsProps, TabsSlice } from '../tabs'
 import { CreateEditorObjectFromTab } from '../tabs/utils'
 import { WorkspaceSlice } from '../workspace'
 import { CreateEditorObject, CreatePouObject } from './utils'
+
+// Cast window.bridge once for file-watcher methods that don't resolve in the renderer webpack context
+const fileBridge = window.bridge as unknown as {
+  fileWatchStopAll: () => Promise<{ success: boolean }>
+  fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+}
 
 type PropsToCreatePou = {
   name: string
@@ -75,10 +88,12 @@ export type SharedSlice = {
   serverActions: {
     deleteRequest: (serverName: string) => void
     delete: (data: DeleteServer) => Promise<BasicSharedSliceResponse>
+    rename: (serverName: string, newServerName: string) => Promise<BasicSharedSliceResponse>
   }
   remoteDeviceActions: {
     deleteRequest: (remoteDeviceName: string) => void
     delete: (data: DeleteRemoteDevice) => Promise<BasicSharedSliceResponse>
+    rename: (remoteDeviceName: string, newRemoteDeviceName: string) => Promise<BasicSharedSliceResponse>
   }
   sharedWorkspaceActions: {
     // Clear all states when closing a project
@@ -97,7 +112,10 @@ export type SharedSlice = {
     // File operations
     openFile: (data: TabsProps) => BasicSharedSliceResponse
     closeFile: (name: string) => BasicSharedSliceResponse
+    forceCloseFile: (name: string) => BasicSharedSliceResponse
     saveFile: (name: string) => Promise<BasicSharedSliceResponse>
+    saveAndCloseFile: (name: string) => Promise<BasicSharedSliceResponse>
+    discardAndCloseFile: (name: string) => Promise<BasicSharedSliceResponse>
     // File and workspace saved state management
     handleFileAndWorkspaceSavedState: (name: string) => void
   }
@@ -140,6 +158,7 @@ export const createSharedSlice: StateCreator<
     FileSlice &
     ConsoleSlice &
     HistorySlice &
+    SearchSlice &
     SharedSlice,
   [],
   [],
@@ -287,11 +306,12 @@ export const createSharedSlice: StateCreator<
       if (propsToCreatePou.type !== 'program')
         getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
 
-      // Add the file to the file slice
+      // Add the file to the file slice (marked as new since it was just created)
       getState().fileActions.addFile({
         name: propsToCreatePou.name,
         type: propsToCreatePou.type,
         filePath: pouPath,
+        isNew: true,
       })
 
       // Add and set the editor
@@ -361,6 +381,9 @@ export const createSharedSlice: StateCreator<
           type: null,
         })
       }
+
+      // Mark the workspace as unsaved so the save warning dialog is triggered
+      getState().workspaceActions.setEditingState('unsaved')
 
       return Promise.resolve({
         success: true,
@@ -671,11 +694,12 @@ export const createSharedSlice: StateCreator<
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
       getState().projectActions.createDatatype({ data: propsToCreateDatatype })
 
-      // Add the file to the file slice
+      // Add the file to the file slice (marked as new since it was just created)
       getState().fileActions.addFile({
         name: propsToCreateDatatype.name,
         type: 'data-type',
         filePath: `/project.json`,
+        isNew: true,
       })
 
       // Add and set the editor
@@ -923,7 +947,75 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return await getState().sharedWorkspaceActions.saveFile(data.file)
+      const saveResult = await getState().sharedWorkspaceActions.saveFile(data.file)
+      getState().fileActions.removeFile({ name: data.file })
+      return saveResult
+    },
+
+    rename: (serverName, newServerName) => {
+      if (serverName === newServerName) {
+        return Promise.resolve({ success: false })
+      }
+
+      if (!(newServerName ?? '').trim()) {
+        toast({ title: 'Error', description: 'New name must be non-empty.', variant: 'fail' })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming server',
+            description: 'New name must be non-empty.',
+          },
+        })
+      }
+
+      const servers = getState().project.data.servers
+      const isServerNameAlreadyUsed = servers?.some((s) => s.name === newServerName)
+      if (isServerNameAlreadyUsed) {
+        toast({
+          title: 'Error renaming server',
+          description: `Server with name ${newServerName} already exists.`,
+          variant: 'fail',
+        })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming server',
+            description: `Server with name ${newServerName} already exists.`,
+          },
+        })
+      }
+
+      const server = servers?.find((s) => s.name === serverName)
+      if (!server) {
+        toast({
+          title: 'Error',
+          description: `Server with name ${serverName} not found.`,
+          variant: 'fail',
+        })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming server',
+            description: `Server with name ${serverName} not found.`,
+          },
+        })
+      }
+
+      getState().projectActions.updateServerName(serverName, newServerName)
+      getState().tabsActions.updateTabName(serverName, newServerName)
+      getState().editorActions.updateEditorName(serverName, newServerName)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === serverName) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: newServerName,
+          type: selectedProjectTreeLeaf.type,
+        })
+      }
+
+      // Mark workspace as unsaved - servers are saved with project.json
+      getState().workspaceActions.setEditingState('unsaved')
+      return Promise.resolve({ success: true })
     },
   },
 
@@ -971,12 +1063,90 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return await getState().sharedWorkspaceActions.saveFile(data.file)
+      const saveResult = await getState().sharedWorkspaceActions.saveFile(data.file)
+      getState().fileActions.removeFile({ name: data.file })
+      return saveResult
+    },
+
+    rename: (remoteDeviceName, newRemoteDeviceName) => {
+      if (remoteDeviceName === newRemoteDeviceName) {
+        return Promise.resolve({ success: false })
+      }
+
+      if (!(newRemoteDeviceName ?? '').trim()) {
+        toast({ title: 'Error', description: 'New name must be non-empty.', variant: 'fail' })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming remote device',
+            description: 'New name must be non-empty.',
+          },
+        })
+      }
+
+      const remoteDevices = getState().project.data.remoteDevices
+      const isRemoteDeviceNameAlreadyUsed = remoteDevices?.some((d) => d.name === newRemoteDeviceName)
+      if (isRemoteDeviceNameAlreadyUsed) {
+        toast({
+          title: 'Error renaming remote device',
+          description: `Remote device with name ${newRemoteDeviceName} already exists.`,
+          variant: 'fail',
+        })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming remote device',
+            description: `Remote device with name ${newRemoteDeviceName} already exists.`,
+          },
+        })
+      }
+
+      const remoteDevice = remoteDevices?.find((d) => d.name === remoteDeviceName)
+      if (!remoteDevice) {
+        toast({
+          title: 'Error',
+          description: `Remote device with name ${remoteDeviceName} not found.`,
+          variant: 'fail',
+        })
+        return Promise.resolve({
+          success: false,
+          error: {
+            title: 'Error renaming remote device',
+            description: `Remote device with name ${remoteDeviceName} not found.`,
+          },
+        })
+      }
+
+      getState().projectActions.updateRemoteDeviceName(remoteDeviceName, newRemoteDeviceName)
+      getState().tabsActions.updateTabName(remoteDeviceName, newRemoteDeviceName)
+      getState().editorActions.updateEditorName(remoteDeviceName, newRemoteDeviceName)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === remoteDeviceName) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: newRemoteDeviceName,
+          type: selectedProjectTreeLeaf.type,
+        })
+      }
+
+      // Mark workspace as unsaved - remote devices are saved with project.json
+      getState().workspaceActions.setEditingState('unsaved')
+      return Promise.resolve({ success: true })
     },
   },
 
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => {
+      // Stop all file watchers before clearing state
+      void fileBridge.fileWatchStopAll()
+
+      // Dispose all Monaco editor models to prevent stale content from being cached
+      // This ensures that when a new project is opened, Monaco will use fresh content
+      const allModels = monaco.editor.getModels()
+      allModels.forEach((model) => {
+        model.dispose()
+      })
+
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
@@ -987,14 +1157,20 @@ export const createSharedSlice: StateCreator<
       getState().workspaceActions.clearWorkspace()
       getState().fileActions.clearFiles()
       getState().consoleActions.clearLogs()
+      // Clear additional slices to ensure complete state reset on project close
+      getState().historyActions.clearHistory()
+      getState().searchActions.clearSearch()
+      getState().modalActions.closeModal()
       window.bridge.rebuildMenu()
     },
 
     closeProject: () => {
       const editingState = getState().workspace.editingState
-      const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved(editingState)
+      const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved()
 
-      if (!isFilesSaved && editingState === 'unsaved') {
+      // Show save dialog if there are unsaved file changes OR the workspace has unsaved changes
+      // (e.g., POU deletions mark editingState as 'unsaved' even though no files are modified)
+      if (!isFilesSaved || editingState === 'unsaved') {
         getState().modalActions.openModal('save-changes-project', {
           validationContext: 'close-project',
         })
@@ -1005,7 +1181,7 @@ export const createSharedSlice: StateCreator<
 
     handleOpenProjectRequest(data) {
       if (data) {
-        getState().workspaceActions.setEditingState('unsaved')
+        getState().workspaceActions.setEditingState('saved')
 
         const { project, pous, deviceConfiguration, devicePinMapping } = data.content
 
@@ -1044,26 +1220,42 @@ export const createSharedSlice: StateCreator<
 
         pous.map((pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type))
 
-        const graphicalPous = [...ladderPous, ...fbdPous]
-        if (graphicalPous.length) {
-          const state = getState()
+        // Reclassify ALL POUs' variables with full context.
+        // The text parser can't determine type definitions accurately since it doesn't have
+        // the full project context. Re-parse with pous, dataTypes, and libraries to correctly
+        // classify FB instances as 'derived' vs structs as 'user-data-type'.
+        {
+          const reclassState = getState()
           const {
             project: {
-              data: { dataTypes },
+              data: { dataTypes: reclassDataTypes },
             },
-            libraries,
-          } = state
+            libraries: reclassLibraries,
+          } = reclassState
 
-          graphicalPous.forEach((pou) => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-            const iecString = generateIecVariablesToString(pou.data.variables as any)
-            const reparsedVariables: PLCVariable[] = parseIecStringToVariables(iecString, pous, dataTypes, libraries)
-            getState().projectActions.setPouVariables({
-              pouName: pou.data.name,
-              variables: reparsedVariables,
-            })
+          pous.forEach((pou) => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+              const iecString = generateIecVariablesToString(pou.data.variables as any)
+              const reparsedVariables: PLCVariable[] = parseIecStringToVariables(
+                iecString,
+                pous,
+                reclassDataTypes,
+                reclassLibraries,
+              )
+              getState().projectActions.setPouVariables({
+                pouName: pou.data.name,
+                variables: reparsedVariables,
+              })
+            } catch (err) {
+              console.error(`[Reclassify] Failed to reclassify variables for POU "${pou.data.name}":`, err)
+            }
           })
+        }
 
+        // Sync graphical POU nodes with reclassified variables
+        const graphicalPous = [...ladderPous, ...fbdPous]
+        if (graphicalPous.length) {
           const freshState = getState()
           const freshLadderFlows = freshState.ladderFlows
           const freshFBDFlows = freshState.fbdFlows
@@ -1180,6 +1372,26 @@ export const createSharedSlice: StateCreator<
             saved: true,
           }
         })
+        const servers = getState().project.data.servers
+        if (servers) {
+          servers.forEach((server) => {
+            files[server.name] = {
+              type: 'server',
+              filePath: `/project.json`,
+              saved: true,
+            }
+          })
+        }
+        const remoteDevices = getState().project.data.remoteDevices
+        if (remoteDevices) {
+          remoteDevices.forEach((device) => {
+            files[device.name] = {
+              type: 'remote-device',
+              filePath: `/project.json`,
+              saved: true,
+            }
+          })
+        }
         files['Resource'] = {
           type: 'resource',
           filePath: `/project.json`,
@@ -1602,7 +1814,21 @@ export const createSharedSlice: StateCreator<
       return { success: true }
     },
     closeFile: (name) => {
-      // Remove the tab from the tabs slice
+      // Check if file has unsaved changes
+      const isSaved = getState().fileActions.getSavedState({ name })
+
+      if (!isSaved) {
+        // File has unsaved changes - show save prompt modal
+        getState().modalActions.openModal('save-changes-file', { fileName: name })
+        return { success: false }
+      }
+
+      // File is saved, proceed with close
+      return getState().sharedWorkspaceActions.forceCloseFile(name)
+    },
+
+    forceCloseFile: (name) => {
+      // Remove the tab from the tabs slice (no saved check)
       getState().tabsActions.removeTab(name)
 
       // Check if there are any remaining tabs
@@ -1621,7 +1847,7 @@ export const createSharedSlice: StateCreator<
         return { success: true }
       }
 
-      // If there is no next tab, set the editor to available
+      // If there are remaining tabs, select the last one
       const editor = getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
       getState().editorActions.setEditor(editor)
       getState().tabsActions.setSelectedTab(nextTab.name)
@@ -1632,6 +1858,180 @@ export const createSharedSlice: StateCreator<
 
       return { success: true }
     },
+    saveAndCloseFile: async (name) => {
+      // Save the file first
+      const saveResult = await getState().sharedWorkspaceActions.saveFile(name)
+      if (!saveResult.success) {
+        return saveResult
+      }
+      // Close the file after successful save
+      return getState().sharedWorkspaceActions.forceCloseFile(name)
+    },
+
+    discardAndCloseFile: async (name) => {
+      const { file } = getState().fileActions.getFile({ name })
+      if (!file) {
+        return {
+          success: false,
+          error: { title: 'Error discarding changes', description: `File with name ${name} does not exist.` },
+        }
+      }
+
+      const isPouType = file.type === 'program' || file.type === 'function' || file.type === 'function-block'
+
+      // Helper: remove file from state and select next tab
+      const removeAndClose = () => {
+        getState().fileActions.removeFile({ name })
+        return getState().sharedWorkspaceActions.forceCloseFile(name)
+      }
+
+      // --- Newly created files that were never saved: delete from state (and disk for POUs) ---
+      if (file.isNew) {
+        if (isPouType) {
+          const projectPath = getState().project.meta.path
+          const pou = getState().project.data.pous.find((p) => p.data.name === name)
+          const extension = pou ? getExtensionFromLanguage(pou.data.body.language) : '.st'
+          const filePath = `${projectPath}/pous/${getFolderFromPouType(file.type ?? 'program')}/${name}${extension}`
+
+          try {
+            await window.bridge.deletePouFile(filePath)
+          } catch (err) {
+            console.error('Error deleting new POU file:', err)
+          }
+
+          getState().projectActions.deletePou(name)
+          getState().ladderFlowActions.removeLadderFlow(name)
+          getState().fbdFlowActions.removeFBDFlow(name)
+          getState().editorActions.removeModel(name)
+          getState().libraryActions.removeUserLibrary(name)
+        } else if (file.type === 'data-type') {
+          getState().projectActions.deleteDatatype(name)
+          getState().editorActions.removeModel(name)
+          getState().libraryActions.removeUserLibrary(name)
+        } else if (file.type === 'server') {
+          getState().projectActions.deleteServer(name)
+          getState().editorActions.removeModel(name)
+        } else if (file.type === 'remote-device') {
+          getState().projectActions.deleteRemoteDevice(name)
+          getState().editorActions.removeModel(name)
+        }
+
+        return removeAndClose()
+      }
+
+      // --- Existing files: reload persisted state from disk before closing ---
+
+      if (isPouType) {
+        const projectPath = getState().project.meta.path
+        const existingPou = getState().project.data.pous.find((p) => p.data.name === name)
+
+        if (existingPou) {
+          const pouLanguage = existingPou.data.body.language
+          const extension = getExtensionFromLanguage(pouLanguage)
+          const filePath = `${projectPath}/pous/${getFolderFromPouType(file.type ?? 'program')}/${name}${extension}`
+
+          const readResult = await fileBridge.fileReadContent(filePath)
+          if (!readResult.success || !readResult.content) {
+            console.error('Failed to read POU file from disk:', readResult.error)
+            return {
+              success: false,
+              error: { title: 'Error discarding changes', description: 'Unable to reload the file from disk.' },
+            }
+          }
+
+          try {
+            let pouData: PLCPou
+            const pouType = (file.type ?? 'program') as 'program' | 'function' | 'function-block'
+            if (pouLanguage === 'st' || pouLanguage === 'il') {
+              pouData = parseTextualPouFromString(readResult.content, pouLanguage, pouType)
+            } else if (pouLanguage === 'python' || pouLanguage === 'cpp') {
+              pouData = parseHybridPouFromString(readResult.content, pouLanguage, pouType)
+            } else if (pouLanguage === 'ld' || pouLanguage === 'fbd') {
+              pouData = parseGraphicalPouFromString(readResult.content, pouLanguage, pouType)
+            } else {
+              return {
+                success: false,
+                error: { title: 'Error discarding changes', description: `Unsupported POU language: ${pouLanguage}` },
+              }
+            }
+
+            getState().projectActions.applyPouSnapshot(name, pouData.data.variables, pouData.data.body)
+
+            if (pouData.data.language === 'ld' && pouData.data.body.language === 'ld') {
+              getState().ladderFlowActions.removeLadderFlow(name)
+              getState().ladderFlowActions.addLadderFlow(pouData.data.body.value as LadderFlowType)
+            } else if (pouData.data.language === 'fbd' && pouData.data.body.language === 'fbd') {
+              getState().fbdFlowActions.removeFBDFlow(name)
+              getState().fbdFlowActions.addFBDFlow(pouData.data.body.value as FBDFlowType)
+            }
+          } catch (err) {
+            console.error('Error parsing POU file:', err)
+            return {
+              success: false,
+              error: { title: 'Error discarding changes', description: 'The file on disk could not be parsed.' },
+            }
+          }
+        }
+      } else if (
+        file.type === 'data-type' ||
+        file.type === 'server' ||
+        file.type === 'remote-device' ||
+        file.type === 'resource'
+      ) {
+        // Non-POU files stored in project.json: re-read project.json and restore the entity
+        const projectPath = getState().project.meta.path
+        const readResult = await fileBridge.fileReadContent(`${projectPath}/project.json`)
+        if (!readResult.success || !readResult.content) {
+          console.error('Failed to read project.json from disk:', readResult.error)
+          return {
+            success: false,
+            error: { title: 'Error discarding changes', description: 'Unable to reload project.json from disk.' },
+          }
+        }
+
+        try {
+          const projectJson = JSON.parse(readResult.content) as PLCProject
+          const projectData = projectJson.data
+
+          if (file.type === 'data-type') {
+            const savedDatatype = projectData.dataTypes.find((dt) => dt.name === name)
+            if (savedDatatype) {
+              getState().projectActions.deleteDatatype(name)
+              getState().projectActions.createDatatype({ data: savedDatatype })
+            }
+          } else if (file.type === 'server') {
+            const savedServer = projectData.servers?.find((s) => s.name === name)
+            if (savedServer) {
+              getState().projectActions.deleteServer(name)
+              getState().projectActions.createServer({ data: savedServer })
+            }
+          } else if (file.type === 'remote-device') {
+            const savedDevice = projectData.remoteDevices?.find((d) => d.name === name)
+            if (savedDevice) {
+              getState().projectActions.deleteRemoteDevice(name)
+              getState().projectActions.createRemoteDevice({ data: savedDevice })
+            }
+          } else if (file.type === 'resource') {
+            const savedResource = projectData.configuration?.resource
+            if (savedResource) {
+              getState().projectActions.setGlobalVariables({ variables: savedResource.globalVariables ?? [] })
+              getState().projectActions.setTasks({ tasks: savedResource.tasks ?? [] })
+              getState().projectActions.setInstances({ instances: savedResource.instances ?? [] })
+            }
+          }
+        } catch (err) {
+          console.error('Error parsing project.json:', err)
+          return {
+            success: false,
+            error: { title: 'Error discarding changes', description: 'The project.json file could not be parsed.' },
+          }
+        }
+      }
+
+      getState().fileActions.updateFile({ name, saved: true })
+      return getState().sharedWorkspaceActions.forceCloseFile(name)
+    },
+
     saveFile: async (name) => {
       const { file } = getState().fileActions.getFile({ name: name })
       if (!file) {
@@ -1674,8 +2074,7 @@ export const createSharedSlice: StateCreator<
             try {
               const language = pouToSave.data.body.language
               const extension = getExtensionFromLanguage(language)
-              const typeDir =
-                file.type === 'function' ? 'functions' : file.type === 'function-block' ? 'function-blocks' : 'programs'
+              const typeDir = getFolderFromPouType(file.type ?? 'program')
               computedFilePath = `${projectFilePath}/pous/${typeDir}/${name}${extension}`
             } catch (_error) {
               // If language is not supported, fall back to using the original file.filePath
@@ -1728,7 +2127,9 @@ export const createSharedSlice: StateCreator<
           break
         }
         case 'data-type':
-        case 'resource': {
+        case 'resource':
+        case 'server':
+        case 'remote-device': {
           const currentProject = getState().project
           const projectData = PLCProjectSchema.safeParse(currentProject)
           if (!projectData.success) {
@@ -1826,6 +2227,8 @@ export const createSharedSlice: StateCreator<
         }
         case 'data-type':
         case 'resource':
+        case 'server':
+        case 'remote-device':
           saveResponse = await window.bridge.saveFile(`${projectFilePath}/project.json`, saveContent)
           break
         default:
@@ -1851,6 +2254,7 @@ export const createSharedSlice: StateCreator<
       getState().fileActions.updateFile({
         name,
         saved: true,
+        isNew: false, // File is no longer "new" after being explicitly saved
       })
 
       toast({
@@ -1870,7 +2274,6 @@ export const createSharedSlice: StateCreator<
 
       // If the file is saved, set the saved to false because it was modified
       if (file?.saved) {
-        console.warn(`File with name ${name} was marked as saved, but it was modified. Marking as unsaved.`)
         getState().fileActions.updateFile({
           name,
           saved: false,
@@ -2152,8 +2555,6 @@ export const createSharedSlice: StateCreator<
       const variables = next.variables as PLCVariable[]
 
       if (variables.length > 0) {
-        console.log(variables.length)
-
         getState().editorActions.updateModelVariables({
           display: 'table',
           selectedRow: variables.length - 1,

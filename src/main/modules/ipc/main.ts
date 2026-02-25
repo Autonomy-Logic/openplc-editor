@@ -6,9 +6,10 @@ import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
+import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingMessage } from 'http'
 import https from 'https'
-import { join } from 'path'
+import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { ProjectState } from '../../../renderer/store/slices'
@@ -17,6 +18,8 @@ import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/m
 import { logger } from '../../services'
 import { ModbusTcpClient } from '../modbus/modbus-client'
 import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
+import { SimulatorModule } from '../simulator/simulator-module'
+import { VirtualSerialPort } from '../simulator/virtual-serial-port'
 import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
 
 type IDataToWrite = {
@@ -42,13 +45,19 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerWebSocketClient: WebSocketDebugClient | null = null
   private debuggerTargetIp: string | null = null
   private debuggerReconnecting: boolean = false
-  private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | null = null
+  private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
   private debuggerRtuPort: string | null = null
   private debuggerRtuBaudRate: number | null = null
   private debuggerRtuSlaveId: number | null = null
   private debuggerJwtToken: string | null = null
   private runtimeCredentials: { ipAddress: string; username: string; password: string } | null = null
   private tokenRefreshInFlight: Promise<{ success: boolean; accessToken?: string; error?: string }> | null = null
+  // Current project root path used to validate file-watcher IPC calls
+  private currentProjectPath: string | null = null
+  // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
+  private fileWatchers: Map<string, { lastMtime: number }> = new Map()
+  // avr8js ATmega2560 emulator instance for the built-in simulator
+  private simulatorModule = new SimulatorModule()
 
   constructor({
     ipcMain,
@@ -589,16 +598,32 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+
+    // ===================== SIMULATOR =====================
+    this.ipcMain.handle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
+    this.ipcMain.handle('simulator:stop', this.handleSimulatorStop)
+    this.ipcMain.handle('simulator:is-running', this.handleSimulatorIsRunning)
+
+    // ===================== FILE WATCHER =====================
+    this.ipcMain.handle('file:watch-start', this.handleFileWatchStart)
+    this.ipcMain.handle('file:watch-stop', this.handleFileWatchStop)
+    this.ipcMain.handle('file:watch-stop-all', this.handleFileWatchStopAll)
+    this.ipcMain.handle('file:read-content', this.handleFileReadContent)
   }
 
   // ===================== HANDLER METHODS =====================
   // Project-related handlers
   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
+    this.stopSimulatorAndNotify()
     const response = await this.projectService.createProject(data)
     return response
   }
   handleProjectOpen = async () => {
+    this.stopSimulatorAndNotify()
     const response = await this.projectService.openProject()
+    if (response.success && response.data?.meta.path) {
+      this.currentProjectPath = response.data.meta.path
+    }
     return response
   }
   handleProjectPathPicker = async (_event: IpcMainInvokeEvent) => {
@@ -613,13 +638,33 @@ class MainProcessBridge implements MainIpcModule {
       console.error('Error getting project path:', error)
     }
   }
-  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) =>
-    await this.projectService.saveFile(filePath, content)
+  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) => {
+    const result = await this.projectService.saveFile(filePath, content)
+    if (result.success) {
+      // Update lastMtime for the saved file's watcher to suppress self-trigger
+      const watcherData = this.fileWatchers.get(filePath)
+      if (watcherData) {
+        try {
+          const stats = statSync(filePath)
+          if (stats.mtimeMs > watcherData.lastMtime) {
+            watcherData.lastMtime = stats.mtimeMs
+          }
+        } catch {
+          /* file may not exist */
+        }
+      }
+    }
+    return result
+  }
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
+    this.stopSimulatorAndNotify()
     try {
       const response = await this.projectService.openProjectByPath(projectPath)
+      if (response.success && response.data?.meta.path) {
+        this.currentProjectPath = response.data.meta.path
+      }
       return response
     } catch (_error) {
       return {
@@ -700,6 +745,12 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleGetSystemInfo = () => {
+    const appStore = this.store as unknown as { get: (key: string) => unknown }
+    const savedTheme = appStore.get('theme')
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      nativeTheme.themeSource = savedTheme
+    }
+
     return {
       OS: platform,
       architecture: 'x64',
@@ -720,6 +771,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleAppQuit = () => {
+    this.simulatorModule.stop()
     if (this.mainWindow) {
       this.mainWindow.destroy()
     }
@@ -784,7 +836,10 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.maximize()
     }
   }
-  handleWindowReload = () => this.mainWindow?.webContents.reload()
+  handleWindowReload = () => {
+    this.simulatorModule.stop()
+    this.mainWindow?.webContents.reload()
+  }
   handleWindowRebuildMenu = () => void this.menuBuilder.buildMenu()
 
   // Hardware handlers
@@ -823,7 +878,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -836,7 +891,25 @@ class MainProcessBridge implements MainIpcModule {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
     let wsClient: WebSocketDebugClient | null = null
     try {
-      if (connectionType === 'websocket') {
+      if (connectionType === 'simulator') {
+        const virtualPort = new VirtualSerialPort(this.simulatorModule)
+        client = new ModbusRtuClient({
+          port: 'simulator',
+          baudRate: 115200,
+          slaveId: 1,
+          timeout: 5000,
+          serialPort: virtualPort,
+        })
+        await client.connect()
+        const targetMd5 = await client.getMd5Hash()
+        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+
+        // Keep the client for subsequent debug operations
+        this.debuggerModbusClient = client
+        this.debuggerConnectionType = 'simulator'
+
+        return { success: true, match, targetMd5 }
+      } else if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
@@ -959,6 +1032,12 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
     needsReconnect?: boolean
   }> => {
+    // If connection type is null, the debugger was intentionally disconnected.
+    // Return a silent failure so the renderer polling ignores it.
+    if (this.debuggerConnectionType === null) {
+      return { success: false, error: 'Debugger not connected' }
+    }
+
     if (this.debuggerConnectionType === 'websocket') {
       if (!this.debuggerWebSocketClient) {
         if (this.debuggerReconnecting) {
@@ -1015,7 +1094,16 @@ class MainProcessBridge implements MainIpcModule {
 
       this.debuggerReconnecting = true
       try {
-        if (this.debuggerConnectionType === 'tcp') {
+        if (this.debuggerConnectionType === 'simulator') {
+          const virtualPort = new VirtualSerialPort(this.simulatorModule)
+          this.debuggerModbusClient = new ModbusRtuClient({
+            port: 'simulator',
+            baudRate: 115200,
+            slaveId: 1,
+            timeout: 5000,
+            serialPort: virtualPort,
+          })
+        } else if (this.debuggerConnectionType === 'tcp') {
           if (!this.debuggerTargetIp) {
             this.debuggerReconnecting = false
             return { success: false, error: 'No target IP address stored', needsReconnect: true }
@@ -1074,7 +1162,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerConnect = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -1084,7 +1172,22 @@ class MainProcessBridge implements MainIpcModule {
     },
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (connectionType === 'websocket') {
+      if (connectionType === 'simulator') {
+        if (this.debuggerModbusClient) {
+          this.debuggerModbusClient.disconnect()
+          this.debuggerModbusClient = null
+        }
+
+        const virtualPort = new VirtualSerialPort(this.simulatorModule)
+        this.debuggerModbusClient = new ModbusRtuClient({
+          port: 'simulator',
+          baudRate: 115200,
+          slaveId: 1,
+          timeout: 5000,
+          serialPort: virtualPort,
+        })
+        await this.debuggerModbusClient.connect()
+      } else if (connectionType === 'websocket') {
         if (this.debuggerModbusClient) {
           this.debuggerModbusClient.disconnect()
           this.debuggerModbusClient = null
@@ -1233,6 +1336,138 @@ class MainProcessBridge implements MainIpcModule {
       console.error('[IPC Handler] Modbus setVariable error:', error)
       return { success: false, error: String(error) }
     }
+  }
+
+  // ===================== FILE WATCHER HANDLERS =====================
+
+  /**
+   * Validate that a file path is within the current project root.
+   * Resolves symlinks to prevent directory traversal attacks.
+   */
+  private validateFilePath(filePath: string): boolean {
+    if (!this.currentProjectPath) return false
+    try {
+      const resolved = realpathSync(resolve(filePath))
+      const projectRoot = realpathSync(resolve(this.currentProjectPath))
+      return resolved.startsWith(projectRoot + sep) || resolved === projectRoot
+    } catch {
+      // realpathSync fails if the file doesn't exist yet — fall back to resolve only
+      const resolved = resolve(filePath)
+      const projectRoot = resolve(this.currentProjectPath)
+      return resolved.startsWith(projectRoot + sep) || resolved === projectRoot
+    }
+  }
+
+  // ===================== SIMULATOR HANDLERS =====================
+
+  /** Stops the simulator and notifies the renderer so it can update UI state. */
+  private stopSimulatorAndNotify(): void {
+    if (this.simulatorModule.isRunning()) {
+      this.simulatorModule.stop()
+      this.mainWindow?.webContents.send('simulator:stopped')
+    }
+  }
+
+  handleSimulatorLoadFirmware = async (
+    _event: IpcMainInvokeEvent,
+    hexPath: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await this.simulatorModule.loadAndRun(hexPath)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  handleSimulatorStop = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    this.simulatorModule.stop()
+    return Promise.resolve({ success: true })
+  }
+
+  handleSimulatorIsRunning = (_event: IpcMainInvokeEvent): Promise<boolean> => {
+    return Promise.resolve(this.simulatorModule.isRunning())
+  }
+
+  // Using watchFile (polling-based) instead of watch for better macOS compatibility
+  // fs.watch can fail when editors use "safe write" (write to temp file, then rename)
+  handleFileWatchStart = (
+    _event: IpcMainInvokeEvent,
+    filePath: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!this.validateFilePath(filePath)) {
+      return Promise.resolve({ success: false, error: 'Path is outside the project directory' })
+    }
+
+    return new Promise((res) => {
+      if (this.fileWatchers.has(filePath)) {
+        res({ success: true })
+        return
+      }
+
+      stat(filePath, (statErr, stats) => {
+        if (statErr) {
+          res({ success: false, error: `Failed to stat file: ${statErr.message}` })
+          return
+        }
+
+        const initialMtime = stats.mtimeMs
+
+        try {
+          watchFile(filePath, { interval: 1000 }, (curr, prev) => {
+            const watcherData = this.fileWatchers.get(filePath)
+            if (!watcherData) return
+
+            if (curr.mtimeMs > prev.mtimeMs && curr.mtimeMs > watcherData.lastMtime) {
+              watcherData.lastMtime = curr.mtimeMs
+              this.mainWindow?.webContents.send('file:external-change', { filePath })
+            }
+          })
+
+          this.fileWatchers.set(filePath, { lastMtime: initialMtime })
+          res({ success: true })
+        } catch (error) {
+          res({ success: false, error: `Failed to watch file: ${String(error)}` })
+        }
+      })
+    })
+  }
+
+  handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): { success: boolean; error?: string } => {
+    if (!this.validateFilePath(filePath)) {
+      return { success: false, error: 'Path is outside the project directory' }
+    }
+    if (this.fileWatchers.has(filePath)) {
+      unwatchFile(filePath)
+      this.fileWatchers.delete(filePath)
+    }
+    return { success: true }
+  }
+
+  handleFileWatchStopAll = (_event: IpcMainInvokeEvent): { success: boolean } => {
+    for (const [filePath] of this.fileWatchers) {
+      unwatchFile(filePath)
+    }
+    this.fileWatchers.clear()
+    return { success: true }
+  }
+
+  handleFileReadContent = (
+    _event: IpcMainInvokeEvent,
+    filePath: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> => {
+    if (!this.validateFilePath(filePath)) {
+      return Promise.resolve({ success: false, error: 'Path is outside the project directory' })
+    }
+    return new Promise((res) => {
+      readFile(filePath, 'utf-8', (err, content) => {
+        if (err) {
+          res({ success: false, error: `Failed to read file: ${err.message}` })
+        } else {
+          res({ success: true, content })
+        }
+      })
+    })
   }
 
   // ===================== EVENT HANDLERS =====================

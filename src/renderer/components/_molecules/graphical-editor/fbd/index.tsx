@@ -1,3 +1,4 @@
+import { useDebugCompositeKey } from '@hooks/use-debug-composite-key'
 import { CustomFbdNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
 import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/block'
 import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
@@ -47,35 +48,13 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     modals,
     modalActions: { closeModal, openModal },
     snapshotActions: { addSnapshot },
-    workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables, fbSelectedInstance, fbDebugInstances },
+    workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables },
   } = useOpenPLCStore()
+  const getCompositeKey = useDebugCompositeKey()
 
   const pous = project.data.pous
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
-
-  // Get FB instance context for function block POUs
-  const fbInstanceContext = useMemo(() => {
-    if (!pouRef || pouRef.type !== 'function-block') return null
-    const fbTypeKey = pouRef.data.name.toUpperCase() // Canonical key for map lookups
-    const selectedKey = fbSelectedInstance.get(fbTypeKey)
-    if (!selectedKey) return null
-    const instances = fbDebugInstances.get(fbTypeKey) || []
-    return instances.find((inst) => inst.key === selectedKey) || null
-  }, [pouRef, fbSelectedInstance, fbDebugInstances])
-
-  // Helper to get composite key for variable lookup, handling FB instance context
-  const getCompositeKey = useCallback(
-    (variableName: string): string => {
-      if (fbInstanceContext) {
-        // For FB POUs, transform to instance context: main:MOTOR_SPEED0.varName
-        return `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.${variableName}`
-      }
-      // For programs, use standard format: pouName:varName
-      return `${editor.meta.name}:${variableName}`
-    },
-    [fbInstanceContext, editor.meta.name],
-  )
 
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
@@ -132,7 +111,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       // For program POUs, verify the program instance exists
       // For FB POUs, skip this check since getCompositeKey already handles instance context
-      if (!fbInstanceContext) {
+      if (pouRef?.type !== 'function-block') {
         const instances = project.data.configuration.resource.instances
         const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
         if (!programInstance) return undefined

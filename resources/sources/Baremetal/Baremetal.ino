@@ -339,4 +339,12 @@ void loop()
         modbusTask();
     }
     #endif
+
+    #ifdef SIMULATOR_MODE
+    // In the emulated ATmega2560, busy-waiting wastes host CPU executing
+    // millions of useless instructions. SLEEP (opcode 0x9588) is detected
+    // by the emulator which fast-forwards the clock to the next timer event
+    // instead of stepping through every idle cycle.
+    __asm volatile("sleep");
+    #endif
 }

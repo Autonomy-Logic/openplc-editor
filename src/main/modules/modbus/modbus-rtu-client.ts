@@ -9,12 +9,15 @@ interface ModbusRtuClientOptions {
   baudRate: number
   slaveId: number
   timeout: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  serialPort?: any // Pre-built serial port (e.g. VirtualSerialPort for simulator)
 }
 
 const ARDUINO_BOOTLOADER_DELAY_MS = 2500
 const MD5_REQUEST_MAX_RETRIES = 3
 const MD5_REQUEST_RETRY_DELAY_MS = 500
-const FRAME_COMPLETE_TIMEOUT_MS = 50
+
+const FRAME_COMPLETE_TIMEOUT_MS = 10
 
 export class ModbusRtuClient {
   private port: string
@@ -23,6 +26,8 @@ export class ModbusRtuClient {
   private timeout: number
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private serialPort: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private injectedSerialPort: any = null
 
   private static readonly CRC_HI_TABLE = [
     0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41, 0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80,
@@ -63,6 +68,7 @@ export class ModbusRtuClient {
     this.baudRate = options.baudRate
     this.slaveId = options.slaveId
     this.timeout = options.timeout
+    this.injectedSerialPort = options.serialPort ?? null
   }
 
   private calculateCrc(buffer: Buffer): number {
@@ -93,6 +99,16 @@ export class ModbusRtuClient {
   }
 
   async connect(): Promise<void> {
+    // If a pre-built serial port was provided (e.g. VirtualSerialPort), use it directly
+    if (this.injectedSerialPort) {
+      this.serialPort = this.injectedSerialPort
+      return new Promise((resolve, reject) => {
+        this.serialPort.on('open', () => resolve())
+        this.serialPort.on('error', (err: Error) => reject(err))
+        this.serialPort.open()
+      })
+    }
+
     return new Promise((resolve, reject) => {
       try {
         this.serialPort = new SerialPort({
@@ -141,7 +157,18 @@ export class ModbusRtuClient {
     })
   }
 
+  private sendRequestMutex: Promise<void> = Promise.resolve()
+
   private async sendRequest(request: Buffer): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+      this.sendRequestMutex = this.sendRequestMutex.then(
+        () => this.sendRequestImpl(request).then(resolve, reject),
+        () => this.sendRequestImpl(request).then(resolve, reject),
+      )
+    })
+  }
+
+  private async sendRequestImpl(request: Buffer): Promise<Buffer> {
     if (!this.serialPort || !this.serialPort.isOpen) {
       throw new Error('Serial port is not open')
     }
@@ -149,13 +176,22 @@ export class ModbusRtuClient {
     await this.flushInputBuffer()
 
     return new Promise((resolve, reject) => {
+      let responseBuffer = Buffer.alloc(0)
+      let frameCompleteTimeout: NodeJS.Timeout | null = null
+
+      // Forward-declared so the timeout handler can reference them for cleanup
+      const cleanup = () => {
+        this.serialPort?.removeListener('data', onData)
+        this.serialPort?.removeListener('error', onError)
+        if (frameCompleteTimeout) {
+          clearTimeout(frameCompleteTimeout)
+        }
+      }
+
       const timeoutHandle = setTimeout(() => {
+        cleanup()
         reject(new Error('Request timeout'))
       }, this.timeout)
-
-      let responseBuffer = Buffer.alloc(0)
-
-      let frameCompleteTimeout: NodeJS.Timeout | null = null
 
       const onData = (data: Buffer) => {
         responseBuffer = Buffer.concat([responseBuffer, data] as unknown as Uint8Array[])
@@ -165,26 +201,19 @@ export class ModbusRtuClient {
         }
 
         frameCompleteTimeout = setTimeout(() => {
+          clearTimeout(timeoutHandle)
+          cleanup()
+
           if (responseBuffer.length < 5) {
-            clearTimeout(timeoutHandle)
-            this.serialPort?.removeListener('data', onData)
-            this.serialPort?.removeListener('error', onError)
             reject(new Error('Response too short'))
             return
           }
-
-          clearTimeout(timeoutHandle)
-          this.serialPort?.removeListener('data', onData)
-          this.serialPort?.removeListener('error', onError)
 
           const receivedCrc = responseBuffer.readUInt16BE(responseBuffer.length - 2)
           const calculatedCrc = this.calculateCrc(responseBuffer.slice(0, responseBuffer.length - 2))
 
           if (receivedCrc !== calculatedCrc) {
-            // OpenPLC debugger ignores CRC errors
-            //reject(new Error('CRC validation failed'))
-            //return
-            console.warn('Warning: CRC validation failed, but continuing anyway')
+            // OpenPLC debugger ignores CRC errors — mismatch is non-fatal
           }
 
           const responseWithoutCrc = responseBuffer.slice(0, responseBuffer.length - 2)
@@ -198,11 +227,7 @@ export class ModbusRtuClient {
 
       const onError = (error: Error) => {
         clearTimeout(timeoutHandle)
-        if (frameCompleteTimeout) {
-          clearTimeout(frameCompleteTimeout)
-        }
-        this.serialPort?.removeListener('data', onData)
-        this.serialPort?.removeListener('error', onError)
+        cleanup()
         reject(error)
       }
 
@@ -211,8 +236,7 @@ export class ModbusRtuClient {
       this.serialPort!.write(request as unknown as Uint8Array, (error: unknown) => {
         if (error) {
           clearTimeout(timeoutHandle)
-          this.serialPort?.removeListener('data', onData)
-          this.serialPort?.removeListener('error', onError)
+          cleanup()
           const errorMessage =
             typeof error === 'string'
               ? error

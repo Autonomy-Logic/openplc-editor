@@ -28,6 +28,20 @@ export function isOpenPLCRuntimeTarget(boardInfo: AvailableBoardInfo | undefined
 }
 
 /**
+ * Determines if a board is the built-in simulator target.
+ * The simulator uses an emulated ATmega2560 and requires no physical hardware.
+ *
+ * @param boardInfo - The board information from availableBoards map
+ * @returns true if the board is the simulator target, false otherwise
+ */
+export function isSimulatorTarget(boardInfo: AvailableBoardInfo | undefined): boolean {
+  if (!boardInfo) {
+    return false
+  }
+  return boardInfo.compiler === 'simulator'
+}
+
+/**
  * Extracts the expected runtime version from the board target name.
  * This is used to validate that the connected runtime matches the selected target.
  *

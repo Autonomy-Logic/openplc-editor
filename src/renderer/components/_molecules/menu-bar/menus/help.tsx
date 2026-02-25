@@ -1,14 +1,12 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { useOpenPLCStore } from '@root/renderer/store'
+import { workspaceSelectors } from '@root/renderer/hooks/use-store-selectors'
 import { i18n } from '@utils/i18n'
-import _ from 'lodash'
 
 import { MenuClasses } from '../constants'
 
 export const HelpMenu = () => {
-  const {
-    workspaceActions: { setModalOpen },
-  } = useOpenPLCStore()
+  const setModalOpen = workspaceSelectors.useSetModalOpen()
+
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR } = MenuClasses
 
   const CommunitySupport = 'https://openplc.discussion.community/'

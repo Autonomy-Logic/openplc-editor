@@ -112,6 +112,7 @@ const InstancesEditor = () => {
       display: 'table',
       selectedRow: parseInt(editorInstances.selectedRow) + index,
     })
+    handleFileAndWorkspaceSavedState('Resource')
   }
 
   const handleCreateInstance = () => {

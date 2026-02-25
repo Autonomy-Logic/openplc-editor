@@ -1,21 +1,27 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useCompiler } from '@root/renderer/hooks'
-import { useOpenPLCStore } from '@root/renderer/store'
+import {
+  menuSelectors,
+  modalSelectors,
+  sharedSelectors,
+  workspaceSelectors,
+} from '@root/renderer/hooks/use-store-selectors'
 import { i18n } from '@utils/i18n'
-import _ from 'lodash'
 
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
-  const {
-    project,
-    workspace,
-    deviceDefinitions,
-    selectedTab,
-    modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, saveProject, saveFile, closeFile },
-  } = useOpenPLCStore()
-  const { editingState } = workspace
+  const editingState = workspaceSelectors.useEditingState()
+  const project = menuSelectors.useProject()
+  const deviceDefinitions = menuSelectors.useDeviceDefinitions()
+  const selectedTab = menuSelectors.useSelectedTab()
+  const openModal = modalSelectors.useOpenModal()
+  const closeProject = sharedSelectors.useCloseProject()
+  const openProject = sharedSelectors.useOpenProject()
+  const saveProject = sharedSelectors.useSaveProject()
+  const saveFile = sharedSelectors.useSaveFile()
+  const closeFile = sharedSelectors.useCloseFile()
+
   const { handleExportProject } = useCompiler()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 

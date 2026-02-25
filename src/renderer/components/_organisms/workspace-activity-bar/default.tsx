@@ -1,17 +1,21 @@
 import { StopIcon } from '@root/renderer/assets'
-import { StandardFunctionBlocks } from '@root/renderer/data/library/standard-function-blocks'
 import { compileOnlySelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RuntimeConnection } from '@root/renderer/store/slices/device/types'
-import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
-import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
+import {
+  buildDebugVariableTreeMap,
+  buildFbInstanceMap,
+  buildVariableIndexMap,
+  connectAndActivateDebugger,
+  disconnectDebugger,
+} from '@root/renderer/utils/debugger-session'
+import type { DebugTreeNode } from '@root/types/debugger'
 import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
-import { BufferToStringArray, cn, isOpenPLCRuntimeTarget } from '@root/utils'
+import { BufferToStringArray, cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
 import { validateCppCode } from '@root/utils/cpp/validateCppCode'
 import { parseDebugFile } from '@root/utils/debug-parser'
-import { findGlobalVariableIndex, findVariableIndexWithFallback } from '@root/utils/debug-variable-finder'
 
 type CppPouData = {
   name: string
@@ -27,7 +31,7 @@ import { parsePlcStatus } from '@root/utils/plc-status'
 import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '@root/utils/python/generateSTCode'
 import { injectPythonCode } from '@root/utils/python/injectPythonCode'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   DebuggerButton,
@@ -85,6 +89,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const [isCompiling, setIsCompiling] = useState(false)
   const [isDebuggerProcessing, setIsDebuggerProcessing] = useState(false)
+  const [simulatorRunning, setSimulatorRunning] = useState(false)
+  const pendingSimulatorDebugRef = useRef(false)
 
   const disabledButtonClass = 'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
@@ -105,6 +111,25 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress)
+  const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
+
+  const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
+  const isCurrentBoardSimulator = isSimulatorTarget(currentBoardInfo)
+
+  // Sync simulatorRunning when the main process stops the simulator
+  // (e.g. on project open/create) so the UI reflects the actual state.
+  useEffect(() => {
+    const cleanup = (window.bridge.onSimulatorStopped as (cb: () => void) => () => void)(() => {
+      pendingSimulatorDebugRef.current = false
+      setSimulatorRunning(false)
+      // Also clean up debugger state if it was connected via simulator
+      const { workspace, workspaceActions } = useOpenPLCStore.getState()
+      if (workspace.isDebuggerVisible) {
+        void disconnectDebugger(workspaceActions)
+      }
+    })
+    return cleanup
+  }, [])
 
   const applyEarlyCommentWrapping = (projectData: PLCProjectData): PLCProjectData => {
     return {
@@ -278,6 +303,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: string | Buffer
         plcStatus?: string
         closePort?: boolean
+        simulatorFirmwarePath?: string
       }) => {
         setIsCompiling(true)
 
@@ -309,6 +335,41 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             })
           })
         }
+
+        // Load firmware into simulator when compilation finishes with a HEX path
+        if (data.simulatorFirmwarePath) {
+          ;(window.bridge.simulatorLoadFirmware as (p: string) => Promise<{ success: boolean; error?: string }>)(
+            data.simulatorFirmwarePath,
+          )
+            .then(async (result) => {
+              if (result.success) {
+                setSimulatorRunning(true)
+                addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
+
+                // Auto-connect debugger after build when triggered from the Start button
+                if (pendingSimulatorDebugRef.current) {
+                  pendingSimulatorDebugRef.current = false
+                  await connectDebuggerAfterBuild()
+                }
+              } else {
+                pendingSimulatorDebugRef.current = false
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'error',
+                  message: `Failed to start simulator: ${result.error}`,
+                })
+              }
+            })
+            .catch((err: unknown) => {
+              pendingSimulatorDebugRef.current = false
+              addLog({
+                id: crypto.randomUUID(),
+                level: 'error',
+                message: `Simulator error: ${err instanceof Error ? err.message : String(err)}`,
+              })
+            })
+        }
+
         if (data.closePort) {
           setIsCompiling(false)
         }
@@ -373,16 +434,138 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
   }
 
+  const handleSimulatorControl = async (): Promise<void> => {
+    try {
+      if (simulatorRunning) {
+        // Stop: disconnect debugger first, then stop simulator
+        const { workspace, workspaceActions } = useOpenPLCStore.getState()
+        if (workspace.isDebuggerVisible) {
+          await disconnectDebugger(workspaceActions)
+        }
+        await (window.bridge.simulatorStop as () => Promise<{ success: boolean }>)()
+        setSimulatorRunning(false)
+        addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator stopped.' })
+      } else {
+        // Start: build, load firmware, then auto-connect debugger
+        pendingSimulatorDebugRef.current = true
+        verifyAndCompile().catch(() => {
+          pendingSimulatorDebugRef.current = false
+        })
+      }
+    } catch (error) {
+      pendingSimulatorDebugRef.current = false
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Simulator control error: ${String(error)}`,
+      })
+    }
+  }
+
+  const connectDebuggerAfterBuild = async () => {
+    const { project, workspaceActions, consoleActions } = useOpenPLCStore.getState()
+    const boardTarget = deviceDefinitions.configuration.deviceBoard
+    const projectPath = project.meta.path
+
+    consoleActions.addLog({
+      id: crypto.randomUUID(),
+      level: 'info',
+      message: 'Starting debugger for simulator...',
+    })
+
+    const debugFileResult = await window.bridge.readDebugFile(projectPath, boardTarget)
+
+    if (!debugFileResult.success || !debugFileResult.content) {
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: 'Failed to read debug.c file after compilation.',
+      })
+      return
+    }
+
+    const parsed = parseDebugFile(debugFileResult.content)
+    const instances = project.data.configuration.resource.instances
+
+    // Build variable index map
+    const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, parsed)
+    for (const w of warnings) {
+      consoleActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
+    }
+
+    // Build debug variable tree
+    let treeMap = new Map<string, DebugTreeNode>()
+    try {
+      const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, parsed.variables, project)
+      treeMap = treeResult.treeMap
+
+      if (process.env.NODE_ENV === 'development') {
+        ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = treeResult.trees
+      }
+
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: `Debug tree builder: Built ${treeResult.trees.length} trees (${treeResult.complexCount} complex).`,
+      })
+    } catch {
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'warning',
+        message: 'Debug tree builder encountered errors.',
+      })
+    }
+
+    // Build FB instance map
+    const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
+
+    const fbTypesCount = fbDebugInstancesMap.size
+    const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
+    if (fbTypesCount > 0) {
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: `FB instance map: Found ${totalFbInstances} instances across ${fbTypesCount} FB types.`,
+      })
+    }
+
+    // Connect and activate debugger
+    const connectResult = await connectAndActivateDebugger(
+      {
+        connectionType: 'simulator',
+        connectionParams: {},
+        indexMap,
+        treeMap,
+        fbDebugInstancesMap,
+      },
+      workspaceActions,
+    )
+
+    if (!connectResult.success) {
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Failed to establish debugger connection: ${connectResult.error || 'Unknown error'}`,
+      })
+      return
+    }
+
+    consoleActions.addLog({
+      id: crypto.randomUUID(),
+      level: 'info',
+      message: `Debugger started successfully. Found ${indexMap.size} debug variables.`,
+    })
+  }
+
   const handleDebuggerClick = async () => {
+    // Simulator target uses the unified Start/Stop flow instead
+    if (isCurrentBoardSimulator) return
+
     const { workspace, project, deviceDefinitions, workspaceActions, consoleActions, deviceActions } =
       useOpenPLCStore.getState()
 
     if (workspace.isDebuggerVisible) {
-      const _disconnectResult: { success: boolean } = await window.bridge.debuggerDisconnect()
-      workspaceActions.setDebuggerVisible(false)
-      workspaceActions.setDebuggerTargetIp(null)
-      workspaceActions.setDebugForcedVariables(new Map())
-      workspaceActions.clearFbDebugContext()
+      await disconnectDebugger(workspaceActions)
       return
     }
 
@@ -404,13 +587,34 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
 
       let targetIpAddress: string | undefined
-      let connectionType: 'tcp' | 'rtu' | 'websocket' = 'tcp'
+      let connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' = 'tcp'
       let rtuPort: string | undefined
       let rtuBaudRate: number | undefined
       let rtuSlaveId: number | undefined
       let jwtToken: string | undefined
 
-      if (isRuntimeTarget) {
+      if (isSimulatorTarget(currentBoardInfo)) {
+        // Check if simulator has firmware loaded
+        const running = await (window.bridge.simulatorIsRunning as () => Promise<boolean>)()
+        if (!running) {
+          const response = await showDebuggerMessage(
+            'warning',
+            'Simulator Empty',
+            'No firmware is running on the simulator. Would you like to build and upload the project first?',
+            ['Build & Upload', 'Cancel'],
+          )
+          if (response === 0) {
+            // Trigger full build, then restart debugger flow
+            setIsDebuggerProcessing(false)
+            void verifyAndCompile()
+            return
+          } else {
+            setIsDebuggerProcessing(false)
+            return
+          }
+        }
+        connectionType = 'simulator'
+      } else if (isRuntimeTarget) {
         const connectionStatus = useOpenPLCStore.getState().runtimeConnection.connectionStatus
         const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress
 
@@ -724,7 +928,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleMd5Verification = async (
     projectPath: string,
     boardTarget: string,
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -827,7 +1031,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       })
 
       const targetDisplay =
-        connectionType === 'tcp' || connectionType === 'websocket' ? targetIpAddress : connectionParams.port
+        connectionType === 'simulator'
+          ? 'simulator'
+          : connectionType === 'tcp' || connectionType === 'websocket'
+            ? targetIpAddress
+            : connectionParams.port
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'info',
@@ -865,161 +1073,41 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
         if (debugFileResult.success && debugFileResult.content) {
           const parsed = parseDebugFile(debugFileResult.content)
-          const indexMap = new Map<string, number>()
 
           const { project } = useOpenPLCStore.getState()
           const instances = project.data.configuration.resource.instances
 
-          project.data.pous.forEach((pou) => {
-            if (pou.type !== 'program') return
+          // Build variable index map
+          const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, parsed)
+          for (const w of warnings) {
+            consoleActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
+          }
 
-            const instance = instances.find((inst) => inst.program === pou.data.name)
-            if (!instance) {
-              consoleActions.addLog({
-                id: crypto.randomUUID(),
-                level: 'warning',
-                message: `No instance found for program '${pou.data.name}', skipping debug variable parsing.`,
-              })
-              return
-            }
-
-            const allVariables = pou.data.variables
-
-            allVariables.forEach((v) => {
-              // Use fallback to try both FB-style and struct-style paths
-              // This ensures consistent behavior with OPC-UA index resolution
-              const index =
-                v.class === 'external'
-                  ? findGlobalVariableIndex(v.name, parsed.variables)
-                  : findVariableIndexWithFallback(instance.name, v.name, parsed.variables)
-              if (index !== null) {
-                const compositeKey = `${pou.data.name}:${v.name}`
-                indexMap.set(compositeKey, index)
-              }
-            })
-          })
-
-          parsed.variables.forEach((debugVar) => {
-            if (!indexMap.has(debugVar.name)) {
-              indexMap.set(debugVar.name, debugVar.index)
-            }
-          })
-
+          // Build debug variable tree
+          let treeMap = new Map<string, DebugTreeNode>()
           try {
-            const trees: DebugTreeNode[] = []
-            const treeMap = new Map<string, DebugTreeNode>()
-            let complexCount = 0
-
-            // Helper function to recursively add a node and all its children to the treeMap
-            // This ensures nested FB variables like main:MOTOR_CONTROL0.TON0 are directly accessible
-            const addNodeAndChildrenToMap = (node: DebugTreeNode) => {
-              treeMap.set(node.compositeKey, node)
-              if (node.children) {
-                for (const child of node.children) {
-                  addNodeAndChildrenToMap(child)
-                }
-              }
-            }
-
-            project.data.pous.forEach((pou) => {
-              if (pou.type !== 'program') return
-
-              const instance = instances.find((inst) => inst.program === pou.data.name)
-              if (!instance) {
-                return
-              }
-
-              pou.data.variables.forEach((v) => {
-                try {
-                  const node = buildDebugTree(v, pou.data.name, instance.name, parsed.variables, project)
-                  trees.push(node)
-                  addNodeAndChildrenToMap(node)
-                  if (node.isComplex) {
-                    complexCount++
-                  }
-                } catch {
-                  // Tree building failed for this variable
-                }
-              })
-            })
-
-            workspaceActions.setDebugVariableTree(treeMap)
+            const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, parsed.variables, project)
+            treeMap = treeResult.treeMap
 
             if (process.env.NODE_ENV === 'development') {
-              ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = trees
+              ;(window as Window & { debugTrees?: DebugTreeNode[] }).debugTrees = treeResult.trees
             }
 
             consoleActions.addLog({
               id: crypto.randomUUID(),
               level: 'info',
-              message: `Debug tree builder: Built ${trees.length} trees (${complexCount} complex).`,
+              message: `Debug tree builder: Built ${treeResult.trees.length} trees (${treeResult.complexCount} complex).`,
             })
           } catch {
             consoleActions.addLog({
               id: crypto.randomUUID(),
               level: 'warning',
-              message: `Debug tree builder encountered errors.`,
+              message: 'Debug tree builder encountered errors.',
             })
           }
 
-          // Build FB instance map for function block debugging
-          const fbDebugInstancesMap = new Map<string, FbInstanceInfo[]>()
-
-          // Helper function to normalize type strings for comparison
-          const normalizeTypeString = (typeStr: string): string => {
-            return typeStr.toLowerCase().replace(/[-_]/g, '')
-          }
-
-          // Iterate all program POUs to find FB instances
-          project.data.pous.forEach((pou) => {
-            if (pou.type !== 'program') return
-
-            const programInstance = instances.find((inst) => inst.program === pou.data.name)
-            if (!programInstance) return
-
-            // Check each variable in the program to see if it's an FB instance
-            pou.data.variables.forEach((v) => {
-              if (v.type.definition !== 'derived') return
-
-              const fbTypeNameRaw = v.type.value
-              const fbTypeKey = fbTypeNameRaw.toUpperCase() // Canonical key for map lookups
-
-              // Check if this is a standard function block
-              const isStandardFB = StandardFunctionBlocks.pous.some(
-                (sfb) => sfb.name.toUpperCase() === fbTypeKey && normalizeTypeString(sfb.type) === 'functionblock',
-              )
-
-              // Check if this is a custom function block
-              const isCustomFB = project.data.pous.some(
-                (p) => normalizeTypeString(p.type) === 'functionblock' && p.data.name.toUpperCase() === fbTypeKey,
-              )
-
-              if (isStandardFB || isCustomFB) {
-                const instanceInfo: FbInstanceInfo = {
-                  fbTypeName: fbTypeNameRaw, // Keep original name for display
-                  programName: pou.data.name,
-                  programInstanceName: programInstance.name,
-                  fbVariableName: v.name,
-                  key: `${pou.data.name}:${v.name}`,
-                }
-
-                // Use uppercase key for consistent lookups
-                const existingInstances = fbDebugInstancesMap.get(fbTypeKey) || []
-                existingInstances.push(instanceInfo)
-                fbDebugInstancesMap.set(fbTypeKey, existingInstances)
-              }
-            })
-          })
-
-          // Store FB debug instances and set default selections
-          workspaceActions.setFbDebugInstances(fbDebugInstancesMap)
-
-          // Set default selected instance for each FB type (first instance)
-          fbDebugInstancesMap.forEach((instanceList, fbTypeName) => {
-            if (instanceList.length > 0) {
-              workspaceActions.setFbSelectedInstance(fbTypeName, instanceList[0].key)
-            }
-          })
+          // Build FB instance map
+          const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
 
           const fbTypesCount = fbDebugInstancesMap.size
           const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
@@ -1031,10 +1119,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             })
           }
 
-          const connectResult: { success: boolean; error?: string } = await window.bridge.debuggerConnect(
-            connectionType,
-            connectionParams,
+          // Connect and activate debugger
+          const connectResult = await connectAndActivateDebugger(
+            {
+              connectionType,
+              connectionParams,
+              indexMap,
+              treeMap,
+              fbDebugInstancesMap,
+              targetIpAddress,
+              isRuntimeTarget,
+            },
+            workspaceActions,
           )
+
           if (!connectResult.success) {
             consoleActions.addLog({
               id: crypto.randomUUID(),
@@ -1045,11 +1143,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             return
           }
 
-          workspaceActions.setDebugVariableIndexes(indexMap)
-          if (!isRuntimeTarget) {
-            workspaceActions.setDebuggerTargetIp(targetIpAddress ?? null)
-          }
-          workspaceActions.setDebuggerVisible(true)
           consoleActions.addLog({
             id: crypto.randomUUID(),
             level: 'info',
@@ -1164,36 +1257,49 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       <TooltipSidebarWrapperButton tooltipContent='Open/Close Toolbox'>
         <ZoomButton {...zoom} />
       </TooltipSidebarWrapperButton>
-      <TooltipSidebarWrapperButton tooltipContent='Compile'>
+      <TooltipSidebarWrapperButton tooltipContent={isCurrentBoardSimulator ? 'Use Start to build and run' : 'Compile'}>
         <DownloadButton
-          disabled={isCompiling}
-          className={cn(isCompiling ? `${disabledButtonClass}` : '')}
+          disabled={isCompiling || isCurrentBoardSimulator}
+          className={cn((isCompiling || isCurrentBoardSimulator) && disabledButtonClass)}
           // eslint-disable-next-line @typescript-eslint/no-misused-promises
           onClick={() => verifyAndCompile()}
         />
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton
         tooltipContent={
-          connectionStatus !== 'connected'
-            ? 'Connect to runtime first'
-            : plcStatus === 'RUNNING'
-              ? 'Stop PLC'
-              : 'Start PLC'
+          isCurrentBoardSimulator
+            ? simulatorRunning
+              ? 'Stop Simulator'
+              : 'Start Simulator'
+            : connectionStatus !== 'connected'
+              ? 'Connect to runtime first'
+              : plcStatus === 'RUNNING'
+                ? 'Stop PLC'
+                : 'Start PLC'
         }
       >
         <PlayButton
-          onClick={() => void handlePlcControl()}
-          disabled={connectionStatus !== 'connected'}
-          className={cn(connectionStatus !== 'connected' ? disabledButtonClass : '')}
+          onClick={isCurrentBoardSimulator ? () => void handleSimulatorControl() : () => void handlePlcControl()}
+          disabled={isCurrentBoardSimulator ? isCompiling : connectionStatus !== 'connected'}
+          className={cn(
+            isCurrentBoardSimulator
+              ? isCompiling
+                ? disabledButtonClass
+                : ''
+              : connectionStatus !== 'connected'
+                ? disabledButtonClass
+                : '',
+          )}
         >
-          {plcStatus === 'RUNNING' ? <StopIcon /> : null}
+          {(isCurrentBoardSimulator ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
         </PlayButton>
       </TooltipSidebarWrapperButton>
-      <TooltipSidebarWrapperButton tooltipContent='Debugger'>
+      <TooltipSidebarWrapperButton tooltipContent={isCurrentBoardSimulator ? 'Use Start to debug' : 'Debugger'}>
         <DebuggerButton
           onClick={() => void handleDebuggerClick()}
-          disabled={isDebuggerProcessing}
-          className={cn(isDebuggerProcessing && 'cursor-not-allowed opacity-50')}
+          disabled={isDebuggerProcessing || isCurrentBoardSimulator}
+          isActive={isDebuggerVisible}
+          className={cn((isDebuggerProcessing || isCurrentBoardSimulator) && 'cursor-not-allowed opacity-50')}
         />
       </TooltipSidebarWrapperButton>
     </>

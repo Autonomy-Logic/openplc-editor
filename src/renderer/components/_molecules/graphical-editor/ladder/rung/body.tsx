@@ -1,3 +1,4 @@
+import { useDebugCompositeKey } from '@hooks/use-debug-composite-key'
 import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RungLadderState } from '@root/renderer/store/slices'
@@ -76,34 +77,12 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     searchQuery,
     searchActions: { setSearchNodePosition },
     snapshotActions: { addSnapshot },
-    workspace: { isDebuggerVisible, debugVariableValues, fbSelectedInstance, fbDebugInstances },
+    workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
+  const getCompositeKey = useDebugCompositeKey()
 
   const pouRef = project.data.pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
-
-  // Get FB instance context for function block POUs
-  const fbInstanceContext = useMemo(() => {
-    if (!pouRef || pouRef.type !== 'function-block') return null
-    const fbTypeKey = pouRef.data.name.toUpperCase() // Canonical key for map lookups
-    const selectedKey = fbSelectedInstance.get(fbTypeKey)
-    if (!selectedKey) return null
-    const instances = fbDebugInstances.get(fbTypeKey) || []
-    return instances.find((inst) => inst.key === selectedKey) || null
-  }, [pouRef, fbSelectedInstance, fbDebugInstances])
-
-  // Helper to get composite key for variable lookup, handling FB instance context
-  const getCompositeKey = useCallback(
-    (variableName: string): string => {
-      if (fbInstanceContext) {
-        // For FB POUs, transform to instance context: main:MOTOR_SPEED0.varName
-        return `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.${variableName}`
-      }
-      // For programs, use standard format: pouName:varName
-      return `${editor.meta.name}:${variableName}`
-    },
-    [fbInstanceContext, editor.meta.name],
-  )
 
   const [rungLocal, setRungLocal] = useState<RungLadderState>(rung)
   const [dragging, setDragging] = useState(false)
@@ -158,7 +137,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       // For program POUs, verify the program instance exists
       // For FB POUs, skip this check since getCompositeKey already handles instance context
-      if (!fbInstanceContext) {
+      if (pouRef?.type !== 'function-block') {
         const instances = project.data.configuration.resource.instances
         const programInstance = instances.find((inst) => inst.program === editor.meta.name)
         if (!programInstance) return undefined

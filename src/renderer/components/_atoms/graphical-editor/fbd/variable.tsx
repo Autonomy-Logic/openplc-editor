@@ -1,7 +1,9 @@
+import { useDebugCompositeKey } from '@hooks/use-debug-composite-key'
 import * as Popover from '@radix-ui/react-popover'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
+import { resolveArrayVariableByName } from '@root/utils/PLC/array-variable-utils'
 import {
   floatToBuffer,
   getVariableTypeInfo,
@@ -58,33 +60,10 @@ const VariableElement = (block: VariableProps) => {
     project: {
       data: { pous, dataTypes },
     },
-    workspace: {
-      isDebuggerVisible,
-      debugVariableIndexes,
-      debugVariableValues,
-      debugForcedVariables,
-      fbSelectedInstance,
-      fbDebugInstances,
-    },
+    workspace: { isDebuggerVisible, debugVariableIndexes, debugVariableValues, debugForcedVariables },
     workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
-
-  // Helper to get composite key with FB instance context
-  const getCompositeKey = (variableName: string): string => {
-    const currentPou = pous.find((p) => p.data.name === editor.meta.name)
-    if (currentPou?.type === 'function-block') {
-      const fbTypeKey = currentPou.data.name.toUpperCase()
-      const selectedKey = fbSelectedInstance.get(fbTypeKey)
-      if (selectedKey) {
-        const instances = fbDebugInstances.get(fbTypeKey) || []
-        const selectedInstance = instances.find((inst) => inst.key === selectedKey)
-        if (selectedInstance) {
-          return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
-        }
-      }
-    }
-    return `${editor.meta.name}:${variableName}`
-  }
+  const getCompositeKey = useDebugCompositeKey()
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -325,9 +304,9 @@ const VariableElement = (block: VariableProps) => {
 
     // For variable nodes, allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types
-    let variable: PLCVariable | { name: string } | undefined = (pou.data.variables as PLCVariable[]).find(
-      (v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase(),
-    )
+    let variable: PLCVariable | { name: string } | undefined =
+      (pou.data.variables as PLCVariable[]).find((v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase()) ||
+      resolveArrayVariableByName(pou.data.variables as PLCVariable[], variableNameToSubmit)
     if (!variable) {
       setIsAVariable(false)
       variable = { name: variableNameToSubmit }
@@ -383,16 +362,16 @@ const VariableElement = (block: VariableProps) => {
       return undefined
     }
 
-    const variableType = getVariableType()
-    if (!variableType || variableType.toUpperCase() !== 'BOOL') {
-      return undefined
-    }
-
     const compositeKey = getCompositeKey(data.variable.name)
 
     if (debugForcedVariables.has(compositeKey)) {
       const forcedValue = debugForcedVariables.get(compositeKey)
       return forcedValue ? '#80C000' : '#4080FF'
+    }
+
+    const variableType = getVariableType()
+    if (!variableType || variableType.toUpperCase() !== 'BOOL') {
+      return undefined
     }
 
     const value = debugVariableValues.get(compositeKey)

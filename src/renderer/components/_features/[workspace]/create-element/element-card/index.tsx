@@ -53,7 +53,7 @@ const ServerProtocolSources = [
 ] as const
 
 const RemoteDeviceProtocolSources = [
-  { value: 'modbus-tcp', label: 'Modbus/TCP', disabled: false },
+  { value: 'modbus-tcp', label: 'Modbus', disabled: false },
   { value: 'ethernet-ip', label: 'EtherNet/IP', disabled: true },
   { value: 'ethercat', label: 'EtherCAT', disabled: true },
   { value: 'profinet', label: 'PROFINET', disabled: true },
@@ -120,6 +120,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     datatypeActions: { create: createDatatype },
     projectActions: { createServer, createRemoteDevice },
     sharedWorkspaceActions: { openFile },
+    fileActions: { addFile },
     deviceAvailableOptions: { availableBoards },
   } = useOpenPLCStore()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
@@ -192,6 +193,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       return
     }
 
+    addFile({
+      name: data.name,
+      type: 'server',
+      filePath: `/project.json`,
+      isNew: true,
+    })
+
     // Open the newly created server tab
     openFile({
       name: data.name,
@@ -216,6 +224,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       })
       return
     }
+
+    addFile({
+      name: data.name,
+      type: 'remote-device',
+      filePath: `/project.json`,
+      isNew: true,
+    })
 
     // Open the newly created remote device tab
     openFile({

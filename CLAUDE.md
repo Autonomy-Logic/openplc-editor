@@ -103,6 +103,7 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`.
 
 ## Code Style
 
+- This is a TypeScript-first codebase. Use strict TypeScript patterns, proper typing, and avoid `any` types.
 - ESLint flat config (`eslint.config.mjs`) with TypeScript strict type checking
 - Prettier: 120 char width, no semicolons, single quotes, trailing commas
 - Import sorting enforced via `simple-import-sort` plugin
@@ -116,6 +117,11 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`.
 - **DND Kit** for drag-and-drop in visual editors
 - **Socket.io** for real-time communication
 - **Modbus TCP/RTU** clients for industrial protocols
+
+## Debugging
+
+- When fixing UI flickering or rendering issues, always check for multiple potential causes: component re-renders, data changes, AND layout/sizing recalculations. Test fixes with the specific user-reported conditions (e.g., specific chart sizes, time ranges) before marking complete.
+- For multi-step debugging tasks, verify each fix is working before moving to the next issue. Run the app and confirm the specific behavior is resolved.
 
 ## Environment Requirements
 
