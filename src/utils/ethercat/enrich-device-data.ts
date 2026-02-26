@@ -11,9 +11,11 @@ import type {
   PersistedChannelInfo,
   PersistedPdo,
   PersistedPdoEntry,
+  SDOConfigurationEntry,
 } from '@root/types/ethercat/esi-types'
 
 import { esiTypeToIecType, pdoToChannels } from './esi-parser'
+import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
 
 /**
  * Convert ESIPdo[] to PersistedPdo[] format.
@@ -99,11 +101,13 @@ export function enrichDeviceData(device: ESIDevice): {
   rxPdos: PersistedPdo[]
   txPdos: PersistedPdo[]
   slaveType: string
+  sdoConfigurations?: SDOConfigurationEntry[]
 } {
   return {
     channelInfo: buildChannelInfo(device),
     rxPdos: persistPdos(device.rxPdo),
     txPdos: persistPdos(device.txPdo),
     slaveType: deriveSlaveType(device),
+    sdoConfigurations: device.coeObjects?.length ? extractDefaultSdoConfigurations(device.coeObjects) : undefined,
   }
 }

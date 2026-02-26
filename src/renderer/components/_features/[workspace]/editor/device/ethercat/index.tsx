@@ -11,6 +11,7 @@ import type {
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
   ScannedDeviceMatch,
+  SDOConfigurationEntry,
 } from '@root/types/ethercat/esi-types'
 import type { EtherCATMasterConfig } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
@@ -389,8 +390,13 @@ const EtherCATEditor = () => {
         enriched = enrichDeviceData(result.device)
       }
 
+      // Compute next available position (max existing position + 1, or 0 if none)
+      const nextPosition =
+        configuredDevices.length > 0 ? Math.max(...configuredDevices.map((d) => d.position ?? -1)) + 1 : 0
+
       const newDevice: ConfiguredEtherCATDevice = {
         id: uuidv4(),
+        position: nextPosition,
         name: device.name,
         esiDeviceRef: ref,
         vendorId: repoItem.vendor.id,
@@ -434,6 +440,14 @@ const EtherCATEditor = () => {
   const handleEnrichDevice = useCallback(
     (deviceId: string, data: Partial<ConfiguredEtherCATDevice>) => {
       syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, ...data } : d)))
+    },
+    [configuredDevices, syncDevicesToStore],
+  )
+
+  // Handle updating a configured device's SDO configurations
+  const handleUpdateSdoConfigurations = useCallback(
+    (deviceId: string, sdoConfigurations: SDOConfigurationEntry[]) => {
+      syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, sdoConfigurations } : d)))
     },
     [configuredDevices, syncDevicesToStore],
   )
@@ -754,6 +768,7 @@ const EtherCATEditor = () => {
           projectPath={projectPath}
           onUpdateChannelMappings={handleUpdateChannelMappings}
           onEnrichDevice={handleEnrichDevice}
+          onUpdateSdoConfigurations={handleUpdateSdoConfigurations}
           usedAddresses={usedAddresses}
         />
       )}

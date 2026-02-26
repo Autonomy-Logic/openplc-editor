@@ -1,4 +1,9 @@
-import type { ConfiguredEtherCATDevice, PersistedChannelInfo, PersistedPdo } from '@root/types/ethercat/esi-types'
+import type {
+  ConfiguredEtherCATDevice,
+  PersistedChannelInfo,
+  PersistedPdo,
+  SDOConfigurationEntry,
+} from '@root/types/ethercat/esi-types'
 import type { PLCRemoteDevice } from '@root/types/PLC/open-plc'
 
 // Runtime JSON interfaces (snake_case for plugin consumption)
@@ -28,6 +33,16 @@ interface RuntimeChannel {
   pdo_entry_subindex: number
 }
 
+interface RuntimeSdoConfig {
+  index: string
+  subindex: number
+  value: string
+  data_type: string
+  bit_length: number
+  name: string
+  comment: string
+}
+
 interface RuntimeSlave {
   position: number
   name: string
@@ -36,7 +51,7 @@ interface RuntimeSlave {
   product_code: string
   revision: string
   channels: RuntimeChannel[]
-  sdo_configurations: unknown[]
+  sdo_configurations: RuntimeSdoConfig[]
   rx_pdos: RuntimePdo[]
   tx_pdos: RuntimePdo[]
 }
@@ -126,6 +141,25 @@ function buildChannels(
 }
 
 /**
+ * Converts SDOConfigurationEntry[] to RuntimeSdoConfig[] for the runtime plugin.
+ */
+function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): RuntimeSdoConfig[] {
+  if (!entries || entries.length === 0) return []
+
+  return entries.map(
+    (entry): RuntimeSdoConfig => ({
+      index: entry.index,
+      subindex: entry.subIndex,
+      value: entry.value,
+      data_type: entry.dataType,
+      bit_length: entry.bitLength,
+      name: entry.name,
+      comment: `Startup SDO: ${entry.objectName}`,
+    }),
+  )
+}
+
+/**
  * Builds a runtime slave from a configured device.
  */
 function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSlave {
@@ -142,7 +176,7 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
     product_code: device.productCode,
     revision: device.revisionNo,
     channels,
-    sdo_configurations: [],
+    sdo_configurations: buildSdoConfigurations(device.sdoConfigurations),
     rx_pdos: rxPdos,
     tx_pdos: txPdos,
   }

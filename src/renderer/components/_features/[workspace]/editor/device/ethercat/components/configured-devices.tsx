@@ -7,6 +7,7 @@ import type {
   EtherCATSlaveConfig,
   PersistedChannelInfo,
   PersistedPdo,
+  SDOConfigurationEntry,
 } from '@root/types/ethercat/esi-types'
 import { useCallback, useState } from 'react'
 
@@ -17,6 +18,7 @@ type EnrichDeviceData = {
   rxPdos?: PersistedPdo[]
   txPdos?: PersistedPdo[]
   slaveType?: string
+  sdoConfigurations?: SDOConfigurationEntry[]
 }
 
 type ConfiguredDevicesProps = {
@@ -28,6 +30,7 @@ type ConfiguredDevicesProps = {
   projectPath: string
   onUpdateChannelMappings: (deviceId: string, mappings: EtherCATChannelMapping[]) => void
   onEnrichDevice: (deviceId: string, data: EnrichDeviceData) => void
+  onUpdateSdoConfigurations: (deviceId: string, configs: SDOConfigurationEntry[]) => void
   usedAddresses: Set<string>
 }
 
@@ -45,6 +48,7 @@ const ConfiguredDevices = ({
   projectPath,
   onUpdateChannelMappings,
   onEnrichDevice,
+  onUpdateSdoConfigurations,
   usedAddresses,
 }: ConfiguredDevicesProps) => {
   const [expandedDevices, setExpandedDevices] = useState<Set<string>>(new Set())
@@ -142,6 +146,7 @@ const ConfiguredDevices = ({
                   projectPath={projectPath}
                   onUpdateChannelMappings={(mappings) => onUpdateChannelMappings(device.id, mappings)}
                   onEnrichDevice={(data) => onEnrichDevice(device.id, data)}
+                  onUpdateSdoConfigurations={(configs) => onUpdateSdoConfigurations(device.id, configs)}
                   usedAddresses={usedAddresses}
                 />
               ))

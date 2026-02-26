@@ -694,6 +694,17 @@ const PersistedChannelInfoSchema = z.object({
   iecType: z.string(),
 })
 
+const SDOConfigurationEntrySchema = z.object({
+  index: z.string(),
+  subIndex: z.number(),
+  value: z.string(),
+  defaultValue: z.string(),
+  dataType: z.string(),
+  bitLength: z.number(),
+  name: z.string(),
+  objectName: z.string(),
+})
+
 const ConfiguredEtherCATDeviceSchema = z.object({
   id: z.string(),
   position: z.number().optional(),
@@ -709,6 +720,7 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   rxPdos: z.array(PersistedPdoSchema).optional(),
   txPdos: z.array(PersistedPdoSchema).optional(),
   slaveType: z.string().optional(),
+  sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
 })
 
 const EtherCATMasterConfigSchema = z.object({
@@ -855,6 +867,7 @@ export {
   S7CommSlaveConfigSchema,
   S7CommSystemAreaSchema,
   S7CommSystemAreasSchema,
+  SDOConfigurationEntrySchema,
 }
 
 export type {

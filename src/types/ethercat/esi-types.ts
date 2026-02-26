@@ -121,6 +121,10 @@ export interface ESICoEObject {
   access: 'RO' | 'RW' | 'WO'
   /** PDO mapping allowed */
   pdoMapping: boolean
+  /** Object category: M=Mandatory, O=Optional, C=Conditional */
+  category?: 'M' | 'O' | 'C'
+  /** PDO mapping direction: R=RxPDO, T=TxPDO, RT=both */
+  pdoMappingDirection?: 'R' | 'T' | 'RT'
   /** Default value */
   defaultValue?: string
   /** Subindexes for complex objects */
@@ -141,8 +145,35 @@ export interface ESICoESubItem {
   bitSize: number
   /** Access rights */
   access: 'RO' | 'RW' | 'WO'
+  /** Whether this sub-item can be PDO-mapped */
+  pdoMapping?: boolean
   /** Default value */
   defaultValue?: string
+}
+
+// ===================== SDO CONFIGURATION =====================
+
+/**
+ * SDO (Service Data Object) configuration entry for startup parameters.
+ * Each entry represents a single parameter to be written to the slave at startup.
+ */
+export interface SDOConfigurationEntry {
+  /** Object index (hex, e.g., "0x8000") */
+  index: string
+  /** Subindex: 0 for simple objects, 1+ for sub-items */
+  subIndex: number
+  /** Value configured by the user */
+  value: string
+  /** Default value from the ESI */
+  defaultValue: string
+  /** Data type (e.g., "UINT16", "BOOL") */
+  dataType: string
+  /** Bit length of the parameter */
+  bitLength: number
+  /** Parameter name */
+  name: string
+  /** Parent object name */
+  objectName: string
 }
 
 // ===================== DEVICE =====================
@@ -447,6 +478,8 @@ export interface ConfiguredEtherCATDevice {
   txPdos?: PersistedPdo[]
   /** Slave device type classification (e.g., "digital_input", "coupler") */
   slaveType?: string
+  /** SDO startup parameters extracted from CoE Object Dictionary */
+  sdoConfigurations?: SDOConfigurationEntry[]
 }
 
 // ===================== PER-SLAVE CONFIGURATION =====================

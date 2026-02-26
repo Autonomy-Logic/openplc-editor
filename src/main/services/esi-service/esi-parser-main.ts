@@ -8,6 +8,8 @@
  */
 
 import type {
+  ESICoEObject,
+  ESICoESubItem,
   ESIDevice,
   ESIDeviceSummary,
   ESIDeviceType,
@@ -75,7 +77,7 @@ function createParser(): XMLParser {
     trimValues: true,
     isArray: (tagName: string) => {
       // Tags that can appear multiple times and should always be arrays
-      const arrayTags = ['Device', 'Group', 'RxPdo', 'TxPdo', 'Entry', 'Fmmu', 'Sm', 'Object', 'SubItem']
+      const arrayTags = ['Device', 'Group', 'RxPdo', 'TxPdo', 'Entry', 'Fmmu', 'Sm', 'Object', 'SubItem', 'DataType']
       return arrayTags.includes(tagName)
     },
   })
@@ -308,6 +310,209 @@ export function parseESIDeviceFull(xmlString: string, deviceIndex: number): ESID
   }
 }
 
+// ===================== COE DICTIONARY PARSING =====================
+
+/**
+ * Parsed DataType info from the Dictionary's DataTypes section.
+ */
+interface ParsedDataTypeInfo {
+  name: string
+  bitSize: number
+  subItems: {
+    subIdx: number
+    name: string
+    type: string
+    bitSize: number
+    bitOffset: number
+    access: 'RO' | 'RW' | 'WO'
+    defaultValue?: string
+    pdoMapping?: boolean
+  }[]
+}
+
+/**
+ * Parse access string from ESI XML to normalized access type.
+ */
+function parseAccessRights(accessStr: string | undefined): 'RO' | 'RW' | 'WO' {
+  if (!accessStr) return 'RO'
+  const lower = accessStr.toLowerCase().trim()
+  if (lower === 'rw' || lower === 'readwrite' || lower === 'read/write') return 'RW'
+  if (lower === 'wo' || lower === 'writeonly' || lower === 'write') return 'WO'
+  return 'RO'
+}
+
+/**
+ * Parse the CoE Object Dictionary from a device element.
+ * Navigates Device > Profile > Dictionary and extracts DataTypes and Objects.
+ */
+function parseCoEDictionary(deviceEl: Record<string, unknown>): ESICoEObject[] | undefined {
+  // Navigate to Profile > Dictionary
+  const profile = deviceEl['Profile'] as Record<string, unknown> | undefined
+  if (!profile) return undefined
+
+  const dictionary = profile['Dictionary'] as Record<string, unknown> | undefined
+  if (!dictionary) return undefined
+
+  // Step 1: Build DataType map
+  const dataTypeMap = new Map<string, ParsedDataTypeInfo>()
+  const dataTypesEl = dictionary['DataTypes'] as Record<string, unknown> | undefined
+  if (dataTypesEl) {
+    const dtElements = ensureArray(dataTypesEl['DataType'] as Record<string, unknown> | Record<string, unknown>[])
+    for (const dt of dtElements) {
+      const dtName = getTextValue(dt['Name'])
+      if (!dtName) continue
+
+      const dtBitSize = parseInt(getTextValue(dt['BitSize']) || '0', 10) || 0
+      const subItems: ParsedDataTypeInfo['subItems'] = []
+
+      const subItemElements = ensureArray(dt['SubItem'] as Record<string, unknown> | Record<string, unknown>[])
+      for (const si of subItemElements) {
+        const siSubIdx = parseInt(getTextValue(si['SubIdx']) || '0', 10)
+        const siName = getTextValue(si['Name'])
+        const siType = getTextValue(si['Type'])
+        const siBitSize = parseInt(getTextValue(si['BitSize']) || '0', 10) || 0
+        const siBitOffset = parseInt(getTextValue(si['BitOffs']) || '0', 10) || 0
+
+        // Parse flags
+        let siAccess: 'RO' | 'RW' | 'WO' = 'RO'
+        let siPdoMapping: boolean | undefined
+        const siFlags = si['Flags'] as Record<string, unknown> | undefined
+        if (siFlags) {
+          siAccess = parseAccessRights(getTextValue(siFlags['Access']))
+          const pdoMappingStr = getTextValue(siFlags['PdoMapping'])
+          if (pdoMappingStr) siPdoMapping = pdoMappingStr.toLowerCase() !== 'false' && pdoMappingStr !== '0'
+        }
+
+        const siDefaultValue = getTextValue(si['DefaultValue']) || undefined
+
+        subItems.push({
+          subIdx: siSubIdx,
+          name: siName,
+          type: siType,
+          bitSize: siBitSize,
+          bitOffset: siBitOffset,
+          access: siAccess,
+          defaultValue: siDefaultValue,
+          pdoMapping: siPdoMapping,
+        })
+      }
+
+      dataTypeMap.set(dtName, { name: dtName, bitSize: dtBitSize, subItems })
+    }
+  }
+
+  // Step 2: Parse Objects
+  const objectsEl = dictionary['Objects'] as Record<string, unknown> | undefined
+  if (!objectsEl) return undefined
+
+  const objectElements = ensureArray(objectsEl['Object'] as Record<string, unknown> | Record<string, unknown>[])
+  if (objectElements.length === 0) return undefined
+
+  const coeObjects: ESICoEObject[] = []
+
+  for (const objEl of objectElements) {
+    const indexStr = getTextValue(objEl['Index'])
+    if (!indexStr) continue
+
+    const index = parseHexValue(indexStr)
+    const name = getTextValue(objEl['Name']) || 'Unnamed'
+    const typeName = getTextValue(objEl['Type'])
+    const bitSize = parseInt(getTextValue(objEl['BitSize']) || '0', 10) || 0
+
+    // Parse object-level flags
+    let access: 'RO' | 'RW' | 'WO' = 'RO'
+    let pdoMapping = false
+    let category: 'M' | 'O' | 'C' | undefined
+    let pdoMappingDirection: 'R' | 'T' | 'RT' | undefined
+
+    const flags = objEl['Flags'] as Record<string, unknown> | undefined
+    if (flags) {
+      access = parseAccessRights(getTextValue(flags['Access']))
+      const pdoMappingStr = getTextValue(flags['PdoMapping'])
+      if (pdoMappingStr) {
+        const lower = pdoMappingStr.toLowerCase()
+        if (lower === 'r') {
+          pdoMapping = true
+          pdoMappingDirection = 'R'
+        } else if (lower === 't') {
+          pdoMapping = true
+          pdoMappingDirection = 'T'
+        } else if (lower === 'rt' || lower === 'tr') {
+          pdoMapping = true
+          pdoMappingDirection = 'RT'
+        } else if (lower !== 'false' && lower !== '0' && lower !== '') {
+          pdoMapping = true
+        }
+      }
+      const categoryStr = getTextValue(flags['Category'])
+      if (categoryStr === 'M' || categoryStr === 'O' || categoryStr === 'C') {
+        category = categoryStr
+      }
+    }
+
+    // Parse default value from object-level Info
+    let defaultValue = getTextValue(objEl['DefaultValue']) || undefined
+
+    // Resolve DataType to build sub-items for complex objects
+    const dtInfo = typeName ? dataTypeMap.get(typeName) : undefined
+    let subItems: ESICoESubItem[] | undefined
+
+    if (dtInfo && dtInfo.subItems.length > 0) {
+      // Build override map from object-level Info > SubItem
+      const overrideMap = new Map<string, { defaultValue?: string }>()
+      const infoEl = objEl['Info'] as Record<string, unknown> | undefined
+      if (infoEl) {
+        const infoSubItems = ensureArray(infoEl['SubItem'] as Record<string, unknown> | Record<string, unknown>[])
+        for (const isi of infoSubItems) {
+          const isiName = getTextValue(isi['Name'])
+          const isiInfo = isi['Info'] as Record<string, unknown> | undefined
+          const isiDefaultValue = isiInfo ? getTextValue(isiInfo['DefaultValue']) || undefined : undefined
+          if (isiName) {
+            overrideMap.set(isiName, { defaultValue: isiDefaultValue })
+          }
+        }
+      }
+
+      // Merge DataType sub-items with object-level overrides
+      subItems = dtInfo.subItems.map((si): ESICoESubItem => {
+        const override = overrideMap.get(si.name)
+        return {
+          subIndex: String(si.subIdx),
+          name: si.name,
+          type: si.type,
+          bitSize: si.bitSize,
+          access: si.access,
+          pdoMapping: si.pdoMapping,
+          defaultValue: override?.defaultValue ?? si.defaultValue,
+        }
+      })
+    }
+
+    // If no sub-items were built and there's an Info > DefaultValue at object level
+    if (!subItems && !defaultValue) {
+      const infoEl = objEl['Info'] as Record<string, unknown> | undefined
+      if (infoEl) {
+        defaultValue = getTextValue(infoEl['DefaultValue']) || undefined
+      }
+    }
+
+    coeObjects.push({
+      index,
+      name,
+      type: typeName,
+      bitSize,
+      access,
+      pdoMapping,
+      category,
+      pdoMappingDirection,
+      defaultValue,
+      subItems,
+    })
+  }
+
+  return coeObjects.length > 0 ? coeObjects : undefined
+}
+
 /**
  * Parse a complete ESIDevice from a parsed device element
  */
@@ -380,6 +585,9 @@ function parseFullDevice(deviceEl: Record<string, unknown>, groups: ESIGroup[]):
     txPdo.push(parseFullPdo(pdoEl))
   }
 
+  // Parse CoE Object Dictionary
+  const coeObjects = parseCoEDictionary(deviceEl)
+
   return {
     type,
     name: getTextValue(deviceEl['Name']) || 'Unknown Device',
@@ -389,6 +597,7 @@ function parseFullDevice(deviceEl: Record<string, unknown>, groups: ESIGroup[]):
     syncManagers,
     rxPdo,
     txPdo,
+    coeObjects,
     description: getTextValue(deviceEl['Comment']) || undefined,
   }
 }
