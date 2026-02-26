@@ -53,6 +53,14 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
           align={align}
           side={side}
           {...res}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            res.onPointerDown?.(e)
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation()
+            res.onPointerUp?.(e)
+          }}
         >
           {/* <PrimitiveSelect.ScrollUpButton>
           <ArrowIcon direction='up' size='sm' className='stroke-brand' />
@@ -76,7 +84,18 @@ type ISelectItemProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Item> & 
 const SelectItem = forwardRef<ElementRef<typeof PrimitiveSelect.Item>, ISelectItemProps>(
   ({ children, indicator, ...res }, forwardedRef) => {
     return (
-      <PrimitiveSelect.Item {...res} ref={forwardedRef}>
+      <PrimitiveSelect.Item
+        {...res}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          res.onPointerDown?.(e)
+        }}
+        onPointerUp={(e) => {
+          e.stopPropagation()
+          res.onPointerUp?.(e)
+        }}
+        ref={forwardedRef}
+      >
         <PrimitiveSelect.ItemText>{children}</PrimitiveSelect.ItemText>
         <PrimitiveSelect.ItemIndicator>
           {/** Icon for item indicator */}

@@ -43,6 +43,16 @@ const columnsPrograms = [
     minSize: 80,
     maxSize: 300,
     cell: SelectableTypeCell,
+    filterFn: (row, columnId, filterValue: string) => {
+      if (filterValue === 'all') return true
+      const type = row.getValue<PLCVariable['type']>(columnId)
+
+      if (filterValue === 'basic') return type.definition === 'base-type'
+      if (filterValue === 'user') return type.definition === 'user-data-type' || type.definition === 'array'
+      if (filterValue === 'system') return type.definition === 'derived'
+
+      return true
+    },
   }),
   columnHelper.accessor('location', {
     header: 'Location',
@@ -95,6 +105,16 @@ const columns = [
     minSize: 80,
     maxSize: 300,
     cell: SelectableTypeCell,
+    filterFn: (row, columnId, filterValue: string) => {
+      if (filterValue === 'all') return true
+      const type = row.getValue<PLCVariable['type']>(columnId)
+
+      if (filterValue === 'basic') return type.definition === 'base-type'
+      if (filterValue === 'user') return type.definition === 'user-data-type' || type.definition === 'array'
+      if (filterValue === 'system') return type.definition === 'derived'
+
+      return true
+    },
   }),
   columnHelper.accessor('initialValue', {
     header: 'Initial Value',

@@ -115,6 +115,7 @@ const VariablesEditor = () => {
    */
   const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
   type FilterOptionsType = (typeof FilterOptions)[number]
+  const TypeFilterOptions = ['All', 'Basic', 'System', 'User'] as const
   const [editorVariables, setEditorVariables] = useState<VariablesTableType>(() => {
     if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
       if (editor.variable.display === 'code') {
@@ -125,6 +126,7 @@ const VariablesEditor = () => {
       display: 'table',
       selectedRow: ROWS_NOT_SELECTED.toString(),
       classFilter: 'All',
+      typeFilter: 'All',
       description: '',
     }
   })
@@ -246,18 +248,20 @@ const VariablesEditor = () => {
   useEffect(() => {
     if (editor.type === 'plc-textual' || editor.type === 'plc-graphical')
       if (editor.variable.display === 'table') {
-        const { classFilter, description, display, selectedRow } = editor.variable
+        const { classFilter, typeFilter, description, display, selectedRow } = editor.variable
         setEditorVariables({
           display: display,
           selectedRow: selectedRow,
           classFilter: classFilter,
+          typeFilter: typeFilter ?? 'All',
           description: description,
         })
-        setColumnFilters((prev) =>
-          classFilter !== 'All'
-            ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: classFilter.toLowerCase() })
-            : prev.filter((filter) => filter.id !== 'class'),
-        )
+        setColumnFilters((prev) => {
+          const next = prev.filter((filter) => filter.id !== 'class' && filter.id !== 'type')
+          if (classFilter !== 'All') next.push({ id: 'class', value: classFilter.toLowerCase() })
+          if (typeFilter && typeFilter !== 'All') next.push({ id: 'type', value: typeFilter.toLowerCase() })
+          return next
+        })
       } else if (editor.variable.display === 'code') {
         const code = editor.variable.code
         setEditorVariables({
@@ -403,6 +407,18 @@ const VariablesEditor = () => {
     updateModelVariables({
       display: 'table',
       classFilter: value,
+    })
+  }
+
+  const handleTypeFilterChange = (value: string) => {
+    setColumnFilters((prev) =>
+      value !== 'All'
+        ? prev.filter((filter) => filter.id !== 'type').concat({ id: 'type', value: value.toLowerCase() })
+        : prev.filter((filter) => filter.id !== 'type'),
+    )
+    updateModelVariables({
+      display: 'table',
+      typeFilter: value,
     })
   }
 
@@ -1007,6 +1023,55 @@ const VariablesEditor = () => {
                     className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                   >
                     {FilterOptions.map((filter) => (
+                      <SelectItem
+                        key={filter}
+                        value={filter}
+                        className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      >
+                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                          {filter}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div
+                aria-label='Variables editor table type filter container'
+                className='flex h-full max-w-lg flex-1 items-center  gap-2'
+              >
+                <label
+                  htmlFor='type-filter'
+                  className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
+                >
+                  Type Filter :
+                </label>
+                <Select
+                  value={
+                    editorVariables.display === 'table' && 'typeFilter' in editorVariables
+                      ? editorVariables.typeFilter
+                      : 'All'
+                  }
+                  onValueChange={handleTypeFilterChange}
+                >
+                  <SelectTrigger
+                    id='type-filter'
+                    placeholder={
+                      editorVariables.display === 'table' && 'typeFilter' in editorVariables
+                        ? editorVariables.typeFilter
+                        : 'All'
+                    }
+                    withIndicator
+                    className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
+                  />
+                  <SelectContent
+                    position='popper'
+                    sideOffset={3}
+                    align='center'
+                    className='box h-max max-h-60 w-40 overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
+                  >
+                    {TypeFilterOptions.map((filter) => (
                       <SelectItem
                         key={filter}
                         value={filter}

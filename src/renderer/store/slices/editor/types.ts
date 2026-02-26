@@ -9,6 +9,7 @@ const editorVariablesSchema = z.discriminatedUnion('display', [
     display: z.literal('table'),
     description: z.string(),
     classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']),
+    typeFilter: z.string().optional(),
     selectedRow: z.string(),
   }),
   z.object({
@@ -234,6 +235,7 @@ const _editorActionsSchema = z.object({
         display: z.enum(['code', 'table']),
         selectedRow: z.number().optional(),
         classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']).optional(),
+        typeFilter: z.string().optional(),
         description: z.string().optional(),
         code: z.string().optional(),
       }),
@@ -247,6 +249,7 @@ const _editorActionsSchema = z.object({
         display: z.enum(['code', 'table']),
         selectedRow: z.number().optional(),
         classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']).optional(),
+        typeFilter: z.string().optional(),
         description: z.string().optional(),
         code: z.string().optional(),
       }),
