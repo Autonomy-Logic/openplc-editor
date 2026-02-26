@@ -12,6 +12,7 @@ import {
   ConvertToLangShortenedFormat,
   isArduinoTarget as checkIsArduinoTarget,
   isOpenPLCRuntimeV4Target,
+  isSimulatorTarget,
 } from '@root/utils'
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
@@ -128,7 +129,9 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const isArduinoTarget = checkIsArduinoTarget(currentBoardInfo)
+  const isSimulator = isSimulatorTarget(currentBoardInfo)
   const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard)
+  const allowServersAndRemoteDevices = isRuntimeV4 || isSimulator
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
     try {
@@ -405,7 +408,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
-                {!isRuntimeV4 ? (
+                {!allowServersAndRemoteDevices ? (
                   <div className='flex flex-col gap-2 py-2'>
                     <p className='text-sm text-neutral-700 dark:text-neutral-300'>
                       Server configuration is only available for OpenPLC Runtime v4 targets.
@@ -540,7 +543,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
-                {!isRuntimeV4 ? (
+                {!allowServersAndRemoteDevices ? (
                   <div className='flex flex-col gap-2 py-2'>
                     <p className='text-sm text-neutral-700 dark:text-neutral-300'>
                       Remote device configuration is only available for OpenPLC Runtime v4 targets.
@@ -740,7 +743,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   if (target === 'function-block') return true
                                   return lang.value !== 'Python' && lang.value !== 'C/C++'
                                 }).map((lang) => {
-                                  const isPythonBlockedForArduino = lang.value === 'Python' && isArduinoTarget
+                                  const isPythonBlockedForArduino =
+                                    lang.value === 'Python' && isArduinoTarget && !isSimulator
                                   const isDisabled = !!BlockedLanguagesStyles[lang.value] || isPythonBlockedForArduino
 
                                   return (

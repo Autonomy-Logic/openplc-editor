@@ -175,10 +175,11 @@ const Board = memo(function () {
 
       // Check if switching to a non-v4 target when servers or remote devices exist
       const isTargetV4 = isOpenPLCRuntimeV4Target(normalizedBoard)
+      const isTargetSimulator = isSimulatorTarget(targetBoardInfo)
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
 
-      if (!isTargetV4 && (hasServers || hasRemoteDevices)) {
+      if (!isTargetV4 && !isTargetSimulator && (hasServers || hasRemoteDevices)) {
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
         setV4FeaturesAffected({ hasServers: !!hasServers, hasRemoteDevices: !!hasRemoteDevices })
         setShowV4FeaturesWarning(true)
