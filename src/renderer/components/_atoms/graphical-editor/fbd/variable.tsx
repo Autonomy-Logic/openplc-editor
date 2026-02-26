@@ -13,7 +13,7 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '@root/utils/PLC/variable-types'
-import { Node, NodeProps, Position } from '@xyflow/react'
+import { Node, NodeProps, NodeResizer, Position } from '@xyflow/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
@@ -51,7 +51,7 @@ export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 export const Z_INDEX_DEBUGGER_VARIABLE = 10
 
 const VariableElement = (block: VariableProps) => {
-  const { id, data, selected } = block
+  const { id, data, selected, width, height } = block
   const {
     editor,
     editorActions: { updateModelFBD },
@@ -573,8 +573,8 @@ const VariableElement = (block: VariableProps) => {
           <TooltipTrigger asChild>
             <div
               style={{
-                width: ELEMENT_SIZE,
-                height: ELEMENT_HEIGHT,
+                width: width ?? ELEMENT_SIZE,
+                height: height ?? ELEMENT_HEIGHT,
                 ...(debuggerColor
                   ? {
                       borderColor: debuggerColor,
@@ -603,8 +603,8 @@ const VariableElement = (block: VariableProps) => {
               <div
                 className='relative flex items-center'
                 style={{
-                  width: DEFAULT_VARIABLE_WIDTH,
-                  height: DEFAULT_VARIABLE_HEIGHT,
+                  width: width ? width - 16 : DEFAULT_VARIABLE_WIDTH,
+                  height: height ?? DEFAULT_VARIABLE_HEIGHT,
                 }}
               >
                 <HighlightedTextArea
@@ -625,8 +625,8 @@ const VariableElement = (block: VariableProps) => {
                   setTextAreaValue={setVariableValue}
                   handleSubmit={handleSubmitVariableValueOnTextareaBlur}
                   inputHeight={{
-                    height: DEFAULT_VARIABLE_HEIGHT / 2,
-                    scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
+                    height: (height ?? DEFAULT_VARIABLE_HEIGHT) / 2,
+                    scrollLimiter: height ?? DEFAULT_VARIABLE_HEIGHT,
                   }}
                   ref={inputVariableRef}
                   disabled={isDebuggerVisible}
@@ -780,6 +780,17 @@ const VariableElement = (block: VariableProps) => {
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} isDebuggerVisible={isDebuggerVisible} />
       ))}
+
+      <NodeResizer
+        isVisible={selected ?? false}
+        minWidth={ELEMENT_SIZE}
+        minHeight={ELEMENT_HEIGHT}
+        handleStyle={{
+          borderRadius: '0',
+          width: '8px',
+          height: '8px',
+        }}
+      />
     </>
   )
 }
