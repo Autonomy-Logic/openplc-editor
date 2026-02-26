@@ -319,16 +319,13 @@ const EditableNameCell = ({
       ) : (
         <div
           onClick={handleStartEditing}
-          className={cn(
-            'relative flex w-full flex-1 items-center justify-center bg-transparent p-2 text-center outline-none',
-            {
-              'pointer-events-none': !selected,
-              'cursor-not-allowed': !isEditable(),
-              'text-red-500': isOrphaned,
-            },
-          )}
+          className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+            'pointer-events-none': !selected,
+            'cursor-not-allowed': !isEditable(),
+            'text-red-500': isOrphaned,
+          })}
         >
-          <div className='flex items-center justify-center gap-2'>
+          <div className='flex w-full items-center justify-center gap-2'>
             <HighlightedText
               text={cellValue}
               searchQuery={searchQuery}
