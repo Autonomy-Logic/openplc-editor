@@ -10,27 +10,10 @@ import {
   disconnectDebugger,
 } from '@root/renderer/utils/debugger-session'
 import type { DebugTreeNode } from '@root/types/debugger'
-import { PLCPou, PLCProjectData } from '@root/types/PLC/open-plc'
 import { BufferToStringArray, cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
-import { addCppLocalVariables } from '@root/utils/cpp/addCppLocalVariables'
-import { generateSTCode as generateCppSTCode } from '@root/utils/cpp/generateSTCode'
-import { validateCppCode } from '@root/utils/cpp/validateCppCode'
 import { parseDebugFile } from '@root/utils/debug-parser'
-
-type CppPouData = {
-  name: string
-  code: string
-  variables: unknown[]
-}
-
-type ProjectDataWithCpp = PLCProjectData & {
-  originalCppPous?: CppPouData[]
-}
-import { wrapUnsupportedComments } from '@root/utils/PLC/wrap-unsupported-comments'
+import { preprocessPous } from '@root/utils/PLC/preprocess-pous'
 import { parsePlcStatus } from '@root/utils/plc-status'
-import { addPythonLocalVariables } from '@root/utils/python/addPythonLocalVariables'
-import { generateSTCode } from '@root/utils/python/generateSTCode'
-import { injectPythonCode } from '@root/utils/python/injectPythonCode'
 import { useEffect, useRef, useState } from 'react'
 
 import {
@@ -94,18 +77,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const disabledButtonClass = 'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
-  const extractPythonData = (pous: typeof projectData.pous) => {
-    return pous
-      .filter((pou) => pou.data.body.language === 'python')
-      .map((pou) => ({
-        name: pou.data.name,
-        type: pou.type,
-        code: pou.data.body.language === 'python' ? (pou.data.body as { value: string }).value : '',
-        documentation: pou.data.documentation,
-        variables: pou.data.variables,
-      }))
-  }
-
   const compileOnly = compileOnlySelectors.useCompileOnly()
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
@@ -131,160 +102,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     return cleanup
   }, [])
 
-  const applyEarlyCommentWrapping = (projectData: PLCProjectData): PLCProjectData => {
-    return {
-      ...projectData,
-      pous: projectData.pous.map((pou: PLCPou) => {
-        if (pou.data.body.language === 'st' || pou.data.body.language === 'il') {
-          const wrappedValue = wrapUnsupportedComments(pou.data.body.value)
-          return {
-            ...pou,
-            data: {
-              ...pou.data,
-              body: {
-                language: pou.data.body.language,
-                value: wrappedValue,
-              },
-            },
-          } as PLCPou
-        }
-        return pou
-      }),
-    }
-  }
-
   const handleRequest = () => {
     const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
 
-    const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.data.body.language === 'python')
-
-    let processedProjectData: PLCProjectData = applyEarlyCommentWrapping(projectData)
-
-    if (hasPythonCode) {
-      const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'python')
-
-      pythonPous.forEach((pou) => {
-        addLog({
-          id: crypto.randomUUID(),
-          level: 'info',
-          message: `Found Python POU: "${pou.data.name}" (${pou.type})`,
-        })
-      })
-
-      addLog({
-        id: crypto.randomUUID(),
-        level: 'info',
-        message: `Processing ${pythonPous.length} Python POU(s)...`,
-      })
-
-      processedProjectData = addPythonLocalVariables(projectData)
-
-      const pythonData = extractPythonData(processedProjectData.pous)
-      const processedPythonCodes = injectPythonCode(pythonData)
-
-      console.log(processedProjectData)
-
-      let pythonIndex = 0
-      processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
-        if (pou.data.body.language === 'python') {
-          if (processedPythonCodes[pythonIndex]) {
-            const stCode = generateSTCode({
-              pouName: pou.data.name,
-              allVariables: pou.data.variables,
-              processedPythonCode: processedPythonCodes[pythonIndex],
-            })
-
-            pou.data.body = {
-              language: 'st',
-              value: stCode,
-            }
-
-            pythonIndex++
-          }
-        }
-        return pou
-      })
-
-      addLog({
-        id: crypto.randomUUID(),
-        level: 'info',
-        message: `Successfully processed ${processedPythonCodes.length} Python POU(s)`,
-      })
+    const { projectData: processedProjectData, validationFailed } = preprocessPous(
+      projectData,
+      isCurrentBoardSimulator,
+      (level, message) => addLog({ id: crypto.randomUUID(), level, message }),
+    )
+    if (validationFailed) {
+      setIsCompiling(false)
+      return
     }
-
-    const hasCppCode = processedProjectData.pous.some((pou: PLCPou) => pou.data.body.language === 'cpp')
-
-    if (hasCppCode) {
-      const cppPous = processedProjectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'cpp')
-
-      cppPous.forEach((pou) => {
-        addLog({
-          id: crypto.randomUUID(),
-          level: 'info',
-          message: `Found C/C++ POU: "${pou.data.name}" (${pou.type})`,
-        })
-      })
-
-      addLog({
-        id: crypto.randomUUID(),
-        level: 'info',
-        message: `Processing ${cppPous.length} C/C++ POU(s)...`,
-      })
-
-      let validationFailed = false
-      for (const pou of cppPous) {
-        const code = pou.data.body.language === 'cpp' ? (pou.data.body as { value: string }).value : ''
-        const validation = validateCppCode(code)
-        if (!validation.valid) {
-          addLog({
-            id: crypto.randomUUID(),
-            level: 'error',
-            message: `Validation failed for "${pou.data.name}": ${validation.error}`,
-          })
-          validationFailed = true
-        }
-      }
-
-      if (validationFailed) {
-        setIsCompiling(false)
-        return
-      }
-
-      processedProjectData = addCppLocalVariables(processedProjectData)
-
-      const originalCppPousData = cppPous.map((pou) => ({
-        name: pou.data.name,
-        code: pou.data.body.language === 'cpp' ? (pou.data.body as { value: string }).value : '',
-        variables: pou.data.variables,
-      }))
-
-      processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
-        if (pou.data.body.language === 'cpp') {
-          const stCode = generateCppSTCode({
-            pouName: pou.data.name,
-            allVariables: pou.data.variables,
-          })
-
-          pou.data.body = {
-            language: 'st',
-            value: stCode,
-          }
-        }
-        return pou
-      })
-
-      const projectDataWithCpp = processedProjectData as ProjectDataWithCpp
-      projectDataWithCpp.originalCppPous = originalCppPousData
-
-      addLog({
-        id: crypto.randomUUID(),
-        level: 'info',
-        message: `Successfully processed ${cppPous.length} C/C++ POU(s)`,
-      })
-    }
-
-    console.log('processado:', processedProjectData)
-    console.log('original:', projectData)
 
     const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
     const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
@@ -294,7 +123,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         deviceDefinitions.configuration.deviceBoard,
         boardCore,
         compileOnly,
-        processedProjectData as ProjectDataWithCpp,
+        processedProjectData,
         runtimeIpAddress,
         runtimeJwtToken,
       ],
@@ -748,132 +577,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: 'Starting debug compilation...',
       })
 
-      const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.data.body.language === 'python')
-      let processedProjectData: PLCProjectData = applyEarlyCommentWrapping(projectData)
-
-      if (hasPythonCode) {
-        const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'python')
-
-        pythonPous.forEach((pou) => {
-          consoleActions.addLog({
-            id: crypto.randomUUID(),
-            level: 'info',
-            message: `Found Python POU: "${pou.data.name}" (${pou.type})`,
-          })
-        })
-
-        consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'info',
-          message: `Processing ${pythonPous.length} Python POU(s)...`,
-        })
-
-        processedProjectData = addPythonLocalVariables(projectData)
-
-        const pythonData = extractPythonData(processedProjectData.pous)
-        const processedPythonCodes = injectPythonCode(pythonData)
-
-        let pythonIndex = 0
-        processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
-          if (pou.data.body.language === 'python') {
-            if (processedPythonCodes[pythonIndex]) {
-              const stCode = generateSTCode({
-                pouName: pou.data.name,
-                allVariables: pou.data.variables,
-                processedPythonCode: processedPythonCodes[pythonIndex],
-              })
-
-              pou.data.body = {
-                language: 'st',
-                value: stCode,
-              }
-
-              pythonIndex++
-            }
-          }
-          return pou
-        })
-
-        consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'info',
-          message: `Successfully processed ${processedPythonCodes.length} Python POU(s)`,
-        })
-      }
-
-      const hasCppCode = processedProjectData.pous.some((pou: PLCPou) => pou.data.body.language === 'cpp')
-
-      if (hasCppCode) {
-        const cppPous = processedProjectData.pous.filter((pou: PLCPou) => pou.data.body.language === 'cpp')
-
-        cppPous.forEach((pou) => {
-          consoleActions.addLog({
-            id: crypto.randomUUID(),
-            level: 'info',
-            message: `Found C/C++ POU: "${pou.data.name}" (${pou.type})`,
-          })
-        })
-
-        consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'info',
-          message: `Processing ${cppPous.length} C/C++ POU(s)...`,
-        })
-
-        let validationFailed = false
-        for (const pou of cppPous) {
-          const code = pou.data.body.language === 'cpp' ? (pou.data.body as { value: string }).value : ''
-          const validation = validateCppCode(code)
-          if (!validation.valid) {
-            consoleActions.addLog({
-              id: crypto.randomUUID(),
-              level: 'error',
-              message: `Validation failed for "${pou.data.name}": ${validation.error}`,
-            })
-            validationFailed = true
-          }
-        }
-
-        if (validationFailed) {
-          setIsDebuggerProcessing(false)
-          return
-        }
-
-        processedProjectData = addCppLocalVariables(processedProjectData)
-
-        const originalCppPousData = cppPous.map((pou) => ({
-          name: pou.data.name,
-          code: pou.data.body.language === 'cpp' ? (pou.data.body as { value: string }).value : '',
-          variables: pou.data.variables,
-        }))
-
-        processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
-          if (pou.data.body.language === 'cpp') {
-            const stCode = generateCppSTCode({
-              pouName: pou.data.name,
-              allVariables: pou.data.variables,
-            })
-
-            pou.data.body = {
-              language: 'st',
-              value: stCode,
-            }
-          }
-          return pou
-        })
-
-        const projectDataWithCpp = processedProjectData as ProjectDataWithCpp
-        projectDataWithCpp.originalCppPous = originalCppPousData
-
-        consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'info',
-          message: `Successfully processed ${cppPous.length} C/C++ POU(s)`,
-        })
+      const { projectData: processedProjectData, validationFailed } = preprocessPous(
+        projectData,
+        isSimulatorTarget(currentBoardInfo),
+        (level, message) => consoleActions.addLog({ id: crypto.randomUUID(), level, message }),
+      )
+      if (validationFailed) {
+        setIsDebuggerProcessing(false)
+        return
       }
 
       window.bridge.runDebugCompilation(
-        [projectPath, boardTarget, processedProjectData as ProjectDataWithCpp],
+        [projectPath, boardTarget, processedProjectData],
         (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
           if (typeof data.message === 'string') {
             data.message
