@@ -640,7 +640,7 @@ const WorkspaceScreen = () => {
           }
         })
 
-        // Register _TMP_ variables for function BOOL outputs so they get polled
+        // Register _TMP_ variables for function base-type outputs so they get polled
         const registerFunctionTempOutputs = (nodes: Array<{ type?: string; data: object }>) => {
           nodes.forEach((node) => {
             if (node.type !== 'block') return
@@ -662,25 +662,22 @@ const WorkspaceScreen = () => {
             const numericId = blockData.numericId
             if (!numericId) return
 
-            let boolOutputs = blockData.variant.variables.filter(
-              (v) =>
-                (v.class === 'output' || v.class === 'inOut') &&
-                v.type.definition === 'base-type' &&
-                v.type.value.toUpperCase() === 'BOOL',
+            let baseTypeOutputs = blockData.variant.variables.filter(
+              (v) => (v.class === 'output' || v.class === 'inOut') && v.type.definition === 'base-type',
             )
 
             const hasExecutionControl = blockData.executionControl || false
             if (hasExecutionControl) {
-              const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+              const hasENO = baseTypeOutputs.some((v) => v.name.toUpperCase() === 'ENO')
               if (!hasENO) {
-                boolOutputs = [
-                  ...boolOutputs,
+                baseTypeOutputs = [
+                  ...baseTypeOutputs,
                   { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
                 ]
               }
             }
 
-            boolOutputs.forEach((outputVar) => {
+            baseTypeOutputs.forEach((outputVar) => {
               const index = getIndexFromMapWithFallback(
                 debugVariableIndexes,
                 programInstance.name,
@@ -693,7 +690,30 @@ const WorkspaceScreen = () => {
                   pouName: pou.data.name,
                   variable: {
                     name: tempVarName,
-                    type: { definition: 'base-type', value: 'bool' },
+                    type: {
+                      definition: 'base-type',
+                      value: outputVar.type.value.toLowerCase() as
+                        | 'bool'
+                        | 'int'
+                        | 'real'
+                        | 'time'
+                        | 'string'
+                        | 'date'
+                        | 'sint'
+                        | 'dint'
+                        | 'lint'
+                        | 'usint'
+                        | 'uint'
+                        | 'udint'
+                        | 'ulint'
+                        | 'lreal'
+                        | 'tod'
+                        | 'dt'
+                        | 'byte'
+                        | 'word'
+                        | 'dword'
+                        | 'lword',
+                    },
                     class: 'local',
                     location: '',
                     documentation: '',
@@ -835,26 +855,23 @@ const WorkspaceScreen = () => {
               const numericId = blockData.numericId
               if (!numericId) return
 
-              let boolOutputs = blockData.variant.variables.filter(
-                (v) =>
-                  (v.class === 'output' || v.class === 'inOut') &&
-                  v.type.definition === 'base-type' &&
-                  v.type.value.toUpperCase() === 'BOOL',
+              let baseTypeOutputs = blockData.variant.variables.filter(
+                (v) => (v.class === 'output' || v.class === 'inOut') && v.type.definition === 'base-type',
               )
 
               // Add ENO if execution control is enabled
               const hasExecutionControl = blockData.executionControl || false
               if (hasExecutionControl) {
-                const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+                const hasENO = baseTypeOutputs.some((v) => v.name.toUpperCase() === 'ENO')
                 if (!hasENO) {
-                  boolOutputs = [
-                    ...boolOutputs,
+                  baseTypeOutputs = [
+                    ...baseTypeOutputs,
                     { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
                   ]
                 }
               }
 
-              boolOutputs.forEach((outputVar) => {
+              baseTypeOutputs.forEach((outputVar) => {
                 // Debug path uses the full nested path:
                 // RES0__INSTANCE0.FB_B0.FB_A0._TMP_EQ_STATE7415072_ENO
                 // Use fallback to try both FB-style and struct-style paths
@@ -871,7 +888,30 @@ const WorkspaceScreen = () => {
                     pouName: programPouName,
                     variable: {
                       name: tempVarName,
-                      type: { definition: 'base-type', value: 'bool' },
+                      type: {
+                        definition: 'base-type',
+                        value: outputVar.type.value.toLowerCase() as
+                          | 'bool'
+                          | 'int'
+                          | 'real'
+                          | 'time'
+                          | 'string'
+                          | 'date'
+                          | 'sint'
+                          | 'dint'
+                          | 'lint'
+                          | 'usint'
+                          | 'uint'
+                          | 'udint'
+                          | 'ulint'
+                          | 'lreal'
+                          | 'tod'
+                          | 'dt'
+                          | 'byte'
+                          | 'word'
+                          | 'dword'
+                          | 'lword',
+                      },
                       class: 'local',
                       location: '',
                       documentation: '',
