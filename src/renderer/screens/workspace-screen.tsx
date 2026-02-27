@@ -4,6 +4,7 @@ import { PlcLogsFilters } from '@components/_organisms/plc-logs/filters'
 import * as Tabs from '@radix-ui/react-tabs'
 import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
+import type { PLCBaseTypesLowercase } from '@root/types/PLC/units/base-types'
 // Note: Logs polling is now handled by useRuntimePolling hook
 import { cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import {
@@ -692,27 +693,7 @@ const WorkspaceScreen = () => {
                     name: tempVarName,
                     type: {
                       definition: 'base-type',
-                      value: outputVar.type.value.toLowerCase() as
-                        | 'bool'
-                        | 'int'
-                        | 'real'
-                        | 'time'
-                        | 'string'
-                        | 'date'
-                        | 'sint'
-                        | 'dint'
-                        | 'lint'
-                        | 'usint'
-                        | 'uint'
-                        | 'udint'
-                        | 'ulint'
-                        | 'lreal'
-                        | 'tod'
-                        | 'dt'
-                        | 'byte'
-                        | 'word'
-                        | 'dword'
-                        | 'lword',
+                      value: outputVar.type.value.toLowerCase() as PLCBaseTypesLowercase,
                     },
                     class: 'local',
                     location: '',
@@ -890,27 +871,7 @@ const WorkspaceScreen = () => {
                       name: tempVarName,
                       type: {
                         definition: 'base-type',
-                        value: outputVar.type.value.toLowerCase() as
-                          | 'bool'
-                          | 'int'
-                          | 'real'
-                          | 'time'
-                          | 'string'
-                          | 'date'
-                          | 'sint'
-                          | 'dint'
-                          | 'lint'
-                          | 'usint'
-                          | 'uint'
-                          | 'udint'
-                          | 'ulint'
-                          | 'lreal'
-                          | 'tod'
-                          | 'dt'
-                          | 'byte'
-                          | 'word'
-                          | 'dword'
-                          | 'lword',
+                        value: outputVar.type.value.toLowerCase() as PLCBaseTypesLowercase,
                       },
                       class: 'local',
                       location: '',
