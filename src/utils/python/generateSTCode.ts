@@ -59,7 +59,8 @@ const generateInputCopyCode = (inputVars: PLCVariable[]): string => {
     const upperName = variable.name.toUpperCase()
 
     if (isArrayVariable(variable)) {
-      code += `        memcpy(data_in.${variable.name}, data__->${upperName}.value.table, sizeof(data_in.${variable.name}));\n`
+      const totalElements = getArrayTotalElements(variable)
+      code += `        for (int __i = 0; __i < ${totalElements}; __i++) data_in.${variable.name}[__i] = data__->${upperName}.value.table[__i].value;\n`
     } else if (isString) {
       code += `        data_in.${variable.name}.len = data__->${upperName}.value.len;\n`
       code += `        memcpy(data_in.${variable.name}.body, data__->${upperName}.value.body, STR_MAX_LEN);\n`
@@ -84,7 +85,8 @@ const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
     const upperName = variable.name.toUpperCase()
 
     if (isArrayVariable(variable)) {
-      code += `        memcpy(data__->${upperName}.value.table, data_out.${variable.name}, sizeof(data_out.${variable.name}));\n`
+      const totalElements = getArrayTotalElements(variable)
+      code += `        for (int __i = 0; __i < ${totalElements}; __i++) data__->${upperName}.value.table[__i].value = data_out.${variable.name}[__i];\n`
     } else if (isString) {
       code += `        data__->${upperName}.value.len = data_out.${variable.name}.len;\n`
       code += `        memcpy(data__->${upperName}.value.body, data_out.${variable.name}.body, STR_MAX_LEN);\n`

@@ -75,4 +75,23 @@ const getVariableIECType = (variable: PLCVariable): string => {
   return variable.type.value.toUpperCase()
 }
 
-export { getArrayBaseTypeValue, getArrayTotalElements, getVariableIECType, isArrayVariable, mapBaseTypeToIEC }
+/**
+ * Get the start index of the first dimension of an array variable.
+ * Returns 0 if the variable is not an array or has invalid dimensions.
+ */
+const getArrayStartIndex = (variable: PLCVariable): number => {
+  if (variable.type.definition !== 'array') return 0
+  const dimensions = variable.type.data.dimensions
+  if (dimensions.length === 0) return 0
+  const range = parseDimensionRange(dimensions[0].dimension)
+  return range ? range.lower : 0
+}
+
+export {
+  getArrayBaseTypeValue,
+  getArrayStartIndex,
+  getArrayTotalElements,
+  getVariableIECType,
+  isArrayVariable,
+  mapBaseTypeToIEC,
+}
