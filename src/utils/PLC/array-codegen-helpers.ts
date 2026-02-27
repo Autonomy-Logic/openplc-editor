@@ -87,7 +87,20 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
   return range ? range.lower : 0
 }
 
+/**
+ * Generate a C struct member declaration for a variable.
+ * Both scalars and arrays use pointers:
+ * - Scalars: pointer to the single value
+ * - Arrays: pointer to the first element of the table
+ */
+const generateStructMember = (variable: PLCVariable): string => {
+  const iecType = getVariableIECType(variable)
+  const name = variable.name.toUpperCase()
+  return `  ${iecType} *${name};\n`
+}
+
 export {
+  generateStructMember,
   getArrayBaseTypeValue,
   getArrayStartIndex,
   getArrayTotalElements,

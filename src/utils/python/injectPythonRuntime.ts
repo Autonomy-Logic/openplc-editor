@@ -39,13 +39,17 @@ const generateInputUnpackCode = (inputVariables: PLCVariable[]): string => {
   inputVariables.forEach((variable) => {
     if (isArrayVariable(variable)) {
       const count = getArrayTotalElements(variable)
-      code += `    ${variable.name} = list(_vals[_idx:_idx+${count}]); _idx += ${count}\n`
+      code += `    ${variable.name} = list(_vals[_idx:_idx+${count}])\n`
+      code += `    _idx += ${count}\n`
     } else if (variable.type?.definition === 'base-type' && variable.type?.value === 'string') {
-      code += `    ${variable.name}_len = _vals[_idx]; _idx += 1\n`
-      code += `    ${variable.name}_body = _vals[_idx]; _idx += 1\n`
+      code += `    ${variable.name}_len = _vals[_idx]\n`
+      code += `    _idx += 1\n`
+      code += `    ${variable.name}_body = _vals[_idx]\n`
+      code += `    _idx += 1\n`
       code += `    ${variable.name} = ${variable.name}_body[:${variable.name}_len].decode('utf-8', errors='ignore')\n`
     } else {
-      code += `    ${variable.name} = _vals[_idx]; _idx += 1\n`
+      code += `    ${variable.name} = _vals[_idx]\n`
+      code += `    _idx += 1\n`
     }
   })
 

@@ -1,19 +1,10 @@
 import { PLCVariable } from '@root/types/PLC/open-plc'
-import { getVariableIECType, isArrayVariable } from '@root/utils/PLC/array-codegen-helpers'
+import { generateStructMember, isArrayVariable } from '@root/utils/PLC/array-codegen-helpers'
 
 type CppPouData = {
   name: string
   code: string
   variables: PLCVariable[]
-}
-
-const generateStructMember = (variable: PLCVariable): string => {
-  const iecType = getVariableIECType(variable)
-  const name = variable.name.toUpperCase()
-  // Both scalars and arrays use pointers:
-  // - Scalars: pointer to the single value
-  // - Arrays: pointer to the first element of the table
-  return `  ${iecType} *${name};\n`
 }
 
 const generateDefine = (variable: PLCVariable): string => {

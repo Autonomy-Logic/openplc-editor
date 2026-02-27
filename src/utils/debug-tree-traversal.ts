@@ -15,6 +15,7 @@ import {
   findDebugVariable,
   findDebugVariableForField,
 } from './debug-variable-finder'
+import { parseDimensionRange } from './PLC/array-variable-utils'
 import { findFunctionBlockVariables, findStructureVariables, normalizeTypeString } from './pou-helpers'
 
 /**
@@ -97,12 +98,12 @@ function isFunctionBlock(typeName: string, projectPous: PLCPou[]): boolean {
 
 /**
  * Parse array dimension string (e.g., "1..10" or "-5..5") into start and end indices.
- * IEC 61131-3 allows negative array indices.
+ * Delegates to the shared parseDimensionRange utility.
  */
 function parseArrayDimension(dimension: string): [number, number] | null {
-  const match = dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
-  if (!match) return null
-  return [parseInt(match[1], 10), parseInt(match[2], 10)]
+  const range = parseDimensionRange(dimension)
+  if (!range) return null
+  return [range.lower, range.upper]
 }
 
 /**

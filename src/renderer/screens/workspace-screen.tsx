@@ -4,6 +4,7 @@ import { PlcLogsFilters } from '@components/_organisms/plc-logs/filters'
 import * as Tabs from '@radix-ui/react-tabs'
 import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
+import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import type { PLCBaseTypesLowercase } from '@root/types/PLC/units/base-types'
 // Note: Logs polling is now handled by useRuntimePolling hook
 import { cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
@@ -13,6 +14,7 @@ import {
   getFieldIndexFromMapWithFallback,
   getIndexFromMapWithFallback,
 } from '@root/utils/debug-variable-finder'
+import { parseDimensionRange } from '@root/utils/PLC/array-variable-utils'
 import { useEffect, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
@@ -440,7 +442,14 @@ const WorkspaceScreen = () => {
         } else if (fbVar.type.definition === 'array') {
           // Array variable inside FB/struct - add each element individually
           const arrayInfo = parseArrayTypeValue(fbVar.type.value)
-          if (arrayInfo) {
+          const isValidBaseType = arrayInfo ? baseTypeSchema.safeParse(arrayInfo.baseType).success : false
+          if (arrayInfo && !isValidBaseType) {
+            console.warn(
+              `[Debugger] Skipping array variable "${fbVar.name}": unknown base type "${arrayInfo.baseType}"`,
+            )
+          }
+          if (arrayInfo && isValidBaseType) {
+            const validBaseType = arrayInfo.baseType as PLCBaseTypesLowercase
             const arrayBasePath = appendToDebugPath(debugPathPrefix, fbVar.name)
             for (let i = 0; i <= arrayInfo.end - arrayInfo.start; i++) {
               const iecIndex = arrayInfo.start + i
@@ -454,7 +463,7 @@ const WorkspaceScreen = () => {
                     name: elementVarName,
                     type: {
                       definition: 'base-type',
-                      value: arrayInfo.baseType as PLCBaseTypesLowercase,
+                      value: validBaseType,
                     },
                     class: 'local',
                     location: '',
@@ -477,10 +486,10 @@ const WorkspaceScreen = () => {
           // Array variables - add each element individually to variableInfoMap
           const dimensions = v.type.data.dimensions
           if (dimensions.length > 0) {
-            const dimMatch = dimensions[0].dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
-            if (dimMatch) {
-              const startIdx = parseInt(dimMatch[1], 10)
-              const endIdx = parseInt(dimMatch[2], 10)
+            const range = parseDimensionRange(dimensions[0].dimension)
+            if (range) {
+              const startIdx = range.lower
+              const endIdx = range.upper
               const baseType = v.type.data.baseType.value.toLowerCase()
               for (let iecIdx = startIdx; iecIdx <= endIdx; iecIdx++) {
                 const elementCompositeKey = `${pou.data.name}:${v.name}[${iecIdx}]`
