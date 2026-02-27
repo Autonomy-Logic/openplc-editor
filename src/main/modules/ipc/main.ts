@@ -1187,6 +1187,13 @@ class MainProcessBridge implements MainIpcModule {
           serialPort: virtualPort,
         })
         await this.debuggerModbusClient.connect()
+
+        // Trigger endianness detection on the emulated runtime.
+        // getMd5Hash sends 0xDEAD which the runtime uses to detect byte order
+        // and call set_endianness(). Without this, the default SAME_ENDIANNESS
+        // causes multi-byte values to be stored with swapped bytes on the
+        // little-endian AVR emulator.
+        await this.debuggerModbusClient.getMd5Hash()
       } else if (connectionType === 'websocket') {
         if (this.debuggerModbusClient) {
           this.debuggerModbusClient.disconnect()
