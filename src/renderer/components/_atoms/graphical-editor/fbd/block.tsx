@@ -6,11 +6,12 @@ import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
-import { FocusEvent, useEffect, useRef, useState } from 'react'
+import { FocusEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { BlockOutputDebugBadges } from '../block-output-debug-badges'
 import { BlockVariant } from '../types/block'
 import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
@@ -352,9 +353,23 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
 
-  const { variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+  const { variables, rung } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
     nodeId: id ?? '',
   })
+
+  // Outputs connected to variable nodes already show their own badge — skip those
+  const connectedOutputNames = useMemo(() => {
+    const names = new Set<string>()
+    if (!rung) return names
+    const outgoingEdges = rung.edges.filter((e) => e.source === id)
+    for (const edge of outgoingEdges) {
+      const targetNode = rung.nodes.find((n) => n.id === edge.target)
+      if (targetNode && typeof targetNode.type === 'string' && targetNode.type.includes('variable')) {
+        if (edge.sourceHandle) names.add(edge.sourceHandle)
+      }
+    }
+    return names
+  }, [rung, id])
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -807,6 +822,17 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
+      <BlockOutputDebugBadges
+        blockType={(data.variant as BlockVariant).type}
+        blockName={(data.variant as BlockVariant).name}
+        blockVariableName={data.variable?.name ?? ''}
+        numericId={data.numericId}
+        outputVariables={(data.variant as BlockVariant).variables}
+        connectorStartY={DEFAULT_BLOCK_CONNECTOR_Y}
+        connectorOffsetY={DEFAULT_BLOCK_CONNECTOR_Y_OFFSET}
+        blockWidth={width ?? DEFAULT_BLOCK_WIDTH}
+        connectedOutputNames={connectedOutputNames}
+      />
     </div>
   )
 }

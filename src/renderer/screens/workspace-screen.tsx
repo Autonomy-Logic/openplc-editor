@@ -4,6 +4,7 @@ import { PlcLogsFilters } from '@components/_organisms/plc-logs/filters'
 import * as Tabs from '@radix-ui/react-tabs'
 import { useRuntimePolling } from '@root/renderer/hooks/use-runtime-polling'
 import { DebugTreeNode } from '@root/types/debugger'
+import type { PLCBaseTypesLowercase } from '@root/types/PLC/units/base-types'
 // Note: Logs polling is now handled by useRuntimePolling hook
 import { cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import {
@@ -640,7 +641,7 @@ const WorkspaceScreen = () => {
           }
         })
 
-        // Register _TMP_ variables for function BOOL outputs so they get polled
+        // Register _TMP_ variables for function base-type outputs so they get polled
         const registerFunctionTempOutputs = (nodes: Array<{ type?: string; data: object }>) => {
           nodes.forEach((node) => {
             if (node.type !== 'block') return
@@ -662,25 +663,22 @@ const WorkspaceScreen = () => {
             const numericId = blockData.numericId
             if (!numericId) return
 
-            let boolOutputs = blockData.variant.variables.filter(
-              (v) =>
-                (v.class === 'output' || v.class === 'inOut') &&
-                v.type.definition === 'base-type' &&
-                v.type.value.toUpperCase() === 'BOOL',
+            let baseTypeOutputs = blockData.variant.variables.filter(
+              (v) => (v.class === 'output' || v.class === 'inOut') && v.type.definition === 'base-type',
             )
 
             const hasExecutionControl = blockData.executionControl || false
             if (hasExecutionControl) {
-              const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+              const hasENO = baseTypeOutputs.some((v) => v.name.toUpperCase() === 'ENO')
               if (!hasENO) {
-                boolOutputs = [
-                  ...boolOutputs,
+                baseTypeOutputs = [
+                  ...baseTypeOutputs,
                   { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
                 ]
               }
             }
 
-            boolOutputs.forEach((outputVar) => {
+            baseTypeOutputs.forEach((outputVar) => {
               const index = getIndexFromMapWithFallback(
                 debugVariableIndexes,
                 programInstance.name,
@@ -693,7 +691,10 @@ const WorkspaceScreen = () => {
                   pouName: pou.data.name,
                   variable: {
                     name: tempVarName,
-                    type: { definition: 'base-type', value: 'bool' },
+                    type: {
+                      definition: 'base-type',
+                      value: outputVar.type.value.toLowerCase() as PLCBaseTypesLowercase,
+                    },
                     class: 'local',
                     location: '',
                     documentation: '',
@@ -835,26 +836,23 @@ const WorkspaceScreen = () => {
               const numericId = blockData.numericId
               if (!numericId) return
 
-              let boolOutputs = blockData.variant.variables.filter(
-                (v) =>
-                  (v.class === 'output' || v.class === 'inOut') &&
-                  v.type.definition === 'base-type' &&
-                  v.type.value.toUpperCase() === 'BOOL',
+              let baseTypeOutputs = blockData.variant.variables.filter(
+                (v) => (v.class === 'output' || v.class === 'inOut') && v.type.definition === 'base-type',
               )
 
               // Add ENO if execution control is enabled
               const hasExecutionControl = blockData.executionControl || false
               if (hasExecutionControl) {
-                const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+                const hasENO = baseTypeOutputs.some((v) => v.name.toUpperCase() === 'ENO')
                 if (!hasENO) {
-                  boolOutputs = [
-                    ...boolOutputs,
+                  baseTypeOutputs = [
+                    ...baseTypeOutputs,
                     { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
                   ]
                 }
               }
 
-              boolOutputs.forEach((outputVar) => {
+              baseTypeOutputs.forEach((outputVar) => {
                 // Debug path uses the full nested path:
                 // RES0__INSTANCE0.FB_B0.FB_A0._TMP_EQ_STATE7415072_ENO
                 // Use fallback to try both FB-style and struct-style paths
@@ -871,7 +869,10 @@ const WorkspaceScreen = () => {
                     pouName: programPouName,
                     variable: {
                       name: tempVarName,
-                      type: { definition: 'base-type', value: 'bool' },
+                      type: {
+                        definition: 'base-type',
+                        value: outputVar.type.value.toLowerCase() as PLCBaseTypesLowercase,
+                      },
                       class: 'local',
                       location: '',
                       documentation: '',
@@ -1383,6 +1384,44 @@ const WorkspaceScreen = () => {
                 }
               })
             }
+          }
+        }
+
+        // Poll all variables of the active POU so non-BOOL values can be displayed on the diagram.
+        // This adds every variable registered in variableInfoMapRef that belongs to the current POU,
+        // enabling the DebugValueBadge components to show real-time values for INT, REAL, etc.
+        if (currentPou) {
+          if (currentPou.type === 'function-block') {
+            // For FB POUs, resolve the selected instance context and match variables by
+            // program name + instance path prefix (same pattern used for BOOL polling above).
+            const fbTypeKey = currentPou.data.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (selectedKey) {
+              const instances = fbDebugInstances.get(fbTypeKey) || []
+              const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+              if (selectedInstance) {
+                const instancePrefix = `${selectedInstance.fbVariableName}.`
+                Array.from(variableInfoMapRef.current.values()).forEach((varInfos) => {
+                  for (const varInfo of varInfos) {
+                    if (
+                      varInfo.pouName === selectedInstance.programName &&
+                      varInfo.variable.name.startsWith(instancePrefix)
+                    ) {
+                      debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                    }
+                  }
+                })
+              }
+            }
+          } else {
+            const activePouName = currentPou.data.name
+            Array.from(variableInfoMapRef.current.values()).forEach((varInfos) => {
+              for (const varInfo of varInfos) {
+                if (varInfo.pouName === activePouName) {
+                  debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                }
+              }
+            })
           }
         }
 
