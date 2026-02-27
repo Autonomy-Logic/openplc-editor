@@ -1391,21 +1391,38 @@ const WorkspaceScreen = () => {
         // This adds every variable registered in variableInfoMapRef that belongs to the current POU,
         // enabling the DebugValueBadge components to show real-time values for INT, REAL, etc.
         if (currentPou) {
-          const activePouName = currentPou.data.name
-          Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
-            for (const varInfo of varInfos) {
-              if (varInfo.pouName !== activePouName) continue
-              // For FB POUs, only add variables that match the selected instance context
-              if (currentPou.type === 'function-block') {
-                const compositeKey = makeCompositeKeyForCurrentPou(varInfo.variable.name)
-                if (compositeKey) {
-                  debugVariableKeys.add(compositeKey)
-                }
-              } else {
-                debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+          if (currentPou.type === 'function-block') {
+            // For FB POUs, resolve the selected instance context and match variables by
+            // program name + instance path prefix (same pattern used for BOOL polling above).
+            const fbTypeKey = currentPou.data.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            if (selectedKey) {
+              const instances = fbDebugInstances.get(fbTypeKey) || []
+              const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+              if (selectedInstance) {
+                const instancePrefix = `${selectedInstance.fbVariableName}.`
+                Array.from(variableInfoMapRef.current.values()).forEach((varInfos) => {
+                  for (const varInfo of varInfos) {
+                    if (
+                      varInfo.pouName === selectedInstance.programName &&
+                      varInfo.variable.name.startsWith(instancePrefix)
+                    ) {
+                      debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                    }
+                  }
+                })
               }
             }
-          })
+          } else {
+            const activePouName = currentPou.data.name
+            Array.from(variableInfoMapRef.current.values()).forEach((varInfos) => {
+              for (const varInfo of varInfos) {
+                if (varInfo.pouName === activePouName) {
+                  debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                }
+              }
+            })
+          }
         }
 
         // Forced variables must also be polled so their current value appears in the debugger panel
