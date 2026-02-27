@@ -1,4 +1,5 @@
 import { PLCVariable } from '@root/types/PLC/open-plc'
+import { getArrayTotalElements, getVariableIECType, isArrayVariable } from '@root/utils/PLC/array-codegen-helpers'
 
 type STCodeGenerationParams = {
   pouName: string
@@ -6,29 +7,13 @@ type STCodeGenerationParams = {
   processedPythonCode: string
 }
 
-const mapTypeToC = (type: PLCVariable['type']): string => {
-  if (type.definition === 'base-type') {
-    const typeMap: Record<string, string> = {
-      bool: 'IEC_BOOL',
-      sint: 'IEC_SINT',
-      int: 'IEC_INT',
-      dint: 'IEC_DINT',
-      lint: 'IEC_LINT',
-      usint: 'IEC_USINT',
-      uint: 'IEC_UINT',
-      udint: 'IEC_UDINT',
-      ulint: 'IEC_ULINT',
-      byte: 'IEC_BYTE',
-      word: 'IEC_WORD',
-      dword: 'IEC_DWORD',
-      lword: 'IEC_LWORD',
-      real: 'IEC_REAL',
-      lreal: 'IEC_LREAL',
-      string: 'IEC_STRING',
-    }
-    return typeMap[type.value] || type.value
+const generateStructField = (variable: PLCVariable): string => {
+  const iecType = getVariableIECType(variable)
+  if (isArrayVariable(variable)) {
+    const totalElements = getArrayTotalElements(variable)
+    return `        ${iecType} ${variable.name}[${totalElements}];\n`
   }
-  return type.value
+  return `        ${iecType} ${variable.name};\n`
 }
 
 const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): string => {
@@ -39,14 +24,10 @@ const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): 
   structs += '    typedef struct {\n'
   if (inputVars.length > 0) {
     inputVars.forEach((variable) => {
-      structs += `        ${mapTypeToC(variable.type)} ${variable.name};\n`
+      structs += generateStructField(variable)
     })
   } else {
     // Padding field ensures sizeof() >= 1, preventing mmap() failure with size 0.
-    // This allows Python blocks with only output variables (no inputs) to work.
-    // TODO: A more robust fix would also add handling in the runtime's python_loader.c
-    // to gracefully handle size 0 by either skipping shared memory allocation entirely
-    // or using a minimum size of 1 byte when shm_in_size or shm_out_size is 0.
     structs += '        uint8_t _padding;\n'
   }
   structs += '    } shm_data_in_t;\n'
@@ -57,14 +38,14 @@ const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): 
   structs += '    typedef struct {\n'
   if (outputVars.length > 0) {
     outputVars.forEach((variable) => {
-      structs += `        ${mapTypeToC(variable.type)} ${variable.name};\n`
+      structs += generateStructField(variable)
     })
   } else {
     // Padding field ensures sizeof() >= 1, preventing mmap() failure with size 0.
-    // This allows Python blocks with only input variables (no outputs) to work.
     structs += '        uint8_t _padding;\n'
   }
   structs += '    } shm_data_out_t;\n'
+  structs += '    #pragma pack(pop)\n'
 
   return structs
 }
@@ -76,12 +57,16 @@ const generateInputCopyCode = (inputVars: PLCVariable[]): string => {
 
   inputVars.forEach((variable) => {
     const isString = variable.type?.definition === 'base-type' && variable.type?.value === 'string'
+    const upperName = variable.name.toUpperCase()
 
-    if (isString) {
-      code += `        data_in.${variable.name}.len = data__->${variable.name.toUpperCase()}.value.len;\n`
-      code += `        memcpy(data_in.${variable.name}.body, data__->${variable.name.toUpperCase()}.value.body, STR_MAX_LEN);\n`
+    if (isArrayVariable(variable)) {
+      const totalElements = getArrayTotalElements(variable)
+      code += `        for (int __i = 0; __i < ${totalElements}; __i++) data_in.${variable.name}[__i] = data__->${upperName}.value.table[__i].value;\n`
+    } else if (isString) {
+      code += `        data_in.${variable.name}.len = data__->${upperName}.value.len;\n`
+      code += `        memcpy(data_in.${variable.name}.body, data__->${upperName}.value.body, STR_MAX_LEN);\n`
     } else {
-      code += `        data_in.${variable.name} = data__->${variable.name.toUpperCase()}.value;\n`
+      code += `        data_in.${variable.name} = data__->${upperName}.value;\n`
     }
   })
 
@@ -98,12 +83,16 @@ const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
 
   outputVars.forEach((variable) => {
     const isString = variable.type?.definition === 'base-type' && variable.type?.value === 'string'
+    const upperName = variable.name.toUpperCase()
 
-    if (isString) {
-      code += `        data__->${variable.name.toUpperCase()}.value.len = data_out.${variable.name}.len;\n`
-      code += `        memcpy(data__->${variable.name.toUpperCase()}.value.body, data_out.${variable.name}.body, STR_MAX_LEN);\n`
+    if (isArrayVariable(variable)) {
+      const totalElements = getArrayTotalElements(variable)
+      code += `        for (int __i = 0; __i < ${totalElements}; __i++) data__->${upperName}.value.table[__i].value = data_out.${variable.name}[__i];\n`
+    } else if (isString) {
+      code += `        data__->${upperName}.value.len = data_out.${variable.name}.len;\n`
+      code += `        memcpy(data__->${upperName}.value.body, data_out.${variable.name}.body, STR_MAX_LEN);\n`
     } else {
-      code += `        data__->${variable.name.toUpperCase()}.value = data_out.${variable.name};\n`
+      code += `        data__->${upperName}.value = data_out.${variable.name};\n`
     }
   })
 
@@ -193,8 +182,6 @@ else
 
 ${inputCopyCode}${outputCopyCode}    }}
 end_if;`
-
-  console.log(stCode)
 
   return stCode
 }
