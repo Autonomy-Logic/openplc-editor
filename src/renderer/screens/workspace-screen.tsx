@@ -1386,6 +1386,27 @@ const WorkspaceScreen = () => {
           }
         }
 
+        // Poll all variables of the active POU so non-BOOL values can be displayed on the diagram.
+        // This adds every variable registered in variableInfoMapRef that belongs to the current POU,
+        // enabling the DebugValueBadge components to show real-time values for INT, REAL, etc.
+        if (currentPou) {
+          const activePouName = currentPou.data.name
+          Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
+            for (const varInfo of varInfos) {
+              if (varInfo.pouName !== activePouName) continue
+              // For FB POUs, only add variables that match the selected instance context
+              if (currentPou.type === 'function-block') {
+                const compositeKey = makeCompositeKeyForCurrentPou(varInfo.variable.name)
+                if (compositeKey) {
+                  debugVariableKeys.add(compositeKey)
+                }
+              } else {
+                debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+              }
+            }
+          })
+        }
+
         // Forced variables must also be polled so their current value appears in the debugger panel
         const {
           workspace: { debugForcedVariables: currentForcedVars },
