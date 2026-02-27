@@ -45,6 +45,7 @@ const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): 
     structs += '        uint8_t _padding;\n'
   }
   structs += '    } shm_data_out_t;\n'
+  structs += '    #pragma pack(pop)\n'
 
   return structs
 }

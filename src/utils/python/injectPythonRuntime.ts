@@ -71,8 +71,9 @@ const generateOutputPackCode = (outputVariables: PLCVariable[]): string => {
       code += `    _out.extend(${variable.name})\n`
     } else if (variable.type?.definition === 'base-type' && variable.type?.value === 'string') {
       code += `    _body = ${variable.name}.encode('utf-8')[:126]\n`
+      code += `    _len = len(_body)\n`
       code += `    _body = _body.ljust(126, b'\\0')\n`
-      code += `    _out.append(len(_body))\n`
+      code += `    _out.append(_len)\n`
       code += `    _out.append(_body)\n`
     } else {
       code += `    _out.append(${variable.name})\n`

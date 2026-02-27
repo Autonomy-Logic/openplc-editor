@@ -43,6 +43,12 @@ const encodeCharactersFromVariable = (variables: PLCVariable[]): string => {
           return ''
         }
         const totalElements = getArrayTotalElements(variable)
+        // For multi-char encodings (e.g., 'b126s' for STRING), the repeat count
+        // only applies to the first char in Python struct format ('10b126s' ≠ 10×'b126s').
+        // Repeat the full encoding string instead.
+        if (encodingChar.length > 1) {
+          return encodingChar.repeat(totalElements)
+        }
         return `${totalElements}${encodingChar}`
       }
 

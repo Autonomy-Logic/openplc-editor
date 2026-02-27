@@ -13,6 +13,8 @@ import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
 import type { PLCInstance, PLCPou, PLCProject, PLCVariable } from '@root/types/PLC/open-plc'
 import type { DebugVariableEntry } from '@root/utils/debug-parser'
 import {
+  buildGlobalDebugPath,
+  findDebugVariable,
   findGlobalVariableIndex,
   findVariableIndex,
   findVariableIndexWithFallback,
@@ -76,10 +78,18 @@ export function buildVariableIndexMap(
             const startIdx = parseInt(dimMatch[1], 10)
             const endIdx = parseInt(dimMatch[2], 10)
             for (let i = 0; i <= endIdx - startIdx; i++) {
-              const elementIndex = findVariableIndex(instance.name, v.name, parsed.variables, {
-                isArrayElement: true,
-                arrayIndex: i,
-              })
+              let elementIndex: number | null
+              if (v.class === 'external') {
+                // External (global) array elements use CONFIG0__ prefix
+                const globalPath = `${buildGlobalDebugPath(v.name)}.value.table[${i}]`
+                const match = findDebugVariable(parsed.variables, globalPath)
+                elementIndex = match ? match.index : null
+              } else {
+                elementIndex = findVariableIndex(instance.name, v.name, parsed.variables, {
+                  isArrayElement: true,
+                  arrayIndex: i,
+                })
+              }
               if (elementIndex !== null) {
                 const compositeKey = `${pou.data.name}:${v.name}[${startIdx + i}]`
                 indexMap.set(compositeKey, elementIndex)

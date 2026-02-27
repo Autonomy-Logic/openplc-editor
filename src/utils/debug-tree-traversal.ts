@@ -7,6 +7,7 @@
  */
 
 import type { PLCDataType, PLCPou, PLCVariable } from '@root/types/PLC/open-plc'
+import { parseDimensionRange } from '@root/utils/PLC/array-variable-utils'
 
 import type { DebugVariableEntry } from './debug-parser'
 import {
@@ -15,7 +16,6 @@ import {
   findDebugVariable,
   findDebugVariableForField,
 } from './debug-variable-finder'
-import { parseDimensionRange } from './PLC/array-variable-utils'
 import { findFunctionBlockVariables, findStructureVariables, normalizeTypeString } from './pou-helpers'
 
 /**
