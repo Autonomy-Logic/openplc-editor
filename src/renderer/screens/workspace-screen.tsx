@@ -447,7 +447,7 @@ const WorkspaceScreen = () => {
       })
     })
 
-    const { ladderFlows } = useOpenPLCStore.getState()
+    const { ladderFlows, fbdFlows } = useOpenPLCStore.getState()
 
     project.data.pous.forEach((pou) => {
       if (pou.type !== 'program') return
@@ -471,6 +471,18 @@ const WorkspaceScreen = () => {
                   }
                 }
               })
+            })
+          }
+        } else if (pou.data.body.language === 'fbd') {
+          const currentFbdFlow = fbdFlows.find((flow) => flow.name === pou.data.name)
+          if (currentFbdFlow) {
+            currentFbdFlow.rung.nodes.forEach((node) => {
+              if (node.type === 'block') {
+                const blockData = node.data as { variable?: { name: string }; executionControl?: boolean }
+                if (blockData.variable?.name && blockData.executionControl) {
+                  blockExecutionControlMap.set(blockData.variable.name, true)
+                }
+              }
             })
           }
         }
@@ -628,73 +640,82 @@ const WorkspaceScreen = () => {
           }
         })
 
+        // Register _TMP_ variables for function BOOL outputs so they get polled
+        const registerFunctionTempOutputs = (nodes: Array<{ type?: string; data: object }>) => {
+          nodes.forEach((node) => {
+            if (node.type !== 'block') return
+
+            const blockData = node.data as {
+              variable?: { name: string }
+              variant?: {
+                name: string
+                type: string
+                variables: Array<{ name: string; class: string; type: { definition: string; value: string } }>
+              }
+              numericId?: string
+              executionControl?: boolean
+            }
+
+            if (!blockData.variant || blockData.variant.type !== 'function') return
+
+            const blockName = blockData.variant.name.toUpperCase()
+            const numericId = blockData.numericId
+            if (!numericId) return
+
+            let boolOutputs = blockData.variant.variables.filter(
+              (v) =>
+                (v.class === 'output' || v.class === 'inOut') &&
+                v.type.definition === 'base-type' &&
+                v.type.value.toUpperCase() === 'BOOL',
+            )
+
+            const hasExecutionControl = blockData.executionControl || false
+            if (hasExecutionControl) {
+              const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
+              if (!hasENO) {
+                boolOutputs = [
+                  ...boolOutputs,
+                  { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+                ]
+              }
+            }
+
+            boolOutputs.forEach((outputVar) => {
+              const index = getIndexFromMapWithFallback(
+                debugVariableIndexes,
+                programInstance.name,
+                `_TMP_${blockName}${numericId}_${outputVar.name}`,
+              )
+
+              if (index !== undefined) {
+                const tempVarName = `_TMP_${blockName}${numericId}_${outputVar.name}`
+                addVariableInfo(index, {
+                  pouName: pou.data.name,
+                  variable: {
+                    name: tempVarName,
+                    type: { definition: 'base-type', value: 'bool' },
+                    class: 'local',
+                    location: '',
+                    documentation: '',
+                    debug: false,
+                  },
+                })
+              }
+            })
+          })
+        }
+
         if (pou.data.body.language === 'ld') {
           const currentLadderFlow = ladderFlows.find((flow) => flow.name === pou.data.name)
           if (currentLadderFlow) {
             currentLadderFlow.rungs.forEach((rung) => {
-              rung.nodes.forEach((node) => {
-                if (node.type !== 'block') return
-
-                const blockData = node.data as {
-                  variable?: { name: string }
-                  variant?: {
-                    name: string
-                    type: string
-                    variables: Array<{ name: string; class: string; type: { definition: string; value: string } }>
-                  }
-                  numericId?: string
-                  executionControl?: boolean
-                }
-
-                if (!blockData.variant || blockData.variant.type !== 'function') return
-
-                const blockName = blockData.variant.name.toUpperCase()
-                const numericId = blockData.numericId
-                if (!numericId) return
-
-                let boolOutputs = blockData.variant.variables.filter(
-                  (v) =>
-                    (v.class === 'output' || v.class === 'inOut') &&
-                    v.type.definition === 'base-type' &&
-                    v.type.value.toUpperCase() === 'BOOL',
-                )
-
-                const hasExecutionControl = blockData.executionControl || false
-                if (hasExecutionControl) {
-                  const hasENO = boolOutputs.some((v) => v.name.toUpperCase() === 'ENO')
-                  if (!hasENO) {
-                    boolOutputs = [
-                      ...boolOutputs,
-                      { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
-                    ]
-                  }
-                }
-
-                boolOutputs.forEach((outputVar) => {
-                  // Use fallback to try both FB-style and struct-style paths
-                  const index = getIndexFromMapWithFallback(
-                    debugVariableIndexes,
-                    programInstance.name,
-                    `_TMP_${blockName}${numericId}_${outputVar.name}`,
-                  )
-
-                  if (index !== undefined) {
-                    const tempVarName = `_TMP_${blockName}${numericId}_${outputVar.name}`
-                    addVariableInfo(index, {
-                      pouName: pou.data.name,
-                      variable: {
-                        name: tempVarName,
-                        type: { definition: 'base-type', value: 'bool' },
-                        class: 'local',
-                        location: '',
-                        documentation: '',
-                        debug: false,
-                      },
-                    })
-                  }
-                })
-              })
+              registerFunctionTempOutputs(rung.nodes)
             })
+          }
+        } else if (pou.data.body.language === 'fbd') {
+          const currentFbdFlow = fbdFlows.find((flow) => flow.name === pou.data.name)
+          if (currentFbdFlow) {
+            registerFunctionTempOutputs(currentFbdFlow.rung.nodes)
           }
         }
       }
@@ -1364,6 +1385,14 @@ const WorkspaceScreen = () => {
             }
           }
         }
+
+        // Forced variables must also be polled so their current value appears in the debugger panel
+        const {
+          workspace: { debugForcedVariables: currentForcedVars },
+        } = useOpenPLCStore.getState()
+        currentForcedVars.forEach((_value, compositeKey) => {
+          debugVariableKeys.add(compositeKey)
+        })
 
         const allIndexes = Array.from(variableInfoMapRef.current.entries())
           .filter(([_, varInfos]) =>

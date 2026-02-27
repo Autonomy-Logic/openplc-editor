@@ -222,6 +222,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     debugForcedVariables,
     editor.meta.name,
     project,
+    getCompositeKey,
   ])
 
   const styledNodes = useMemo(() => {
