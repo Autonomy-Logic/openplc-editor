@@ -1,8 +1,17 @@
 import { PLCVariable } from '@root/types/PLC/open-plc'
+import { isArrayVariable } from '@root/utils/PLC/array-codegen-helpers'
 
 type STCodeGenerationParams = {
   pouName: string
   allVariables: PLCVariable[]
+}
+
+const generateVariableAssignment = (variable: PLCVariable): string => {
+  const name = variable.name.toUpperCase()
+  if (isArrayVariable(variable)) {
+    return `vars.${name} = data__->${name}.value.table;\n`
+  }
+  return `vars.${name} = &data__->${name}.value;\n`
 }
 
 const generateSTCode = (params: STCodeGenerationParams): string => {
@@ -18,11 +27,11 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
   let variableAssignments = ''
 
   inputVariables.forEach((variable) => {
-    variableAssignments += `vars.${variable.name.toUpperCase()} = &data__->${variable.name.toUpperCase()}.value;\n`
+    variableAssignments += generateVariableAssignment(variable)
   })
 
   outputVariables.forEach((variable) => {
-    variableAssignments += `vars.${variable.name.toUpperCase()} = &data__->${variable.name.toUpperCase()}.value;\n`
+    variableAssignments += generateVariableAssignment(variable)
   })
 
   const stCode = `{{
