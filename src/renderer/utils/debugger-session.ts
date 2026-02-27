@@ -12,7 +12,11 @@ import { buildDebugTree } from '@root/renderer/utils/debug-tree-builder'
 import type { DebugTreeNode, FbInstanceInfo } from '@root/types/debugger'
 import type { PLCInstance, PLCPou, PLCProject, PLCVariable } from '@root/types/PLC/open-plc'
 import type { DebugVariableEntry } from '@root/utils/debug-parser'
-import { findGlobalVariableIndex, findVariableIndexWithFallback } from '@root/utils/debug-variable-finder'
+import {
+  findGlobalVariableIndex,
+  findVariableIndex,
+  findVariableIndexWithFallback,
+} from '@root/utils/debug-variable-finder'
 import { normalizeTypeString } from '@root/utils/pou-helpers'
 
 // ---------------------------------------------------------------------------
@@ -62,13 +66,36 @@ export function buildVariableIndexMap(
     }
 
     pou.data.variables.forEach((v: PLCVariable) => {
-      const index =
-        v.class === 'external'
-          ? findGlobalVariableIndex(v.name, parsed.variables)
-          : findVariableIndexWithFallback(instance.name, v.name, parsed.variables)
-      if (index !== null) {
-        const compositeKey = `${pou.data.name}:${v.name}`
-        indexMap.set(compositeKey, index)
+      if (v.type.definition === 'array' && v.type.data) {
+        // Array variables don't have a single debug index - each element has its own index.
+        // Add entries for each element so they can be polled individually.
+        const dimensions = v.type.data.dimensions
+        if (dimensions.length > 0) {
+          const dimMatch = dimensions[0].dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
+          if (dimMatch) {
+            const startIdx = parseInt(dimMatch[1], 10)
+            const endIdx = parseInt(dimMatch[2], 10)
+            for (let i = 0; i <= endIdx - startIdx; i++) {
+              const elementIndex = findVariableIndex(instance.name, v.name, parsed.variables, {
+                isArrayElement: true,
+                arrayIndex: i,
+              })
+              if (elementIndex !== null) {
+                const compositeKey = `${pou.data.name}:${v.name}[${startIdx + i}]`
+                indexMap.set(compositeKey, elementIndex)
+              }
+            }
+          }
+        }
+      } else {
+        const index =
+          v.class === 'external'
+            ? findGlobalVariableIndex(v.name, parsed.variables)
+            : findVariableIndexWithFallback(instance.name, v.name, parsed.variables)
+        if (index !== null) {
+          const compositeKey = `${pou.data.name}:${v.name}`
+          indexMap.set(compositeKey, index)
+        }
       }
     })
   })

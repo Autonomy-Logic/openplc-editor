@@ -275,6 +275,15 @@ const WorkspaceScreen = () => {
       return [...fbVars, { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } }]
     }
 
+    // Helper to parse "ARRAY [1..10] OF DINT" into { start, end, baseType }
+    const parseArrayTypeValue = (value: string): { start: number; end: number; baseType: string } | null => {
+      const match = value.match(
+        /ARRAY\s*\[\s*(-?\d+)\s*\.\.\s*(-?\d+)\s*(?:,\s*-?\d+\s*\.\.\s*-?\d+)*\s*\]\s*OF\s*(\w+)/i,
+      )
+      if (!match) return null
+      return { start: parseInt(match[1], 10), end: parseInt(match[2], 10), baseType: match[3].toLowerCase() }
+    }
+
     // Helper function to recursively process nested FB and struct variables
     const processNestedVariables = (
       fbVariables: Array<{ name: string; class: string; type: { definition: string; value: string } }>,
@@ -428,6 +437,34 @@ const WorkspaceScreen = () => {
               processNestedVariables(structVariables, pouName, nestedDebugPath, nestedVarName)
             }
           }
+        } else if (fbVar.type.definition === 'array') {
+          // Array variable inside FB/struct - add each element individually
+          const arrayInfo = parseArrayTypeValue(fbVar.type.value)
+          if (arrayInfo) {
+            const arrayBasePath = appendToDebugPath(debugPathPrefix, fbVar.name)
+            for (let i = 0; i <= arrayInfo.end - arrayInfo.start; i++) {
+              const iecIndex = arrayInfo.start + i
+              const elementPath = `${arrayBasePath}.value.table[${i}]`
+              const index = debugVariableIndexes.get(elementPath)
+              if (index !== undefined) {
+                const elementVarName = `${variableNamePrefix}.${fbVar.name}[${iecIndex}]`
+                addVariableInfo(index, {
+                  pouName,
+                  variable: {
+                    name: elementVarName,
+                    type: {
+                      definition: 'base-type',
+                      value: arrayInfo.baseType as PLCBaseTypesLowercase,
+                    },
+                    class: 'local',
+                    location: '',
+                    documentation: '',
+                    debug: false,
+                  },
+                })
+              }
+            }
+          }
         }
       })
     }
@@ -436,14 +473,47 @@ const WorkspaceScreen = () => {
       if (pou.type !== 'program') return
 
       pou.data.variables.forEach((v) => {
-        const compositeKey = `${pou.data.name}:${v.name}`
-        const index = debugVariableIndexes.get(compositeKey)
-        if (index !== undefined) {
-          addVariableInfo(index, { pouName: pou.data.name, variable: v })
+        if (v.type.definition === 'array' && v.type.data) {
+          // Array variables - add each element individually to variableInfoMap
+          const dimensions = v.type.data.dimensions
+          if (dimensions.length > 0) {
+            const dimMatch = dimensions[0].dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
+            if (dimMatch) {
+              const startIdx = parseInt(dimMatch[1], 10)
+              const endIdx = parseInt(dimMatch[2], 10)
+              const baseType = v.type.data.baseType.value.toLowerCase()
+              for (let iecIdx = startIdx; iecIdx <= endIdx; iecIdx++) {
+                const elementCompositeKey = `${pou.data.name}:${v.name}[${iecIdx}]`
+                const index = debugVariableIndexes.get(elementCompositeKey)
+                if (index !== undefined) {
+                  addVariableInfo(index, {
+                    pouName: pou.data.name,
+                    variable: {
+                      name: `${v.name}[${iecIdx}]`,
+                      type: {
+                        definition: 'base-type',
+                        value: baseType as PLCBaseTypesLowercase,
+                      },
+                      class: 'local',
+                      location: '',
+                      documentation: '',
+                      debug: false,
+                    },
+                  })
+                }
+              }
+            }
+          }
         } else {
-          console.warn(
-            `[Debugger] Could not resolve index for program variable: ${compositeKey} (type: ${v.type.value})`,
-          )
+          const compositeKey = `${pou.data.name}:${v.name}`
+          const index = debugVariableIndexes.get(compositeKey)
+          if (index !== undefined) {
+            addVariableInfo(index, { pouName: pou.data.name, variable: v })
+          } else {
+            console.warn(
+              `[Debugger] Could not resolve index for program variable: ${compositeKey} (type: ${v.type.value})`,
+            )
+          }
         }
       })
     })
@@ -574,9 +644,12 @@ const WorkspaceScreen = () => {
               }
             })
 
-            // Process nested FB and struct variables recursively
+            // Process nested FB, struct, and array variables recursively
             const nestedVariables = fbVariables.filter(
-              (v) => v.type.definition === 'derived' || v.type.definition === 'user-data-type',
+              (v) =>
+                v.type.definition === 'derived' ||
+                v.type.definition === 'user-data-type' ||
+                v.type.definition === 'array',
             )
             if (nestedVariables.length > 0) {
               const debugPathPrefix = buildDebugPath(programInstance.name, fbInstance.name)
@@ -788,9 +861,10 @@ const WorkspaceScreen = () => {
         }
       })
 
-      // 2. Process nested FB and struct variables recursively
+      // 2. Process nested FB, struct, and array variables recursively
       const nestedVariables = fbVariables.filter(
-        (v) => v.type.definition === 'derived' || v.type.definition === 'user-data-type',
+        (v) =>
+          v.type.definition === 'derived' || v.type.definition === 'user-data-type' || v.type.definition === 'array',
       )
       if (nestedVariables.length > 0) {
         processNestedVariables(nestedVariables, programPouName, debugPathPrefix, variablePathPrefix)
