@@ -9,7 +9,7 @@ import { getExtensionFromLanguage, getFolderFromPouType } from '@root/utils/PLC/
 import { parseHybridPouFromString, parseTextualPouFromString } from '@root/utils/PLC/pou-text-parser'
 import type { IpcRendererEvent } from 'electron'
 import * as monaco from 'monaco-editor'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
@@ -65,6 +65,50 @@ const bridge = window.bridge as unknown as {
   onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
 }
 
+// Replaces comment regions with spaces so column positions are preserved.
+// Tracks block comment state across lines: (*..*), /*..*/, and // line comments.
+type BlockCommentState = false | 'paren' | 'slash'
+function stripLineComments(line: string, state: BlockCommentState): { stripped: string; state: BlockCommentState } {
+  const chars = [...line]
+  let i = 0
+  let s = state
+
+  while (i < chars.length) {
+    if (s) {
+      const endMarker = s === 'paren' ? ')' : '/'
+      if (chars[i] === '*' && chars[i + 1] === endMarker) {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = false
+      } else {
+        chars[i] = ' '
+        i++
+      }
+    } else {
+      if (chars[i] === '/' && chars[i + 1] === '/') {
+        for (let j = i; j < chars.length; j++) chars[j] = ' '
+        break
+      }
+      if (chars[i] === '(' && chars[i + 1] === '*') {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = 'paren'
+      } else if (chars[i] === '/' && chars[i + 1] === '*') {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = 'slash'
+      } else {
+        i++
+      }
+    }
+  }
+
+  return { stripped: chars.join(''), state: s }
+}
+
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
@@ -78,6 +122,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     regularExpression,
     workspace: {
       systemConfigs: { shouldUseDarkMode },
+      isDebuggerVisible,
+      debugVariableValues,
+      fbSelectedInstance,
+      fbDebugInstances,
     },
     project: {
       meta: { path: projectPath },
@@ -233,6 +281,98 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       }
     }
   }, [pou?.type, name, language])
+
+  // Update readOnly when debugger visibility changes on an already-mounted editor
+  useEffect(() => {
+    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
+  }, [isDebuggerVisible])
+
+  // Resolve FB instance context for composite key building
+  const fbInstanceContext = useMemo(() => {
+    if (!pou || pou.type !== 'function-block') return null
+    const fbTypeKey = pou.data.name.toUpperCase()
+    const selectedKey = fbSelectedInstance.get(fbTypeKey)
+    if (!selectedKey) return null
+    const instances = fbDebugInstances.get(fbTypeKey) || []
+    return instances.find((inst) => inst.key === selectedKey) || null
+  }, [pou, fbSelectedInstance, fbDebugInstances])
+
+  // Debug inline value decorations for ST/IL editors
+  useEffect(() => {
+    if (!isDebuggerVisible || !editorRef.current || (language !== 'st' && language !== 'il')) {
+      return
+    }
+
+    const editorInstance = editorRef.current
+    const model = editorInstance.getModel()
+    if (!model) return
+
+    // Build variable expression → value entries from debugVariableValues keys matching this POU.
+    // This naturally includes complex expressions like "TON0.Q" and "my_array[3]".
+    const prefix = fbInstanceContext
+      ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
+      : `${name}:`
+
+    const varEntries: Array<{ expr: string; value: string }> = []
+    for (const [key, value] of debugVariableValues) {
+      if (key.startsWith(prefix)) {
+        varEntries.push({ expr: key.slice(prefix.length), value })
+      }
+    }
+
+    if (varEntries.length === 0) return
+
+    // Sort longest first so "TON0.Q" is matched before "TON0" on the same line
+    varEntries.sort((a, b) => b.expr.length - a.expr.length)
+
+    // Build per-expression regex: word boundary at start, negative lookahead at end
+    // to prevent partial matches (e.g. "TON0" inside "TON0.Q")
+    const exprPatterns = varEntries.map(({ expr, value }) => {
+      const escaped = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return { pattern: new RegExp(`\\b${escaped}(?![\\w.\\[])`, 'gi'), value }
+    })
+
+    const decorations: monaco.editor.IModelDeltaDecoration[] = []
+    const lineCount = model.getLineCount()
+    let blockCommentState: BlockCommentState = false
+
+    for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
+      const lineContent = model.getLineContent(lineNumber)
+      const result = stripLineComments(lineContent, blockCommentState)
+      blockCommentState = result.state
+      const stripped = result.stripped
+
+      // Track claimed column ranges to prevent overlapping decorations
+      const claimed: Array<[number, number]> = []
+
+      for (const { pattern, value } of exprPatterns) {
+        pattern.lastIndex = 0
+        let match: RegExpExecArray | null
+        while ((match = pattern.exec(stripped)) !== null) {
+          const startCol = match.index + 1
+          const endCol = startCol + match[0].length
+
+          // Skip if overlapping with an already-claimed range
+          if (claimed.some(([s, e]) => startCol < e && endCol > s)) continue
+
+          claimed.push([startCol, endCol])
+          decorations.push({
+            range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
+            options: {
+              after: {
+                content: ` = ${value} `,
+                inlineClassName: 'debug-inline-value',
+              },
+            },
+          })
+          break // Only first occurrence per expression per line
+        }
+      }
+    }
+
+    const collection = editorInstance.createDecorationsCollection(decorations)
+    return () => collection.clear()
+  }, [isDebuggerVisible, debugVariableValues, pou?.data.body.value, language, name, fbInstanceContext])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
@@ -826,6 +966,7 @@ void loop()
     dropIntoEditor: {
       enabled: true,
     },
+    readOnly: isDebuggerVisible,
   }
 
   const handleDrop = (ev: React.DragEvent<HTMLDivElement>) => {
