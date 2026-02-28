@@ -9,7 +9,7 @@ import { getExtensionFromLanguage, getFolderFromPouType } from '@root/utils/PLC/
 import { parseHybridPouFromString, parseTextualPouFromString } from '@root/utils/PLC/pou-text-parser'
 import type { IpcRendererEvent } from 'electron'
 import * as monaco from 'monaco-editor'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
@@ -65,6 +65,50 @@ const bridge = window.bridge as unknown as {
   onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
 }
 
+// Replaces comment regions with spaces so column positions are preserved.
+// Tracks block comment state across lines: (*..*), /*..*/, and // line comments.
+type BlockCommentState = false | 'paren' | 'slash'
+function stripLineComments(line: string, state: BlockCommentState): { stripped: string; state: BlockCommentState } {
+  const chars = [...line]
+  let i = 0
+  let s = state
+
+  while (i < chars.length) {
+    if (s) {
+      const endMarker = s === 'paren' ? ')' : '/'
+      if (chars[i] === '*' && chars[i + 1] === endMarker) {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = false
+      } else {
+        chars[i] = ' '
+        i++
+      }
+    } else {
+      if (chars[i] === '/' && chars[i + 1] === '/') {
+        for (let j = i; j < chars.length; j++) chars[j] = ' '
+        break
+      }
+      if (chars[i] === '(' && chars[i + 1] === '*') {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = 'paren'
+      } else if (chars[i] === '/' && chars[i + 1] === '*') {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = 'slash'
+      } else {
+        i++
+      }
+    }
+  }
+
+  return { stripped: chars.join(''), state: s }
+}
+
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
@@ -78,6 +122,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     regularExpression,
     workspace: {
       systemConfigs: { shouldUseDarkMode },
+      isDebuggerVisible,
+      debugVariableValues,
+      fbSelectedInstance,
+      fbDebugInstances,
     },
     project: {
       meta: { path: projectPath },
@@ -233,6 +281,101 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       }
     }
   }, [pou?.type, name, language])
+
+  // Update readOnly when debugger visibility changes on an already-mounted editor
+  useEffect(() => {
+    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
+  }, [isDebuggerVisible])
+
+  // Resolve FB instance context for composite key building
+  const fbInstanceContext = useMemo(() => {
+    if (!pou || pou.type !== 'function-block') return null
+    const fbTypeKey = pou.data.name.toUpperCase()
+    const selectedKey = fbSelectedInstance.get(fbTypeKey)
+    if (!selectedKey) return null
+    const instances = fbDebugInstances.get(fbTypeKey) || []
+    return instances.find((inst) => inst.key === selectedKey) || null
+  }, [pou, fbSelectedInstance, fbDebugInstances])
+
+  // Stable key derived from the set of debug variable names (not values).
+  // Only changes when a variable is added/removed from the watch list.
+  const debugVarKeySet = useMemo(() => {
+    const keys: string[] = []
+    for (const key of debugVariableValues.keys()) keys.push(key)
+    return keys.sort().join('\0')
+  }, [debugVariableValues])
+
+  // Phase 1: scan the document for variable positions once.
+  // Re-runs only when the watched variable set, FB context, or editor identity changes —
+  // NOT on every 50ms value poll. The editor is read-only during debug so positions are stable.
+  const debugVarPositions = useMemo(() => {
+    if (!isDebuggerVisible || !editorRef.current || (language !== 'st' && language !== 'il')) return null
+
+    const model = editorRef.current.getModel()
+    if (!model) return null
+
+    const prefix = fbInstanceContext
+      ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
+      : `${name}:`
+
+    // Extract variable names from the key set (values are irrelevant for position scanning)
+    const varNames: string[] = []
+    for (const key of debugVariableValues.keys()) {
+      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
+    }
+    if (varNames.length === 0) return null
+
+    // Sort longest first so "TON0.Q" is matched before "TON0" on the same line
+    varNames.sort((a, b) => b.length - a.length)
+
+    const exprPatterns = varNames.map((expr) => {
+      const escaped = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return { expr, pattern: new RegExp(`\\b${escaped}(?![\\w.\\[])`, 'gi') }
+    })
+
+    const positions: Array<{ expr: string; line: number; startCol: number; endCol: number }> = []
+    let blockCommentState: BlockCommentState = false
+
+    for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
+      const result = stripLineComments(model.getLineContent(lineNumber), blockCommentState)
+      blockCommentState = result.state
+      const claimed: Array<[number, number]> = []
+
+      for (const { expr, pattern } of exprPatterns) {
+        pattern.lastIndex = 0
+        let match: RegExpExecArray | null
+        while ((match = pattern.exec(result.stripped)) !== null) {
+          const startCol = match.index + 1
+          const endCol = startCol + match[0].length
+          if (claimed.some(([s, e]) => startCol < e && endCol > s)) continue
+          claimed.push([startCol, endCol])
+          positions.push({ expr, line: lineNumber, startCol, endCol })
+          break // Only first occurrence per expression per line
+        }
+      }
+    }
+
+    return { prefix, positions }
+  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext])
+
+  // Phase 2: stamp current values onto cached positions (runs on each poll, O(positions) map lookups only)
+  useEffect(() => {
+    if (!debugVarPositions || !editorRef.current) return
+
+    const { prefix, positions } = debugVarPositions
+    const decorations: monaco.editor.IModelDeltaDecoration[] = positions.map(({ expr, line, startCol, endCol }) => ({
+      range: new monaco.Range(line, startCol, line, endCol),
+      options: {
+        after: {
+          content: ` = ${debugVariableValues.get(prefix + expr) ?? '?'} `,
+          inlineClassName: 'debug-inline-value',
+        },
+      },
+    }))
+
+    const collection = editorRef.current.createDecorationsCollection(decorations)
+    return () => collection.clear()
+  }, [debugVarPositions, debugVariableValues])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
@@ -826,6 +969,7 @@ void loop()
     dropIntoEditor: {
       enabled: true,
     },
+    readOnly: isDebuggerVisible,
   }
 
   const handleDrop = (ev: React.DragEvent<HTMLDivElement>) => {

@@ -184,6 +184,21 @@
   z-index: 10 !important;
 }
 
+/* Debug inline value badges for ST/IL editors during debug sessions */
+.oplc-monaco-wrapper .debug-inline-value {
+  color: #ffffff;
+  background-color: #2e7d32;
+  padding: 0px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.dark .oplc-monaco-wrapper .debug-inline-value {
+  background-color: #388e3c;
+}
+
 /* Ensure Radix popper/select content sits well above Monaco */
 [data-radix-popper-content-wrapper],
 [data-radix-select-content],
