@@ -297,82 +297,85 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return instances.find((inst) => inst.key === selectedKey) || null
   }, [pou, fbSelectedInstance, fbDebugInstances])
 
-  // Debug inline value decorations for ST/IL editors
-  useEffect(() => {
-    if (!isDebuggerVisible || !editorRef.current || (language !== 'st' && language !== 'il')) {
-      return
-    }
+  // Stable key derived from the set of debug variable names (not values).
+  // Only changes when a variable is added/removed from the watch list.
+  const debugVarKeySet = useMemo(() => {
+    const keys: string[] = []
+    for (const key of debugVariableValues.keys()) keys.push(key)
+    return keys.sort().join('\0')
+  }, [debugVariableValues])
 
-    const editorInstance = editorRef.current
-    const model = editorInstance.getModel()
-    if (!model) return
+  // Phase 1: scan the document for variable positions once.
+  // Re-runs only when the watched variable set, FB context, or editor identity changes —
+  // NOT on every 50ms value poll. The editor is read-only during debug so positions are stable.
+  const debugVarPositions = useMemo(() => {
+    if (!isDebuggerVisible || !editorRef.current || (language !== 'st' && language !== 'il')) return null
 
-    // Build variable expression → value entries from debugVariableValues keys matching this POU.
-    // This naturally includes complex expressions like "TON0.Q" and "my_array[3]".
+    const model = editorRef.current.getModel()
+    if (!model) return null
+
     const prefix = fbInstanceContext
       ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
       : `${name}:`
 
-    const varEntries: Array<{ expr: string; value: string }> = []
-    for (const [key, value] of debugVariableValues) {
-      if (key.startsWith(prefix)) {
-        varEntries.push({ expr: key.slice(prefix.length), value })
-      }
+    // Extract variable names from the key set (values are irrelevant for position scanning)
+    const varNames: string[] = []
+    for (const key of debugVariableValues.keys()) {
+      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
     }
-
-    if (varEntries.length === 0) return
+    if (varNames.length === 0) return null
 
     // Sort longest first so "TON0.Q" is matched before "TON0" on the same line
-    varEntries.sort((a, b) => b.expr.length - a.expr.length)
+    varNames.sort((a, b) => b.length - a.length)
 
-    // Build per-expression regex: word boundary at start, negative lookahead at end
-    // to prevent partial matches (e.g. "TON0" inside "TON0.Q")
-    const exprPatterns = varEntries.map(({ expr, value }) => {
+    const exprPatterns = varNames.map((expr) => {
       const escaped = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      return { pattern: new RegExp(`\\b${escaped}(?![\\w.\\[])`, 'gi'), value }
+      return { expr, pattern: new RegExp(`\\b${escaped}(?![\\w.\\[])`, 'gi') }
     })
 
-    const decorations: monaco.editor.IModelDeltaDecoration[] = []
-    const lineCount = model.getLineCount()
+    const positions: Array<{ expr: string; line: number; startCol: number; endCol: number }> = []
     let blockCommentState: BlockCommentState = false
 
-    for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
-      const lineContent = model.getLineContent(lineNumber)
-      const result = stripLineComments(lineContent, blockCommentState)
+    for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
+      const result = stripLineComments(model.getLineContent(lineNumber), blockCommentState)
       blockCommentState = result.state
-      const stripped = result.stripped
-
-      // Track claimed column ranges to prevent overlapping decorations
       const claimed: Array<[number, number]> = []
 
-      for (const { pattern, value } of exprPatterns) {
+      for (const { expr, pattern } of exprPatterns) {
         pattern.lastIndex = 0
         let match: RegExpExecArray | null
-        while ((match = pattern.exec(stripped)) !== null) {
+        while ((match = pattern.exec(result.stripped)) !== null) {
           const startCol = match.index + 1
           const endCol = startCol + match[0].length
-
-          // Skip if overlapping with an already-claimed range
           if (claimed.some(([s, e]) => startCol < e && endCol > s)) continue
-
           claimed.push([startCol, endCol])
-          decorations.push({
-            range: new monaco.Range(lineNumber, startCol, lineNumber, endCol),
-            options: {
-              after: {
-                content: ` = ${value} `,
-                inlineClassName: 'debug-inline-value',
-              },
-            },
-          })
+          positions.push({ expr, line: lineNumber, startCol, endCol })
           break // Only first occurrence per expression per line
         }
       }
     }
 
-    const collection = editorInstance.createDecorationsCollection(decorations)
+    return { prefix, positions }
+  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext])
+
+  // Phase 2: stamp current values onto cached positions (runs on each poll, O(positions) map lookups only)
+  useEffect(() => {
+    if (!debugVarPositions || !editorRef.current) return
+
+    const { prefix, positions } = debugVarPositions
+    const decorations: monaco.editor.IModelDeltaDecoration[] = positions.map(({ expr, line, startCol, endCol }) => ({
+      range: new monaco.Range(line, startCol, line, endCol),
+      options: {
+        after: {
+          content: ` = ${debugVariableValues.get(prefix + expr) ?? '?'} `,
+          inlineClassName: 'debug-inline-value',
+        },
+      },
+    }))
+
+    const collection = editorRef.current.createDecorationsCollection(decorations)
     return () => collection.clear()
-  }, [isDebuggerVisible, debugVariableValues, pou?.data.body.value, language, name, fbInstanceContext])
+  }, [debugVarPositions, debugVariableValues])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
