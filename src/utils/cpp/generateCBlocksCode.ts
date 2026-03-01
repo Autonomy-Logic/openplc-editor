@@ -17,6 +17,10 @@ const generateDefine = (variable: PLCVariable): string => {
   return `#define ${name} (*(vars->${upperName}))\n`
 }
 
+const generateUndef = (variable: PLCVariable): string => {
+  return `#undef ${variable.name}\n`
+}
+
 const processUserCode = (pou: CppPouData): string => {
   const structName = `${pou.name.toUpperCase()}_VARS`
   const setupFunctionName = `${pou.name.toLowerCase()}_setup`
@@ -61,6 +65,14 @@ const processUserCode = (pou: CppPouData): string => {
   modifiedUserCode = modifiedUserCode.replace(/void\s+loop\s*\(\s*\)/g, `void ${loopFunctionName}(${structName} *vars)`)
 
   processedCode += modifiedUserCode
+  processedCode += '\n'
+
+  inputVariables.forEach((variable) => {
+    processedCode += generateUndef(variable)
+  })
+  outputVariables.forEach((variable) => {
+    processedCode += generateUndef(variable)
+  })
   processedCode += '\n'
 
   return processedCode
