@@ -498,7 +498,9 @@ const VariableElement = (block: VariableProps) => {
               // Call triggerSubmit synchronously before blur to avoid race condition
               // where autocomplete unmounts before processing the Enter key
               autocompleteRef.current?.triggerSubmit?.()
-              inputVariableRef.current?.blur({ submit: false })
+              // For literals/constants, let the blur handler process them
+              // instead of suppressing it (triggerSubmit skips variable creation for literals)
+              inputVariableRef.current?.blur({ submit: !!getLiteralType(variableValue) })
               return
             }
             setKeyPressedAtTextarea(e.key)

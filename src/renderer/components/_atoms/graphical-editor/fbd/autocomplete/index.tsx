@@ -4,6 +4,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
+import { getLiteralType } from '@root/utils/keywords'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { expandArrayVariables } from '@root/utils/PLC/array-variable-utils'
 import { Node } from '@xyflow/react'
@@ -241,6 +242,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
 
     const submit = ({ variable }: { variable: { id: string; name: string } }) => {
       if (variable.id === 'add') {
+        if (getLiteralType(valueToSearch)) return
         submitAddVariable({ variableName: valueToSearch })
         return
       }

@@ -10,6 +10,7 @@ import {
 } from '@root/renderer/assets/icons/flow/Coil'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
+import { getLiteralType } from '@root/utils/keywords'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
@@ -476,7 +477,8 @@ export const Coil = (block: CoilProps) => {
                 // Call triggerSubmit synchronously before blur to avoid race condition
                 // where autocomplete unmounts before processing the Enter key
                 autocompleteRef.current?.triggerSubmit?.()
-                inputVariableRef.current?.blur({ submit: false })
+                // For literals/constants, let the blur handler process them
+                inputVariableRef.current?.blur({ submit: !!getLiteralType(coilVariableValue) })
                 return
               }
               setKeyPressedAtTextarea(e.key)
