@@ -12,10 +12,12 @@ import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { isLegalIdentifier, sanitizeVariableInput } from '@root/utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
+import { TriangleAlert } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { HighlightedText, InputWithRef } from '../../_atoms'
 import { GenericComboboxCell } from '../../_atoms/generic-table-inputs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../_atoms/tooltip'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../rename-impact-modal'
 
@@ -258,6 +260,23 @@ const EditableNameCell = ({
     )
   }, [editor.meta.name, index, table.options.data, scope, getVariable])
 
+  const isOrphaned = useMemo(() => {
+    if (!variable || isExternalVariable || isDebuggerVisible) return false
+
+    const analysisScope = scope === 'global' || variable.class === 'external' ? 'global' : 'local'
+
+    const impact = findAllReferencesToVariable(
+      variable.name,
+      variable.type,
+      editor.meta.name,
+      pous,
+      ladderFlows,
+      fbdFlows,
+      analysisScope,
+    )
+    return impact.totalReferences === 0
+  }, [variable, editor.meta.name, pous, ladderFlows, fbdFlows, scope, isExternalVariable, isDebuggerVisible])
+
   return (
     <>
       {confirmOpen && impactAnalysis && (
@@ -303,13 +322,30 @@ const EditableNameCell = ({
           className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
             'pointer-events-none': !selected,
             'cursor-not-allowed': !isEditable(),
+            'text-red-500': isOrphaned,
           })}
         >
-          <HighlightedText
-            text={cellValue}
-            searchQuery={searchQuery}
-            className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
-          />
+          <div className='flex w-full items-center justify-center gap-2'>
+            <HighlightedText
+              text={cellValue}
+              searchQuery={searchQuery}
+              className={cn('h-4 max-w-[380px] overflow-hidden text-ellipsis break-all', {})}
+            />
+            {isOrphaned && (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className='flex items-center justify-center'>
+                      <TriangleAlert className='h-4 w-4 text-red-500' />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Unused variable</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
         </div>
       )}
     </>
