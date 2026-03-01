@@ -11,6 +11,7 @@ import { cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import {
   appendToDebugPath,
   buildDebugPath,
+  buildGlobalDebugPath,
   getFieldIndexFromMapWithFallback,
   getIndexFromMapWithFallback,
 } from '@root/utils/debug-variable-finder'
@@ -606,13 +607,22 @@ const WorkspaceScreen = () => {
               }
             }
 
+            const isExternal = fbInstance.class === 'external'
+
             allBaseTypeVars.forEach((fbVar) => {
               // Use fallback to try both FB-style and struct-style paths
-              const index = getIndexFromMapWithFallback(
-                debugVariableIndexes,
-                programInstance.name,
-                `${fbInstance.name}.${fbVar.name}`,
-              )
+              let index: number | undefined
+              if (isExternal) {
+                // External (global) FB members use CONFIG0__ prefix
+                const globalFieldPath = `${buildGlobalDebugPath(fbInstance.name)}.${fbVar.name.toUpperCase()}`
+                index = debugVariableIndexes.get(globalFieldPath)
+              } else {
+                index = getIndexFromMapWithFallback(
+                  debugVariableIndexes,
+                  programInstance.name,
+                  `${fbInstance.name}.${fbVar.name}`,
+                )
+              }
 
               if (index !== undefined) {
                 const blockVarName = `${fbInstance.name}.${fbVar.name}`
@@ -661,7 +671,9 @@ const WorkspaceScreen = () => {
                 v.type.definition === 'array',
             )
             if (nestedVariables.length > 0) {
-              const debugPathPrefix = buildDebugPath(programInstance.name, fbInstance.name)
+              const debugPathPrefix = isExternal
+                ? buildGlobalDebugPath(fbInstance.name)
+                : buildDebugPath(programInstance.name, fbInstance.name)
               const variableNamePrefix = fbInstance.name
               processNestedVariables(nestedVariables, pou.data.name, debugPathPrefix, variableNamePrefix)
             }
@@ -717,7 +729,10 @@ const WorkspaceScreen = () => {
           }
 
           if (variablesToProcess) {
-            const debugPathPrefix = buildDebugPath(programInstance.name, udtVar.name)
+            const debugPathPrefix =
+              udtVar.class === 'external'
+                ? buildGlobalDebugPath(udtVar.name)
+                : buildDebugPath(programInstance.name, udtVar.name)
             const variableNamePrefix = udtVar.name
             processNestedVariables(variablesToProcess, pou.data.name, debugPathPrefix, variableNamePrefix)
           }
@@ -1029,7 +1044,10 @@ const WorkspaceScreen = () => {
 
         if (customFB && customFB.type === 'function-block') {
           // For custom FBs, use visitFbInstance to process all internals
-          const debugPathPrefix = buildDebugPath(programInstance.name, fbInstance.name)
+          const debugPathPrefix =
+            fbInstance.class === 'external'
+              ? buildGlobalDebugPath(fbInstance.name)
+              : buildDebugPath(programInstance.name, fbInstance.name)
           const variablePathPrefix = fbInstance.name
           visitFbInstance(customFB, debugPathPrefix, variablePathPrefix, programPou.data.name, blockExecutionControlMap)
         }
