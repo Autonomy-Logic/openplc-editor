@@ -10,7 +10,6 @@ import {
   timer2Config,
   usart0Config,
 } from 'avr8js'
-import { readFile } from 'fs/promises'
 
 // ATmega2560 specs
 const CPU_FREQ_HZ = 16_000_000
@@ -172,14 +171,15 @@ export class SimulatorModule {
   onUartByte: ((byte: number) => void) | null = null
 
   /**
-   * Loads an Intel HEX firmware file and starts the emulated ATmega2560.
+   * Loads Intel HEX firmware content and starts the emulated ATmega2560.
    * Stops any currently running emulation first.
+   *
+   * @param hexContent - Raw Intel HEX string (caller is responsible for reading the file)
    */
-  async loadAndRun(hexPath: string): Promise<void> {
+  loadAndRun(hexContent: string): void {
     this.stop()
 
-    const hexData = await readFile(hexPath, 'utf-8')
-    const progMem = parseIntelHex(hexData, FLASH_SIZE_BYTES)
+    const progMem = parseIntelHex(hexContent, FLASH_SIZE_BYTES)
 
     this.cpu = new CPU(progMem, SRAM_BYTES)
 

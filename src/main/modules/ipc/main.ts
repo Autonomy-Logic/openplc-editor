@@ -11,6 +11,9 @@ import type { IncomingMessage } from 'http'
 import https from 'https'
 import { join, resolve, sep } from 'path'
 import { platform } from 'process'
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - serialport types are not available at build time but will be at runtime
+import { SerialPort } from 'serialport'
 
 import { ProjectState } from '../../../renderer/store/slices'
 import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
@@ -21,6 +24,8 @@ import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
 import { SimulatorModule } from '../simulator/simulator-module'
 import { VirtualSerialPort } from '../simulator/virtual-serial-port'
 import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
+
+const ARDUINO_BOOTLOADER_DELAY_MS = 2500
 
 type IDataToWrite = {
   projectPath: string
@@ -894,8 +899,6 @@ class MainProcessBridge implements MainIpcModule {
       if (connectionType === 'simulator') {
         const virtualPort = new VirtualSerialPort(this.simulatorModule)
         client = new ModbusRtuClient({
-          port: 'simulator',
-          baudRate: 115200,
           slaveId: 1,
           timeout: 5000,
           serialPort: virtualPort,
@@ -950,15 +953,25 @@ class MainProcessBridge implements MainIpcModule {
         if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
           return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
         }
-        client = new ModbusRtuClient({
-          port: connectionParams.port,
+        const realPort = new SerialPort({
+          path: connectionParams.port,
           baudRate: connectionParams.baudRate,
+          autoOpen: false,
+          dataBits: 8,
+          stopBits: 1,
+          parity: 'none',
+        })
+        client = new ModbusRtuClient({
           slaveId: connectionParams.slaveId,
           timeout: 5000,
+          serialPort: realPort,
         })
       }
 
       await client.connect()
+      if (connectionType === 'rtu') {
+        await new Promise((resolve) => setTimeout(resolve, ARDUINO_BOOTLOADER_DELAY_MS))
+      }
       const targetMd5 = await client.getMd5Hash()
 
       const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
@@ -1097,8 +1110,6 @@ class MainProcessBridge implements MainIpcModule {
         if (this.debuggerConnectionType === 'simulator') {
           const virtualPort = new VirtualSerialPort(this.simulatorModule)
           this.debuggerModbusClient = new ModbusRtuClient({
-            port: 'simulator',
-            baudRate: 115200,
             slaveId: 1,
             timeout: 5000,
             serialPort: virtualPort,
@@ -1118,11 +1129,18 @@ class MainProcessBridge implements MainIpcModule {
             this.debuggerReconnecting = false
             return { success: false, error: 'No RTU connection parameters stored', needsReconnect: true }
           }
-          this.debuggerModbusClient = new ModbusRtuClient({
-            port: this.debuggerRtuPort,
+          const realPort = new SerialPort({
+            path: this.debuggerRtuPort,
             baudRate: this.debuggerRtuBaudRate,
+            autoOpen: false,
+            dataBits: 8,
+            stopBits: 1,
+            parity: 'none',
+          })
+          this.debuggerModbusClient = new ModbusRtuClient({
             slaveId: this.debuggerRtuSlaveId,
             timeout: 5000,
+            serialPort: realPort,
           })
         } else {
           this.debuggerReconnecting = false
@@ -1130,6 +1148,9 @@ class MainProcessBridge implements MainIpcModule {
         }
 
         await this.debuggerModbusClient.connect()
+        if (this.debuggerConnectionType === 'rtu') {
+          await new Promise((resolve) => setTimeout(resolve, ARDUINO_BOOTLOADER_DELAY_MS))
+        }
         this.debuggerReconnecting = false
       } catch (error) {
         this.debuggerModbusClient = null
@@ -1180,8 +1201,6 @@ class MainProcessBridge implements MainIpcModule {
 
         const virtualPort = new VirtualSerialPort(this.simulatorModule)
         this.debuggerModbusClient = new ModbusRtuClient({
-          port: 'simulator',
-          baudRate: 115200,
           slaveId: 1,
           timeout: 5000,
           serialPort: virtualPort,
@@ -1258,13 +1277,21 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerModbusClient = null
         }
 
-        this.debuggerModbusClient = new ModbusRtuClient({
-          port: connectionParams.port,
+        const realPort = new SerialPort({
+          path: connectionParams.port,
           baudRate: connectionParams.baudRate,
+          autoOpen: false,
+          dataBits: 8,
+          stopBits: 1,
+          parity: 'none',
+        })
+        this.debuggerModbusClient = new ModbusRtuClient({
           slaveId: connectionParams.slaveId,
           timeout: 5000,
+          serialPort: realPort,
         })
         await this.debuggerModbusClient.connect()
+        await new Promise((resolve) => setTimeout(resolve, ARDUINO_BOOTLOADER_DELAY_MS))
         this.debuggerRtuPort = connectionParams.port
         this.debuggerRtuBaudRate = connectionParams.baudRate
         this.debuggerRtuSlaveId = connectionParams.slaveId
@@ -1380,7 +1407,9 @@ class MainProcessBridge implements MainIpcModule {
     hexPath: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      await this.simulatorModule.loadAndRun(hexPath)
+      const fs = await import('fs/promises')
+      const hexContent = await fs.readFile(hexPath, 'utf-8')
+      this.simulatorModule.loadAndRun(hexContent)
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }

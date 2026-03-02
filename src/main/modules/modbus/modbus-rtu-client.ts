@@ -1,33 +1,76 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore - serialport types are not available at build time but will be at runtime
-import { SerialPort } from 'serialport'
+import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-types'
 
-import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-client'
-
-interface ModbusRtuClientOptions {
-  port: string
-  baudRate: number
-  slaveId: number
-  timeout: number
+export interface SerialPortLike {
+  isOpen: boolean
+  open(): void
+  close(): void
+  write(data: Uint8Array, callback?: (err?: Error | null) => void): void
+  flush(callback?: (err?: Error | null) => void): void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  serialPort?: any // Pre-built serial port (e.g. VirtualSerialPort for simulator)
+  on(event: string, listener: (...args: any[]) => void): void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  once(event: string, listener: (...args: any[]) => void): void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  removeListener(event: string, listener: (...args: any[]) => void): void
+  removeAllListeners(event?: string): void
 }
 
-const ARDUINO_BOOTLOADER_DELAY_MS = 2500
+interface ModbusRtuClientOptions {
+  slaveId: number
+  timeout: number
+  serialPort: SerialPortLike
+}
+
 const MD5_REQUEST_MAX_RETRIES = 3
 const MD5_REQUEST_RETRY_DELAY_MS = 500
 
 const FRAME_COMPLETE_TIMEOUT_MS = 10
 
+// ---------------------------------------------------------------------------
+// Uint8Array helpers (replacing Node.js Buffer)
+// ---------------------------------------------------------------------------
+
+function allocBytes(size: number): Uint8Array {
+  return new Uint8Array(size)
+}
+
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const result = new Uint8Array(a.length + b.length)
+  result.set(a, 0)
+  result.set(b, a.length)
+  return result
+}
+
+function readUint8(buf: Uint8Array, offset: number): number {
+  return buf[offset]
+}
+
+function writeUint8(buf: Uint8Array, offset: number, value: number): void {
+  buf[offset] = value
+}
+
+function readUint16BE(buf: Uint8Array, offset: number): number {
+  return (buf[offset] << 8) | buf[offset + 1]
+}
+
+function writeUint16BE(buf: Uint8Array, offset: number, value: number): void {
+  buf[offset] = (value >>> 8) & 0xff
+  buf[offset + 1] = value & 0xff
+}
+
+function readUint32BE(buf: Uint8Array, offset: number): number {
+  return ((buf[offset] << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3]) >>> 0
+}
+
+// ---------------------------------------------------------------------------
+// Modbus RTU Client (web-compatible)
+// ---------------------------------------------------------------------------
+
 export class ModbusRtuClient {
-  private port: string
-  private baudRate: number
   private slaveId: number
   private timeout: number
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private serialPort: any = null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private injectedSerialPort: any = null
+  private serialPort: SerialPortLike | null = null
+  private injectedSerialPort: SerialPortLike
 
   private static readonly CRC_HI_TABLE = [
     0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41, 0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80,
@@ -64,14 +107,12 @@ export class ModbusRtuClient {
   ]
 
   constructor(options: ModbusRtuClientOptions) {
-    this.port = options.port
-    this.baudRate = options.baudRate
     this.slaveId = options.slaveId
     this.timeout = options.timeout
-    this.injectedSerialPort = options.serialPort ?? null
+    this.injectedSerialPort = options.serialPort
   }
 
-  private calculateCrc(buffer: Buffer): number {
+  private calculateCrc(buffer: Uint8Array): number {
     let crcHi = 0xff
     let crcLo = 0xff
 
@@ -84,53 +125,26 @@ export class ModbusRtuClient {
     return (crcHi << 8) | crcLo
   }
 
-  private assembleRequest(functionCode: number, data: Buffer): Buffer {
-    const frameWithoutCrc = Buffer.alloc(2 + data.length)
-    frameWithoutCrc.writeUInt8(this.slaveId, 0)
-    frameWithoutCrc.writeUInt8(functionCode, 1)
-    data.copy(frameWithoutCrc as unknown as Uint8Array, 2)
+  private assembleRequest(functionCode: number, data: Uint8Array): Uint8Array {
+    const frameWithoutCrc = allocBytes(2 + data.length)
+    writeUint8(frameWithoutCrc, 0, this.slaveId)
+    writeUint8(frameWithoutCrc, 1, functionCode)
+    frameWithoutCrc.set(data, 2)
 
     const crc = this.calculateCrc(frameWithoutCrc)
-    const request = Buffer.alloc(frameWithoutCrc.length + 2)
-    frameWithoutCrc.copy(request as unknown as Uint8Array, 0)
-    request.writeUInt16BE(crc, frameWithoutCrc.length)
+    const request = allocBytes(frameWithoutCrc.length + 2)
+    request.set(frameWithoutCrc, 0)
+    writeUint16BE(request, frameWithoutCrc.length, crc)
 
     return request
   }
 
   async connect(): Promise<void> {
-    // If a pre-built serial port was provided (e.g. VirtualSerialPort), use it directly
-    if (this.injectedSerialPort) {
-      this.serialPort = this.injectedSerialPort
-      return new Promise((resolve, reject) => {
-        this.serialPort.on('open', () => resolve())
-        this.serialPort.on('error', (err: Error) => reject(err))
-        this.serialPort.open()
-      })
-    }
-
+    this.serialPort = this.injectedSerialPort
     return new Promise((resolve, reject) => {
-      try {
-        this.serialPort = new SerialPort({
-          path: this.port,
-          baudRate: this.baudRate,
-          dataBits: 8,
-          stopBits: 1,
-          parity: 'none',
-        })
-
-        this.serialPort.on('open', () => {
-          setTimeout(() => {
-            resolve()
-          }, ARDUINO_BOOTLOADER_DELAY_MS)
-        })
-
-        this.serialPort.on('error', (error: unknown) => {
-          reject(error instanceof Error ? error : new Error(String(error)))
-        })
-      } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)))
-      }
+      this.serialPort!.on('open', () => resolve())
+      this.serialPort!.on('error', (err: unknown) => reject(err instanceof Error ? err : new Error(String(err))))
+      this.serialPort!.open()
     })
   }
 
@@ -148,7 +162,7 @@ export class ModbusRtuClient {
         return
       }
 
-      this.serialPort.flush((err: Error | null) => {
+      this.serialPort.flush((err?: Error | null) => {
         if (err) {
           console.warn('Warning: Failed to flush serial port:', err.message)
         }
@@ -159,8 +173,8 @@ export class ModbusRtuClient {
 
   private sendRequestMutex: Promise<void> = Promise.resolve()
 
-  private async sendRequest(request: Buffer): Promise<Buffer> {
-    return new Promise<Buffer>((resolve, reject) => {
+  private async sendRequest(request: Uint8Array): Promise<Uint8Array> {
+    return new Promise<Uint8Array>((resolve, reject) => {
       this.sendRequestMutex = this.sendRequestMutex.then(
         () => this.sendRequestImpl(request).then(resolve, reject),
         () => this.sendRequestImpl(request).then(resolve, reject),
@@ -168,7 +182,7 @@ export class ModbusRtuClient {
     })
   }
 
-  private async sendRequestImpl(request: Buffer): Promise<Buffer> {
+  private async sendRequestImpl(request: Uint8Array): Promise<Uint8Array> {
     if (!this.serialPort || !this.serialPort.isOpen) {
       throw new Error('Serial port is not open')
     }
@@ -176,10 +190,9 @@ export class ModbusRtuClient {
     await this.flushInputBuffer()
 
     return new Promise((resolve, reject) => {
-      let responseBuffer = Buffer.alloc(0)
-      let frameCompleteTimeout: NodeJS.Timeout | null = null
+      let responseBuffer = allocBytes(0)
+      let frameCompleteTimeout: ReturnType<typeof setTimeout> | null = null
 
-      // Forward-declared so the timeout handler can reference them for cleanup
       const cleanup = () => {
         this.serialPort?.removeListener('data', onData)
         this.serialPort?.removeListener('error', onError)
@@ -193,8 +206,8 @@ export class ModbusRtuClient {
         reject(new Error('Request timeout'))
       }, this.timeout)
 
-      const onData = (data: Buffer) => {
-        responseBuffer = Buffer.concat([responseBuffer, data] as unknown as Uint8Array[])
+      const onData = (data: Uint8Array) => {
+        responseBuffer = concatBytes(responseBuffer, data)
 
         if (frameCompleteTimeout) {
           clearTimeout(frameCompleteTimeout)
@@ -209,7 +222,7 @@ export class ModbusRtuClient {
             return
           }
 
-          const receivedCrc = responseBuffer.readUInt16BE(responseBuffer.length - 2)
+          const receivedCrc = readUint16BE(responseBuffer, responseBuffer.length - 2)
           const calculatedCrc = this.calculateCrc(responseBuffer.slice(0, responseBuffer.length - 2))
 
           if (receivedCrc !== calculatedCrc) {
@@ -217,33 +230,27 @@ export class ModbusRtuClient {
           }
 
           const responseWithoutCrc = responseBuffer.slice(0, responseBuffer.length - 2)
-          const paddedResponse = Buffer.alloc(6 + responseWithoutCrc.length)
-          paddedResponse.fill(0, 0, 6)
-          responseWithoutCrc.copy(paddedResponse as unknown as Uint8Array, 6)
+          const paddedResponse = allocBytes(6 + responseWithoutCrc.length)
+          // First 6 bytes are zeros (padding for TCP header compatibility)
+          paddedResponse.set(responseWithoutCrc, 6)
 
           resolve(paddedResponse)
         }, FRAME_COMPLETE_TIMEOUT_MS)
       }
 
-      const onError = (error: Error) => {
+      const onError = (error: unknown) => {
         clearTimeout(timeoutHandle)
         cleanup()
-        reject(error)
+        reject(error instanceof Error ? error : new Error(String(error)))
       }
 
       this.serialPort!.on('data', onData)
       this.serialPort!.once('error', onError)
-      this.serialPort!.write(request as unknown as Uint8Array, (error: unknown) => {
+      this.serialPort!.write(request, (error?: Error | null) => {
         if (error) {
           clearTimeout(timeoutHandle)
           cleanup()
-          const errorMessage =
-            typeof error === 'string'
-              ? error
-              : typeof error === 'object' && error !== null
-                ? JSON.stringify(error)
-                : 'Unknown error'
-          reject(error instanceof Error ? error : new Error(errorMessage))
+          reject(error)
         }
       })
     })
@@ -253,10 +260,10 @@ export class ModbusRtuClient {
     const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
     const endiannessCheck = 0xdead
 
-    const data = Buffer.alloc(4)
-    data.writeUInt16BE(endiannessCheck, 0)
-    data.writeUInt8(0, 2)
-    data.writeUInt8(0, 3)
+    const data = allocBytes(4)
+    writeUint16BE(data, 0, endiannessCheck)
+    writeUint8(data, 2, 0)
+    writeUint8(data, 3, 0)
 
     const request = this.assembleRequest(functionCode, data)
 
@@ -273,8 +280,8 @@ export class ModbusRtuClient {
           throw new Error('Invalid response: too short')
         }
 
-        const functionCodeResponse = response.readUInt8(7)
-        const statusCode = response.readUInt8(8)
+        const functionCodeResponse = readUint8(response, 7)
+        const statusCode = readUint8(response, 8)
 
         if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
           throw new Error('Function code mismatch')
@@ -284,7 +291,8 @@ export class ModbusRtuClient {
           throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
         }
 
-        const md5String = response.slice(9).toString('utf-8').trim()
+        const md5Bytes = response.slice(9)
+        const md5String = new TextDecoder().decode(md5Bytes).trim()
         return md5String
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
@@ -301,18 +309,18 @@ export class ModbusRtuClient {
     success: boolean
     tick?: number
     lastIndex?: number
-    data?: Buffer
+    data?: Uint8Array
     error?: string
   }> {
     try {
       const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
       const numIndexes = variableIndexes.length
 
-      const data = Buffer.alloc(2 + 2 * numIndexes)
-      data.writeUInt16BE(numIndexes, 0)
+      const data = allocBytes(2 + 2 * numIndexes)
+      writeUint16BE(data, 0, numIndexes)
 
       for (let i = 0; i < numIndexes; i++) {
-        data.writeUInt16BE(variableIndexes[i], 2 + i * 2)
+        writeUint16BE(data, 2 + i * 2, variableIndexes[i])
       }
 
       const request = this.assembleRequest(functionCode, data)
@@ -322,8 +330,8 @@ export class ModbusRtuClient {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
       }
 
-      const functionCodeResponse = response.readUInt8(7)
-      const statusCode = response.readUInt8(8)
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
 
       if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
         return { success: false, error: 'Function code mismatch' }
@@ -348,9 +356,9 @@ export class ModbusRtuClient {
         }
       }
 
-      const lastIndex = response.readUInt16BE(9)
-      const tick = response.readUInt32BE(11)
-      const responseSize = response.readUInt16BE(15)
+      const lastIndex = readUint16BE(response, 9)
+      const tick = readUint32BE(response, 11)
+      const responseSize = readUint16BE(response, 15)
 
       if (response.length < 17 + responseSize) {
         return {
@@ -375,7 +383,7 @@ export class ModbusRtuClient {
   async setVariable(
     variableIndex: number,
     force: boolean,
-    valueBuffer?: Buffer,
+    valueBuffer?: Uint8Array,
   ): Promise<{
     success: boolean
     error?: string
@@ -384,18 +392,16 @@ export class ModbusRtuClient {
       const functionCode = ModbusFunctionCode.DEBUG_SET
 
       const dataLength = force && valueBuffer ? valueBuffer.length : 1
-      const data = Buffer.alloc(5 + dataLength)
+      const data = allocBytes(5 + dataLength)
 
-      data.writeUInt16BE(variableIndex, 0)
-      data.writeUInt8(force ? 1 : 0, 2)
-      data.writeUInt16BE(dataLength, 3)
+      writeUint16BE(data, 0, variableIndex)
+      writeUint8(data, 2, force ? 1 : 0)
+      writeUint16BE(data, 3, dataLength)
 
       if (force && valueBuffer) {
-        for (let i = 0; i < valueBuffer.length; i++) {
-          data.writeUInt8(valueBuffer[i], 5 + i)
-        }
+        data.set(valueBuffer, 5)
       } else {
-        data.writeUInt8(0, 5)
+        writeUint8(data, 5, 0)
       }
 
       const request = this.assembleRequest(functionCode, data)
@@ -405,8 +411,8 @@ export class ModbusRtuClient {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
       }
 
-      const functionCodeResponse = response.readUInt8(7)
-      const statusCode = response.readUInt8(8)
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
 
       if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_SET as number)) {
         return { success: false, error: 'Function code mismatch' }
