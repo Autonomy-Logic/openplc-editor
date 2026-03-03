@@ -1,3 +1,4 @@
+import { ArrowIcon } from '@root/renderer/assets/icons'
 import type { SDOConfigurationEntry } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
 import { useCallback, useMemo, useState } from 'react'
@@ -5,6 +6,15 @@ import { useCallback, useMemo, useState } from 'react'
 type SdoParametersTableProps = {
   sdoConfigurations: SDOConfigurationEntry[]
   onUpdateSdoConfigurations: (configs: SDOConfigurationEntry[]) => void
+}
+
+/**
+ * A group of SDO entries sharing the same parent object (index + objectName).
+ */
+interface SdoObjectGroup {
+  index: string
+  objectName: string
+  entries: SDOConfigurationEntry[]
 }
 
 /**
@@ -50,7 +60,6 @@ const ValueCell = ({
 
   const handleBlur = useCallback(() => {
     if (localValue !== entry.value) {
-      // Validate before committing
       const range = getDataTypeRange(entry.dataType, entry.bitLength)
       if (range && localValue !== '') {
         const num = Number(localValue)
@@ -99,24 +108,76 @@ const ValueCell = ({
 /**
  * SDO Parameters Table Component
  *
- * Displays configurable SDO startup parameters extracted from the CoE Object Dictionary.
- * Allows editing values that will be written to the slave during EtherCAT startup.
+ * Displays configurable SDO startup parameters grouped by parent CoE object.
+ * Each object is a collapsible section header; sub-items are shown as editable rows beneath.
  */
 const SdoParametersTable = ({ sdoConfigurations, onUpdateSdoConfigurations }: SdoParametersTableProps) => {
   const [searchTerm, setSearchTerm] = useState('')
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
-  const filteredEntries = useMemo(() => {
-    if (!searchTerm) return sdoConfigurations
+  // Group entries by parent object index
+  const groups = useMemo<SdoObjectGroup[]>(() => {
+    const map = new Map<string, SdoObjectGroup>()
+    for (const entry of sdoConfigurations) {
+      const existing = map.get(entry.index)
+      if (existing) {
+        existing.entries.push(entry)
+      } else {
+        map.set(entry.index, { index: entry.index, objectName: entry.objectName, entries: [entry] })
+      }
+    }
+    return Array.from(map.values())
+  }, [sdoConfigurations])
+
+  // Filter groups and entries by search term
+  const filteredGroups = useMemo<SdoObjectGroup[]>(() => {
+    if (!searchTerm) return groups
 
     const search = searchTerm.toLowerCase()
-    return sdoConfigurations.filter(
-      (entry) =>
-        entry.name.toLowerCase().includes(search) ||
-        entry.objectName.toLowerCase().includes(search) ||
-        entry.index.toLowerCase().includes(search) ||
-        entry.dataType.toLowerCase().includes(search),
-    )
-  }, [sdoConfigurations, searchTerm])
+    const result: SdoObjectGroup[] = []
+
+    for (const group of groups) {
+      // If group name/index matches, include entire group
+      if (group.objectName.toLowerCase().includes(search) || group.index.toLowerCase().includes(search)) {
+        result.push(group)
+        continue
+      }
+
+      // Otherwise filter entries within the group
+      const matchedEntries = group.entries.filter(
+        (entry) =>
+          entry.name.toLowerCase().includes(search) ||
+          entry.dataType.toLowerCase().includes(search) ||
+          entry.index.toLowerCase().includes(search),
+      )
+
+      if (matchedEntries.length > 0) {
+        result.push({ ...group, entries: matchedEntries })
+      }
+    }
+
+    return result
+  }, [groups, searchTerm])
+
+  const handleToggleGroup = useCallback((index: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
+  }, [])
+
+  const handleExpandAll = useCallback(() => {
+    setCollapsedGroups(new Set())
+  }, [])
+
+  const handleCollapseAll = useCallback(() => {
+    setCollapsedGroups(new Set(groups.map((g) => g.index)))
+  }, [groups])
 
   const handleValueChange = useCallback(
     (index: string, subIndex: number, value: string) => {
@@ -134,6 +195,7 @@ const SdoParametersTable = ({ sdoConfigurations, onUpdateSdoConfigurations }: Sd
   }, [sdoConfigurations, onUpdateSdoConfigurations])
 
   const hasModifiedValues = sdoConfigurations.some((entry) => entry.value !== entry.defaultValue)
+  const totalEntries = sdoConfigurations.length
 
   return (
     <div className='flex flex-col gap-3'>
@@ -157,8 +219,22 @@ const SdoParametersTable = ({ sdoConfigurations, onUpdateSdoConfigurations }: Sd
         >
           Reset All to Defaults
         </button>
+        <div className='flex items-center gap-1'>
+          <button
+            onClick={handleExpandAll}
+            className='h-[30px] rounded-md border border-neutral-300 px-2 text-xs text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800'
+          >
+            Expand All
+          </button>
+          <button
+            onClick={handleCollapseAll}
+            className='h-[30px] rounded-md border border-neutral-300 px-2 text-xs text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800'
+          >
+            Collapse All
+          </button>
+        </div>
         <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-          {sdoConfigurations.length} parameter(s)
+          {filteredGroups.length} object(s), {totalEntries} parameter(s)
           {hasModifiedValues && ' — modified values highlighted'}
         </span>
       </div>
@@ -166,15 +242,13 @@ const SdoParametersTable = ({ sdoConfigurations, onUpdateSdoConfigurations }: Sd
       {/* Table */}
       <div className='max-h-[400px] overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800'>
         <table className='w-full table-fixed'>
-          <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
+          <thead className='sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-900'>
             <tr>
-              <th className='w-[12%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                Index
-              </th>
-              <th className='w-[6%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[6%] px-2 py-2'></th>
+              <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Sub
               </th>
-              <th className='w-[22%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[26%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Name
               </th>
               <th className='w-[12%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
@@ -183,62 +257,37 @@ const SdoParametersTable = ({ sdoConfigurations, onUpdateSdoConfigurations }: Sd
               <th className='w-[8%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Bits
               </th>
-              <th className='w-[12%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Default
               </th>
-              <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+              <th className='w-[20%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Value
               </th>
-              <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>Object</th>
             </tr>
           </thead>
           <tbody>
-            {filteredEntries.length === 0 ? (
+            {filteredGroups.length === 0 ? (
               <tr>
-                <td colSpan={8} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                <td colSpan={7} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
                   {sdoConfigurations.length === 0
                     ? 'No configurable SDO parameters found'
                     : 'No parameters match the current filter'}
                 </td>
               </tr>
             ) : (
-              filteredEntries.map((entry) => {
-                const isModified = entry.value !== entry.defaultValue
+              filteredGroups.map((group) => {
+                const isCollapsed = collapsedGroups.has(group.index)
+                const groupHasModified = group.entries.some((e) => e.value !== e.defaultValue)
+
                 return (
-                  <tr
-                    key={`${entry.index}-${entry.subIndex}`}
-                    className={cn(
-                      'border-b border-neutral-200 transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50',
-                      isModified && 'bg-amber-50/50 dark:bg-amber-900/10',
-                    )}
-                  >
-                    <td className='px-2 py-1.5 font-mono text-xs text-neutral-700 dark:text-neutral-300'>
-                      {entry.index}
-                    </td>
-                    <td className='px-2 py-1.5 font-mono text-xs text-neutral-600 dark:text-neutral-400'>
-                      {entry.subIndex}
-                    </td>
-                    <td
-                      className='truncate px-2 py-1.5 text-xs text-neutral-700 dark:text-neutral-300'
-                      title={entry.name}
-                    >
-                      {entry.name}
-                    </td>
-                    <td className='px-2 py-1.5 text-xs text-neutral-600 dark:text-neutral-400'>{entry.dataType}</td>
-                    <td className='px-2 py-1.5 text-xs text-neutral-600 dark:text-neutral-400'>{entry.bitLength}</td>
-                    <td className='px-2 py-1.5 font-mono text-xs text-neutral-500 dark:text-neutral-500'>
-                      {entry.defaultValue || '-'}
-                    </td>
-                    <td className='px-2 py-1.5'>
-                      <ValueCell entry={entry} onValueChange={handleValueChange} />
-                    </td>
-                    <td
-                      className='truncate px-2 py-1.5 text-xs text-neutral-500 dark:text-neutral-500'
-                      title={entry.objectName}
-                    >
-                      {entry.objectName}
-                    </td>
-                  </tr>
+                  <GroupRows
+                    key={group.index}
+                    group={group}
+                    isCollapsed={isCollapsed}
+                    hasModified={groupHasModified}
+                    onToggle={() => handleToggleGroup(group.index)}
+                    onValueChange={handleValueChange}
+                  />
                 )
               })
             )}
@@ -246,6 +295,84 @@ const SdoParametersTable = ({ sdoConfigurations, onUpdateSdoConfigurations }: Sd
         </table>
       </div>
     </div>
+  )
+}
+
+/**
+ * Renders a group header row + its sub-item rows (when expanded).
+ * Extracted as a component to avoid key issues with fragments in map.
+ */
+const GroupRows = ({
+  group,
+  isCollapsed,
+  hasModified,
+  onToggle,
+  onValueChange,
+}: {
+  group: SdoObjectGroup
+  isCollapsed: boolean
+  hasModified: boolean
+  onToggle: () => void
+  onValueChange: (index: string, subIndex: number, value: string) => void
+}) => {
+  return (
+    <>
+      {/* Group header row */}
+      <tr
+        onClick={onToggle}
+        className='cursor-pointer border-b border-neutral-200 bg-neutral-50 transition-colors hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-850 dark:hover:bg-neutral-800'
+      >
+        <td className='px-2 py-1.5'>
+          <ArrowIcon
+            direction='right'
+            className={cn('h-3.5 w-3.5 stroke-brand-light transition-transform', !isCollapsed && 'rotate-270')}
+          />
+        </td>
+        <td colSpan={6} className='px-2 py-1.5'>
+          <div className='flex items-center gap-2'>
+            <span className='font-mono text-xs font-semibold text-brand dark:text-brand-light'>{group.index}</span>
+            <span className='text-xs font-medium text-neutral-800 dark:text-neutral-200'>{group.objectName}</span>
+            <span className='text-xs text-neutral-500 dark:text-neutral-500'>
+              ({group.entries.length} param{group.entries.length !== 1 && 's'})
+            </span>
+            {hasModified && (
+              <span className='rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'>
+                modified
+              </span>
+            )}
+          </div>
+        </td>
+      </tr>
+
+      {/* Sub-item rows */}
+      {!isCollapsed &&
+        group.entries.map((entry) => {
+          const isModified = entry.value !== entry.defaultValue
+          return (
+            <tr
+              key={`${entry.index}-${entry.subIndex}`}
+              className={cn(
+                'border-b border-neutral-200 transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50',
+                isModified && 'bg-amber-50/50 dark:bg-amber-900/10',
+              )}
+            >
+              <td className='px-2 py-1.5'></td>
+              <td className='px-2 py-1.5 font-mono text-xs text-neutral-600 dark:text-neutral-400'>{entry.subIndex}</td>
+              <td className='truncate px-2 py-1.5 text-xs text-neutral-700 dark:text-neutral-300' title={entry.name}>
+                {entry.name}
+              </td>
+              <td className='px-2 py-1.5 text-xs text-neutral-600 dark:text-neutral-400'>{entry.dataType}</td>
+              <td className='px-2 py-1.5 text-xs text-neutral-600 dark:text-neutral-400'>{entry.bitLength}</td>
+              <td className='px-2 py-1.5 font-mono text-xs text-neutral-500 dark:text-neutral-500'>
+                {entry.defaultValue || '-'}
+              </td>
+              <td className='px-2 py-1.5'>
+                <ValueCell entry={entry} onValueChange={onValueChange} />
+              </td>
+            </tr>
+          )
+        })}
+    </>
   )
 }
 
