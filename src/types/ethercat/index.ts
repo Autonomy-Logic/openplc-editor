@@ -236,3 +236,77 @@ export type TestConnectionIPCResponse = EtherCATIPCResponse<EtherCATTestResponse
  * IPC response for validating configuration
  */
 export type ValidateConfigIPCResponse = EtherCATIPCResponse<EtherCATValidateResponse>
+
+// ===================== RUNTIME STATUS MONITORING =====================
+
+/**
+ * EtherCAT plugin state machine states as reported by the runtime
+ */
+export type EtherCATPluginState =
+  | 'IDLE'
+  | 'SCANNING'
+  | 'CONFIGURING'
+  | 'TRANSITIONING'
+  | 'OPERATIONAL'
+  | 'RECOVERING'
+  | 'ERROR'
+  | 'STOPPED'
+
+/**
+ * Per-slave status snapshot from the runtime
+ */
+export interface EtherCATSlaveStatus {
+  /** Position in the EtherCAT chain (1-indexed) */
+  position: number
+  /** Device name */
+  name: string
+  /** Current EtherCAT AL state (e.g., "OP", "SAFE-OP", "INIT") */
+  state: string
+  /** AL status code (0 = no error) */
+  al_status_code: number
+  /** Cumulative error count for this slave */
+  error_count: number
+  /** Whether the slave has an error condition */
+  has_error: boolean
+}
+
+/**
+ * Cycle performance metrics from the EtherCAT thread
+ */
+export interface EtherCATCycleMetrics {
+  /** Total cycles executed since last reset */
+  cycle_count: number
+  /** Total WKC errors since last reset */
+  wkc_error_count: number
+  /** Average cycle time in microseconds */
+  avg_cycle_us: number
+  /** Maximum cycle time in microseconds */
+  max_cycle_us: number
+  /** Maximum process data exchange time in microseconds */
+  max_exchange_us: number
+  /** Current consecutive WKC error count */
+  consecutive_wkc_errors: number
+  /** Number of recovery attempts since last successful recovery */
+  recovery_attempts: number
+}
+
+/**
+ * Response from GET /api/discovery/ethercat/runtime-status
+ */
+export interface EtherCATRuntimeStatusResponse {
+  /** Current plugin state */
+  plugin_state: EtherCATPluginState
+  /** Number of configured slaves */
+  slave_count: number
+  /** Expected working counter value */
+  expected_wkc: number
+  /** Per-slave status array */
+  slaves: EtherCATSlaveStatus[]
+  /** Cycle performance metrics */
+  metrics: EtherCATCycleMetrics
+}
+
+/**
+ * IPC response for getting runtime status
+ */
+export type RuntimeStatusIPCResponse = EtherCATIPCResponse<EtherCATRuntimeStatusResponse>

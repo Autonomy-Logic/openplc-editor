@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
 import type {
+  EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
   EtherCATScanResponse,
   EtherCATServiceStatusResponse,
@@ -419,6 +420,15 @@ const rendererProcessBridge = {
     validateRequest: EtherCATValidateRequest,
   ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> =>
     ipcRenderer.invoke('ethercat:validate', ipAddress, jwtToken, validateRequest),
+
+  /**
+   * Get EtherCAT runtime status (state machine state, slave states, metrics)
+   */
+  etherCATGetRuntimeStatus: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress, jwtToken),
 
   // ===================== ESI REPOSITORY METHODS =====================
 

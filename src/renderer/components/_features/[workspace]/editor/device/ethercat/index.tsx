@@ -26,6 +26,7 @@ import { DeviceBrowserModal } from './components/device-browser-modal'
 import { DiscoveredDeviceTable } from './components/discovered-device-table'
 import { ESIRepository } from './components/esi-repository'
 import { InterfaceSelector } from './components/interface-selector'
+import { RuntimeStatusPanel } from './components/runtime-status-panel'
 
 type EditorTab = 'repository' | 'discovery' | 'configured'
 
@@ -568,6 +569,13 @@ const EtherCATEditor = () => {
           </span>
         </div>
       </div>
+
+      {/* Runtime Status */}
+      {isConnectedToRuntime && (
+        <div className='mb-4'>
+          <RuntimeStatusPanel ipAddress={ipAddress} jwtToken={jwtToken} isConnected={isConnectedToRuntime} />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className='mb-4 flex border-b border-neutral-200 dark:border-neutral-700'>

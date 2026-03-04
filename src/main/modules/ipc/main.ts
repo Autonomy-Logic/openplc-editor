@@ -2,6 +2,7 @@ import { ESIService } from '@root/main/services/esi-service'
 import { parseESIDeviceFull } from '@root/main/services/esi-service/esi-parser-main'
 import { getProjectPath } from '@root/main/utils'
 import type {
+  EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
   EtherCATScanResponse,
   EtherCATServiceStatusResponse,
@@ -797,6 +798,82 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  /**
+   * Get EtherCAT runtime status (state machine state, slave states, metrics)
+   */
+  handleEtherCATGetRuntimeStatus = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> => {
+    try {
+      const postData = JSON.stringify({
+        plugin: 'ethercat',
+        command: 'status',
+      })
+
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: '/api/plugin-command',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const pluginResponse = JSON.parse(data)
+
+                  if (pluginResponse.error) {
+                    resolve({ success: false, error: pluginResponse.error })
+                    return
+                  }
+
+                  resolve({ success: true, data: pluginResponse as EtherCATRuntimeStatusResponse })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                try {
+                  const errorResponse = JSON.parse(data)
+                  resolve({
+                    success: false,
+                    error: errorResponse.error || `Unexpected status: ${res.statusCode}`,
+                  })
+                } catch {
+                  resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
+                }
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(postData)
+        req.end()
+      })
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   // ===================== ESI REPOSITORY HANDLERS =====================
 
   /**
@@ -1091,6 +1168,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('ethercat:scan', this.handleEtherCATScan)
     this.ipcMain.handle('ethercat:test', this.handleEtherCATTest)
     this.ipcMain.handle('ethercat:validate', this.handleEtherCATValidate)
+    this.ipcMain.handle('ethercat:get-runtime-status', this.handleEtherCATGetRuntimeStatus)
 
     // ===================== ESI REPOSITORY =====================
     this.ipcMain.handle('esi:load-repository-index', this.handleESILoadRepositoryIndex)
