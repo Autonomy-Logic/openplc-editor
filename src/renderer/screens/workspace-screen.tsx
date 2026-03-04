@@ -1115,44 +1115,71 @@ const WorkspaceScreen = () => {
         // creates a watched key like main:IRRIGATION_MAIN_CONTROLLER0.TON0, and its children
         // (like ET, PT) should be polled when TON0 is expanded
         const shouldPollNestedVariable = (varName: string, pouName: string, currentGraphList: string[]): boolean => {
-          const parts = varName.split('.')
-          if (parts.length <= 1) return true // Not a nested variable
-
-          // Check if this variable is in the graph list
+          // Fast-path: graphed variables must always be polled.
           const compositeKey = `${pouName}:${varName}`
           if (currentGraphList.includes(compositeKey)) {
             return true
           }
 
-          // Find the deepest watched ancestor
-          // For example, if varName is 'IRRIGATION_MAIN_CONTROLLER0.TON0.ET':
-          // - Check if 'main:IRRIGATION_MAIN_CONTROLLER0.TON0' is watched (deepest)
-          // - If not, check if 'main:IRRIGATION_MAIN_CONTROLLER0' is watched
-          let watchedAncestorIndex = -1
-          for (let i = parts.length - 1; i >= 1; i--) {
-            const candidatePath = parts.slice(0, i).join('.')
-            const candidateKey = `${pouName}:${candidatePath}`
+          if (debugVariableKeys.has(compositeKey)) {
+            return true
+          }
+
+          const hierarchyPaths: string[] = []
+          const dotParts = varName.split('.')
+          let prefix = ''
+          for (const part of dotParts) {
+            const hasBracket = part.includes('[')
+            if (hasBracket) {
+              const base = part.split('[')[0]
+              if (base) {
+                const basePath = prefix ? `${prefix}.${base}` : base
+                if (hierarchyPaths[hierarchyPaths.length - 1] !== basePath) {
+                  hierarchyPaths.push(basePath)
+                }
+              }
+            }
+
+            const fullPath = prefix ? `${prefix}.${part}` : part
+            hierarchyPaths.push(fullPath)
+            prefix = fullPath
+          }
+
+          // If there's no hierarchy, treat as not pollable.
+          if (hierarchyPaths.length === 0) {
+            return false
+          }
+
+          // If this is not nested (single path, no bracket-derived parent), it must be explicitly watched/forced.
+          // (This matches previous behavior for simple variables.)
+          if (hierarchyPaths.length === 1) {
+            return debugVariableKeys.has(`${pouName}:${hierarchyPaths[0]}`)
+          }
+
+          // Find the deepest watched ancestor in the hierarchy.
+          let watchedAncestorPos = -1
+          for (let i = hierarchyPaths.length - 2; i >= 0; i--) {
+            const candidateKey = `${pouName}:${hierarchyPaths[i]}`
             if (debugVariableKeys.has(candidateKey)) {
-              watchedAncestorIndex = i
+              watchedAncestorPos = i
               break
             }
           }
 
-          // If no ancestor is watched, don't poll this variable
-          if (watchedAncestorIndex === -1) {
+          if (watchedAncestorPos === -1) {
             return false
           }
 
-          // Check if all nodes from the watched ancestor to this variable are expanded
-          // Start from the watched ancestor (which must be expanded to see its children)
-          for (let i = watchedAncestorIndex; i < parts.length; i++) {
-            const parentPath = parts.slice(0, i).join('.')
-            const parentKey = `${pouName}:${parentPath}`
+          // Ensure every ancestor from watched -> parent of target is expanded.
+          // The target node itself does not need to be expanded to show its value.
+          for (let i = watchedAncestorPos; i < hierarchyPaths.length - 1; i++) {
+            const parentKey = `${pouName}:${hierarchyPaths[i]}`
             const isParentExpanded = debugExpandedNodes.get(parentKey) ?? false
             if (!isParentExpanded) {
               return false
             }
           }
+
           return true
         }
 
@@ -1160,11 +1187,9 @@ const WorkspaceScreen = () => {
         // This now supports arbitrary nesting depth by finding the deepest watched ancestor
         Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
           for (const varInfo of varInfos) {
-            if (varInfo.variable.name.includes('.')) {
+            // Treat both dot-nesting (A.B) and array indexing (A[1]) as nested.
+            if (varInfo.variable.name.includes('.') || varInfo.variable.name.includes('[')) {
               const childKey = `${varInfo.pouName}:${varInfo.variable.name}`
-
-              // Check if this nested variable should be polled based on expansion state
-              // shouldPollNestedVariable now handles finding the watched ancestor internally
               if (shouldPollNestedVariable(varInfo.variable.name, varInfo.pouName, graphListRef.current)) {
                 debugVariableKeys.add(childKey)
               }
