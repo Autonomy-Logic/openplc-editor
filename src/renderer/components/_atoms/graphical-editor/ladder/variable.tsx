@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
+import { DebugValueBadge } from '../debug-value-badge'
 import { getVariableByName, validateVariableType } from '../utils'
 import { VariablesBlockAutoComplete } from './autocomplete'
 import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables } from './block'
@@ -455,6 +456,7 @@ const VariableElement = (block: VariableProps) => {
   return (
     <>
       <div
+        className='relative'
         style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
         onClick={isDebuggerVisible ? handleClick : undefined}
       >
@@ -517,6 +519,14 @@ const VariableElement = (block: VariableProps) => {
               />
             </div>
           </div>
+        )}
+
+        {isDebuggerVisible && isAVariable && (
+          <DebugValueBadge
+            compositeKey={compositeKey}
+            variableType={variableType}
+            position={data.variant === 'output' ? 'left' : 'right'}
+          />
         )}
 
         {isDebuggerVisible && contextMenuPosition && (

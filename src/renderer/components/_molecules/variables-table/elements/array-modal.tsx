@@ -11,6 +11,7 @@ type ArrayModalProps = {
   arrayModalIsOpen: boolean
   setArrayModalIsOpen: (value: boolean) => void
   closeContainer: () => void
+  language?: string | null
 }
 
 type Pou = { type: string; name: string }
@@ -23,6 +24,7 @@ export const ArrayModal = ({
   setArrayModalIsOpen,
   variableName,
   VariableRow,
+  language,
 }: ArrayModalProps) => {
   const {
     editor: {
@@ -35,33 +37,46 @@ export const ArrayModal = ({
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
-  const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
+  const isNativeLanguage = language === 'python' || language === 'cpp'
+  const excludedNativeTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
 
-  const userDataTypes = dataTypes
-    .map((type) => type.name)
-    .filter((typeName) => typeName !== name && typeName.toUpperCase() !== 'ARRAY')
+  const baseTypes = baseTypeSchema.options.filter((type) => {
+    if (type.toUpperCase() === 'ARRAY') return false
+    if (isNativeLanguage && excludedNativeTypes.includes(type.toUpperCase())) return false
+    return true
+  })
 
-  const systemFunctionBlocks = sliceLibraries.system.flatMap((lib) =>
-    lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
-  )
+  const userDataTypes = isNativeLanguage
+    ? []
+    : dataTypes.map((type) => type.name).filter((typeName) => typeName !== name && typeName.toUpperCase() !== 'ARRAY')
 
-  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
-    'pous' in userLib && Array.isArray(userLib.pous)
-      ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
-      : (userLib as UserLibFunctionBlock).type === 'function-block'
-        ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
-        : [],
-  )
+  const systemFunctionBlocks = isNativeLanguage
+    ? []
+    : sliceLibraries.system.flatMap((lib) =>
+        lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+      )
+
+  const userFunctionBlocks = isNativeLanguage
+    ? []
+    : sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
+        'pous' in userLib && Array.isArray(userLib.pous)
+          ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
+          : (userLib as UserLibFunctionBlock).type === 'function-block'
+            ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
+            : [],
+      )
 
   const VariableTypes = [
     { definition: 'base-type', values: baseTypes },
-    { definition: 'user-data-type', values: userDataTypes },
+    ...(isNativeLanguage ? [] : [{ definition: 'user-data-type', values: userDataTypes }]),
   ]
 
-  const LibraryTypes = [
-    { definition: 'system', values: systemFunctionBlocks },
-    { definition: 'user', values: userFunctionBlocks },
-  ]
+  const LibraryTypes = isNativeLanguage
+    ? []
+    : [
+        { definition: 'system', values: systemFunctionBlocks },
+        { definition: 'user', values: userFunctionBlocks },
+      ]
 
   const [selectedInput, setSelectedInput] = useState<string>('')
   const [dimensions, setDimensions] = useState<string[]>([])

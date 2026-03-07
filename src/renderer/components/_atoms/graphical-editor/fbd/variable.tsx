@@ -20,6 +20,7 @@ import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { DebugValueBadge } from '../debug-value-badge'
 import { BlockVariant } from '../types/block'
 import { validateVariableType } from '../utils'
 import { FBDBlockAutoComplete } from './autocomplete'
@@ -654,6 +655,16 @@ const VariableElement = (block: VariableProps) => {
                     keyPressed={keyPressedAtTextarea}
                   />
                 </div>
+              )}
+
+              {isDebuggerVisible && isAVariable && (
+                <DebugValueBadge
+                  compositeKey={compositeKeyForForced}
+                  variableType={variableType}
+                  position={
+                    data.variant === 'output-variable' ? 'left' : data.variant === 'inout-variable' ? 'below' : 'right'
+                  }
+                />
               )}
 
               {isDebuggerVisible && contextMenuPosition && (
