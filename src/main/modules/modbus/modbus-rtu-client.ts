@@ -1,4 +1,15 @@
-import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-types'
+import {
+  allocBytes,
+  buildGetListPdu,
+  buildGetMd5Pdu,
+  buildSetVariablePdu,
+  parseGetListResponse,
+  parseGetMd5Response,
+  parseSetVariableResponse,
+  readUint16BE,
+  writeUint8,
+  writeUint16BE,
+} from '@shared/modbus/modbus-pdu'
 
 export interface SerialPortLike {
   isOpen: boolean
@@ -26,40 +37,11 @@ const MD5_REQUEST_RETRY_DELAY_MS = 500
 
 const FRAME_COMPLETE_TIMEOUT_MS = 10
 
-// ---------------------------------------------------------------------------
-// Uint8Array helpers (replacing Node.js Buffer)
-// ---------------------------------------------------------------------------
-
-function allocBytes(size: number): Uint8Array {
-  return new Uint8Array(size)
-}
-
 function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
   const result = new Uint8Array(a.length + b.length)
   result.set(a, 0)
   result.set(b, a.length)
   return result
-}
-
-function readUint8(buf: Uint8Array, offset: number): number {
-  return buf[offset]
-}
-
-function writeUint8(buf: Uint8Array, offset: number, value: number): void {
-  buf[offset] = value
-}
-
-function readUint16BE(buf: Uint8Array, offset: number): number {
-  return (buf[offset] << 8) | buf[offset + 1]
-}
-
-function writeUint16BE(buf: Uint8Array, offset: number, value: number): void {
-  buf[offset] = (value >>> 8) & 0xff
-  buf[offset + 1] = value & 0xff
-}
-
-function readUint32BE(buf: Uint8Array, offset: number): number {
-  return ((buf[offset] << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3]) >>> 0
 }
 
 // ---------------------------------------------------------------------------
@@ -256,16 +238,18 @@ export class ModbusRtuClient {
     })
   }
 
+  private extractPdu(response: Uint8Array): Uint8Array {
+    // RTU response is padded: [6 zero bytes][slave ID][PDU...]
+    // PDU starts at offset 7
+    if (response.length < 9) {
+      throw new Error(`Invalid response: too short (${response.length} bytes, need at least 9)`)
+    }
+    return response.subarray(7)
+  }
+
   async getMd5Hash(): Promise<string> {
-    const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
-    const endiannessCheck = 0xdead
-
-    const data = allocBytes(4)
-    writeUint16BE(data, 0, endiannessCheck)
-    writeUint8(data, 2, 0)
-    writeUint8(data, 3, 0)
-
-    const request = this.assembleRequest(functionCode, data)
+    const pdu = buildGetMd5Pdu()
+    const request = this.assembleRequest(pdu[0], pdu.subarray(1))
 
     let lastError: Error | null = null
     for (let attempt = 0; attempt <= MD5_REQUEST_MAX_RETRIES; attempt++) {
@@ -275,25 +259,8 @@ export class ModbusRtuClient {
         }
 
         const response = await this.sendRequest(request)
-
-        if (response.length < 9) {
-          throw new Error('Invalid response: too short')
-        }
-
-        const functionCodeResponse = readUint8(response, 7)
-        const statusCode = readUint8(response, 8)
-
-        if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
-          throw new Error('Function code mismatch')
-        }
-
-        if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-          throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
-        }
-
-        const md5Bytes = response.slice(9)
-        const md5String = new TextDecoder().decode(md5Bytes).trim()
-        return md5String
+        const responsePdu = this.extractPdu(response)
+        return parseGetMd5Response(responsePdu).md5
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
         if (attempt < MD5_REQUEST_MAX_RETRIES) {
@@ -313,67 +280,21 @@ export class ModbusRtuClient {
     error?: string
   }> {
     try {
-      const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
-      const numIndexes = variableIndexes.length
-
-      const data = allocBytes(2 + 2 * numIndexes)
-      writeUint16BE(data, 0, numIndexes)
-
-      for (let i = 0; i < numIndexes; i++) {
-        writeUint16BE(data, 2 + i * 2, variableIndexes[i])
-      }
-
-      const request = this.assembleRequest(functionCode, data)
+      const pdu = buildGetListPdu(variableIndexes)
+      const request = this.assembleRequest(pdu[0], pdu.subarray(1))
       const response = await this.sendRequest(request)
+      const responsePdu = this.extractPdu(response)
+      const result = parseGetListResponse(responsePdu)
 
-      if (response.length < 9) {
-        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      if ('error' in result) {
+        return { success: false, error: result.error }
       }
-
-      const functionCodeResponse = readUint8(response, 7)
-      const statusCode = readUint8(response, 8)
-
-      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-        return { success: false, error: 'ERROR_OUT_OF_BOUNDS' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-        return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
-      }
-
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
-      }
-
-      if (response.length < 17) {
-        return {
-          success: false,
-          error: `Incomplete success response (${response.length} bytes, expected at least 17)`,
-        }
-      }
-
-      const lastIndex = readUint16BE(response, 9)
-      const tick = readUint32BE(response, 11)
-      const responseSize = readUint16BE(response, 15)
-
-      if (response.length < 17 + responseSize) {
-        return {
-          success: false,
-          error: `Incomplete variable data (expected ${responseSize} bytes, got ${response.length - 17})`,
-        }
-      }
-
-      const variableData = response.slice(17, 17 + responseSize)
 
       return {
         success: true,
-        tick,
-        lastIndex,
-        data: variableData,
+        tick: result.tick,
+        lastIndex: result.lastIndex,
+        data: result.data,
       }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -389,45 +310,14 @@ export class ModbusRtuClient {
     error?: string
   }> {
     try {
-      const functionCode = ModbusFunctionCode.DEBUG_SET
-
-      const dataLength = force && valueBuffer ? valueBuffer.length : 1
-      const data = allocBytes(5 + dataLength)
-
-      writeUint16BE(data, 0, variableIndex)
-      writeUint8(data, 2, force ? 1 : 0)
-      writeUint16BE(data, 3, dataLength)
-
-      if (force && valueBuffer) {
-        data.set(valueBuffer, 5)
-      } else {
-        writeUint8(data, 5, 0)
-      }
-
-      const request = this.assembleRequest(functionCode, data)
+      const pdu = buildSetVariablePdu(variableIndex, force, valueBuffer)
+      const request = this.assembleRequest(pdu[0], pdu.subarray(1))
       const response = await this.sendRequest(request)
+      const responsePdu = this.extractPdu(response)
+      const result = parseSetVariableResponse(responsePdu)
 
-      if (response.length < 9) {
-        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
-      }
-
-      const functionCodeResponse = readUint8(response, 7)
-      const statusCode = readUint8(response, 8)
-
-      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_SET as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-        return { success: false, error: 'ERROR_OUT_OF_BOUNDS' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-        return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
-      }
-
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      if ('error' in result) {
+        return { success: false, error: result.error }
       }
 
       return { success: true }

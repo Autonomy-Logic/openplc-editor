@@ -1,8 +1,14 @@
+import {
+  buildGetListPdu,
+  buildGetMd5Pdu,
+  buildSetVariablePdu,
+  parseGetListResponse,
+  parseGetMd5Response,
+  parseSetVariableResponse,
+} from '@shared/modbus/modbus-pdu'
 import { Socket } from 'net'
 
-import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-types'
-
-export { ModbusDebugResponse, ModbusFunctionCode } from './modbus-types'
+export { ModbusDebugResponse, ModbusFunctionCode } from '@shared/modbus/modbus-pdu'
 
 interface ModbusTcpClientOptions {
   host: string
@@ -99,51 +105,37 @@ export class ModbusTcpClient {
     })
   }
 
+  private wrapMbap(pdu: Uint8Array): { request: Buffer; transactionId: number } {
+    const transactionId = this.incrementTransactionId()
+    const request = Buffer.alloc(7 + pdu.length)
+    request.writeUInt16BE(transactionId, 0) // Transaction ID
+    request.writeUInt16BE(0x0000, 2) // Protocol ID
+    request.writeUInt16BE(1 + pdu.length, 4) // Length (unit ID + PDU)
+    request.writeUInt8(0x00, 6) // Unit ID
+    request.set(pdu, 7) // PDU
+    return { request, transactionId }
+  }
+
+  private stripMbap(data: Buffer, expectedTransactionId: number): Uint8Array {
+    if (data.length < 9) {
+      throw new Error(`Invalid response: too short (${data.length} bytes, need at least 9)`)
+    }
+    const responseTransactionId = data.readUInt16BE(0)
+    if (responseTransactionId !== expectedTransactionId) {
+      throw new Error('Transaction ID mismatch')
+    }
+    return new Uint8Array(data.buffer, data.byteOffset + 7, data.length - 7)
+  }
+
   async getMd5Hash(): Promise<string> {
     if (!this.socket) {
       throw new Error('Not connected to target')
     }
 
-    const transactionId = this.incrementTransactionId()
-    const protocolId = 0x0000
-    const unitId = 0x00
-    const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
-    const endiannessCheck = 0xdead
-
-    const request = Buffer.alloc(12)
-    request.writeUInt16BE(transactionId, 0)
-    request.writeUInt16BE(protocolId, 2)
-    request.writeUInt16BE(6, 4)
-    request.writeUInt8(unitId, 6)
-    request.writeUInt8(functionCode, 7)
-    request.writeUInt16BE(endiannessCheck, 8)
-    request.writeUInt8(0, 10)
-    request.writeUInt8(0, 11)
-
+    const { request, transactionId } = this.wrapMbap(buildGetMd5Pdu())
     const data = await this.sendTcpRequest(request)
-
-    if (data.length < 9) {
-      throw new Error('Invalid response: too short')
-    }
-
-    const responseTransactionId = data.readUInt16BE(0)
-    const responseFunctionCode = data.readUInt8(7)
-    const statusCode = data.readUInt8(8)
-
-    if (responseTransactionId !== transactionId) {
-      throw new Error('Transaction ID mismatch')
-    }
-
-    if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
-      throw new Error('Function code mismatch')
-    }
-
-    if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-      throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
-    }
-
-    const md5String = data.slice(9).toString('utf-8').trim()
-    return md5String
+    const pdu = this.stripMbap(data, transactionId)
+    return parseGetMd5Response(pdu).md5
   }
 
   async getVariablesList(variableIndexes: number[]): Promise<{
@@ -157,82 +149,22 @@ export class ModbusTcpClient {
       return { success: false, error: 'Not connected to target' }
     }
 
-    const transactionId = this.incrementTransactionId()
-    const protocolId = 0x0000
-    const unitId = 0x00
-    const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
-    const numIndexes = variableIndexes.length
-
-    const pduLength = 4 + 2 * numIndexes
-    const request = Buffer.alloc(6 + pduLength)
-
-    request.writeUInt16BE(transactionId, 0)
-    request.writeUInt16BE(protocolId, 2)
-    request.writeUInt16BE(pduLength, 4)
-    request.writeUInt8(unitId, 6)
-    request.writeUInt8(functionCode, 7)
-    request.writeUInt16BE(numIndexes, 8)
-
-    for (let i = 0; i < numIndexes; i++) {
-      request.writeUInt16BE(variableIndexes[i], 10 + i * 2)
-    }
+    const { request, transactionId } = this.wrapMbap(buildGetListPdu(variableIndexes))
 
     try {
       const data = await this.sendTcpRequest(request)
+      const pdu = this.stripMbap(data, transactionId)
+      const result = parseGetListResponse(pdu)
 
-      if (data.length < 9) {
-        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      if ('error' in result) {
+        return { success: false, error: result.error }
       }
-
-      const responseTransactionId = data.readUInt16BE(0)
-      const responseFunctionCode = data.readUInt8(7)
-      const statusCode = data.readUInt8(8)
-
-      if (responseTransactionId !== transactionId) {
-        return { success: false, error: 'Transaction ID mismatch' }
-      }
-
-      if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-        return { success: false, error: 'ERROR_OUT_OF_BOUNDS' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-        return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
-      }
-
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
-      }
-
-      if (data.length < 17) {
-        return {
-          success: false,
-          error: `Incomplete success response (${data.length} bytes, expected at least 17)`,
-        }
-      }
-
-      const lastIndex = data.readUInt16BE(9)
-      const tick = data.readUInt32BE(11)
-      const responseSize = data.readUInt16BE(15)
-
-      if (data.length < 17 + responseSize) {
-        return {
-          success: false,
-          error: `Incomplete variable data (expected ${responseSize} bytes, got ${data.length - 17})`,
-        }
-      }
-
-      const variableData = data.slice(17, 17 + responseSize)
 
       return {
         success: true,
-        tick,
-        lastIndex,
-        data: variableData,
+        tick: result.tick,
+        lastIndex: result.lastIndex,
+        data: Buffer.from(result.data),
       }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -251,61 +183,16 @@ export class ModbusTcpClient {
       return { success: false, error: 'Not connected to target' }
     }
 
-    const transactionId = this.incrementTransactionId()
-    const protocolId = 0x0000
-    const unitId = 0x00
-    const functionCode = ModbusFunctionCode.DEBUG_SET
-
-    const dataLength = force && valueBuffer ? valueBuffer.length : 1
-    const pduLength = 7 + dataLength
-    const request = Buffer.alloc(6 + pduLength)
-
-    request.writeUInt16BE(transactionId, 0)
-    request.writeUInt16BE(protocolId, 2)
-    request.writeUInt16BE(pduLength, 4)
-    request.writeUInt8(unitId, 6)
-    request.writeUInt8(functionCode, 7)
-    request.writeUInt16BE(variableIndex, 8)
-    request.writeUInt8(force ? 1 : 0, 10)
-    request.writeUInt16BE(dataLength, 11)
-
-    if (force && valueBuffer) {
-      for (let i = 0; i < valueBuffer.length; i++) {
-        request.writeUInt8(valueBuffer[i], 13 + i)
-      }
-    } else {
-      request.writeUInt8(0, 13)
-    }
+    const value = valueBuffer ? new Uint8Array(valueBuffer) : undefined
+    const { request, transactionId } = this.wrapMbap(buildSetVariablePdu(variableIndex, force, value))
 
     try {
       const data = await this.sendTcpRequest(request)
+      const pdu = this.stripMbap(data, transactionId)
+      const result = parseSetVariableResponse(pdu)
 
-      if (data.length < 9) {
-        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
-      }
-
-      const responseTransactionId = data.readUInt16BE(0)
-      const responseFunctionCode = data.readUInt8(7)
-      const statusCode = data.readUInt8(8)
-
-      if (responseTransactionId !== transactionId) {
-        return { success: false, error: 'Transaction ID mismatch' }
-      }
-
-      if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_SET as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-        return { success: false, error: 'ERROR_OUT_OF_BOUNDS' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-        return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
-      }
-
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      if ('error' in result) {
+        return { success: false, error: result.error }
       }
 
       return { success: true }

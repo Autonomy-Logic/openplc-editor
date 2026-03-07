@@ -1,6 +1,14 @@
+import {
+  buildGetListPdu,
+  buildGetMd5Pdu,
+  buildSetVariablePdu,
+  bytesToHexString,
+  hexStringToBytes,
+  parseGetListResponse,
+  parseGetMd5Response,
+  parseSetVariableResponse,
+} from '@shared/modbus/modbus-pdu'
 import { io, Socket } from 'socket.io-client'
-
-import { ModbusDebugResponse, ModbusFunctionCode } from '../modbus/modbus-client'
 
 interface WebSocketDebugClientOptions {
   host: string
@@ -70,33 +78,7 @@ export class WebSocketDebugClient {
     }
   }
 
-  private bufferToHexString(buffer: Buffer): string {
-    return Array.from(buffer)
-      .map((byte) => byte.toString(16).toUpperCase().padStart(2, '0'))
-      .join(' ')
-  }
-
-  private hexStringToBuffer(hexString: string): Buffer {
-    const bytes = hexString.split(' ').map((byte) => parseInt(byte, 16))
-    return Buffer.from(bytes)
-  }
-
-  async getMd5Hash(): Promise<string> {
-    if (!this.socket) {
-      throw new Error('Not connected to target')
-    }
-
-    const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
-    const endiannessCheck = 0xdead
-
-    const request = Buffer.alloc(5)
-    request.writeUInt8(functionCode, 0)
-    request.writeUInt16BE(endiannessCheck, 1)
-    request.writeUInt8(0, 3)
-    request.writeUInt8(0, 4)
-
-    const commandHex = this.bufferToHexString(request)
-
+  private sendCommand(commandHex: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const timeoutHandle = setTimeout(() => {
         reject(new Error('Request timeout'))
@@ -116,37 +98,23 @@ export class WebSocketDebugClient {
           return
         }
 
-        try {
-          const responseBuffer = this.hexStringToBuffer(response.data)
-
-          if (responseBuffer.length < 2) {
-            reject(new Error('Invalid response: too short'))
-            return
-          }
-
-          const responseFunctionCode = responseBuffer.readUInt8(0)
-          const statusCode = responseBuffer.readUInt8(1)
-
-          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
-            reject(new Error('Function code mismatch'))
-            return
-          }
-
-          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-            reject(new Error(`Target returned error code: 0x${statusCode.toString(16)}`))
-            return
-          }
-
-          const md5String = responseBuffer.slice(2).toString('utf-8').trim()
-          resolve(md5String)
-        } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)))
-        }
+        resolve(response.data)
       }
 
       this.socket!.on('debug_response', responseHandler)
       this.socket!.emit('debug_command', { command: commandHex })
     })
+  }
+
+  async getMd5Hash(): Promise<string> {
+    if (!this.socket) {
+      throw new Error('Not connected to target')
+    }
+
+    const commandHex = bytesToHexString(buildGetMd5Pdu())
+    const responseHex = await this.sendCommand(commandHex)
+    const responsePdu = hexStringToBytes(responseHex)
+    return parseGetMd5Response(responsePdu).md5
   }
 
   async getVariablesList(variableIndexes: number[]): Promise<{
@@ -160,108 +128,26 @@ export class WebSocketDebugClient {
       return { success: false, error: 'Not connected to target' }
     }
 
-    const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
-    const numIndexes = variableIndexes.length
+    const commandHex = bytesToHexString(buildGetListPdu(variableIndexes))
 
-    const request = Buffer.alloc(3 + 2 * numIndexes)
-    request.writeUInt8(functionCode, 0)
-    request.writeUInt16BE(numIndexes, 1)
+    try {
+      const responseHex = await this.sendCommand(commandHex)
+      const responsePdu = hexStringToBytes(responseHex)
+      const result = parseGetListResponse(responsePdu)
 
-    for (let i = 0; i < numIndexes; i++) {
-      request.writeUInt16BE(variableIndexes[i], 3 + i * 2)
-    }
-
-    const commandHex = this.bufferToHexString(request)
-
-    return new Promise((resolve) => {
-      const timeoutHandle = setTimeout(() => {
-        resolve({ success: false, error: 'Request timeout' })
-      }, 5000)
-
-      const responseHandler = (response: { success: boolean; data?: string; error?: string }) => {
-        clearTimeout(timeoutHandle)
-        this.socket?.off('debug_response', responseHandler)
-
-        if (!response.success) {
-          resolve({ success: false, error: response.error || 'Unknown error' })
-          return
-        }
-
-        if (!response.data) {
-          resolve({ success: false, error: 'No data in response' })
-          return
-        }
-
-        try {
-          const responseBuffer = this.hexStringToBuffer(response.data)
-
-          if (responseBuffer.length < 2) {
-            resolve({
-              success: false,
-              error: `Invalid response: too short (${responseBuffer.length} bytes, need at least 2)`,
-            })
-            return
-          }
-
-          const responseFunctionCode = responseBuffer.readUInt8(0)
-          const statusCode = responseBuffer.readUInt8(1)
-
-          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
-            resolve({ success: false, error: 'Function code mismatch' })
-            return
-          }
-
-          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-            resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
-            return
-          }
-
-          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-            resolve({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
-            return
-          }
-
-          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-            resolve({ success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` })
-            return
-          }
-
-          if (responseBuffer.length < 10) {
-            resolve({
-              success: false,
-              error: `Incomplete success response (${responseBuffer.length} bytes, expected at least 10)`,
-            })
-            return
-          }
-
-          const lastIndex = responseBuffer.readUInt16BE(2)
-          const tick = responseBuffer.readUInt32BE(4)
-          const responseSize = responseBuffer.readUInt16BE(8)
-
-          if (responseBuffer.length < 10 + responseSize) {
-            resolve({
-              success: false,
-              error: `Incomplete variable data (expected ${responseSize} bytes, got ${responseBuffer.length - 10})`,
-            })
-            return
-          }
-
-          const variableData = responseBuffer.slice(10, 10 + responseSize)
-
-          resolve({
-            success: true,
-            tick,
-            lastIndex,
-            data: variableData,
-          })
-        } catch (error) {
-          resolve({ success: false, error: String(error) })
-        }
+      if ('error' in result) {
+        return { success: false, error: result.error }
       }
 
-      this.socket!.on('debug_response', responseHandler)
-      this.socket!.emit('debug_command', { command: commandHex })
-    })
+      return {
+        success: true,
+        tick: result.tick,
+        lastIndex: result.lastIndex,
+        data: Buffer.from(result.data),
+      }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   async setVariable(
@@ -276,87 +162,21 @@ export class WebSocketDebugClient {
       return { success: false, error: 'Not connected to target' }
     }
 
-    const functionCode = ModbusFunctionCode.DEBUG_SET
+    const value = valueBuffer ? new Uint8Array(valueBuffer) : undefined
+    const commandHex = bytesToHexString(buildSetVariablePdu(variableIndex, force, value))
 
-    const dataLength = force && valueBuffer ? valueBuffer.length : 1
-    const request = Buffer.alloc(6 + dataLength)
+    try {
+      const responseHex = await this.sendCommand(commandHex)
+      const responsePdu = hexStringToBytes(responseHex)
+      const result = parseSetVariableResponse(responsePdu)
 
-    request.writeUInt8(functionCode, 0)
-    request.writeUInt16BE(variableIndex, 1)
-    request.writeUInt8(force ? 1 : 0, 3)
-    request.writeUInt16BE(dataLength, 4)
-
-    if (force && valueBuffer) {
-      for (let i = 0; i < valueBuffer.length; i++) {
-        request.writeUInt8(valueBuffer[i], 6 + i)
+      if ('error' in result) {
+        return { success: false, error: result.error }
       }
-    } else {
-      request.writeUInt8(0, 6)
+
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
-
-    const commandHex = this.bufferToHexString(request)
-
-    return new Promise((resolve) => {
-      const timeoutHandle = setTimeout(() => {
-        resolve({ success: false, error: 'Request timeout' })
-      }, 5000)
-
-      const responseHandler = (response: { success: boolean; data?: string; error?: string }) => {
-        clearTimeout(timeoutHandle)
-        this.socket?.off('debug_response', responseHandler)
-
-        if (!response.success) {
-          resolve({ success: false, error: response.error || 'Unknown error' })
-          return
-        }
-
-        if (!response.data) {
-          resolve({ success: false, error: 'No data in response' })
-          return
-        }
-
-        try {
-          const responseBuffer = this.hexStringToBuffer(response.data)
-
-          if (responseBuffer.length < 2) {
-            resolve({
-              success: false,
-              error: `Invalid response: too short (${responseBuffer.length} bytes, need at least 2)`,
-            })
-            return
-          }
-
-          const responseFunctionCode = responseBuffer.readUInt8(0)
-          const statusCode = responseBuffer.readUInt8(1)
-
-          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_SET as number)) {
-            resolve({ success: false, error: 'Function code mismatch' })
-            return
-          }
-
-          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-            resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
-            return
-          }
-
-          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-            resolve({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
-            return
-          }
-
-          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-            resolve({ success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` })
-            return
-          }
-
-          resolve({ success: true })
-        } catch (error) {
-          resolve({ success: false, error: String(error) })
-        }
-      }
-
-      this.socket!.on('debug_response', responseHandler)
-      this.socket!.emit('debug_command', { command: commandHex })
-    })
   }
 }
