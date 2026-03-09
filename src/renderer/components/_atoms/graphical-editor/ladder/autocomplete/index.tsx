@@ -83,7 +83,12 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
                 variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
                 // Variable type restrictions
                 (variableRestrictions.values === undefined ||
-                  variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
+                  (Array.isArray(variableRestrictions.values)
+                    ? variableRestrictions.values
+                    : [variableRestrictions.values]
+                  )
+                    .map((v) => v.toLowerCase())
+                    .includes(variable.type.value.toLowerCase())) &&
                 (variableRestrictions.limitations === undefined ||
                   !variableRestrictions.limitations.includes(variable.type.definition)),
             )

@@ -221,8 +221,8 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     debugVariableValues,
     debugForcedVariables,
     editor.meta.name,
-    project,
-    getCompositeKey,
+    pouRef?.data.variables,
+    project.data.configuration.resource.instances,
   ])
 
   const styledNodes = useMemo(() => {
@@ -263,25 +263,32 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   }
 
   const updateRungState = () => {
+    const stripDivergence = (node: FlowNode) => {
+      const { hasDivergence: _hd, ...cleanData } = node.data
+      return { ...node, data: cleanData }
+    }
+
     const rungLocalCopy = {
       ...rungLocal,
-      nodes: rungLocal.nodes.map((node) => {
-        const localObjectData = { ...node.data }
-        return { ...node, data: localObjectData }
-      }),
+      nodes: rungLocal.nodes.map(stripDivergence),
+    }
+
+    const rungClean = {
+      ...rung,
+      nodes: rung.nodes.map(stripDivergence),
     }
 
     // Make node data mirror be the rung and not the rungLocal
     // This is made because the rungLocal is a local copy and may not reflect the latest changes in the store
     // And the store saves all the block data updates
     const isSelectedNodeDataEqual =
-      rung.selectedNodes.length > 0
-        ? rung.selectedNodes.every((node) => {
+      rungClean.selectedNodes.length > 0
+        ? rungClean.selectedNodes.every((node) => {
             const localNode = rungLocalCopy.nodes.find((n) => n.id === node.id)
             return localNode ? isEqual(localNode.data, node.data) : false
           })
         : true
-    const skipUpdate = (dragging || isEqual(rungLocalCopy, rung)) && isSelectedNodeDataEqual
+    const skipUpdate = (dragging || isEqual(rungLocalCopy, rungClean)) && isSelectedNodeDataEqual
 
     if (skipUpdate) {
       return

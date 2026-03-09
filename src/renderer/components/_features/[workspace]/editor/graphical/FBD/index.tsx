@@ -3,48 +3,24 @@ import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/
 import { FBDBody } from '@root/renderer/components/_molecules/graphical-editor/fbd'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { zodFBDFlowSchema } from '@root/renderer/store/slices'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 
 export default function FbdEditor() {
-  const {
-    editor,
-    fbdFlows,
-    project: {
-      data: { pous },
-    },
-    libraries: { user: userLibraries },
-    fbdFlowActions,
-    projectActions: { updatePou },
-    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
-    workspace: { isDebuggerVisible },
-  } = useOpenPLCStore()
+  const editor = useOpenPLCStore((state) => state.editor)
+  const fbdFlows = useOpenPLCStore((state) => state.fbdFlows)
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const userLibraries = useOpenPLCStore((state) => state.libraries.user)
+  const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
+  const updatePou = useOpenPLCStore((state) => state.projectActions.updatePou)
+  const handleFileAndWorkspaceSavedState = useOpenPLCStore(
+    (state) => state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState,
+  )
+  const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const flow = fbdFlows.find((flow) => flow.name === editor.meta.name)
   const flowUpdated = flow?.updated || false
-  const nodeDivergences = getLibraryDivergences()
 
-  /**
-   * Update the flow state to project JSON
-   */
-  useEffect(() => {
-    if (!flowUpdated) return
-
-    const flowSchema = zodFBDFlowSchema.safeParse(flow)
-    if (!flowSchema.success) return
-
-    updatePou({
-      name: editor.meta.name,
-      content: {
-        language: 'fbd',
-        value: flowSchema.data,
-      },
-    })
-
-    fbdFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
-    handleFileAndWorkspaceSavedState(editor.meta.name)
-  }, [flowUpdated])
-
-  function getLibraryDivergences() {
+  const nodeDivergences = useMemo(() => {
     if (!flow) return []
 
     const divergences = []
@@ -96,7 +72,28 @@ export default function FbdEditor() {
     }
 
     return divergences
-  }
+  }, [flow?.rung.nodes, userLibraries, pous])
+
+  /**
+   * Update the flow state to project JSON
+   */
+  useEffect(() => {
+    if (!flowUpdated) return
+
+    const flowSchema = zodFBDFlowSchema.safeParse(flow)
+    if (!flowSchema.success) return
+
+    updatePou({
+      name: editor.meta.name,
+      content: {
+        language: 'fbd',
+        value: flowSchema.data,
+      },
+    })
+
+    fbdFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
+  }, [flowUpdated])
 
   return (
     <div className='h-full w-full'>
