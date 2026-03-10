@@ -1,0 +1,45 @@
+{
+  "name": "OpenPLC Editor",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [1212, 3000],
+  "portsAttributes": {
+    "1212": { "label": "Webpack Dev Server (Renderer)" },
+    "3000": { "label": "Electron Debug Port" }
+  },
+  "mounts": [
+    "source=openplc-editor-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+    "source=openplc-editor-release-node-modules,target=${containerWorkspaceFolder}/release/app/node_modules,type=volume"
+  ],
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "postStartCommand": "export DISPLAY=:99",
+  "remoteEnv": {
+    "DISPLAY": ":99",
+    "ELECTRON_DISABLE_GPU": "1",
+    "ELECTRON_EXTRA_LAUNCH_ARGS": "--no-sandbox --disable-gpu-sandbox",
+    "NODE_ENV": "development"
+  },
+  "runArgs": ["--init"],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode.vscode-typescript-next"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "eslint.validate": ["typescript", "typescriptreact"],
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  }
+}

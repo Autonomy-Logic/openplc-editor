@@ -24,6 +24,8 @@
     "start:main": "concurrently -k \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./configs/webpack/webpack.config.main.dev.ts\" \"electronmon .\"",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
+    "start:src2": "ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer:src2",
+    "start:renderer:src2": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.src2.dev.ts",
     "test:unit": "jest --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
     "test": "jest --collectCoverage --",
