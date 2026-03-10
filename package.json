@@ -27,6 +27,9 @@
     "test:unit": "jest --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
     "test": "jest --collectCoverage --",
+    "test:src2": "jest --config jest.config.src2.json --collectCoverage",
+    "test:src2:watch": "jest --config jest.config.src2.json --watch --no-coverage",
+    "validate:arch": "npx tsx src2/__architecture__/validate.ts",
     "prepare": "husky"
   },
   "browserslist": [],

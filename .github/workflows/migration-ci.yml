@@ -1,0 +1,58 @@
+name: CI - Migration (src2)
+
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+      - refactor/shared-ui-migration
+
+jobs:
+  architecture:
+    name: Architecture Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate architecture layers
+        run: npx tsx src2/__architecture__/validate.ts
+
+  unit-tests:
+    name: Unit Tests + Coverage (src2)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run src2 tests with 100% coverage threshold
+        run: npx jest --config jest.config.src2.json --collectCoverage --ci
+
+      - name: Upload coverage report
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-src2
+          path: coverage/src2/
+          retention-days: 7
