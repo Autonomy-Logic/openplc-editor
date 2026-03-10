@@ -18,6 +18,7 @@
 
 import type { PlatformPorts } from '../providers/platform/types'
 import { EDITOR_CAPABILITIES } from '../providers/platform/ports/platform-capabilities'
+import { createEditorSystemAdapter } from './editor/system-adapter'
 import { createEditorThemeAdapter } from './editor/theme-adapter'
 
 function notMigrated(portName: string): never {
@@ -55,7 +56,7 @@ export const editorPorts: PlatformPorts = {
   simulator: createStubPort('SimulatorPort'),
   project: createStubPort('ProjectPort'),
   device: createStubPort('DevicePort'),
-  system: createStubPort('SystemPort'),
+  system: createEditorSystemAdapter(),
   window: createStubPort('WindowPort'),
   accelerator: createStubPort('AcceleratorPort'),
   theme: createEditorThemeAdapter(),
