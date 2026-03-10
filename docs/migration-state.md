@@ -31,14 +31,17 @@ adapters
 | 14 | store | Data state slices (Project, File, Library, Console, Shared) | pending | |
 | 15 | store | Visual editor slices (FBDFlow, LadderFlow) | pending | |
 | 16 | store | Platform state slices (Device, History, web-only) | pending | |
-| 17 | components | Atoms batch 1 — shared identical components | pending | |
-| 18 | components | Atoms batch 2 — divergent components (reconcile) | pending | |
-| 19 | components | Molecules batch 1 — shared identical | pending | |
-| 20 | components | Molecules batch 2 — divergent (reconcile) | pending | |
-| 21 | components | Organisms — shared | pending | |
-| 22 | components | Organisms — platform-specific (port-dependent) | pending | |
-| 23 | components | Features — shared | pending | |
-| 24 | components | Features — platform-specific | pending | |
-| 25 | components | Templates and screens | pending | |
-| 26 | components | Hooks migration | pending | |
-| 27 | integration | Wire App root, update build config, smoke test | pending | |
+| 17 | resources | Copy shared resources (styles, assets, locales, declarations) to src2/ | pending | |
+| 18 | components | Atoms batch 1 — shared identical components | pending | |
+| 19 | components | Atoms batch 2 — divergent components (reconcile) | pending | |
+| 20 | components | Molecules batch 1 — shared identical | pending | |
+| 21 | components | Molecules batch 2 — divergent (reconcile) | pending | |
+| 22 | components | Organisms — shared | pending | |
+| 23 | components | Organisms — platform-specific (port-dependent) | pending | |
+| 24 | components | Features — shared | pending | |
+| 25 | components | Features — platform-specific | pending | |
+| 26 | components | Templates and screens | pending | |
+| 27 | components | Hooks migration | pending | |
+| 28 | integration | App shell and routing | pending | |
+| 29 | integration | Production build configs | pending | |
+| 30 | integration | Switchover and cleanup — remove src/ | pending | |
