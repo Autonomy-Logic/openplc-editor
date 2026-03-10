@@ -34,7 +34,8 @@
     "!src2/**/index.ts",
     "!src2/providers/platform/ports/*.ts",
     "!src2/providers/platform/types.ts",
-    "!src2/adapters/**"
+    "!src2/adapters/**",
+    "!src2/renderer/**"
   ],
   "coverageDirectory": "coverage/src2",
   "coverageReporters": ["text", "text-summary", "lcov", "json-summary"],
