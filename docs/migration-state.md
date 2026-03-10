@@ -16,7 +16,7 @@ domain
 |------|-------|-------------|--------|------|
 | 0 | planning | Migration tracker, port interfaces, PlatformProvider scaffolding | done | 2026-03-10 |
 | 1 | architecture | Define clean architecture layers and create validation tests | done | 2026-03-10 |
-| 2 | domain | Migrate shared domain types and pure utilities | pending | |
+| 2 | domain | Migrate shared domain types and pure utilities | done | 2026-03-10 |
 | 3 | adapters | ThemePort adapter implementation | pending | |
 | 4 | adapters | SystemPort adapter implementation | pending | |
 | 5 | adapters | WindowPort adapter implementation | pending | |
