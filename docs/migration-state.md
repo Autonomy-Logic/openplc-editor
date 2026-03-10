@@ -8,7 +8,7 @@ adapters
 
 ## Current Step
 
-4
+5
 
 ## Step Log
 
@@ -19,7 +19,7 @@ adapters
 | 2 | domain | Migrate shared domain types and pure utilities | done | 2026-03-10 |
 | 3 | adapters | ThemePort adapter implementation | done | 2026-03-10 |
 | 4 | adapters | SystemPort adapter implementation | done | 2026-03-10 |
-| 5 | adapters | WindowPort adapter implementation | pending | |
+| 5 | adapters | WindowPort adapter implementation | done | 2026-03-10 |
 | 6 | adapters | AcceleratorPort adapter implementation | pending | |
 | 7 | adapters | DevicePort adapter implementation | pending | |
 | 8 | adapters | ProjectPort adapter implementation | pending | |

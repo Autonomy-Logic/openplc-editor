@@ -20,6 +20,7 @@ import type { PlatformPorts } from '../providers/platform/types'
 import { EDITOR_CAPABILITIES } from '../providers/platform/ports/platform-capabilities'
 import { createEditorSystemAdapter } from './editor/system-adapter'
 import { createEditorThemeAdapter } from './editor/theme-adapter'
+import { createEditorWindowAdapter } from './editor/window-adapter'
 
 function notMigrated(portName: string): never {
   throw new Error(`[EditorAdapter] ${portName} is not yet migrated. Implement the adapter to use this port.`)
@@ -57,7 +58,7 @@ export const editorPorts: PlatformPorts = {
   project: createStubPort('ProjectPort'),
   device: createStubPort('DevicePort'),
   system: createEditorSystemAdapter(),
-  window: createStubPort('WindowPort'),
+  window: createEditorWindowAdapter(),
   accelerator: createStubPort('AcceleratorPort'),
   theme: createEditorThemeAdapter(),
   capabilities: EDITOR_CAPABILITIES,
