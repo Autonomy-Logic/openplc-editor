@@ -1,4 +1,4 @@
-export { createAISlice } from './slice'
+export { createAISlice, createAISliceFactory } from './slice'
 export type {
   AIActions,
   AIModel,

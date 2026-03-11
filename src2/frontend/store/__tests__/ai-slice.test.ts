@@ -1,6 +1,6 @@
 import { createStore, StoreApi } from 'zustand/vanilla'
 
-import { createAISlice } from '../slices/ai/slice'
+import { createAISlice, createAISliceFactory } from '../slices/ai/slice'
 import type { AISlice, ChatMessage } from '../slices/ai/types'
 import { MAX_CONVERSATION_MESSAGES } from '../slices/ai/types'
 
@@ -352,5 +352,51 @@ describe('createAISlice', () => {
       store.getState().aiActions.setChatOpen(false)
       expect(store.getState().ai.isChatOpen).toBe(false)
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Factory pattern (createAISliceFactory)
+// ---------------------------------------------------------------------------
+
+describe('createAISliceFactory', () => {
+  it('uses default state when called without config', () => {
+    const store = createStore<AISlice>()(createAISliceFactory())
+    const { ai } = store.getState()
+    expect(ai.isEnabled).toBe(false)
+    expect(ai.hasConsented).toBe(false)
+  })
+
+  it('overrides isEnabled and hasConsented from config', () => {
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }),
+    )
+    const { ai } = store.getState()
+    expect(ai.isEnabled).toBe(true)
+    expect(ai.hasConsented).toBe(true)
+  })
+
+  it('preserves other default values when config is provided', () => {
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false }),
+    )
+    const { ai } = store.getState()
+    expect(ai.model).toBe('haiku')
+    expect(ai.creditsUsed).toBe(0)
+    expect(ai.creditsTotal).toBe(500)
+    expect(ai.tier).toBe('free')
+    expect(ai.currentPeriodEnd).toBeNull()
+    expect(ai.conversations).toEqual([])
+    expect(ai.activeConversationPou).toBeNull()
+    expect(ai.isChatOpen).toBe(false)
+    expect(ai.error).toBeNull()
+  })
+
+  it('creates functional actions when config is provided', () => {
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }),
+    )
+    store.getState().aiActions.setAIEnabled(false)
+    expect(store.getState().ai.isEnabled).toBe(false)
   })
 })
