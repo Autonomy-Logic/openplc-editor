@@ -16,7 +16,7 @@ import type {
   CompilerPort,
   DebugCompileArgs,
   ExportXmlArgs,
-} from '../../providers/platform/ports/compiler-port'
+} from '../../frontend/providers/platform/ports/compiler-port'
 import type {
   CompileProgressEvent,
   CompileResult,
@@ -24,7 +24,7 @@ import type {
   PLCPou,
   PLCProjectData,
   Result,
-} from '../../providers/platform/ports/types'
+} from '../../frontend/providers/platform/ports/types'
 
 /** Shape of the project data expected by the editor's IPC bridge. */
 interface IpcProjectData {

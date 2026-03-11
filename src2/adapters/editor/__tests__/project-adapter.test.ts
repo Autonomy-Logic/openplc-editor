@@ -1,5 +1,5 @@
 import { createEditorProjectAdapter } from '../project-adapter'
-import type { ProjectPort } from '../../../providers/platform/ports/project-port'
+import type { ProjectPort } from '../../../frontend/providers/platform/ports/project-port'
 
 const mockIpcProjectResponse = {
   success: true,

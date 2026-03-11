@@ -12,8 +12,8 @@
  * wires the VirtualSerialPort when debuggerConnect is called with 'simulator' type.
  */
 
-import type { SimulatorPort } from '../../providers/platform/ports/simulator-port'
-import type { Unsubscribe } from '../../providers/platform/ports/types'
+import type { SimulatorPort } from '../../frontend/providers/platform/ports/simulator-port'
+import type { Unsubscribe } from '../../frontend/providers/platform/ports/types'
 
 export function createEditorSimulatorAdapter(): SimulatorPort {
   let running = false

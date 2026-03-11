@@ -19,8 +19,8 @@
  *   - window-controls:toggle-maximized (on) — maximize state change
  */
 
-import type { WindowPort } from '../../providers/platform/ports/window-port'
-import type { Unsubscribe } from '../../providers/platform/ports/types'
+import type { WindowPort } from '../../frontend/providers/platform/ports/window-port'
+import type { Unsubscribe } from '../../frontend/providers/platform/ports/types'
 
 export function createEditorWindowAdapter(): WindowPort {
   return {

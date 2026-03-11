@@ -13,8 +13,8 @@
  *   - util:log                (send)
  */
 
-import type { SystemPort } from '../../providers/platform/ports/system-port'
-import type { SystemInfo } from '../../providers/platform/ports/types'
+import type { SystemPort } from '../../frontend/providers/platform/ports/system-port'
+import type { SystemInfo } from '../../frontend/providers/platform/ports/types'
 
 export function createEditorSystemAdapter(): SystemPort {
   return {

@@ -13,8 +13,8 @@
  *   </PlatformProvider>
  */
 
-import type { PlatformPorts } from '../providers/platform/types'
-import { EDITOR_CAPABILITIES } from '../providers/platform/ports/platform-capabilities'
+import type { PlatformPorts } from '../frontend/providers/platform/types'
+import { EDITOR_CAPABILITIES } from '../frontend/providers/platform/ports/platform-capabilities'
 import { createEditorAcceleratorAdapter } from './editor/accelerator-adapter'
 import { createEditorCompilerAdapter } from './editor/compiler-adapter'
 import type { EditorDebugConnectionConfig } from './editor/debugger-adapter'
