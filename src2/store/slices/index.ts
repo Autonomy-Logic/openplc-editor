@@ -1,6 +1,8 @@
 export { createConsoleSlice } from './console'
 export { createEditorSlice } from './editor'
+export { createFBDFlowSlice } from './fbd'
 export { createFileSlice } from './file'
+export { createLadderFlowSlice } from './ladder'
 export { createLibrarySlice } from './library'
 export { createModalSlice } from './modal'
 export { createProjectSlice } from './project'
