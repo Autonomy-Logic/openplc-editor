@@ -18,6 +18,7 @@
 
 import type { PlatformPorts } from '../providers/platform/types'
 import { EDITOR_CAPABILITIES } from '../providers/platform/ports/platform-capabilities'
+import { createEditorAcceleratorAdapter } from './editor/accelerator-adapter'
 import { createEditorSystemAdapter } from './editor/system-adapter'
 import { createEditorThemeAdapter } from './editor/theme-adapter'
 import { createEditorWindowAdapter } from './editor/window-adapter'
@@ -59,7 +60,7 @@ export const editorPorts: PlatformPorts = {
   device: createStubPort('DevicePort'),
   system: createEditorSystemAdapter(),
   window: createEditorWindowAdapter(),
-  accelerator: createStubPort('AcceleratorPort'),
+  accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
   capabilities: EDITOR_CAPABILITIES,
 }
