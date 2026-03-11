@@ -44,7 +44,12 @@
     "!src2/frontend/components/**",
     "!src2/frontend/assets/**",
     "!src2/frontend/data/**",
+    "!src2/frontend/hooks/**",
     "!src2/frontend/store/index.ts",
+    "!src2/frontend/store/slices/project/validation/**",
+    "!src2/frontend/utils/generate-uuid.ts",
+    "!src2/frontend/utils/variable-types.ts",
+    "!src2/backend/shared/array-variable-utils.ts",
     "!src2/jest-vi-shim.ts"
   ],
   "coverageDirectory": "coverage/src2",

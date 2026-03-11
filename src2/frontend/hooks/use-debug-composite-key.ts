@@ -15,11 +15,11 @@ export const useDebugCompositeKey = () => {
     workspace: { fbSelectedInstance, fbDebugInstances },
   } = useOpenPLCStore()
 
-  const pouRef = pous.find((p) => p.data.name === editor.meta.name)
+  const pouRef = pous.find((p) => p.name === editor.meta.name)
 
   const fbInstanceContext = useMemo(() => {
-    if (!pouRef || pouRef.type !== 'function-block') return null
-    const fbTypeKey = pouRef.data.name.toUpperCase()
+    if (!pouRef || pouRef.pouType !== 'function-block') return null
+    const fbTypeKey = pouRef.name.toUpperCase()
     const selectedKey = fbSelectedInstance.get(fbTypeKey)
     if (!selectedKey) return null
     const instances = fbDebugInstances.get(fbTypeKey) || []
