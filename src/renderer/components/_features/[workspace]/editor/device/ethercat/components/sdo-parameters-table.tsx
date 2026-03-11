@@ -30,6 +30,9 @@ function getDataTypeRange(dataType: string, bitLength: number): { min: number; m
   if (upper === 'INT' || upper === 'INT16') return { min: -32768, max: 32767 }
   if (upper === 'UDINT' || upper === 'UINT32') return { min: 0, max: 4294967295 }
   if (upper === 'DINT' || upper === 'INT32') return { min: -2147483648, max: 2147483647 }
+  if (upper === 'REAL' || upper === 'REAL32' || upper === 'FLOAT') return { min: -3.4028235e38, max: 3.4028235e38 }
+  if (upper === 'LREAL' || upper === 'REAL64' || upper === 'DOUBLE')
+    return { min: -1.7976931348623157e308, max: 1.7976931348623157e308 }
 
   // Fallback based on bit length for unsigned
   if (bitLength > 0 && bitLength <= 32) {
@@ -91,10 +94,12 @@ const ValueCell = ({
   }
 
   const range = getDataTypeRange(entry.dataType, entry.bitLength)
+  const isFloat = ['REAL', 'REAL32', 'FLOAT', 'LREAL', 'REAL64', 'DOUBLE'].includes(entry.dataType.toUpperCase())
 
   return (
     <input
       type='number'
+      step={isFloat ? 'any' : undefined}
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}

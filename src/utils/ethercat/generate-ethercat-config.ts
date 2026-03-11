@@ -36,7 +36,7 @@ interface RuntimeChannel {
 interface RuntimeSdoConfig {
   index: string
   subindex: number
-  value: string
+  value: number
   data_type: string
   bit_length: number
   name: string
@@ -87,6 +87,27 @@ interface RuntimeRootEntry {
  */
 function hexToInt(hex: string): number {
   return parseInt(hex, 16)
+}
+
+/**
+ * Parses a user-entered value string into a numeric value.
+ * Handles decimal ("100"), hex ("0xFF", "#xFF"), float ("3.14"), and negative ("-50").
+ * Returns 0 for empty or unparseable strings.
+ */
+function parseNumericValue(str: string): number {
+  if (!str || str.trim() === '') return 0
+
+  const trimmed = str.trim()
+
+  // Handle hex prefixes: "0x" / "0X" / "#x" / "#X"
+  if (/^(0x|#x)/i.test(trimmed)) {
+    const hexStr = trimmed.replace(/^#x/i, '0x')
+    const parsed = Number(hexStr)
+    return isNaN(parsed) ? 0 : parsed
+  }
+
+  const parsed = Number(trimmed)
+  return isNaN(parsed) ? 0 : parsed
 }
 
 /**
@@ -150,7 +171,7 @@ function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): R
     (entry): RuntimeSdoConfig => ({
       index: entry.index,
       subindex: entry.subIndex,
-      value: entry.value,
+      value: parseNumericValue(entry.value),
       data_type: entry.dataType,
       bit_length: entry.bitLength,
       name: entry.name,
