@@ -8,7 +8,7 @@ architecture-rework
 
 ## Current Step
 
-19
+20
 
 ## Step Log
 
@@ -33,7 +33,7 @@ architecture-rework
 | 16 | store | Platform state slices (Device, History, web-only) | done | 2026-03-11 |
 | 17 | resources | Copy shared resources (styles, assets, locales, declarations) to src2/ | done | 2026-03-11 |
 | 18 | components | Atoms batch 1 — shared identical components (revised: 23 kept, 17 divergent moved to step 22) | done | 2026-03-11 |
-| 19 | architecture-rework | Restructure src2/ into frontend/middleware/backend three-layer architecture | pending | |
+| 19 | architecture-rework | Restructure src2/ into frontend/middleware/backend three-layer architecture | done | 2026-03-11 |
 | 20 | architecture-rework | Extract application logic from Zustand stores into backend/shared/ | pending | |
 | 21 | architecture-rework | Update comparison script to validate all byte-identical surfaces | pending | |
 | 22 | components | Atoms batch 2 — divergent components (reconcile) | pending | |

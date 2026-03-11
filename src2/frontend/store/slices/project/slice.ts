@@ -5,7 +5,7 @@ import type {
   S7CommLogging,
   S7CommPlcIdentity,
   S7CommServerSettings,
-} from '../../../providers/platform/ports/types'
+} from '../../../../middleware/shared/ports/types'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 

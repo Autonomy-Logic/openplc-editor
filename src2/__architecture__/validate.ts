@@ -15,7 +15,16 @@ import { dirname, join, relative, resolve } from 'node:path'
 // Layer definitions
 // ---------------------------------------------------------------------------
 
-type LayerName = 'utils' | 'ports' | 'provider' | 'adapters' | 'store' | 'hooks' | 'components' | 'architecture'
+type LayerName =
+  | 'utils'
+  | 'ports'
+  | 'provider'
+  | 'adapters'
+  | 'backend-shared'
+  | 'store'
+  | 'hooks'
+  | 'components'
+  | 'architecture'
 
 interface LayerRule {
   /** Human-readable layer name */
@@ -26,32 +35,36 @@ interface LayerRule {
 
 const LAYER_RULES: Record<LayerName, LayerRule> = {
   utils: {
-    name: 'Domain (utils/)',
+    name: 'Domain (frontend/utils/)',
     allowedDeps: ['utils'],
   },
   ports: {
-    name: 'Application — Ports (providers/platform/ports/)',
+    name: 'Application — Ports (middleware/shared/ports/)',
     allowedDeps: ['utils', 'ports'],
   },
   provider: {
-    name: 'Application — Provider (providers/platform/)',
+    name: 'Application — Provider (middleware/shared/providers/)',
     allowedDeps: ['ports', 'utils'],
   },
   adapters: {
-    name: 'Adapters (adapters/)',
+    name: 'Adapters (middleware/adapters/)',
     allowedDeps: ['ports', 'provider', 'utils'],
   },
+  'backend-shared': {
+    name: 'Backend Shared (backend/shared/)',
+    allowedDeps: ['ports', 'utils'],
+  },
   store: {
-    name: 'Store (store/)',
-    allowedDeps: ['ports', 'provider', 'store', 'utils'],
+    name: 'Store (frontend/store/)',
+    allowedDeps: ['ports', 'provider', 'store', 'utils', 'backend-shared'],
   },
   hooks: {
-    name: 'Hooks (hooks/)',
-    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'utils'],
+    name: 'Hooks (frontend/hooks/)',
+    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'utils', 'backend-shared'],
   },
   components: {
-    name: 'Components (components/)',
-    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'components', 'utils'],
+    name: 'Components (frontend/components/)',
+    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'components', 'utils', 'backend-shared'],
   },
   architecture: {
     name: 'Architecture (__architecture__/)',
@@ -85,14 +98,19 @@ function getLayer(filePath: string): LayerName | null {
 
   if (rel.startsWith('__architecture__/')) return 'architecture'
 
-  // Support both frontend/-prefixed and non-prefixed paths
-  if (rel.startsWith('frontend/providers/platform/ports/') || rel.startsWith('providers/platform/ports/')) return 'ports'
-  if (rel.startsWith('frontend/providers/platform/') || rel.startsWith('providers/platform/')) return 'provider'
-  if (rel.startsWith('adapters/')) return 'adapters'
-  if (rel.startsWith('frontend/store/') || rel.startsWith('store/')) return 'store'
-  if (rel.startsWith('frontend/hooks/') || rel.startsWith('hooks/')) return 'hooks'
-  if (rel.startsWith('frontend/components/') || rel.startsWith('components/')) return 'components'
-  if (rel.startsWith('frontend/utils/') || rel.startsWith('utils/')) return 'utils'
+  // Middleware layers
+  if (rel.startsWith('middleware/shared/ports/')) return 'ports'
+  if (rel.startsWith('middleware/shared/providers/')) return 'provider'
+  if (rel.startsWith('middleware/adapters/')) return 'adapters'
+
+  // Backend layers
+  if (rel.startsWith('backend/shared/')) return 'backend-shared'
+
+  // Frontend layers
+  if (rel.startsWith('frontend/store/')) return 'store'
+  if (rel.startsWith('frontend/hooks/')) return 'hooks'
+  if (rel.startsWith('frontend/components/')) return 'components'
+  if (rel.startsWith('frontend/utils/')) return 'utils'
 
   return null
 }

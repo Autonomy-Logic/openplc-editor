@@ -1,4 +1,4 @@
-import type { PLCBody, PLCDataType, PLCVariable } from '../../../providers/platform/ports/types'
+import type { PLCBody, PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
 import type { ConsoleSlice } from '../console'
 import type { EditorSlice } from '../editor'
 import type { FileSlice } from '../file'

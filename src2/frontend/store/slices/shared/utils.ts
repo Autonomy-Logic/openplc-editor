@@ -1,4 +1,4 @@
-import type { PLCDataType } from '../../../providers/platform/ports/types'
+import type { PLCDataType } from '../../../../middleware/shared/ports/types'
 import type { EditorModel } from '../editor'
 import type { PouDTO } from '../project'
 

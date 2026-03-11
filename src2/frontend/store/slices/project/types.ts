@@ -25,7 +25,7 @@ import type {
   S7CommPlcIdentity,
   S7CommServerSettings,
   S7CommSystemArea,
-} from '../../../providers/platform/ports/types'
+} from '../../../../middleware/shared/ports/types'
 
 // ---------------------------------------------------------------------------
 // DTOs

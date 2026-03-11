@@ -1,8 +1,8 @@
 import { enableMapSet } from 'immer'
 import { createStore } from 'zustand/vanilla'
 
-import type { DebugTreeNode, FbInstanceInfo, RuntimeLogEntry } from '../../providers/platform/ports/types'
-import { LOG_BUFFER_CAP } from '../../providers/platform/ports/types'
+import type { DebugTreeNode, FbInstanceInfo, RuntimeLogEntry } from '../../../middleware/shared/ports/types'
+import { LOG_BUFFER_CAP } from '../../../middleware/shared/ports/types'
 import { createWorkspaceSlice } from '../slices/workspace/slice'
 import type { WorkspaceSlice } from '../slices/workspace/types'
 

@@ -1,9 +1,9 @@
 import '@xyflow/react/dist/style.css'
 import 'tailwindcss/tailwind.css'
-import './styles/globals.css'
+import './backend/styles/globals.css'
 
-import { PlatformProvider } from './frontend/providers/platform'
-import { editorPorts } from './adapters/editor-platform'
+import { PlatformProvider } from './middleware/shared/providers'
+import { editorPorts } from './middleware/editor-platform'
 
 /**
  * src2 App root — wires PlatformProvider with editor adapter ports.

@@ -5,7 +5,7 @@ import type {
   DevicePin,
   PlcStatus,
   TimingStats,
-} from '../../../providers/platform/ports/types'
+} from '../../../../middleware/shared/ports/types'
 
 // ---------------------------------------------------------------------------
 // Device available options

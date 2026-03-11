@@ -1,4 +1,4 @@
-import type { LogObject } from '../../../providers/platform/ports/types'
+import type { LogObject } from '../../../../middleware/shared/ports/types'
 
 export type LogLevel = 'debug' | 'info' | 'warning' | 'error'
 

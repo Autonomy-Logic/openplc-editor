@@ -1,4 +1,4 @@
-import type { DeviceConfiguration } from '../../../../providers/platform/ports/types'
+import type { DeviceConfiguration } from '../../../../../middleware/shared/ports/types'
 
 export const defaultDeviceConfiguration: DeviceConfiguration = {
   deviceBoard: 'OpenPLC Simulator',

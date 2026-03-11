@@ -1,4 +1,4 @@
-import type { DevicePin, PinType } from '../../../../providers/platform/ports/types'
+import type { DevicePin, PinType } from '../../../../../middleware/shared/ports/types'
 
 // ---------------------------------------------------------------------------
 // Address manipulation
