@@ -1,4 +1,4 @@
-import type { PLCVariable } from '../../../providers/platform/ports/types'
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
 export type LibraryPouType = 'function' | 'function-block'
 export type LibraryLanguage = 'il' | 'st' | 'ld' | 'sfc' | 'fbd'

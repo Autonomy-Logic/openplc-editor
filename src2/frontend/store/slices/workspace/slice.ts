@@ -1,5 +1,5 @@
-import type { DebugTreeNode, FbInstanceInfo, PlcLogs } from '../../../providers/platform/ports/types'
-import { isV4Logs, LOG_BUFFER_CAP } from '../../../providers/platform/ports/types'
+import type { DebugTreeNode, FbInstanceInfo, PlcLogs } from '../../../../middleware/shared/ports/types'
+import { isV4Logs, LOG_BUFFER_CAP } from '../../../../middleware/shared/ports/types'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 

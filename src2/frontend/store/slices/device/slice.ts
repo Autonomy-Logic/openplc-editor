@@ -1,4 +1,4 @@
-import type { DeviceConfiguration, DevicePin } from '../../../providers/platform/ports/types'
+import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 

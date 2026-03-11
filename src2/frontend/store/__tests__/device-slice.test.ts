@@ -1,4 +1,4 @@
-import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../../providers/platform/ports/types'
+import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../../../middleware/shared/ports/types'
 import { createStore } from 'zustand/vanilla'
 
 import { createDeviceSlice, DeviceSlice } from '../slices/device'

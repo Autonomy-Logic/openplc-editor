@@ -15,9 +15,9 @@ import {
   useSystem,
   useTheme,
   useWindow,
-} from '../frontend/providers/platform'
-import type { PlatformPorts } from '../frontend/providers/platform/types'
-import { EDITOR_CAPABILITIES } from '../frontend/providers/platform/ports/platform-capabilities'
+} from '../middleware/shared/providers'
+import type { PlatformPorts } from '../middleware/shared/providers/types'
+import { EDITOR_CAPABILITIES } from '../middleware/shared/ports/platform-capabilities'
 
 function createStubPort<T extends object>(): T {
   return new Proxy({} as T, {

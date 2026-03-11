@@ -15,7 +15,7 @@ import type {
   PLCTask,
   PLCVariable,
   S7CommDataBlock,
-} from '../../providers/platform/ports/types'
+} from '../../../middleware/shared/ports/types'
 import { createProjectSlice } from '../slices/project/slice'
 import type { ProjectSlice, ProjectState } from '../slices/project/types'
 

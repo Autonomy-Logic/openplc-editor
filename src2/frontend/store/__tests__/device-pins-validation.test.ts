@@ -1,4 +1,4 @@
-import type { DevicePin } from '../../providers/platform/ports/types'
+import type { DevicePin } from '../../../middleware/shared/ports/types'
 import {
   ADDRESS_ACTIONS,
   checkIfAddressExists,

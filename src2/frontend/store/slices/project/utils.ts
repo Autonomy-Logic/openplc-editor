@@ -1,4 +1,4 @@
-import type { PLCVariable } from '../../../providers/platform/ports/types'
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
 export function getVariableBasedOnRowIdOrVariableId(
   variables: PLCVariable[],

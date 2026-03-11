@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla'
 
-import type { LogObject } from '../../providers/platform/ports/types'
+import type { LogObject } from '../../../middleware/shared/ports/types'
 import { createConsoleSlice } from '../slices/console/slice'
 import type { ConsoleSlice, LogLevel, TimestampFormat } from '../slices/console/types'
 

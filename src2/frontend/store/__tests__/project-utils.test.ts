@@ -1,4 +1,4 @@
-import type { PLCVariable } from '../../providers/platform/ports/types'
+import type { PLCVariable } from '../../../middleware/shared/ports/types'
 
 import { getVariableBasedOnRowIdOrVariableId } from '../slices/project/utils'
 

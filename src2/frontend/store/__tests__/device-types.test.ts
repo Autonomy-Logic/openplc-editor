@@ -1,4 +1,4 @@
-import type { BoardInfo, CommunicationPort, DevicePin, PlcStatus, TimingStats } from '../../providers/platform/ports/types'
+import type { BoardInfo, CommunicationPort, DevicePin, PlcStatus, TimingStats } from '../../../middleware/shared/ports/types'
 import type {
   ConnectionStatus,
   DeviceActions,
