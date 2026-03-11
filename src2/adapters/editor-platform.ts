@@ -20,6 +20,7 @@ import type { PlatformPorts } from '../providers/platform/types'
 import { EDITOR_CAPABILITIES } from '../providers/platform/ports/platform-capabilities'
 import { createEditorAcceleratorAdapter } from './editor/accelerator-adapter'
 import { createEditorDeviceAdapter } from './editor/device-adapter'
+import { createEditorProjectAdapter } from './editor/project-adapter'
 import { createEditorSystemAdapter } from './editor/system-adapter'
 import { createEditorThemeAdapter } from './editor/theme-adapter'
 import { createEditorWindowAdapter } from './editor/window-adapter'
@@ -57,7 +58,7 @@ export const editorPorts: PlatformPorts = {
   runtime: createStubPort('RuntimePort'),
   debugger: createStubPort('DebuggerPort'),
   simulator: createStubPort('SimulatorPort'),
-  project: createStubPort('ProjectPort'),
+  project: createEditorProjectAdapter(),
   device: createEditorDeviceAdapter(),
   system: createEditorSystemAdapter(),
   window: createEditorWindowAdapter(),
