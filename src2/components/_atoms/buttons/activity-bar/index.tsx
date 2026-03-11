@@ -11,7 +11,7 @@ const ActivityBarButton = (props: IActivityBarButtonProps) => {
 
   return (
     <button
-      role='button'
+      type='button'
       className={cn('flex h-6 w-full cursor-pointer items-center justify-center', className)}
       {...res}
     >

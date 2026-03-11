@@ -29,10 +29,7 @@ export const CustomHandle = ({
       position={position}
       type={type}
       isConnectable={isConnectable}
-      style={{
-        ...style,
-        ...(isDebuggerVisible ? { pointerEvents: 'none' } : {}),
-      }}
+      style={{ ...style, ...(isDebuggerVisible ? { pointerEvents: 'none' } : {}) }}
       className={cn(className)}
       {...props}
     />
@@ -53,6 +50,7 @@ type BuildHandleProps = HandleProps & {
  * @param relY: number - The y coordinate of the handle based on the relative position (inside the node)
  * @returns CustomHandleProps
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export const buildHandle = ({ glbX, glbY, relX, relY, ...rest }: BuildHandleProps) => {
   return {
     glbPosition: {

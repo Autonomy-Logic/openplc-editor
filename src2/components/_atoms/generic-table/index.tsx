@@ -1,4 +1,4 @@
-import type { ProjectResponse } from '../../../store/slices/project'
+import type { ProjectResponse } from '../../../store/slices'
 import { cn } from '../../../utils'
 import {
   ColumnDef,
@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-table'
 import { useEffect, useRef } from 'react'
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../table'
 
 type GenericTableProps<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

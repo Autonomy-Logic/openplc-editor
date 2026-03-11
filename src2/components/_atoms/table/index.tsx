@@ -3,7 +3,7 @@ import { ComponentPropsWithRef, forwardRef } from 'react'
 
 const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { context?: string }>(
   ({ className, context, ...res }, ref) => (
-    <div aria-label='Table container' className={cn('h-fit w-fit select-none', className)}>
+    <div aria-label='Table container' className={cn('h-fit select-none w-fit', className)}>
       <table
         aria-label={`${context} table`}
         ref={ref}
