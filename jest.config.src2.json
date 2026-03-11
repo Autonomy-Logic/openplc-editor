@@ -37,7 +37,8 @@
     "!src2/adapters/**",
     "!src2/renderer/**",
     "!src2/locales/**",
-    "!src2/shared/**"
+    "!src2/shared/**",
+    "!src2/components/**"
   ],
   "coverageDirectory": "coverage/src2",
   "coverageReporters": ["text", "text-summary", "lcov", "json-summary"],

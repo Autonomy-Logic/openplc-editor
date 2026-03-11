@@ -19,73 +19,73 @@ Legend:
 ### Identical (copy as-is)
 | # | Component | Status |
 |---|-----------|--------|
-| 1 | `accordion/index.tsx` | [ ] S |
-| 2 | `buttons/index.ts` | [ ] S |
-| 3 | `buttons/default/index.tsx` | [ ] S |
-| 4 | `buttons/window-control/index.tsx` | [ ] S |
-| 5 | `card/index.tsx` | [ ] S |
-| 6 | `dimensions-modal/array-dimensions-input/index.tsx` | [ ] S |
-| 7 | `graphical-editor/fbd/svg/connector-svg.tsx` | [ ] S |
-| 8 | `graphical-editor/fbd/svg/continuation-svg.tsx` | [ ] S |
-| 9 | `graphical-editor/fbd/svg/index.ts` | [ ] S |
-| 10 | `graphical-editor/fbd/utils/index.ts` | [ ] S |
-| 11 | `graphical-editor/ladder/utils/index.ts` | [ ] S |
-| 12 | `input/index.tsx` | [ ] S |
-| 13 | `label/index.tsx` | [ ] S |
-| 14 | `tab-list/index.tsx` | [ ] S |
-| 15 | `tooltip/index.tsx` | [ ] S |
-| 16 | `workspace-activity-bar/divider.tsx` | [ ] S |
+| 1 | `accordion/index.tsx` | [x] S |
+| 2 | `buttons/index.ts` | [x] S |
+| 3 | `buttons/default/index.tsx` | [x] S |
+| 4 | `buttons/window-control/index.tsx` | [x] S |
+| 5 | `card/index.tsx` | [x] S |
+| 6 | `dimensions-modal/array-dimensions-input/index.tsx` | [x] S |
+| 7 | `graphical-editor/fbd/svg/connector-svg.tsx` | [x] S |
+| 8 | `graphical-editor/fbd/svg/continuation-svg.tsx` | [x] S |
+| 9 | `graphical-editor/fbd/svg/index.ts` | [x] S |
+| 10 | `input/index.tsx` | [x] S |
+| 11 | `label/index.tsx` | [x] S |
+| 12 | `tab-list/index.tsx` | [x] S |
+| 13 | `tooltip/index.tsx` | [x] S |
+| 14 | `workspace-activity-bar/divider.tsx` | [x] S |
 
-### Near-identical (<5% diff, reconcile minor differences)
+### Near-identical (<5% diff, import paths and cosmetic only)
 | # | Component | Status |
 |---|-----------|--------|
-| 17 | `buttons/activity-bar/index.tsx` | [ ] S |
-| 18 | `buttons/console/clear-console.tsx` | [ ] S |
-| 19 | `buttons/tables-actions/index.tsx` | [ ] S |
-| 20 | `debug-tree-node/index.tsx` | [ ] S |
-| 21 | `dimensions-modal/index.tsx` | [ ] S |
-| 22 | `file/index.tsx` | [ ] S |
-| 23 | `generic-table/index.tsx` | [ ] S |
-| 24 | `graphical-editor/autocomplete/index.tsx` | [ ] S |
-| 25 | `graphical-editor/fbd/autocomplete/index.tsx` | [ ] S |
-| 26 | `graphical-editor/fbd/handle.tsx` | [ ] S |
-| 27 | `graphical-editor/fbd/index.ts` | [ ] S |
-| 28 | `graphical-editor/ladder/autocomplete/index.tsx` | [ ] S |
-| 29 | `graphical-editor/ladder/handle.tsx` | [ ] S |
-| 30 | `graphical-editor/ladder/index.ts` | [ ] S |
-| 31 | `graphical-editor/types/block.ts` | [ ] S |
-| 32 | `graphical-editor/utils/index.ts` | [ ] S |
-| 33 | `highlighted-textarea/index.tsx` | [ ] S |
-| 34 | `react-flow/index.tsx` | [ ] S |
-| 35 | `tab/index.tsx` | [ ] S |
-| 36 | `table/index.tsx` | [ ] S |
-| 37 | `type-dropdown-selector/index.tsx` | [ ] S |
+| 15 | `buttons/activity-bar/index.tsx` | [x] S |
+| 16 | `buttons/console/clear-console.tsx` | [x] S |
+| 17 | `buttons/tables-actions/index.tsx` | [x] S |
+| 18 | `file/index.tsx` | [x] S |
+| 19 | `generic-table/index.tsx` | [x] S |
+| 20 | `graphical-editor/fbd/handle.tsx` | [x] S |
+| 21 | `react-flow/index.tsx` | [x] S |
+| 22 | `table/index.tsx` | [x] S |
+| 23 | `type-dropdown-selector/index.tsx` | [x] S |
 
 ### Divergent (needs reconciliation)
 | # | Component | Diff | Status | Notes |
 |---|-----------|------|--------|-------|
-| 38 | `checkbox/index.tsx` | 456B | [ ] D | Web version larger |
-| 39 | `generic-data-type-table/index.tsx` | 258B | [ ] D | Web version larger |
-| 40 | `generic-table-inputs/*` | varies | [ ] D | Editor has `generic-button-cell.tsx` and `generic-textarea-cell.tsx` missing from web |
-| 41 | `select/index.tsx` | 405B | [ ] D | |
-| 42 | `table-actions/index.tsx` | 83B | [ ] D | |
-| 43 | `react-flow/style.css` | 87B | [ ] D | |
-| 44 | `graphical-editor/fbd/block.tsx` | 7.4KB | [ ] D | Editor much larger |
-| 45 | `graphical-editor/fbd/comment.tsx` | 1.4KB | [ ] D | |
-| 46 | `graphical-editor/fbd/connection.tsx` | 2KB | [ ] D | |
-| 47 | `graphical-editor/fbd/variable.tsx` | 2.9KB | [ ] D | |
-| 48 | `graphical-editor/fbd/utils/types.ts` | 1.2KB | [ ] D | Web much larger |
-| 49 | `graphical-editor/fbd/utils/utils.ts` | 3.6KB | [ ] D | Web much larger |
-| 50 | `graphical-editor/ladder/block.tsx` | 10.6KB | [ ] D | Editor much larger |
-| 51 | `graphical-editor/ladder/coil.tsx` | 5KB | [ ] D | |
-| 52 | `graphical-editor/ladder/contact.tsx` | 4.3KB | [ ] D | |
-| 53 | `graphical-editor/ladder/variable.tsx` | 2.6KB | [ ] D | |
-| 54 | `graphical-editor/ladder/mock-node.tsx` | 2.9KB | [ ] D | Editor much larger |
-| 55 | `graphical-editor/ladder/parallel.tsx` | 3.8KB | [ ] D | Editor much larger |
-| 56 | `graphical-editor/ladder/placeholder.tsx` | 2.4KB | [ ] D | Editor much larger |
-| 57 | `graphical-editor/ladder/power-rail.tsx` | 2.6KB | [ ] D | Editor much larger |
-| 58 | `graphical-editor/ladder/utils/types.ts` | 3.4KB | [ ] D | Web much larger |
-| 59 | `graphical-editor/ladder/utils/utils.ts` | 8KB | [ ] D | Web much larger |
+| 24 | `checkbox/index.tsx` | 456B | [ ] D | Web version larger |
+| 25 | `debug-tree-node/index.tsx` | 14 | [ ] D | Reclassified from near-identical |
+| 26 | `dimensions-modal/index.tsx` | 28 | [ ] D | Reclassified from near-identical |
+| 27 | `generic-data-type-table/index.tsx` | 258B | [ ] D | Web version larger |
+| 28 | `generic-table-inputs/*` | varies | [ ] D | Editor has `generic-button-cell.tsx` and `generic-textarea-cell.tsx` missing from web |
+| 29 | `graphical-editor/autocomplete/index.tsx` | 63 | [ ] D | Reclassified: editor has triggerSubmit imperative handle |
+| 30 | `graphical-editor/fbd/autocomplete/index.tsx` | 43 | [ ] D | Reclassified: different ID gen, error handling |
+| 31 | `graphical-editor/fbd/block.tsx` | 7.4KB | [ ] D | Editor much larger |
+| 32 | `graphical-editor/fbd/comment.tsx` | 1.4KB | [ ] D | |
+| 33 | `graphical-editor/fbd/connection.tsx` | 2KB | [ ] D | |
+| 34 | `graphical-editor/fbd/index.ts` | 14 | [ ] D | Reclassified: web uses buildNodes module |
+| 35 | `graphical-editor/fbd/utils/index.ts` | - | [ ] D | Barrel for types.ts + utils.ts |
+| 36 | `graphical-editor/fbd/utils/types.ts` | 1.2KB | [ ] D | Web much larger |
+| 37 | `graphical-editor/fbd/utils/utils.ts` | 3.6KB | [ ] D | Web much larger |
+| 38 | `graphical-editor/fbd/variable.tsx` | 2.9KB | [ ] D | |
+| 39 | `graphical-editor/ladder/autocomplete/index.tsx` | 44 | [ ] D | Reclassified: different ID gen, error handling |
+| 40 | `graphical-editor/ladder/block.tsx` | 10.6KB | [ ] D | Editor much larger |
+| 41 | `graphical-editor/ladder/coil.tsx` | 5KB | [ ] D | |
+| 42 | `graphical-editor/ladder/contact.tsx` | 4.3KB | [ ] D | |
+| 43 | `graphical-editor/ladder/handle.tsx` | 16 | [ ] D | Reclassified: editor has extra props |
+| 44 | `graphical-editor/ladder/index.ts` | 152 | [ ] D | Reclassified: web uses constants/buildNodes modules |
+| 45 | `graphical-editor/ladder/mock-node.tsx` | 2.9KB | [ ] D | Editor much larger |
+| 46 | `graphical-editor/ladder/parallel.tsx` | 3.8KB | [ ] D | Editor much larger |
+| 47 | `graphical-editor/ladder/placeholder.tsx` | 2.4KB | [ ] D | Editor much larger |
+| 48 | `graphical-editor/ladder/power-rail.tsx` | 2.6KB | [ ] D | Editor much larger |
+| 49 | `graphical-editor/ladder/utils/index.ts` | - | [ ] D | Barrel for types.ts + utils.ts |
+| 50 | `graphical-editor/ladder/utils/types.ts` | 3.4KB | [ ] D | Web much larger |
+| 51 | `graphical-editor/ladder/utils/utils.ts` | 8KB | [ ] D | Web much larger |
+| 52 | `graphical-editor/ladder/variable.tsx` | 2.6KB | [ ] D | |
+| 53 | `graphical-editor/types/block.ts` | 9 | [ ] D | Reclassified: depends on divergent Zod schemas |
+| 54 | `graphical-editor/utils/index.ts` | 14 | [ ] D | Reclassified: different type/import sources |
+| 55 | `highlighted-textarea/index.tsx` | 19 | [ ] D | Reclassified: different rendering approach |
+| 56 | `react-flow/style.css` | 24 | [ ] D | Different dark mode strategy |
+| 57 | `select/index.tsx` | 405B | [ ] D | |
+| 58 | `tab/index.tsx` | 74 | [ ] D | Reclassified: different icons, types, rendering |
+| 59 | `table-actions/index.tsx` | 14 | [ ] D | Different props/styling |
 
 ### Platform-specific
 | # | Component | Repo | Status | Notes |

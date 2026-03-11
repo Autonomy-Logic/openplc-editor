@@ -4,11 +4,11 @@ Tracks progress of the shared UI migration. Updated by the `/migrate` skill afte
 
 ## Current Phase
 
-resources
+components
 
 ## Current Step
 
-17
+18
 
 ## Step Log
 
@@ -32,7 +32,7 @@ resources
 | 15 | store | Visual editor slices (FBDFlow, LadderFlow) | done | 2026-03-11 |
 | 16 | store | Platform state slices (Device, History, web-only) | done | 2026-03-11 |
 | 17 | resources | Copy shared resources (styles, assets, locales, declarations) to src2/ | done | 2026-03-11 |
-| 18 | components | Atoms batch 1 — shared identical components | pending | |
+| 18 | components | Atoms batch 1 — shared identical components (revised: 23 kept, 17 divergent moved to step 19) | done | 2026-03-11 |
 | 19 | components | Atoms batch 2 — divergent components (reconcile) | pending | |
 | 20 | components | Molecules batch 1 — shared identical | pending | |
 | 21 | components | Molecules batch 2 — divergent (reconcile) | pending | |

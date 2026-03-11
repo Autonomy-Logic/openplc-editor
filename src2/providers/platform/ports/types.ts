@@ -42,6 +42,7 @@ export interface PLCVariableType {
 }
 
 export interface PLCVariable {
+  id?: string
   name: string
   class?: VariableClass
   type: PLCVariableType
@@ -610,4 +611,15 @@ export interface RecentProject {
   path: string
   lastOpenedAt: string
   createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// Variable Reference
+// ---------------------------------------------------------------------------
+
+/** Composite key for identifying a variable reference in the system */
+export type VariableReference = {
+  pouName: string
+  variableName: string
+  variableType: PLCVariableType
 }
