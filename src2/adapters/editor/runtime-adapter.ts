@@ -20,8 +20,8 @@ import type {
   RuntimePort,
   RuntimeStatusResult,
   UsersInfoResult,
-} from '../../providers/platform/ports/runtime-port'
-import type { SerialPort, Unsubscribe } from '../../providers/platform/ports/types'
+} from '../../frontend/providers/platform/ports/runtime-port'
+import type { SerialPort, Unsubscribe } from '../../frontend/providers/platform/ports/types'
 
 export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimePort {
   let jwtToken = ''

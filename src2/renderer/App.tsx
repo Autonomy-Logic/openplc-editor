@@ -2,7 +2,7 @@ import '@xyflow/react/dist/style.css'
 import 'tailwindcss/tailwind.css'
 import './styles/globals.css'
 
-import { PlatformProvider } from '../providers/platform'
+import { PlatformProvider } from '../frontend/providers/platform'
 import { editorPorts } from '../adapters/editor-platform'
 
 /**
@@ -14,8 +14,8 @@ import { editorPorts } from '../adapters/editor-platform'
  *
  * As components are migrated, replace the placeholder below with real screens:
  *
- *   import { AppLayout } from '../components/_templates'
- *   import { StartScreen, WorkspaceScreen } from '../components/screens'
+ *   import { AppLayout } from '../frontend/components/_templates'
+ *   import { StartScreen, WorkspaceScreen } from '../frontend/components/screens'
  *   import { useOpenPLCStore } from '../store'
  *
  *   const { project: { meta: { path } } } = useOpenPLCStore()

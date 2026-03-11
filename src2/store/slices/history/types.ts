@@ -1,6 +1,6 @@
-import type { PLCDataType, PLCInstance, PLCTask, PLCVariable } from '../../../providers/platform/ports/types'
-import type { ZodFBDFlowType } from '../fbd'
-import type { ZodLadderFlowType } from '../ladder'
+import type { PLCDataType, PLCInstance, PLCTask, PLCVariable } from '../../../frontend/providers/platform/ports/types'
+import type { ZodFBDFlowType } from '../../../frontend/store/slices/fbd'
+import type { ZodLadderFlowType } from '../../../frontend/store/slices/ladder'
 
 // ---------------------------------------------------------------------------
 // History snapshot — captures the complete state of a POU for undo/redo

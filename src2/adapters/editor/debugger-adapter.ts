@@ -12,8 +12,8 @@
  *     auto-reconnection using stored connection parameters.
  */
 
-import type { DebuggerPort } from '../../providers/platform/ports/debugger-port'
-import type { DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from '../../providers/platform/ports/types'
+import type { DebuggerPort } from '../../frontend/providers/platform/ports/debugger-port'
+import type { DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from '../../frontend/providers/platform/ports/types'
 
 export type EditorDebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator'
 

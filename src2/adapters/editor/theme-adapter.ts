@@ -12,8 +12,8 @@
  *   Main → handleUpdateTheme() → renderer updates local state
  */
 
-import type { ThemePort, ThemeVariant } from '../../providers/platform/ports/theme-port'
-import type { Unsubscribe } from '../../providers/platform/ports/types'
+import type { ThemePort, ThemeVariant } from '../../frontend/providers/platform/ports/theme-port'
+import type { Unsubscribe } from '../../frontend/providers/platform/ports/types'
 
 export function createEditorThemeAdapter(): ThemePort {
   let currentTheme: ThemeVariant = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'

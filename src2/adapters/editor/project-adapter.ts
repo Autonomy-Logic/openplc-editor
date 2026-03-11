@@ -17,7 +17,7 @@ import type {
   ProjectResponse,
   RenamePouParams,
   SaveProjectParams,
-} from '../../providers/platform/ports/project-port'
+} from '../../frontend/providers/platform/ports/project-port'
 import type {
   DeviceConfiguration,
   DevicePin,
@@ -28,7 +28,7 @@ import type {
   PLCVariable,
   RecentProject,
   Unsubscribe,
-} from '../../providers/platform/ports/types'
+} from '../../frontend/providers/platform/ports/types'
 
 /** Editor IPC POU shape (discriminated union). */
 interface IpcPou {

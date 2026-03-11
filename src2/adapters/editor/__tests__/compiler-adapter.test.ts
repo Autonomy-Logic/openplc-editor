@@ -4,8 +4,8 @@ import {
   toIpcProjectData,
   inferStage,
 } from '../compiler-adapter'
-import type { CompilerPort } from '../../../providers/platform/ports/compiler-port'
-import type { CompileProgressEvent, PLCProjectData } from '../../../providers/platform/ports/types'
+import type { CompilerPort } from '../../../frontend/providers/platform/ports/compiler-port'
+import type { CompileProgressEvent, PLCProjectData } from '../../../frontend/providers/platform/ports/types'
 
 const mockProjectData: PLCProjectData = {
   dataTypes: [],

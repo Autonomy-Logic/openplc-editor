@@ -1,6 +1,6 @@
 import type { EditorDebugConnectionConfig } from '../debugger-adapter'
 import { createEditorDebuggerAdapter } from '../debugger-adapter'
-import type { DebuggerPort } from '../../../providers/platform/ports/debugger-port'
+import type { DebuggerPort } from '../../../frontend/providers/platform/ports/debugger-port'
 
 let adapter: DebuggerPort
 let mockConnectionConfig: EditorDebugConnectionConfig | null

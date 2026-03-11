@@ -1,5 +1,5 @@
 import { createEditorRuntimeAdapter } from '../runtime-adapter'
-import type { RuntimePort } from '../../../providers/platform/ports/runtime-port'
+import type { RuntimePort } from '../../../frontend/providers/platform/ports/runtime-port'
 
 let adapter: RuntimePort
 let mockIpAddress: string

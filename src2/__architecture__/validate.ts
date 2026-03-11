@@ -84,13 +84,15 @@ function getLayer(filePath: string): LayerName | null {
   const rel = relative(SRC2_ROOT, filePath).replace(/\\/g, '/')
 
   if (rel.startsWith('__architecture__/')) return 'architecture'
-  if (rel.startsWith('providers/platform/ports/')) return 'ports'
-  if (rel.startsWith('providers/platform/')) return 'provider'
+
+  // Support both frontend/-prefixed and non-prefixed paths
+  if (rel.startsWith('frontend/providers/platform/ports/') || rel.startsWith('providers/platform/ports/')) return 'ports'
+  if (rel.startsWith('frontend/providers/platform/') || rel.startsWith('providers/platform/')) return 'provider'
   if (rel.startsWith('adapters/')) return 'adapters'
-  if (rel.startsWith('store/')) return 'store'
-  if (rel.startsWith('hooks/')) return 'hooks'
-  if (rel.startsWith('components/')) return 'components'
-  if (rel.startsWith('utils/')) return 'utils'
+  if (rel.startsWith('frontend/store/') || rel.startsWith('store/')) return 'store'
+  if (rel.startsWith('frontend/hooks/') || rel.startsWith('hooks/')) return 'hooks'
+  if (rel.startsWith('frontend/components/') || rel.startsWith('components/')) return 'components'
+  if (rel.startsWith('frontend/utils/') || rel.startsWith('utils/')) return 'utils'
 
   return null
 }

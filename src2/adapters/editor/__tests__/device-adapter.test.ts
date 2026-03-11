@@ -1,6 +1,6 @@
 import { createEditorDeviceAdapter } from '../device-adapter'
-import type { DevicePort } from '../../../providers/platform/ports/device-port'
-import type { BoardInfo, CommunicationPort } from '../../../providers/platform/ports/types'
+import type { DevicePort } from '../../../frontend/providers/platform/ports/device-port'
+import type { BoardInfo, CommunicationPort } from '../../../frontend/providers/platform/ports/types'
 
 const mockBoards = new Map<string, BoardInfo>([
   [

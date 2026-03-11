@@ -26,8 +26,8 @@
  *   about:open-accelerator
  */
 
-import type { AcceleratorPort } from '../../providers/platform/ports/accelerator-port'
-import type { Unsubscribe } from '../../providers/platform/ports/types'
+import type { AcceleratorPort } from '../../frontend/providers/platform/ports/accelerator-port'
+import type { Unsubscribe } from '../../frontend/providers/platform/ports/types'
 
 export function createEditorAcceleratorAdapter(): AcceleratorPort {
   return {
