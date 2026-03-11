@@ -1,6 +1,6 @@
 import '@xyflow/react/dist/style.css'
 import 'tailwindcss/tailwind.css'
-import '@process:renderer/styles/globals.css'
+import './styles/globals.css'
 
 import { PlatformProvider } from '../providers/platform'
 import { editorPorts } from '../adapters/editor-platform'

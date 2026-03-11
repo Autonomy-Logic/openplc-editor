@@ -1,0 +1,9 @@
+{
+  "comment": {
+    "tooltip": "Create a new comment",
+    "label": "Comment"
+  },
+  "powerRail": "Create a new power rail",
+  "coil": "Create a coil",
+  "var": "VAR"
+}

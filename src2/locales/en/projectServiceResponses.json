@@ -1,0 +1,87 @@
+{
+  "createProject": {
+    "success": {
+      "created": {
+        "status": 201,
+        "title": "Project created",
+        "description": "The project was created successfully! \nYou can now add a POU to your project to start working in OpenPLC Editor"
+      }
+    },
+    "errors": {
+      "canceled": {
+        "status": 400,
+        "title": "Operation canceled",
+        "description": "Operation canceled by the user."
+      },
+      "directoryNotEmpty": {
+        "status": 409,
+        "title": "Directory is not empty",
+        "description": "The folder chosen isn't empty. You can't use it for a new project!"
+      },
+      "internalError": {
+        "status": 500,
+        "title": "Failed to create file",
+        "description": "Unable to create new project files"
+      }
+    }
+  },
+  "openProject": {
+    "success": {
+      "status": 200,
+      "title": "Success to open file",
+      "description": "Your project was opened successfully"
+    },
+    "errors": {
+      "canceled": {
+        "status": 400,
+        "title": "Operation canceled",
+        "description": "Operation canceled by the user."
+      },
+      "readFile": {
+        "status": 500,
+        "title": "Failed to read file!",
+        "description": "Could not read the file."
+      },
+      "readProject": {
+        "status": 500,
+        "title": "Failed to read project",
+        "description": "Could not read the project. Please check the project directory."
+      },
+      "directoryNotFound": {
+        "status": 404,
+        "title": "Directory not found",
+        "description": "The selected directory does not exist."
+      },
+      "invalidProjectDirectory": {
+        "status": 500,
+        "title": "Invalid project directory",
+        "description": "The selected directory is not a valid OpenPLC project directory."
+      },
+      "invalidProject": {
+        "status": 500,
+        "title": "Invalid project",
+        "description": "The selected project is not a valid OpenPLC project."
+      }
+    }
+  },
+  "saveProject": {
+    "success": {
+      "successToSaveFile": {
+        "status": 200,
+        "message": "Your project was saved successfully"
+      }
+    },
+    "errors": {
+      "failedToSaveFile": {
+        "status": 500,
+        "title": "Failed to save file",
+        "description": "Unable to save project"
+      },
+      "missingParams": {
+        "status": 409,
+        "title": "Missing parameters",
+        "description": "Missing parameters"
+      }
+    }
+  }
+}
