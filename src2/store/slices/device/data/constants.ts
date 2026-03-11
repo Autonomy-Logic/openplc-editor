@@ -1,0 +1,31 @@
+import type { DeviceConfiguration } from '../../../../providers/platform/ports/types'
+
+export const defaultDeviceConfiguration: DeviceConfiguration = {
+  deviceBoard: 'OpenPLC Simulator',
+  communicationPort: '',
+  runtimeIpAddress: '',
+  compileOnly: false,
+  communicationConfiguration: {
+    modbusRTU: {
+      rtuInterface: 'Serial',
+      rtuBaudRate: '115200',
+      rtuSlaveId: null,
+      rtuRS485ENPin: null,
+    },
+    modbusTCP: {
+      tcpInterface: 'Ethernet',
+      tcpMacAddress: 'DE:AD:BE:EF:DE:AD',
+      tcpStaticHostConfiguration: {
+        ipAddress: '',
+        dns: '',
+        gateway: '',
+        subnet: '',
+      },
+    },
+    communicationPreferences: {
+      enabledRTU: false,
+      enabledTCP: false,
+      enabledDHCP: true,
+    },
+  },
+}
