@@ -8,7 +8,7 @@ adapters
 
 ## Current Step
 
-11
+12
 
 ## Step Log
 
@@ -26,7 +26,7 @@ adapters
 | 9 | adapters | CompilerPort adapter implementation | done | 2026-03-10 |
 | 10 | adapters | RuntimePort adapter implementation | done | 2026-03-10 |
 | 11 | adapters | DebuggerPort adapter implementation | done | 2026-03-10 |
-| 12 | adapters | SimulatorPort adapter implementation | pending | |
+| 12 | adapters | SimulatorPort adapter implementation | done | 2026-03-10 |
 | 13 | store | UI state slices (Workspace, Editor, Tabs, Modal, Search) | pending | |
 | 14 | store | Data state slices (Project, File, Library, Console, Shared) | pending | |
 | 15 | store | Visual editor slices (FBDFlow, LadderFlow) | pending | |
