@@ -4,11 +4,11 @@ Tracks progress of the shared UI migration. Updated by the `/migrate` skill afte
 
 ## Current Phase
 
-architecture-rework
+components
 
 ## Current Step
 
-21
+22
 
 ## Step Log
 
@@ -35,7 +35,7 @@ architecture-rework
 | 18 | components | Atoms batch 1 — shared identical components (revised: 23 kept, 17 divergent moved to step 22) | done | 2026-03-11 |
 | 19 | architecture-rework | Restructure src2/ into frontend/middleware/backend three-layer architecture | done | 2026-03-11 |
 | 20 | architecture-rework | Extract application logic from Zustand stores into backend/shared/ | done | 2026-03-11 |
-| 21 | architecture-rework | Update comparison script to validate all byte-identical surfaces | pending | |
+| 21 | architecture-rework | Update comparison script to validate all byte-identical surfaces | done | 2026-03-11 |
 | 22 | components | Atoms batch 2 — divergent components (reconcile) | pending | |
 | 23 | components | Molecules batch 1 — shared identical | pending | |
 | 24 | components | Molecules batch 2 — divergent (reconcile) | pending | |
