@@ -8,7 +8,7 @@ components
 
 ## Current Step
 
-22b
+24
 
 ## Step Log
 
@@ -37,8 +37,8 @@ components
 | 20 | architecture-rework | Extract application logic from Zustand stores into backend/shared/ | done | 2026-03-11 |
 | 21 | architecture-rework | Update comparison script to validate all byte-identical surfaces | done | 2026-03-11 |
 | 22 | components | Atoms batch 2a — simple divergent atoms, generic-table-inputs, UI scroll-area | done | 2026-03-11 |
-| 22b | components | Atoms batch 2b — graphical editor divergent atoms + platform-specific atoms | pending | |
-| 23 | components | Molecules batch 1 — shared identical | pending | |
+| 22b | components | Atoms batch 2b — graphical editor divergent atoms + platform-specific atoms | done | 2026-03-11 |
+| 23 | components | Molecules batch 1 — shared identical (10 modules migrated, divergent deferred to step 24) | done | 2026-03-11 |
 | 24 | components | Molecules batch 2 — divergent (reconcile) | pending | |
 | 25 | components | Organisms — shared | pending | |
 | 26 | components | Organisms — platform-specific (port-dependent) | pending | |
