@@ -8,7 +8,7 @@ components
 
 ## Current Step
 
-22
+22b
 
 ## Step Log
 
@@ -36,7 +36,8 @@ components
 | 19 | architecture-rework | Restructure src2/ into frontend/middleware/backend three-layer architecture | done | 2026-03-11 |
 | 20 | architecture-rework | Extract application logic from Zustand stores into backend/shared/ | done | 2026-03-11 |
 | 21 | architecture-rework | Update comparison script to validate all byte-identical surfaces | done | 2026-03-11 |
-| 22 | components | Atoms batch 2 — divergent components (reconcile) | pending | |
+| 22 | components | Atoms batch 2a — simple divergent atoms, generic-table-inputs, UI scroll-area | done | 2026-03-11 |
+| 22b | components | Atoms batch 2b — graphical editor divergent atoms + platform-specific atoms | pending | |
 | 23 | components | Molecules batch 1 — shared identical | pending | |
 | 24 | components | Molecules batch 2 — divergent (reconcile) | pending | |
 | 25 | components | Organisms — shared | pending | |
