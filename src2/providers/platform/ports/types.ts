@@ -64,6 +64,13 @@ export interface PLCInstance {
   pouName: string
 }
 
+export interface PLCStructureVariable {
+  name: string
+  type: PLCVariableType
+  initialValue?: string | null
+  documentation?: string
+}
+
 export type PLCDataType =
   | { name: string; derivation: 'structure'; variable: PLCVariable[] }
   | {
@@ -75,7 +82,7 @@ export type PLCDataType =
   | {
       name: string
       derivation: 'array'
-      baseType: string
+      baseType: PLCVariableType
       initialValue?: string
       dimensions: Array<{ dimension: string }>
     }
@@ -97,6 +104,259 @@ export interface PLCPou {
 }
 
 // ---------------------------------------------------------------------------
+// POU Variants (used by project store)
+// ---------------------------------------------------------------------------
+
+export type PouLanguage = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+
+export interface PLCFunction {
+  language: PouLanguage
+  name: string
+  returnType: string
+  variables: PLCVariable[]
+  body: PLCBody
+  documentation: string
+  variablesText?: string
+}
+
+export interface PLCFunctionBlock {
+  language: PouLanguage
+  name: string
+  variables: PLCVariable[]
+  body: PLCBody
+  documentation: string
+  variablesText?: string
+}
+
+export interface PLCProgram {
+  language: PouLanguage
+  name: string
+  variables: PLCVariable[]
+  body: PLCBody
+  documentation: string
+  variablesText?: string
+}
+
+export interface PLCGlobalVariable extends Omit<PLCVariable, 'class'> {
+  class: 'global'
+}
+
+// ---------------------------------------------------------------------------
+// Servers & Communication Protocols
+// ---------------------------------------------------------------------------
+
+export type ServerProtocol = 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'
+export type RemoteDeviceProtocol = 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet'
+
+// Modbus
+export interface ModbusSlaveConfig {
+  enabled: boolean
+  networkInterface: string
+  port: number
+  bufferMapping?: ModbusBufferMapping
+}
+
+export interface ModbusBufferMapping {
+  holdingRegisters?: { qwCount?: number; mwCount?: number; mdCount?: number; mlCount?: number }
+  coils?: { qxBits?: number; mxBits?: number }
+  discreteInputs?: { ixBits?: number }
+  inputRegisters?: { iwCount?: number }
+}
+
+export interface ModbusIOPoint {
+  id: string
+  name: string
+  type: string
+  iecLocation: string
+  alias?: string
+}
+
+export interface ModbusIOGroup {
+  id: string
+  name: string
+  functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16'
+  cycleTime: number
+  offset: string
+  length: number
+  errorHandling: 'keep-last-value' | 'set-to-zero'
+  ioPoints: ModbusIOPoint[]
+}
+
+export interface ModbusRemoteTcpConfig {
+  host: string
+  port: number
+  slaveId: number
+  timeout: number
+  ioGroups: ModbusIOGroup[]
+}
+
+// S7Comm
+export interface S7CommServerSettings {
+  enabled: boolean
+  bindAddress: string
+  port: number
+  maxClients: number
+  workIntervalMs: number
+  sendTimeoutMs: number
+  recvTimeoutMs: number
+  pingTimeoutMs: number
+  pduSize: number
+}
+
+export interface S7CommPlcIdentity {
+  name: string
+  moduleType: string
+  serialNumber: string
+  copyright: string
+  moduleName: string
+}
+
+export interface S7CommBufferMapping {
+  startByte: number
+  endByte: number
+  iecAddresses: string[]
+}
+
+export interface S7CommDataBlock {
+  dbNumber: number
+  description: string
+  sizeBytes: number
+  mapping: S7CommBufferMapping
+}
+
+export interface S7CommSystemArea {
+  enabled: boolean
+  sizeBytes: number
+  mapping?: S7CommBufferMapping
+}
+
+export interface S7CommLogging {
+  logConnections: boolean
+  logDataAccess: boolean
+  logErrors: boolean
+}
+
+export interface S7CommSlaveConfig {
+  server: S7CommServerSettings
+  plcIdentity: S7CommPlcIdentity
+  dataBlocks: S7CommDataBlock[]
+  logging: S7CommLogging
+}
+
+// OPC-UA
+export interface OpcUaServerSettings {
+  enabled: boolean
+  name: string
+  applicationUri: string
+  productUri: string
+  bindAddress: string
+  port: number
+  endpointPath: string
+}
+
+export type OpcUaSecurityPolicyType = 'None' | 'Basic128Rsa15' | 'Basic256' | 'Basic256Sha256'
+export type OpcUaSecurityModeType = 'None' | 'Sign' | 'SignAndEncrypt'
+export type OpcUaAuthMethod = 'Anonymous' | 'Username' | 'Certificate'
+
+export interface OpcUaSecurityProfile {
+  id: string
+  name: string
+  enabled: boolean
+  securityPolicy: OpcUaSecurityPolicyType
+  securityMode: OpcUaSecurityModeType
+  authMethods: OpcUaAuthMethod[]
+}
+
+export interface OpcUaUser {
+  id: string
+  type: 'password' | 'certificate'
+  username: string | null
+  passwordHash: string | null
+  certificateId: string | null
+  role: 'viewer' | 'operator' | 'engineer'
+}
+
+export interface OpcUaTrustedCertificate {
+  id: string
+  pem: string
+  subject?: string
+  validFrom?: string
+  validTo?: string
+  fingerprint?: string
+}
+
+export type OpcUaPermission = 'r' | 'w' | 'rw'
+
+export interface OpcUaPermissions {
+  viewer: OpcUaPermission
+  operator: OpcUaPermission
+  engineer: OpcUaPermission
+}
+
+export interface OpcUaFieldConfig {
+  fieldPath: string
+  displayName: string
+  datatype?: string
+  initialValue: boolean | number | string
+  permissions: OpcUaPermissions
+  fields?: OpcUaFieldConfig[]
+}
+
+export interface OpcUaNodeConfig {
+  id: string
+  pouName: string
+  variablePath: string
+  variableType: string
+  nodeId: string
+  browseName: string
+  displayName: string
+  description: string
+  initialValue: boolean | number | string
+  permissions: OpcUaPermissions
+  nodeType: 'variable' | 'structure' | 'array'
+  fields?: OpcUaFieldConfig[]
+  arrayLength?: number
+  elementType?: string
+}
+
+export interface OpcUaAddressSpaceConfig {
+  namespaceUri: string
+  nodes: OpcUaNodeConfig[]
+}
+
+export interface OpcUaSecurityConfig {
+  serverCertificateStrategy: 'auto_self_signed' | 'custom'
+  serverCertificateCustom: string | null
+  serverPrivateKeyCustom: string | null
+  trustedClientCertificates: OpcUaTrustedCertificate[]
+}
+
+export interface OpcUaServerConfig {
+  server: OpcUaServerSettings
+  securityProfiles: OpcUaSecurityProfile[]
+  security: OpcUaSecurityConfig
+  users: OpcUaUser[]
+  cycleTimeMs: number
+  addressSpace: OpcUaAddressSpaceConfig
+}
+
+// PLCServer
+export interface PLCServer {
+  name: string
+  protocol: ServerProtocol
+  modbusSlaveConfig?: ModbusSlaveConfig
+  s7commSlaveConfig?: S7CommSlaveConfig
+  opcuaServerConfig?: OpcUaServerConfig
+}
+
+// PLCRemoteDevice
+export interface PLCRemoteDevice {
+  name: string
+  protocol: RemoteDeviceProtocol
+  modbusTcpConfig?: ModbusRemoteTcpConfig
+}
+
+// ---------------------------------------------------------------------------
 // Project
 // ---------------------------------------------------------------------------
 
@@ -110,6 +370,8 @@ export interface PLCProjectData {
       globalVariables: PLCVariable[]
     }
   }
+  servers?: PLCServer[]
+  remoteDevices?: PLCRemoteDevice[]
 }
 
 export interface ProjectMeta {

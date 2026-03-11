@@ -8,7 +8,7 @@ store
 
 ## Current Step
 
-13
+14
 
 ## Step Log
 
@@ -28,7 +28,7 @@ store
 | 11 | adapters | DebuggerPort adapter implementation | done | 2026-03-10 |
 | 12 | adapters | SimulatorPort adapter implementation | done | 2026-03-10 |
 | 13 | store | UI state slices (Workspace, Editor, Tabs, Modal, Search) | done | 2026-03-10 |
-| 14 | store | Data state slices (Project, File, Library, Console, Shared) | pending | |
+| 14 | store | Data state slices (Project, File, Library, Console, Shared) | done | 2026-03-10 |
 | 15 | store | Visual editor slices (FBDFlow, LadderFlow) | pending | |
 | 16 | store | Platform state slices (Device, History, web-only) | pending | |
 | 17 | resources | Copy shared resources (styles, assets, locales, declarations) to src2/ | pending | |
