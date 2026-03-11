@@ -19,6 +19,7 @@
 import type { PlatformPorts } from '../providers/platform/types'
 import { EDITOR_CAPABILITIES } from '../providers/platform/ports/platform-capabilities'
 import { createEditorAcceleratorAdapter } from './editor/accelerator-adapter'
+import { createEditorCompilerAdapter } from './editor/compiler-adapter'
 import { createEditorDeviceAdapter } from './editor/device-adapter'
 import { createEditorProjectAdapter } from './editor/project-adapter'
 import { createEditorSystemAdapter } from './editor/system-adapter'
@@ -54,7 +55,7 @@ function createStubPort<T extends object>(portName: string): T {
  *   compiler: createEditorCompilerAdapter(),
  */
 export const editorPorts: PlatformPorts = {
-  compiler: createStubPort('CompilerPort'),
+  compiler: createEditorCompilerAdapter(),
   runtime: createStubPort('RuntimePort'),
   debugger: createStubPort('DebuggerPort'),
   simulator: createStubPort('SimulatorPort'),
