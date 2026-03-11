@@ -108,6 +108,9 @@ export type {
   RecentProject,
 } from './types'
 
+// --- PLC type system Zod schemas ---
+export { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from './plc-schemas'
+
 // --- Port parameter/result types ---
 export type { CompileProgramArgs, DebugCompileArgs, ExportXmlArgs } from './compiler-port'
 export type {
