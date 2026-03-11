@@ -1,6 +1,4 @@
-import { ArrowIcon } from '@root/renderer/assets/icons'
-import { InputWithRef } from '@root/renderer/components/_atoms/input'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms/select'
+import * as Tabs from '@radix-ui/react-tabs'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
 import type {
@@ -21,22 +19,46 @@ import { enrichDeviceData } from '@root/utils/ethercat/enrich-device-data'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { ConfiguredDevices } from './components/configured-devices'
-import { DeviceBrowserModal } from './components/device-browser-modal'
-import { DiscoveredDeviceTable } from './components/discovered-device-table'
-import { ESIRepository } from './components/esi-repository'
-import { InterfaceSelector } from './components/interface-selector'
-import { RuntimeStatusPanel } from './components/runtime-status-panel'
+import { DevicesTab } from './components/devices-tab'
+import { DiagnosticsTab } from './components/diagnostics-tab'
+import { GlobalSettingsTab } from './components/global-settings-tab'
 
-type EditorTab = 'repository' | 'discovery' | 'configured'
+type EditorTab = 'global-settings' | 'diagnostics' | 'devices'
+
+const TabItem = ({
+  value,
+  label,
+  isActive,
+  badge,
+}: {
+  value: string
+  label: string
+  isActive: boolean
+  badge?: React.ReactNode
+}) => (
+  <Tabs.Trigger
+    value={value}
+    className={cn(
+      'px-4 py-2 font-caption !text-xs font-medium transition-colors',
+      'border-b-2 border-transparent',
+      'hover:text-brand-medium dark:hover:text-brand-light',
+      isActive
+        ? 'border-brand-medium text-brand-medium dark:border-brand-light dark:text-brand-light'
+        : 'text-neutral-500 dark:text-neutral-400',
+    )}
+  >
+    {label}
+    {badge}
+  </Tabs.Trigger>
+)
 
 /**
  * EtherCAT Device Editor
  *
- * Provides interface for:
- * - Managing ESI file repository (Repository tab)
- * - Scanning for EtherCAT devices and matching with repository (Discovery tab)
- * - Viewing and configuring added devices (Configured Devices tab)
+ * Three-tab layout:
+ * - Global Settings: Master configuration (network interface, cycle time, watchdog)
+ * - Diagnostics: Runtime status monitoring and device discovery/scanning
+ * - Devices: ESI repository management and configured device editing
  */
 const EtherCATEditor = () => {
   const { editor, runtimeConnection, project, projectActions } = useOpenPLCStore()
@@ -49,9 +71,9 @@ const EtherCATEditor = () => {
   const isConnectedToRuntime = connectionStatus === 'connected' && ipAddress !== null && jwtToken !== null
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<EditorTab>('repository')
+  const [activeTab, setActiveTab] = useState<EditorTab>('devices')
 
-  // Repository state (now lightweight)
+  // Repository state
   const [repository, setRepository] = useState<ESIRepositoryItemLight[]>([])
   const [isLoadingRepository, setIsLoadingRepository] = useState(false)
   const [repositoryError, setRepositoryError] = useState<string | null>(null)
@@ -73,7 +95,6 @@ const EtherCATEditor = () => {
     const allRemoteDevices = project.data.remoteDevices || []
 
     for (const rd of allRemoteDevices) {
-      // Modbus devices
       if (rd.modbusTcpConfig?.ioGroups) {
         for (const group of rd.modbusTcpConfig.ioGroups) {
           for (const point of group.ioPoints) {
@@ -81,7 +102,6 @@ const EtherCATEditor = () => {
           }
         }
       }
-      // EtherCAT devices
       if (rd.ethercatConfig?.devices) {
         for (const dev of rd.ethercatConfig.devices) {
           for (const mapping of dev.channelMappings) {
@@ -121,8 +141,6 @@ const EtherCATEditor = () => {
     [deviceName, projectActions, masterConfig, configuredDevices],
   )
 
-  const [isDeviceBrowserOpen, setIsDeviceBrowserOpen] = useState(false)
-
   // Network interfaces state
   const [interfaces, setInterfaces] = useState<NetworkInterface[]>([])
   const [selectedInterface, setSelectedInterface] = useState<string>('')
@@ -143,14 +161,14 @@ const EtherCATEditor = () => {
   // Discovery selection state
   const [selectedScannedDevices, setSelectedScannedDevices] = useState<Set<number>>(new Set())
 
-  // Matched devices (scanned devices with repository matches)
+  // Matched devices
   const deviceMatches = useMemo<ScannedDeviceMatch[]>(() => {
     return matchDevicesToRepository(scannedDevices, repository)
   }, [scannedDevices, repository])
 
   const matchCounts = useMemo(() => countMatchedDevices(deviceMatches), [deviceMatches])
 
-  // Check EtherCAT service status when connected to runtime
+  // Check EtherCAT service status
   const checkServiceStatus = useCallback(async () => {
     if (!isConnectedToRuntime || !ipAddress || !jwtToken) {
       setServiceAvailable(null)
@@ -241,7 +259,7 @@ const EtherCATEditor = () => {
     }
   }, [isConnectedToRuntime, ipAddress, jwtToken, selectedInterface])
 
-  // Load ESI repository from cache (v2) or migrate (v1)
+  // Load ESI repository
   useEffect(() => {
     const loadRepository = async () => {
       if (!projectPath || repositoryLoadedRef.current) return
@@ -256,7 +274,6 @@ const EtherCATEditor = () => {
           setRepository(result.items)
           repositoryLoadedRef.current = true
         } else if (result.needsMigration) {
-          // One-time migration from v1 to v2
           const migrationResult = await window.bridge.esiMigrateRepository(projectPath)
           if (migrationResult.success && migrationResult.items) {
             setRepository(migrationResult.items)
@@ -303,7 +320,7 @@ const EtherCATEditor = () => {
     }
   }, [remoteDevice, deviceName, projectActions])
 
-  // Handle device selection from scan
+  // Discovery handlers
   const handleSelectScannedDevice = useCallback((position: number, selected: boolean) => {
     setSelectedScannedDevices((prev) => {
       const next = new Set(prev)
@@ -316,11 +333,9 @@ const EtherCATEditor = () => {
     })
   }, [])
 
-  // Handle select all scanned devices
   const handleSelectAllScanned = useCallback(
     (selected: boolean) => {
       if (selected) {
-        // Select only devices with matches
         const selectable = deviceMatches
           .filter((dm) => getBestMatchQuality(dm.matches) !== 'none')
           .map((dm) => dm.device.position)
@@ -332,7 +347,6 @@ const EtherCATEditor = () => {
     [deviceMatches],
   )
 
-  // Add selected scanned devices to configured devices
   const handleAddSelectedFromScan = useCallback(async () => {
     const newDevices: ConfiguredEtherCATDevice[] = []
 
@@ -340,12 +354,10 @@ const EtherCATEditor = () => {
       const match = deviceMatches.find((dm) => dm.device.position === position)
       if (!match || match.matches.length === 0) continue
 
-      // Use the best match (first one, which is sorted by quality)
       const bestMatch = match.matches[0]
       const repoItem = repository.find((r) => r.id === bestMatch.repositoryItemId)
       if (!repoItem) continue
 
-      // Enrich with full ESI data
       let enriched = {}
       const result = await window.bridge.esiLoadDeviceFull(
         projectPath,
@@ -377,21 +389,19 @@ const EtherCATEditor = () => {
     if (newDevices.length > 0) {
       syncDevicesToStore([...configuredDevices, ...newDevices])
       setSelectedScannedDevices(new Set())
-      setActiveTab('configured')
+      setActiveTab('devices')
     }
   }, [selectedScannedDevices, deviceMatches, repository, configuredDevices, syncDevicesToStore, projectPath])
 
-  // Handle adding device from browser modal
+  // Device management handlers
   const handleAddDeviceFromBrowser = useCallback(
     async (ref: ESIDeviceRef, device: ESIDeviceSummary, repoItem: ESIRepositoryItemLight) => {
-      // Enrich with full ESI data
       let enriched = {}
       const result = await window.bridge.esiLoadDeviceFull(projectPath, ref.repositoryItemId, ref.deviceIndex)
       if (result.success && result.device) {
         enriched = enrichDeviceData(result.device)
       }
 
-      // Compute next available position (max existing position + 1, or 0 if none)
       const nextPosition =
         configuredDevices.length > 0 ? Math.max(...configuredDevices.map((d) => d.position ?? -1)) + 1 : 0
 
@@ -413,7 +423,6 @@ const EtherCATEditor = () => {
     [configuredDevices, syncDevicesToStore, projectPath],
   )
 
-  // Handle removing a configured device
   const handleRemoveDevice = useCallback(
     (deviceId: string) => {
       syncDevicesToStore(configuredDevices.filter((d) => d.id !== deviceId))
@@ -421,7 +430,6 @@ const EtherCATEditor = () => {
     [configuredDevices, syncDevicesToStore],
   )
 
-  // Handle updating a configured device's configuration
   const handleUpdateDevice = useCallback(
     (deviceId: string, config: EtherCATSlaveConfig) => {
       syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, config } : d)))
@@ -429,7 +437,6 @@ const EtherCATEditor = () => {
     [configuredDevices, syncDevicesToStore],
   )
 
-  // Handle updating a configured device's channel mappings
   const handleUpdateChannelMappings = useCallback(
     (deviceId: string, channelMappings: EtherCATChannelMapping[]) => {
       syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, channelMappings } : d)))
@@ -437,7 +444,6 @@ const EtherCATEditor = () => {
     [configuredDevices, syncDevicesToStore],
   )
 
-  // Handle enriching a device with persisted ESI data (backward compat for old projects)
   const handleEnrichDevice = useCallback(
     (deviceId: string, data: Partial<ConfiguredEtherCATDevice>) => {
       syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, ...data } : d)))
@@ -445,7 +451,6 @@ const EtherCATEditor = () => {
     [configuredDevices, syncDevicesToStore],
   )
 
-  // Handle updating a configured device's SDO configurations
   const handleUpdateSdoConfigurations = useCallback(
     (deviceId: string, sdoConfigurations: SDOConfigurationEntry[]) => {
       syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, sdoConfigurations } : d)))
@@ -453,341 +458,124 @@ const EtherCATEditor = () => {
     [configuredDevices, syncDevicesToStore],
   )
 
+  const handleRetryRepository = useCallback(() => {
+    setRepositoryError(null)
+    repositoryLoadedRef.current = false
+    setRepositoryLoadRetry((c) => c + 1)
+  }, [])
+
   return (
     <div aria-label='EtherCAT editor container' className='flex h-full w-full flex-col overflow-hidden p-4'>
       {/* Header */}
-      <div className='mb-4'>
+      <div className='mb-4 shrink-0'>
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>EtherCAT Device: {deviceName}</h2>
         <p className='text-sm text-neutral-600 dark:text-neutral-400'>Protocol: EtherCAT</p>
       </div>
 
-      {/* Master Settings */}
-      <div className='mb-4 flex flex-wrap items-end gap-6 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900'>
-        <span className='text-xs font-semibold text-neutral-700 dark:text-neutral-300'>Master Settings</span>
-        <div className='flex flex-col gap-1'>
-          <span className='text-xs text-neutral-600 dark:text-neutral-400'>Network Interface</span>
-          {isConnectedToRuntime && interfaces.length > 0 ? (
-            <div className='flex items-center gap-2'>
-              <Select
-                value={masterConfig.networkInterface}
-                onValueChange={(value) => handleUpdateMasterConfig({ networkInterface: value })}
-              >
-                <SelectTrigger
-                  withIndicator
-                  placeholder='Select interface'
-                  className='flex h-[26px] w-full min-w-[180px] max-w-[260px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-700 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
-                />
-                <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
-                  {interfaces.map((iface) => (
-                    <SelectItem
-                      key={iface.name}
-                      value={iface.name}
-                      className={cn(
-                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                        'flex w-full cursor-pointer flex-col items-start justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                      )}
-                    >
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {iface.name}
-                      </span>
-                      {iface.description && (
-                        <span className='text-start font-caption text-[10px] font-normal text-neutral-500 dark:text-neutral-400'>
-                          {iface.description}
-                        </span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <button
-                onClick={() => void fetchInterfaces()}
-                disabled={isLoadingInterfaces}
-                className={cn(
-                  'flex h-[26px] w-[26px] items-center justify-center rounded-md border border-neutral-300 bg-white transition-colors',
-                  'hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-950 dark:hover:bg-neutral-800',
-                  'disabled:cursor-not-allowed disabled:opacity-50',
-                )}
-                title='Refresh interfaces'
-              >
-                <ArrowIcon
-                  size='sm'
-                  className={cn('rotate-180 stroke-brand transition-transform', isLoadingInterfaces && 'animate-spin')}
-                />
-              </button>
-            </div>
-          ) : (
-            <InputWithRef
-              type='text'
-              value={masterConfig.networkInterface}
-              onChange={(e) => handleUpdateMasterConfig({ networkInterface: e.target.value })}
-              placeholder='eth0'
-              className='h-[26px] w-36 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
-            />
-          )}
-          <span className='text-[10px] text-neutral-500 dark:text-neutral-500'>
-            {isConnectedToRuntime && interfaces.length > 0
-              ? 'Select from runtime interfaces'
-              : 'Interface name on the runtime host (e.g. eth0, enp3s0)'}
-          </span>
-        </div>
-        <div className='flex flex-col gap-1'>
-          <span className='text-xs text-neutral-600 dark:text-neutral-400'>Cycle Time (us)</span>
-          <InputWithRef
-            type='number'
-            value={masterConfig.cycleTimeUs}
-            onChange={(e) => handleUpdateMasterConfig({ cycleTimeUs: Number(e.target.value) })}
-            onBlur={(e) => {
-              const val = Number(e.target.value)
-              if (!val || val < 100) handleUpdateMasterConfig({ cycleTimeUs: 100 })
-              else if (val > 100000) handleUpdateMasterConfig({ cycleTimeUs: 100000 })
-            }}
-            min={100}
-            max={100000}
-            className='h-[26px] w-24 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
-          />
-          <span className='text-[10px] text-neutral-500 dark:text-neutral-500'>
-            EtherCAT bus cycle time in microseconds
-          </span>
-        </div>
-        <div className='flex flex-col gap-1'>
-          <span className='text-xs text-neutral-600 dark:text-neutral-400'>Watchdog Timeout (cycles)</span>
-          <InputWithRef
-            type='number'
-            value={masterConfig.watchdogTimeoutCycles ?? 3}
-            onChange={(e) => handleUpdateMasterConfig({ watchdogTimeoutCycles: Number(e.target.value) })}
-            onBlur={(e) => {
-              const val = Number(e.target.value)
-              if (!val || val < 1) handleUpdateMasterConfig({ watchdogTimeoutCycles: 1 })
-              else if (val > 100) handleUpdateMasterConfig({ watchdogTimeoutCycles: 100 })
-            }}
-            min={1}
-            max={100}
-            className='h-[26px] w-24 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
-          />
-          <span className='text-[10px] text-neutral-500 dark:text-neutral-500'>
-            Missed cycles before watchdog triggers
-          </span>
-        </div>
-      </div>
-
-      {/* Runtime Status */}
-      {isConnectedToRuntime && (
-        <div className='mb-4'>
-          <RuntimeStatusPanel ipAddress={ipAddress} jwtToken={jwtToken} isConnected={isConnectedToRuntime} />
-        </div>
-      )}
-
       {/* Tabs */}
-      <div className='mb-4 flex border-b border-neutral-200 dark:border-neutral-700'>
-        <button
-          onClick={() => setActiveTab('repository')}
-          className={cn(
-            'px-4 py-2 text-sm font-medium transition-colors',
-            activeTab === 'repository'
-              ? 'border-b-2 border-brand text-brand'
-              : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200',
-          )}
-        >
-          Repository
-          {repository.length > 0 && (
-            <span className='ml-1 rounded-full bg-neutral-200 px-1.5 py-0.5 text-xs dark:bg-neutral-700'>
-              {repository.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('discovery')}
-          className={cn(
-            'px-4 py-2 text-sm font-medium transition-colors',
-            activeTab === 'discovery'
-              ? 'border-b-2 border-brand text-brand'
-              : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200',
-          )}
-        >
-          Discovery
-          {scannedDevices.length > 0 && (
-            <span className='ml-1 rounded-full bg-neutral-200 px-1.5 py-0.5 text-xs dark:bg-neutral-700'>
-              {scannedDevices.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('configured')}
-          className={cn(
-            'px-4 py-2 text-sm font-medium transition-colors',
-            activeTab === 'configured'
-              ? 'border-b-2 border-brand text-brand'
-              : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200',
-          )}
-        >
-          Configured Devices
-          {configuredDevices.length > 0 && (
-            <span className='bg-brand/20 ml-1 rounded-full px-1.5 py-0.5 text-xs text-brand'>
-              {configuredDevices.length}
-            </span>
-          )}
-        </button>
-      </div>
+      <Tabs.Root
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as EditorTab)}
+        className='flex min-h-0 flex-1 flex-col overflow-hidden'
+      >
+        <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>
+          <TabItem value='global-settings' label='Global Settings' isActive={activeTab === 'global-settings'} />
+          <TabItem
+            value='diagnostics'
+            label='Diagnostics'
+            isActive={activeTab === 'diagnostics'}
+            badge={
+              scannedDevices.length > 0 ? (
+                <span className='ml-1 rounded-full bg-neutral-200 px-1.5 py-0.5 text-[10px] dark:bg-neutral-700'>
+                  {scannedDevices.length}
+                </span>
+              ) : undefined
+            }
+          />
+          <TabItem
+            value='devices'
+            label='Devices'
+            isActive={activeTab === 'devices'}
+            badge={
+              configuredDevices.length > 0 ? (
+                <span className='bg-brand/20 ml-1 rounded-full px-1.5 py-0.5 text-[10px] text-brand'>
+                  {configuredDevices.length}
+                </span>
+              ) : undefined
+            }
+          />
+        </Tabs.List>
 
-      {/* Repository Tab */}
-      {activeTab === 'repository' && (
-        <>
-          {repositoryError && (
-            <div className='mb-4 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20'>
-              <p className='text-sm text-red-700 dark:text-red-300'>Failed to load repository: {repositoryError}</p>
-              <button
-                onClick={() => {
-                  setRepositoryError(null)
-                  repositoryLoadedRef.current = false
-                  setRepositoryLoadRetry((c) => c + 1)
-                }}
-                className='text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300'
-              >
-                Retry
-              </button>
-            </div>
-          )}
-          <ESIRepository
+        {/* Global Settings Tab */}
+        <Tabs.Content
+          value='global-settings'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <GlobalSettingsTab
+            masterConfig={masterConfig}
+            onUpdateMasterConfig={handleUpdateMasterConfig}
+            isConnectedToRuntime={isConnectedToRuntime}
+            interfaces={interfaces}
+            isLoadingInterfaces={isLoadingInterfaces}
+            onRefreshInterfaces={() => void fetchInterfaces()}
+          />
+        </Tabs.Content>
+
+        {/* Diagnostics Tab */}
+        <Tabs.Content
+          value='diagnostics'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <DiagnosticsTab
+            isConnectedToRuntime={isConnectedToRuntime}
+            ipAddress={ipAddress}
+            jwtToken={jwtToken}
+            serviceAvailable={serviceAvailable}
+            serviceMessage={serviceMessage}
+            interfaces={interfaces}
+            selectedInterface={selectedInterface}
+            onSelectInterface={setSelectedInterface}
+            isLoadingInterfaces={isLoadingInterfaces}
+            interfaceError={interfaceError}
+            onRefreshInterfaces={() => void fetchInterfaces()}
+            isScanning={isScanning}
+            scanError={scanError}
+            scanTimeMs={scanTimeMs}
+            scanMessage={scanMessage}
+            scannedDevices={scannedDevices}
+            onScan={() => void scanDevices()}
+            deviceMatches={deviceMatches}
+            matchCounts={matchCounts}
+            selectedScannedDevices={selectedScannedDevices}
+            onSelectScannedDevice={handleSelectScannedDevice}
+            onSelectAllScanned={handleSelectAllScanned}
+            onAddSelectedFromScan={() => void handleAddSelectedFromScan()}
+          />
+        </Tabs.Content>
+
+        {/* Devices Tab */}
+        <Tabs.Content
+          value='devices'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <DevicesTab
+            devices={configuredDevices}
             repository={repository}
             onRepositoryChange={setRepository}
             projectPath={projectPath}
-            isLoading={isLoadingRepository}
+            isLoadingRepository={isLoadingRepository}
+            repositoryError={repositoryError}
+            onRetryRepository={handleRetryRepository}
+            usedAddresses={usedAddresses}
+            onAddDeviceFromBrowser={handleAddDeviceFromBrowser}
+            onRemoveDevice={handleRemoveDevice}
+            onUpdateDevice={handleUpdateDevice}
+            onUpdateChannelMappings={handleUpdateChannelMappings}
+            onEnrichDevice={handleEnrichDevice}
+            onUpdateSdoConfigurations={handleUpdateSdoConfigurations}
           />
-        </>
-      )}
-
-      {/* Discovery Tab */}
-      {activeTab === 'discovery' && (
-        <div className='flex flex-1 flex-col overflow-hidden'>
-          {/* Not connected state */}
-          {!isConnectedToRuntime && (
-            <div className='flex flex-1 items-center justify-center rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700'>
-              <div className='text-center'>
-                <p className='text-sm font-medium text-neutral-700 dark:text-neutral-300'>Not connected to runtime</p>
-                <p className='mt-1 text-xs text-neutral-500 dark:text-neutral-400'>
-                  Connect to the OpenPLC Runtime to scan for EtherCAT devices.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Service not available state */}
-          {isConnectedToRuntime && serviceAvailable === false && (
-            <div className='flex flex-1 items-center justify-center rounded-lg border border-dashed border-yellow-300 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-900/20'>
-              <div className='text-center'>
-                <p className='text-sm font-medium text-yellow-700 dark:text-yellow-300'>
-                  EtherCAT Discovery Service Not Available
-                </p>
-                <p className='mt-1 max-w-md text-xs text-yellow-600 dark:text-yellow-400'>{serviceMessage}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Connected state */}
-          {isConnectedToRuntime && serviceAvailable !== false && (
-            <>
-              {/* Interface Selection and Scan Controls */}
-              <div className='mb-4 flex flex-wrap items-end gap-4'>
-                <InterfaceSelector
-                  interfaces={interfaces}
-                  selectedInterface={selectedInterface}
-                  onSelectInterface={setSelectedInterface}
-                  isLoading={isLoadingInterfaces}
-                  error={interfaceError}
-                  onRefresh={() => void fetchInterfaces()}
-                />
-
-                <button
-                  onClick={() => void scanDevices()}
-                  disabled={isScanning || !selectedInterface}
-                  className={cn(
-                    'flex h-[30px] items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors',
-                    'bg-brand text-white hover:bg-brand-medium-dark',
-                    'disabled:cursor-not-allowed disabled:opacity-50',
-                  )}
-                >
-                  {isScanning ? (
-                    <>
-                      <ArrowIcon size='sm' className='animate-spin stroke-white' />
-                      Scanning...
-                    </>
-                  ) : (
-                    'Scan'
-                  )}
-                </button>
-
-                {scanTimeMs !== null && (
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                    Completed in {scanTimeMs}ms{scanMessage ? ` — ${scanMessage}` : ''}
-                  </span>
-                )}
-              </div>
-
-              {/* Error/Status Messages */}
-              {scanError && (
-                <div className='mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20'>
-                  <p className='text-sm text-red-700 dark:text-red-300'>{scanError}</p>
-                </div>
-              )}
-
-              {/* Match summary */}
-              {deviceMatches.length > 0 && (
-                <div className='mb-4 flex items-center justify-between'>
-                  <div className='flex items-center gap-4'>
-                    <span className='text-sm text-neutral-700 dark:text-neutral-300'>
-                      Found {matchCounts.total} device(s):
-                    </span>
-                    <span className='text-xs text-green-600 dark:text-green-400'>{matchCounts.exact} exact</span>
-                    <span className='text-xs text-yellow-600 dark:text-yellow-400'>{matchCounts.partial} partial</span>
-                    <span className='text-xs text-red-600 dark:text-red-400'>{matchCounts.none} no match</span>
-                  </div>
-                  {selectedScannedDevices.size > 0 && (
-                    <button
-                      onClick={() => void handleAddSelectedFromScan()}
-                      className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
-                    >
-                      Add Selected ({selectedScannedDevices.size})
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Discovered Devices Table */}
-              <DiscoveredDeviceTable
-                deviceMatches={deviceMatches}
-                selectedDevices={selectedScannedDevices}
-                onSelectDevice={handleSelectScannedDevice}
-                onSelectAll={handleSelectAllScanned}
-                isScanning={isScanning}
-              />
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Configured Devices Tab */}
-      {activeTab === 'configured' && (
-        <ConfiguredDevices
-          devices={configuredDevices}
-          repository={repository}
-          onAddDevice={() => setIsDeviceBrowserOpen(true)}
-          onRemoveDevice={handleRemoveDevice}
-          onUpdateDevice={handleUpdateDevice}
-          projectPath={projectPath}
-          onUpdateChannelMappings={handleUpdateChannelMappings}
-          onEnrichDevice={handleEnrichDevice}
-          onUpdateSdoConfigurations={handleUpdateSdoConfigurations}
-          usedAddresses={usedAddresses}
-        />
-      )}
-
-      {/* Device Browser Modal */}
-      <DeviceBrowserModal
-        isOpen={isDeviceBrowserOpen}
-        onClose={() => setIsDeviceBrowserOpen(false)}
-        onSelectDevice={(...args) => void handleAddDeviceFromBrowser(...args)}
-        repository={repository}
-      />
+        </Tabs.Content>
+      </Tabs.Root>
     </div>
   )
 }
