@@ -22,9 +22,20 @@ import { createEditorAcceleratorAdapter } from './editor/accelerator-adapter'
 import { createEditorCompilerAdapter } from './editor/compiler-adapter'
 import { createEditorDeviceAdapter } from './editor/device-adapter'
 import { createEditorProjectAdapter } from './editor/project-adapter'
+import { createEditorRuntimeAdapter } from './editor/runtime-adapter'
 import { createEditorSystemAdapter } from './editor/system-adapter'
 import { createEditorThemeAdapter } from './editor/theme-adapter'
 import { createEditorWindowAdapter } from './editor/window-adapter'
+
+/**
+ * Runtime connection target — IP address of the OpenPLC runtime device.
+ * Set by the store/UI when the user configures or connects to a device.
+ */
+let _runtimeIpAddress = ''
+
+export function setRuntimeIpAddress(ip: string): void {
+  _runtimeIpAddress = ip
+}
 
 function notMigrated(portName: string): never {
   throw new Error(`[EditorAdapter] ${portName} is not yet migrated. Implement the adapter to use this port.`)
@@ -56,7 +67,7 @@ function createStubPort<T extends object>(portName: string): T {
  */
 export const editorPorts: PlatformPorts = {
   compiler: createEditorCompilerAdapter(),
-  runtime: createStubPort('RuntimePort'),
+  runtime: createEditorRuntimeAdapter(() => _runtimeIpAddress),
   debugger: createStubPort('DebuggerPort'),
   simulator: createStubPort('SimulatorPort'),
   project: createEditorProjectAdapter(),
