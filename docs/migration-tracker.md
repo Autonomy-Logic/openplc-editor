@@ -50,11 +50,11 @@ Legend:
 ### Divergent (needs reconciliation)
 | # | Component | Diff | Status | Notes |
 |---|-----------|------|--------|-------|
-| 24 | `checkbox/index.tsx` | 456B | [ ] D | Web version larger |
-| 25 | `debug-tree-node/index.tsx` | 14 | [ ] D | Reclassified from near-identical |
-| 26 | `dimensions-modal/index.tsx` | 28 | [ ] D | Reclassified from near-identical |
-| 27 | `generic-data-type-table/index.tsx` | 258B | [ ] D | Web version larger |
-| 28 | `generic-table-inputs/*` | varies | [ ] D | Editor has `generic-button-cell.tsx` and `generic-textarea-cell.tsx` missing from web |
+| 24 | `checkbox/index.tsx` | 456B | [x] D | Reconciled: web superset (label, disabled, checked border) |
+| 25 | `debug-tree-node/index.tsx` | 14 | [x] D | Reconciled: unified imports |
+| 26 | `dimensions-modal/index.tsx` | 28 | [x] D | Reconciled: unified imports, PLCBaseType |
+| 27 | `generic-data-type-table/index.tsx` | 258B | [x] D | Reconciled: web scroll wrapper |
+| 28 | `generic-table-inputs/*` | varies | [x] D | Reconciled: editor superset (5 files), search via extractSearchQuery |
 | 29 | `graphical-editor/autocomplete/index.tsx` | 63 | [ ] D | Reclassified: editor has triggerSubmit imperative handle |
 | 30 | `graphical-editor/fbd/autocomplete/index.tsx` | 43 | [ ] D | Reclassified: different ID gen, error handling |
 | 31 | `graphical-editor/fbd/block.tsx` | 7.4KB | [ ] D | Editor much larger |
@@ -81,11 +81,11 @@ Legend:
 | 52 | `graphical-editor/ladder/variable.tsx` | 2.6KB | [ ] D | |
 | 53 | `graphical-editor/types/block.ts` | 9 | [ ] D | Reclassified: depends on divergent Zod schemas |
 | 54 | `graphical-editor/utils/index.ts` | 14 | [ ] D | Reclassified: different type/import sources |
-| 55 | `highlighted-textarea/index.tsx` | 19 | [ ] D | Reclassified: different rendering approach |
-| 56 | `react-flow/style.css` | 24 | [ ] D | Different dark mode strategy |
-| 57 | `select/index.tsx` | 405B | [ ] D | |
-| 58 | `tab/index.tsx` | 74 | [ ] D | Reclassified: different icons, types, rendering |
-| 59 | `table-actions/index.tsx` | 14 | [ ] D | Different props/styling |
+| 55 | `highlighted-textarea/index.tsx` | 19 | [x] D | Reconciled: web approach (extractSearchQuery, no HighlightedText dep) |
+| 56 | `react-flow/style.css` | 24 | [x] D | Reconciled: web class-based dark mode |
+| 57 | `select/index.tsx` | 405B | [x] D | Reconciled: editor superset (forwardRef, viewportRef) |
+| 58 | `tab/index.tsx` | 74 | [x] D | Reconciled: merged web icons + editor safe rendering |
+| 59 | `table-actions/index.tsx` | 14 | [x] D | Reconciled: editor superset (className prop) |
 
 ### Platform-specific
 | # | Component | Repo | Status | Notes |
