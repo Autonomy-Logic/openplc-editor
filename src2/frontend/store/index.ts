@@ -6,6 +6,8 @@ import { subscribeWithSelector } from 'zustand/middleware'
 // Enable Immer's MapSet plugin for Map/Set support in store state
 enableMapSet()
 
+import type { AIFeatureConfig } from '../../backend/shared/ai'
+
 import type {
   AISlice,
   ConsoleSlice,
@@ -25,7 +27,7 @@ import type {
   WorkspaceSlice,
 } from './slices'
 import {
-  createAISlice,
+  createAISliceFactory,
   createConsoleSlice,
   createDeviceSlice,
   createEditorSlice,
@@ -60,25 +62,37 @@ export type RootState = AISlice &
   WebRTCSlice &
   WorkspaceSlice
 
-export const openPLCStoreBase = create(
-  subscribeWithSelector<RootState>((...a) => ({
-    ...createAISlice(...a),
-    ...createConsoleSlice(...a),
-    ...createDeviceSlice(...a),
-    ...createEditorSlice(...a),
-    ...createFBDFlowSlice(...a),
-    ...createFileSlice(...a),
-    ...createHistorySlice(...a),
-    ...createLadderFlowSlice(...a),
-    ...createLibrarySlice(...a),
-    ...createModalSlice(...a),
-    ...createProjectSlice(...a),
-    ...createSearchSlice(...a),
-    ...createSharedSlice(...a),
-    ...createTabsSlice(...a),
-    ...createWebRTCSlice(...a),
-    ...createWorkspaceSlice(...a),
-  })),
-)
+/**
+ * Configuration for store initialization.
+ * Allows the composition root to inject platform-specific initial state.
+ */
+export interface StoreConfig {
+  /** AI feature configuration from platform environment */
+  ai?: AIFeatureConfig
+}
 
+export function createOpenPLCStore(config: StoreConfig = {}) {
+  return create(
+    subscribeWithSelector<RootState>((...a) => ({
+      ...createAISliceFactory(config.ai)(...a),
+      ...createConsoleSlice(...a),
+      ...createDeviceSlice(...a),
+      ...createEditorSlice(...a),
+      ...createFBDFlowSlice(...a),
+      ...createFileSlice(...a),
+      ...createHistorySlice(...a),
+      ...createLadderFlowSlice(...a),
+      ...createLibrarySlice(...a),
+      ...createModalSlice(...a),
+      ...createProjectSlice(...a),
+      ...createSearchSlice(...a),
+      ...createSharedSlice(...a),
+      ...createTabsSlice(...a),
+      ...createWebRTCSlice(...a),
+      ...createWorkspaceSlice(...a),
+    })),
+  )
+}
+
+export const openPLCStoreBase = createOpenPLCStore()
 export const useOpenPLCStore = createSelectorHooks(openPLCStoreBase)

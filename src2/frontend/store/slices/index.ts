@@ -1,4 +1,4 @@
-export { createAISlice } from './ai'
+export { createAISlice, createAISliceFactory } from './ai'
 export type { AISlice } from './ai'
 export { MAX_CONVERSATION_MESSAGES } from './ai'
 export { createConsoleSlice } from './console'
