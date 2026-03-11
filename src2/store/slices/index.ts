@@ -1,0 +1,5 @@
+export { createEditorSlice } from './editor'
+export { createModalSlice } from './modal'
+export { createSearchSlice } from './search'
+export { createTabsSlice } from './tabs'
+export { createWorkspaceSlice } from './workspace'

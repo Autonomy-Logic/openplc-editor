@@ -272,6 +272,52 @@ export interface DebugCompileResult {
 }
 
 // ---------------------------------------------------------------------------
+// Debugger Tree
+// ---------------------------------------------------------------------------
+
+/** Function Block Instance Info — represents a specific FB instance for debugging */
+export interface FbInstanceInfo {
+  fbTypeName: string
+  programName: string
+  programInstanceName: string
+  fbVariableName: string
+  key: string
+}
+
+/** Debug Tree Node — represents a node in the hierarchical debugger variable tree */
+export interface DebugTreeNode {
+  name: string
+  fullPath: string
+  compositeKey: string
+  type: string
+  isComplex: boolean
+  isExpanded?: boolean
+  children?: DebugTreeNode[]
+  debugIndex?: number
+  arrayIndices?: number[]
+}
+
+// ---------------------------------------------------------------------------
+// PLC Logs
+// ---------------------------------------------------------------------------
+
+/** Union type representing logs from either v3 (string) or v4 (array) runtime */
+export type PlcLogs = string | RuntimeLogEntry[]
+
+/** Maximum number of log entries to keep in the client-side buffer */
+export const LOG_BUFFER_CAP = 1000
+
+/** Type guard to check if logs are in v4 format (array of objects) */
+export function isV4Logs(logs: PlcLogs): logs is RuntimeLogEntry[] {
+  return Array.isArray(logs)
+}
+
+/** Type guard to check if logs are in v3 format (plain string) */
+export function isV3Logs(logs: PlcLogs): logs is string {
+  return typeof logs === 'string'
+}
+
+// ---------------------------------------------------------------------------
 // Console
 // ---------------------------------------------------------------------------
 

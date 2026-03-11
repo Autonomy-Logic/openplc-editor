@@ -4,11 +4,11 @@ Tracks progress of the shared UI migration. Updated by the `/migrate` skill afte
 
 ## Current Phase
 
-adapters
+store
 
 ## Current Step
 
-12
+13
 
 ## Step Log
 
@@ -27,7 +27,7 @@ adapters
 | 10 | adapters | RuntimePort adapter implementation | done | 2026-03-10 |
 | 11 | adapters | DebuggerPort adapter implementation | done | 2026-03-10 |
 | 12 | adapters | SimulatorPort adapter implementation | done | 2026-03-10 |
-| 13 | store | UI state slices (Workspace, Editor, Tabs, Modal, Search) | pending | |
+| 13 | store | UI state slices (Workspace, Editor, Tabs, Modal, Search) | done | 2026-03-10 |
 | 14 | store | Data state slices (Project, File, Library, Console, Shared) | pending | |
 | 15 | store | Visual editor slices (FBDFlow, LadderFlow) | pending | |
 | 16 | store | Platform state slices (Device, History, web-only) | pending | |
