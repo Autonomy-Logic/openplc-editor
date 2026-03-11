@@ -20,6 +20,8 @@ import type { PlatformPorts } from '../providers/platform/types'
 import { EDITOR_CAPABILITIES } from '../providers/platform/ports/platform-capabilities'
 import { createEditorAcceleratorAdapter } from './editor/accelerator-adapter'
 import { createEditorCompilerAdapter } from './editor/compiler-adapter'
+import type { EditorDebugConnectionConfig } from './editor/debugger-adapter'
+import { createEditorDebuggerAdapter } from './editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './editor/device-adapter'
 import { createEditorProjectAdapter } from './editor/project-adapter'
 import { createEditorRuntimeAdapter } from './editor/runtime-adapter'
@@ -32,9 +34,14 @@ import { createEditorWindowAdapter } from './editor/window-adapter'
  * Set by the store/UI when the user configures or connects to a device.
  */
 let _runtimeIpAddress = ''
+let _debugConnectionConfig: EditorDebugConnectionConfig | null = null
 
 export function setRuntimeIpAddress(ip: string): void {
   _runtimeIpAddress = ip
+}
+
+export function setDebugConnectionConfig(config: EditorDebugConnectionConfig | null): void {
+  _debugConnectionConfig = config
 }
 
 function notMigrated(portName: string): never {
@@ -68,7 +75,7 @@ function createStubPort<T extends object>(portName: string): T {
 export const editorPorts: PlatformPorts = {
   compiler: createEditorCompilerAdapter(),
   runtime: createEditorRuntimeAdapter(() => _runtimeIpAddress),
-  debugger: createStubPort('DebuggerPort'),
+  debugger: createEditorDebuggerAdapter(() => _debugConnectionConfig),
   simulator: createStubPort('SimulatorPort'),
   project: createEditorProjectAdapter(),
   device: createEditorDeviceAdapter(),
