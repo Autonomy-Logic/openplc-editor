@@ -8,7 +8,7 @@ adapters
 
 ## Current Step
 
-5
+6
 
 ## Step Log
 
@@ -20,7 +20,7 @@ adapters
 | 3 | adapters | ThemePort adapter implementation | done | 2026-03-10 |
 | 4 | adapters | SystemPort adapter implementation | done | 2026-03-10 |
 | 5 | adapters | WindowPort adapter implementation | done | 2026-03-10 |
-| 6 | adapters | AcceleratorPort adapter implementation | pending | |
+| 6 | adapters | AcceleratorPort adapter implementation | done | 2026-03-10 |
 | 7 | adapters | DevicePort adapter implementation | pending | |
 | 8 | adapters | ProjectPort adapter implementation | pending | |
 | 9 | adapters | CompilerPort adapter implementation | pending | |
