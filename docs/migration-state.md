@@ -4,11 +4,11 @@ Tracks progress of the shared UI migration. Updated by the `/migrate` skill afte
 
 ## Current Phase
 
-components
+architecture-rework
 
 ## Current Step
 
-18
+19
 
 ## Step Log
 
@@ -32,16 +32,19 @@ components
 | 15 | store | Visual editor slices (FBDFlow, LadderFlow) | done | 2026-03-11 |
 | 16 | store | Platform state slices (Device, History, web-only) | done | 2026-03-11 |
 | 17 | resources | Copy shared resources (styles, assets, locales, declarations) to src2/ | done | 2026-03-11 |
-| 18 | components | Atoms batch 1 — shared identical components (revised: 23 kept, 17 divergent moved to step 19) | done | 2026-03-11 |
-| 19 | components | Atoms batch 2 — divergent components (reconcile) | pending | |
-| 20 | components | Molecules batch 1 — shared identical | pending | |
-| 21 | components | Molecules batch 2 — divergent (reconcile) | pending | |
-| 22 | components | Organisms — shared | pending | |
-| 23 | components | Organisms — platform-specific (port-dependent) | pending | |
-| 24 | components | Features — shared | pending | |
-| 25 | components | Features — platform-specific | pending | |
-| 26 | components | Templates and screens | pending | |
-| 27 | components | Hooks migration | pending | |
-| 28 | integration | App shell and routing | pending | |
-| 29 | integration | Production build configs | pending | |
-| 30 | integration | Switchover and cleanup — remove src/ | pending | |
+| 18 | components | Atoms batch 1 — shared identical components (revised: 23 kept, 17 divergent moved to step 22) | done | 2026-03-11 |
+| 19 | architecture-rework | Restructure src2/ into frontend/middleware/backend three-layer architecture | pending | |
+| 20 | architecture-rework | Extract application logic from Zustand stores into backend/shared/ | pending | |
+| 21 | architecture-rework | Update comparison script to validate all byte-identical surfaces | pending | |
+| 22 | components | Atoms batch 2 — divergent components (reconcile) | pending | |
+| 23 | components | Molecules batch 1 — shared identical | pending | |
+| 24 | components | Molecules batch 2 — divergent (reconcile) | pending | |
+| 25 | components | Organisms — shared | pending | |
+| 26 | components | Organisms — platform-specific (port-dependent) | pending | |
+| 27 | components | Features — shared | pending | |
+| 28 | components | Features — platform-specific | pending | |
+| 29 | components | Templates and screens | pending | |
+| 30 | components | Hooks migration | pending | |
+| 31 | integration | App shell and routing | pending | |
+| 32 | integration | Production build configs | pending | |
+| 33 | integration | Switchover and cleanup — remove src/ | pending | |
