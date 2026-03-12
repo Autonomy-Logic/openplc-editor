@@ -114,6 +114,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
+  const [editorMounted, setEditorMounted] = useState(false)
 
   const {
     editor,
@@ -356,7 +357,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     return { prefix, positions }
-  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext])
+  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted])
 
   // Phase 2: stamp current values onto cached positions (runs on each poll, O(positions) map lookups only)
   useEffect(() => {
@@ -724,6 +725,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   ) {
     editorRef.current = editorInstance
     monacoRef.current = monacoInstance
+    setEditorMounted(true)
 
     if (!editorInstance || !monacoInstance) return
 
