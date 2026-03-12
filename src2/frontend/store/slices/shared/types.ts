@@ -1,7 +1,11 @@
 import type { PLCBody, PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
 import type { ConsoleSlice } from '../console'
+import type { DeviceSlice } from '../device'
 import type { EditorSlice } from '../editor'
+import type { FBDFlowSlice } from '../fbd'
 import type { FileSlice } from '../file'
+import type { HistorySlice } from '../history'
+import type { LadderFlowSlice } from '../ladder'
 import type { LibrarySlice } from '../library'
 import type { ModalSlice } from '../modal'
 import type { ProjectSlice } from '../project'
@@ -22,6 +26,10 @@ export type SharedRootState = ProjectSlice &
   ModalSlice &
   SearchSlice &
   ConsoleSlice &
+  DeviceSlice &
+  FBDFlowSlice &
+  LadderFlowSlice &
+  HistorySlice &
   SharedSlice
 
 // ---------------------------------------------------------------------------
@@ -94,6 +102,20 @@ export type SnapshotActions = {
   redo: (pouName: string) => void
 }
 
+export type SharedWorkspaceActions = {
+  /** Mark a file as unsaved and set workspace editingState to 'unsaved'. */
+  handleFileAndWorkspaceSavedState: (name: string) => void
+  /** Remove a tab and select the next one. Does NOT check save state. */
+  forceCloseFile: (name: string) => { success: boolean }
+  /**
+   * Close project: checks save state, shows save-changes modal if unsaved,
+   * or clears all state if saved.
+   */
+  closeProject: () => void
+  /** Reset all slice state for project close. */
+  clearStatesOnCloseProject: () => void
+}
+
 export type SharedSlice = {
   undoRedo: Record<string, PouHistory>
   pouActions: PouActions
@@ -101,4 +123,5 @@ export type SharedSlice = {
   serverActions: ServerActions
   remoteDeviceActions: RemoteDeviceActions
   snapshotActions: SnapshotActions
+  sharedWorkspaceActions: SharedWorkspaceActions
 }

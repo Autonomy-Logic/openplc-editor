@@ -18,5 +18,6 @@ export type {
   SharedResponse,
   SharedRootState,
   SharedSlice,
+  SharedWorkspaceActions,
   SnapshotActions,
 } from './types'
