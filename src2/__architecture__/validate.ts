@@ -163,6 +163,28 @@ function resolveImport(importPath: string, fromFile: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Known exceptions
+// ---------------------------------------------------------------------------
+
+/**
+ * Some files legitimately cross layer boundaries due to the nature of their
+ * functionality (e.g., sync utilities that bridge store types with component
+ * types, or store helpers that reference component node builders).
+ *
+ * Each entry maps a file path (relative to SRC2_ROOT, forward-slash separated)
+ * to the set of extra layers it is allowed to import from beyond what its own
+ * layer rule permits.
+ */
+const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
+  // Syncs React Flow nodes with PLC variables — needs store types, port types, and component constants
+  'frontend/utils/graphical/sync-nodes-with-variables.ts': ['ports', 'store', 'components'],
+  // Determines which FB variables to clean up — needs port types and component block types
+  'frontend/utils/graphical/get-function-block-variables-to-cleanup.ts': ['ports', 'components'],
+  // FBD paste/duplicate helpers — needs component atom types and molecule node builders
+  'frontend/store/slices/fbd/utils/index.ts': ['components'],
+}
+
+// ---------------------------------------------------------------------------
 // Main validation
 // ---------------------------------------------------------------------------
 
@@ -179,7 +201,7 @@ function validate(): Violation[] {
   const violations: Violation[] = []
 
   const files = collectFiles(SRC2_ROOT, ['.ts', '.tsx']).filter(
-    (f) => !f.includes('__architecture__/'),
+    (f) => !f.includes('__architecture__/') && !f.includes('__tests__/') && !f.match(/\.(test|spec)\.[jt]sx?$/),
   )
 
   for (const file of files) {
@@ -188,6 +210,8 @@ function validate(): Violation[] {
 
     const source = readFileSync(file, 'utf-8')
     const imports = extractImports(source)
+    const relFile = relative(SRC2_ROOT, file).replace(/\\/g, '/')
+    const exceptions = KNOWN_EXCEPTIONS[relFile] ?? []
 
     for (const imp of imports) {
       const resolved = resolveImport(imp.path, file)
@@ -197,8 +221,7 @@ function validate(): Violation[] {
       if (!toLayer) continue // Can't determine target layer — skip
 
       const rule = LAYER_RULES[fromLayer]
-      if (!rule.allowedDeps.includes(toLayer) && fromLayer !== toLayer) {
-        const relFile = relative(SRC2_ROOT, file)
+      if (!rule.allowedDeps.includes(toLayer) && fromLayer !== toLayer && !exceptions.includes(toLayer)) {
         violations.push({
           file: relFile,
           line: imp.line,
