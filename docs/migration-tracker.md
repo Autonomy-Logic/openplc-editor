@@ -108,32 +108,32 @@ Legend:
 ### Identical / near-identical
 | # | Component | Status |
 |---|-----------|--------|
-| 70 | `file/*` (4 files) | [ ] S |
+| 70 | `file/*` (4 files) | [x] S |
 | 71 | `pin-mapping-table/*` (4 files) | [ ] S |
-| 72 | `select-field/index.tsx` | [ ] S |
-| 73 | `input-field/index.tsx` | [ ] S |
-| 74 | `toast/index.tsx` | [ ] S |
-| 75 | `window-controls/index.tsx` | [ ] S |
-| 76 | `menu-bar/index.tsx` | [ ] S |
-| 77 | `modal/index.tsx` | [ ] S |
-| 78 | `rename-impact-modal/index.tsx` | [ ] S |
-| 79 | `type-change-modal/index.tsx` | [ ] S |
-| 80 | `breadcrumbs/index.tsx` | [ ] S |
-| 81 | `search/index.tsx` | [ ] S |
-| 82 | `variables-panel/index.tsx` | [ ] S |
-| 83 | `data-types/array/* (header + table)` | [ ] S |
-| 84 | `data-types/enumerated/*` | [ ] S |
-| 85 | `data-types/structure/* (table + elements)` | [ ] S |
-| 86 | `graphical-editor/fbd/fbd-utils/*` | [ ] S |
-| 87 | `graphical-editor/fbd/index.tsx` | [ ] S |
-| 88 | `graphical-editor/ladder/rung/index.tsx` | [ ] S |
-| 89 | `graphical-editor/ladder/index.tsx` | [ ] S |
-| 90 | `graphical-editor/ladder/* utils` | [ ] S |
-| 91 | `instances-table/*` | [ ] S |
-| 92 | `library-tree/index.tsx` | [ ] S |
-| 93 | `task-table/*` | [ ] S |
-| 94 | `global-variables-table/elements/*` | [ ] S |
-| 95 | `variables-table/elements/*` | [ ] S |
+| 72 | `select-field/index.tsx` | [x] S |
+| 73 | `input-field/index.tsx` | [x] S |
+| 74 | `toast/index.tsx` | [x] S |
+| 75 | `window-controls/index.tsx` | [ ] E | Reclassified: editor-only (uses window.bridge) |
+| 76 | `menu-bar/index.tsx` | [ ] D | Reclassified: children (menus) are divergent/platform-specific |
+| 77 | `modal/index.tsx` | [x] S |
+| 78 | `rename-impact-modal/index.tsx` | [x] S |
+| 79 | `type-change-modal/index.tsx` | [ ] D | Reclassified: depends on type-change validation (store-component arch violation) |
+| 80 | `breadcrumbs/index.tsx` | [x] S |
+| 81 | `search/index.tsx` | [x] S |
+| 82 | `variables-panel/index.tsx` | [ ] D | Reclassified: editor uses Radix Popover, web uses custom ContextMenu |
+| 83 | `data-types/array/* (header + table)` | [ ] D | Reclassified: undo/redo pattern diverges (addSnapshot vs pushToHistory) |
+| 84 | `data-types/enumerated/*` | [ ] D | Reclassified: same undo/redo divergence |
+| 85 | `data-types/structure/* (table + elements)` | [ ] D | Reclassified: same undo/redo divergence |
+| 86 | `graphical-editor/fbd/fbd-utils/*` | [ ] D | Reclassified: useCopyPaste.ts divergent |
+| 87 | `graphical-editor/fbd/index.tsx` | [ ] D | Reclassified: heavily divergent (ID gen, node sync, delete logic) |
+| 88 | `graphical-editor/ladder/rung/index.tsx` | [ ] D | Reclassified: rung children divergent |
+| 89 | `graphical-editor/ladder/index.tsx` | [ ] D | Reclassified: depends on divergent children |
+| 90 | `graphical-editor/ladder/* utils` | [ ] D | Reclassified: ID generation differs (newGraphicalEditorNodeID vs uuidv4) |
+| 91 | `instances-table/*` | [ ] D | Reclassified: undo pattern + search highlighting diverges |
+| 92 | `library-tree/index.tsx` | [x] S |
+| 93 | `task-table/*` | [ ] D | Reclassified: undo pattern + search highlighting diverges |
+| 94 | `global-variables-table/elements/*` | [ ] D | Reclassified: type casting differs |
+| 95 | `variables-table/elements/*` | [ ] D | Reclassified: language filtering differs |
 
 ### Divergent
 | # | Component | Diff | Status | Notes |

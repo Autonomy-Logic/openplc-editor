@@ -1,1 +1,5 @@
 export { IconStyles } from './constants/icon-styles'
+export { LanguageIcon } from './constants/language-icons'
+export type { LanguageIconType } from './constants/language-icons'
+export { PouIcon } from './constants/pou-icons'
+export type { PouIconType } from './constants/pou-icons'

@@ -106,6 +106,8 @@ export type {
   Architecture,
   SystemInfo,
   RecentProject,
+  // Debugger session
+  FbInstanceInfo,
 } from './types'
 
 // --- PLC type system Zod schemas ---

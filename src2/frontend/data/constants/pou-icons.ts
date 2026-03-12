@@ -1,0 +1,12 @@
+import { DataTypeIcon, DeviceIcon, FunctionBlockIcon, FunctionIcon, ProgramIcon, ResourceIcon } from '../../../assets'
+
+export const PouIcon = {
+  function: FunctionIcon,
+  'function-block': FunctionBlockIcon,
+  program: ProgramIcon,
+  resource: ResourceIcon,
+  'data-type': DataTypeIcon,
+  device: DeviceIcon,
+}
+
+export type PouIconType = typeof PouIcon
