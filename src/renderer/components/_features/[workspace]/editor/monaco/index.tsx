@@ -3,6 +3,8 @@ import './configs'
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
+import { collectSTVariableNames } from '@root/renderer/utils/debug/collect-st-variables'
+import { type BlockCommentState, stripLineComments } from '@root/renderer/utils/debug/strip-line-comments'
 import { PLCVariable } from '@root/types/PLC'
 import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
 import { getExtensionFromLanguage, getFolderFromPouType } from '@root/utils/PLC/pou-file-extensions'
@@ -65,50 +67,6 @@ const bridge = window.bridge as unknown as {
   onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
 }
 
-// Replaces comment regions with spaces so column positions are preserved.
-// Tracks block comment state across lines: (*..*), /*..*/, and // line comments.
-type BlockCommentState = false | 'paren' | 'slash'
-function stripLineComments(line: string, state: BlockCommentState): { stripped: string; state: BlockCommentState } {
-  const chars = [...line]
-  let i = 0
-  let s = state
-
-  while (i < chars.length) {
-    if (s) {
-      const endMarker = s === 'paren' ? ')' : '/'
-      if (chars[i] === '*' && chars[i + 1] === endMarker) {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = false
-      } else {
-        chars[i] = ' '
-        i++
-      }
-    } else {
-      if (chars[i] === '/' && chars[i + 1] === '/') {
-        for (let j = i; j < chars.length; j++) chars[j] = ' '
-        break
-      }
-      if (chars[i] === '(' && chars[i + 1] === '*') {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = 'paren'
-      } else if (chars[i] === '/' && chars[i + 1] === '*') {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = 'slash'
-      } else {
-        i++
-      }
-    }
-  }
-
-  return { stripped: chars.join(''), state: s }
-}
-
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
@@ -146,6 +104,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     projectActions: { updatePou, createVariable },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { addSnapshot },
+    workspaceActions: { setDebugViewportVarNames },
   } = useOpenPLCStore()
 
   // Create a unique Monaco path by combining project path with relative path
@@ -287,6 +246,46 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   useEffect(() => {
     editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
   }, [isDebuggerVisible])
+
+  // Push visible variable names to store for ST/IL debugger polling (debounced 1s on scroll)
+  useEffect(() => {
+    if (!isDebuggerVisible || !editorRef.current || (language !== 'st' && language !== 'il')) return
+
+    const editor = editorRef.current
+    const model = editor.getModel()
+    if (!model) return
+
+    const varNames = pou?.data.variables.map((v) => v.name).filter((n) => n && n.trim() !== '') || []
+    if (varNames.length === 0) return
+
+    const computeVisibleVars = () => {
+      const ranges = editor.getVisibleRanges()
+      const visibleLines: string[] = []
+      for (const range of ranges) {
+        for (let line = range.startLineNumber; line <= range.endLineNumber; line++) {
+          visibleLines.push(model.getLineContent(line))
+        }
+      }
+      const sourceText = visibleLines.join('\n')
+      const visibleVarNames = collectSTVariableNames(sourceText, varNames)
+      setDebugViewportVarNames(visibleVarNames)
+    }
+
+    // Compute immediately
+    computeVisibleVars()
+
+    // Debounce on scroll
+    let timer: ReturnType<typeof setTimeout>
+    const disposable = editor.onDidScrollChange(() => {
+      clearTimeout(timer)
+      timer = setTimeout(computeVisibleVars, 1000)
+    })
+
+    return () => {
+      disposable.dispose()
+      clearTimeout(timer)
+    }
+  }, [isDebuggerVisible, editorMounted, name, language, pou?.data.variables, setDebugViewportVarNames])
 
   // Resolve FB instance context for composite key building
   const fbInstanceContext = useMemo(() => {

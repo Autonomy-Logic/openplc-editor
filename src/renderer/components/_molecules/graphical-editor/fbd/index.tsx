@@ -49,6 +49,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     modalActions: { closeModal, openModal },
     snapshotActions: { addSnapshot },
     workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables },
+    workspaceActions: { setDebugViewportVarNames },
   } = useOpenPLCStore()
   const getCompositeKey = useDebugCompositeKey()
 
@@ -697,6 +698,60 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     openModal(modalToOpen, node)
   }
 
+  // Compute visible variable names from FBD nodes within viewport bounds (debounced 1s)
+  const debugViewportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const computeFbdVisibleVars = useCallback(() => {
+    if (!isDebuggerVisible || !reactFlowInstance || !reactFlowViewportRef.current) return
+
+    const vp = reactFlowInstance.getViewport()
+    const containerRect = reactFlowViewportRef.current.getBoundingClientRect()
+    const visibleBounds = {
+      minX: -vp.x / vp.zoom,
+      maxX: (-vp.x + containerRect.width) / vp.zoom,
+      minY: -vp.y / vp.zoom,
+      maxY: (-vp.y + containerRect.height) / vp.zoom,
+    }
+
+    const varNames = new Set<string>()
+    for (const node of rung.nodes) {
+      // Check if node overlaps with visible bounds
+      const nodeRight = node.position.x + (node.measured?.width ?? node.width ?? 150)
+      const nodeBottom = node.position.y + (node.measured?.height ?? node.height ?? 50)
+      if (nodeRight < visibleBounds.minX || node.position.x > visibleBounds.maxX) continue
+      if (nodeBottom < visibleBounds.minY || node.position.y > visibleBounds.maxY) continue
+
+      if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
+        const varName = (node.data as { variable?: { name?: string } }).variable?.name
+        if (varName) varNames.add(varName)
+      }
+      if (node.type === 'block') {
+        const blockData = node.data as { variant?: { type: string }; numericId?: string }
+        if (blockData.numericId) varNames.add(blockData.numericId)
+      }
+    }
+
+    setDebugViewportVarNames(varNames)
+  }, [isDebuggerVisible, reactFlowInstance, rung.nodes, setDebugViewportVarNames])
+
+  // Compute on debug start and on viewport move (debounced)
+  useEffect(() => {
+    if (!isDebuggerVisible) return
+    computeFbdVisibleVars()
+  }, [isDebuggerVisible, computeFbdVisibleVars])
+
+  const handleDebugViewportMove = useCallback(() => {
+    if (!isDebuggerVisible) return
+    if (debugViewportTimerRef.current) clearTimeout(debugViewportTimerRef.current)
+    debugViewportTimerRef.current = setTimeout(computeFbdVisibleVars, 1000)
+  }, [isDebuggerVisible, computeFbdVisibleVars])
+
+  useEffect(() => {
+    return () => {
+      if (debugViewportTimerRef.current) clearTimeout(debugViewportTimerRef.current)
+    }
+  }, [])
+
   /**
    * Handle the close of the modal
    */
@@ -768,6 +823,8 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
           onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,
           onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
+
+          onMoveEnd: handleDebugViewportMove,
 
           preventScrolling: canZoom,
           panOnDrag: canPan,

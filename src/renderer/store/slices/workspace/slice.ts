@@ -27,6 +27,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugExpandedNodes: new Map(),
     fbDebugInstances: new Map(),
     fbSelectedInstance: new Map(),
+    debugViewportVarNames: new Set(),
     isPlcLogsVisible: false,
     plcLogs: '',
     plcLogsLastId: null,
@@ -156,6 +157,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugExpandedNodes = new Map()
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
+          workspace.debugViewportVarNames = new Set()
           // Reset PLC logs state
           workspace.isPlcLogsVisible = false
           workspace.plcLogs = ''
@@ -172,6 +174,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.isDebuggerVisible = isVisible
+          if (!isVisible) {
+            workspace.debugViewportVarNames = new Set()
+          }
         }),
       )
     },
@@ -255,6 +260,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugForcedVariables.delete(compositeKey)
           workspace.debugVariableTree.delete(compositeKey)
           workspace.debugExpandedNodes.delete(compositeKey)
+        }),
+      )
+    },
+    setDebugViewportVarNames: (varNames: Set<string>): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugViewportVarNames = varNames
         }),
       )
     },

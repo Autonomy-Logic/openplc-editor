@@ -25,7 +25,7 @@ import { ladderSelectors } from '@root/renderer/hooks'
 import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState, zodLadderFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -50,6 +50,7 @@ export default function LadderEditor() {
     snapshotActions: { addSnapshot },
     libraries: { user: userLibraries },
     workspace: { isDebuggerVisible },
+    workspaceActions: { setDebugViewportVarNames },
   } = useOpenPLCStore()
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
@@ -243,6 +244,76 @@ export default function LadderEditor() {
       })
     }
   }, [scrollableRef.current, editor.meta.name])
+
+  // Collect variable names from ladder rung nodes (contacts, coils, blocks)
+  const collectVarNamesFromRungs = useCallback((visibleRungs: RungLadderState[]) => {
+    const names = new Set<string>()
+    for (const rung of visibleRungs) {
+      for (const node of rung.nodes) {
+        if (node.type === 'contact' || node.type === 'coil') {
+          const varName = (node.data as { variable?: { name?: string } }).variable?.name
+          if (varName) names.add(varName)
+        }
+        if (node.type === 'block') {
+          const blockData = node.data as { variant?: { type: string }; numericId?: string }
+          if (blockData.numericId) names.add(blockData.numericId)
+        }
+      }
+    }
+    return names
+  }, [])
+
+  // Push visible viewport variable names to store (debounced 1s) during debug
+  const debugTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!isDebuggerVisible || !scrollableRef.current) {
+      return
+    }
+
+    const computeVisibleVars = () => {
+      const container = scrollableRef.current
+      if (!container) return
+
+      const scrollTop = container.scrollTop
+      const viewportHeight = container.clientHeight
+      const viewportBottom = scrollTop + viewportHeight
+
+      // Find visible rungs by checking rung element positions (each rung div has id={rung.id})
+      const visibleRungIds = new Set<string>()
+
+      for (const rung of rungs) {
+        const el = document.getElementById(rung.id)
+        if (!el) continue
+        const top = el.offsetTop
+        const bottom = top + el.offsetHeight
+        // Rung overlaps with viewport
+        if (bottom > scrollTop && top < viewportBottom) {
+          visibleRungIds.add(rung.id)
+        }
+      }
+
+      const visibleRungs = rungs.filter((r) => visibleRungIds.has(r.id))
+      const varNames = collectVarNamesFromRungs(visibleRungs.length > 0 ? visibleRungs : rungs)
+      setDebugViewportVarNames(varNames)
+    }
+
+    // Compute immediately
+    computeVisibleVars()
+
+    // Debounced scroll handler
+    const handleScroll = () => {
+      if (debugTimerRef.current) clearTimeout(debugTimerRef.current)
+      debugTimerRef.current = setTimeout(computeVisibleVars, 1000)
+    }
+
+    const container = scrollableRef.current
+    container.addEventListener('scroll', handleScroll)
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll)
+      if (debugTimerRef.current) clearTimeout(debugTimerRef.current)
+    }
+  }, [isDebuggerVisible, rungs, collectVarNamesFromRungs, setDebugViewportVarNames])
 
   function getLibraryDivergences() {
     if (!flow) return []
