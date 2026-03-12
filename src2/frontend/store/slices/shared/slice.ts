@@ -2,6 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { SharedRootState, SharedSlice } from './types'
+import { CreateEditorObjectFromTab } from '../tabs/utils'
 import {
   createDatatypeObject,
   createEditorObjectForDatatype,
@@ -257,6 +258,77 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.tabsActions.updateTabName(oldName, newName)
 
       return { ok: true }
+    },
+  },
+
+  sharedWorkspaceActions: {
+    handleFileAndWorkspaceSavedState: (name) => {
+      const { file } = getState().fileActions.getFile({ name })
+      if (!file) {
+        console.warn(`File with name ${name} does not exist.`)
+        return
+      }
+
+      if (file.saved) {
+        getState().fileActions.updateFile({ name, saved: false })
+      }
+
+      if (getState().workspace.editingState !== 'unsaved') {
+        getState().workspaceActions.setEditingState('unsaved')
+      }
+    },
+
+    forceCloseFile: (name) => {
+      getState().tabsActions.removeTab(name)
+
+      const filteredTabs = getState().tabs
+      const nextTab = filteredTabs[filteredTabs.length - 1]
+      if (!nextTab) {
+        getState().editorActions.setEditor({ type: 'available', meta: { name: '' } })
+        getState().tabsActions.setSelectedTab('')
+        getState().workspaceActions.setSelectedProjectTreeLeaf({ label: '', type: null })
+        return { success: true }
+      }
+
+      const editor =
+        getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
+      getState().editorActions.setEditor(editor)
+      getState().tabsActions.setSelectedTab(nextTab.name)
+      getState().workspaceActions.setSelectedProjectTreeLeaf({
+        label: nextTab.name,
+        type: nextTab.elementType.type,
+      })
+
+      return { success: true }
+    },
+
+    closeProject: () => {
+      const editingState = getState().workspace.editingState
+      const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved()
+
+      if (!isFilesSaved || editingState === 'unsaved') {
+        getState().modalActions.openModal('save-changes-project', {
+          validationContext: 'close-project',
+        })
+        return
+      }
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    },
+
+    clearStatesOnCloseProject: () => {
+      getState().editorActions.clearEditor()
+      getState().tabsActions.clearTabs()
+      getState().libraryActions.clearUserLibraries()
+      getState().fbdFlowActions.clearFBDFlows()
+      getState().ladderFlowActions.clearLadderFlows()
+      getState().projectActions.clearProjects()
+      getState().deviceActions.clearDeviceDefinitions()
+      getState().workspaceActions.clearWorkspace()
+      getState().fileActions.clearFiles()
+      getState().consoleActions.clearLogs()
+      getState().historyActions.clearHistory()
+      getState().searchActions.clearSearch()
+      getState().modalActions.closeModal()
     },
   },
 

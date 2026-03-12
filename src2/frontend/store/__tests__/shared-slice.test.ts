@@ -2,8 +2,12 @@ import { createStore } from 'zustand/vanilla'
 
 import type { PLCPou } from '../../../middleware/shared/ports/types'
 import { createConsoleSlice } from '../slices/console/slice'
+import { createDeviceSlice } from '../slices/device/slice'
 import { createEditorSlice } from '../slices/editor/slice'
+import { createFBDFlowSlice } from '../slices/fbd/slice'
 import { createFileSlice } from '../slices/file/slice'
+import { createHistorySlice } from '../slices/history/slice'
+import { createLadderFlowSlice } from '../slices/ladder/slice'
 import { createLibrarySlice } from '../slices/library/slice'
 import { createModalSlice } from '../slices/modal/slice'
 import { createProjectSlice } from '../slices/project/slice'
@@ -24,6 +28,10 @@ function makeStore() {
     ...createModalSlice(...args),
     ...createSearchSlice(...args),
     ...createConsoleSlice(...args),
+    ...createDeviceSlice(...args),
+    ...createFBDFlowSlice(...args),
+    ...createLadderFlowSlice(...args),
+    ...createHistorySlice(...args),
     ...createSharedSlice(...args),
   }))
 }
@@ -1138,6 +1146,148 @@ describe('createSharedSlice', () => {
         // Redo: restore v2-state
         store.getState().snapshotActions.redo('Main')
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('v2')
+      })
+    })
+  })
+
+  // =========================================================================
+  // sharedWorkspaceActions
+  // =========================================================================
+  describe('sharedWorkspaceActions', () => {
+    // -----------------------------------------------------------------------
+    // handleFileAndWorkspaceSavedState
+    // -----------------------------------------------------------------------
+    describe('handleFileAndWorkspaceSavedState', () => {
+      it('marks a saved file as unsaved', () => {
+        // Create a POU to get a file
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        // File should be new (isNew: true), mark it as saved first
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        expect(store.getState().fileActions.getSavedState({ name: 'TestPou' })).toBe(true)
+
+        store.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState('TestPou')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'TestPou' })).toBe(false)
+      })
+
+      it('sets workspace editingState to unsaved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        store.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState('TestPou')
+
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
+      it('does not change file saved state if already unsaved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: false })
+
+        store.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState('TestPou')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'TestPou' })).toBe(false)
+      })
+
+      it('does not change editingState if already unsaved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        store.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState('TestPou')
+
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
+      it('warns but does not throw for non-existent file', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        store.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState('NonExistent')
+        expect(warnSpy).toHaveBeenCalledWith('File with name NonExistent does not exist.')
+        warnSpy.mockRestore()
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // forceCloseFile
+    // -----------------------------------------------------------------------
+    describe('forceCloseFile', () => {
+      it('removes the tab and selects the previous tab', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'PouA', language: 'st' })
+        store.getState().pouActions.create({ type: 'program', name: 'PouB', language: 'st' })
+
+        const result = store.getState().sharedWorkspaceActions.forceCloseFile('PouB')
+
+        expect(result).toEqual({ success: true })
+        expect(store.getState().tabs.find((t) => t.name === 'PouB')).toBeUndefined()
+        // PouA should be selected
+        expect(store.getState().editor.meta.name).toBe('PouA')
+      })
+
+      it('falls back to CreateEditorObjectFromTab when editor not in editors array', () => {
+        // Add a tab directly without a corresponding editor model
+        store.getState().tabsActions.updateTabs({
+          name: 'OrphanTab',
+          elementType: { type: 'program', language: 'st' },
+        })
+        store.getState().pouActions.create({ type: 'program', name: 'ToClose', language: 'st' })
+
+        const result = store.getState().sharedWorkspaceActions.forceCloseFile('ToClose')
+
+        expect(result).toEqual({ success: true })
+        // OrphanTab should be selected via CreateEditorObjectFromTab fallback
+        expect(store.getState().editor.meta.name).toBe('OrphanTab')
+      })
+
+      it('clears editor when last tab is closed', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'OnlyPou', language: 'st' })
+
+        store.getState().sharedWorkspaceActions.forceCloseFile('OnlyPou')
+
+        expect(store.getState().tabs).toHaveLength(0)
+        expect(store.getState().editor.type).toBe('available')
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // closeProject
+    // -----------------------------------------------------------------------
+    describe('closeProject', () => {
+      it('opens save-changes modal when there are unsaved changes', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        store.getState().sharedWorkspaceActions.closeProject()
+
+        const modalState = store.getState().modalActions.getModalState('save-changes-project')
+        expect(modalState.open).toBe(true)
+      })
+
+      it('clears state when everything is saved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        store.getState().sharedWorkspaceActions.closeProject()
+
+        // State should be cleared
+        expect(store.getState().tabs).toHaveLength(0)
+        expect(store.getState().project.data.pous).toHaveLength(0)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // clearStatesOnCloseProject
+    // -----------------------------------------------------------------------
+    describe('clearStatesOnCloseProject', () => {
+      it('resets all slice states', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().consoleActions.addLog({ id: '1', level: 'info', message: 'test' })
+
+        store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+
+        expect(store.getState().tabs).toHaveLength(0)
+        expect(store.getState().project.data.pous).toHaveLength(0)
+        expect(store.getState().logs).toHaveLength(0)
+        expect(store.getState().editor.type).toBe('available')
       })
     })
   })
