@@ -8,7 +8,7 @@ components
 
 ## Current Step
 
-25
+26
 
 ## Step Log
 
@@ -41,7 +41,7 @@ components
 | 23 | components | Molecules batch 1 — shared identical (10 modules migrated, divergent deferred to step 24) | done | 2026-03-11 |
 | 24 | components | Molecules batch 2a — divergent non-graphical-editor molecules | done | 2026-03-12 |
 | 24b | components | Molecules batch 2b — graphical-editor divergent molecules (fbd/ladder utils, fbd-utils, rung, index) | done | 2026-03-12 |
-| 25 | components | Organisms — shared | pending | |
+| 25 | components | Organisms — shared (15 files: console, explorer, global-variables-editor, graphical-editor/ladder, navigation, panel, plc-logs, variables-code-editor, workspace-activity-bar) | done | 2026-03-12 |
 | 26 | components | Organisms — platform-specific (port-dependent) | pending | |
 | 27 | components | Features — shared | pending | |
 | 28 | components | Features — platform-specific | pending | |

@@ -101,6 +101,7 @@ export type {
   DebugCompileResult,
   // Console
   LogObject,
+  PlcLogs,
   // System
   Platform,
   Architecture,
@@ -109,6 +110,9 @@ export type {
   // Debugger session
   FbInstanceInfo,
 } from './types'
+
+// --- Runtime log helpers ---
+export { isV4Logs } from './types'
 
 // --- PLC type system Zod schemas ---
 export { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from './plc-schemas'
