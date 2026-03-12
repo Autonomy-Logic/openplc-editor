@@ -8,7 +8,7 @@ components
 
 ## Current Step
 
-24
+24b
 
 ## Step Log
 
@@ -39,7 +39,8 @@ components
 | 22 | components | Atoms batch 2a — simple divergent atoms, generic-table-inputs, UI scroll-area | done | 2026-03-11 |
 | 22b | components | Atoms batch 2b — graphical editor divergent atoms + platform-specific atoms | done | 2026-03-11 |
 | 23 | components | Molecules batch 1 — shared identical (10 modules migrated, divergent deferred to step 24) | done | 2026-03-11 |
-| 24 | components | Molecules batch 2 — divergent (reconcile) | pending | |
+| 24 | components | Molecules batch 2a — divergent non-graphical-editor molecules | done | 2026-03-12 |
+| 24b | components | Molecules batch 2b — graphical-editor divergent molecules (fbd/ladder utils, fbd-utils, rung, index) | pending | |
 | 25 | components | Organisms — shared | pending | |
 | 26 | components | Organisms — platform-specific (port-dependent) | pending | |
 | 27 | components | Features — shared | pending | |

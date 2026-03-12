@@ -109,42 +109,42 @@ Legend:
 | # | Component | Status |
 |---|-----------|--------|
 | 70 | `file/*` (4 files) | [x] S |
-| 71 | `pin-mapping-table/*` (4 files) | [ ] S |
+| 71 | `pin-mapping-table/*` (4 files) | [x] S |
 | 72 | `select-field/index.tsx` | [x] S |
 | 73 | `input-field/index.tsx` | [x] S |
 | 74 | `toast/index.tsx` | [x] S |
 | 75 | `window-controls/index.tsx` | [ ] E | Reclassified: editor-only (uses window.bridge) |
-| 76 | `menu-bar/index.tsx` | [ ] D | Reclassified: children (menus) are divergent/platform-specific |
+| 76 | `menu-bar/index.tsx` | [x] D | Reconciled step 24: shell + stub menus |
 | 77 | `modal/index.tsx` | [x] S |
 | 78 | `rename-impact-modal/index.tsx` | [x] S |
-| 79 | `type-change-modal/index.tsx` | [ ] D | Reclassified: depends on type-change validation (store-component arch violation) |
+| 79 | `type-change-modal/index.tsx` | [x] D | Reconciled step 24: validation extracted to backend/shared |
 | 80 | `breadcrumbs/index.tsx` | [x] S |
 | 81 | `search/index.tsx` | [x] S |
-| 82 | `variables-panel/index.tsx` | [ ] D | Reclassified: editor uses Radix Popover, web uses custom ContextMenu |
-| 83 | `data-types/array/* (header + table)` | [ ] D | Reclassified: undo/redo pattern diverges (addSnapshot vs pushToHistory) |
-| 84 | `data-types/enumerated/*` | [ ] D | Reclassified: same undo/redo divergence |
-| 85 | `data-types/structure/* (table + elements)` | [ ] D | Reclassified: same undo/redo divergence |
+| 82 | `variables-panel/index.tsx` | [x] D | Reconciled step 24 |
+| 83 | `data-types/array/* (header + table)` | [x] D | Reconciled step 24 |
+| 84 | `data-types/enumerated/*` | [x] D | Reconciled step 24 |
+| 85 | `data-types/structure/* (table + elements)` | [x] D | Reconciled step 24 |
 | 86 | `graphical-editor/fbd/fbd-utils/*` | [ ] D | Reclassified: useCopyPaste.ts divergent |
 | 87 | `graphical-editor/fbd/index.tsx` | [ ] D | Reclassified: heavily divergent (ID gen, node sync, delete logic) |
 | 88 | `graphical-editor/ladder/rung/index.tsx` | [ ] D | Reclassified: rung children divergent |
 | 89 | `graphical-editor/ladder/index.tsx` | [ ] D | Reclassified: depends on divergent children |
 | 90 | `graphical-editor/ladder/* utils` | [ ] D | Reclassified: ID generation differs (newGraphicalEditorNodeID vs uuidv4) |
-| 91 | `instances-table/*` | [ ] D | Reclassified: undo pattern + search highlighting diverges |
+| 91 | `instances-table/*` | [x] D | Reconciled step 24 |
 | 92 | `library-tree/index.tsx` | [x] S |
-| 93 | `task-table/*` | [ ] D | Reclassified: undo pattern + search highlighting diverges |
-| 94 | `global-variables-table/elements/*` | [ ] D | Reclassified: type casting differs |
-| 95 | `variables-table/elements/*` | [ ] D | Reclassified: language filtering differs |
+| 93 | `task-table/*` | [x] D | Reconciled step 24 |
+| 94 | `global-variables-table/elements/*` | [x] D | Reconciled step 24 |
+| 95 | `variables-table/elements/*` | [x] D | Reconciled step 24 |
 
 ### Divergent
 | # | Component | Diff | Status | Notes |
 |---|-----------|------|--------|-------|
-| 96 | `charts/line-chart.tsx` | 50% | [ ] D | Editor much larger |
-| 97 | `global-variables-table/editable-cell.tsx` | 21% | [ ] D | |
-| 98 | `global-variables-table/selectable-cell.tsx` | 30% | [ ] D | |
-| 99 | `variables-table/editable-cell.tsx` | 48% | [ ] D | Web much larger |
-| 100 | `tabs/index.tsx` | 23% | [ ] D | Web larger |
-| 101 | `graphical-editor/ladder/rung/body.tsx` | 13% | [ ] D | Web larger |
-| 102 | `workspace-activity-bar/download.tsx` | 47% | [ ] D | |
+| 96 | `charts/line-chart.tsx` | 50% | [x] D | Reconciled step 24 |
+| 97 | `global-variables-table/editable-cell.tsx` | 21% | [x] D | Reconciled step 24 |
+| 98 | `global-variables-table/selectable-cell.tsx` | 30% | [x] D | Reconciled step 24 |
+| 99 | `variables-table/editable-cell.tsx` | 48% | [x] D | Reconciled step 24 |
+| 100 | `tabs/index.tsx` | 23% | [x] D | Reconciled step 24 |
+| 101 | `graphical-editor/ladder/rung/body.tsx` | 13% | [ ] D | Deferred to step 24b |
+| 102 | `workspace-activity-bar/download.tsx` | 47% | [x] D | Reconciled step 24 |
 
 ### Platform-specific (menus)
 | # | Component | Status | Notes |
