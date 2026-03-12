@@ -283,6 +283,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [pou?.type, name, language])
 
+  // Reset editorMounted when switching POUs so debug position scanning
+  // waits for the new model to be ready via onMount
+  useEffect(() => {
+    setEditorMounted(false)
+  }, [name])
+
   // Update readOnly when debugger visibility changes on an already-mounted editor
   useEffect(() => {
     editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
