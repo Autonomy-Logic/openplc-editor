@@ -1,7 +1,9 @@
-import { baseTypeSchema, genericTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { resolveArrayVariableByName } from '../../../../../backend/shared/array-variable-utils'
-import { ZodLiteral } from 'zod'
+import {
+  validateVariableType as _validateVariableType,
+  getVariableRestrictionType,
+} from '../../../../../backend/shared/validate-variable-type'
 
 import { BlockVariant } from '../ladder/utils'
 import { BlockVariant as newBlockVariant } from '../types/block'
@@ -45,104 +47,10 @@ export const validateVariableType = (
   selectedType: string,
   expectedType: BlockVariant['variables'][0] | string,
 ): { isValid: boolean; error?: string } => {
-  const upperSelectedType = selectedType.toUpperCase()
-  const upperExpectedType = typeof expectedType === 'string' ? expectedType : expectedType.type.value.toUpperCase()
-
-  if (upperExpectedType === 'ANY') {
-    return {
-      isValid: true,
-      error: undefined,
-    }
+  if (typeof expectedType === 'string') {
+    return _validateVariableType(selectedType, expectedType)
   }
-
-  // Handle generic types
-  if (upperExpectedType.includes('ANY_')) {
-    const validTypes = genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options
-    if (validTypes.length > 1) {
-      const subValues: string[] = []
-      validTypes.forEach((value) => {
-        if (typeof value === 'string') {
-          subValues.push(value.toLowerCase())
-          return
-        }
-
-        if (value instanceof ZodLiteral) {
-          ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
-            (subValue) => {
-              subValues.push(subValue.toLowerCase())
-            },
-          )
-          return
-        }
-      })
-
-      return {
-        isValid: subValues.includes(upperSelectedType.toLowerCase()),
-        error: subValues.includes(upperSelectedType.toLowerCase())
-          ? undefined
-          : `Expected one of: ${subValues.join(', ')}`,
-      }
-    }
-    return {
-      isValid: Object.values(validTypes).includes(upperSelectedType),
-      error: Object.values(validTypes).includes(upperSelectedType)
-        ? undefined
-        : `Expected one of: ${Object.values(validTypes).join(', ')}`,
-    }
-  }
-
-  // Handle specific types
-  return {
-    isValid: upperSelectedType === upperExpectedType,
-    error:
-      upperSelectedType === upperExpectedType ? undefined : `Expected: ${upperExpectedType}, Got: ${upperSelectedType}`,
-  }
+  return _validateVariableType(selectedType, expectedType.type.value)
 }
 
-export const getVariableRestrictionType = (variableType: string) => {
-  if (variableType === 'ANY') {
-    return {
-      values: undefined,
-      definition: undefined,
-    }
-  }
-
-  if (variableType.includes('ANY_')) {
-    const values = genericTypeSchema.shape[variableType as keyof typeof genericTypeSchema.shape].options
-    if (values.length > 1) {
-      const subValues: string[] = []
-      values.forEach((value) => {
-        if (typeof value === 'string') {
-          subValues.push(value.toLowerCase())
-          return
-        }
-
-        if (value instanceof ZodLiteral) {
-          ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
-            (subValue) => {
-              subValues.push(subValue.toLowerCase())
-            },
-          )
-          return
-        }
-      })
-      return {
-        values: subValues,
-        definition: 'base-type',
-      }
-    }
-    return {
-      values: (values as string[]).map((value) => value.toLowerCase()),
-      definition: 'base-type',
-    }
-  }
-
-  const isABaseType = baseTypeSchema.safeParse(variableType)
-
-  return {
-    // For base types, lowercase is fine (they're standardized and compared case-insensitively)
-    // For derived/custom types, preserve original case to match user-defined type names
-    values: isABaseType.success ? variableType.toLowerCase() : variableType,
-    definition: isABaseType.success ? 'base-type' : 'derived',
-  }
-}
+export { getVariableRestrictionType }
