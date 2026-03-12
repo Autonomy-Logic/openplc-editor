@@ -162,18 +162,18 @@ Legend:
 ### Identical / near-identical
 | # | Component | Status |
 |---|-----------|--------|
-| 107 | `console/* (3 files)` | [ ] S |
-| 108 | `explorer/index.tsx` | [ ] S |
-| 109 | `explorer/info.tsx` | [ ] S |
-| 110 | `global-variables-editor/index.tsx` | [ ] S |
-| 111 | `graphical-editor/ladder/index.ts` | [ ] S |
-| 112 | `graphical-editor/ladder/rung/index.tsx` | [ ] S |
-| 113 | `navigation/index.tsx` | [ ] S |
-| 114 | `panel/index.tsx` | [ ] S |
-| 115 | `plc-logs/* (2 files)` | [ ] S |
-| 116 | `variables-code-editor/index.tsx` | [ ] S |
-| 117 | `workspace-activity-bar/fbd-toolbox.tsx` | [ ] S |
-| 118 | `workspace-activity-bar/index.tsx` | [ ] S |
+| 107 | `console/* (3 files)` | [x] S |
+| 108 | `explorer/index.tsx` | [x] S |
+| 109 | `explorer/info.tsx` | [x] S |
+| 110 | `global-variables-editor/index.tsx` | [x] S |
+| 111 | `graphical-editor/ladder/index.ts` | [x] S |
+| 112 | `graphical-editor/ladder/rung/index.tsx` | [x] S |
+| 113 | `navigation/index.tsx` | [x] S |
+| 114 | `panel/index.tsx` | [x] S |
+| 115 | `plc-logs/* (2 files)` | [x] S |
+| 116 | `variables-code-editor/index.tsx` | [x] S |
+| 117 | `workspace-activity-bar/fbd-toolbox.tsx` | [x] S |
+| 118 | `workspace-activity-bar/index.tsx` | [x] S |
 
 ### Divergent
 | # | Component | Diff | Status | Notes |
