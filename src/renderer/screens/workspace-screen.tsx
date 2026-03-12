@@ -1356,6 +1356,64 @@ const WorkspaceScreen = () => {
           }
         }
 
+        // --- ST/IL: poll variables that appear in the editor source text ---
+        if (currentPou && (currentPou.data.body.language === 'st' || currentPou.data.body.language === 'il')) {
+          const sourceText = typeof currentPou.data.body.value === 'string' ? currentPou.data.body.value : ''
+          if (sourceText) {
+            // Build candidate list: all POU variables
+            const candidates = currentPou.data.variables.map((v) => v.name).filter((n) => n && n.trim() !== '')
+
+            // Check which variables appear in the source text (word-boundary match)
+            for (const varName of candidates) {
+              const pattern = new RegExp(`\\b${varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+              if (pattern.test(sourceText)) {
+                const compositeKey = makeCompositeKeyForCurrentPou(varName)
+                if (compositeKey) {
+                  debugVariableKeys.add(compositeKey)
+                }
+              }
+            }
+
+            // For derived-type (FB instance) variables that appear in source, poll their children
+            const fbInstances = currentPou.data.variables.filter(
+              (v) => v.type.definition === 'derived' && v.name && v.name.trim() !== '',
+            )
+            for (const fbInstance of fbInstances) {
+              const fbPattern = new RegExp(`\\b${fbInstance.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+              if (!fbPattern.test(sourceText)) continue
+
+              Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
+                for (const varInfo of varInfos) {
+                  if (currentPou.type === 'function-block') {
+                    // FB POU: resolve through instance context
+                    const fbTypeKey = currentPou.data.name.toUpperCase()
+                    const selectedKey = fbSelectedInstance.get(fbTypeKey)
+                    if (selectedKey) {
+                      const instances = fbDebugInstances.get(fbTypeKey) || []
+                      const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+                      if (
+                        selectedInstance &&
+                        varInfo.pouName === selectedInstance.programName &&
+                        varInfo.variable.name.startsWith(`${selectedInstance.fbVariableName}.${fbInstance.name}.`)
+                      ) {
+                        debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                      }
+                    }
+                  } else {
+                    // Program POU: match directly
+                    if (
+                      varInfo.pouName === currentPou.data.name &&
+                      varInfo.variable.name.startsWith(`${fbInstance.name}.`)
+                    ) {
+                      debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                    }
+                  }
+                }
+              })
+            }
+          }
+        }
+
         // Forced variables must also be polled so their current value appears in the debugger panel
         const {
           workspace: { debugForcedVariables: currentForcedVars },
