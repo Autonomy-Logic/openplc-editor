@@ -104,7 +104,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             (variable) =>
               variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
               (variableRestrictions.values === undefined ||
-                variableRestrictions.values.includes(variable.type.value.toLowerCase())),
+                variableRestrictions.values.map((v) => v.toLowerCase()).includes(variable.type.value.toLowerCase())),
           )
           .sort((a, b) => {
             const aNumber = extractNumberAtEnd(a.name).number
