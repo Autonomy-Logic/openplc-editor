@@ -36,7 +36,7 @@ export interface PLCVariableType {
   definition: VariableTypeDefinition
   value: string
   data?: {
-    baseType: string
+    baseType: { definition: 'base-type' | 'user-data-type'; value: string }
     dimensions: Array<{ dimension: string }>
   }
 }

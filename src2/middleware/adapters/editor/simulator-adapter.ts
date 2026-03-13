@@ -15,7 +15,9 @@
 import type { SimulatorPort } from '../../shared/ports/simulator-port'
 import type { SimulatorDebugResult, Unsubscribe } from '../../shared/ports/types'
 
-export function createEditorSimulatorAdapter(): SimulatorPort {
+export function createEditorSimulatorAdapter(
+  getProjectContext?: () => { projectPath: string; boardTarget: string },
+): SimulatorPort {
   let running = false
   const stopCallbacks: Array<() => void> = []
 
@@ -75,7 +77,11 @@ export function createEditorSimulatorAdapter(): SimulatorPort {
     },
 
     async getDebugMd5Hash(): Promise<string> {
-      const result = await window.bridge.debuggerReadProgramMd5()
+      if (!getProjectContext) {
+        throw new Error('Project context not available for MD5 hash')
+      }
+      const { projectPath, boardTarget } = getProjectContext()
+      const result = await window.bridge.debuggerReadProgramStMd5(projectPath, boardTarget)
       if (!result.success || !result.md5) {
         throw new Error(result.error ?? 'Failed to read MD5 hash')
       }
@@ -114,7 +120,7 @@ export function createEditorSimulatorAdapter(): SimulatorPort {
           valueBuffer.push(parseInt(hexClean.substring(i, i + 2), 16))
         }
       }
-      return window.bridge.debuggerSetVariable(index, force, valueBuffer)
+      return window.bridge.debuggerSetVariable(index, force, valueBuffer ? new Uint8Array(valueBuffer) : undefined)
     },
   }
 }
