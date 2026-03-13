@@ -8,7 +8,7 @@ components
 
 ## Current Step
 
-27
+28
 
 ## Step Log
 
@@ -44,7 +44,7 @@ components
 | 25 | components | Organisms — shared (15 files: console, explorer, global-variables-editor, graphical-editor/ladder, navigation, panel, plc-logs, variables-code-editor, workspace-activity-bar) | done | 2026-03-12 |
 | 26 | components | Organisms — platform-specific (port-dependent) | done | 2026-03-12 |
 | 27 | components | Features — shared (45 files: toast, menu, new-project store/interval-model/first-step, graphical editor routing/SFC, device configuration + pin-mapping-table, monaco completion/configs/languages/themes/drag-and-drop, server barrel + opcua-server, create-element data-type-element, arrow-button-group, fbd/ladder block library, ladder coil/contact) | done | 2026-03-12 |
-| 28 | components | Features — platform-specific | pending | |
+| 28 | components | Features — platform-specific (97 files: divergent reconciliation of search, create-element, device/board, monaco editor, data-type editor; web-only AI chat, debug-manager, loading-overlay, orchestrators, device elements; editor-only device-aware gating; new utils device.ts, formatters/POU.ts, data sources data-type.tsx) | done | 2026-03-13 |
 | 29 | components | Templates and screens | pending | |
 | 30 | components | Hooks migration | pending | |
 | 31 | integration | App shell and routing | pending | |

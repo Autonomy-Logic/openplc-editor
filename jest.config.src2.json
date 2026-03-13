@@ -49,6 +49,7 @@
     "!src2/frontend/store/slices/project/validation/**",
     "!src2/frontend/utils/generate-uuid.ts",
     "!src2/frontend/utils/variable-types.ts",
+    "!src2/frontend/utils/variable-reference-types.ts",
     "!src2/backend/shared/array-variable-utils.ts",
     "!src2/jest-vi-shim.ts"
   ],
