@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { CreatePouSources, PouLanguageSources } from '../../../../../../data'
+import { CreatePouSources, PouLanguageSources } from '../../../../../data'
 import * as Popover from '@radix-ui/react-popover'
-import { ArrowIcon } from '../../../../../../assets'
-import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms'
-import { DatatypeDerivationSources } from '../../../../../../data/sources/data-type'
-import { useOpenPLCStore } from '../../../../../../store'
-import type { PLCDataType } from '../../../../../../../middleware/shared/ports/types'
+import { ArrowIcon } from '../../../../../assets'
+import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms'
+import { DatatypeDerivationSources } from '../../../../../data/sources/data-type'
+import { useOpenPLCStore } from '../../../../../store'
+import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
 
 type PLCArrayDatatype = Extract<PLCDataType, { derivation: 'array' }>
 type PLCEnumeratedDatatype = Extract<PLCDataType, { derivation: 'enumerated' }>
@@ -17,7 +17,7 @@ import {
   isArduinoTarget as checkIsArduinoTarget,
   isOpenPLCRuntimeV4Target,
   isSimulatorTarget,
-} from '../../../../../../utils'
+} from '../../../../../utils'
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'

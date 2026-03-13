@@ -1,5 +1,5 @@
 import * as Switch from '@radix-ui/react-switch'
-import { InputWithRef } from '../../../../../../_atoms'
+import { InputWithRef } from '../../../../../../../_atoms'
 import {
   BlockNode,
   BlockNodeData,
@@ -7,16 +7,16 @@ import {
   BlockVariant as LadderBlockVariant,
   buildBlockNode,
   getBlockSize,
-} from '../../../../../../_atoms/graphical-editor/ladder/block'
-import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../_atoms/graphical-editor/ladder/utils'
-import { BasicNodeData } from '../../../../../../_atoms/graphical-editor/ladder/utils/types'
-import { BlockVariant } from '../../../../../../_atoms/graphical-editor/types/block'
+} from '../../../../../../../_atoms/graphical-editor/ladder/block'
+import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils'
+import { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
 import {
   getBlockDocumentation,
   getVariableRestrictionType,
-} from '../../../../../../_atoms/graphical-editor/utils'
-import { Modal, ModalContent, ModalTitle } from '../../../../../../_molecules'
-import { updateDiagramElementsPosition } from '../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+} from '../../../../../../../_atoms/graphical-editor/utils'
+import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules'
+import { updateDiagramElementsPosition } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '../../../../../../../../store'
 import { EditorModel, LibraryState } from '../../../../../../../../store/slices'
 import { PLCPou } from '../../../../../../../../../middleware/shared/ports'

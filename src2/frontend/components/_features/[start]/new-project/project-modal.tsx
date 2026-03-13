@@ -1,5 +1,5 @@
-import { Modal, ModalContent, ModalTitle } from '../../../../_molecules'
-import { useOpenPLCStore } from '../../../../../store'
+import { Modal, ModalContent, ModalTitle } from '../../../_molecules'
+import { useOpenPLCStore } from '../../../../store'
 import { useEffect, useState } from 'react'
 
 import { Step1 } from './steps/first-step'

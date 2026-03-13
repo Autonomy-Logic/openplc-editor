@@ -1,4 +1,4 @@
-import { useOpenPLCStore } from '../../../../../../store'
+import { useOpenPLCStore } from '../../../../../store'
 import { useEffect } from 'react'
 
 import { DeviceConfigurationEditor } from './configuration'

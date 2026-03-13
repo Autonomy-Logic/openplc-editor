@@ -1,10 +1,10 @@
 import * as AccordionPrimitive from '@radix-ui/react-accordion'
 import { ChevronDownIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
-import { InputWithRef } from '../../../../../../_atoms/input'
-import { Label } from '../../../../../../_atoms/label'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
-import { useOpenPLCStore } from '../../../../../../../store'
-import { cn } from '../../../../../../../utils'
+import { InputWithRef } from '../../../../../_atoms/input'
+import { Label } from '../../../../../_atoms/label'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { useOpenPLCStore } from '../../../../../../store'
+import { cn } from '../../../../../../utils'
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 
 // UI-specific types for S7Comm buffer mapping.

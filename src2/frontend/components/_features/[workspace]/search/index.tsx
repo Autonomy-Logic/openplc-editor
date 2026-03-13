@@ -1,9 +1,9 @@
 import { CloseIcon } from '../../../../assets'
 import { Accordion } from '../../../_atoms/accordion'
-import { useOpenPLCStore } from '../../../../../store'
-import { Project, TabsProps } from '../../../../../store/slices'
-import { CreateEditorObjectFromTab } from '../../../../../store/slices/tabs/utils'
-import { extractSearchQuery } from '../../../../../store/slices/search/utils'
+import { useOpenPLCStore } from '../../../../store'
+import { Project, TabsProps } from '../../../../store/slices'
+import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
+import { extractSearchQuery } from '../../../../store/slices/search/utils'
 
 import {
   ProjectSearchTreeBranch,

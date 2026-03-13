@@ -20,8 +20,8 @@ import {
   StructureIcon,
 } from '../../../../../assets'
 import ZapIcon from '../../../../../assets/icons/interface/Zap'
-import { useOpenPLCStore } from '../../../../../../store'
-import { cn } from '../../../../../../utils'
+import { useOpenPLCStore } from '../../../../../store'
+import { cn } from '../../../../../utils'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
 type IProjectSearchTreeRootProps = ComponentPropsWithoutRef<'ul'> & {

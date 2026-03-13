@@ -1,7 +1,7 @@
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { InputWithRef } from '../../../../_atoms'
-import { useOpenPLCStore } from '../../../../../../store'
+import { useOpenPLCStore } from '../../../../../store'
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
