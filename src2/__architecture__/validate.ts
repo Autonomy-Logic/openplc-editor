@@ -17,11 +17,13 @@ import { dirname, join, relative, resolve } from 'node:path'
 
 type LayerName =
   | 'utils'
+  | 'data'
   | 'ports'
   | 'provider'
   | 'adapters'
   | 'backend-shared'
   | 'store'
+  | 'services'
   | 'hooks'
   | 'components'
   | 'architecture'
@@ -37,6 +39,10 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
   utils: {
     name: 'Domain (frontend/utils/)',
     allowedDeps: ['utils'],
+  },
+  data: {
+    name: 'Data (frontend/data/)',
+    allowedDeps: ['ports', 'utils', 'data'],
   },
   ports: {
     name: 'Application — Ports (middleware/shared/ports/)',
@@ -58,13 +64,17 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
     name: 'Store (frontend/store/)',
     allowedDeps: ['ports', 'provider', 'store', 'utils', 'backend-shared'],
   },
+  services: {
+    name: 'Services (frontend/services/)',
+    allowedDeps: ['ports', 'provider', 'store', 'services', 'utils', 'backend-shared'],
+  },
   hooks: {
     name: 'Hooks (frontend/hooks/)',
-    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'utils', 'backend-shared'],
+    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'utils', 'backend-shared'],
   },
   components: {
     name: 'Components (frontend/components/)',
-    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'components', 'utils', 'backend-shared'],
+    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'components', 'data', 'utils', 'backend-shared'],
   },
   architecture: {
     name: 'Architecture (__architecture__/)',
@@ -108,8 +118,10 @@ function getLayer(filePath: string): LayerName | null {
 
   // Frontend layers
   if (rel.startsWith('frontend/store/')) return 'store'
+  if (rel.startsWith('frontend/services/')) return 'services'
   if (rel.startsWith('frontend/hooks/')) return 'hooks'
   if (rel.startsWith('frontend/components/')) return 'components'
+  if (rel.startsWith('frontend/data/')) return 'data'
   if (rel.startsWith('frontend/utils/')) return 'utils'
 
   return null
@@ -182,6 +194,11 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/utils/graphical/get-function-block-variables-to-cleanup.ts': ['ports', 'components'],
   // FBD paste/duplicate helpers — needs component atom types and molecule node builders
   'frontend/store/slices/fbd/utils/index.ts': ['components'],
+  // Debug utilities need port types, store types, and library data for variable resolution
+  'frontend/utils/variable-sizes.ts': ['ports'],
+  'frontend/utils/pou-helpers.ts': ['ports', 'data', 'store'],
+  'frontend/utils/debug-tree-traversal.ts': ['ports', 'data', 'store'],
+  'frontend/utils/debug-tree-builder.ts': ['ports', 'store'],
 }
 
 // ---------------------------------------------------------------------------

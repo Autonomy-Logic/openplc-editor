@@ -36,7 +36,7 @@ export interface PLCVariableType {
   definition: VariableTypeDefinition
   value: string
   data?: {
-    baseType: string
+    baseType: { definition: 'base-type' | 'user-data-type'; value: string }
     dimensions: Array<{ dimension: string }>
   }
 }
@@ -507,6 +507,18 @@ export interface Md5VerifyResult {
   success: boolean
   match?: boolean
   targetMd5?: string
+  error?: string
+}
+
+// ---------------------------------------------------------------------------
+// Simulator Debug
+// ---------------------------------------------------------------------------
+
+export interface SimulatorDebugResult {
+  success: boolean
+  tick?: number
+  lastIndex?: number
+  data?: string // hex string
   error?: string
 }
 

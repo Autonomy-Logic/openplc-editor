@@ -95,6 +95,8 @@ export type {
   DebugVariableResult,
   DebugSetResult,
   Md5VerifyResult,
+  // Simulator Debug
+  SimulatorDebugResult,
   // Compiler
   CompileProgressEvent,
   CompileResult,
@@ -109,6 +111,7 @@ export type {
   RecentProject,
   // Debugger session
   FbInstanceInfo,
+  DebugTreeNode,
 } from './types'
 
 // --- Runtime log helpers ---
