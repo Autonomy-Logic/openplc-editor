@@ -511,6 +511,18 @@ export interface Md5VerifyResult {
 }
 
 // ---------------------------------------------------------------------------
+// Simulator Debug
+// ---------------------------------------------------------------------------
+
+export interface SimulatorDebugResult {
+  success: boolean
+  tick?: number
+  lastIndex?: number
+  data?: string // hex string
+  error?: string
+}
+
+// ---------------------------------------------------------------------------
 // Compiler
 // ---------------------------------------------------------------------------
 

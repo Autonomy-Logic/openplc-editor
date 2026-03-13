@@ -25,7 +25,7 @@
  *   - simulatorService.disconnectDebugger()
  */
 
-import type { Unsubscribe } from './types'
+import type { SimulatorDebugResult, Unsubscribe } from './types'
 
 export interface SimulatorPort {
   /**
@@ -61,4 +61,22 @@ export interface SimulatorPort {
    * Cleans up virtual serial port and Modbus client state.
    */
   disconnectDebugger(): void
+
+  /**
+   * Get the MD5 hash from the running firmware (used for program verification).
+   * Only available when debugger is connected.
+   */
+  getDebugMd5Hash(): Promise<string>
+
+  /**
+   * Get variable values from the simulator via debug protocol.
+   * Returns data as a hex string for compatibility with handleValuesResponse.
+   */
+  getDebugVariablesList(indexes: number[]): Promise<SimulatorDebugResult>
+
+  /**
+   * Force or release a variable in the simulator via debug protocol.
+   * Accepts valueHex as a hex string.
+   */
+  setDebugVariable(index: number, force: boolean, valueHex?: string): Promise<{ success: boolean; error?: string }>
 }

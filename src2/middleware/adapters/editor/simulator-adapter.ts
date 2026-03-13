@@ -13,7 +13,7 @@
  */
 
 import type { SimulatorPort } from '../../shared/ports/simulator-port'
-import type { Unsubscribe } from '../../shared/ports/types'
+import type { SimulatorDebugResult, Unsubscribe } from '../../shared/ports/types'
 
 export function createEditorSimulatorAdapter(): SimulatorPort {
   let running = false
@@ -72,6 +72,49 @@ export function createEditorSimulatorAdapter(): SimulatorPort {
     disconnectDebugger(): void {
       // No-op for editor: cleanup is handled by the main process
       // when debuggerDisconnect is called.
+    },
+
+    async getDebugMd5Hash(): Promise<string> {
+      const result = await window.bridge.debuggerReadProgramMd5()
+      if (!result.success || !result.md5) {
+        throw new Error(result.error ?? 'Failed to read MD5 hash')
+      }
+      return result.md5
+    },
+
+    async getDebugVariablesList(indexes: number[]): Promise<SimulatorDebugResult> {
+      const result = await window.bridge.debuggerGetVariablesList(indexes)
+      if (!result.success) {
+        return { success: false, error: result.error }
+      }
+      // Convert number[] data to hex string
+      let hexData: string | undefined
+      if (result.data) {
+        hexData = result.data.map((b: number) => b.toString(16).padStart(2, '0')).join('')
+      }
+      return {
+        success: true,
+        tick: result.tick,
+        lastIndex: result.lastIndex,
+        data: hexData,
+      }
+    },
+
+    async setDebugVariable(
+      index: number,
+      force: boolean,
+      valueHex?: string,
+    ): Promise<{ success: boolean; error?: string }> {
+      // Convert hex string back to number[] for the IPC bridge
+      let valueBuffer: number[] | undefined
+      if (force && valueHex) {
+        const hexClean = valueHex.replace(/\s+/g, '')
+        valueBuffer = []
+        for (let i = 0; i < hexClean.length; i += 2) {
+          valueBuffer.push(parseInt(hexClean.substring(i, i + 2), 16))
+        }
+      }
+      return window.bridge.debuggerSetVariable(index, force, valueBuffer)
     },
   }
 }
