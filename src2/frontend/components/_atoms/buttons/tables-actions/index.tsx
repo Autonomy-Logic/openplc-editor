@@ -1,4 +1,4 @@
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 import { ComponentPropsWithoutRef, ReactNode } from 'react'
 
 type TableActionButtonProps = ComponentPropsWithoutRef<'button'> & {

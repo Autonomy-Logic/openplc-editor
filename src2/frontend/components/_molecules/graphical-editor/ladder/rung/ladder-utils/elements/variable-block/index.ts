@@ -1,10 +1,10 @@
-import { defaultCustomNodesStyles, nodesBuilder } from '../../../../../../_atoms/graphical-editor/ladder'
-import { RungLadderState } from '../../../../../../../store/slices'
+import { defaultCustomNodesStyles, nodesBuilder } from '../../../../../../../_atoms/graphical-editor/ladder'
+import { RungLadderState } from '../../../../../../../../store/slices'
 import { Edge, Node } from '@xyflow/react'
 
-import { newGraphicalEditorNodeID } from '../../../../../../../utils'
+import { newGraphicalEditorNodeID } from '../../../../../../../../utils/new-graphical-editor-node-id'
 import { buildEdge } from '../../edges'
-import { BlockNode, BlockVariant } from '../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import { BlockNode, BlockVariant } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 
 export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderState, block: Node) => {
   const variableElements: Node[] = []

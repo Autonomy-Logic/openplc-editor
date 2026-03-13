@@ -1,8 +1,8 @@
-import { nodesBuilder } from '../../../../../../_atoms/graphical-editor/ladder'
-import type { RungLadderState } from '../../../../../../../store/slices'
+import { nodesBuilder } from '../../../../../../../_atoms/graphical-editor/ladder'
+import type { RungLadderState } from '../../../../../../../../store/slices'
 import type { Node, ReactFlowInstance } from '@xyflow/react'
 
-import { newGraphicalEditorNodeID } from '../../../../../../../utils'
+import { newGraphicalEditorNodeID } from '../../../../../../../../utils/new-graphical-editor-node-id'
 import { getDeepestNodesInsideParallels, getNodesInsideAllParallels, getPlaceholderPositionBasedOnNode } from '../utils'
 
 export const removePlaceholderElements = (nodes: Node[]) => {

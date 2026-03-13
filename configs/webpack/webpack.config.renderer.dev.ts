@@ -133,11 +133,6 @@ const configuration: ICustomConfiguration = {
         ],
       },
 
-      {
-        test: /\.ts?$/,
-        use: 'ts-loader',
-        exclude: /node_modules/,
-      },
     ],
   },
 

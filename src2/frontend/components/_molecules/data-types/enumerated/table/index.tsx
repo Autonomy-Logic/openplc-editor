@@ -7,7 +7,7 @@ import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../../../store'
 import { enumeratedValidation } from '../../../../../store/slices/project/validation/variables'
 import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../utils'
+import { cn } from '../../../../../utils/cn'
 import { DescriptionCell } from './editable-cell'
 
 type PLCEnumeratedDatatype = Extract<PLCDataType, { derivation: 'enumerated' }>

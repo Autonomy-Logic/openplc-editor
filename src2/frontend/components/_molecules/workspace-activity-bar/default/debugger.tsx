@@ -1,5 +1,5 @@
-import { DebuggerIcon } from '../../../../assets'
-import { ActivityBarButton } from '../../../_atoms/buttons'
+import { DebuggerIcon } from '../../../../assets/icons/interface/Debugger'
+import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
 import { ComponentPropsWithoutRef } from 'react'
 
 type DebuggerButtonProps = ComponentPropsWithoutRef<typeof ActivityBarButton> & {

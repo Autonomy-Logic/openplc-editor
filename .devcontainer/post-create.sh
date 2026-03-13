@@ -15,16 +15,23 @@ BIN_DIR="resources/bin/linux/$NODE_ARCH"
 echo "[1/4] Starting Xvfb..."
 start-xvfb.sh 99 2>/dev/null
 
+# Fix ownership of volume-mounted node_modules (Docker creates volumes as root)
+echo "[2/5] Fixing node_modules permissions..."
+sudo chown -R dev:dev node_modules 2>/dev/null || true
+
+# Remove stale src/node_modules symlink (broken symlinks cause EEXIST in link-modules.ts)
+rm -f src/node_modules 2>/dev/null || true
+
 # Install root dependencies (downloads binaries, builds DLL)
-echo "[2/4] Installing dependencies..."
+echo "[3/5] Installing dependencies..."
 npm install
 
 # Install release/app dependencies and rebuild native modules for Electron
-echo "[3/4] Installing release/app dependencies..."
+echo "[4/5] Installing release/app dependencies..."
 cd release/app && npm install && cd ../..
 
 # Verify binaries and Electron sandbox
-echo "[4/4] Verifying setup..."
+echo "[5/5] Verifying setup..."
 
 if [ -f "$BIN_DIR/iec2c" ]; then
   echo "  matiec binary ($NODE_ARCH): OK"
@@ -38,10 +45,12 @@ else
   echo "  WARNING: xml2st binary not found at $BIN_DIR/xml2st"
 fi
 
-# Fix Electron sandbox for container (chrome-sandbox needs SUID bit or --no-sandbox)
+# Fix Electron sandbox for container (chrome-sandbox needs SUID root + mode 4755)
 CHROME_SANDBOX="node_modules/electron/dist/chrome-sandbox"
 if [ -f "$CHROME_SANDBOX" ]; then
-  echo "  Electron sandbox: using --no-sandbox via ELECTRON_DISABLE_SANDBOX env"
+  sudo chown root:root "$CHROME_SANDBOX"
+  sudo chmod 4755 "$CHROME_SANDBOX"
+  echo "  Electron sandbox: SUID bit set on chrome-sandbox"
 fi
 
 echo ""

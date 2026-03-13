@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
-import { MinusIcon, PlusIcon, StickArrowIcon } from '../../../../assets'
+import { MinusIcon } from '../../../../assets/icons/interface/Minus'
+import { PlusIcon } from '../../../../assets/icons/interface/Plus'
+import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import TableActions from '../../../_atoms/table-actions'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'

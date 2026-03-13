@@ -1,6 +1,6 @@
-import { MagnifierIcon } from '../../../../../../../../assets'
-import { InputWithRef } from '../../../../../../../_atoms'
-import { LibraryFile, LibraryFolder, LibraryRoot } from '../../../../../../../_molecules'
+import { MagnifierIcon } from '../../../../../../../../assets/icons/interface/Magnifier'
+import { InputWithRef } from '../../../../../../../_atoms/input'
+import { LibraryFile, LibraryFolder, LibraryRoot } from '../../../../../../../_molecules/library-tree'
 import { useOpenPLCStore } from '../../../../../../../../store'
 import { useState } from 'react'
 

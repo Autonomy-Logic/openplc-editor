@@ -1,7 +1,7 @@
-import { SearchIcon } from '../../../../assets'
+import { SearchIcon } from '../../../../assets/icons/interface/Search'
 import { useOpenPLCStore } from '../../../../store'
 
-import { ActivityBarButton } from '../../../_atoms/buttons'
+import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
 import SearchInProject from '../../../_features/[workspace]/editor/search-in-project'
 import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../../modal'
 

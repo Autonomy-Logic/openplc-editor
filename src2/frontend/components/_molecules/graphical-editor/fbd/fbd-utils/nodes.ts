@@ -1,5 +1,5 @@
 import { CustomFbdNodeTypes, nodesBuilder } from '../../../../_atoms/graphical-editor/fbd'
-import { BuilderBasicProps } from '../../../../_atoms/graphical-editor/fbd/utils'
+import { BuilderBasicProps } from '../../../../_atoms/graphical-editor/fbd/utils/types'
 
 export const buildGenericNode = <T>({
   nodeType,

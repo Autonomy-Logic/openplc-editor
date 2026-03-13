@@ -1,7 +1,7 @@
 import { InputField } from '../../../../../../_molecules/input-field'
 import { SelectField } from '../../../../../../_molecules/select-field'
 import { useOpenPLCStore } from '../../../../../../../store'
-import { cn } from '../../../../../../../utils'
+import { cn } from '../../../../../../../utils/cn'
 import { ComponentPropsWithoutRef } from 'react'
 
 type RTUSettingsProps = ComponentPropsWithoutRef<'div'> & {

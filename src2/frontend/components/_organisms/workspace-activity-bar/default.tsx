@@ -1,18 +1,16 @@
-import { StopIcon } from '../../../assets'
-import { cn } from '../../../utils'
+import { StopIcon } from '../../../assets/icons/interface/Stop'
+import { cn } from '../../../utils/cn'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { useCompiler, useRuntime, useSimulator, useDebugger } from '../../../../middleware/shared/providers'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import {
-  ChatButton,
-  DebuggerButton,
-  DownloadButton,
-  PlayButton,
-  SearchButton,
-  ZoomButton,
-} from '../../_molecules/workspace-activity-bar/default'
+import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
+import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
+import { DownloadButton } from '../../_molecules/workspace-activity-bar/default/download'
+import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play'
+import { SearchButton } from '../../_molecules/workspace-activity-bar/default/search'
+import { ZoomButton } from '../../_molecules/workspace-activity-bar/default/zoom'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 
 const showDebuggerMessage = (

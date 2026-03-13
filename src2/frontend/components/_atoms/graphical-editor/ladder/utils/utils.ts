@@ -1,4 +1,5 @@
-import type { EditorModel, LadderFlowType } from '../../../../../store/slices'
+import type { EditorModel } from '../../../../../store/slices/editor'
+import type { LadderFlowType } from '../../../../../store/slices/ladder'
 import { baseTypeSchema, genericTypeSchema } from '../../../../../../middleware/shared/ports'
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'

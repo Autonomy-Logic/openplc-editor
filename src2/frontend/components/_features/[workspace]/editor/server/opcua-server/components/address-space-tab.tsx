@@ -1,7 +1,7 @@
-import { InputWithRef } from '../../../../../../../_atoms/input'
-import { Label } from '../../../../../../../_atoms/label'
-import { useOpenPLCStore } from '../../../../../../../../store'
-import type { OpcUaNodeConfig, OpcUaServerConfig } from '../../../../../../../../../middleware/shared/ports/types'
+import { InputWithRef } from '../../../../../../_atoms/input'
+import { Label } from '../../../../../../_atoms/label'
+import { useOpenPLCStore } from '../../../../../../../store'
+import type { OpcUaNodeConfig, OpcUaServerConfig } from '../../../../../../../../middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
 
 import {

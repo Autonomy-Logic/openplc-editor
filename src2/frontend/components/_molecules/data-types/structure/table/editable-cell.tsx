@@ -1,11 +1,11 @@
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
-import { InputWithRef } from '../../../../_atoms'
+import { InputWithRef } from '../../../../_atoms/input'
 import { useToast } from '../../../../_features/[app]/toast/use-toast'
 import type { ProjectResponse } from '../../../../../store/slices/project/types'
 import type { PLCStructureVariable } from '../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../utils'
+import { cn } from '../../../../../utils/cn'
 
 declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.

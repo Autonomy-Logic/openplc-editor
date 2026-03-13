@@ -1,7 +1,7 @@
 import { HTMLAttributes, ReactElement } from 'react'
 
-import type { LabelProps as PrimitiveLabelProps } from '../../_atoms'
-import { Label as PrimitiveLabel } from '../../_atoms'
+import type { LabelProps as PrimitiveLabelProps } from '../../_atoms/label'
+import { Label as PrimitiveLabel } from '../../_atoms/label'
 
 type FolderLabelProps = HTMLAttributes<HTMLParagraphElement> & {
   projectName?: string

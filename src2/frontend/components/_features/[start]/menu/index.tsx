@@ -1,5 +1,5 @@
-import { Button } from '../../../_atoms'
-import { cn } from '../../../../utils'
+import { Button } from '../../../_atoms/buttons/default'
+import { cn } from '../../../../utils/cn'
 import { ComponentPropsWithoutRef } from 'react'
 
 type IMenuRootProps = ComponentPropsWithoutRef<'div'>

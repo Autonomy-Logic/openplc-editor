@@ -7,7 +7,7 @@ import type {
   VariableBuilderProps,
   VariableNode,
 } from './utils/types'
-import { generateNumericUUID } from '../../../../utils'
+import { generateNumericUUID } from '../../../../utils/generate-uuid'
 import { getBlockSize, getBlockVariantAndExecutionControl } from './utils'
 import { BlockVariant } from '../types/block'
 import {

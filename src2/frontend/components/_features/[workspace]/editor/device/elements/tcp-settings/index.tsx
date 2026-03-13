@@ -1,7 +1,7 @@
-import { Checkbox } from '../../../../../../_atoms'
+import { Checkbox } from '../../../../../../_atoms/checkbox'
 import { InputField } from '../../../../../../_molecules/input-field'
 import { SelectField } from '../../../../../../_molecules/select-field'
-import { cn } from '../../../../../../../utils'
+import { cn } from '../../../../../../../utils/cn'
 import { ComponentPropsWithoutRef, useState } from 'react'
 
 type TCPSettingsProps = ComponentPropsWithoutRef<'div'> & {

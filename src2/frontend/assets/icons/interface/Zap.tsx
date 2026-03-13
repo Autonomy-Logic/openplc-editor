@@ -1,7 +1,7 @@
 import { cn } from '../../../utils/cn'
 
 import { IIconProps } from '../Types/iconTypes'
-import { IconStyles } from '../../../data'
+import { IconStyles } from '../../../data/constants/icon-styles'
 
 export default function ZapIcon(props: IIconProps) {
   const { className, size = 'sm', ...res } = props

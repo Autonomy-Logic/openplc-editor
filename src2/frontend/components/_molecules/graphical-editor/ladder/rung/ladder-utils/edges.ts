@@ -1,5 +1,5 @@
 import type { BasicNodeData, ParallelNode } from '../../../../../_atoms/graphical-editor/ladder/utils/types'
-import type { RungLadderState } from '../../../../../../store/slices'
+import type { RungLadderState } from '../../../../../../store/slices/ladder'
 import type { Edge, Node } from '@xyflow/react'
 
 import { isNodeOfType } from './nodes'

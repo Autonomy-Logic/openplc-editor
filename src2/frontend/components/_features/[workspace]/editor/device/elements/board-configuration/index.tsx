@@ -1,4 +1,4 @@
-import { RefreshIcon } from '../../../../../../../assets/icons'
+import { RefreshIcon } from '../../../../../../../assets/icons/interface/Refresh'
 import { SelectField } from '../../../../../../_molecules/select-field'
 import { useOpenPLCStore } from '../../../../../../../store'
 import { useCallback, useMemo, useState } from 'react'

@@ -1,9 +1,9 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { startCase } from 'lodash'
 import { useEffect, useRef, useState } from 'react'
 
-import { ScrollAreaComponent } from '../../ui'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '..'
+import ScrollAreaComponent from '../../ui/scroll-area'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../select'
 
 export const GenericSelectCell = ({
   value,

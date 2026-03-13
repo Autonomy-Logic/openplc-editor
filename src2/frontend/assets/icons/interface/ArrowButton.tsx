@@ -1,4 +1,4 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { ComponentPropsWithRef, ElementType } from 'react'
 
 type IArrowButtonIconProps = ComponentPropsWithRef<'svg'> & {

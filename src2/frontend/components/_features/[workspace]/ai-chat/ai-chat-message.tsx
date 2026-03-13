@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '../../../../store'
-import { trackChatRating } from '../../../../services/ai'
+import { trackChatRating } from '../../../../services/ai/telemetry'
 import type { ChatMessage } from '../../../../store/slices/ai/types'
 import Markdown from 'react-markdown'
 import { AICodeBlock } from './ai-code-block'

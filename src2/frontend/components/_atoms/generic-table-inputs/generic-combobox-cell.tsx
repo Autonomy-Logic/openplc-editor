@@ -1,10 +1,11 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { CloseIcon, PlusIcon } from '../../../assets'
-import { cn } from '../../../utils'
+import { CloseIcon } from '../../../assets/icons/interface/Close'
+import { PlusIcon } from '../../../assets/icons/interface/Plus'
+import { cn } from '../../../utils/cn'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { ScrollAreaComponent } from '../../ui'
-import { InputWithRef } from '..'
+import ScrollAreaComponent from '../../ui/scroll-area'
+import { InputWithRef } from '../input'
 
 type SelectOption = {
   id: string

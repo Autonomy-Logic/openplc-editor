@@ -1,4 +1,4 @@
-import { DeviceEditorTemplate } from '../../../../../_templates/[editors]'
+import { DeviceEditorTemplate } from '../../../../../_templates/[editors]/device-editor-template'
 import { OrchestratorsList } from './orchestrators-list'
 
 const DeviceOrchestratorsEditor = () => {

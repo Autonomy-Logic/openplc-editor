@@ -1,12 +1,12 @@
 import * as Switch from '@radix-ui/react-switch'
-import { InputWithRef } from '../../../../../../../_atoms'
+import { InputWithRef } from '../../../../../../../_atoms/input'
 import {
   BlockNode,
   BlockNodeData,
   BlockNodeElement,
-  buildBlockNode,
-  getBlockSize,
 } from '../../../../../../../_atoms/graphical-editor/fbd/block'
+import { buildBlockNode } from '../../../../../../../_atoms/graphical-editor/fbd/buildNodes'
+import { getBlockSize } from '../../../../../../../_atoms/graphical-editor/fbd/utils/utils'
 import { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/fbd/utils/types'
 import { getFBDPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/fbd/utils/utils'
 import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
@@ -14,11 +14,12 @@ import {
   getBlockDocumentation,
   getVariableRestrictionType,
 } from '../../../../../../../_atoms/graphical-editor/utils'
-import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules'
+import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
 import { useOpenPLCStore } from '../../../../../../../../store'
-import { EditorModel, LibraryState } from '../../../../../../../../store/slices'
+import type { EditorModel } from '../../../../../../../../store/slices/editor'
+import type { LibraryState } from '../../../../../../../../store/slices/library'
 import { PLCPou } from '../../../../../../../../../middleware/shared/ports'
-import { cn } from '../../../../../../../../utils'
+import { cn } from '../../../../../../../../utils/cn'
 import {
   assembleVariables,
   buildNextExtensibleInput,

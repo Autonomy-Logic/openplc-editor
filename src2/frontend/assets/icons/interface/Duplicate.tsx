@@ -1,7 +1,7 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 
 import { IIconProps } from '../Types/iconTypes'
-import { IconStyles } from '../../../data'
+import { IconStyles } from '../../../data/constants/icon-styles'
 
 
 export const DuplicateIcon = (props: IIconProps) => {

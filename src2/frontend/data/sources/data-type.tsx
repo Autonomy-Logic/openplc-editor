@@ -1,4 +1,6 @@
-import { ArrayIcon, EnumIcon, StructureIcon } from '../../assets'
+import { ArrayIcon } from '../../assets/icons/project/Array'
+import { EnumIcon } from '../../assets/icons/project/Enum'
+import { StructureIcon } from '../../assets/icons/project/Structure'
 
 const DatatypeDerivationSources = [
   {

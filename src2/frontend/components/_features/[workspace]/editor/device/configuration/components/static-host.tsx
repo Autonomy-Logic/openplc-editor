@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { staticHostSelectors } from '../../../../../../../hooks/use-store-selectors'
-import { InputWithRef, Label } from '../../../../../../_atoms'
+import { InputWithRef } from '../../../../../../_atoms/input'
+import { Label } from '../../../../../../_atoms/label'
 import { ComponentPropsWithoutRef, memo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'

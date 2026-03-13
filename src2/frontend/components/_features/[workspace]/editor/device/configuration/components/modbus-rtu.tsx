@@ -1,15 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { rtuSelectors } from '../../../../../../../hooks/use-store-selectors'
-import {
-  Checkbox,
-  InputWithRef,
-  Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '../../../../../../_atoms'
-import { cn } from '../../../../../../../utils'
+import { Checkbox } from '../../../../../../_atoms/checkbox'
+import { InputWithRef } from '../../../../../../_atoms/input'
+import { Label } from '../../../../../../_atoms/label'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
+import { cn } from '../../../../../../../utils/cn'
 import { memo, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'

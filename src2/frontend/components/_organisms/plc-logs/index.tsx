@@ -1,6 +1,6 @@
 import { useOpenPLCStore } from '../../../store'
 import { isV4Logs, RuntimeLogEntry, RuntimeLogLevel } from '../../../../middleware/shared/ports'
-import { formatTimestamp } from '../../../utils'
+import formatTimestamp from '../../../utils/format-timestamp'
 import { debounce } from 'lodash'
 import { memo, useEffect, useMemo, useRef } from 'react'
 

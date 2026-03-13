@@ -1,8 +1,8 @@
 import { CellContext } from '@tanstack/react-table'
 import { useEffect, useRef, useState } from 'react'
 
-import { InputWithRef } from '../../../../_atoms'
-import { cn } from '../../../../../utils'
+import { InputWithRef } from '../../../../_atoms/input'
+import { cn } from '../../../../../utils/cn'
 
 type EditableCellProps = CellContext<{ dimension: string }, unknown> & {
   id: string

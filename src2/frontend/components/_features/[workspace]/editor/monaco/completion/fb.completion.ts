@@ -1,5 +1,5 @@
 import { StandardFunctionBlocks } from '../../../../../../data/library/standard-function-blocks'
-import { VariableDTO } from '../../../../../../store/slices'
+import type { VariableDTO } from '../../../../../../store/slices/project'
 import { PLCProject } from '../../../../../../../middleware/shared/ports/types'
 import { escapeRegExp } from 'lodash'
 import * as monaco from 'monaco-editor'

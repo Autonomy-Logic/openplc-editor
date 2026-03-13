@@ -1,4 +1,6 @@
-import type { EditorModel, FBDFlowType, LadderFlowType } from '../../../../../store/slices'
+import type { EditorModel } from '../../../../../store/slices/editor'
+import type { FBDFlowType } from '../../../../../store/slices/fbd'
+import type { LadderFlowType } from '../../../../../store/slices/ladder'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import { resolveArrayVariableByName } from '../../../../../../backend/shared/array-variable-utils'

@@ -1,5 +1,7 @@
 import { useAIChat } from '../../../../hooks/useAI'
-import { collectProjectContext, trackChatMessage, type AIChatMessage } from '../../../../services/ai'
+import { collectProjectContext } from '../../../../services/ai/context-collector'
+import { trackChatMessage } from '../../../../services/ai/telemetry'
+import type { AIChatMessage } from '../../../../services/ai/types'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'

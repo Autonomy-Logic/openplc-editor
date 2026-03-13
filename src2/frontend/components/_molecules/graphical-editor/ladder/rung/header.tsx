@@ -6,11 +6,14 @@
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities'
 import { useEffect, useRef, useState } from 'react'
 
-import { CloseIcon, DragHandleIcon, DuplicateIcon, StickArrowIcon } from '../../../../../assets'
-import { cn } from '../../../../../utils'
+import { CloseIcon } from '../../../../../assets/icons/interface/Close'
+import { DragHandleIcon } from '../../../../../assets/icons/interface/DragHandle'
+import { DuplicateIcon } from '../../../../../assets/icons/interface/Duplicate'
+import { StickArrowIcon } from '../../../../../assets/icons/interface/StickArrow'
+import { cn } from '../../../../../utils/cn'
 import { useOpenPLCStore } from '../../../../../store'
-import { RungLadderState } from '../../../../../store/slices'
-import { HighlightedTextArea } from '../../../../_atoms'
+import type { RungLadderState } from '../../../../../store/slices/ladder'
+import { HighlightedTextArea } from '../../../../_atoms/highlighted-textarea'
 
 type RungHeaderProps = {
   rung: RungLadderState

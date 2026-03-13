@@ -1,9 +1,13 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 
 import { MenuClasses } from './constants'
-import { DisplayMenu, EditMenu, FileMenu, HelpMenu, RecentMenu } from './menus'
+import { DisplayMenu } from './menus/display'
+import { EditMenu } from './menus/edit'
+import { FileMenu } from './menus/file'
+import { HelpMenu } from './menus/help'
+import { RecentMenu } from './menus/recent'
 
 const MenuBar = () => {
   const { SEPARATOR } = MenuClasses

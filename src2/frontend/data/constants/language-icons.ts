@@ -1,4 +1,10 @@
-import { CppIcon, FBDIcon, ILIcon, LDIcon, PythonIcon, SFCIcon, STIcon } from '../../../assets'
+import { CppIcon } from '../../assets/icons/project/Cpp'
+import { FBDIcon } from '../../assets/icons/project/FBD'
+import { ILIcon } from '../../assets/icons/project/IL'
+import { LDIcon } from '../../assets/icons/project/LD'
+import { PythonIcon } from '../../assets/icons/project/Python'
+import { SFCIcon } from '../../assets/icons/project/SFC'
+import { STIcon } from '../../assets/icons/project/ST'
 
 export const LanguageIcon = {
   st: STIcon,

@@ -31,7 +31,7 @@ import {
 import { parsePouToStText } from './drag-and-drop/st'
 import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
 import { applyThemeNow, ensureOpenplcThemes } from './theme-utils'
-import { AIInlineCompletionProvider } from './ai-completion'
+import { AIInlineCompletionProvider } from './ai-completion/ai-inline-completion-provider'
 import { AIConsentModal } from './ai-consent-modal'
 import { AIStatusIndicator } from './ai-status-indicator'
 

@@ -1,5 +1,5 @@
 import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '../../_molecules/project-tree'
-import { FolderIcon } from '../../../assets'
+import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../store/slices/tabs/utils'

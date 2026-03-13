@@ -1,5 +1,5 @@
-import type { ProjectResponse } from '../../../store/slices'
-import { cn } from '../../../utils'
+import type { ProjectResponse } from '../../../store/slices/project'
+import { cn } from '../../../utils/cn'
 import {
   ColumnDef,
   ColumnFiltersState,

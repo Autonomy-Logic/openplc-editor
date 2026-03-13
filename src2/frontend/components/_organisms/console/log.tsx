@@ -1,4 +1,4 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { Copy } from 'lucide-react'
 import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
 

@@ -1,4 +1,4 @@
-import { Checkbox } from '../../../../../_atoms'
+import { Checkbox } from '../../../../../_atoms/checkbox'
 import { useOpenPLCStore } from '../../../../../../store'
 import { useEffect, useState } from 'react'
 

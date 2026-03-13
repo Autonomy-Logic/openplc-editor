@@ -1,11 +1,11 @@
 import type { PLCTask } from '../../../../middleware/shared/ports/types'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useMemo, useState } from 'react'
 
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
-import { Modal, ModalContent, ModalTitle, ModalTrigger } from '..'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
+import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../modal'
 import ArrowButtonGroup from '../../_features/[workspace]/editor/graphical/elements/arrow-button-group'
 
 type ISelectableCellProps = CellContext<PLCTask, unknown> & { editable?: boolean }

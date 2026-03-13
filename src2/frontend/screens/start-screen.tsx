@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
 
-import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
+import { FolderIcon } from '../assets/icons/interface/Folder'
+import { PlusIcon } from '../assets/icons/interface/Plus'
+import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
+import { VideoIcon } from '../assets/icons/interface/Video'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
-import { StartMainContent, StartSideContent } from '../components/_templates'
+import { StartMainContent } from '../components/_templates/[start]/main-content'
+import { StartSideContent } from '../components/_templates/[start]/side-content'
 import { useOpenPLCStore } from '../store'
 import { useCapabilities, useDevice, useProject, useSystem, useWindow } from '../../middleware/shared/providers'
 

@@ -1,4 +1,4 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { ComponentPropsWithoutRef } from 'react'
 
 const CommentIcon = (props: ComponentPropsWithoutRef<'svg'>) => {

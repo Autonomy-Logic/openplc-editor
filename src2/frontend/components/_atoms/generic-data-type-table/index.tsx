@@ -1,4 +1,4 @@
-import { Table, TableBody, TableCell, TableRow } from '../../../components/_atoms'
+import { Table, TableBody, TableCell, TableRow } from '../table'
 import { flexRender, Table as ReactTable } from '@tanstack/react-table'
 import React, { RefObject } from 'react'
 

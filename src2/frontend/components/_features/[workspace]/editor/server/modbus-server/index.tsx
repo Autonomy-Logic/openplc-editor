@@ -4,7 +4,7 @@ import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import { useOpenPLCStore } from '../../../../../../store'
-import { cn } from '../../../../../../utils'
+import { cn } from '../../../../../../utils/cn'
 import { DEFAULT_BUFFER_MAPPING } from '../../../../../../utils/modbus/generate-modbus-slave-config'
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 

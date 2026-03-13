@@ -1,4 +1,4 @@
-import { InputWithRef } from '../../../_atoms'
+import { InputWithRef } from '../../../_atoms/input'
 import { ArrayDataType } from '../../../_molecules/data-types/array'
 import { EnumeratorDataType } from '../../../_molecules/data-types/enumerated'
 import { StructureDataType } from '../../../_molecules/data-types/structure'

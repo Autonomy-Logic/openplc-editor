@@ -1,4 +1,4 @@
-import { FileElement } from '../../_atoms'
+import { File as FileElement } from '../../_atoms/file'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '../../../store'
 import { useSystem, useProject } from '../../../../middleware/shared/providers'

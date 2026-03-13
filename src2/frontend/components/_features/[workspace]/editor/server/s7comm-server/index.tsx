@@ -4,7 +4,7 @@ import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import { useOpenPLCStore } from '../../../../../../store'
-import { cn } from '../../../../../../utils'
+import { cn } from '../../../../../../utils/cn'
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 
 // UI-specific types for S7Comm buffer mapping.

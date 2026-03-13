@@ -1,7 +1,0 @@
-export * from './chat'
-export * from './debugger'
-export * from './download'
-export * from './exit'
-export * from './play'
-export * from './search'
-export * from './zoom'

@@ -1,6 +1,6 @@
 import * as PrimitiveToast from '@radix-ui/react-toast'
-import { CloseIcon } from '../../../../assets'
-import { cn } from '../../../../utils'
+import { CloseIcon } from '../../../../assets/icons/interface/Close'
+import { cn } from '../../../../utils/cn'
 import { cva, type VariantProps } from 'cva'
 import { ComponentPropsWithoutRef, ElementRef, forwardRef, ReactElement } from 'react'
 

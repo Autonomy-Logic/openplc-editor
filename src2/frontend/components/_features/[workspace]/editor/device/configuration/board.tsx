@@ -1,22 +1,20 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { boardSelectors, compileOnlySelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
-import { MinusIcon, PlusIcon, RefreshIcon } from '../../../../../../assets'
-import { Checkbox, Label, Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms'
+import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
+import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
+import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
+import { Checkbox } from '../../../../../_atoms/checkbox'
+import { Label } from '../../../../../_atoms/label'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
-import { DeviceEditorSlot } from '../../../../../_templates/[editors]'
+import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import type { TimingStats } from '../../../../../../../middleware/shared/ports/types'
 import { useDevice, useRuntime } from '../../../../../../../middleware/shared/providers/platform-context'
-import {
-  cn,
-  isArduinoTarget,
-  isOpenPLCRuntimeTarget,
-  isOpenPLCRuntimeV4Target,
-  isSimulatorTarget,
-  validateRuntimeVersion,
-} from '../../../../../../utils'
+import { cn } from '../../../../../../utils/cn'
+import { isArduinoTarget, isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PinMappingTable } from './components/pin-mapping-table'

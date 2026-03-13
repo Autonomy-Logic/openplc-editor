@@ -2,7 +2,7 @@ import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
 import { useOpenPLCStore } from '../../../../../../store'
-import { zodFBDFlowSchema } from '../../../../../../store/slices'
+import { zodFBDFlowSchema } from '../../../../../../store/slices/fbd'
 import { useEffect, useMemo } from 'react'
 
 export default function FbdEditor() {

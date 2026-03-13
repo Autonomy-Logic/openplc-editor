@@ -1,4 +1,4 @@
-import { PlusIcon } from '../../../../../assets'
+import { PlusIcon } from '../../../../../assets/icons/interface/Plus'
 
 type CreateRungProps = {
   onClick: () => void

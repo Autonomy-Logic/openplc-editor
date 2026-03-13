@@ -1,4 +1,4 @@
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 
 import { CustomHandle } from './handle'
 import type { ParallelProps } from './utils/types'

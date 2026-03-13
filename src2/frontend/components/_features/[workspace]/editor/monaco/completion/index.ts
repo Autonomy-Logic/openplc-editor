@@ -1,4 +1,5 @@
-import { EditorState, LibraryState } from '../../../../../../store/slices'
+import type { EditorState } from '../../../../../../store/slices/editor'
+import type { LibraryState } from '../../../../../../store/slices/library'
 import { PLCVariable } from '../../../../../../../middleware/shared/ports/types'
 import { PLCProject } from '../../../../../../../middleware/shared/ports/types'
 import * as monaco from 'monaco-editor'

@@ -4,7 +4,7 @@ import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../../store'
 import { RungLadderState } from '../../../../store/slices/ladder'
 import { PLCVariable } from '../../../../../middleware/shared/ports'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 import {
   floatToBuffer,
   getVariableTypeInfo,

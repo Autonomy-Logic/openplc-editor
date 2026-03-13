@@ -1,6 +1,7 @@
-import { CoilNode, DEFAULT_COIL_TYPES } from '../../../../../../../_atoms/graphical-editor/ladder/coil'
-import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils'
-import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules'
+import { CoilNode } from '../../../../../../../_atoms/graphical-editor/ladder/coil'
+import { DEFAULT_COIL_TYPES } from '../../../../../../../_atoms/graphical-editor/ladder/utils/constants'
+import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
+import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
 import { useOpenPLCStore } from '../../../../../../../../store'
 import { useState } from 'react'
 

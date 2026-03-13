@@ -2,7 +2,8 @@ import { useRef } from 'react'
 
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
-import { Tab, TabList } from '../../_atoms'
+import { Tab } from '../../_atoms/tab'
+import { TabList } from '../../_atoms/tab-list'
 
 const Tabs = () => {
   const {

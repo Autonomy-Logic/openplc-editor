@@ -1,7 +1,7 @@
 import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '../../../store'
-import type { RungLadderState } from '../../../store/slices'
+import type { RungLadderState } from '../../../store/slices/ladder'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 

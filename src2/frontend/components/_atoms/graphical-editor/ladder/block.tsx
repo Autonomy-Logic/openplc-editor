@@ -3,7 +3,7 @@ import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '../../../../store'
 import { checkVariableNameUnit } from '../../../../store/slices/project/validation/variables'
 import type { PLCVariable } from '../../../../../middleware/shared/ports'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 import { FocusEvent, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -17,21 +17,9 @@ import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildBlockNode } from './buildNodes'
 import { CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
-import {
-  DEFAULT_BLOCK_CONNECTOR_Y,
-  DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-  DEFAULT_BLOCK_HEIGHT,
-  DEFAULT_BLOCK_TYPE,
-  DEFAULT_BLOCK_WIDTH,
-} from './utils/constants'
-import type {
-  BasicNodeData,
-  BlockNodeData,
-  BlockProps,
-  BlockVariant,
-  LadderBlockConnectedVariables,
-} from './utils/types'
-import { RefreshIcon } from '../../../../assets'
+import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_HEIGHT, DEFAULT_BLOCK_TYPE, DEFAULT_BLOCK_WIDTH, } from './utils/constants'
+import type { BasicNodeData, BlockNodeData, BlockProps, BlockVariant, LadderBlockConnectedVariables, } from './utils/types'
+import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
 
 export const BlockNodeElement = <T extends object>({
   nodeId,

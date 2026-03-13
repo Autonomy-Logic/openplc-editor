@@ -1,10 +1,12 @@
 import { useOpenPLCStore } from '../../../store'
 import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
-import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default'
-import { BlockButton, CoilButton, ContactButton } from '../../_molecules/workspace-activity-bar/ladder'
+import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default/exit'
+import { BlockButton } from '../../_molecules/workspace-activity-bar/ladder/block'
+import { CoilButton } from '../../_molecules/workspace-activity-bar/ladder/coil'
+import { ContactButton } from '../../_molecules/workspace-activity-bar/ladder/contact'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 
 export const LadderToolbox = () => {

@@ -14,18 +14,17 @@
     "3000": { "label": "Electron Debug Port" }
   },
   "mounts": [
-    "source=openplc-editor-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
-    "source=openplc-editor-release-node-modules,target=${containerWorkspaceFolder}/release/app/node_modules,type=volume"
+    "source=openplc-editor-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
   ],
   "postCreateCommand": ".devcontainer/post-create.sh",
-  "postStartCommand": "export DISPLAY=:99",
+  "postStartCommand": "sudo mkdir -p /run/dbus && sudo dbus-daemon --system 2>/dev/null || true; start-xvfb.sh 99 2>/dev/null || true",
   "remoteEnv": {
-    "DISPLAY": ":99",
+    "DISPLAY": "host.docker.internal:0",
     "ELECTRON_DISABLE_GPU": "1",
     "ELECTRON_EXTRA_LAUNCH_ARGS": "--no-sandbox --disable-gpu-sandbox",
     "NODE_ENV": "development"
   },
-  "runArgs": ["--init"],
+  "runArgs": ["--init", "--security-opt", "seccomp=unconfined", "--cap-add", "SYS_ADMIN"],
   "customizations": {
     "vscode": {
       "extensions": [

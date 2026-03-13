@@ -1,5 +1,5 @@
 import { PlaceholderNodeFilled } from '../../../../assets/icons/flow/Placeholder'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 
 import { CustomHandle } from './handle'
 import { PlaceholderProps } from './utils/types'

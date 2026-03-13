@@ -86,6 +86,7 @@
     "react-hook-form": "^7.47.0",
     "react-i18next": "^13.3.0",
     "react-icons": "^4.11.0",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.0.3",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^2.1.0",

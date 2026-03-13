@@ -1,6 +1,6 @@
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
-import { cn } from '../../../../../../utils'
+import { cn } from '../../../../../../utils/cn'
 import { useMemo, useState } from 'react'
 
 // ---------------------------------------------------------------------------

@@ -9,12 +9,13 @@ import {
   type ReferenceImpactAnalysis,
 } from '../../../utils/variable-references'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { HighlightedText, InputWithRef } from '../../_atoms'
+import { HighlightedText } from '../../_atoms/highlighted-text'
+import { InputWithRef } from '../../_atoms/input'
 import { GenericComboboxCell } from '../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../rename-impact-modal'

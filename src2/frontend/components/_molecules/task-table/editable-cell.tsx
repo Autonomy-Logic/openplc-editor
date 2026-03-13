@@ -1,11 +1,12 @@
 import type { PLCTask } from '../../../../middleware/shared/ports/types'
 import type { ProjectResponse } from '../../../store/slices/project'
 import { useOpenPLCStore } from '../../../store'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
-import { HighlightedText, InputWithRef } from '../../_atoms'
+import { HighlightedText } from '../../_atoms/highlighted-text'
+import { InputWithRef } from '../../_atoms/input'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import ArrowButtonGroup from '../../_features/[workspace]/editor/graphical/elements/arrow-button-group'
 

@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '../../../../store'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 import { NodeResizer } from '@xyflow/react'
 import { memo, useEffect, useRef, useState } from 'react'
 

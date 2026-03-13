@@ -1,4 +1,4 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { useOpenPLCStore } from '../../../store'
 import { ComponentPropsWithoutRef } from 'react'
 

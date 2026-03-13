@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { PouLanguageSources } from '../../../../../data'
-import { TimerIcon } from '../../../../../assets'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms'
+import { PouLanguageSources } from '../../../../../data/sources/POU'
+import { TimerIcon } from '../../../../../assets/icons/interface/Timer'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
 import { useOpenPLCStore } from '../../../../../store'
-import { cn, ConvertToLangShortenedFormat } from '../../../../../utils'
+import { cn } from '../../../../../utils/cn'
+import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 

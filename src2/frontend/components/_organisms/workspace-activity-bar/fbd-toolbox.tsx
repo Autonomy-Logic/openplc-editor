@@ -1,11 +1,9 @@
-import {
-  BlockButton,
-  Comment,
-  Connector,
-  Continuation,
-  InputVariable,
-  OutVariable,
-} from '../../_molecules/workspace-activity-bar/fbd'
+import { BlockButton } from '../../_molecules/workspace-activity-bar/fbd/block'
+import { Comment } from '../../_molecules/workspace-activity-bar/fbd/comment'
+import { Connector } from '../../_molecules/workspace-activity-bar/fbd/connector'
+import { Continuation } from '../../_molecules/workspace-activity-bar/fbd/continuation'
+import { InputVariable } from '../../_molecules/workspace-activity-bar/fbd/input-variable'
+import { OutVariable } from '../../_molecules/workspace-activity-bar/fbd/out-variable'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 
 export const FBDToolbox = () => {

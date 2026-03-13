@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useRef } from 'react'
 
-import { AIRequestError, fetchAICredits, streamAIRequest } from '../services/ai'
-import type { AIChatRequest, AICompleteRequest } from '../services/ai'
+import { AIRequestError, fetchAICredits, streamAIRequest } from '../services/ai/api-client'
+import type { AIChatRequest, AICompleteRequest } from '../services/ai/types'
 import { useOpenPLCStore } from '../store'
 
 /**

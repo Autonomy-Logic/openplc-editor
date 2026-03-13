@@ -3,7 +3,7 @@ import { CellContext } from '@tanstack/react-table'
 import { startCase } from 'lodash'
 import { useCallback, useEffect, useState } from 'react'
 
-import { GenericSelectCell } from '../../_atoms'
+import { GenericSelectCell } from '../../_atoms/generic-table-inputs/generic-select-cell'
 import { toast } from '../../_features/[app]/toast/use-toast'
 
 const pinTypes: PinType[] = ['digitalInput', 'digitalOutput', 'analogInput', 'analogOutput']

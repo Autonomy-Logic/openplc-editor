@@ -14,7 +14,7 @@ import type {
   VariableBuilderProps,
   VariableNode,
 } from './utils/types'
-import { generateNumericUUID } from '../../../../utils'
+import { generateNumericUUID } from '../../../../utils/generate-uuid'
 import {
   DEFAULT_COIL_CONNECTOR_Y,
   DEFAULT_COIL_BLOCK_WIDTH,

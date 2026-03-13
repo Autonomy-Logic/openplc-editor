@@ -1,4 +1,4 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { ForwardedRef, forwardRef, HTMLAttributes } from 'react'
 
 type CustomDisplayProps = HTMLAttributes<HTMLDivElement>

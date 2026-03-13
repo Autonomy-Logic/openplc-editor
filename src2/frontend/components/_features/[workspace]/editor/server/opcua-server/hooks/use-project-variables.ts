@@ -1,5 +1,5 @@
-import { useOpenPLCStore } from '../../../../../../../../store'
-import type { PLCDataType, PLCPou, PLCVariable } from '../../../../../../../../../middleware/shared/ports/types'
+import { useOpenPLCStore } from '../../../../../../../store'
+import type { PLCDataType, PLCPou, PLCVariable } from '../../../../../../../../middleware/shared/ports/types'
 import {
   findFunctionBlockVariables,
   findStructureVariables,
@@ -7,7 +7,7 @@ import {
   isEnumerationType,
   isFunctionBlockType,
   type PouVariable,
-} from '../../../../../../../../utils/pou-helpers'
+} from '../../../../../../../utils/pou-helpers'
 import { useMemo } from 'react'
 
 /**

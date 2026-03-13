@@ -1,6 +1,7 @@
 import { useOpenPLCStore } from '../../../store'
 import { TimestampFormat } from '../../../store/slices/console/types'
-import { cn, formatTimestamp } from '../../../utils'
+import { cn } from '../../../utils/cn'
+import formatTimestamp from '../../../utils/format-timestamp'
 import { ChevronDown, Download, Filter, Search, X } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 

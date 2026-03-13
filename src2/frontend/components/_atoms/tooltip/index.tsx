@@ -1,5 +1,5 @@
 import * as PrimitiveTooltip from '@radix-ui/react-tooltip'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { ComponentPropsWithoutRef, ElementRef, forwardRef } from 'react'
 
 const TooltipProvider = PrimitiveTooltip.Provider

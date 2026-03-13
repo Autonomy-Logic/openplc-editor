@@ -1,4 +1,4 @@
-import { Modal, ModalContent, ModalTitle } from '../../../_molecules'
+import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { useOpenPLCStore } from '../../../../store'
 import { useEffect, useState } from 'react'
 

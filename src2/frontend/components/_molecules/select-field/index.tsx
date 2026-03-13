@@ -1,6 +1,6 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 
 const SelectField = ({
   label,

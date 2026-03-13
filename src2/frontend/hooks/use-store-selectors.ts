@@ -80,6 +80,12 @@ const communicationSelectors = {
   useSetCommunicationPreferences: () => useOpenPLCStore((state) => state.deviceActions.setCommunicationPreferences),
 }
 
+// ===================== Ladder selectors. =====================
+const ladderSelectors = {
+  useGetIsRungOpen: () => useOpenPLCStore((state) => state.editorActions.getIsRungOpen),
+  useUpdateModelLadder: () => useOpenPLCStore((state) => state.editorActions.updateModelLadder),
+}
+
 // ===================== Remote Device selectors. =====================
 const remoteDeviceSelectors = {
   useRemoteDeviceIOPoints: (): RemoteDeviceIOPoint[] => {
@@ -115,6 +121,7 @@ export {
   boardSelectors,
   communicationSelectors,
   compileOnlySelectors,
+  ladderSelectors,
   pinSelectors,
   remoteDeviceSelectors,
   rtuSelectors,

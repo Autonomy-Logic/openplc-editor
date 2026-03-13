@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '../../../store'
 import { useEffect, useState } from 'react'
 
-import { Label } from '../../_atoms'
+import { Label } from '../../_atoms/label'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 const DebuggerIpInputModal = () => {

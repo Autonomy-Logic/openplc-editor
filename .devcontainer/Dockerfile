@@ -54,6 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     procps \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
@@ -63,11 +64,13 @@ COPY .devcontainer/start-xvfb.sh /usr/local/bin/start-xvfb.sh
 RUN chmod +x /usr/local/bin/start-xvfb.sh
 
 # ---------------------------------------------------------
-# Non-root user (rename default ubuntu user to node)
+# Non-root user (rename default ubuntu user to dev)
 # ---------------------------------------------------------
-RUN usermod -l node -d /home/node -m ubuntu \
-    && groupmod -n node ubuntu
+RUN usermod -l dev -d /home/dev -m ubuntu \
+    && groupmod -n dev ubuntu \
+    && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev \
+    && chmod 0440 /etc/sudoers.d/dev
 
-USER node
+USER dev
 
 WORKDIR /workspaces/openplc-editor

@@ -1,11 +1,9 @@
-import { GenericTable } from '../../../../../../../_atoms/generic-table'
-import {
-  PinComboboxInputCell,
-  PinSelectInputCell,
-  PinTextInputCell,
-} from '../../../../../../../_molecules/pin-mapping-table'
-import { pinSelectors } from '../../../../../../../../hooks/use-store-selectors'
-import type { DevicePin } from '../../../../../../../../../middleware/shared/ports/types'
+import { GenericTable } from '../../../../../../_atoms/generic-table'
+import { PinComboboxInputCell } from '../../../../../../_molecules/pin-mapping-table/combobox-input'
+import { PinSelectInputCell } from '../../../../../../_molecules/pin-mapping-table/select-input'
+import { PinTextInputCell } from '../../../../../../_molecules/pin-mapping-table/text-input'
+import { pinSelectors } from '../../../../../../../hooks/use-store-selectors'
+import type { DevicePin } from '../../../../../../../../middleware/shared/ports/types'
 import { createColumnHelper } from '@tanstack/react-table'
 
 const columnHelper = createColumnHelper<DevicePin>()

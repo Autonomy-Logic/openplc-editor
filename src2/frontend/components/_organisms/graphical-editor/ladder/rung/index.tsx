@@ -4,10 +4,11 @@
  */
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { RungBody, RungHeader } from '../../../../_molecules/graphical-editor/ladder/rung'
+import { RungBody } from '../../../../_molecules/graphical-editor/ladder/rung/body'
+import { RungHeader } from '../../../../_molecules/graphical-editor/ladder/rung/header'
 import { useOpenPLCStore } from '../../../../../store'
-import { RungLadderState } from '../../../../../store/slices'
-import { cn } from '../../../../../utils'
+import type { RungLadderState } from '../../../../../store/slices/ladder'
+import { cn } from '../../../../../utils/cn'
 import { useEffect, useState } from 'react'
 
 type RungProps = {

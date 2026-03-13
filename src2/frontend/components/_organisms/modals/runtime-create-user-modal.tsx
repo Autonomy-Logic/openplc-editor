@@ -2,7 +2,7 @@ import { useOpenPLCStore } from '../../../store'
 import { useRuntime } from '../../../../middleware/shared/providers'
 import { useState } from 'react'
 
-import { Label } from '../../_atoms'
+import { Label } from '../../_atoms/label'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 const RuntimeCreateUserModal = () => {

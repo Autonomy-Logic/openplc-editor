@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '../../../../store'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugger } from '../../../../../middleware/shared/providers'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 import { useEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 

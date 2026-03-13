@@ -7,7 +7,7 @@ import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../../../store'
 import { arrayValidation } from '../../../../../store/slices/project/validation/variables'
 import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../utils'
+import { cn } from '../../../../../utils/cn'
 import { DimensionCell } from './editable-cell'
 
 type PLCArrayDatatype = Extract<PLCDataType, { derivation: 'array' }>

@@ -1,5 +1,5 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { ArrowIcon } from '../../../assets'
+import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import _ from 'lodash'
 import { useState } from 'react'
 

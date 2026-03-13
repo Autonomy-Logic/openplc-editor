@@ -1,27 +1,25 @@
-import {
-  ArrayIcon,
-  ArrowIcon,
-  CommentIcon,
-  CppIcon,
-  DataTypeIcon,
-  DeviceIcon,
-  EnumIcon,
-  FBDIcon,
-  FunctionBlockIcon,
-  FunctionIcon,
-  ILIcon,
-  LDIcon,
-  PLCIcon,
-  ProgramIcon,
-  PythonIcon,
-  ResourceIcon,
-  SFCIcon,
-  STIcon,
-  StructureIcon,
-} from '../../../../../assets'
+import { ArrayIcon } from '../../../../../assets/icons/project/Array'
+import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
+import { CommentIcon } from '../../../../../assets/icons/interface/Comment'
+import { CppIcon } from '../../../../../assets/icons/project/Cpp'
+import { DataTypeIcon } from '../../../../../assets/icons/project/DataType'
+import { DeviceIcon } from '../../../../../assets/icons/project/Device'
+import { EnumIcon } from '../../../../../assets/icons/project/Enum'
+import { FBDIcon } from '../../../../../assets/icons/project/FBD'
+import { FunctionBlockIcon } from '../../../../../assets/icons/project/FunctionBlock'
+import { FunctionIcon } from '../../../../../assets/icons/project/Function'
+import { ILIcon } from '../../../../../assets/icons/project/IL'
+import { LDIcon } from '../../../../../assets/icons/project/LD'
+import { PLCIcon } from '../../../../../assets/icons/project/PLC'
+import { ProgramIcon } from '../../../../../assets/icons/project/Program'
+import { PythonIcon } from '../../../../../assets/icons/project/Python'
+import { ResourceIcon } from '../../../../../assets/icons/project/Resource'
+import { SFCIcon } from '../../../../../assets/icons/project/SFC'
+import { STIcon } from '../../../../../assets/icons/project/ST'
+import { StructureIcon } from '../../../../../assets/icons/project/Structure'
 import ZapIcon from '../../../../../assets/icons/interface/Zap'
 import { useOpenPLCStore } from '../../../../../store'
-import { cn } from '../../../../../utils'
+import { cn } from '../../../../../utils/cn'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
 type IProjectSearchTreeRootProps = ComponentPropsWithoutRef<'ul'> & {

@@ -1,7 +1,7 @@
 import type { CheckboxProps as PrimitiveCheckboxProps } from '@radix-ui/react-checkbox'
 import * as PrimitiveCheckbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 
 type CheckboxProps = PrimitiveCheckboxProps & {
   label?: string

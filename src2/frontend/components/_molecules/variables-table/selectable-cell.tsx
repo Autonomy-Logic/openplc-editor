@@ -1,19 +1,18 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { ArrowIcon, DebuggerIcon } from '../../../assets'
+import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
+import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
 import { useOpenPLCStore } from '../../../store'
-import {
-  TypeChangeValidationResult,
-  validateTypeChange,
-} from '../../../store/slices/project/validation/type-change'
+import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import { InputWithRef } from '../../_atoms/input'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import { TypeChangeModal } from '../type-change-modal'
 import { ArrayModal } from './elements/array-modal'
 

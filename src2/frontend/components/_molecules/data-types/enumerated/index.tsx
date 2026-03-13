@@ -1,7 +1,9 @@
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
-import { MinusIcon, PlusIcon, StickArrowIcon } from '../../../../assets'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../_atoms'
+import { MinusIcon } from '../../../../assets/icons/interface/Minus'
+import { PlusIcon } from '../../../../assets/icons/interface/Plus'
+import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../_atoms/select'
 import TableActions from '../../../_atoms/table-actions'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../../store'

@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '../../../../store'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 
-import { ActivityBarButton } from '../../../_atoms/buttons'
+import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
 
 export const ChatButton = () => {
   const { isChatOpen, isEnabled, hasConsented } = useOpenPLCStore.useAi()

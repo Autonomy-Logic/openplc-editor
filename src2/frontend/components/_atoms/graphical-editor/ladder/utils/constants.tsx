@@ -7,7 +7,7 @@ import {
   SetCoil,
 } from '../../../../../assets/icons/flow/Coil'
 import { DefaultContact, FallingEdgeContact, NegatedContact, RisingEdgeContact } from '../../../../../assets/icons/flow/Contact'
-import { cn } from '../../../../../utils'
+import { cn } from '../../../../../utils/cn'
 import { CoilType, ContactType } from './types'
 import { ReactNode } from 'react'
 

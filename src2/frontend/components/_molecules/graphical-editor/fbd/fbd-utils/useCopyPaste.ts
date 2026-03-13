@@ -1,6 +1,6 @@
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '../../../../../store'
-import { FBDRungState } from '../../../../../store/slices'
+import type { FBDRungState } from '../../../../../store/slices/fbd'
 import { pasteNodesAtFBD } from '../../../../../store/slices/fbd/utils'
 import { EdgeType, NodeType } from '../../../../../store/slices/react-flow'
 import { ClipboardType } from '../../../../../store/slices/clipboard'

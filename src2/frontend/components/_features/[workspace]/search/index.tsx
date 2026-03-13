@@ -1,17 +1,12 @@
-import { CloseIcon } from '../../../../assets'
+import { CloseIcon } from '../../../../assets/icons/interface/Close'
 import { Accordion } from '../../../_atoms/accordion'
 import { useOpenPLCStore } from '../../../../store'
-import { Project, TabsProps } from '../../../../store/slices'
+import type { Project } from '../../../../store/slices/search'
+import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
 import { extractSearchQuery } from '../../../../store/slices/search/utils'
 
-import {
-  ProjectSearchTreeBranch,
-  ProjectSearchTreeLeaf,
-  ProjectSearchTreeRoot,
-  ProjectSearchTreeVariableBranch,
-  ProjectSearchTreeVariableLeaf,
-} from './display/tree-view'
+import { ProjectSearchTreeBranch, ProjectSearchTreeLeaf, ProjectSearchTreeRoot, ProjectSearchTreeVariableBranch, ProjectSearchTreeVariableLeaf, } from './display/tree-view'
 
 interface _SearchResult {
   searchID: string

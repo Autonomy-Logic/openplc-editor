@@ -1,17 +1,14 @@
-import { DeviceEditorSlot } from '../../../../../_templates/[editors]'
-import { cn } from '../../../../../../utils'
+import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { cn } from '../../../../../../utils/cn'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowIcon, RefreshIcon } from '../../../../../../assets'
+import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
+import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { useOpenPLCStore } from '../../../../../../store'
 import { runtimeGetUsersInfo, runtimeLogout } from '../../../../../../services/api/runtime-api'
 import { RuntimeLoginModal, RuntimeCreateUserModal } from '../../../../../_organisms/modals'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
-import {
-  listOrchestratorsRequest,
-  type OrchestratorResponse,
-  type DeviceResponse,
-} from '../../../../../../api/queries/orchestrators'
+import { listOrchestratorsRequest, type OrchestratorResponse, type DeviceResponse, } from '../../../../../../api/queries/orchestrators'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
@@ -215,7 +212,7 @@ const OrchestratorsList = () => {
       console.error('[Orchestrators] Edge API fetch failed', error)
 
       // In development mode, fall back to mock data for local testing
-      if (import.meta.env.DEV) {
+      if (import.meta.env?.DEV) {
         console.info('[Orchestrators] Using mock data for development')
         await new Promise((resolve) => setTimeout(resolve, 300))
         setOrchestrators(MOCK_ORCHESTRATORS)

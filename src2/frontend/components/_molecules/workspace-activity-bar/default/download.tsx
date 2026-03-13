@@ -1,5 +1,5 @@
-import { DownloadIcon } from '../../../../assets'
-import { ActivityBarButton } from '../../../_atoms/buttons'
+import { DownloadIcon } from '../../../../assets/icons/interface/Download'
+import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
 
 type DownloadButtonProps = { onClick?: () => void }
 

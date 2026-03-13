@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 
 import { useOpenPLCStore } from '../store'
-import { debugBridge } from '../services/debug'
+import { debugBridge } from '../services/debug/debug-bridge'
 import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 import type { DebugTreeNode } from '../../middleware/shared/ports/types'
 

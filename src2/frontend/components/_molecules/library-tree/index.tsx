@@ -1,5 +1,8 @@
-import { ArrowIcon, LibraryCloseFolderIcon, LibraryFileIcon, LibraryOpenFolderIcon } from '../../../assets'
-import { cn } from '../../../utils'
+import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
+import { LibraryCloseFolderIcon } from '../../../assets/icons/library/CloseFolder'
+import { LibraryFileIcon } from '../../../assets/icons/library/File'
+import { LibraryOpenFolderIcon } from '../../../assets/icons/library/OpenFolder'
+import { cn } from '../../../utils/cn'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
 type ILibraryRootProps = ComponentPropsWithoutRef<'ul'> & {

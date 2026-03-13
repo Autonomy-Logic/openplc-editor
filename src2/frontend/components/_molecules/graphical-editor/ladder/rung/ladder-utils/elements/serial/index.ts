@@ -1,13 +1,13 @@
-import { checkIfElementIsNode } from '../../../../../../_atoms/graphical-editor/ladder'
-import type { RungLadderState } from '../../../../../../../store/slices'
+import { checkIfElementIsNode } from '../../../../../../../_atoms/graphical-editor/ladder'
+import type { RungLadderState } from '../../../../../../../../store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
-import { newGraphicalEditorNodeID } from '../../../../../../../utils'
+import { newGraphicalEditorNodeID } from '../../../../../../../../utils/new-graphical-editor-node-id'
 import { connectNodes } from '../../edges'
 import { buildGenericNode, isNodeOfType } from '../../nodes'
 import { removePlaceholderElements } from '../placeholder'
 import { getElementPositionBasedOnPlaceholderElement, getPreviousElement, getPreviousElementsByEdge } from '../utils'
-import { ParallelNode, PlaceholderNode } from '../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import { ParallelNode, PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 
 export const appendSerialConnection = <T>(
   rung: RungLadderState,

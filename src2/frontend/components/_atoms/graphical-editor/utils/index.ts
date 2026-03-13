@@ -5,7 +5,7 @@ import {
   getVariableRestrictionType,
 } from '../../../../../backend/shared/validate-variable-type'
 
-import { BlockVariant } from '../ladder/utils'
+import { BlockVariant } from '../ladder/utils/types'
 import { BlockVariant as newBlockVariant } from '../types/block'
 
 export const getVariableByName = (variables: PLCVariable[], name: string): PLCVariable | undefined => {

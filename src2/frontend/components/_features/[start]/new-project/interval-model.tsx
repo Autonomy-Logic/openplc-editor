@@ -1,5 +1,5 @@
-import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../../../_molecules'
-import { cn } from '../../../../utils'
+import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../../../_molecules/modal'
+import { cn } from '../../../../utils/cn'
 import { useEffect, useMemo, useState } from 'react'
 
 import ArrowButtonGroup from '../../[workspace]/editor/graphical/elements/arrow-button-group'

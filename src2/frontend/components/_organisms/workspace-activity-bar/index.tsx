@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '../../../store'
 
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
-import { ExitButton } from '../../_molecules/workspace-activity-bar/default'
+import { ExitButton } from '../../_molecules/workspace-activity-bar/default/exit'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 import { DefaultWorkspaceActivityBar } from './default'
 import { FBDToolbox } from './fbd-toolbox'

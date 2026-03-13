@@ -2,7 +2,7 @@ import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useOpenPLCStore } from '../../../../store'
 import { PLCVariable } from '../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 import {
   floatToBuffer,
   getVariableTypeInfo,

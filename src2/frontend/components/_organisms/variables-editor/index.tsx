@@ -1,39 +1,28 @@
-import { MinusIcon, PlusIcon, StickArrowIcon } from '../../../assets'
+import { MinusIcon } from '../../../assets/icons/interface/Minus'
+import { PlusIcon } from '../../../assets/icons/interface/Plus'
+import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
 import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
-import {
-  FBDFlowActions,
-  FBDFlowState,
-  LadderFlowActions,
-  LadderFlowState,
-  VariablesTable as VariablesTableType,
-} from '../../../store/slices'
-import {
-  TypeChangeValidationResult,
-  validateTypeChange,
-} from '../../../store/slices/project/validation/type-change'
-import {
-  syncNodesWithVariables as syncNodesWithVariablesUtil,
-  syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil,
-} from '../../../utils/graphical/sync-nodes-with-variables'
-import {
-  findAllReferencesToVariable,
-  propagateVariableRename,
-  type ReferenceImpactAnalysis,
-} from '../../../utils/variable-references'
+import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
+import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
+import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
+import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
+import { syncNodesWithVariables as syncNodesWithVariablesUtil, syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil, } from '../../../utils/graphical/sync-nodes-with-variables'
+import { findAllReferencesToVariable, propagateVariableRename, type ReferenceImpactAnalysis, } from '../../../utils/variable-references'
 import { baseTypes } from '../../../utils/plc-constants'
 import { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useRef, useState } from 'react'
 
-import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import { InputWithRef } from '../../_atoms/input'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
-import { VariablesTable } from '../../_molecules'
+import { VariablesTable } from '../../_molecules/variables-table'
 import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
 import { TypeChangeModal } from '../../_molecules/type-change-modal'
 import { VariablesCodeEditor } from '../variables-code-editor'

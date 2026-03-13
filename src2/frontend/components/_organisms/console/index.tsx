@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '../../../store'
-import { formatTimestamp } from '../../../utils'
+import formatTimestamp from '../../../utils/format-timestamp'
 import { debounce } from 'lodash'
 import { memo, useEffect, useMemo, useRef } from 'react'
 

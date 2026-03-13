@@ -1,4 +1,4 @@
-import { MagnifierIcon } from '../../../assets'
+import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { ComponentPropsWithoutRef, createRef } from 'react'
 
 import { InputWithRef } from '../../_atoms/input'

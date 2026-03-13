@@ -1,4 +1,4 @@
-import { VariableDTO } from '../../../../../../store/slices'
+import type { VariableDTO } from '../../../../../../store/slices/project'
 import { PLCDataType, PLCStructureVariable } from '../../../../../../../middleware/shared/ports/types'
 import { escapeRegExp } from 'lodash'
 import * as monaco from 'monaco-editor'

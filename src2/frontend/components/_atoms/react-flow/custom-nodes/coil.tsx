@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '../../../../store'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'

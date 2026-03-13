@@ -111,7 +111,7 @@ export function subscribeToIceCandidates(
   onCandidate: (event: IceCandidateEvent) => void,
   onError?: (error: Event) => void,
 ): () => void {
-  const baseURL = import.meta.env.VITE_EDGE_API_URL || 'http://localhost:3333'
+  const baseURL = import.meta.env?.VITE_EDGE_API_URL || 'http://localhost:3333'
   const sseUrl = `${baseURL}/webrtc/sessions/${sessionId}/events`
 
   const eventSource = new EventSource(sseUrl, {

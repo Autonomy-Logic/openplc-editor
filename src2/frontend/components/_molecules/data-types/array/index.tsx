@@ -1,7 +1,9 @@
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
-import { MinusIcon, PlusIcon, StickArrowIcon } from '../../../../assets'
-import { InputWithRef } from '../../../_atoms'
+import { MinusIcon } from '../../../../assets/icons/interface/Minus'
+import { PlusIcon } from '../../../../assets/icons/interface/Plus'
+import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
+import { InputWithRef } from '../../../_atoms/input'
 import TableActions from '../../../_atoms/table-actions'
 import { TypeDropdownSelector } from '../../../_atoms/type-dropdown-selector'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 
-import { PathIcon } from '../../../../../assets'
-import { cn } from '../../../../../utils'
+import { PathIcon } from '../../../../../assets/icons/interface/Path'
+import { cn } from '../../../../../utils/cn'
 import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers/platform-context'
 import { useEffect, useState } from 'react'
 import { SubmitHandler, useForm } from 'react-hook-form'

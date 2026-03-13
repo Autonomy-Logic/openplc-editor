@@ -2,7 +2,7 @@ import type { DevicePin } from '../../../../middleware/shared/ports/types'
 import { CellContext } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
-import { GenericTextCell } from '../../_atoms'
+import { GenericTextCell } from '../../_atoms/generic-table-inputs/generic-text-cell'
 import { toast } from '../../_features/[app]/toast/use-toast'
 
 type PinTextInputCellProps = CellContext<DevicePin, unknown> & { selected?: boolean; editable?: boolean }

@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 
 import { useOpenPLCStore } from '../store'
-import { WebRTCConnectionManager } from '../services/api/webrtc'
+import { WebRTCConnectionManager } from '../services/api/webrtc/webrtc-connection-manager'
 import type { WebRTCConnectionStatus } from '../store/slices/webrtc/types'
 
 export interface UseWebRTCConnectionOptions {

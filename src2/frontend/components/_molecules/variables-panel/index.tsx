@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import ViewIcon from '../../../assets/icons/interface/View'
 import ZapIcon from '../../../assets/icons/interface/Zap'
 import type { DebugTreeNode } from '../../../../middleware/shared/ports/types'
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import {
   floatToBuffer,
   getVariableTypeInfo,

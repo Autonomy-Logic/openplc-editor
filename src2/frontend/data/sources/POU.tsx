@@ -1,18 +1,16 @@
-import {
-  CppIcon,
-  DataTypeIcon,
-  FBDIcon,
-  FunctionBlockIcon,
-  FunctionIcon,
-  ILIcon,
-  LDIcon,
-  ProgramIcon,
-  PythonIcon,
-  RemoteDeviceIcon,
-  ServerIcon,
-  SFCIcon,
-  STIcon,
-} from '../../assets'
+import { CppIcon } from '../../assets/icons/project/Cpp'
+import { DataTypeIcon } from '../../assets/icons/project/DataType'
+import { FBDIcon } from '../../assets/icons/project/FBD'
+import { FunctionBlockIcon } from '../../assets/icons/project/FunctionBlock'
+import { FunctionIcon } from '../../assets/icons/project/Function'
+import { ILIcon } from '../../assets/icons/project/IL'
+import { LDIcon } from '../../assets/icons/project/LD'
+import { ProgramIcon } from '../../assets/icons/project/Program'
+import { PythonIcon } from '../../assets/icons/project/Python'
+import { RemoteDeviceIcon } from '../../assets/icons/project/RemoteDevice'
+import { ServerIcon } from '../../assets/icons/project/Server'
+import { SFCIcon } from '../../assets/icons/project/SFC'
+import { STIcon } from '../../assets/icons/project/ST'
 
 const PouLanguageSources = [
   {

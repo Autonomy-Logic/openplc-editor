@@ -8,42 +8,38 @@ enableMapSet()
 
 import type { AIFeatureConfig } from '../../backend/shared/ai'
 
-import type {
-  AISlice,
-  ConsoleSlice,
-  DeviceSlice,
-  EditorSlice,
-  FBDFlowSlice,
-  FileSlice,
-  HistorySlice,
-  LadderFlowSlice,
-  LibrarySlice,
-  ModalSlice,
-  ProjectSlice,
-  SearchSlice,
-  SharedSlice,
-  TabsSlice,
-  WebRTCSlice,
-  WorkspaceSlice,
-} from './slices'
-import {
-  createAISliceFactory,
-  createConsoleSlice,
-  createDeviceSlice,
-  createEditorSlice,
-  createFBDFlowSlice,
-  createFileSlice,
-  createHistorySlice,
-  createLadderFlowSlice,
-  createLibrarySlice,
-  createModalSlice,
-  createProjectSlice,
-  createSearchSlice,
-  createSharedSlice,
-  createTabsSlice,
-  createWebRTCSlice,
-  createWorkspaceSlice,
-} from './slices'
+import type { AISlice } from './slices/ai'
+import type { ConsoleSlice } from './slices/console'
+import type { DeviceSlice } from './slices/device'
+import type { EditorSlice } from './slices/editor'
+import type { FBDFlowSlice } from './slices/fbd'
+import type { FileSlice } from './slices/file'
+import type { HistorySlice } from './slices/history'
+import type { LadderFlowSlice } from './slices/ladder'
+import type { LibrarySlice } from './slices/library'
+import type { ModalSlice } from './slices/modal'
+import type { ProjectSlice } from './slices/project'
+import type { SearchSlice } from './slices/search'
+import type { SharedSlice } from './slices/shared'
+import type { TabsSlice } from './slices/tabs'
+import type { WebRTCSlice } from './slices/webrtc'
+import type { WorkspaceSlice } from './slices/workspace'
+import { createAISliceFactory } from './slices/ai'
+import { createConsoleSlice } from './slices/console'
+import { createDeviceSlice } from './slices/device'
+import { createEditorSlice } from './slices/editor'
+import { createFBDFlowSlice } from './slices/fbd'
+import { createFileSlice } from './slices/file'
+import { createHistorySlice } from './slices/history'
+import { createLadderFlowSlice } from './slices/ladder'
+import { createLibrarySlice } from './slices/library'
+import { createModalSlice } from './slices/modal'
+import { createProjectSlice } from './slices/project'
+import { createSearchSlice } from './slices/search'
+import { createSharedSlice } from './slices/shared'
+import { createTabsSlice } from './slices/tabs'
+import { createWebRTCSlice } from './slices/webrtc'
+import { createWorkspaceSlice } from './slices/workspace'
 
 export type RootState = AISlice &
   ConsoleSlice &

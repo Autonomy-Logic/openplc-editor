@@ -1,4 +1,4 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 import { HTMLAttributes } from 'react'
 
 type FolderRootProps = HTMLAttributes<HTMLDivElement>

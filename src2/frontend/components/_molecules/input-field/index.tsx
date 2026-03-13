@@ -1,6 +1,6 @@
-import { cn } from '../../../utils'
+import { cn } from '../../../utils/cn'
 
-import { InputWithRef } from '../../_atoms'
+import { InputWithRef } from '../../_atoms/input'
 
 type InputFieldProps = {
   label: string

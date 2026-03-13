@@ -3,7 +3,7 @@ import { buildGenericNode } from '../../../../_molecules/graphical-editor/fbd/fb
 import { useOpenPLCStore } from '../../../../../store'
 import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'
 import { PLCVariable } from '../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../utils'
+import { cn } from '../../../../../utils/cn'
 import { expandArrayVariables } from '../../../../../../backend/shared/array-variable-utils'
 import { Node } from '@xyflow/react'
 import { isArray } from 'lodash'

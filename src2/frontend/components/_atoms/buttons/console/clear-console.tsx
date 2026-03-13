@@ -1,6 +1,6 @@
-import { BroomIcon } from '../../../../assets'
+import { BroomIcon } from '../../../../assets/icons/interface/Broom'
 import { useOpenPLCStore } from '../../../../store'
-import { cn } from '../../../../utils'
+import { cn } from '../../../../utils/cn'
 
 type ClearConsoleButtonProps = {
   onClear?: () => void
