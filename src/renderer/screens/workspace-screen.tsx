@@ -176,6 +176,17 @@ const WorkspaceScreen = () => {
   const graphListRef = useRef<string[]>([])
   const batchOffsetRef = useRef<number>(0)
 
+  // Cache for diagram/source variable keys — recomputed only when the active POU or FB
+  // instance context changes. During debug the editor is read-only, so the same POU+context
+  // always yields the same set of keys. This avoids rebuilding regex objects (ST/IL) and
+  // re-scanning flow nodes (LD/FBD) on every 50ms poll tick.
+  const diagramVarKeysCache = useRef<{
+    pouName: string
+    language: string
+    fbContextKey: string
+    keys: Set<string>
+  } | null>(null)
+
   useEffect(() => {
     isMountedRef.current = true
     return () => {
@@ -210,6 +221,7 @@ const WorkspaceScreen = () => {
         pollingIntervalRef.current = null
       }
       variableInfoMapRef.current = null
+      diagramVarKeysCache.current = null
       return
     }
 
@@ -1200,217 +1212,252 @@ const WorkspaceScreen = () => {
         const { editor, ladderFlows, fbdFlows } = useOpenPLCStore.getState()
         const currentPou = currentProject.data.pous.find((pou) => pou.data.name === editor.meta.name)
 
-        // Helper to create composite key for current POU, handling FB instance context
-        const makeCompositeKeyForCurrentPou = (variableName: string): string | null => {
-          if (!currentPou) return null
-          if (currentPou.type === 'function-block') {
-            const fbTypeKey = currentPou.data.name.toUpperCase()
-            const selectedKey = fbSelectedInstance.get(fbTypeKey)
-            if (!selectedKey) return null
-            const instances = fbDebugInstances.get(fbTypeKey) || []
-            const selectedInstance = instances.find((inst) => inst.key === selectedKey)
-            if (!selectedInstance) return null
-            return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
-          }
-          return `${currentPou.data.name}:${variableName}`
-        }
+        // --- Diagram/source variable keys (cached) ---
+        // During debug the editor is read-only, so the set of variables visible on the diagram
+        // or referenced in source text is stable for a given POU + FB instance context.
+        // We cache this set and only recompute when the active POU or FB context changes,
+        // avoiding redundant regex compilation (ST/IL) and node scanning (LD/FBD) every 50ms tick.
+        if (currentPou) {
+          const pouName = currentPou.data.name
+          const pouLanguage = currentPou.data.body.language
+          const fbContextKey =
+            currentPou.type === 'function-block' ? fbSelectedInstance.get(currentPou.data.name.toUpperCase()) ?? '' : ''
 
-        if (currentPou && currentPou.data.body.language === 'ld') {
-          const currentLadderFlow = ladderFlows.find((flow) => flow.name === editor.meta.name)
-          if (currentLadderFlow) {
-            currentLadderFlow.rungs.forEach((rung) => {
-              rung.nodes.forEach((node) => {
-                if (node.type === 'contact' || node.type === 'coil') {
-                  const nodeData = node.data as {
-                    variable?: { name?: string; type?: { definition?: string; value?: string } }
-                  }
-                  const variableName = nodeData.variable?.name
+          const cached = diagramVarKeysCache.current
+          if (
+            cached &&
+            cached.pouName === pouName &&
+            cached.language === pouLanguage &&
+            cached.fbContextKey === fbContextKey
+          ) {
+            // Reuse cached keys
+            cached.keys.forEach((key) => debugVariableKeys.add(key))
+          } else {
+            // Recompute: build the set of keys from diagram nodes or source text
+            const newKeys = new Set<string>()
 
-                  if (
-                    variableName &&
-                    nodeData.variable?.type?.definition === 'base-type' &&
-                    nodeData.variable?.type?.value?.toUpperCase() === 'BOOL'
-                  ) {
-                    const compositeKey = makeCompositeKeyForCurrentPou(variableName)
-                    if (compositeKey) {
-                      debugVariableKeys.add(compositeKey)
-                    }
-                  }
-                }
+            // Resolve FB instance context once (used by makeCompositeKey and ST/IL FB children)
+            let resolvedFbInstance: { programName: string; fbVariableName: string } | null = null
+            if (currentPou.type === 'function-block') {
+              const fbTypeKey = currentPou.data.name.toUpperCase()
+              const selectedKey = fbSelectedInstance.get(fbTypeKey)
+              if (selectedKey) {
+                const instances = fbDebugInstances.get(fbTypeKey) || []
+                resolvedFbInstance = instances.find((inst) => inst.key === selectedKey) ?? null
+              }
+            }
 
-                // Variable nodes can display non-BOOL DebugValueBadges and also support force menus.
-                // Poll only the variable referenced by the node (not every variable in the POU).
-                if (node.type === 'variable') {
-                  const nodeData = node.data as {
-                    variable?: { name?: string }
-                  }
-                  const variableName = nodeData.variable?.name
-                  if (variableName) {
-                    const compositeKey = makeCompositeKeyForCurrentPou(variableName)
-                    if (compositeKey) {
-                      debugVariableKeys.add(compositeKey)
-                    }
-                  }
-                }
+            const makeCompositeKey = (variableName: string): string | null => {
+              if (currentPou.type === 'function-block') {
+                if (!resolvedFbInstance) return null
+                return `${resolvedFbInstance.programName}:${resolvedFbInstance.fbVariableName}.${variableName}`
+              }
+              return `${currentPou.data.name}:${variableName}`
+            }
 
-                // Block nodes may show output DebugValueBadges (function blocks + functions).
-                // Poll only those output variables for blocks present on the diagram.
-                if (node.type === 'block') {
-                  const blockData = node.data as {
-                    variant?: {
-                      type?: string
-                      name?: string
-                      variables?: Array<{ name: string; class: string; type: { definition: string; value: string } }>
-                    }
-                    variable?: { name?: string }
-                    numericId?: string
-                  }
+            if (pouLanguage === 'ld') {
+              const currentLadderFlow = ladderFlows.find((flow) => flow.name === editor.meta.name)
+              if (currentLadderFlow) {
+                currentLadderFlow.rungs.forEach((rung) => {
+                  rung.nodes.forEach((node) => {
+                    if (node.type === 'contact' || node.type === 'coil') {
+                      const nodeData = node.data as {
+                        variable?: { name?: string; type?: { definition?: string; value?: string } }
+                      }
+                      const variableName = nodeData.variable?.name
 
-                  const variantType = blockData.variant?.type
-                  const variantName = blockData.variant?.name
-                  const variantVars = blockData.variant?.variables ?? []
-                  const outputVars = variantVars.filter((v) => v.class === 'output' || v.class === 'inOut')
-
-                  if (variantType === 'function-block') {
-                    const instanceName = blockData.variable?.name
-                    if (instanceName) {
-                      for (const outVar of outputVars) {
-                        const compositeKey = makeCompositeKeyForCurrentPou(`${instanceName}.${outVar.name}`)
+                      if (
+                        variableName &&
+                        nodeData.variable?.type?.definition === 'base-type' &&
+                        nodeData.variable?.type?.value?.toUpperCase() === 'BOOL'
+                      ) {
+                        const compositeKey = makeCompositeKey(variableName)
                         if (compositeKey) {
-                          debugVariableKeys.add(compositeKey)
+                          newKeys.add(compositeKey)
                         }
                       }
                     }
-                  } else if (variantType === 'function' && variantName && blockData.numericId) {
-                    const numericId = blockData.numericId
-                    for (const outVar of outputVars) {
-                      const tmpName = `_TMP_${variantName.toUpperCase()}${numericId}_${outVar.name}`
-                      const compositeKey = makeCompositeKeyForCurrentPou(tmpName)
-                      if (compositeKey) {
-                        debugVariableKeys.add(compositeKey)
+
+                    if (node.type === 'variable') {
+                      const nodeData = node.data as {
+                        variable?: { name?: string }
+                      }
+                      const variableName = nodeData.variable?.name
+                      if (variableName) {
+                        const compositeKey = makeCompositeKey(variableName)
+                        if (compositeKey) {
+                          newKeys.add(compositeKey)
+                        }
                       }
                     }
-                  }
-                }
-              })
-            })
-          }
-        }
 
-        if (currentPou && currentPou.data.body.language === 'fbd') {
-          const currentFbdFlow = fbdFlows.find((flow) => flow.name === editor.meta.name)
-          if (currentFbdFlow) {
-            currentFbdFlow.rung.nodes.forEach((node) => {
-              if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
-                const nodeData = node.data as {
-                  variable?: { name?: string }
-                }
-                const variableName = nodeData.variable?.name
+                    if (node.type === 'block') {
+                      const blockData = node.data as {
+                        variant?: {
+                          type?: string
+                          name?: string
+                          variables?: Array<{
+                            name: string
+                            class: string
+                            type: { definition: string; value: string }
+                          }>
+                        }
+                        variable?: { name?: string }
+                        numericId?: string
+                      }
 
-                if (variableName) {
-                  const compositeKey = makeCompositeKeyForCurrentPou(variableName)
-                  if (compositeKey) {
-                    debugVariableKeys.add(compositeKey)
-                  }
-                }
+                      const variantType = blockData.variant?.type
+                      const variantName = blockData.variant?.name
+                      const variantVars = blockData.variant?.variables ?? []
+                      const outputVars = variantVars.filter((v) => v.class === 'output' || v.class === 'inOut')
+
+                      if (variantType === 'function-block') {
+                        const instanceName = blockData.variable?.name
+                        if (instanceName) {
+                          for (const outVar of outputVars) {
+                            const compositeKey = makeCompositeKey(`${instanceName}.${outVar.name}`)
+                            if (compositeKey) {
+                              newKeys.add(compositeKey)
+                            }
+                          }
+                        }
+                      } else if (variantType === 'function' && variantName && blockData.numericId) {
+                        const numericId = blockData.numericId
+                        for (const outVar of outputVars) {
+                          const tmpName = `_TMP_${variantName.toUpperCase()}${numericId}_${outVar.name}`
+                          const compositeKey = makeCompositeKey(tmpName)
+                          if (compositeKey) {
+                            newKeys.add(compositeKey)
+                          }
+                        }
+                      }
+                    }
+                  })
+                })
               }
+            }
 
-              if (node.type === 'block') {
-                const blockData = node.data as {
-                  variant?: {
-                    type?: string
-                    name?: string
-                    variables?: Array<{ name: string; class: string; type: { definition: string; value: string } }>
-                  }
-                  variable?: { name?: string }
-                  numericId?: string
-                }
+            if (pouLanguage === 'fbd') {
+              const currentFbdFlow = fbdFlows.find((flow) => flow.name === editor.meta.name)
+              if (currentFbdFlow) {
+                currentFbdFlow.rung.nodes.forEach((node) => {
+                  if (
+                    node.type === 'input-variable' ||
+                    node.type === 'output-variable' ||
+                    node.type === 'inout-variable'
+                  ) {
+                    const nodeData = node.data as {
+                      variable?: { name?: string }
+                    }
+                    const variableName = nodeData.variable?.name
 
-                const variantType = blockData.variant?.type
-                const variantName = blockData.variant?.name
-                const variantVars = blockData.variant?.variables ?? []
-                const outputVars = variantVars.filter((v) => v.class === 'output' || v.class === 'inOut')
-
-                if (variantType === 'function-block') {
-                  const instanceName = blockData.variable?.name
-                  if (instanceName) {
-                    for (const outVar of outputVars) {
-                      const compositeKey = makeCompositeKeyForCurrentPou(`${instanceName}.${outVar.name}`)
+                    if (variableName) {
+                      const compositeKey = makeCompositeKey(variableName)
                       if (compositeKey) {
-                        debugVariableKeys.add(compositeKey)
+                        newKeys.add(compositeKey)
                       }
                     }
                   }
-                } else if (variantType === 'function' && variantName && blockData.numericId) {
-                  const numericId = blockData.numericId
-                  for (const outVar of outputVars) {
-                    const tmpName = `_TMP_${variantName.toUpperCase()}${numericId}_${outVar.name}`
-                    const compositeKey = makeCompositeKeyForCurrentPou(tmpName)
+
+                  if (node.type === 'block') {
+                    const blockData = node.data as {
+                      variant?: {
+                        type?: string
+                        name?: string
+                        variables?: Array<{
+                          name: string
+                          class: string
+                          type: { definition: string; value: string }
+                        }>
+                      }
+                      variable?: { name?: string }
+                      numericId?: string
+                    }
+
+                    const variantType = blockData.variant?.type
+                    const variantName = blockData.variant?.name
+                    const variantVars = blockData.variant?.variables ?? []
+                    const outputVars = variantVars.filter((v) => v.class === 'output' || v.class === 'inOut')
+
+                    if (variantType === 'function-block') {
+                      const instanceName = blockData.variable?.name
+                      if (instanceName) {
+                        for (const outVar of outputVars) {
+                          const compositeKey = makeCompositeKey(`${instanceName}.${outVar.name}`)
+                          if (compositeKey) {
+                            newKeys.add(compositeKey)
+                          }
+                        }
+                      }
+                    } else if (variantType === 'function' && variantName && blockData.numericId) {
+                      const numericId = blockData.numericId
+                      for (const outVar of outputVars) {
+                        const tmpName = `_TMP_${variantName.toUpperCase()}${numericId}_${outVar.name}`
+                        const compositeKey = makeCompositeKey(tmpName)
+                        if (compositeKey) {
+                          newKeys.add(compositeKey)
+                        }
+                      }
+                    }
+                  }
+                })
+              }
+            }
+
+            // ST/IL: poll variables that appear in the editor source text.
+            // The regex matches are intentionally broad (no comment stripping) — this is the
+            // polling side, not the display side. Over-matching just polls a few extra variables;
+            // the Monaco badge display already strips comments before rendering.
+            if (pouLanguage === 'st' || pouLanguage === 'il') {
+              const sourceText = typeof currentPou.data.body.value === 'string' ? currentPou.data.body.value : ''
+              if (sourceText) {
+                const candidates = currentPou.data.variables.map((v) => v.name).filter((n) => n && n.trim() !== '')
+
+                for (const varName of candidates) {
+                  const pattern = new RegExp(`\\b${varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+                  if (pattern.test(sourceText)) {
+                    const compositeKey = makeCompositeKey(varName)
                     if (compositeKey) {
-                      debugVariableKeys.add(compositeKey)
+                      newKeys.add(compositeKey)
                     }
                   }
                 }
-              }
-            })
-          }
-        }
 
-        // --- ST/IL: poll variables that appear in the editor source text ---
-        if (currentPou && (currentPou.data.body.language === 'st' || currentPou.data.body.language === 'il')) {
-          const sourceText = typeof currentPou.data.body.value === 'string' ? currentPou.data.body.value : ''
-          if (sourceText) {
-            // Build candidate list: all POU variables
-            const candidates = currentPou.data.variables.map((v) => v.name).filter((n) => n && n.trim() !== '')
+                // For derived-type (FB instance) variables that appear in source, poll their children
+                const fbInstances = currentPou.data.variables.filter(
+                  (v) => v.type.definition === 'derived' && v.name && v.name.trim() !== '',
+                )
+                for (const fbInstance of fbInstances) {
+                  const fbPattern = new RegExp(`\\b${fbInstance.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+                  if (!fbPattern.test(sourceText)) continue
 
-            // Check which variables appear in the source text (word-boundary match)
-            for (const varName of candidates) {
-              const pattern = new RegExp(`\\b${varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
-              if (pattern.test(sourceText)) {
-                const compositeKey = makeCompositeKeyForCurrentPou(varName)
-                if (compositeKey) {
-                  debugVariableKeys.add(compositeKey)
-                }
-              }
-            }
-
-            // For derived-type (FB instance) variables that appear in source, poll their children
-            const fbInstances = currentPou.data.variables.filter(
-              (v) => v.type.definition === 'derived' && v.name && v.name.trim() !== '',
-            )
-            for (const fbInstance of fbInstances) {
-              const fbPattern = new RegExp(`\\b${fbInstance.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
-              if (!fbPattern.test(sourceText)) continue
-
-              Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
-                for (const varInfo of varInfos) {
-                  if (currentPou.type === 'function-block') {
-                    // FB POU: resolve through instance context
-                    const fbTypeKey = currentPou.data.name.toUpperCase()
-                    const selectedKey = fbSelectedInstance.get(fbTypeKey)
-                    if (selectedKey) {
-                      const instances = fbDebugInstances.get(fbTypeKey) || []
-                      const selectedInstance = instances.find((inst) => inst.key === selectedKey)
-                      if (
-                        selectedInstance &&
-                        varInfo.pouName === selectedInstance.programName &&
-                        varInfo.variable.name.startsWith(`${selectedInstance.fbVariableName}.${fbInstance.name}.`)
-                      ) {
-                        debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                  Array.from(variableInfoMapRef.current.entries()).forEach(([_, varInfos]) => {
+                    for (const varInfo of varInfos) {
+                      if (resolvedFbInstance) {
+                        // FB POU: resolve through instance context (already hoisted above)
+                        if (
+                          varInfo.pouName === resolvedFbInstance.programName &&
+                          varInfo.variable.name.startsWith(`${resolvedFbInstance.fbVariableName}.${fbInstance.name}.`)
+                        ) {
+                          newKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                        }
+                      } else {
+                        // Program POU: match directly
+                        if (
+                          varInfo.pouName === currentPou.data.name &&
+                          varInfo.variable.name.startsWith(`${fbInstance.name}.`)
+                        ) {
+                          newKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
+                        }
                       }
                     }
-                  } else {
-                    // Program POU: match directly
-                    if (
-                      varInfo.pouName === currentPou.data.name &&
-                      varInfo.variable.name.startsWith(`${fbInstance.name}.`)
-                    ) {
-                      debugVariableKeys.add(`${varInfo.pouName}:${varInfo.variable.name}`)
-                    }
-                  }
+                  })
                 }
-              })
+              }
             }
+
+            diagramVarKeysCache.current = { pouName, language: pouLanguage, fbContextKey, keys: newKeys }
+            newKeys.forEach((key) => debugVariableKeys.add(key))
           }
         }
 
@@ -1570,6 +1617,7 @@ const WorkspaceScreen = () => {
         clearInterval(pollingIntervalRef.current)
         pollingIntervalRef.current = null
       }
+      diagramVarKeysCache.current = null
       void window.bridge.debuggerDisconnect().catch((error: unknown) => {
         const { consoleActions } = useOpenPLCStore.getState()
         consoleActions.addLog({
