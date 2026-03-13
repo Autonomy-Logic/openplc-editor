@@ -1,16 +1,17 @@
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef } from 'react'
+import { ComponentPropsWithoutRef, forwardRef } from 'react'
 
 type IActivityBarButtonProps = ComponentPropsWithoutRef<'button'> & {
   'data-active'?: string
 }
 
-const ActivityBarButton = (props: IActivityBarButtonProps) => {
+const ActivityBarButton = forwardRef<HTMLButtonElement, IActivityBarButtonProps>((props, ref) => {
   const { children, className, 'data-active': dataActive, ...res } = props
   const isActive = dataActive === 'true'
 
   return (
     <button
+      ref={ref}
       role='button'
       className={cn('flex h-6 w-full cursor-pointer items-center justify-center', className)}
       {...res}
@@ -25,6 +26,7 @@ const ActivityBarButton = (props: IActivityBarButtonProps) => {
       </div>
     </button>
   )
-}
+})
+ActivityBarButton.displayName = 'ActivityBarButton'
 
 export { ActivityBarButton }

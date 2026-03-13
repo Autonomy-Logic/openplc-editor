@@ -296,7 +296,7 @@ const WorkspaceScreen = () => {
           <ResizablePanel
             id='workspacePanel'
             order={2}
-            defaultSize={87}
+            defaultSize={84}
             className='relative flex h-full min-h-0 w-[400px]'
           >
             <ResizableHandle
@@ -312,7 +312,7 @@ const WorkspaceScreen = () => {
                   id='editorPanel'
                   order={1}
                   minSize={15}
-                  defaultSize={75}
+                  defaultSize={69}
                   className={cn(
                     'relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white px-4 py-4 dark:border-neutral-800 dark:bg-neutral-950',
                     {
