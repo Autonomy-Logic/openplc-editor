@@ -4,11 +4,11 @@ Tracks progress of the shared UI migration. Updated by the `/migrate` skill afte
 
 ## Current Phase
 
-components
+integration
 
 ## Current Step
 
-30
+31
 
 ## Step Log
 
@@ -47,6 +47,6 @@ components
 | 28 | components | Features — platform-specific (97 files: divergent reconciliation of search, create-element, device/board, monaco editor, data-type editor; web-only AI chat, debug-manager, loading-overlay, orchestrators, device elements; editor-only device-aware gating; new utils device.ts, formatters/POU.ts, data sources data-type.tsx) | done | 2026-03-13 |
 | 29 | components | Templates, screens, and shared hooks | done | 2026-03-13 |
 | 30 | components | Hooks migration — debug/AI/WebRTC hooks, services, utilities, simulator facade, architecture validator updates (637 byte-identical files) | done | 2026-03-13 |
-| 31 | integration | App shell and routing | pending | |
+| 31 | integration | App shell and routing — editor store-based routing, web TanStack Router with project loading | done | 2026-03-13 |
 | 32 | integration | Production build configs | pending | |
 | 33 | integration | Switchover and cleanup — remove src/ | pending | |
