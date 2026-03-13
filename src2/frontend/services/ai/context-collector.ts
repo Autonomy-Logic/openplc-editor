@@ -12,7 +12,7 @@ type StoreState = ReturnType<typeof openPLCStoreBase.getState>
 export function collectProjectContext(state: StoreState, currentPouName: string, maxTokenBudget: number): string {
   const maxChars = maxTokenBudget * 4
   const pous = state.project.data.pous
-  const pou = pous.find((p) => p.data.name === currentPouName)
+  const pou = pous.find((p) => p.name === currentPouName)
   if (!pou) return ''
 
   const sections: string[] = []
@@ -26,14 +26,15 @@ export function collectProjectContext(state: StoreState, currentPouName: string,
   }
 
   // 1. Current POU variables (always included — most important context)
-  if (pou.data.variables.length > 0) {
-    const varLines = pou.data.variables
+  const pouVariables = pou.interface?.variables ?? []
+  if (pouVariables.length > 0) {
+    const varLines = pouVariables
       .map((v) => {
         const cls = v.class ? `${v.class} ` : ''
         return `  ${cls}${v.name} : ${v.type.value};`
       })
       .join('\n')
-    addSection(`(* Current POU: ${pou.data.name} [${pou.type}] *)\nVAR\n${varLines}\nEND_VAR`)
+    addSection(`(* Current POU: ${pou.name} [${pou.pouType}] *)\nVAR\n${varLines}\nEND_VAR`)
   }
 
   // 2. Global variables
@@ -44,19 +45,19 @@ export function collectProjectContext(state: StoreState, currentPouName: string,
   }
 
   // 3. Referenced function blocks — signatures only
-  const derivedTypeNames = pou.data.variables
+  const derivedTypeNames = pouVariables
     .filter((v) => v.type.definition === 'user-data-type')
     .map((v) => v.type.value)
 
   if (derivedTypeNames.length > 0) {
-    const fbPous = pous.filter((p) => p.type === 'function-block' && derivedTypeNames.includes(p.data.name))
+    const fbPous = pous.filter((p) => p.pouType === 'function-block' && derivedTypeNames.includes(p.name))
     if (fbPous.length > 0) {
       const fbSigs = fbPous.map((fb) => {
-        const vars = fb.data.variables
+        const vars = (fb.interface?.variables ?? [])
           .filter((v) => v.class === 'input' || v.class === 'output' || v.class === 'inOut')
           .map((v) => `${v.class?.toUpperCase()} ${v.name} : ${v.type.value}`)
           .join(', ')
-        return `FUNCTION_BLOCK ${fb.data.name} (* ${vars} *)`
+        return `FUNCTION_BLOCK ${fb.name} (* ${vars} *)`
       })
       addSection(`(* Referenced Function Blocks *)\n${fbSigs.join('\n')}`)
     }
@@ -89,14 +90,14 @@ export function collectProjectContext(state: StoreState, currentPouName: string,
 
   // 5. Sibling POU signatures (limited to 5)
   const siblings = pous
-    .filter((p) => p.data.name !== currentPouName)
+    .filter((p) => p.name !== currentPouName)
     .slice(0, 5)
     .map((p) => {
-      const params = p.data.variables
+      const params = (p.interface?.variables ?? [])
         .filter((v) => v.class === 'input' || v.class === 'output')
         .map((v) => `${v.class?.toUpperCase()} ${v.name} : ${v.type.value}`)
         .join(', ')
-      return `${p.type.toUpperCase()} ${p.data.name}${params ? ` (* ${params} *)` : ''}`
+      return `${p.pouType.toUpperCase()} ${p.name}${params ? ` (* ${params} *)` : ''}`
     })
 
   if (siblings.length > 0) {

@@ -1,4 +1,4 @@
-import { File as FileElement } from '../../_atoms/file'
+import { File } from '../../_atoms/file'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '../../../store'
 import { useSystem, useProject } from '../../../../middleware/shared/providers'
@@ -12,6 +12,7 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
   const {
     workspace: { recent },
     workspaceActions: { setRecent },
+    sharedWorkspaceActions: { handleOpenProjectResponse },
   } = useOpenPLCStore()
 
   const system = useSystem()
@@ -92,14 +93,16 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
 
   const handleOpenProjectByPath = async (projectPath: string) => {
     const result = await project.openProjectByPath(projectPath)
-    if (!result.success) {
-      void updateUserRecentProjects()
-      toast({
-        title: 'Cannot open the project.',
-        description: result.error?.description ?? `The path ${projectPath} does not exist on this computer.`,
-        variant: 'fail',
-      })
+    if (result.success && result.data) {
+      handleOpenProjectResponse(result.data)
+      return
     }
+    void updateUserRecentProjects()
+    toast({
+      title: 'Cannot open the project.',
+      description: result.error?.description ?? `The path ${projectPath} does not exist on this computer.`,
+      variant: 'fail',
+    })
   }
 
   return (
@@ -112,18 +115,14 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
       </h2>
       <div className='scroll-area flex h-auto w-full flex-wrap  gap-[25px] overflow-y-auto'>
         {recentProjects.map((proj) => (
-          <FileElement.Root
+          <File
             onClick={() => void handleOpenProjectByPath(proj.path)}
-            className='overflow-hidden '
+            className='overflow-hidden'
             key={proj.path}
-          >
-            <FileElement.Label
-              projectName={proj.name}
-              projectPath={proj.path}
-              lastModified={projectTimes[proj.path]}
-            />
-            <FileElement.Shape />
-          </FileElement.Root>
+            projectName={proj.name}
+            projectPath={proj.path}
+            lastModified={projectTimes[proj.path]}
+          />
         ))}
       </div>
     </section>

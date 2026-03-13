@@ -8,10 +8,12 @@ import { useEffect, useState } from 'react'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
+type PouLeafLang = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+
 const Project = () => {
   const {
     project: {
-      data: { pous, dataTypes, configuration, servers, remoteDevices },
+      data: { pous, dataTypes, configurations, servers, remoteDevices },
       meta: { name },
     },
     projectActions: { updateMetaName },
@@ -95,19 +97,19 @@ const Project = () => {
           {/* Project Functions tree branch */}
           <ProjectTreeBranch branchTarget='function'>
             {pous
-              ?.filter(({ type }) => type === 'function')
-              .sort((a, b) => a.data.name.localeCompare(b.data.name))
-              .map(({ data }) => (
+              ?.filter((pou) => pou.pouType === 'function')
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((pou) => (
                 <ProjectTreeLeaf
-                  key={data.name}
-                  leafLang={data.language}
+                  key={pou.name}
+                  leafLang={pou.body.language as PouLeafLang}
                   leafType='function'
-                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
+                  label={searchQuery ? extractSearchQuery(pou.name, searchQuery) : pou.name}
                   onClick={() =>
                     handleCreateTab({
-                      name: data.name,
-                      path: `/data/pous/function/${data.name}`,
-                      elementType: { type: 'function', language: data.language },
+                      name: pou.name,
+                      path: `/data/pous/function/${pou.name}`,
+                      elementType: { type: 'function', language: pou.body.language as PouLeafLang },
                     })
                   }
                 />
@@ -117,19 +119,19 @@ const Project = () => {
           {/* Project Function Blocks tree branch */}
           <ProjectTreeBranch branchTarget='function-block'>
             {pous
-              ?.filter(({ type }) => type === 'function-block')
-              .sort((a, b) => a.data.name.localeCompare(b.data.name))
-              .map(({ data }) => (
+              ?.filter((pou) => pou.pouType === 'function-block')
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((pou) => (
                 <ProjectTreeLeaf
-                  key={data.name}
-                  leafLang={data.language}
+                  key={pou.name}
+                  leafLang={pou.body.language as PouLeafLang}
                   leafType='function-block'
-                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
+                  label={searchQuery ? extractSearchQuery(pou.name, searchQuery) : pou.name}
                   onClick={() =>
                     handleCreateTab({
-                      name: data.name,
-                      path: `/data/pous/function-block/${data.name}`,
-                      elementType: { type: 'function-block', language: data.language },
+                      name: pou.name,
+                      path: `/data/pous/function-block/${pou.name}`,
+                      elementType: { type: 'function-block', language: pou.body.language as PouLeafLang },
                     })
                   }
                 />
@@ -139,19 +141,19 @@ const Project = () => {
           {/* Project Programs tree branch */}
           <ProjectTreeBranch branchTarget='program'>
             {pous
-              ?.filter(({ type }) => type === 'program')
-              .sort((a, b) => a.data.name.localeCompare(b.data.name))
-              .map(({ data }) => (
+              ?.filter((pou) => pou.pouType === 'program')
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((pou) => (
                 <ProjectTreeLeaf
-                  key={data.name}
-                  leafLang={data.language}
+                  key={pou.name}
+                  leafLang={pou.body.language as PouLeafLang}
                   leafType='program'
-                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
+                  label={searchQuery ? extractSearchQuery(pou.name, searchQuery) : pou.name}
                   onClick={() =>
                     handleCreateTab({
-                      name: data.name,
-                      path: `/data/pous/program/${data.name}`,
-                      elementType: { type: 'program', language: data.language },
+                      name: pou.name,
+                      path: `/data/pous/program/${pou.name}`,
+                      elementType: { type: 'program', language: pou.body.language as PouLeafLang },
                     })
                   }
                 />
@@ -226,7 +228,7 @@ const Project = () => {
             branchTarget='resource'
             onClick={() => {
               handleCreateTab({
-                configuration: configuration,
+                configuration: configurations,
                 name: 'Resource',
                 path: `/data/configuration/resource`,
                 elementType: { type: 'resource' },

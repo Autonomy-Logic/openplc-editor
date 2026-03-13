@@ -104,7 +104,7 @@ export const BlockNodeElement = <T extends object>({
 
   const resolveLibraryBlock = (blockNameValue: string, libraries: LibraryState['libraries'], pous: PLCPou[]) => {
     const userLibrary = libraries.user.find((lib) => lib.name.toLowerCase() === blockNameValue.toLowerCase())
-    const userPou = pous.find((pou) => pou.data.name.toLowerCase() === userLibrary?.name.toLowerCase())
+    const userPou = pous.find((pou) => pou.name.toLowerCase() === userLibrary?.name.toLowerCase())
 
     if (!userPou) {
       return (
@@ -116,7 +116,7 @@ export const BlockNodeElement = <T extends object>({
       )
     }
 
-    const variables = userPou.data.variables.map((variable) => ({
+    const variables = (userPou.interface?.variables ?? []).map((variable) => ({
       name: variable.name,
       class: variable.class,
       type: {
@@ -125,23 +125,24 @@ export const BlockNodeElement = <T extends object>({
       },
     }))
 
-    if (userPou.type === 'function') {
-      const variable = getVariableRestrictionType(userPou.data.returnType)
+    if (userPou.pouType === 'function') {
+      const returnType = userPou.interface?.returnType ?? ''
+      const variable = getVariableRestrictionType(returnType)
       variables.push({
         name: 'OUT',
         class: 'output',
         type: {
           definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
-          value: userPou.data.returnType.toUpperCase(),
+          value: returnType.toUpperCase(),
         },
       })
     }
 
     return {
-      name: userPou.data.name,
-      type: userPou.type,
+      name: userPou.name,
+      type: userPou.pouType,
       variables,
-      documentation: userPou.data.documentation,
+      documentation: userPou.documentation,
       extensible: false,
     }
   }
@@ -166,7 +167,7 @@ export const BlockNodeElement = <T extends object>({
     })
     if (!pou || !rung || !node) return
 
-    if (libraryBlock && pou.type === 'function' && (libraryBlock as BlockVariant).type !== 'function') {
+    if (libraryBlock && pou.pouType === 'function' && (libraryBlock as BlockVariant).type !== 'function') {
       setWrongName(true)
       toast({
         title: 'Can not add block',
@@ -578,11 +579,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
     if (!libMatch) return
 
-    const libPou = pous.find((pou) => pou.data.name === libMatch.name)
+    const libPou = pous.find((pou) => pou.name === libMatch.name)
     if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant
-    const newNodeVariables = (libPou.data.variables || []).map((variable) => {
+    const newNodeVariables = (libPou.interface?.variables ?? []).map((variable) => {
       let newType
       switch (variable.type.definition) {
         case 'array':
@@ -619,14 +620,15 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       }
     })
 
-    if (libPou.type === 'function') {
-      const variable = getVariableRestrictionType(libPou.data.returnType)
+    if (libPou.pouType === 'function') {
+      const returnType = libPou.interface?.returnType ?? ''
+      const variable = getVariableRestrictionType(returnType)
       newNodeVariables.push({
         name: 'OUT',
         class: 'output',
         type: {
           definition: variable.definition ?? 'derived',
-          value: libPou.data.returnType.toUpperCase(),
+          value: returnType.toUpperCase(),
         },
         location: '',
         documentation: '',
@@ -640,7 +642,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
       handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
-      variant: { ...libPou.data, type: blockVariant.type, variables: [...newNodeVariables] },
+      variant: { name: libPou.name, documentation: libPou.documentation, type: blockVariant.type, variables: [...newNodeVariables] },
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
 

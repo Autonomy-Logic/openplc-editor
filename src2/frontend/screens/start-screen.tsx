@@ -24,14 +24,18 @@ const StartScreen = () => {
     workspaceActions: { setRecent },
     modalActions: { openModal },
     deviceActions: { setAvailableOptions },
+    sharedWorkspaceActions: { handleOpenProjectResponse },
   } = useOpenPLCStore()
 
   const handleCreateProject = () => {
     openModal('create-project', null)
   }
 
-  const handleOpenProject = () => {
-    void projectPort.openProject()
+  const handleOpenProject = async () => {
+    const result = await projectPort.openProject()
+    if (result.success && result.data) {
+      handleOpenProjectResponse(result.data)
+    }
   }
 
   const searchFilter = (value: string) => {

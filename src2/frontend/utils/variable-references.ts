@@ -37,7 +37,7 @@ export function findAllReferencesToVariable(
   const isGlobalScope = scope === 'global'
 
   if (!isGlobalScope) {
-    const pou = pous.find((p) => p.data.name === pouName)
+    const pou = pous.find((p) => p.name === pouName)
     if (!pou) {
       return {
         totalReferences: 0,
@@ -50,12 +50,12 @@ export function findAllReferencesToVariable(
     searchWithinPou(pou, pouName, normalizedName, variableName, ladderFlows, fbdFlows, references)
   } else {
     pous.forEach((pou) => {
-      const hasExternalVar = pou.data.variables.some(
+      const hasExternalVar = (pou.interface?.variables ?? []).some(
         (v) => v.class === 'external' && v.name.toLowerCase() === normalizedName,
       )
 
       if (hasExternalVar) {
-        searchWithinPou(pou, pou.data.name, normalizedName, variableName, ladderFlows, fbdFlows, references)
+        searchWithinPou(pou, pou.name, normalizedName, variableName, ladderFlows, fbdFlows, references)
       }
     })
   }
@@ -217,12 +217,12 @@ function searchWithinPou(
   }
 
   if (
-    pou.data.body.language === 'st' ||
-    pou.data.body.language === 'il' ||
-    pou.data.body.language === 'python' ||
-    pou.data.body.language === 'cpp'
+    pou.body.language === 'st' ||
+    pou.body.language === 'il' ||
+    pou.body.language === 'python' ||
+    pou.body.language === 'cpp'
   ) {
-    const bodyValue = pou.data.body.value
+    const bodyValue = pou.body.value
     const lines = bodyValue.split('\n')
     const variablePattern = new RegExp(`\\b${variableName}\\b`, 'gi')
 
@@ -231,7 +231,7 @@ function searchWithinPou(
       while ((match = variablePattern.exec(line)) !== null) {
         references.push({
           pouName,
-          editorType: pou.data.body.language as 'st' | 'il' | 'python' | 'cpp',
+          editorType: pou.body.language as 'st' | 'il' | 'python' | 'cpp',
           lineNumber: lineIndex + 1,
           columnStart: match.index,
           columnEnd: match.index + variableName.length,
@@ -255,12 +255,12 @@ export function propagateVariableTypeChange(
   },
 ): void {
   pous.forEach((pou) => {
-    pou.data.variables.forEach((variable, varIndex) => {
+    ;(pou.interface?.variables ?? []).forEach((variable, varIndex) => {
       if (variable.class === 'external' && variable.name.toLowerCase() === variableName.toLowerCase()) {
         projectActions.updateVariable({
           scope: 'local',
           rowId: varIndex,
-          associatedPou: pou.data.name,
+          associatedPou: pou.name,
           data: { type: newType },
         })
       }
@@ -282,7 +282,7 @@ export function propagateVariableRename(
     updateNode: (params: { editorName: string; nodeId: string; node: Node }) => void
   },
   projectActions: {
-    updatePou: (params: { name: string; content: PLCPou['data']['body'] }) => void
+    updatePou: (params: { name: string; content: PLCPou['body'] }) => void
     updateVariable: (params: {
       scope: 'local' | 'global'
       rowId: number
@@ -294,12 +294,12 @@ export function propagateVariableRename(
 ): void {
   if (scope === 'global') {
     pous.forEach((pou) => {
-      pou.data.variables.forEach((variable, varIndex) => {
+      ;(pou.interface?.variables ?? []).forEach((variable, varIndex) => {
         if (variable.class === 'external' && variable.name.toLowerCase() === oldName.toLowerCase()) {
           projectActions.updateVariable({
             scope: 'local',
             rowId: varIndex,
-            associatedPou: pou.data.name,
+            associatedPou: pou.name,
             data: { name: newName },
           })
         }
@@ -321,13 +321,13 @@ export function propagateVariableRename(
   })
 
   textBasedRefsByPou.forEach((_refs, pouName) => {
-    const pou = pous.find((p) => p.data.name === pouName)
+    const pou = pous.find((p) => p.name === pouName)
     if (!pou) return
 
-    const bodyValue = pou.data.body.value
+    const bodyValue = pou.body.value
     if (typeof bodyValue !== 'string') return
 
-    const language = pou.data.body.language
+    const language = pou.body.language
     if (language !== 'st' && language !== 'il' && language !== 'python' && language !== 'cpp') return
 
     try {

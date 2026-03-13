@@ -27,9 +27,9 @@ function collectProjectContext(pouName: string, maxTokenBudget: number): string 
   let approxTokens = 0
 
   for (const pou of pous) {
-    if (pou.data.name === pouName) continue
-    const header = `${pou.type} ${pou.data.name}`
-    const vars = pou.data.variables
+    if (pou.name === pouName) continue
+    const header = `${pou.pouType} ${pou.name}`
+    const vars = (pou.interface?.variables ?? [])
       .slice(0, 10)
       .map((v) => `  ${v.class ?? 'local'} ${v.name}: ${v.type.value}`)
       .join('\n')

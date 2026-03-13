@@ -1,4 +1,12 @@
-import type { PLCBody, PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
+import type {
+  DeviceConfiguration,
+  DevicePin,
+  PLCBody,
+  PLCDataType,
+  PLCProjectData,
+  PLCVariable,
+  ProjectMeta,
+} from '../../../../middleware/shared/ports/types'
 import type { ConsoleSlice } from '../console'
 import type { DeviceSlice } from '../device'
 import type { EditorSlice } from '../editor'
@@ -102,6 +110,13 @@ export type SnapshotActions = {
   redo: (pouName: string) => void
 }
 
+export type OpenProjectResponseData = {
+  meta: ProjectMeta
+  projectData: PLCProjectData
+  deviceConfiguration?: DeviceConfiguration
+  devicePinMapping?: DevicePin[]
+}
+
 export type SharedWorkspaceActions = {
   /** Mark a file as unsaved and set workspace editingState to 'unsaved'. */
   handleFileAndWorkspaceSavedState: (name: string) => void
@@ -114,6 +129,11 @@ export type SharedWorkspaceActions = {
   closeProject: () => void
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
+  /**
+   * Populate store with project data returned from a ProjectPort open call.
+   * Sets project state, device config, files, libraries, flows, and opens main POU tab.
+   */
+  handleOpenProjectResponse: (data: OpenProjectResponseData) => void
 }
 
 export type SharedSlice = {

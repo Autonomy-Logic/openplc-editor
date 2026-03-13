@@ -88,8 +88,8 @@ export const ArrayModal = ({
 
   useEffect(() => {
     const variable = pous
-      .find((pou) => pou.data.name === name)
-      ?.data.variables.find((variable) => variable.name === variableName)
+      .find((pou) => pou.name === name)
+      ?.interface?.variables?.find((variable) => variable.name === variableName)
     if (!variable) return
 
     if (variable.type.definition === 'array') {

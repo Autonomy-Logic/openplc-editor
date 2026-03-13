@@ -91,15 +91,15 @@ export function useDebugSession(): UseDebugSessionReturn {
       const trees: Record<string, DebugTreeNode[]> = {}
 
       for (const pou of projectData.pous) {
-        if (pou.type !== 'program') continue
+        if (pou.pouType !== 'program') continue
 
-        const instanceName = findInstanceName(pou.data.name, instances)
+        const instanceName = findInstanceName(pou.name, instances)
         if (!instanceName) continue
 
         const pouTrees: DebugTreeNode[] = []
 
-        for (const variable of pou.data.variables) {
-          const tree = buildDebugTree(variable, pou.data.name, instanceName, parsed.variables, projectData)
+        for (const variable of (pou.interface?.variables ?? [])) {
+          const tree = buildDebugTree(variable, pou.name, instanceName, parsed.variables, projectData)
           pouTrees.push(tree)
         }
 
@@ -121,14 +121,14 @@ export function useDebugSession(): UseDebugSessionReturn {
           pouTrees.push({
             name: localName,
             fullPath: dv.name,
-            compositeKey: `${pou.data.name}:${localName}`,
+            compositeKey: `${pou.name}:${localName}`,
             type: typeName,
             isComplex: false,
             debugIndex: dv.index,
           })
         }
 
-        trees[pou.data.name] = pouTrees
+        trees[pou.name] = pouTrees
       }
 
       debugTreesRef.current = trees
@@ -163,21 +163,21 @@ export function useDebugSession(): UseDebugSessionReturn {
       // Build FB instance maps from project data
       const fbInstances = new Map<string, FbInstanceInfo[]>()
       for (const pou of projectData.pous) {
-        if (pou.type !== 'function-block') continue
-        const fbTypeName = pou.data.name.toUpperCase()
+        if (pou.pouType !== 'function-block') continue
+        const fbTypeName = pou.name.toUpperCase()
         const instanceList: FbInstanceInfo[] = []
 
         for (const programPou of projectData.pous) {
-          if (programPou.type !== 'program') continue
-          const progInstanceName = findInstanceName(programPou.data.name, instances)
+          if (programPou.pouType !== 'program') continue
+          const progInstanceName = findInstanceName(programPou.name, instances)
           if (!progInstanceName) continue
 
-          for (const variable of programPou.data.variables) {
+          for (const variable of (programPou.interface?.variables ?? [])) {
             if (variable.type.definition === 'derived' && variable.type.value.toUpperCase() === fbTypeName) {
-              const key = `${programPou.data.name}:${variable.name}`
+              const key = `${programPou.name}:${variable.name}`
               instanceList.push({
-                fbTypeName: pou.data.name,
-                programName: programPou.data.name,
+                fbTypeName: pou.name,
+                programName: programPou.name,
                 programInstanceName: progInstanceName,
                 fbVariableName: variable.name,
                 key,

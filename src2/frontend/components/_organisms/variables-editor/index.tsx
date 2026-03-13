@@ -115,23 +115,23 @@ const VariablesEditor = () => {
     }
   })
 
-  const pou = pous.find((p) => p.data.name === editor.meta.name)
+  const pou = pous.find((p) => p.name === editor.meta.name)
   useEffect(() => {
-    const data = pou?.data.documentation
+    const data = pou?.documentation
     if (data) setPouDescription(data)
     return () => {
       setPouDescription('')
     }
-  }, [editor, pou?.data.documentation])
+  }, [editor, pou?.documentation])
 
   /**
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
     if (pou) {
-      setTableData(pou.data.variables)
-      if (pou.type === 'function') {
-        setReturnType(pou.data.returnType)
+      setTableData(pou.interface?.variables ?? [])
+      if (pou.pouType === 'function') {
+        setReturnType(pou.interface?.returnType ?? 'BOOL')
       }
     } else {
       setTableData([])
@@ -291,7 +291,8 @@ const VariablesEditor = () => {
 
     pushToHistory(editor.meta.name)
 
-    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    const matchedPou = pous.find((p) => p.name === editor.meta.name)
+    const variables = matchedPou?.interface?.variables ?? []
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     const language = 'language' in editor.meta ? editor.meta.language : null
@@ -361,7 +362,8 @@ const VariablesEditor = () => {
     pushToHistory(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
-    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    const deletePou = pous.find((p) => p.name === editor.meta.name)
+    const variables = deletePou?.interface?.variables ?? []
     const variableToDelete = variables[selectedRow]
 
     if (variableToDelete) {
@@ -792,7 +794,7 @@ const VariablesEditor = () => {
       })
 
       const response = setPouVariables({
-        pouName: pou?.data?.name ?? '',
+        pouName: pou?.name ?? '',
         variables: finalVariables,
       })
 
@@ -808,8 +810,8 @@ const VariablesEditor = () => {
         fbdFlows: freshFBDFlows,
       } = useOpenPLCStore.getState()
 
-      const freshPou = freshPous.find((p) => p.data.name === editor.meta.name)
-      const freshVariables = freshPou?.data.variables ?? []
+      const freshPou = freshPous.find((p) => p.name === editor.meta.name)
+      const freshVariables = freshPou?.interface?.variables ?? []
 
       if (language === 'ld') {
         syncNodesWithVariablesUtil(freshVariables, freshLadderFlows, updateNode)
@@ -850,7 +852,7 @@ const VariablesEditor = () => {
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
-      if (freshPou && 'variablesText' in freshPou.data) {
+      if (freshPou && freshPou.interface && 'variablesText' in freshPou.interface) {
         clearPouVariablesText(editor.meta.name)
       }
 

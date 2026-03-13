@@ -167,7 +167,7 @@ const Board = memo(function () {
       const targetBoardInfo = availableBoards.get(normalizedBoard)
       const isArduino = isArduinoTarget(targetBoardInfo)
       const hasPythonFunctionBlocks = pous.some(
-        (pou) => pou.type === 'function-block' && pou.data.language === 'python',
+        (pou) => pou.pouType === 'function-block' && pou.body.language === 'python',
       )
 
       if (isArduino && hasPythonFunctionBlocks) {

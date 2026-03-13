@@ -383,19 +383,19 @@ const buildVariableNodeFromPLC = (
  * Build a tree node for a program POU.
  */
 const buildProgramNode = (pou: PLCPou, dataTypes: PLCDataType[], pous: PLCPou[]): VariableTreeNode => {
-  if (pou.type !== 'program') {
+  if (pou.pouType !== 'program') {
     throw new Error('Expected program POU')
   }
 
-  const children = pou.data.variables
-    .map((v) => buildVariableNodeFromPLC(v, pou.data.name, dataTypes, pous))
+  const children = (pou.interface?.variables ?? [])
+    .map((v) => buildVariableNodeFromPLC(v, pou.name, dataTypes, pous))
     .filter((node): node is VariableTreeNode => node !== null)
 
   return {
-    id: `pou-${pou.data.name}`,
-    name: pou.data.name,
+    id: `pou-${pou.name}`,
+    name: pou.name,
     type: 'program',
-    pouName: pou.data.name,
+    pouName: pou.name,
     variablePath: '',
     isSelectable: false,
     children,
@@ -440,7 +440,7 @@ export const useProjectVariables = (): VariableTreeNode[] => {
     const nodes: VariableTreeNode[] = []
 
     for (const pou of projectData.pous) {
-      if (pou.type === 'program') {
+      if (pou.pouType === 'program') {
         nodes.push(buildProgramNode(pou, projectData.dataTypes, projectData.pous))
       }
     }

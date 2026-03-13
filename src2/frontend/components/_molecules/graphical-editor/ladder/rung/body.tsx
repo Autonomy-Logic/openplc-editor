@@ -85,7 +85,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const { captureAndPush } = usePouSnapshot()
   const { pous } = project.data
-  const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
+  const pouRef = pous.find((pou) => pou.name === editor.meta.name)
   const getCompositeKey = useDebugCompositeKey()
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
@@ -183,7 +183,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }
       if (!sourceHandle) return undefined
 
-      if (pouRef?.type !== 'function-block') {
+      if (pouRef?.pouType !== 'function-block') {
         const instances = project.data.configuration.resource.instances
         const programInstance = instances.find((inst) => inst.program === editor.meta.name)
         if (!programInstance) return undefined
@@ -471,32 +471,32 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       if (blockLibraryType === 'user') {
         const library = libraries.user.find((library) => library.name === blockLibrary)
-        const pou = pous.find((pou) => pou.data.name === library?.name)
+        const pou = pous.find((pou) => pou.name === library?.name)
         if (!pou) return
-        const variables = pou.data.variables.map((variable) => ({
+        const variables = (pou.interface?.variables ?? []).map((variable) => ({
           id: variable.id,
           name: variable.name,
           class: variable.class,
           type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
         }))
-        if (pou.type === 'function') {
-          const variable = getVariableRestrictionType(pou.data.returnType)
+        if (pou.pouType === 'function') {
+          const variable = getVariableRestrictionType(pou.interface?.returnType)
           variables.push({
             id: 'OUT',
             name: 'OUT',
             class: 'output',
             type: {
               definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
-              value: pou.data.returnType.toUpperCase(),
+              value: (pou.interface?.returnType ?? '').toUpperCase(),
             },
           })
         }
 
         pouLibrary = {
-          name: pou.data.name,
-          type: pou.type,
+          name: pou.name,
+          type: pou.pouType,
           variables: variables,
-          documentation: pou.data.documentation,
+          documentation: pou.documentation,
           extensible: false,
         }
       }
@@ -531,7 +531,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       })
 
     if (pouRef) {
-      syncNodesWithVariables(pouRef.data.variables, ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
+      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
     }
   }
 
@@ -566,7 +566,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     const blockNodes = nodes.filter((node) => node.type === 'block')
     if (blockNodes.length > 0) {
       let variables: PLCVariable[] = []
-      if (pouRef) variables = [...pouRef.data.variables] as PLCVariable[]
+      if (pouRef) variables = [...(pouRef.interface?.variables ?? [])] as PLCVariable[]
 
       const variablesToCleanup = getFunctionBlockVariablesToCleanup(blockNodes, variables, ladderFlows)
 
@@ -601,7 +601,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     if (pouRef) {
-      syncNodesWithVariables(pouRef.data.variables, ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
+      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
     }
   }
 
@@ -652,7 +652,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
 
     if (pouRef) {
-      syncNodesWithVariables(pouRef.data.variables, ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
+      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
     }
   }
 

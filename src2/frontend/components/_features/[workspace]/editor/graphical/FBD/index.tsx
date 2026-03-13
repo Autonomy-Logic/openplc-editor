@@ -32,11 +32,11 @@ export default function FbdEditor() {
       const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
       if (!libMatch) continue
 
-      const originalPou = pous.find((pou) => pou.data.name === libMatch.name)
+      const originalPou = pous.find((pou) => pou.name === libMatch.name)
       if (!originalPou) continue
 
-      const originalVariables = originalPou.data?.variables ?? []
-      const originalInOut = originalVariables?.filter((variable) =>
+      const originalVariables = originalPou.interface?.variables ?? []
+      const originalInOut = originalVariables.filter((variable) =>
         ['input', 'output', 'inOut'].includes(variable.class || ''),
       )
 
@@ -51,10 +51,10 @@ export default function FbdEditor() {
         type: { definition: string; value: string }
       }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
 
-      if (originalPou.type === 'function') {
+      if (originalPou.pouType === 'function') {
         const outVariable = variant.variables.find((v) => v.name === 'OUT')
         const outType = outVariable?.type?.value?.toUpperCase()
-        const returnType = originalPou.data.returnType?.toUpperCase()
+        const returnType = originalPou.interface?.returnType?.toUpperCase()
         if (!outType || !returnType || outType !== returnType) {
           divergences.push(node.id)
           continue

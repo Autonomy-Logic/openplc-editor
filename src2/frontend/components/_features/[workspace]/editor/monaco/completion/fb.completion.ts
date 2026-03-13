@@ -82,10 +82,10 @@ function findFinalType(
     } else {
       // Check if it's a Custom FB
       const customFB = customFBs.find(
-        (fb) => fb.data.name.toUpperCase() === currentTypeName.toUpperCase() && fb.type === 'function-block',
+        (fb) => fb.name.toUpperCase() === currentTypeName.toUpperCase() && fb.pouType === 'function-block',
       )
       if (customFB) {
-        const field = customFB.data.variables.find(
+        const field = (customFB.interface?.variables ?? []).find(
           (v) => v.name === fieldName && (v.class === 'input' || v.class === 'output' || v.class === 'inOut'),
         )
         if (field && (field.type?.definition === 'derived' || field.type?.definition === 'user-data-type')) {
@@ -134,9 +134,9 @@ function findFBType(
     }
 
     // Check if it's a Custom FB
-    const customFB = customFBs.find((fb) => fb.data.name.toUpperCase() === typeName && fb.type === 'function-block')
+    const customFB = customFBs.find((fb) => fb.name.toUpperCase() === typeName && fb.pouType === 'function-block')
     if (customFB) {
-      return { type: customFB.data.name, isStandard: false }
+      return { type: customFB.name, isStandard: false }
     }
   }
 
@@ -154,9 +154,9 @@ function findFBType(
     }
 
     // Check Custom FBs
-    const customFB = customFBs.find((fb) => fb.data.name.toUpperCase() === typeName && fb.type === 'function-block')
+    const customFB = customFBs.find((fb) => fb.name.toUpperCase() === typeName && fb.pouType === 'function-block')
     if (customFB) {
-      return { type: customFB.data.name, isStandard: false }
+      return { type: customFB.name, isStandard: false }
     }
   }
 
@@ -201,12 +201,12 @@ function getCustomFBVariableSuggestions(
   range: monaco.IRange,
   editorName: string,
 ): monaco.languages.CompletionItem[] {
-  const functionBlock = customFBs.find((fb) => fb.data.name === fbType && fb.type === 'function-block')
+  const functionBlock = customFBs.find((fb) => fb.name === fbType && fb.pouType === 'function-block')
 
   if (!functionBlock) return []
 
   // Filter only public variables (Input, Output, InOut) - same as Standard FBs
-  const publicVariables = functionBlock.data.variables
+  const publicVariables = (functionBlock.interface?.variables ?? [])
     .filter((variable) => variable.class === 'input' || variable.class === 'output' || variable.class === 'inOut')
     .filter((variable) => variable.name !== editorName)
 
@@ -216,7 +216,7 @@ function getCustomFBVariableSuggestions(
     insertText: variable.name,
     detail: `${variable.type.value} (${variable.class})`,
     documentation: {
-      value: `**${variable.name}** - ${variable.class} variable\n\nType: \`${variable.type.value}\`\n\nCustom Function Block: ${fbType}\n\n${variable.documentation || functionBlock.data.documentation}`,
+      value: `**${variable.name}** - ${variable.class} variable\n\nType: \`${variable.type.value}\`\n\nCustom Function Block: ${fbType}\n\n${variable.documentation || functionBlock.documentation}`,
     },
     range,
     sortText: `${variable.class === 'input' ? '1' : variable.class === 'output' ? '2' : '3'}_${variable.name}`,
@@ -232,13 +232,14 @@ function getCustomFBInstanceSuggestions(
   editorName: string,
 ): monaco.languages.CompletionItem[] {
   return customFBs
-    .filter((fb) => fb.type === 'function-block')
-    .filter((fb) => fb.data.name !== editorName)
+    .filter((fb) => fb.pouType === 'function-block')
+    .filter((fb) => fb.name !== editorName)
     .map((fb) => {
-      const inputVars = fb.data.variables.filter((v) => v.class === 'input')
+      const variables = fb.interface?.variables ?? []
+      const inputVars = variables.filter((v) => v.class === 'input')
 
       // Generate snippet with input parameters
-      let snippet = `${fb.data.name}(`
+      let snippet = `${fb.name}(`
       if (inputVars.length > 0) {
         snippet += '\n'
         inputVars.forEach((input, index) => {
@@ -251,16 +252,16 @@ function getCustomFBInstanceSuggestions(
       snippet += ')'
 
       return {
-        label: fb.data.name,
+        label: fb.name,
         kind: monaco.languages.CompletionItemKind.Class,
         insertText: snippet,
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         detail: `Custom Function Block`,
         documentation: {
-          value: `**${fb.data.name}** - Custom Function Block\n\n${fb.data.documentation || 'User-defined function block'}\n\n**Variables:**\n${fb.data.variables.map((v) => `- **${v.name}** (${v.class}): ${v.type.value}`).join('\n')}`,
+          value: `**${fb.name}** - Custom Function Block\n\n${fb.documentation || 'User-defined function block'}\n\n**Variables:**\n${variables.map((v) => `- **${v.name}** (${v.class}): ${v.type.value}`).join('\n')}`,
         },
         range,
-        sortText: `2_${fb.data.name}`, // Sort after standard FBs
+        sortText: `2_${fb.name}`, // Sort after standard FBs
       }
     })
 }

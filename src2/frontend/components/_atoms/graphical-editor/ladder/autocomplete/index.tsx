@@ -68,8 +68,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       ladderFlowActions: { updateNode },
     } = useOpenPLCStore()
 
-    const pou = pous.find((pou) => pou.data.name === editor.meta.name)
-    const variables = pou?.data.variables || []
+    const pou = pous.find((pou) => pou.name === editor.meta.name)
+    const variables = pou?.interface?.variables ?? []
     const variableRestrictions = blockTypeRestrictions(block, blockType)
 
     const expandedVariables = expandArrayVariables(variables as PLCVariable[])

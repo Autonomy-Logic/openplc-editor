@@ -51,7 +51,7 @@ const searchLibraryByPouName = (
   let libraryBlock: unknown = undefined
 
   const filteredLibraries = libraries.system.filter((library) =>
-    pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
       ? library.pous.some((pou) => pou.type === 'function')
       : true,
   )
@@ -139,30 +139,31 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
       let pouLibrary = undefined
       if (type === 'user') {
-        const pou = pous.find((pou) => pou.data.name === selectedFile?.name)
+        const pou = pous.find((pou) => pou.name === selectedFile?.name)
         if (!pou) return
-        const variables = pou.data.variables.map((variable) => ({
+        const variables = (pou.interface?.variables ?? []).map((variable) => ({
           name: variable.name,
           class: variable.class,
           type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
         }))
-        if (pou.type === 'function') {
-          const variable = getVariableRestrictionType(pou.data.returnType)
+        if (pou.pouType === 'function') {
+          const returnType = pou.interface?.returnType ?? ''
+          const variable = getVariableRestrictionType(returnType)
           variables.push({
             name: 'OUT',
             class: 'output',
             type: {
               definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
-              value: pou.data.returnType.toUpperCase(),
+              value: returnType.toUpperCase(),
             },
           })
         }
 
         pouLibrary = {
-          name: pou.data.name,
-          type: pou.type as 'function-block' | 'function',
+          name: pou.name,
+          type: pou.pouType as 'function-block' | 'function',
           variables: variables,
-          documentation: pou.data.documentation,
+          documentation: pou.documentation,
           extensible: false,
         }
       }

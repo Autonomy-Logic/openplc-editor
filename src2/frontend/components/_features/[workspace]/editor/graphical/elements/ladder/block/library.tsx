@@ -22,12 +22,12 @@ export const ModalBlockLibrary = ({
   const [filterText, setFilterText] = useState('')
 
   const systemLibraries = system.filter((library) =>
-    pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
   const userLibraries = user.filter((library) =>
-    pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
       ? library.type === 'function' && library.name.toLowerCase().includes(filterText)
       : library.name.toLowerCase().includes(filterText),
   )

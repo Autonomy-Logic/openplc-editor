@@ -24,6 +24,7 @@ import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
 import { ServerIcon } from '../../../assets/icons/project/Server'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
+import { OrchestratorIcon } from '../../../assets/icons/project/Orchestrator'
 import { DuplicateIcon } from '../../../assets/icons/interface/Duplicate'
 import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
@@ -114,7 +115,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedPou =
-    pous.some((pou) => pou.type === branchTarget) ||
+    pous.some((pou) => pou.pouType === branchTarget) ||
     branchTarget === 'device' ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
     (branchTarget === 'server' && servers !== undefined && servers.length > 0) ||
@@ -252,6 +253,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'res'
     | 'devConfig'
     | 'devPin'
+    | 'devOrchestrators'
     | 'server'
     | 'remoteDevice'
   leafType: WorkspaceProjectTreeLeafType
@@ -272,6 +274,7 @@ const LeafSources = {
   res: { LeafIcon: ResourceIcon },
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
+  devOrchestrators: { LeafIcon: OrchestratorIcon },
   server: { LeafIcon: ServerIcon },
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
 }

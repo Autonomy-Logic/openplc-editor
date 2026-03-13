@@ -4,8 +4,7 @@
  */
 
 import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
-import type { PLCDataType } from '../../middleware/shared/ports/types'
-import type { PouDTO } from '../store/slices/project/types'
+import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
 
 /**
  * Variable definition from a POU or library FB.
@@ -68,7 +67,7 @@ export const isBaseType = (typeName: string): boolean => {
  * Searches BOTH the built-in library AND project POUs.
  * Returns the variables array from the FB definition, or null if not found.
  */
-export const findFunctionBlockVariables = (typeName: string, projectPous: PouDTO[]): PouVariable[] | null => {
+export const findFunctionBlockVariables = (typeName: string, projectPous: PLCPou[]): PouVariable[] | null => {
   const typeNameUpper = typeName.toUpperCase()
 
   // Check standard library FBs
@@ -81,10 +80,10 @@ export const findFunctionBlockVariables = (typeName: string, projectPous: PouDTO
 
   // Check project POUs (user-defined FBs)
   const customFB = projectPous.find(
-    (pou) => normalizeTypeString(pou.type) === 'functionblock' && pou.data.name.toUpperCase() === typeNameUpper,
+    (pou) => normalizeTypeString(pou.pouType) === 'functionblock' && pou.name.toUpperCase() === typeNameUpper,
   )
-  if (customFB && customFB.type === 'function-block') {
-    return customFB.data.variables as PouVariable[]
+  if (customFB && customFB.pouType === 'function-block') {
+    return (customFB.interface?.variables ?? []) as PouVariable[]
   }
 
   return null
@@ -93,7 +92,7 @@ export const findFunctionBlockVariables = (typeName: string, projectPous: PouDTO
 /**
  * Check if a type name is a function block (library or project).
  */
-export const isFunctionBlockType = (typeName: string, projectPous: PouDTO[]): boolean => {
+export const isFunctionBlockType = (typeName: string, projectPous: PLCPou[]): boolean => {
   return findFunctionBlockVariables(typeName, projectPous) !== null
 }
 
@@ -147,7 +146,7 @@ export interface LeafVariable {
  */
 export const findLeafVariables = (
   typeName: string,
-  projectPous: PouDTO[],
+  projectPous: PLCPou[],
   dataTypes: PLCDataType[],
   pathPrefix: string = '',
   visited: Set<string> = new Set(),
@@ -212,9 +211,9 @@ export const findLeafVariables = (
 /**
  * Get all variables from a POU (program or function block).
  */
-export const getPouVariables = (pou: PouDTO): PouVariable[] => {
-  if (pou.type === 'program' || pou.type === 'function-block') {
-    return pou.data.variables as PouVariable[]
+export const getPouVariables = (pou: PLCPou): PouVariable[] => {
+  if (pou.pouType === 'program' || pou.pouType === 'function-block') {
+    return (pou.interface?.variables ?? []) as PouVariable[]
   }
   return []
 }

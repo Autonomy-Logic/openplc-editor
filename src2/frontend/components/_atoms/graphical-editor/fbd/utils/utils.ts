@@ -27,11 +27,11 @@ export const getFBDPouVariablesRungNodeAndEdges = (
   }
   node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
 } => {
-  const pou = pous.find((pou) => pou.data.name === editor.meta.name)
+  const pou = pous.find((pou) => pou.name === editor.meta.name)
   const rung = fbdFlows.find((flow) => flow.name === editor.meta.name)?.rung
   const node = rung?.nodes.find((node) => node.id === data.nodeId)
 
-  const variables: PLCVariable[] = pou?.data.variables as PLCVariable[]
+  const variables: PLCVariable[] = (pou?.interface?.variables ?? []) as PLCVariable[]
   let variable = variables.find((variable) => {
     if (!node) return undefined
     switch (node.type as keyof typeof customNodeTypes) {

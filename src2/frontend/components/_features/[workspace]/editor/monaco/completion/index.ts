@@ -335,7 +335,7 @@ export const libraryCompletion = ({
 }) => {
   const systemSuggestions = library.system
     .filter((library) =>
-      pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+      pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
         ? library.pous.some((pou) => pou.type === 'function')
         : library.pous.some((pou) => pou),
     )
@@ -374,9 +374,10 @@ export const libraryCompletion = ({
       return userLibrary.name !== editor.meta.name
     })
     .flatMap((user) => {
-      const pou = pous.find((pou) => pou.data.name === user.name)
+      const pou = pous.find((pou) => pou.name === user.name)
       if (!pou) return []
 
+      const variables = pou.interface?.variables ?? []
       const data: {
         name: string
         language?: string
@@ -390,22 +391,22 @@ export const libraryCompletion = ({
         }[]
         extensible?: boolean
       } = {
-        name: pou.data.name,
-        type: pou.type,
-        variables: pou.data.variables.map((variable) => ({
+        name: pou.name,
+        type: pou.pouType,
+        variables: variables.map((variable) => ({
           name: variable.name,
           class: variable.class,
           type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
         })),
-        documentation: pou.data.documentation,
+        documentation: pou.documentation,
         extensible: false,
       }
       const text = parsePouToStText(data)
 
       return {
-        label: pou.data.name,
+        label: pou.name,
         insertText: text,
-        documentation: pou.data.documentation,
+        documentation: pou.documentation,
         kind: monaco.languages.CompletionItemKind.Function,
         range,
       }

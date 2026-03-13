@@ -154,7 +154,7 @@ export const parseIecStringToVariables = (
     const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
 
     const isUserFunctionBlock = pous?.some(
-      (pou) => pou.type === 'function-block' && pou.data.name.toLowerCase() === parsedType.toLowerCase(),
+      (pou) => pou.pouType === 'function-block' && pou.name.toLowerCase() === parsedType.toLowerCase(),
     )
 
     const isSystemFunctionBlock = libraries?.system.some((lib) => {

@@ -124,7 +124,7 @@ export const BlockNodeElement = <T extends object>({
 
     if (!pou || !rung || !node) return
 
-    if (libraryBlock && pou.type === 'function' && (libraryBlock as BlockVariant).type !== 'function') {
+    if (libraryBlock && pou.pouType === 'function' && (libraryBlock as BlockVariant).type !== 'function') {
       setWrongName(true)
       toast({
         title: 'Can not add block',
@@ -543,11 +543,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
     if (!libMatch) return
 
-    const libPou = pous.find((pou) => pou.data.name === libMatch.name)
+    const libPou = pous.find((pou) => pou.name === libMatch.name)
     if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant
-    const newNodeVariables = (libPou.data.variables || []).map((variable) => {
+    const newNodeVariables = (libPou.interface?.variables ?? []).map((variable) => {
       let newType
       switch (variable.type.definition) {
         case 'array':
@@ -584,8 +584,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       }
     })
 
-    if (libPou.type === 'function') {
-      const variable = getVariableRestrictionType(libPou.data.returnType)
+    if (libPou.pouType === 'function') {
+      const variable = getVariableRestrictionType(libPou.interface?.returnType ?? '')
       const hasOut = newNodeVariables.some((v) => v.name === 'OUT')
       if (!hasOut)
         newNodeVariables.push({
@@ -594,7 +594,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           class: 'output',
           type: {
             definition: variable.definition ?? 'derived',
-            value: libPou.data.returnType.toUpperCase(),
+            value: (libPou.interface?.returnType ?? '').toUpperCase(),
           },
           location: '',
           documentation: '',
@@ -608,7 +608,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         x: node.position.x,
         y: node.position.y,
       },
-      variant: { ...libPou.data, type: blockVariant.type, variables: newNodeVariables },
+      variant: { name: libPou.name, type: blockVariant.type, variables: newNodeVariables },
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
     updatedNewNode.data = {

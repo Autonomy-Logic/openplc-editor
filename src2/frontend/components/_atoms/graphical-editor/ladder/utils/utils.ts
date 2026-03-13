@@ -26,7 +26,7 @@ export const getLadderPouVariablesRungNodeAndEdges = (
   }
   node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
 } => {
-  const pou = pous.find((pou) => pou.data.name === editor.meta.name)
+  const pou = pous.find((pou) => pou.name === editor.meta.name)
 
   const rung = ladderFlows
     .find((flow) => flow.name === editor.meta.name)
@@ -34,7 +34,7 @@ export const getLadderPouVariablesRungNodeAndEdges = (
 
   const node = rung?.nodes.find((node) => node.id === data.nodeId)
 
-  const variables: PLCVariable[] = pou?.data.variables as PLCVariable[]
+  const variables: PLCVariable[] = (pou?.interface?.variables ?? []) as PLCVariable[]
   let variable = variables.find((variable) => {
     if (!node) return undefined
     const nodeVariable = (node.data as BasicNodeData).variable

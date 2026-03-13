@@ -7,8 +7,7 @@
  */
 
 import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
-import type { PLCDataType, PLCVariable } from '../../middleware/shared/ports/types'
-import type { PouDTO } from '../store/slices/project/types'
+import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 
 import type { DebugVariableEntry } from './debug-parser'
 import {
@@ -26,7 +25,7 @@ export interface TraversalContext {
   /** Parsed debug variables from debug.c */
   debugVariables: DebugVariableEntry[]
   /** Project POUs for FB lookup */
-  projectPous: PouDTO[]
+  projectPous: PLCPou[]
   /** Project data types for struct lookup */
   dataTypes: PLCDataType[]
   /** Instance name from Resources configuration */
@@ -74,7 +73,7 @@ interface ArrayTypeData {
 /**
  * Check if a type is a function block (standard library or custom).
  */
-function isFunctionBlock(typeName: string, projectPous: PouDTO[]): boolean {
+function isFunctionBlock(typeName: string, projectPous: PLCPou[]): boolean {
   const typeNameUpper = typeName.toUpperCase()
 
   // Check standard library
@@ -85,7 +84,7 @@ function isFunctionBlock(typeName: string, projectPous: PouDTO[]): boolean {
 
   // Check custom FBs
   return projectPous.some(
-    (pou) => normalizeTypeString(pou.type) === 'functionblock' && pou.data.name.toUpperCase() === typeNameUpper,
+    (pou) => normalizeTypeString(pou.pouType) === 'functionblock' && pou.name.toUpperCase() === typeNameUpper,
   )
 }
 

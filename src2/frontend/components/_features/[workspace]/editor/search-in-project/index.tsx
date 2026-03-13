@@ -205,15 +205,16 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
 
     const groupedPous = data.pous
       .filter((pou) => {
-        const pouTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes(pou.type)
+        const pouTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes(pou.pouType)
 
         const pouMatches = regularExpressionOption
-          ? countOccurrences(pou.data.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+          ? countOccurrences(pou.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
           : sensitiveCaseOption
-            ? pou.data.name.includes(searchQuery)
-            : pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
+            ? pou.name.includes(searchQuery)
+            : pou.name.toLowerCase().includes(searchQuery.toLowerCase())
 
-        const variableMatches = pou.data.variables.some((variable) =>
+        const pouVariables = pou.interface?.variables ?? []
+        const variableMatches = pouVariables.some((variable) =>
           regularExpressionOption
             ? countOccurrences(variable.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
             : sensitiveCaseOption
@@ -225,11 +226,11 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
           pouTypeMatchesFilter &&
           (pouMatches ||
             variableMatches ||
-            (['st', 'il'].includes(pou.data.language) &&
+            (['st', 'il'].includes(pou.body.language) &&
               (() => {
                 try {
                   const regex = new RegExp(searchQuery, sensitiveCaseOption ? 'g' : 'gi')
-                  const matches = (pou.data.body.value as string).match(regex)
+                  const matches = (pou.body.value as string).match(regex)
                   return matches ? matches.length > 0 : false
                 } catch (error) {
                   console.error('Invalid regex or error processing body:', error)
@@ -240,22 +241,23 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       })
       .reduce(
         (acc, pou) => {
-          const pouType = pou.type
+          const pouType = pou.pouType
 
           if (!acc[pouType]) {
             acc[pouType] = []
           }
 
+          const pouVariables = pou.interface?.variables ?? []
           acc[pouType].push({
-            name: pou.data.name,
-            language: pou.data.language,
-            pouType: pou.type,
+            name: pou.name,
+            language: pou.body.language,
+            pouType: pou.pouType,
             body:
-              (['st', 'il'].includes(pou.data.language) &&
+              (['st', 'il'].includes(pou.body.language) &&
                 (() => {
                   try {
                     const regex = new RegExp(`\\b(${searchQuery}\\w*)`, sensitiveCaseOption ? 'g' : 'gi')
-                    const matches = (pou.data.body.value as string).match(regex)
+                    const matches = (pou.body.value as string).match(regex)
                     return matches ? matches.join(', ') : ''
                   } catch (error) {
                     console.error('Invalid regex or error processing body:', error)
@@ -263,7 +265,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
                   }
                 })()) ||
               '',
-            variable: pou.data.variables
+            variable: pouVariables
               .filter((variable) =>
                 regularExpressionOption
                   ? countOccurrences(variable.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0

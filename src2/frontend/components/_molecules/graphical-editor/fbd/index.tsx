@@ -54,7 +54,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   const { captureAndPush } = usePouSnapshot()
 
   const { pous } = project.data
-  const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
+  const pouRef = pous.find((pou) => pou.name === editor.meta.name)
   const getCompositeKey = useDebugCompositeKey()
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
@@ -102,7 +102,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       if (!variableName) return undefined
 
       if (!pouRef) return undefined
-      const variable = pouRef.data.variables.find((v) => v.name.toLowerCase() === variableName.toLowerCase())
+      const variable = (pouRef.interface?.variables ?? []).find((v) => v.name.toLowerCase() === variableName.toLowerCase())
       if (!variable || variable.type.value.toUpperCase() !== 'BOOL') return undefined
 
       const compositeKey = getCompositeKey(variableName)
@@ -125,7 +125,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       }
       if (!sourceHandle) return undefined
 
-      if (pouRef?.type !== 'function-block') {
+      if (pouRef?.pouType !== 'function-block') {
         const instances = project.data.configuration.resource.instances
         const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
         if (!programInstance) return undefined
@@ -236,7 +236,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     debugVariableValues,
     debugForcedVariables,
     editor.meta.name,
-    pouRef?.data.variables,
+    pouRef?.interface?.variables,
     project.data.configuration.resource.instances,
   ])
 
@@ -401,33 +401,33 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       if (blockLibraryType === 'user') {
         const library = libraries.user.find((library) => library.name === blockLibrary)
-        const pou = pous.find((pou) => pou.data.name === library?.name)
+        const pou = pous.find((pou) => pou.name === library?.name)
         if (!pou) return
-        const variables = pou.data.variables.map((variable) => ({
+        const variables = (pou.interface?.variables ?? []).map((variable) => ({
           id: variable.id,
           name: variable.name,
           class: variable.class,
           type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
         }))
 
-        if (pou.type === 'function') {
-          const variable = getVariableRestrictionType(pou.data.returnType)
+        if (pou.pouType === 'function') {
+          const variable = getVariableRestrictionType(pou.interface?.returnType)
           variables.push({
             id: 'OUT',
             name: 'OUT',
             class: 'output',
             type: {
               definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
-              value: pou.data.returnType.toUpperCase(),
+              value: (pou.interface?.returnType ?? '').toUpperCase(),
             },
           })
         }
 
         pouLibrary = {
-          name: pou.data.name,
-          type: pou.type,
+          name: pou.name,
+          type: pou.pouType,
           variables: variables,
-          documentation: pou.data.documentation,
+          documentation: pou.documentation,
           extensible: false,
         }
       }
@@ -479,7 +479,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       })
 
       if (pouRef && nodes.length > 0) {
-        const allVariables = pouRef.data.variables
+        const allVariables = pouRef.interface?.variables ?? []
         const allRungs = [rung]
 
         const variablesToDelete = getFunctionBlockVariablesToCleanup(nodes, allRungs, allVariables)

@@ -2,7 +2,12 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { SharedRootState, SharedSlice } from './types'
+import type { FileSliceDataObject } from '../file'
+import type { TabsProps } from '../tabs'
+import type { LadderFlowType } from '../ladder'
+import type { FBDFlowType } from '../fbd'
 import { CreateEditorObjectFromTab } from '../tabs/utils'
+import { toast } from '../../../components/_features/[app]/toast/use-toast'
 import {
   createDatatypeObject,
   createEditorObjectForDatatype,
@@ -329,6 +334,90 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().historyActions.clearHistory()
       getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
+    },
+
+    handleOpenProjectResponse: (data) => {
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+      getState().workspaceActions.setEditingState('saved')
+
+      // Set project data (setting meta.path triggers navigation from start to workspace)
+      getState().projectActions.setProject({
+        meta: data.meta,
+        data: data.projectData,
+      })
+
+      // Add ladder and FBD flows for graphical POUs
+      const pous = data.projectData.pous
+      pous.forEach((pou) => {
+        if (pou.body.language === 'ld') {
+          getState().ladderFlowActions.addLadderFlow(pou.body.value as LadderFlowType)
+        }
+        if (pou.body.language === 'fbd') {
+          getState().fbdFlowActions.addFBDFlow(pou.body.value as FBDFlowType)
+        }
+      })
+
+      // Register user-defined functions/function-blocks in the library
+      pous.forEach((pou) => {
+        if (pou.pouType !== 'program') {
+          getState().libraryActions.addLibrary(pou.name, pou.pouType)
+        }
+      })
+
+      // Set device definitions
+      if (data.deviceConfiguration || data.devicePinMapping) {
+        getState().deviceActions.setDeviceDefinitions({
+          configuration: data.deviceConfiguration,
+          pinMapping: data.devicePinMapping,
+        })
+      }
+
+      // Register files for save-state tracking
+      const files: FileSliceDataObject = {}
+      pous.forEach((pou) => {
+        files[pou.name] = { type: pou.pouType, filePath: pou.name, saved: true }
+      })
+      data.projectData.dataTypes.forEach((dt) => {
+        files[dt.name] = { type: 'data-type', filePath: dt.name, saved: true }
+      })
+      const servers = data.projectData.servers
+      if (servers) {
+        servers.forEach((s) => {
+          files[s.name] = { type: 'server', filePath: s.name, saved: true }
+        })
+      }
+      const remoteDevices = data.projectData.remoteDevices
+      if (remoteDevices) {
+        remoteDevices.forEach((d) => {
+          files[d.name] = { type: 'remote-device', filePath: d.name, saved: true }
+        })
+      }
+      files['Resource'] = { type: 'resource', filePath: 'Resource', saved: true }
+      files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
+      getState().fileActions.setFiles({ files })
+
+      // Open the main POU tab (if present)
+      const mainPou = pous.find((p) => p.name === 'main' && p.pouType === 'program')
+      if (mainPou) {
+        const language = mainPou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+        const tabToBeCreated: TabsProps = {
+          name: mainPou.name,
+          path: `/data/pous/program/${mainPou.name}`,
+          elementType: { type: 'program', language },
+        }
+        const model = CreateEditorObjectFromTab(tabToBeCreated)
+        getState().editorActions.addModel(model)
+        getState().editorActions.setEditor(model)
+        getState().tabsActions.updateTabs(tabToBeCreated)
+        getState().tabsActions.setSelectedTab(mainPou.name)
+        getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
+      }
+
+      toast({
+        title: 'Project opened!',
+        description: 'Your project was opened, and loaded.',
+        variant: 'default',
+      })
     },
   },
 

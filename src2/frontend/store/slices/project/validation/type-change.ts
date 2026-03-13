@@ -59,20 +59,21 @@ export const validateTypeChange = (
   ladderFlows: LadderFlowState['ladderFlows'],
   fbdFlows: FBDFlowState['fbdFlows'],
   scope?: 'local' | 'global',
-  pous?: Array<{ data: { name: string; variables: PLCVariable[] } }>,
+  pous?: Array<{ name: string; interface?: { variables: PLCVariable[] } }>,
 ): TypeChangeValidationResult => {
   const affectedNodes: NodeUsage[] = []
   const warnings: string[] = []
 
   if (scope === 'global' && pous) {
     pous.forEach((pou) => {
-      const externalVars = pou.data.variables.filter(
+      const variables = pou.interface?.variables ?? []
+      const externalVars = variables.filter(
         (v) => v.class === 'external' && v.name.toLowerCase() === variableName.toLowerCase(),
       )
 
       if (externalVars.length > 0) {
         warnings.push(
-          `POU "${pou.data.name}" has ${externalVars.length} external variable(s) referencing this global variable. Their types will be updated automatically.`,
+          `POU "${pou.name}" has ${externalVars.length} external variable(s) referencing this global variable. Their types will be updated automatically.`,
         )
       }
     })
@@ -82,11 +83,11 @@ export const validateTypeChange = (
     scope === 'global' && pous
       ? pous
           .filter((pou) =>
-            pou.data.variables.some(
+            (pou.interface?.variables ?? []).some(
               (v) => v.class === 'external' && v.name.toLowerCase() === variableName.toLowerCase(),
             ),
           )
-          .map((pou) => pou.data.name)
+          .map((pou) => pou.name)
       : []
 
   const shouldCheckFlow = (flowName: string) => {

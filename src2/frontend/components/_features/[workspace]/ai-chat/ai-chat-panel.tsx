@@ -90,14 +90,14 @@ export const AIChatPanel = () => {
         .map((m) => ({ role: m.role, content: m.content }))
 
       // Resolve language from POU data (covers graphical editors like FBD/LD)
-      const pou = pouName ? storeState.project.data.pous.find((p) => p.data.name === pouName) : undefined
-      const pouLang = pou?.data.body.language ?? language ?? 'st'
+      const pou = pouName ? storeState.project.data.pous.find((p) => p.name === pouName) : undefined
+      const pouLang = pou?.body.language ?? language ?? 'st'
 
       // Collect project context: POU identity + body + variables/globals/FBs
       let pouContext: string | undefined
       if (pouName) {
-        const pouType = pou?.type ?? 'program'
-        const bodyValue = typeof pou?.data.body.value === 'string' ? pou.data.body.value : ''
+        const pouType = pou?.pouType ?? 'program'
+        const bodyValue = typeof pou?.body.value === 'string' ? pou.body.value : ''
         const projectCtx = collectProjectContext(storeState, pouName, 4000)
 
         const parts: string[] = []

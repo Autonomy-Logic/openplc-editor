@@ -90,7 +90,7 @@ const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSea
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedPou: boolean =
-    pous.some((pou) => pou.type === branchTarget) ||
+    pous.some((pou) => pou.pouType === branchTarget) ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
     (branchTarget === 'resource' && configuration !== null)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
@@ -269,7 +269,7 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasVariable: boolean = pous.some((pou) => pou.data.variables.length > 0) || configuration !== null
+  const hasVariable: boolean = pous.some((pou) => (pou.interface?.variables ?? []).length > 0) || configuration !== null
   useEffect(() => setBranchIsOpen(hasVariable), [hasVariable])
 
   return (
