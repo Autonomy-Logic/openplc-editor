@@ -156,8 +156,8 @@ export function createEditorProjectAdapter(): ProjectPort {
         name: params.name,
         type: params.type,
         path: params.path ?? '',
-        language: 'il',
-        time: new Date().toISOString(),
+        language: params.language ?? 'il',
+        time: params.time ?? new Date().toISOString(),
       })) as unknown as IpcProjectResponse
 
       return mapIpcResponse(response, { name: params.name, type: params.type })

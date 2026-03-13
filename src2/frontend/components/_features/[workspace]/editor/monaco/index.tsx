@@ -5,7 +5,7 @@ import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import type { PLCVariable, PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
-import { useCapabilities } from '../../../../../../middleware/shared/providers/platform-context'
+import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -57,19 +57,6 @@ type monacoEditorOptionsType = monaco.editor.IStandaloneEditorConstructionOption
 
 type SnippetController = {
   insert: (snippet: string, options?: unknown) => void
-}
-
-// ---------------------------------------------------------------------------
-// File watcher bridge type (editor-only, accessed via window.bridge)
-// ---------------------------------------------------------------------------
-
-type FileWatcherBridge = {
-  fileWatchStart: (path: string) => Promise<{ success: boolean; error?: string }>
-  fileWatchStop: (path: string) => Promise<{ success: boolean }>
-  fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
-  onFileExternalChange: (
-    handler: (event: unknown, data: { filePath: string }) => void,
-  ) => () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +127,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const isSyncingModelRef = useRef(false)
 
   const capabilities = useCapabilities()
+  const projectPort = useProject()
 
   const {
     editor,
@@ -262,8 +250,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const currentProjectPath = openPLCStoreBase.getState().project.meta.path
     if (!currentProjectPath || !pou) return
 
-    const bridge = window.bridge as unknown as FileWatcherBridge
-    if (!bridge?.fileWatchStart) return
+    if (!projectPort.watchFile || !projectPort.onFileExternalChange) return
 
     // Import dynamically to avoid bundling editor-only utils on web
     let getExtensionFromLanguage: ((lang: string) => string) | null = null
@@ -293,10 +280,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const fullPath = `${currentProjectPath}/pous/${pouFolder}/${name}${actualExtension}`
     watchedFilePathRef.current = fullPath
 
-    void bridge.fileWatchStart(fullPath)
+    void projectPort.watchFile(fullPath)
 
-    const handleExternalChange = (_event: unknown, data: { filePath: string }) => {
-      if (data.filePath !== watchedFilePathRef.current) return
+    const handleExternalChange = (filePath: string) => {
+      if (filePath !== watchedFilePathRef.current) return
 
       const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
       if (isSaved) {
@@ -308,7 +295,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       if (!watchedFilePathRef.current) return
 
       try {
-        const result = await bridge.fileReadContent(watchedFilePathRef.current)
+        const result = await projectPort.readFileContent(watchedFilePathRef.current)
 
         if (result.success && result.content && parseTextualPouFromString && parseHybridPouFromString) {
           const parsedPou =
@@ -325,12 +312,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       }
     }
 
-    const cleanup = bridge.onFileExternalChange(handleExternalChange)
+    const cleanup = projectPort.onFileExternalChange(handleExternalChange)
 
     return () => {
       cleanup()
       if (watchedFilePathRef.current) {
-        void bridge.fileWatchStop(watchedFilePathRef.current)
+        void projectPort.unwatchFile?.(watchedFilePathRef.current)
         watchedFilePathRef.current = null
       }
     }
@@ -851,8 +838,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           const pouFolder = getFolderFromPouType(currentPou.pouType)
           const fullPath = `${currentProjectPath}/pous/${pouFolder}/${name}${actualExtension}`
 
-          const bridge = window.bridge as unknown as FileWatcherBridge
-          const result = await bridge.fileReadContent(fullPath)
+          const result = await projectPort.readFileContent(fullPath)
 
           if (result.success && result.content) {
             const parsedPou =
@@ -902,13 +888,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       injectCppTemplateIfNeeded(editorInstance, pou, name)
     }
 
-    // Keyboard shortcuts: Ctrl+S, Ctrl+Shift+S
+    // Keyboard shortcuts: Ctrl+S (save project), Ctrl+Shift+S (save project)
     editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
-      if (editingState !== 'save-request' && name) {
-        const sharedActions = openPLCStoreBase.getState().sharedWorkspaceActions
-        if ('saveFile' in sharedActions) {
-          void (sharedActions as { saveFile: (name: string) => Promise<void> }).saveFile(name)
-        }
+      if (editingState !== 'save-request') {
+        const state = openPLCStoreBase.getState()
+        void projectPort.saveProject({
+          projectPath: state.project.meta.path,
+          projectData: state.project.data,
+          deviceConfiguration: state.deviceDefinitions.configuration,
+          devicePinMapping: state.deviceDefinitions.pinMapping.pins,
+        })
       }
     })
 
@@ -916,10 +905,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyS,
       () => {
         if (editingState !== 'save-request') {
-          const sharedActions = openPLCStoreBase.getState().sharedWorkspaceActions
-          if ('saveProject' in sharedActions) {
-            void (sharedActions as { saveProject: () => Promise<void> }).saveProject()
-          }
+          const state = openPLCStoreBase.getState()
+          void projectPort.saveProject({
+            projectPath: state.project.meta.path,
+            projectData: state.project.data,
+            deviceConfiguration: state.deviceDefinitions.configuration,
+            devicePinMapping: state.deviceDefinitions.pinMapping.pins,
+          })
         }
       },
     )

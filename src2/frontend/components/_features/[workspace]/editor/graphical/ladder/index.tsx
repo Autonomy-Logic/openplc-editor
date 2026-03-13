@@ -24,8 +24,9 @@ import { Rung } from '../../../../../_organisms/graphical-editor/ladder/rung'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../../store'
 import { RungLadderState, zodLadderFlowSchema } from '../../../../../../store/slices/ladder'
+import type { PouHistorySnapshot } from '../../../../../../store/slices/shared/types'
 import { cn } from '../../../../../../utils/cn'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -47,10 +48,23 @@ export default function LadderEditor() {
     editorActions: { saveEditorViewState },
     modalActions: { closeModal },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
-    snapshotActions: { addSnapshot },
+    snapshotActions: { pushToHistory },
     libraries: { user: userLibraries },
     workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
+
+  const captureSnapshot = useCallback(
+    (pouName: string): PouHistorySnapshot | null => {
+      const pou = pous.find((p) => p.name === pouName)
+      if (!pou) return null
+      return {
+        variables: pou.interface?.variables ?? [],
+        body: pou.body.value,
+        globalVariables: openPLCStoreBase.getState().project.data.configurations.resource.globalVariables,
+      }
+    },
+    [pous],
+  )
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
@@ -137,7 +151,8 @@ export default function LadderEditor() {
   const handleAddNewRung = () => {
     if (isDebuggerVisible) return
 
-    addSnapshot(editor.meta.name)
+    const snapshot = captureSnapshot(editor.meta.name)
+    if (snapshot) pushToHistory(editor.meta.name, snapshot)
 
     const defaultViewport: [number, number] = [300, 100]
 
@@ -196,7 +211,8 @@ export default function LadderEditor() {
     auxRungs.splice(destinationIndex, 0, removed)
 
     try {
-      addSnapshot(editor.meta.name)
+      const snapshot = captureSnapshot(editor.meta.name)
+      if (snapshot) pushToHistory(editor.meta.name, snapshot)
       ladderFlowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)

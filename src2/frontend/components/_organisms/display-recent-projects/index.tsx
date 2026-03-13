@@ -91,12 +91,12 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
   }
 
   const handleOpenProjectByPath = async (projectPath: string) => {
-    const result = await project.openProject(projectPath)
-    if (!result.ok) {
+    const result = await project.openProjectByPath(projectPath)
+    if (!result.success) {
       void updateUserRecentProjects()
       toast({
         title: 'Cannot open the project.',
-        description: result.message ?? `The path ${projectPath} does not exist on this computer.`,
+        description: result.error?.description ?? `The path ${projectPath} does not exist on this computer.`,
         variant: 'fail',
       })
     }

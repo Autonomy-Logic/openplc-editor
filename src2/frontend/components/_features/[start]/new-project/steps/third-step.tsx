@@ -5,20 +5,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_a
 import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
 import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
+import { useProject } from '../../../../../../middleware/shared/providers'
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
 import { useToast } from '../../../[app]/toast/use-toast'
 import { IntervalModal } from '../interval-model'
 import { NewProjectStore } from '../store'
-
-type CreateProjectFileProps = {
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
-  time: string
-  type: 'plc-project' | 'plc-library'
-  name: string
-  path: string
-}
 {
   /** TODO: Need to be implemented - Sequential Functional Chart and Functional Block Diagram */
 }
@@ -47,8 +40,11 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
   const projectData = NewProjectStore((state) => state.formData)
   const [isModalOpen, setModalOpen] = useState(false)
   const [intervalValue, setIntervalValue] = useState('T#20ms')
+  const projectPort = useProject()
   const {
-    sharedWorkspaceActions: { createProject },
+    projectActions: { setProject },
+    deviceActions: { setDeviceDefinitions },
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
@@ -60,7 +56,35 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
 
     handleUpdateForm(allData)
     try {
-      await createProject(allData as CreateProjectFileProps)
+      const result = await projectPort.createProject({
+        name: allData.name,
+        type: allData.type as 'plc-project' | 'plc-library',
+        path: allData.path,
+        language: allData.language,
+        time: allData.time,
+      })
+
+      if (!result.success || !result.data) {
+        toast({
+          title: 'Cannot create a project!',
+          description: result.error?.description ?? 'Failed to create the project.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      // Hydrate store with returned project data
+      setProject({
+        meta: result.data.meta,
+        data: result.data.projectData,
+      })
+      if (result.data.deviceConfiguration || result.data.devicePinMapping) {
+        setDeviceDefinitions({
+          configuration: result.data.deviceConfiguration,
+          pinMapping: result.data.devicePinMapping,
+        })
+      }
+      setEditingState('saved')
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_error) {
       toast({

@@ -42,6 +42,8 @@ export interface CreateProjectParams {
   name: string
   type: 'plc-project' | 'plc-library'
   path?: string
+  language?: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+  time?: string
 }
 
 export interface ProjectResponse {
