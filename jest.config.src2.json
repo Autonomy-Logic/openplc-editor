@@ -45,6 +45,7 @@
     "!src2/frontend/assets/**",
     "!src2/frontend/data/**",
     "!src2/frontend/hooks/**",
+    "!src2/frontend/screens/**",
     "!src2/frontend/store/index.ts",
     "!src2/frontend/store/slices/project/validation/**",
     "!src2/frontend/utils/generate-uuid.ts",
