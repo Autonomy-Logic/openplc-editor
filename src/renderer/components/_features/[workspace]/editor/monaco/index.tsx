@@ -115,6 +115,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
   const [editorMounted, setEditorMounted] = useState(false)
+  const [modelVersion, setModelVersion] = useState(0)
 
   const {
     editor,
@@ -283,6 +284,18 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [pou?.type, name, language])
 
+  // Track when @monaco-editor/react switches models (tab changes with keepCurrentModel).
+  // onMount only fires once on initial mount, so we use onDidChangeModel to know when the
+  // model has actually switched, then bump modelVersion to trigger debugVarPositions recomputation.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const disposable = editor.onDidChangeModel(() => {
+      setModelVersion((v) => v + 1)
+    })
+    return () => disposable.dispose()
+  }, [editorMounted])
+
   // Update readOnly when debugger visibility changes on an already-mounted editor
   useEffect(() => {
     editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
@@ -314,6 +327,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const model = editorRef.current.getModel()
     if (!model) return null
+
+    // Guard: ensure the model matches the current POU. During tab switches the memo may
+    // fire before @monaco-editor/react has swapped the model, so we'd scan the wrong file.
+    const expectedUri = monaco.Uri.file(uniqueMonacoPath).toString()
+    if (model.uri.toString() !== expectedUri) return null
 
     const prefix = fbInstanceContext
       ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
@@ -357,7 +375,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     return { prefix, positions }
-  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted])
+  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
 
   // Phase 2: stamp current values onto cached positions (runs on each poll, O(positions) map lookups only)
   useEffect(() => {
