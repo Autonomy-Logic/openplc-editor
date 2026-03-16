@@ -85,6 +85,17 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [variables, searchValue])
 
+    const closeModal = () => {
+      setAutocompleteFocus(false)
+      setSelectedVariable({ positionInArray: -1, variable: { id: '', name: '' } })
+      if (setIsOpen) setIsOpen(false)
+    }
+
+    const submitAutocompletion = ({ variable }: { variable: { id: string; name: string } }) => {
+      closeModal()
+      submit({ variable })
+    }
+
     // @ts-expect-error - not all properties are used
     useImperativeHandle(ref, () => {
       return {
@@ -93,8 +104,25 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
         },
         isFocused: autocompleteFocus,
         selectedVariable: selectedVariable,
+        /**
+         * Synchronously triggers the submit action.
+         * Used by parent components to bypass the async keyPressed → keyDown useEffect chain
+         * which can cause race conditions when the autocomplete unmounts on blur.
+         */
+        triggerSubmit: () => {
+          if (selectedVariable.positionInArray === -1) {
+            const addVariableOption = selectableValues.find((item) => item.type === 'add')
+            if (addVariableOption) {
+              submitAutocompletion({ variable: addVariableOption.variable })
+            } else {
+              closeModal()
+            }
+          } else {
+            submitAutocompletion({ variable: selectedVariable.variable })
+          }
+        },
       }
-    }, [selectedVariable, popoverRef, autocompleteFocus])
+    }, [selectedVariable, selectableValues, popoverRef, autocompleteFocus, submitAutocompletion, closeModal])
 
     useEffect(() => {
       switch (keyDown) {
@@ -160,17 +188,6 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
         const selectedElement = variablesDivRef.current.children[selectedVariable.positionInArray]
         selectedElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
-    }
-
-    const closeModal = () => {
-      setAutocompleteFocus(false)
-      setSelectedVariable({ positionInArray: -1, variable: { id: '', name: '' } })
-      if (setIsOpen) setIsOpen(false)
-    }
-
-    const submitAutocompletion = ({ variable }: { variable: { id: string; name: string } }) => {
-      closeModal()
-      submit({ variable })
     }
 
     return (
