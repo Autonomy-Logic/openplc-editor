@@ -170,5 +170,15 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
         active = false
       }
     },
+
+    onQuitApp(callback: () => void): Unsubscribe {
+      let active = true
+      window.bridge.quitAppRequest(() => {
+        if (active) callback()
+      })
+      return () => {
+        active = false
+      }
+    },
   }
 }

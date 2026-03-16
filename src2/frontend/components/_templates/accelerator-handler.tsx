@@ -1,4 +1,11 @@
-import { useAccelerator, useCompiler, useProject, useWindow, useCapabilities } from '../../../middleware/shared/providers'
+import {
+  useAccelerator,
+  useCompiler,
+  useProject,
+  useWindow,
+  useTheme,
+  useCapabilities,
+} from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
 import { useEffect, useState } from 'react'
@@ -20,6 +27,7 @@ const AcceleratorHandler = () => {
   const compilerPort = useCompiler()
   const projectPort = useProject()
   const windowPort = useWindow()
+  const themePort = useTheme()
   const capabilities = useCapabilities()
 
   const [requestFlag, setRequestFlag] = useState(false)
@@ -32,8 +40,18 @@ const AcceleratorHandler = () => {
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject },
-    workspaceActions: { switchAppTheme, toggleMaximizedWindow, setCloseWindow, setCloseApp, setCloseAppDarwin },
+    workspaceActions: {
+      switchAppTheme,
+      toggleMaximizedWindow,
+      setCloseWindow,
+      setCloseApp,
+      setCloseAppDarwin,
+      setEditingState,
+      setModalOpen,
+      toggleCollapse,
+    },
     tabsActions: { removeTab },
+    fileActions: { setAllToSaved },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
     snapshotActions: { undo, redo },
@@ -157,19 +175,32 @@ const AcceleratorHandler = () => {
   }, [editingState, accelerator, closeProject])
 
   /**
-   * Save project
+   * Save project (Cmd+Shift+S)
    */
   useEffect(() => {
     const unsub = accelerator.onSaveProject(() => {
-      void projectPort.saveProject({
-        projectPath: project.meta.path,
-        projectData: project.data,
-        deviceConfiguration: deviceDefinitions.configuration,
-        devicePinMapping: deviceDefinitions.pinMapping.pins,
-      })
+      setEditingState('save-request')
+      projectPort
+        .saveProject({
+          projectPath: project.meta.path,
+          projectData: project.data,
+          deviceConfiguration: deviceDefinitions.configuration,
+          devicePinMapping: deviceDefinitions.pinMapping.pins,
+        })
+        .then((res) => {
+          if (res.success) {
+            setEditingState('saved')
+            setAllToSaved()
+          } else {
+            setEditingState('unsaved')
+          }
+        })
+        .catch(() => {
+          setEditingState('unsaved')
+        })
     })
     return unsub
-  }, [project, deviceDefinitions, accelerator, projectPort])
+  }, [project, deviceDefinitions, accelerator, projectPort, setEditingState, setAllToSaved])
 
   /**
    * Delete file
@@ -218,19 +249,52 @@ const AcceleratorHandler = () => {
   }, [selectedProjectTreeLeaf, accelerator, removeTab])
 
   /**
-   * Save file (saves entire project since files are part of project XML)
+   * Save file (Cmd+S) — saves entire project since files are part of project XML
    */
   useEffect(() => {
     const unsub = accelerator.onSaveFile(() => {
-      void projectPort.saveProject({
-        projectPath: project.meta.path,
-        projectData: project.data,
-        deviceConfiguration: deviceDefinitions.configuration,
-        devicePinMapping: deviceDefinitions.pinMapping.pins,
-      })
+      setEditingState('save-request')
+      projectPort
+        .saveProject({
+          projectPath: project.meta.path,
+          projectData: project.data,
+          deviceConfiguration: deviceDefinitions.configuration,
+          devicePinMapping: deviceDefinitions.pinMapping.pins,
+        })
+        .then((res) => {
+          if (res.success) {
+            setEditingState('saved')
+            setAllToSaved()
+          } else {
+            setEditingState('unsaved')
+          }
+        })
+        .catch(() => {
+          setEditingState('unsaved')
+        })
     })
     return unsub
-  }, [selectedProjectTreeLeaf, accelerator, projectPort, project, deviceDefinitions])
+  }, [selectedProjectTreeLeaf, accelerator, projectPort, project, deviceDefinitions, setEditingState, setAllToSaved])
+
+  /**
+   * Find in project (Cmd+Shift+F)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onFindInProject(() => {
+      setModalOpen('findInProject', true)
+    })
+    return unsub
+  }, [accelerator, setModalOpen])
+
+  /**
+   * Switch perspective (F12)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onSwitchPerspective(() => {
+      toggleCollapse()
+    })
+    return unsub
+  }, [accelerator, toggleCollapse])
 
   /**
    * Undo / Redo
@@ -252,8 +316,35 @@ const AcceleratorHandler = () => {
   }, [meta.name, isMonacoFocused, accelerator, redo])
 
   /**
+   * Quit app (Ctrl+Q on Windows/Linux)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onQuitApp(() => {
+      quitAppRequest(editingState === 'unsaved', openModal)
+    })
+    return unsub
+  }, [editingState, accelerator, openModal])
+
+  /**
+   * Theme update from main process
+   */
+  useEffect(() => {
+    const unsub = themePort.onThemeChanged(() => {
+      switchAppTheme()
+    })
+    return unsub
+  }, [themePort, switchAppTheme])
+
+  /**
    * Window lifecycle events (editor-only, gated by capabilities)
    */
+  useEffect(() => {
+    if (!capabilities.hasNativeWindowControls) return
+
+    const unsub = windowPort.enableAutoCloseHandshake?.()
+    return unsub
+  }, [capabilities.hasNativeWindowControls, windowPort])
+
   useEffect(() => {
     if (!capabilities.hasNativeWindowControls) return
 
@@ -262,6 +353,15 @@ const AcceleratorHandler = () => {
     })
     return unsub
   }, [capabilities.hasNativeWindowControls, windowPort, setCloseWindow])
+
+  useEffect(() => {
+    if (!capabilities.hasNativeWindowControls) return
+
+    const unsub = windowPort.onDarwinAppQuitting?.(() => {
+      setCloseAppDarwin(true)
+    })
+    return unsub
+  }, [capabilities.hasNativeWindowControls, windowPort, setCloseAppDarwin])
 
   useEffect(() => {
     if (!capabilities.hasNativeWindowControls) return

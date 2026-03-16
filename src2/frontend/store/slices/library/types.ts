@@ -6,9 +6,12 @@ export type LibraryLanguage = 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 export interface SystemLibraryVariable {
   name: string
   class: 'input' | 'output' | 'local'
-  type: { definition: 'base-type'; value: string }
+  type:
+    | { definition: 'base-type'; value: string }
+    | { definition: 'derived-type'; value: string }
+    | { definition: 'generic-type'; value: string }
   location?: string
-  initialValue?: string | null
+  initialValue?: unknown
   documentation?: string
 }
 

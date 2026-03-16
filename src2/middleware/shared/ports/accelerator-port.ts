@@ -55,4 +55,7 @@ export interface AcceleratorPort {
   // --- View actions ---
   onSwitchPerspective(callback: () => void): Unsubscribe
   onAbout(callback: () => void): Unsubscribe
+
+  // --- App lifecycle ---
+  onQuitApp(callback: () => void): Unsubscribe
 }

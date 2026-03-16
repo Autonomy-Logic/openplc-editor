@@ -53,15 +53,29 @@ export function createEditorWindowAdapter(): WindowPort {
     },
 
     onCloseRequested(callback: () => void): Unsubscribe {
-      const handler = () => callback()
-
-      window.bridge.windowIsClosing(handler)
-      window.bridge.darwinAppIsClosing(handler)
-
+      let active = true
+      window.bridge.windowIsClosing(() => {
+        if (active) callback()
+      })
       return () => {
-        // Electron IPC listeners are removed by channel name.
-        // The bridge does not expose a per-listener removeListener,
-        // so we guard with an active flag instead.
+        active = false
+      }
+    },
+
+    onDarwinAppQuitting(callback: () => void): Unsubscribe {
+      let active = true
+      window.bridge.darwinAppIsClosing(() => {
+        if (active) callback()
+      })
+      return () => {
+        active = false
+      }
+    },
+
+    enableAutoCloseHandshake(): Unsubscribe {
+      window.bridge.handleCloseOrHideWindowAccelerator()
+      return () => {
+        window.bridge.removeHandleCloseOrHideWindowAccelerator()
       }
     },
 
@@ -76,7 +90,7 @@ export function createEditorWindowAdapter(): WindowPort {
       window.bridge.isMaximizedWindow(handler)
 
       return () => {
-        // Same limitation as onCloseRequested — no per-listener unsubscribe.
+        // Electron IPC does not expose per-listener unsubscribe for this channel.
       }
     },
   }
