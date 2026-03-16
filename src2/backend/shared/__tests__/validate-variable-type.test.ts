@@ -1,4 +1,4 @@
-import { validateVariableType, getVariableRestrictionType } from '../validate-variable-type'
+import { getVariableRestrictionType, validateVariableType } from '../validate-variable-type'
 
 describe('validateVariableType', () => {
   it('returns valid for exact type match', () => {
@@ -91,6 +91,6 @@ describe('getVariableRestrictionType', () => {
     const result = getVariableRestrictionType('ANY_STRING')
     expect(result.definition).toBe('base-type')
     expect(Array.isArray(result.values)).toBe(true)
-    expect((result.values as string[])).toContain('string')
+    expect(result.values as string[]).toContain('string')
   })
 })

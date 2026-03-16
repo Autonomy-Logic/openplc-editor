@@ -9,7 +9,7 @@ import tseslint from 'typescript-eslint'
 /** @type {import('@types/eslint').Linter.FlatConfig} */
 export default [
   {
-    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    files: ['src/**/*.ts', 'src/**/*.tsx', 'src2/**/*.ts', 'src2/**/*.tsx'],
     ignores: [
       '**/*.d.ts',
       '**/*.test.{js,jsx,ts,tsx}',

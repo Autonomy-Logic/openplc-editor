@@ -1,11 +1,6 @@
-import {
-  createEditorCompilerAdapter,
-  portPouToIpcPou,
-  toIpcProjectData,
-  inferStage,
-} from '../compiler-adapter'
 import type { CompilerPort } from '../../../shared/ports/compiler-port'
 import type { CompileProgressEvent, PLCProjectData } from '../../../shared/ports/types'
+import { createEditorCompilerAdapter, inferStage, portPouToIpcPou, toIpcProjectData } from '../compiler-adapter'
 
 const mockProjectData: PLCProjectData = {
   dataTypes: [],
@@ -40,7 +35,7 @@ const mockProjectData: PLCProjectData = {
   configurations: {
     resource: {
       tasks: [{ name: 'MainTask', triggering: 'Cyclic', interval: 'T#20ms', priority: 0 }],
-      instances: [{ name: 'main0', taskName: 'MainTask', pouName: 'main' }],
+      instances: [{ name: 'main0', task: 'MainTask', program: 'main' }],
       globalVariables: [],
     },
   },
@@ -73,9 +68,11 @@ beforeEach(() => {
     runCompileProgram: jest.fn().mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
       compileCallback = cb
     }),
-    runDebugCompilation: jest.fn().mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
-      debugCallback = cb
-    }),
+    runDebugCompilation: jest
+      .fn()
+      .mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
+        debugCallback = cb
+      }),
     exportProjectXml: jest.fn().mockResolvedValue({ success: true, message: 'Exported successfully' }),
   } as unknown as typeof window.bridge
 })

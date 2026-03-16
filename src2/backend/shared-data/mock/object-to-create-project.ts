@@ -1,4 +1,4 @@
-import { formatDate } from '../../../utils'
+import { formatDate } from '../../../frontend/utils/format-date'
 
 const xmlProjectAsObject = {
   project: {

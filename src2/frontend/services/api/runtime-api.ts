@@ -7,13 +7,9 @@ export function runtimeGetUsersInfo(
   _orchestratorAgentId: string,
   _deviceId: string,
 ): Promise<{ error?: string; hasUsers: boolean }> {
-  return { hasUsers: false }
+  return Promise.resolve({ hasUsers: false })
 }
 
-export async function runtimeLogout(
-  _orchestratorAgentId: string,
-  _deviceId: string,
-  _jwtToken: string,
-): Promise<void> {
+export async function runtimeLogout(_orchestratorAgentId: string, _deviceId: string, _jwtToken: string): Promise<void> {
   // Stub
 }

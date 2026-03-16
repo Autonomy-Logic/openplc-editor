@@ -24,7 +24,23 @@ const src2Path = join(webpackPaths.rootPath, 'src2')
 const basePlugins = (rendererDevConfig.plugins ?? []).filter(
   (p) => !(p instanceof HtmlWebpackPlugin) && !(p instanceof EslintPlugin),
 )
-const baseConfig = { ...rendererDevConfig, plugins: basePlugins }
+
+// Remove the duplicate bare ts-loader rule (/\.ts?$/) from the renderer config.
+// The base config already handles .ts files via /\.[jt]sx?$/ with transpileOnly + module:'esnext'.
+// The duplicate causes double-compilation: the bare ts-loader uses tsconfig's module:"commonjs",
+// injecting `exports.xxx` references that are undefined in webpack's module scope.
+const baseRules = (rendererDevConfig.module?.rules ?? []).filter((r) => {
+  if (r && typeof r === 'object' && 'test' in r && r.test instanceof RegExp) {
+    return r.test.toString() !== '/\\.ts?$/'
+  }
+  return true
+})
+
+const baseConfig = {
+  ...rendererDevConfig,
+  module: { ...rendererDevConfig.module, rules: baseRules },
+  plugins: basePlugins,
+}
 
 const src2Overrides: webpack.Configuration = {
   entry: [
@@ -32,6 +48,10 @@ const src2Overrides: webpack.Configuration = {
     'webpack/hot/only-dev-server',
     join(src2Path, 'main.tsx'),
   ],
+
+  devServer: {
+    port,
+  },
 
   resolve: {
     alias: {

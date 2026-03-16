@@ -14,7 +14,10 @@
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
     "lint": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx}",
     "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --debug --fix",
+    "lint:src2": "cross-env NODE_ENV=development eslint ./src2/**/*.{ts,tsx}",
+    "lint:src2:fix": "cross-env NODE_ENV=development eslint ./src2/**/*.{ts,tsx} --debug --fix",
     "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
+    "format:src2": "cross-env NODE_ENV=development prettier --write \"./src2/**/*.{ts,tsx}\"",
     "postinstall": "ts-node scripts/download-binaries.ts && ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "setup:binaries": "ts-node scripts/download-binaries.ts",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
@@ -24,8 +27,8 @@
     "start:main": "concurrently -k \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./configs/webpack/webpack.config.main.dev.ts\" \"electronmon .\"",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
-    "start:src2": "ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer:src2",
-    "start:src2:electron": "ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer:src2\" \"electronmon .\"",
+    "start:src2": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer:src2",
+    "start:src2:electron": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer:src2\" \"cross-env PORT=1313 electronmon .\"",
     "start:renderer:src2": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.src2.dev.ts",
     "test:unit": "jest --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
@@ -184,7 +187,8 @@
       "!node_modules",
       "!node_modules/**/*",
       "!.*",
-      "src/**/*"
+      "src/**/*",
+      "src2/**/*"
     ],
     "logLevel": "quiet"
   },
@@ -192,6 +196,10 @@
     "./src/**/*": [
       "npm run lint:fix",
       "npm run format"
+    ],
+    "./src2/**/*": [
+      "npm run lint:src2:fix",
+      "npm run format:src2"
     ]
   }
 }

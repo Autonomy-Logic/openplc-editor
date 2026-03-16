@@ -55,11 +55,11 @@ const Tabs = () => {
         tabs.map((tab, idx) => (
           <Tab
             key={tab.name}
-            tab={tab}
-            onClick={() => handleClickedTab(tab)}
-            onClose={() => handleRemoveTab(tab.name)}
-            selected={selectedTab === tab.name}
-            draggable
+            fileName={tab.name}
+            fileDerivation={tab.elementType}
+            currentTab={selectedTab === tab.name}
+            handleClickedTab={() => handleClickedTab(tab)}
+            handleDeleteTab={() => handleRemoveTab(tab.name)}
             onDragStart={() => handleDragStart({ tab, idx })}
             onDragEnter={() => handleDragEnter(idx)}
             onDragEnd={handleSortOnDragEnd}

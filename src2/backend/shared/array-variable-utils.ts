@@ -83,7 +83,7 @@ export const resolveArrayElement = (baseVariable: PLCVariable, access: ParsedArr
     name: `${access.baseName}[${indexStr}]`,
     type: {
       definition: data.baseType.definition as PLCVariable['type']['definition'],
-      value: data.baseType.value as string,
+      value: data.baseType.value,
     },
   } as PLCVariable
 }
@@ -129,7 +129,7 @@ export const expandArrayVariable = (variable: PLCVariable): PLCVariable[] => {
       name: `${variable.name}[${indexStr}]`,
       type: {
         definition: data.baseType.definition as PLCVariable['type']['definition'],
-        value: data.baseType.value as string,
+        value: data.baseType.value,
       },
     } as PLCVariable
   })
