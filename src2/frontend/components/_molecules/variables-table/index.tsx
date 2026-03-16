@@ -138,6 +138,7 @@ const VariablesTable = ({
       data: { pous },
     },
     projectActions: { updateVariable },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
   const { captureAndPush } = usePouSnapshot()
 
@@ -159,14 +160,18 @@ const VariablesTable = ({
           }
         }
 
-        return updateVariable({
+        const result = updateVariable({
           scope: 'local',
           associatedPou: name,
-          variableId: tableData[rowIndex].id,
+          rowId: rowIndex,
           data: {
             [columnId]: value,
           },
         })
+        if (result.ok) {
+          handleFileAndWorkspaceSavedState(name)
+        }
+        return result
       }}
       tableContext='Variables'
       columnFilters={columnFilters}

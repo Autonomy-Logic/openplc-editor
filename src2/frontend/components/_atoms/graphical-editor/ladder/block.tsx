@@ -1,17 +1,19 @@
-import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
-import { toast } from '../../../_features/[app]/toast/use-toast'
-import { useOpenPLCStore } from '../../../../store'
-import { checkVariableNameUnit } from '../../../../store/slices/project/validation/variables'
-import type { PLCVariable } from '../../../../../middleware/shared/ports'
-import { cn } from '../../../../utils/cn'
-import { FocusEvent, useEffect, useRef, useState } from 'react'
+import { FocusEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { LibraryState } from '../../../../store/slices/library'
+import type { PLCVariable } from '../../../../../middleware/shared/ports'
 import { PLCPou } from '../../../../../middleware/shared/ports'
+import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
+import { useOpenPLCStore } from '../../../../store'
+import { LibraryState } from '../../../../store/slices/library'
+import { checkVariableNameUnit } from '../../../../store/slices/project/validation/variables'
+import { cn } from '../../../../utils/cn'
+import { toast } from '../../../_features/[app]/toast/use-toast'
+import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { BlockOutputDebugBadges } from '../block-output-debug-badges'
 import { BlockVariant as newBlockVariant } from '../types/block'
 import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildBlockNode } from './buildNodes'
@@ -19,7 +21,6 @@ import { CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_HEIGHT, DEFAULT_BLOCK_TYPE, DEFAULT_BLOCK_WIDTH, } from './utils/constants'
 import type { BasicNodeData, BlockNodeData, BlockProps, BlockVariant, LadderBlockConnectedVariables, } from './utils/types'
-import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
 
 export const BlockNodeElement = <T extends object>({
   nodeId,
@@ -385,6 +386,18 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     nodeId: id,
   })
 
+  const connectedOutputNames = useMemo(() => {
+    const names = new Set<string>()
+    if (data.connectedVariables) {
+      for (const cv of data.connectedVariables) {
+        if (cv.type === 'output' && cv.variable) {
+          names.add(cv.handleId)
+        }
+      }
+    }
+    return names
+  }, [data.connectedVariables])
+
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
       blur: ({ submit }: { submit?: boolean }) => void
@@ -447,8 +460,22 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id === variable.id) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+    const nodeVariable = (node.data as BasicNodeData).variable
+    const nodeVariableName = nodeVariable.name.toLowerCase()
+    const selectedVariableName = variable.name.toLowerCase()
+    const nodeBlockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+
+    if (nodeVariableName === selectedVariableName) {
+      const typeMatches =
+        variable.type.definition === 'derived' &&
+        variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
+
+      if (!typeMatches) {
+        setWrongVariable(true)
+        return
+      }
+
+      if (nodeVariable.name !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
@@ -461,14 +488,14 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             },
           },
         })
-        setWrongVariable(false)
-        return
       }
+      setWrongVariable(false)
+      return
     }
 
-    setWrongVariable(false)
+    setWrongVariable(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pous])
+  }, [pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event
@@ -492,9 +519,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const findMatchingVariable = () =>
       variables.all.find(
         (variable) =>
-          variable.name === variableNameToSubmit &&
+          variable.name.toLowerCase() === variableNameToSubmit.toLowerCase() &&
           variable.type.definition === 'derived' &&
-          variable.type.value === blockType,
+          variable.type.value.toLowerCase() === blockType.toLowerCase(),
       )
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
@@ -513,7 +540,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const matchingVariable = findMatchingVariable()
 
     if (variableToLink) {
-      if (variableToLink.name === variableNameToSubmit) return
+      if (variableToLink.name.toLowerCase() === variableNameToSubmit.toLowerCase()) return
 
       if (matchingVariable && matchingVariable.id !== variableToLink.id) {
         variableToLink = matchingVariable
@@ -815,6 +842,17 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
+      <BlockOutputDebugBadges
+        blockType={(data.variant as BlockVariant).type}
+        blockName={(data.variant as BlockVariant).name}
+        blockVariableName={data.variable?.name ?? ''}
+        numericId={data.numericId}
+        outputVariables={(data.variant as BlockVariant).variables}
+        connectorStartY={DEFAULT_BLOCK_CONNECTOR_Y}
+        connectorOffsetY={DEFAULT_BLOCK_CONNECTOR_Y_OFFSET}
+        blockWidth={width ?? DEFAULT_BLOCK_WIDTH}
+        connectedOutputNames={connectedOutputNames}
+      />
     </div>
   )
 }

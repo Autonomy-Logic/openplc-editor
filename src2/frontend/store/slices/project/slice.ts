@@ -2,6 +2,7 @@ import type {
   ModbusIOPoint,
   OpcUaServerConfig,
   PLCServer,
+  PLCVariable,
   S7CommLogging,
   S7CommPlcIdentity,
   S7CommServerSettings,
@@ -9,8 +10,16 @@ import type {
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { isLegalIdentifier } from '../../../utils/keywords'
+
 import type { ProjectResponse, ProjectSlice } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
+import {
+  createGlobalVariableValidation,
+  createVariableValidation,
+  updateGlobalVariableValidation,
+  updateVariableValidation,
+} from './validation/variables'
 
 const ok = (data?: unknown): ProjectResponse => ({ ok: true, data })
 const fail = (message: string, title?: string): ProjectResponse => ({ ok: false, message, title })
@@ -313,38 +322,45 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     // Variables
     // -----------------------------------------------------------------------
     createVariable: (dto) => {
-      const { scope, associatedPou, data, rowToInsert } = dto
-      if (scope === 'local' && associatedPou) {
-        const pou = getState().project.data.pous.find((p) => p.name === associatedPou)
-        if (!pou) return fail('POU not found')
-        const variables = pou.interface?.variables ?? []
-        if (variables.some((v) => v.name === data.name)) return fail('Variable already exists')
-      } else {
-        const globalVars = getState().project.data.configurations.resource.globalVariables
-        if (globalVars.some((v) => v.name === data.name)) return fail('Variable already exists')
+      const { scope, associatedPou, rowToInsert } = dto
+      let { data } = dto
+
+      const [isNameLegal, reason] = isLegalIdentifier(data.name)
+      if (!isNameLegal) {
+        return fail(`'${data.name}' ${reason}`, 'Illegal Variable Name')
       }
 
+      let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
           if (scope === 'local' && associatedPou) {
             const pou = slice.project.data.pous.find((p) => p.name === associatedPou)
-            if (!pou?.interface) return
+            if (!pou?.interface) {
+              response = fail('POU not found')
+              return
+            }
+            data = { ...data, ...createVariableValidation(pou.interface.variables, data) }
             if (rowToInsert !== undefined) {
-              pou.interface.variables.splice(rowToInsert, 0, data)
+              const pouVariables = pou.interface.variables.filter((variable) => variable.name !== 'OUT')
+              pouVariables.splice(rowToInsert, 0, data)
+              pou.interface.variables = [...pouVariables]
             } else {
               pou.interface.variables.push(data)
             }
+            response.data = data
           } else {
             const vars = slice.project.data.configurations.resource.globalVariables
+            data.name = createGlobalVariableValidation(vars, data.name)
             if (rowToInsert !== undefined) {
               vars.splice(rowToInsert, 0, data)
             } else {
               vars.push(data)
             }
+            response.data = data
           }
         }),
       )
-      return ok(data)
+      return response
     },
     setPouVariables: ({ pouName, variables }) => {
       setState(
@@ -364,20 +380,52 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       return ok()
     },
     updateVariable: ({ scope, associatedPou, rowId, variableId, data: updates }) => {
+      let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
-          const variables =
-            scope === 'local' && associatedPou
-              ? slice.project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables
-              : slice.project.data.configurations.resource.globalVariables
-          if (!variables) return
-
-          const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
-          if (!found) return
-          Object.assign(variables[found.index], updates)
+          if (scope === 'local' && associatedPou) {
+            const pou = slice.project.data.pous.find((p) => p.name === associatedPou)
+            if (!pou?.interface) {
+              response = fail('POU not found')
+              return
+            }
+            const found = getVariableBasedOnRowIdOrVariableId(pou.interface.variables, rowId, variableId)
+            if (!found) {
+              response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+              return
+            }
+            const validationResponse = updateVariableValidation(pou.interface.variables, updates, found.variable)
+            if (!validationResponse.ok) {
+              response = validationResponse
+              return
+            }
+            pou.interface.variables[found.index] = {
+              ...pou.interface.variables[found.index],
+              ...updates,
+              ...(validationResponse.data ? validationResponse.data : {}),
+            }
+            response.data = pou.interface.variables[found.index]
+          } else {
+            const globalVars = slice.project.data.configurations.resource.globalVariables
+            const validationResponse = updateGlobalVariableValidation(globalVars, updates)
+            if (!validationResponse.ok) {
+              response = validationResponse
+              return
+            }
+            const found = getVariableBasedOnRowIdOrVariableId(globalVars, rowId, variableId)
+            if (!found) {
+              response = { ok: false, title: 'Variable not found' }
+              return
+            }
+            globalVars[found.index] = {
+              ...globalVars[found.index],
+              ...updates,
+            }
+            response.data = globalVars[found.index]
+          }
         }),
       )
-      return ok()
+      return response
     },
     getVariable: ({ scope, associatedPou, rowId, variableId }) => {
       const variables =
@@ -390,6 +438,36 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       return found?.variable
     },
     deleteVariable: ({ scope, associatedPou, rowId, variableId, variableName }) => {
+      if (scope === 'global') {
+        const state = getState()
+        const globalVars = state.project.data.configurations.resource.globalVariables
+
+        let variableToDelete: PLCVariable | undefined
+        if (variableName) {
+          variableToDelete = globalVars.find(
+            (v) => v.name.toLowerCase() === variableName.toLowerCase(),
+          )
+        } else {
+          variableToDelete = getVariableBasedOnRowIdOrVariableId(globalVars, rowId, variableId)?.variable
+        }
+
+        if (variableToDelete) {
+          const externalReferences = state.project.data.pous.filter((pou) =>
+            pou.interface?.variables?.some(
+              (v) => v.class === 'external' && v.name.toLowerCase() === variableToDelete.name.toLowerCase(),
+            ),
+          )
+
+          if (externalReferences.length > 0) {
+            const pouNames = externalReferences.map((pou) => pou.name).join(', ')
+            return fail(
+              `The global variable "${variableToDelete.name}" is referenced by external variables in the following POUs: ${pouNames}. Please remove these references before deleting the global variable.`,
+              'Cannot Delete Global Variable',
+            )
+          }
+        }
+      }
+
       setState(
         produce((slice: ProjectSlice) => {
           const variables =
@@ -399,7 +477,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (!variables) return
 
           if (variableName) {
-            const idx = variables.findIndex((v) => v.name === variableName)
+            const idx = variables.findIndex((v) => v.name.toLowerCase() === variableName.toLowerCase())
             if (idx !== -1) variables.splice(idx, 1)
             return
           }

@@ -248,7 +248,7 @@ const EditableNameCell = ({
   useEffect(() => {
     setVariable(
       getVariable({
-        variableId: table.options.data[index].id,
+        rowId: index,
         scope,
         associatedPou: editor.meta.name,
       }),
@@ -389,7 +389,7 @@ const EditableInitialValueCell = ({
   useEffect(() => {
     setVariable(
       getVariable({
-        variableId: table.options.data[index].id,
+        rowId: index,
         scope,
         associatedPou: editor.meta.name,
       }),
@@ -478,7 +478,7 @@ const EditableLocationCell = ({
   useEffect(() => {
     setVariable(
       getVariable({
-        variableId: table.options.data[index].id,
+        rowId: index,
         scope,
         associatedPou: editor.meta.name,
       }),

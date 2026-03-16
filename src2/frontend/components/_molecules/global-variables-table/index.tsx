@@ -78,6 +78,7 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
       meta: { name },
     },
     projectActions: { updateVariable },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
@@ -91,6 +92,9 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
       updateData={(rowIndex, columnId, value) => {
         captureAndPush(name)
         const result = updateVariable({ scope: 'global', rowId: rowIndex, data: { [columnId]: value } })
+        if (result.ok) {
+          handleFileAndWorkspaceSavedState('Resource')
+        }
         return result
       }}
       tableContext='Variables'

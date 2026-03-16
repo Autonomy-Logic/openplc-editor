@@ -17,7 +17,7 @@ import { mergeWithCustomize, customizeArray } from 'webpack-merge'
 import rendererDevConfig from './webpack.config.renderer.dev'
 import webpackPaths from './webpack.paths'
 
-const port = process.env.PORT || 1212
+const port = process.env.PORT || 1313
 const src2Path = join(webpackPaths.rootPath, 'src2')
 
 // Remove the base HtmlWebpackPlugin and EslintPlugin so we can replace/skip them

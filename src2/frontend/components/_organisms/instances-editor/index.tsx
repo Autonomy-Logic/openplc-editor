@@ -9,7 +9,7 @@ import type { PLCInstance } from '../../../../middleware/shared/ports/types'
 import { cn } from '../../../utils/cn'
 import { parseResourceConfigurationToString } from '../../../utils/parse-resource-configuration-to-string'
 import { parseResourceStringToConfiguration } from '../../../utils/parse-resource-string-to-configuration'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -32,9 +32,29 @@ const InstancesEditor = () => {
       },
     },
     editorActions: { updateModelInstances },
-    projectActions: { createInstance, rearrangeInstances, deleteInstance, setInstances, setTasks, pushToHistory },
+    projectActions: { createInstance, rearrangeInstances, deleteInstance, setInstances, setTasks },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
+
+  const {
+    project: {
+      data: { pous: snapshotPous, configurations },
+    },
+    snapshotActions: { pushToHistory: rawPushToHistory },
+  } = useOpenPLCStore()
+
+  const pushToHistory = useCallback(
+    (pouName: string) => {
+      const pou = snapshotPous.find((p) => p.name === pouName)
+      if (!pou) return
+      rawPushToHistory(pouName, {
+        variables: pou.interface?.variables ?? [],
+        body: pou.body.value,
+        globalVariables: configurations.resource.globalVariables,
+      })
+    },
+    [snapshotPous, configurations.resource.globalVariables, rawPushToHistory],
+  )
 
   const [instanceData, setInstanceData] = useState<PLCInstance[]>([])
   const [editorCode, setEditorCode] = useState(() => parseResourceConfigurationToString(tasks, instanceData))

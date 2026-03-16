@@ -16,7 +16,7 @@ import { cn } from '../../../utils/cn'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { ColumnFiltersState } from '@tanstack/react-table'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
@@ -55,10 +55,29 @@ const VariablesEditor = () => {
       setPouVariables,
       updatePou,
       updateVariable,
-      pushToHistory,
     },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
+
+  const {
+    project: {
+      data: { pous: snapshotPous, configurations },
+    },
+    snapshotActions: { pushToHistory: rawPushToHistory },
+  } = useOpenPLCStore()
+
+  const pushToHistory = useCallback(
+    (pouName: string) => {
+      const pou = snapshotPous.find((p) => p.name === pouName)
+      if (!pou) return
+      rawPushToHistory(pouName, {
+        variables: pou.interface?.variables ?? [],
+        body: pou.body.value,
+        globalVariables: configurations.resource.globalVariables,
+      })
+    },
+    [snapshotPous, configurations.resource.globalVariables, rawPushToHistory],
+  )
 
   /**
    * Table data and column filters states to keep track of the table data and column filters

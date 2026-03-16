@@ -1,10 +1,13 @@
-import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import * as Popover from '@radix-ui/react-popover'
+import { useEffect, useRef, useState } from 'react'
+
+import { PLCVariable } from '../../../../../middleware/shared/ports'
 import { useDebugger } from '../../../../../middleware/shared/providers'
+import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useOpenPLCStore } from '../../../../store'
 import { RungLadderState } from '../../../../store/slices/ladder'
-import { PLCVariable } from '../../../../../middleware/shared/ports'
 import { cn } from '../../../../utils/cn'
+import { getLiteralType } from '../../../../utils/keywords'
 import {
   floatToBuffer,
   getVariableTypeInfo,
@@ -14,16 +17,15 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../../../../utils/variable-types'
-import { useEffect, useRef, useState } from 'react'
-
-import { Label } from '../../label'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { Label } from '../../label'
+import { DebugValueBadge } from '../debug-value-badge'
+import { VariablesBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges, validateVariableType } from './utils'
-import { VariablesBlockAutoComplete } from './autocomplete'
-import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables, VariableNode, VariableProps } from './utils/types'
 import { DEFAULT_VARIABLE_HEIGHT, DEFAULT_VARIABLE_WIDTH } from './utils/constants'
+import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables, VariableNode, VariableProps } from './utils/types'
 
 const VariableElement = (block: VariableProps) => {
   const { id, data } = block
@@ -51,6 +53,7 @@ const VariableElement = (block: VariableProps) => {
       focus: () => void
       isFocused: boolean
       selectedVariable: { positionInArray: number; variableName: string }
+      triggerSubmit?: () => void
     }
   >(null)
 
@@ -194,14 +197,22 @@ const VariableElement = (block: VariableProps) => {
 
     // For variable nodes (block pins), allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types
-    let variable: PLCVariable | { name: string } | undefined = ((pou.interface?.variables ?? []) as PLCVariable[]).find(
+    let variable: PLCVariable | { name: string } | undefined = ((pou.interface?.variables ?? [])).find(
       (v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase(),
     )
-    if (!variable) {
+    const literalTypes = getLiteralType(variableNameToSubmit)
+    if (variable) {
+      setIsAVariable(true)
+      setInputError(false)
+    } else if (literalTypes) {
       setIsAVariable(false)
+      const mismatchType = !literalTypes.includes(data.block.variableType.type.value)
+      setInputError(mismatchType)
       variable = { name: variableNameToSubmit }
     } else {
       setIsAVariable(true)
+      setInputError(true)
+      variable = { name: variableNameToSubmit }
     }
 
     updateNode({
@@ -218,7 +229,6 @@ const VariableElement = (block: VariableProps) => {
     })
 
     updateRelatedNode(rung, variableNode, variable as PLCVariable)
-    setInputError(false)
   }
 
   const onChangeHandler = () => {
@@ -443,8 +453,11 @@ const VariableElement = (block: VariableProps) => {
           onChange={onChangeHandler}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
-            if (e.key === 'Enter' && (autocompleteRef.current?.selectedVariable.positionInArray ?? -1) !== -1) {
+            if (e.key === 'Enter' && openAutocomplete) {
+              e.preventDefault()
+              autocompleteRef.current?.triggerSubmit?.()
               inputVariableRef.current?.blur({ submit: false })
+              return
             }
             setKeyPressedAtTextarea(e.key)
           }}
@@ -464,6 +477,14 @@ const VariableElement = (block: VariableProps) => {
               />
             </div>
           </div>
+        )}
+
+        {isDebuggerVisible && isAVariable && (
+          <DebugValueBadge
+            compositeKey={compositeKey}
+            variableType={variableType}
+            position={data.variant === 'output' ? 'left' : 'right'}
+          />
         )}
 
         {isDebuggerVisible && contextMenuPosition && (

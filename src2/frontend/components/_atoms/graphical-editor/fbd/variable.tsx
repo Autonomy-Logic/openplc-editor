@@ -1,7 +1,11 @@
+import * as Popover from '@radix-ui/react-popover'
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+import { resolveArrayVariableByName } from '../../../../../backend/shared/array-variable-utils'
+import { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useOpenPLCStore } from '../../../../store'
-import { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { cn } from '../../../../utils/cn'
 import {
   floatToBuffer,
@@ -12,19 +16,15 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../../../../utils/variable-types'
-import { resolveArrayVariableByName } from '../../../../../backend/shared/array-variable-utils'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import * as Popover from '@radix-ui/react-popover'
-
+import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
-import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { DebugValueBadge } from '../debug-value-badge'
 import { BlockVariant } from '../types/block'
 import { validateVariableType } from '../utils'
 import { FBDBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
-import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 import { BlockNode, VariableNode, VariableProps } from './utils'
 import {
   DEFAULT_VARIABLE_HEIGHT,
@@ -32,6 +32,7 @@ import {
   VARIABLE_ELEMENT_HEIGHT,
   VARIABLE_ELEMENT_SIZE,
 } from './utils/constants'
+import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 const VariableElement = (block: VariableProps) => {
   const { id, data, selected } = block
@@ -60,6 +61,7 @@ const VariableElement = (block: VariableProps) => {
       focus: () => void
       isFocused: boolean
       selectedVariable: { positionInArray: number; variableName: string }
+      triggerSubmit?: () => void
     }
   >(null)
 
@@ -500,8 +502,8 @@ const VariableElement = (block: VariableProps) => {
     // For variable nodes, allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types
     let variable: PLCVariable | { name: string } | undefined =
-      ((pou.interface?.variables ?? []) as PLCVariable[]).find((v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase()) ||
-      resolveArrayVariableByName((pou.interface?.variables ?? []) as PLCVariable[], variableNameToSubmit)
+      ((pou.interface?.variables ?? [])).find((v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase()) ||
+      resolveArrayVariableByName((pou.interface?.variables ?? []), variableNameToSubmit)
     if (!variable) {
       setIsAVariable(false)
       variable = { name: variableNameToSubmit }
@@ -613,8 +615,11 @@ const VariableElement = (block: VariableProps) => {
                   onFocus={onChangeHandler}
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
-                    if (e.key === 'Enter' && (autocompleteRef.current?.selectedVariable.positionInArray ?? -1) !== -1) {
+                    if (e.key === 'Enter' && openAutocomplete) {
+                      e.preventDefault()
+                      autocompleteRef.current?.triggerSubmit?.()
                       inputVariableRef.current?.blur({ submit: false })
+                      return
                     }
                     setKeyPressedAtTextarea(e.key)
                   }}
@@ -632,6 +637,14 @@ const VariableElement = (block: VariableProps) => {
                     keyPressed={keyPressedAtTextarea}
                   />
                 </div>
+              )}
+
+              {isDebuggerVisible && isAVariable && (
+                <DebugValueBadge
+                  compositeKey={getCompositeKey(data.variable.name)}
+                  variableType={variableType}
+                  position={data.variant === 'output-variable' ? 'left' : 'right'}
+                />
               )}
 
               {isDebuggerVisible && contextMenuPosition && (

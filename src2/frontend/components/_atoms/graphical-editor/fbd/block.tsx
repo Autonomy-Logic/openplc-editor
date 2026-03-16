@@ -1,14 +1,16 @@
-import { toast } from '../../../_features/[app]/toast/use-toast'
+import { FocusEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+
+import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
 import { useOpenPLCStore } from '../../../../store'
 import { checkVariableNameUnit } from '../../../../store/slices/project/validation/variables'
-import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { cn } from '../../../../utils/cn'
-import { FocusEvent, useEffect, useRef, useState } from 'react'
-
-import { v4 as uuidv4 } from 'uuid'
+import { toast } from '../../../_features/[app]/toast/use-toast'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { BlockOutputDebugBadges } from '../block-output-debug-badges'
 import { BlockVariant } from '../types/block'
 import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildBlockNode } from './buildNodes'
@@ -16,7 +18,6 @@ import { CustomHandle } from './handle'
 import { BasicNodeData, BlockNodeData, BlockProps } from './utils'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_HEIGHT, DEFAULT_BLOCK_TYPE, DEFAULT_BLOCK_WIDTH, } from './utils/constants'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
-import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
 
 export const BlockNodeElement = <T extends object>({
   nodeId,
@@ -344,6 +345,20 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     nodeId: id ?? '',
   })
 
+  // Outputs connected to variable nodes already show their own badge — skip those
+  const connectedOutputNames = useMemo(() => {
+    const names = new Set<string>()
+    if (!rung) return names
+    const outgoingEdges = rung.edges.filter((e) => e.source === id)
+    for (const edge of outgoingEdges) {
+      const targetNode = rung.nodes.find((n) => n.id === edge.target)
+      if (targetNode && typeof targetNode.type === 'string' && targetNode.type.includes('variable')) {
+        if (edge.sourceHandle) names.add(edge.sourceHandle)
+      }
+    }
+    return names
+  }, [rung, id])
+
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
       blur: ({ submit }: { submit?: boolean }) => void
@@ -456,9 +471,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const findMatchingVariable = () =>
       variables.all.find(
         (variable) =>
-          variable.name === variableNameToSubmit &&
+          variable.name.toLowerCase() === variableNameToSubmit.toLowerCase() &&
           variable.type.definition === 'derived' &&
-          variable.type.value === blockType,
+          variable.type.value.toLowerCase() === blockType.toLowerCase(),
       )
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) => {
@@ -477,7 +492,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const matchingVariable = findMatchingVariable()
 
     if (variableToLink) {
-      if (variableToLink.name === variableNameToSubmit) return
+      if (variableToLink.name.toLowerCase() === variableNameToSubmit.toLowerCase()) return
 
       if (matchingVariable && matchingVariable.id !== variableToLink.id) {
         variableToLink = matchingVariable
@@ -787,6 +802,17 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
+      <BlockOutputDebugBadges
+        blockType={(data.variant as BlockVariant).type}
+        blockName={(data.variant as BlockVariant).name}
+        blockVariableName={data.variable?.name ?? ''}
+        numericId={data.numericId}
+        outputVariables={(data.variant as BlockVariant).variables}
+        connectorStartY={DEFAULT_BLOCK_CONNECTOR_Y}
+        connectorOffsetY={DEFAULT_BLOCK_CONNECTOR_Y_OFFSET}
+        blockWidth={width ?? DEFAULT_BLOCK_WIDTH}
+        connectedOutputNames={connectedOutputNames}
+      />
     </div>
   )
 }

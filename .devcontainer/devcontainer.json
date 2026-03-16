@@ -8,9 +8,9 @@
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  "forwardPorts": [1212, 3000],
+  "forwardPorts": [1313, 3000],
   "portsAttributes": {
-    "1212": { "label": "Webpack Dev Server (Renderer)" },
+    "1313": { "label": "Webpack Dev Server (Renderer)" },
     "3000": { "label": "Electron Debug Port" }
   },
   "mounts": [
