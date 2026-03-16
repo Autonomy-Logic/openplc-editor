@@ -86,6 +86,7 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// @ts-expect-error TS1343 — this script runs via `npx tsx` (ESM), not through webpack
 const SRC2_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..')
 
 function collectFiles(dir: string, ext: string[]): string[] {
@@ -237,7 +238,7 @@ function validate(): Violation[] {
       const toLayer = getLayer(resolved)
       if (!toLayer) continue // Can't determine target layer — skip
 
-      const rule = LAYER_RULES[fromLayer]
+      const rule: LayerRule = LAYER_RULES[fromLayer]
       if (!rule.allowedDeps.includes(toLayer) && fromLayer !== toLayer && !exceptions.includes(toLayer)) {
         violations.push({
           file: relFile,

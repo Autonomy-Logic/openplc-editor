@@ -1,11 +1,12 @@
 import * as AccordionPrimitive from '@radix-ui/react-accordion'
 import { ChevronDownIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
+
+import { useOpenPLCStore } from '../../../../../../store'
+import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
-import { useOpenPLCStore } from '../../../../../../store'
-import { cn } from '../../../../../../utils/cn'
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 
 // UI-specific types for S7Comm buffer mapping.
 // These differ from the middleware S7CommDataBlock which uses startByte/endByte/iecAddresses.
@@ -26,7 +27,7 @@ type S7CommBufferType =
   | 'lint_output'
   | 'lint_memory'
 
-type S7CommDataBlock = {
+type S7CommUIDataBlock = {
   dbNumber: number
   description: string
   sizeBytes: number
@@ -142,9 +143,9 @@ AccordionContent.displayName = 'AccordionContent'
 interface DataBlockModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (dataBlock: S7CommDataBlock) => void
+  onSave: (dataBlock: S7CommUIDataBlock) => void
   existingDbNumbers: number[]
-  editingBlock?: S7CommDataBlock
+  editingBlock?: S7CommUIDataBlock
 }
 
 const DataBlockModal = ({ isOpen, onClose, onSave, existingDbNumbers, editingBlock }: DataBlockModalProps) => {
@@ -383,7 +384,7 @@ const S7CommServerEditor = () => {
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingBlock, setEditingBlock] = useState<S7CommDataBlock | undefined>(undefined)
+  const [editingBlock, setEditingBlock] = useState<S7CommUIDataBlock | undefined>(undefined)
 
   // Sync state from config
   useEffect(() => {
@@ -500,17 +501,19 @@ const S7CommServerEditor = () => {
     setIsModalOpen(true)
   }, [])
 
-  const handleEditDataBlock = useCallback((dataBlock: S7CommDataBlock) => {
+  const handleEditDataBlock = useCallback((dataBlock: S7CommUIDataBlock) => {
     setEditingBlock(dataBlock)
     setIsModalOpen(true)
   }, [])
 
   const handleSaveDataBlock = useCallback(
-    (dataBlock: S7CommDataBlock) => {
+    (dataBlock: S7CommUIDataBlock) => {
+      // Cast UI data block to middleware type — the extra UI fields (startBuffer, bitAddressing) are ignored by the store
+      const middlewareBlock = dataBlock as unknown as import('../../../../../../../middleware/shared/ports/types').S7CommDataBlock
       if (editingBlock) {
-        projectActions.updateS7CommDataBlock(serverName, editingBlock.dbNumber, dataBlock)
+        projectActions.updateS7CommDataBlock(serverName, editingBlock.dbNumber, middlewareBlock)
       } else {
-        projectActions.addS7CommDataBlock(serverName, dataBlock)
+        projectActions.addS7CommDataBlock(serverName, middlewareBlock)
       }
       handleFileAndWorkspaceSavedState(serverName)
     },
@@ -728,12 +731,12 @@ const S7CommServerEditor = () => {
                                 {db.sizeBytes} bytes
                               </td>
                               <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
-                                {BUFFER_TYPE_OPTIONS.find((o) => o.value === db.mapping.type)?.label || db.mapping.type}
+                                {BUFFER_TYPE_OPTIONS.find((o) => o.value === db.mapping.type)?.label || db.mapping.type || 'Unknown'}
                               </td>
                               <td className='px-3 py-2 text-right'>
                                 <div className='flex justify-end gap-2'>
                                   <button
-                                    onClick={() => handleEditDataBlock(db)}
+                                    onClick={() => handleEditDataBlock(db as unknown as S7CommUIDataBlock)}
                                     className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
                                     title='Edit'
                                   >

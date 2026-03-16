@@ -1,8 +1,9 @@
-import { StandardFunctionBlocks } from '../../../../../../data/library/standard-function-blocks'
-import type { VariableDTO } from '../../../../../../store/slices/project'
-import { PLCProject } from '../../../../../../../middleware/shared/ports/types'
 import { escapeRegExp } from 'lodash'
 import * as monaco from 'monaco-editor'
+
+import { PLCProject } from '../../../../../../../middleware/shared/ports/types'
+import { StandardFunctionBlocks } from '../../../../../../data/library/standard-function-blocks'
+import type { VariableDTO } from '../../../../../../store/slices/project'
 
 interface FBCompletionContext {
   isAfterDot: boolean
@@ -48,7 +49,7 @@ function analyzeContext(model: monaco.editor.ITextModel, position: monaco.IPosit
 function findFinalType(
   instancePath: string[],
   pouVariables: VariableDTO['data'][] = [],
-  customFBs: PLCProject['data']['pous'] = [],
+  customFBs: PLCProject['pous'] = [],
 ): { type: string; isStandard: boolean } | null {
   if (instancePath.length === 0) return null
 
@@ -114,7 +115,7 @@ function findFBType(
   code: string,
   instanceName: string,
   pouVariables: VariableDTO['data'][] = [],
-  customFBs: PLCProject['data']['pous'] = [],
+  customFBs: PLCProject['pous'] = [],
 ): { type: string; isStandard: boolean } | null {
   // First, check in POU variables (from the store)
   const pouVariable = pouVariables.find((variable) => {
@@ -197,7 +198,7 @@ function getStandardFBVariableSuggestions(
  */
 function getCustomFBVariableSuggestions(
   fbType: string,
-  customFBs: PLCProject['data']['pous'],
+  customFBs: PLCProject['pous'],
   range: monaco.IRange,
   editorName: string,
 ): monaco.languages.CompletionItem[] {
@@ -227,7 +228,7 @@ function getCustomFBVariableSuggestions(
  * Get custom function block instance suggestions (for direct FB calls)
  */
 function getCustomFBInstanceSuggestions(
-  customFBs: PLCProject['data']['pous'],
+  customFBs: PLCProject['pous'],
   range: monaco.IRange,
   editorName: string,
 ): monaco.languages.CompletionItem[] {
@@ -282,7 +283,7 @@ export const fbCompletion = ({
   range: monaco.IRange
   editorName: string
   pouVariables?: VariableDTO['data'][]
-  customFBs?: PLCProject['data']['pous']
+  customFBs?: PLCProject['pous']
 }) => {
   const context = analyzeContext(model, position)
   const code = model.getValue()

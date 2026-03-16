@@ -14,14 +14,14 @@
 
 import { useCallback, useRef } from 'react'
 
-import { useOpenPLCStore } from '../store'
-import { debugBridge } from '../services/debug/debug-bridge'
-import { parseDebugFile } from '../utils/debug-parser'
-import { hexToBytes } from '../utils/hex'
-import { buildDebugTree } from '../utils/debug-tree-builder'
-import { findInstanceName, buildDebugPathPrefix, type PLCInstanceMapping } from '../utils/debug-variable-finder'
-import { simulatorService } from '../services/simulator/simulator-service'
 import type { DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
+import { debugBridge } from '../services/debug/debug-bridge'
+import { simulatorService } from '../services/simulator/simulator-service'
+import { useOpenPLCStore } from '../store'
+import { parseDebugFile } from '../utils/debug-parser'
+import { buildDebugTree } from '../utils/debug-tree-builder'
+import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from '../utils/debug-variable-finder'
+import { hexToBytes } from '../utils/hex'
 
 export interface UseDebugSessionReturn {
   /** Parse debug.c, build trees/indexes, commit to store, activate debugger.

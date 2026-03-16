@@ -1,8 +1,11 @@
 import * as Popover from '@radix-ui/react-popover'
+import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
 import { DeviceTransferIcon } from '../../../assets/icons/interface/DeviceTransfer'
+import { DuplicateIcon } from '../../../assets/icons/interface/Duplicate'
 import { MoreOptionsIcon } from '../../../assets/icons/interface/MoreOptions'
 import { PencilIcon } from '../../../assets/icons/interface/Pencil'
 import { ArrayIcon } from '../../../assets/icons/project/Array'
@@ -15,23 +18,20 @@ import { FunctionIcon } from '../../../assets/icons/project/Function'
 import { FunctionBlockIcon } from '../../../assets/icons/project/FunctionBlock'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
+import { OrchestratorIcon } from '../../../assets/icons/project/Orchestrator'
 import { PLCIcon } from '../../../assets/icons/project/PLC'
 import { ProgramIcon } from '../../../assets/icons/project/Program'
 import { PythonIcon } from '../../../assets/icons/project/Python'
 import { RemoteDeviceIcon } from '../../../assets/icons/project/RemoteDevice'
 import { ResourceIcon } from '../../../assets/icons/project/Resource'
+import { ServerIcon } from '../../../assets/icons/project/Server'
 import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
-import { ServerIcon } from '../../../assets/icons/project/Server'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
-import { OrchestratorIcon } from '../../../assets/icons/project/Orchestrator'
-import { DuplicateIcon } from '../../../assets/icons/interface/Duplicate'
 import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
 import { isUnsaved, unsavedLabel } from '../../../utils/unsaved-label'
-import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
 import { toast } from '../../_features/[app]/toast/use-toast'
 
 const pousAllLanguages = ['il', 'st', 'python', 'cpp', 'ld', 'sfc', 'fbd'] as const
@@ -323,7 +323,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     setSelectedProjectTreeLeaf({ label, type: leafType })
   }
 
-  const handleRenameFile = async (newLabel: string) => {
+  const handleRenameFile = (newLabel: string) => {
     setIsEditing(false)
 
     if (!isAPou && !isDatatype && !isServer && !isRemoteDevice) {
@@ -345,39 +345,39 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
 
     if (isAPou) {
-      const res = await renamePou(label, newLabel)
-      if (!res.success) {
+      const res = renamePou(label, newLabel)
+      if (!res.ok) {
         setNewLabel(label || '')
       }
       return
     }
 
     if (isDatatype) {
-      const res = await renameDatatype(label, newLabel)
-      if (!res.success) {
+      const res = renameDatatype(label, newLabel)
+      if (!res.ok) {
         setNewLabel(label || '')
       }
       return
     }
 
     if (isServer) {
-      const res = await renameServer(label, newLabel)
-      if (!res.success) {
+      const res = renameServer(label, newLabel)
+      if (!res.ok) {
         setNewLabel(label || '')
       }
       return
     }
 
     if (isRemoteDevice) {
-      const res = await renameRemoteDevice(label, newLabel)
-      if (!res.success) {
+      const res = renameRemoteDevice(label, newLabel)
+      if (!res.ok) {
         setNewLabel(label || '')
       }
       return
     }
   }
 
-  const handleDuplicateFile = async () => {
+  const handleDuplicateFile = () => {
     if (!isAPou && !isDatatype) {
       toast({
         title: 'Error',
@@ -397,12 +397,12 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
 
     if (isAPou) {
-      await duplicatePou(label)
+      duplicatePou(label, `${label}_copy`)
       return
     }
 
     if (isDatatype) {
-      await duplicateDatatype(label)
+      duplicateDatatype(label, `${label}_copy`)
       return
     }
 

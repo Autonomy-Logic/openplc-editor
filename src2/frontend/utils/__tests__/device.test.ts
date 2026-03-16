@@ -1,9 +1,9 @@
 import {
+  getExpectedRuntimeVersion,
   isArduinoTarget,
   isOpenPLCRuntimeTarget,
-  isSimulatorTarget,
-  getExpectedRuntimeVersion,
   isOpenPLCRuntimeV4Target,
+  isSimulatorTarget,
   validateRuntimeVersion,
 } from '../device'
 

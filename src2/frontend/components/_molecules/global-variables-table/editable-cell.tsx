@@ -1,22 +1,22 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import type { CellContext, RowData } from '@tanstack/react-table'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import type { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
 import { pinSelectors, remoteDeviceSelectors } from '../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../store'
 import type { ProjectResponse } from '../../../store/slices/project'
+import { cn } from '../../../utils/cn'
+import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
 import { buildRemoteDeviceOptionGroups } from '../../../utils/remote-device-options'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
   type ReferenceImpactAnalysis,
 } from '../../../utils/variable-references'
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { cn } from '../../../utils/cn'
-import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
-import type { CellContext, RowData } from '@tanstack/react-table'
-import { useCallback, useEffect, useRef, useState } from 'react'
-
+import { GenericComboboxCell } from '../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { HighlightedText } from '../../_atoms/highlighted-text'
 import { InputWithRef } from '../../_atoms/input'
-import { GenericComboboxCell } from '../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../rename-impact-modal'
 
@@ -28,7 +28,7 @@ declare module '@tanstack/react-table' {
   }
 }
 
-type IEditableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
+type IEditableCellProps = CellContext<PLCGlobalVariable, unknown> & { editable?: boolean }
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
   const initialValue = getValue<string>()
   const { toast } = useToast()

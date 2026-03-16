@@ -1,10 +1,10 @@
-import { StopIcon } from '../../../assets/icons/interface/Stop'
-import { cn } from '../../../utils/cn'
-import { useOpenPLCStore } from '../../../store'
-import type { RuntimeConnection } from '../../../store/slices/device/types'
-import { useCompiler, useRuntime, useSimulator, useDebugger } from '../../../../middleware/shared/providers'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useCompiler, useDebugger,useRuntime, useSimulator } from '../../../../middleware/shared/providers'
+import { StopIcon } from '../../../assets/icons/interface/Stop'
+import { useOpenPLCStore } from '../../../store'
+import type { RuntimeConnection } from '../../../store/slices/device/types'
+import { cn } from '../../../utils/cn'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
 import { DownloadButton } from '../../_molecules/workspace-activity-bar/default/download'
@@ -104,7 +104,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               .trim()
               .split('\n')
               .forEach((line) => {
-                addLog({ id: crypto.randomUUID(), level: event.level ?? 'info', message: line })
+                addLog({ id: crypto.randomUUID(), level: (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info', message: line })
               })
           }
           if (event.firmwarePath && isSimulatorBoard) {

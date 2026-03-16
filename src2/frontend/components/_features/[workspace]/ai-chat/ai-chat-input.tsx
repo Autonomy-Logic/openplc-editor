@@ -1,5 +1,6 @@
-import { useOpenPLCStore } from '../../../../store'
 import { useCallback, useRef, useState } from 'react'
+
+import { useOpenPLCStore } from '../../../../store'
 
 type AIChatInputProps = {
   onSend: (message: string) => void

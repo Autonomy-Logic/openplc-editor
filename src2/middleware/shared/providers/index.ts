@@ -1,15 +1,15 @@
 export { PlatformProvider, usePlatform } from './platform-context'
 export {
-  useCompiler,
-  useRuntime,
-  useDebugger,
-  useSimulator,
-  useProject,
-  useDevice,
-  useSystem,
-  useWindow,
   useAccelerator,
-  useTheme,
   useCapabilities,
+  useCompiler,
+  useDebugger,
+  useDevice,
+  useProject,
+  useRuntime,
+  useSimulator,
+  useSystem,
+  useTheme,
+  useWindow,
 } from './platform-context'
 export type { PlatformPorts } from './types'

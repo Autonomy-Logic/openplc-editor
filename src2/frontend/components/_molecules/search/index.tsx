@@ -1,6 +1,6 @@
-import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { ComponentPropsWithoutRef, createRef } from 'react'
 
+import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { InputWithRef } from '../../_atoms/input'
 
 type ISearchProps = ComponentPropsWithoutRef<'form'>

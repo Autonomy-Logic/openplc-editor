@@ -1,7 +1,8 @@
 
+import { ComponentProps } from 'react'
+
 import { IconStyles } from '../../../data/constants/icon-styles'
 import { cn } from '../../../utils/cn'
-import { ComponentProps } from 'react'
 
 type IProps = ComponentProps<'svg'> & {
   size?: 'sm' | 'md' | 'lg'

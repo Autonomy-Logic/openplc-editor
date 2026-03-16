@@ -1,9 +1,9 @@
-import type { CustomHandleProps } from '../../../../../../../_atoms/graphical-editor/ladder/handle'
-import type { RungLadderState } from '../../../../../../../../store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
-import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
+import type { RungLadderState } from '../../../../../../../../store/slices'
+import type { CustomHandleProps } from '../../../../../../../_atoms/graphical-editor/ladder/handle'
 import { BasicNodeData, ParallelNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
 
 /**
  * Get the previous element by searching with edge in the rung

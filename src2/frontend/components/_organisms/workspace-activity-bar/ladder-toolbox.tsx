@@ -1,7 +1,6 @@
 import { useOpenPLCStore } from '../../../store'
-import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { cn } from '../../../utils/cn'
-
+import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default/exit'
 import { BlockButton } from '../../_molecules/workspace-activity-bar/ladder/block'

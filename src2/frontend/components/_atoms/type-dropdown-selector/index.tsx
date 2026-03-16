@@ -1,8 +1,8 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import _ from 'lodash'
 import { useState } from 'react'
 
+import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { InputWithRef } from '../input'
 
 type TypeDropdownSelectorProps = {

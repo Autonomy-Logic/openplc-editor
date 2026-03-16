@@ -1,9 +1,9 @@
 import { createColumnHelper } from '@tanstack/react-table'
 
-import { GenericTable } from '../../../../_atoms/generic-table'
+import type { PLCDataType, PLCStructureVariable } from '../../../../../../middleware/shared/ports/types'
 import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../../../store'
-import type { PLCDataType, PLCStructureVariable } from '../../../../../../middleware/shared/ports/types'
+import { GenericTable } from '../../../../_atoms/generic-table'
 import { EditableInitialValueCell, EditableNameCell } from './editable-cell'
 import { SelectableTypeCell } from './selectable-cell'
 
@@ -41,7 +41,7 @@ const columns = [
 ]
 
 type PLCStructureTableProps = {
-  tableData: PLCStructureDatatype['variable']
+  tableData: PLCStructureVariable[]
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }

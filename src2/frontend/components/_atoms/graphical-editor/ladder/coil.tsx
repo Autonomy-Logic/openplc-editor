@@ -1,16 +1,18 @@
-import { useOpenPLCStore } from '../../../../store'
-import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
-import { useDebugger } from '../../../../../middleware/shared/providers'
-import { cn } from '../../../../utils/cn'
-import { useEffect, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
+import { useEffect, useRef, useState } from 'react'
 
+import { useDebugger } from '../../../../../middleware/shared/providers'
+import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
+import { useOpenPLCStore } from '../../../../store'
+import { cn } from '../../../../utils/cn'
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { VariablesBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
-import type { BasicNodeData, CoilProps } from './utils/types'
-import { VariablesBlockAutoComplete } from './autocomplete'
 import { DEFAULT_COIL_BLOCK_HEIGHT, DEFAULT_COIL_BLOCK_WIDTH, DEFAULT_COIL_TYPES } from './utils/constants'
+import type { BasicNodeData, CoilProps } from './utils/types'
+
+export type { CoilNode } from './utils/types'
 
 export const Coil = (block: CoilProps) => {
   const { selected, data, id } = block

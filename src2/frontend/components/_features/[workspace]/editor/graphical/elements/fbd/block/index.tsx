@@ -1,24 +1,11 @@
 import * as Switch from '@radix-ui/react-switch'
-import { InputWithRef } from '../../../../../../../_atoms/input'
-import {
-  BlockNode,
-  BlockNodeData,
-  BlockNodeElement,
-} from '../../../../../../../_atoms/graphical-editor/fbd/block'
-import { buildBlockNode } from '../../../../../../../_atoms/graphical-editor/fbd/buildNodes'
-import { getBlockSize } from '../../../../../../../_atoms/graphical-editor/fbd/utils/utils'
-import { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/fbd/utils/types'
-import { getFBDPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/fbd/utils/utils'
-import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
-import {
-  getBlockDocumentation,
-  getVariableRestrictionType,
-} from '../../../../../../../_atoms/graphical-editor/utils'
-import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
+import { useEffect, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+
+import { PLCPou } from '../../../../../../../../../middleware/shared/ports'
 import { useOpenPLCStore } from '../../../../../../../../store'
 import type { EditorModel } from '../../../../../../../../store/slices/editor'
 import type { LibraryState } from '../../../../../../../../store/slices/library'
-import { PLCPou } from '../../../../../../../../../middleware/shared/ports'
 import { cn } from '../../../../../../../../utils/cn'
 import {
   assembleVariables,
@@ -28,9 +15,22 @@ import {
   rebuildVariablesForInputCount,
   removeLastExtensibleInput,
 } from '../../../../../../../../utils/PLC/extensible-block-variables'
-import { useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
-
+import {
+  BlockNode,
+  BlockNodeData,
+  BlockNodeElement,
+} from '../../../../../../../_atoms/graphical-editor/fbd/block'
+import { buildBlockNode } from '../../../../../../../_atoms/graphical-editor/fbd/buildNodes'
+import { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/fbd/utils/types'
+import { getBlockSize } from '../../../../../../../_atoms/graphical-editor/fbd/utils/utils'
+import { getFBDPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/fbd/utils/utils'
+import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
+import {
+  getBlockDocumentation,
+  getVariableRestrictionType,
+} from '../../../../../../../_atoms/graphical-editor/utils'
+import { InputWithRef } from '../../../../../../../_atoms/input'
+import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
 import ArrowButtonGroup from '../../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 

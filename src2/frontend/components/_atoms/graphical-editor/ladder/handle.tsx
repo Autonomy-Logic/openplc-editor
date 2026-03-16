@@ -1,5 +1,6 @@
-import { cn } from '../../../../utils/cn'
 import { Handle, HandleProps } from '@xyflow/react'
+
+import { cn } from '../../../../utils/cn'
 
 export type CustomHandleProps = HandleProps & {
   glbPosition: {

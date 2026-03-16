@@ -1,26 +1,11 @@
 import * as Switch from '@radix-ui/react-switch'
-import { InputWithRef } from '../../../../../../../_atoms/input'
-import {
-  BlockNode,
-  BlockNodeData,
-  BlockNodeElement,
-  BlockVariant as LadderBlockVariant,
-} from '../../../../../../../_atoms/graphical-editor/ladder/block'
-import { buildBlockNode } from '../../../../../../../_atoms/graphical-editor/ladder/buildNodes'
-import { getBlockSize } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
-import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
-import { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
-import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
-import {
-  getBlockDocumentation,
-  getVariableRestrictionType,
-} from '../../../../../../../_atoms/graphical-editor/utils'
-import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
-import { updateDiagramElementsPosition } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import { useEffect, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+
+import { PLCPou } from '../../../../../../../../../middleware/shared/ports'
 import { useOpenPLCStore } from '../../../../../../../../store'
 import type { EditorModel } from '../../../../../../../../store/slices/editor'
 import type { LibraryState } from '../../../../../../../../store/slices/library'
-import { PLCPou } from '../../../../../../../../../middleware/shared/ports'
 import { cn } from '../../../../../../../../utils/cn'
 import {
   assembleVariables,
@@ -30,9 +15,24 @@ import {
   rebuildVariablesForInputCount,
   removeLastExtensibleInput,
 } from '../../../../../../../../utils/PLC/extensible-block-variables'
-import { useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
-
+import {
+  BlockNode,
+  BlockNodeData,
+  BlockNodeElement,
+  BlockVariant as LadderBlockVariant,
+} from '../../../../../../../_atoms/graphical-editor/ladder/block'
+import { buildBlockNode } from '../../../../../../../_atoms/graphical-editor/ladder/buildNodes'
+import { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import { getBlockSize } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
+import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
+import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
+import {
+  getBlockDocumentation,
+  getVariableRestrictionType,
+} from '../../../../../../../_atoms/graphical-editor/utils'
+import { InputWithRef } from '../../../../../../../_atoms/input'
+import { updateDiagramElementsPosition } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
 import ArrowButtonGroup from '../../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 

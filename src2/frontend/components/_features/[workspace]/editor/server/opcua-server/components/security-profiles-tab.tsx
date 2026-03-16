@@ -1,8 +1,8 @@
-import { useOpenPLCStore } from '../../../../../../../store'
-import type { OpcUaSecurityProfile, OpcUaServerConfig } from '../../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../../utils/cn'
 import { useCallback, useMemo, useState } from 'react'
 
+import type { OpcUaSecurityProfile, OpcUaServerConfig } from '../../../../../../../../middleware/shared/ports/types'
+import { useOpenPLCStore } from '../../../../../../../store'
+import { cn } from '../../../../../../../utils/cn'
 import { SecurityProfileModal } from './security-profile-modal'
 
 interface SecurityProfilesTabProps {

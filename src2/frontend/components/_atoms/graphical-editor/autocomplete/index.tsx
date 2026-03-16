@@ -1,8 +1,9 @@
 import * as Popover from '@radix-ui/react-popover'
-import { PlusIcon } from '../../../../assets/icons/interface/Plus'
-import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../utils/cn'
 import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+
+import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { PlusIcon } from '../../../../assets/icons/interface/Plus'
+import { cn } from '../../../../utils/cn'
 
 export type GraphicalEditorAutocompleteProps = ComponentPropsWithRef<'div'> & {
   isOpen?: boolean

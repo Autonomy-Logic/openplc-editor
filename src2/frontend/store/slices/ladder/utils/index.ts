@@ -1,3 +1,6 @@
+import { Edge, Node } from '@xyflow/react'
+
+import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { nodesBuilder } from '../../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type {
   BlockNode,
@@ -10,9 +13,6 @@ import type {
 } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { generateNumericUUID } from '../../../../utils/generate-uuid'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
-import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
-import { Edge, Node } from '@xyflow/react'
-
 import { RungLadderState } from '../types'
 
 export const duplicateLadderRung = (editorName: string, rung: RungLadderState): RungLadderState => {

@@ -1,8 +1,9 @@
-import { InputField } from '../../../../../../_molecules/input-field'
-import { SelectField } from '../../../../../../_molecules/select-field'
+import { ComponentPropsWithoutRef } from 'react'
+
 import { useOpenPLCStore } from '../../../../../../../store'
 import { cn } from '../../../../../../../utils/cn'
-import { ComponentPropsWithoutRef } from 'react'
+import { InputField } from '../../../../../../_molecules/input-field'
+import { SelectField } from '../../../../../../_molecules/select-field'
 
 type RTUSettingsProps = ComponentPropsWithoutRef<'div'> & {
   userEnabled?: boolean
@@ -10,11 +11,11 @@ type RTUSettingsProps = ComponentPropsWithoutRef<'div'> & {
 
 const RTUSettings = ({ userEnabled, ...props }: RTUSettingsProps) => {
   const {
-    deviceAvailableOptions: { availableRTUInterfaces, availableRTUBaudrates },
+    deviceAvailableOptions: { availableRTUInterfaces, availableRTUBaudRates },
     deviceDefinitions: {
       configuration: {
         communicationConfiguration: {
-          modbusRTU: { rtuInterface, rtuBaudrate },
+          modbusRTU: { rtuInterface, rtuBaudRate },
         },
       },
     },
@@ -44,8 +45,8 @@ const RTUSettings = ({ userEnabled, ...props }: RTUSettingsProps) => {
         <SelectField
           ariaLabel='RTU Baudrate select'
           // setSelectedOption={setSelectBaudRateOption}
-          selectedOption={rtuBaudrate}
-          options={availableRTUBaudrates}
+          selectedOption={rtuBaudRate}
+          options={availableRTUBaudRates}
           label='Baudrate'
         />
         <InputField

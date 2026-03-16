@@ -1,7 +1,8 @@
-import { RefreshIcon } from '../../../../../../../assets/icons/interface/Refresh'
-import { SelectField } from '../../../../../../_molecules/select-field'
-import { useOpenPLCStore } from '../../../../../../../store'
 import { useCallback, useMemo, useState } from 'react'
+
+import { RefreshIcon } from '../../../../../../../assets/icons/interface/Refresh'
+import { useOpenPLCStore } from '../../../../../../../store'
+import { SelectField } from '../../../../../../_molecules/select-field'
 
 const BoardConfiguration = () => {
   const [isPressed, setIsPressed] = useState(false)
@@ -60,7 +61,7 @@ const BoardConfiguration = () => {
         </div>
         <div id='programming-port-selection' className='flex items-center justify-center gap-1'>
           <SelectField
-            options={availableCommunicationPorts}
+            options={availableCommunicationPorts.map((p) => p.name)}
             setSelectedOption={setCommunicationPort}
             label='Programming Port'
             placeholder={communicationPort}

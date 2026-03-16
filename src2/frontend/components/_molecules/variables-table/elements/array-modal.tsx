@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { z } from 'zod'
 
-import { DimensionsModal } from '../../../_atoms/dimensions-modal'
-import { toast } from '../../../_features/[app]/toast/use-toast'
+import { baseTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
 import { useOpenPLCStore } from '../../../../store'
 import { arrayValidation } from '../../../../store/slices/project/validation/variables'
-import { baseTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
+import { DimensionsModal } from '../../../_atoms/dimensions-modal'
+import { toast } from '../../../_features/[app]/toast/use-toast'
 
 type BaseType = z.infer<typeof baseTypeSchema>
 
@@ -92,7 +92,7 @@ export const ArrayModal = ({
       ?.interface?.variables?.find((variable) => variable.name === variableName)
     if (!variable) return
 
-    if (variable.type.definition === 'array') {
+    if (variable.type.definition === 'array' && variable.type.data) {
       setDimensions(variable.type.data.dimensions.map((dimension) => dimension.dimension))
       setTypeValue(variable.type.data.baseType.value)
     } else {
@@ -130,7 +130,7 @@ export const ArrayModal = ({
     setSelectedInput((index + 1).toString())
   }
 
-  const handleUpdateType = (value: BaseType) => {
+  const handleUpdateType = (value: string) => {
     setTypeValue(value)
   }
 
@@ -175,7 +175,6 @@ export const ArrayModal = ({
           definition: 'array',
           value: formatArrayName,
           data: {
-            // @ts-expect-error - This is a valid operation. This is being fixed.
             baseType: {
               definition: isBaseType ? 'base-type' : 'user-data-type',
               value: typeValue,

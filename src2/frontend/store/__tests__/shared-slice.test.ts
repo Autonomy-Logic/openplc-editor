@@ -324,7 +324,7 @@ describe('createSharedSlice', () => {
             return { ...p, interface: { variables: p.interface?.variables ?? [], returnType: undefined } }
           }
           return p
-        }) as PLCPou[]
+        })
         store.getState().projectActions.setPous(pous)
 
         const result = store.getState().pouActions.duplicate('FnNoRet', 'FnNoRetCopy')

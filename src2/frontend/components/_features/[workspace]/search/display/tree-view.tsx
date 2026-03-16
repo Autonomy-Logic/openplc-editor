@@ -1,13 +1,16 @@
-import { ArrayIcon } from '../../../../../assets/icons/project/Array'
+import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
+
 import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
 import { CommentIcon } from '../../../../../assets/icons/interface/Comment'
+import ZapIcon from '../../../../../assets/icons/interface/Zap'
+import { ArrayIcon } from '../../../../../assets/icons/project/Array'
 import { CppIcon } from '../../../../../assets/icons/project/Cpp'
 import { DataTypeIcon } from '../../../../../assets/icons/project/DataType'
 import { DeviceIcon } from '../../../../../assets/icons/project/Device'
 import { EnumIcon } from '../../../../../assets/icons/project/Enum'
 import { FBDIcon } from '../../../../../assets/icons/project/FBD'
-import { FunctionBlockIcon } from '../../../../../assets/icons/project/FunctionBlock'
 import { FunctionIcon } from '../../../../../assets/icons/project/Function'
+import { FunctionBlockIcon } from '../../../../../assets/icons/project/FunctionBlock'
 import { ILIcon } from '../../../../../assets/icons/project/IL'
 import { LDIcon } from '../../../../../assets/icons/project/LD'
 import { PLCIcon } from '../../../../../assets/icons/project/PLC'
@@ -17,10 +20,8 @@ import { ResourceIcon } from '../../../../../assets/icons/project/Resource'
 import { SFCIcon } from '../../../../../assets/icons/project/SFC'
 import { STIcon } from '../../../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../../../assets/icons/project/Structure'
-import ZapIcon from '../../../../../assets/icons/interface/Zap'
 import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
-import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
 type IProjectSearchTreeRootProps = ComponentPropsWithoutRef<'ul'> & {
   label: string
@@ -83,7 +84,7 @@ const BranchSources = {
 const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSearchTreeBranchProps) => {
   const {
     project: {
-      data: { pous, dataTypes, configuration },
+      data: { pous, dataTypes, configurations },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
@@ -92,7 +93,7 @@ const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSea
   const hasAssociatedPou: boolean =
     pous.some((pou) => pou.pouType === branchTarget) ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
-    (branchTarget === 'resource' && configuration !== null)
+    (branchTarget === 'resource' && configurations !== null)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   return (
@@ -234,7 +235,7 @@ const ProjectSearchTreeLeaf = ({ leafLang, label, ...res }: IProjectSearchTreeLe
     },
   } = useOpenPLCStore()
   const [leafIsSelected, setLeafIsSelected] = useState<boolean>(false)
-  const leafSource = LeafSources[leafLang as keyof typeof LeafSources] ?? LeafSources.st
+  const leafSource = LeafSources[leafLang] ?? LeafSources.st
   const { LeafIcon } = leafSource
 
   const handleLeafSelection = useCallback(() => setLeafIsSelected(!leafIsSelected), [leafIsSelected])
@@ -263,13 +264,13 @@ const ProjectSearchTreeLeaf = ({ leafLang, label, ...res }: IProjectSearchTreeLe
 const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: IProjectSearchTreeLeafProps) => {
   const {
     project: {
-      data: { pous, configuration },
+      data: { pous, configurations },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasVariable: boolean = pous.some((pou) => (pou.interface?.variables ?? []).length > 0) || configuration !== null
+  const hasVariable: boolean = pous.some((pou) => (pou.interface?.variables ?? []).length > 0) || configurations !== null
   useEffect(() => setBranchIsOpen(hasVariable), [hasVariable])
 
   return (

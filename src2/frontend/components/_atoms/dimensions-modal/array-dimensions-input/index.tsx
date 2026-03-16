@@ -1,5 +1,6 @@
-import { cn } from '../../../../utils/cn'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
+
+import { cn } from '../../../../utils/cn'
 
 type ArrayDimensionsComponentProps = ComponentPropsWithoutRef<'div'> & {
   id: string

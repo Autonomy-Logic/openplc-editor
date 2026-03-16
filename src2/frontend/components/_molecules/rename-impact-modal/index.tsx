@@ -1,5 +1,4 @@
 import type { ReferenceImpactAnalysis } from '../../../utils/variable-reference-types'
-
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../modal'
 
 type RenameImpactModalProps = {

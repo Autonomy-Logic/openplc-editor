@@ -1,15 +1,20 @@
 import './configs'
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
-import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
-import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
-import type { PLCVariable, PLCPou } from '../../../../../../middleware/shared/ports/types'
-import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
-import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
+import type { PLCPou,PLCVariable } from '../../../../../../middleware/shared/ports/types'
+import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
+import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
+import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
+import { parseHybridPouFromString,parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
+import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
+import { AIInlineCompletionProvider } from './ai-completion/ai-inline-completion-provider'
+import { AIConsentModal } from './ai-consent-modal'
+import { AIStatusIndicator } from './ai-status-indicator'
 import {
   arduinoApiCompletion,
   cppSignatureHelp,
@@ -31,9 +36,6 @@ import {
 import { parsePouToStText } from './drag-and-drop/st'
 import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
 import { applyThemeNow, ensureOpenplcThemes } from './theme-utils'
-import { AIInlineCompletionProvider } from './ai-completion/ai-inline-completion-provider'
-import { AIConsentModal } from './ai-consent-modal'
-import { AIStatusIndicator } from './ai-status-indicator'
 
 type monacoEditorProps = {
   path: string
@@ -252,29 +254,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     if (!projectPort.watchFile || !projectPort.onFileExternalChange) return
 
-    // Import dynamically to avoid bundling editor-only utils on web
-    let getExtensionFromLanguage: ((lang: string) => string) | null = null
-    let getFolderFromPouType: ((type: string) => string) | null = null
-    let parseTextualPouFromString: ((...args: unknown[]) => { data: { body: { value: unknown } } }) | null = null
-    let parseHybridPouFromString: ((...args: unknown[]) => { data: { body: { value: unknown } } }) | null = null
-
-    try {
-      // These utils exist in the editor's src/ tree; they're accessed at runtime only
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pouExtensions = require('@root/utils/PLC/pou-file-extensions')
-      getExtensionFromLanguage = pouExtensions.getExtensionFromLanguage
-      getFolderFromPouType = pouExtensions.getFolderFromPouType
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pouParser = require('@root/utils/PLC/pou-text-parser')
-      parseTextualPouFromString = pouParser.parseTextualPouFromString
-      parseHybridPouFromString = pouParser.parseHybridPouFromString
-    } catch {
-      // Not available in this platform
-      return
-    }
-
-    if (!getExtensionFromLanguage || !getFolderFromPouType) return
-
     const actualExtension = getExtensionFromLanguage(language)
     const pouFolder = getFolderFromPouType(pou.pouType)
     const fullPath = `${currentProjectPath}/pous/${pouFolder}/${name}${actualExtension}`
@@ -297,12 +276,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       try {
         const result = await projectPort.readFileContent(watchedFilePathRef.current)
 
-        if (result.success && result.content && parseTextualPouFromString && parseHybridPouFromString) {
+        if (result.success && result.content) {
           const parsedPou =
             language === 'st' || language === 'il'
               ? parseTextualPouFromString(result.content, language, pou.pouType)
               : parseHybridPouFromString(result.content, language, pou.pouType)
-          const newBodyValue = typeof parsedPou.data.body.value === 'string' ? parsedPou.data.body.value : ''
+          const newBodyValue = typeof parsedPou.body.value === 'string' ? parsedPou.body.value : ''
 
           setLocalText(newBodyValue)
           updatePou({ name, content: { language, value: newBodyValue } })
@@ -421,7 +400,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     (range: monaco.IRange) => {
       const suggestions = tableVariablesCompletion({
         range,
-        variables: pouVariables as PLCVariable[],
+        variables: pouVariables,
       }).suggestions
       const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
       const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
@@ -434,7 +413,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     (range: monaco.IRange) => {
       const suggestions = tableGlobalVariablesCompletion({
         range,
-        variables: globalVariables as PLCVariable[],
+        variables: globalVariables,
       }).suggestions
       const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
       const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
@@ -829,11 +808,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         if (!currentProjectPath) return
 
         try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { getExtensionFromLanguage, getFolderFromPouType } = require('@root/utils/PLC/pou-file-extensions')
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { parseTextualPouFromString, parseHybridPouFromString } = require('@root/utils/PLC/pou-text-parser')
-
           const actualExtension = getExtensionFromLanguage(language)
           const pouFolder = getFolderFromPouType(currentPou.pouType)
           const fullPath = `${currentProjectPath}/pous/${pouFolder}/${name}${actualExtension}`
@@ -845,7 +819,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
               language === 'st' || language === 'il'
                 ? parseTextualPouFromString(result.content, language, currentPou.pouType)
                 : parseHybridPouFromString(result.content, language, currentPou.pouType)
-            const newBodyValue = typeof parsedPou.data.body.value === 'string' ? parsedPou.data.body.value : ''
+            const newBodyValue = typeof parsedPou.body.value === 'string' ? parsedPou.body.value : ''
 
             const currentBodyValue = typeof currentPou.body.value === 'string' ? currentPou.body.value : ''
             if (newBodyValue !== currentBodyValue) {

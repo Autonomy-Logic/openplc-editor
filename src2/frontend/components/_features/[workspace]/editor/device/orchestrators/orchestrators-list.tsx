@@ -1,14 +1,16 @@
-import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
-import { cn } from '../../../../../../utils/cn'
 import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { type DeviceResponse,listOrchestratorsRequest, type OrchestratorResponse,  } from '../../../../../../api/queries/orchestrators'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
-import { useOpenPLCStore } from '../../../../../../store'
-import { runtimeGetUsersInfo, runtimeLogout } from '../../../../../../services/api/runtime-api'
-import { RuntimeLoginModal, RuntimeCreateUserModal } from '../../../../../_organisms/modals'
-import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
-import { listOrchestratorsRequest, type OrchestratorResponse, type DeviceResponse, } from '../../../../../../api/queries/orchestrators'
+import { runtimeGetUsersInfo, runtimeLogout } from '../../../../../../services/api/runtime-api'
+import { useOpenPLCStore } from '../../../../../../store'
+import { cn } from '../../../../../../utils/cn'
+import { isDev } from '../../../../../../utils/get-env'
+import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
+import { RuntimeCreateUserModal,RuntimeLoginModal } from '../../../../../_organisms/modals'
+import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
@@ -212,7 +214,7 @@ const OrchestratorsList = () => {
       console.error('[Orchestrators] Edge API fetch failed', error)
 
       // In development mode, fall back to mock data for local testing
-      if (import.meta.env?.DEV) {
+      if (isDev()) {
         console.info('[Orchestrators] Using mock data for development')
         await new Promise((resolve) => setTimeout(resolve, 300))
         setOrchestrators(MOCK_ORCHESTRATORS)

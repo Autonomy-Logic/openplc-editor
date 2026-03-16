@@ -1,8 +1,8 @@
 import { CellContext } from '@tanstack/react-table'
 import { useCallback, useEffect, useState } from 'react'
 
-import { boardSelectors, pinSelectors } from '../../../hooks/use-store-selectors'
 import type { DevicePin } from '../../../../middleware/shared/ports/types'
+import { boardSelectors, pinSelectors } from '../../../hooks/use-store-selectors'
 import { GenericComboboxCell } from '../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { toast } from '../../_features/[app]/toast/use-toast'
 

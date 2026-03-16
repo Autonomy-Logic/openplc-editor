@@ -1,5 +1,6 @@
-import { LogoIcon } from '../../../assets/icons/interface/Logo'
 import { useEffect, useState } from 'react'
+
+import { LogoIcon } from '../../../assets/icons/interface/Logo'
 
 const ResolutionWarning = () => {
   const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth)

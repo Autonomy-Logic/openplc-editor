@@ -1,10 +1,10 @@
-import type { PLCInstance } from '../../../../middleware/shared/ports/types'
-import { useOpenPLCStore } from '../../../store'
-import { cn } from '../../../utils/cn'
 import { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
+import type { PLCInstance } from '../../../../middleware/shared/ports/types'
+import { useOpenPLCStore } from '../../../store'
+import { cn } from '../../../utils/cn'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 
 type ISelectableCellProps = CellContext<PLCInstance, unknown> & { editable?: boolean }

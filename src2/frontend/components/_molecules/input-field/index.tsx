@@ -1,5 +1,4 @@
 import { cn } from '../../../utils/cn'
-
 import { InputWithRef } from '../../_atoms/input'
 
 type InputFieldProps = {

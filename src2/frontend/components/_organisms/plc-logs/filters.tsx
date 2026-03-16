@@ -1,10 +1,11 @@
-import { useOpenPLCStore } from '../../../store'
-import { TimestampFormat } from '../../../store/slices/console/types'
-import { isV4Logs, RuntimeLogEntry, RuntimeLogLevel } from '../../../../middleware/shared/ports'
-import { cn } from '../../../utils/cn'
-import formatTimestamp from '../../../utils/format-timestamp'
 import { ChevronDown, Download, Filter, Search, X } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+import { isV4Logs, RuntimeLogEntry, RuntimeLogLevel } from '../../../../middleware/shared/ports'
+import { useOpenPLCStore } from '../../../store'
+import { TimestampFormat } from '../../../store/slices/console/types'
+import { cn } from '../../../utils/cn'
+import formatTimestamp from '../../../utils/format-timestamp'
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error'
 type ExportFormat = 'txt' | 'csv' | 'json'

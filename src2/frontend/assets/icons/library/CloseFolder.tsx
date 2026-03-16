@@ -1,5 +1,6 @@
-import { cn } from '../../../utils/cn'
 import { ComponentProps } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 type ILibraryCloseFolderIconProps = ComponentProps<'svg'> & {
   size: 'sm' | 'md' | 'lg'

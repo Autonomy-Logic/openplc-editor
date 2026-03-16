@@ -1,8 +1,9 @@
+import { Node } from '@xyflow/react'
+
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { FBD_VARIABLE_NODE_TYPES } from '../../components/_atoms/graphical-editor/fbd/utils/constants'
 import type { FBDFlowActions, FBDFlowState } from '../../store/slices/fbd/types'
 import type { LadderFlowActions, LadderFlowState } from '../../store/slices/ladder/types'
-import { FBD_VARIABLE_NODE_TYPES } from '../../components/_atoms/graphical-editor/fbd/utils/constants'
-import { Node } from '@xyflow/react'
 
 const getBlockExpectedType = (node: Node): string => {
   const variant = (node.data as { variant?: { name?: string } }).variant

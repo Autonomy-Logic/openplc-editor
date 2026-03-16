@@ -1,5 +1,6 @@
-import { cn } from '../../../utils/cn'
 import { ComponentPropsWithoutRef } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 const CloseIcon = (props: ComponentPropsWithoutRef<'svg'>) => {
   const { className, ...rest } = props

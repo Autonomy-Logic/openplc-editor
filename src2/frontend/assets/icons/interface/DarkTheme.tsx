@@ -1,7 +1,6 @@
-import { cn } from '../../../utils/cn'
-
-import { IIconProps } from '../Types/iconTypes'
 import { IconStyles } from '../../../data/constants/icon-styles'
+import { cn } from '../../../utils/cn'
+import { IIconProps } from '../Types/iconTypes'
 
 export const DarkThemeIcon = (props: IIconProps) => {
   const { className, size = 'md', ...res } = props

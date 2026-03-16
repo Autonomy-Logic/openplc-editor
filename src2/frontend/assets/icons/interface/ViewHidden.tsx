@@ -1,7 +1,6 @@
-import { cn } from '../../../utils/cn'
-
-import { IIconProps } from '../Types/iconTypes'
 import { IconStyles } from '../../../data/constants/icon-styles'
+import { cn } from '../../../utils/cn'
+import { IIconProps } from '../Types/iconTypes'
 
 export default function ViewHiddenIcon(props: IIconProps) {
   const { stroke, className, size = 'sm', ...res } = props

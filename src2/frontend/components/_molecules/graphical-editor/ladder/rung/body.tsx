@@ -1,20 +1,20 @@
-import { getVariableRestrictionType } from '../../../../_atoms/graphical-editor/utils'
-import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
-import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
-import { useOpenPLCStore } from '../../../../../store'
-import type { RungLadderState } from '../../../../../store/slices/ladder'
-import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../utils/cn'
-import { getLadderBlockType, isLadderBlockDrag } from '../../../../../utils/graphical/drag-detection'
-import { syncNodesWithVariables } from '../../../../../utils/graphical/sync-nodes-with-variables'
-import { getFunctionBlockVariablesToCleanup } from '../../../../../utils/graphical/get-function-block-variables-to-cleanup'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
 import { differenceWith, isEqual, parseInt } from 'lodash'
 import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
+import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
+import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
+import { useOpenPLCStore } from '../../../../../store'
+import type { RungLadderState } from '../../../../../store/slices/ladder'
+import { cn } from '../../../../../utils/cn'
+import { getLadderBlockType, isLadderBlockDrag } from '../../../../../utils/graphical/drag-detection'
+import { getFunctionBlockVariablesToCleanup } from '../../../../../utils/graphical/get-function-block-variables-to-cleanup'
+import { syncNodesWithVariables } from '../../../../../utils/graphical/sync-nodes-with-variables'
 import { customNodeTypes } from '../../../../_atoms/graphical-editor/ladder'
 import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
+import { getVariableRestrictionType } from '../../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { addNewElement, removeElements } from './ladder-utils/elements'
@@ -480,7 +480,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
           type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
         }))
         if (pou.pouType === 'function') {
-          const variable = getVariableRestrictionType(pou.interface?.returnType)
+          const variable = getVariableRestrictionType(pou.interface?.returnType ?? '')
           variables.push({
             id: 'OUT',
             name: 'OUT',
@@ -568,7 +568,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       let variables: PLCVariable[] = []
       if (pouRef) variables = [...(pouRef.interface?.variables ?? [])] as PLCVariable[]
 
-      const variablesToCleanup = getFunctionBlockVariablesToCleanup(blockNodes, variables, ladderFlows)
+      const currentFlow = ladderFlows.find((f) => f.name === editor.meta.name)
+      const allRungs = currentFlow?.rungs ?? []
+      const variablesToCleanup = getFunctionBlockVariablesToCleanup(blockNodes, allRungs, variables)
 
       variablesToCleanup.forEach((variableName) => {
         deleteVariable({

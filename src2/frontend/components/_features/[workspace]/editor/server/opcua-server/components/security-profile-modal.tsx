@@ -1,12 +1,13 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+
+import type { OpcUaSecurityProfile } from '../../../../../../../../middleware/shared/ports/types'
+import { cn } from '../../../../../../../utils/cn'
 import { Checkbox } from '../../../../../../_atoms/checkbox'
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../../_molecules/modal'
-import type { OpcUaSecurityProfile } from '../../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../../utils/cn'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 type SecurityPolicy = 'None' | 'Basic128Rsa15' | 'Basic256' | 'Basic256Sha256'
 type SecurityMode = 'None' | 'Sign' | 'SignAndEncrypt'

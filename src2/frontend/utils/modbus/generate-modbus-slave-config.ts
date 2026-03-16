@@ -75,20 +75,20 @@ export const generateModbusSlaveConfig = (servers: PLCServer[] | undefined): str
     },
     buffer_mapping: {
       holding_registers: {
-        qw_count: bufferMapping.holdingRegisters.qwCount,
-        mw_count: bufferMapping.holdingRegisters.mwCount,
-        md_count: bufferMapping.holdingRegisters.mdCount,
-        ml_count: bufferMapping.holdingRegisters.mlCount,
+        qw_count: bufferMapping.holdingRegisters?.qwCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.qwCount,
+        mw_count: bufferMapping.holdingRegisters?.mwCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mwCount,
+        md_count: bufferMapping.holdingRegisters?.mdCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mdCount,
+        ml_count: bufferMapping.holdingRegisters?.mlCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mlCount,
       },
       coils: {
-        qx_bits: bufferMapping.coils.qxBits,
-        mx_bits: bufferMapping.coils.mxBits,
+        qx_bits: bufferMapping.coils?.qxBits ?? DEFAULT_BUFFER_MAPPING.coils.qxBits,
+        mx_bits: bufferMapping.coils?.mxBits ?? DEFAULT_BUFFER_MAPPING.coils.mxBits,
       },
       discrete_inputs: {
-        ix_bits: bufferMapping.discreteInputs.ixBits,
+        ix_bits: bufferMapping.discreteInputs?.ixBits ?? DEFAULT_BUFFER_MAPPING.discreteInputs.ixBits,
       },
       input_registers: {
-        iw_count: bufferMapping.inputRegisters.iwCount,
+        iw_count: bufferMapping.inputRegisters?.iwCount ?? DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount,
       },
     },
   }

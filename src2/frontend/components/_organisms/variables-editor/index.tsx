@@ -1,30 +1,30 @@
-import { MinusIcon } from '../../../assets/icons/interface/Minus'
-import { PlusIcon } from '../../../assets/icons/interface/Plus'
-import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
-import { TableIcon } from '../../../assets/icons/interface/TableIcon'
-import { useOpenPLCStore } from '../../../store'
-import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
-import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
-import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
-import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
-import { syncNodesWithVariables as syncNodesWithVariablesUtil, syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil, } from '../../../utils/graphical/sync-nodes-with-variables'
-import { findAllReferencesToVariable, propagateVariableRename, type ReferenceImpactAnalysis, } from '../../../utils/variable-references'
-import { baseTypes } from '../../../utils/plc-constants'
-import { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { cn } from '../../../utils/cn'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
-import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
+import { MinusIcon } from '../../../assets/icons/interface/Minus'
+import { PlusIcon } from '../../../assets/icons/interface/Plus'
+import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
+import { TableIcon } from '../../../assets/icons/interface/TableIcon'
+import { useOpenPLCStore } from '../../../store'
+import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
+import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
+import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
+import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
+import { cn } from '../../../utils/cn'
+import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
+import { syncNodesWithVariables as syncNodesWithVariablesUtil, syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil, } from '../../../utils/graphical/sync-nodes-with-variables'
+import { baseTypes } from '../../../utils/plc-constants'
+import { findAllReferencesToVariable, propagateVariableRename, type ReferenceImpactAnalysis, } from '../../../utils/variable-references'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
-import { VariablesTable } from '../../_molecules/variables-table'
 import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
 import { TypeChangeModal } from '../../_molecules/type-change-modal'
+import { VariablesTable } from '../../_molecules/variables-table'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
 const VariablesEditor = () => {
@@ -94,7 +94,7 @@ const VariablesEditor = () => {
     ) {
       return editor.variable.code
     }
-    return generateIecVariablesToString(tableData as PLCVariable[])
+    return generateIecVariablesToString(tableData)
   })
   const [parseError, setParseError] = useState<string | null>(null)
   const [pouDescription, setPouDescription] = useState<string>('')
@@ -167,7 +167,7 @@ const VariablesEditor = () => {
 
   useEffect(() => {
     if (editorVariables.display !== 'code') {
-      setEditorCode(generateIecVariablesToString(tableData as PLCVariable[]))
+      setEditorCode(generateIecVariablesToString(tableData))
     }
   }, [tableData, editorVariables.display])
 

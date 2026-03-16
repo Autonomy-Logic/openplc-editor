@@ -2,8 +2,8 @@ import * as Popover from '@radix-ui/react-popover'
 import { useState } from 'react'
 
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
-import { cn } from '../../../../utils/cn'
 import { useOpenPLCStore } from '../../../../store'
+import { cn } from '../../../../utils/cn'
 import { ElementCard } from './element-card'
 
 const CreatePLCElement = () => {

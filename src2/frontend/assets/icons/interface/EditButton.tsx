@@ -1,5 +1,6 @@
-import { cn } from '../../../utils/cn'
 import { ComponentPropsWithRef, forwardRef } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 type IEditButtonIconProps = ComponentPropsWithRef<'svg'> & {
   variant?: 'default' | 'primary' | 'secondary'

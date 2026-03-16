@@ -1,5 +1,4 @@
 export { createProjectSlice } from './slice'
-export { getVariableBasedOnRowIdOrVariableId } from './utils'
 export type {
   DataTypeDTO,
   InstanceDTO,
@@ -14,3 +13,4 @@ export type {
   TaskDTO,
   VariableDTO,
 } from './types'
+export { getVariableBasedOnRowIdOrVariableId } from './utils'

@@ -1,6 +1,5 @@
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
-
 import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
 
 export const ChatButton = () => {

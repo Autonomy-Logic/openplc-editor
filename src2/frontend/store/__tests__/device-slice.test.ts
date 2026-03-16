@@ -1,6 +1,6 @@
-import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../../../middleware/shared/ports/types'
 import { createStore } from 'zustand/vanilla'
 
+import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../../../middleware/shared/ports/types'
 import { createDeviceSlice, DeviceSlice } from '../slices/device'
 import { defaultDeviceConfiguration } from '../slices/device/data/constants'
 import * as pinsValidation from '../slices/device/validation/pins'

@@ -1,7 +1,8 @@
+import type { Node } from '@xyflow/react'
+
+import type { PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 import type { FBDFlowState } from '../store/slices/fbd'
 import type { LadderFlowState } from '../store/slices/ladder'
-import type { PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import type { Node } from '@xyflow/react'
 
 export type VariableReferenceLocation = {
   pouName: string
@@ -222,7 +223,7 @@ function searchWithinPou(
     pou.body.language === 'python' ||
     pou.body.language === 'cpp'
   ) {
-    const bodyValue = pou.body.value
+    const bodyValue = pou.body.value as string
     const lines = bodyValue.split('\n')
     const variablePattern = new RegExp(`\\b${variableName}\\b`, 'gi')
 

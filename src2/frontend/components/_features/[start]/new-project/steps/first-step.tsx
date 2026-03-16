@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 
-import { BookIcon } from '../../../../../assets/icons/interface/Book'
-import { FolderIcon } from '../../../../../assets/icons/interface/Folder'
-import { cn } from '../../../../../utils/cn'
 import { useEffect, useState } from 'react'
 import { SubmitHandler, useForm } from 'react-hook-form'
 
+import { BookIcon } from '../../../../../assets/icons/interface/Book'
+import { FolderIcon } from '../../../../../assets/icons/interface/Folder'
+import { cn } from '../../../../../utils/cn'
 import { NewProjectStore } from '../store'
 
 const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void }) => {

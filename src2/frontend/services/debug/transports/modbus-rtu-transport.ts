@@ -9,9 +9,9 @@
  * VirtualSerialPort + ModbusRtuClient pair (MainProcessBridge lines 894-909).
  */
 
-import type { DebugTransport, DebugTransportResult, DebugSetResult } from '../types'
+import { bytesToHex,hexToBytes } from '../../../utils/hex'
 import { simulatorService } from '../../simulator'
-import { hexToBytes, bytesToHex } from '../../../utils/hex'
+import type { DebugSetResult,DebugTransport, DebugTransportResult } from '../types'
 
 export class ModbusRtuTransport implements DebugTransport {
   async connect(): Promise<void> {

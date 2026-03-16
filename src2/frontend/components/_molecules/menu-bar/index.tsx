@@ -1,7 +1,6 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 
 import { cn } from '../../../utils/cn'
-
 import { MenuClasses } from './constants'
 import { DisplayMenu } from './menus/display'
 import { EditMenu } from './menus/edit'

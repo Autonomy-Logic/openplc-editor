@@ -1,15 +1,15 @@
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
+import { baseTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
+import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
+import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
+import { useOpenPLCStore } from '../../../../store'
 import { InputWithRef } from '../../../_atoms/input'
 import TableActions from '../../../_atoms/table-actions'
 import { TypeDropdownSelector } from '../../../_atoms/type-dropdown-selector'
-import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
-import { useOpenPLCStore } from '../../../../store'
-import { baseTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
-import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
 import { DimensionsTable } from './table'
 
 type PLCArrayDatatype = Extract<PLCDataType, { derivation: 'array' }>

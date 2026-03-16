@@ -1,9 +1,8 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { resolveAIInitialState } from '../../../../backend/shared/ai'
 import type { AIFeatureConfig } from '../../../../backend/shared/ai'
-
+import { resolveAIInitialState } from '../../../../backend/shared/ai'
 import type { AISlice } from './types'
 import { MAX_CONVERSATION_MESSAGES } from './types'
 

@@ -1,9 +1,10 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import type { OpcUaTrustedCertificate } from '../../../../../../../../middleware/shared/ports/types'
+import { cn } from '../../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../../_molecules/modal'
-import type { OpcUaTrustedCertificate } from '../../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../../utils/cn'
-import { useCallback, useEffect, useMemo, useState } from 'react'
 
 interface CertificateModalProps {
   isOpen: boolean

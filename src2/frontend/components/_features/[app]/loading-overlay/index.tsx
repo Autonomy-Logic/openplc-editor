@@ -1,7 +1,9 @@
 import { useOpenPLCStore } from '../../../../store'
 
 export const LoadingOverlay = () => {
-  const { isProjectLoading, projectLoadingMessage } = useOpenPLCStore()
+  const {
+    workspace: { isProjectLoading, projectLoadingMessage },
+  } = useOpenPLCStore()
 
   if (!isProjectLoading) {
     return null

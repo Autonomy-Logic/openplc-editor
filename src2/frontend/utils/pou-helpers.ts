@@ -3,8 +3,8 @@
  * Used by both the debugger and OPC-UA config generator.
  */
 
-import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
+import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 
 /**
  * Variable definition from a POU or library FB.

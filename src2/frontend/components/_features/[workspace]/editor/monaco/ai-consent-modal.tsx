@@ -1,5 +1,5 @@
-import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { useOpenPLCStore } from '../../../../../store'
+import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 
 const AIConsentModal = () => {
   const {

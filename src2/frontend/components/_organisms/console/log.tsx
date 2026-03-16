@@ -1,6 +1,7 @@
-import { cn } from '../../../utils/cn'
 import { Copy } from 'lucide-react'
 import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 const messageClasses = {
   debug: 'text-neutral-500 dark:text-neutral-400',

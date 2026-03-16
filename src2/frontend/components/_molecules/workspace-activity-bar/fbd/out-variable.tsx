@@ -1,6 +1,7 @@
+import { ComponentPropsWithoutRef } from 'react'
+
 import VariableOutIcon from '../../../../assets/icons/project/fbd/VariableOut'
 import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
-import { ComponentPropsWithoutRef } from 'react'
 
 export const OutVariable = ({ onDragStart, onDragEnd }: ComponentPropsWithoutRef<'div'>) => {
   return (

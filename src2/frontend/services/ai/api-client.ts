@@ -1,6 +1,7 @@
+import { getEnv } from '../../utils/get-env'
 import type { AIChatRequest, AICompleteRequest, AICreditStatus, AISSEEvent, AITelemetryEvent } from './types'
 
-const AI_BASE_URL = `${import.meta.env?.VITE_EDGE_API_URL ?? ''}/ai`
+const AI_BASE_URL = `${getEnv('VITE_EDGE_API_URL') ?? ''}/ai`
 
 /**
  * Parse a single SSE line into an AISSEEvent.

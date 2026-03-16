@@ -1,6 +1,7 @@
-import { Button } from '../../../_atoms/buttons/default'
-import { cn } from '../../../../utils/cn'
 import { ComponentPropsWithoutRef } from 'react'
+
+import { cn } from '../../../../utils/cn'
+import { Button } from '../../../_atoms/buttons/default'
 
 type IMenuRootProps = ComponentPropsWithoutRef<'div'>
 const MenuRoot = (props: IMenuRootProps) => {

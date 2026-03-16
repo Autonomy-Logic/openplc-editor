@@ -1,5 +1,6 @@
-import { cn } from '../../../../utils/cn'
 import { ComponentPropsWithRef, ReactNode } from 'react'
+
+import { cn } from '../../../../utils/cn'
 
 type ButtonProps = ComponentPropsWithRef<'button'> & {
   ghosted?: boolean

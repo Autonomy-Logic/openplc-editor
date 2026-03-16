@@ -6,9 +6,8 @@
  * can use these utilities to traverse variable hierarchies consistently.
  */
 
-import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-
+import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import type { DebugVariableEntry } from './debug-parser'
 import {
   buildDebugPath,

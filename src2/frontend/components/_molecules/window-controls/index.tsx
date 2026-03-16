@@ -1,10 +1,10 @@
+import { useWindow } from '../../../../middleware/shared/providers'
 import { CloseWindowIcon } from '../../../assets/icons/window-controls/Close'
 import { ExitMaximizeIcon } from '../../../assets/icons/window-controls/Exit-Maximize'
 import { MaximizeIcon } from '../../../assets/icons/window-controls/Maximize'
 import { MinimizeIcon } from '../../../assets/icons/window-controls/Minimize'
-import { WindowControlButton } from '../../_atoms/buttons/window-control'
 import { useOpenPLCStore } from '../../../store'
-import { useWindow } from '../../../../middleware/shared/providers'
+import { WindowControlButton } from '../../_atoms/buttons/window-control'
 
 const MinimizeButton = () => {
   const windowPort = useWindow()

@@ -1,4 +1,5 @@
 import type * as monaco from 'monaco-editor'
+
 import { darkThemeData, lightThemeData } from './configs/themes/openplc/openplc'
 
 const instancesWithOpenplcThemes = new WeakSet<object>()

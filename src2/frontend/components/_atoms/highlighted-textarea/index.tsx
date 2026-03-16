@@ -1,8 +1,9 @@
+import type { ChangeEvent, ComponentPropsWithRef, UIEvent } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+
 import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
 import { cn } from '../../../utils/cn'
-import type { ChangeEvent, ComponentPropsWithRef, UIEvent } from 'react'
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
 type HighlightedTextAreaProps = ComponentPropsWithRef<'textarea'> & {
   textAreaValue: string

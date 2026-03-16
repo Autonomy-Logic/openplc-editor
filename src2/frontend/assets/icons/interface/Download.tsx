@@ -1,6 +1,5 @@
-import { cn } from '../../../utils/cn'
-
 import { IconStyles } from '../../../data/constants/icon-styles'
+import { cn } from '../../../utils/cn'
 import { IIconProps } from '../Types/iconTypes'
 
 export const DownloadIcon = (props: IIconProps) => {

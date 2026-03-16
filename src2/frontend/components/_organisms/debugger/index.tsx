@@ -1,10 +1,10 @@
 import * as Select from '@radix-ui/react-select'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { PauseIcon } from '../../../assets/icons/interface/Pause'
 import { PlayIcon } from '../../../assets/icons/interface/Play'
 import { useOpenPLCStore } from '../../../store'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
 import { Button } from '../../_atoms/buttons/default'
 import { LineChart } from '../../_molecules/charts/line-chart'
 
@@ -181,7 +181,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
           {renderSeries.series.map(({ name, points, isBool }) => (
             <LineChart
               key={name}
-              data={points}
+              data={points.map((p) => ({ x: p.t, y: p.y }))}
               isBool={isBool}
               range={range}
               now={renderSeries.now}

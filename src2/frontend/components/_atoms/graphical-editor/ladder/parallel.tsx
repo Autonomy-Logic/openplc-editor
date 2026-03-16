@@ -1,8 +1,7 @@
 import { cn } from '../../../../utils/cn'
-
 import { CustomHandle } from './handle'
-import type { ParallelProps } from './utils/types'
 import { DEFAULT_PARALLEL_HEIGHT, DEFAULT_PARALLEL_WIDTH } from './utils/constants'
+import type { ParallelProps } from './utils/types'
 
 export const Parallel = ({ selected, data }: ParallelProps) => {
   return (

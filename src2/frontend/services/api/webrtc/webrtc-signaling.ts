@@ -9,6 +9,7 @@
  * - Server-Sent Events for receiving ICE candidates from the agent
  */
 
+import { getEnv } from '../../../utils/get-env'
 import { api } from '../axios'
 
 export interface HttpResponse<T> {
@@ -111,7 +112,7 @@ export function subscribeToIceCandidates(
   onCandidate: (event: IceCandidateEvent) => void,
   onError?: (error: Event) => void,
 ): () => void {
-  const baseURL = import.meta.env?.VITE_EDGE_API_URL || 'http://localhost:3333'
+  const baseURL = getEnv('VITE_EDGE_API_URL') || 'http://localhost:3333'
   const sseUrl = `${baseURL}/webrtc/sessions/${sessionId}/events`
 
   const eventSource = new EventSource(sseUrl, {

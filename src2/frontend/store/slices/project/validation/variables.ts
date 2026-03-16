@@ -1,5 +1,4 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
-
 import type { ProjectResponse } from '../types'
 
 /**

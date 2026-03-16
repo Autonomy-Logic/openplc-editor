@@ -1,12 +1,12 @@
-import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '../../_molecules/project-tree'
-import { FolderIcon } from '../../../assets/icons/interface/Folder'
-import { useOpenPLCStore } from '../../../store'
-import type { TabsProps } from '../../../store/slices/tabs'
-import { CreateEditorObjectFromTab } from '../../../store/slices/tabs/utils'
-import { extractSearchQuery } from '../../../store/slices/search/utils'
 import { useEffect, useState } from 'react'
 
+import { FolderIcon } from '../../../assets/icons/interface/Folder'
+import { useOpenPLCStore } from '../../../store'
+import { extractSearchQuery } from '../../../store/slices/search/utils'
+import type { TabsProps } from '../../../store/slices/tabs'
+import { CreateEditorObjectFromTab } from '../../../store/slices/tabs/utils'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
+import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '../../_molecules/project-tree'
 
 type PouLeafLang = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 
@@ -167,7 +167,6 @@ const Project = () => {
               .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='arr'
                   leafType='data-type'
@@ -186,7 +185,6 @@ const Project = () => {
               .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='enum'
                   leafType='data-type'
@@ -206,7 +204,6 @@ const Project = () => {
               .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='str'
                   leafType='data-type'

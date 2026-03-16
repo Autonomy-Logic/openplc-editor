@@ -22,6 +22,8 @@ import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_HEIGHT, DEFAULT_BLOCK_TYPE, DEFAULT_BLOCK_WIDTH, } from './utils/constants'
 import type { BasicNodeData, BlockNodeData, BlockProps, BlockVariant, LadderBlockConnectedVariables, } from './utils/types'
 
+export type { BlockNode, BlockNodeData, BlockVariant } from './utils/types'
+
 export const BlockNodeElement = <T extends object>({
   nodeId,
   data,
@@ -449,21 +451,29 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if (!node || !rung) {
-      console.error('Node or rung not found for ID:', id)
+    const {
+      variables: freshVariables,
+      rung: freshRung,
+      node: freshNode,
+    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      nodeId: id,
+      variableName: data.variable.name,
+    })
+
+    if (!freshNode || !freshRung) {
       return
     }
 
-    const variable = variables.selected
+    const variable = freshVariables.selected
     if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    const nodeVariable = (node.data as BasicNodeData).variable
+    const nodeVariable = (freshNode.data as BasicNodeData).variable
     const nodeVariableName = nodeVariable.name.toLowerCase()
     const selectedVariableName = variable.name.toLowerCase()
-    const nodeBlockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+    const nodeBlockType = (freshNode.data as BlockNodeData<BlockVariant>).variant.name
 
     if (nodeVariableName === selectedVariableName) {
       const typeMatches =
@@ -478,12 +488,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (nodeVariable.name !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
-          rungId: rung.id,
-          nodeId: node.id,
+          rungId: freshRung.id,
+          nodeId: freshNode.id,
           node: {
-            ...node,
+            ...freshNode,
             data: {
-              ...node.data,
+              ...freshNode.data,
               variable,
             },
           },

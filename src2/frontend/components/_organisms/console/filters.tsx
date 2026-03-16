@@ -1,9 +1,10 @@
+import { ChevronDown, Download, Filter, Search, X } from 'lucide-react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import { useOpenPLCStore } from '../../../store'
 import { TimestampFormat } from '../../../store/slices/console/types'
 import { cn } from '../../../utils/cn'
 import formatTimestamp from '../../../utils/format-timestamp'
-import { ChevronDown, Download, Filter, Search, X } from 'lucide-react'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error'
 type ExportFormat = 'txt' | 'csv' | 'json'
@@ -123,7 +124,7 @@ const ConsoleFilters = memo(() => {
       if (filters.searchTerm) {
         const searchLower = filters.searchTerm.toLowerCase()
         const messageMatch = log.message.toLowerCase().includes(searchLower)
-        const timestampMatch = log.tstamp.toISOString().includes(searchLower)
+        const timestampMatch = log.tstamp?.toISOString().includes(searchLower) ?? false
         if (!messageMatch && !timestampMatch) return false
       }
       return true
@@ -141,7 +142,7 @@ const ConsoleFilters = memo(() => {
         case 'json':
           content = JSON.stringify(
             filteredLogs.map((log) => ({
-              timestamp: log.tstamp.toISOString(),
+              timestamp: (log.tstamp ?? new Date()).toISOString(),
               level: log.level || 'info',
               message: log.message,
             })),
@@ -156,7 +157,7 @@ const ConsoleFilters = memo(() => {
           content += filteredLogs
             .map((log) => {
               const escapedMessage = `"${log.message.replace(/"/g, '""')}"`
-              return `${log.tstamp.toISOString()},${log.level || 'info'},${escapedMessage}`
+              return `${(log.tstamp ?? new Date()).toISOString()},${log.level || 'info'},${escapedMessage}`
             })
             .join('\n')
           mimeType = 'text/csv'
@@ -166,7 +167,7 @@ const ConsoleFilters = memo(() => {
           content = filteredLogs
             .map(
               (log) =>
-                `[${formatTimestamp(log.tstamp, 'full')}] [${(log.level || 'info').toUpperCase()}]: ${log.message}`,
+                `[${formatTimestamp(log.tstamp ?? new Date(), 'full')}] [${(log.level || 'info').toUpperCase()}]: ${log.message}`,
             )
             .join('\n')
           mimeType = 'text/plain'

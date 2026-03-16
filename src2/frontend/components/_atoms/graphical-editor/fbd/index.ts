@@ -1,8 +1,8 @@
 import * as blockNode from './block'
+import * as buildNodes from './buildNodes'
 import * as commentNode from './comment'
 import * as connectionNode from './connection'
 import * as variableNode from './variable'
-import * as buildNodes from './buildNodes'
 
 export const customNodeTypes = {
   block: blockNode.Block,

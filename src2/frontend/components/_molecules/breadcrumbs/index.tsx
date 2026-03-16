@@ -1,18 +1,19 @@
 /**
  * This need to be refactored!!!!
  */
-import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
-import { ConfigIcon } from '../../../assets/icons/interface/Config'
-import { PLCIcon } from '../../../assets/icons/project/PLC'
-import { LanguageIcon, LanguageIconType } from '../../../data/constants/language-icons'
-import { PouIcon, PouIconType } from '../../../data/constants/pou-icons'
-import { ArrayIcon } from '../../../assets/icons/project/Array'
-import { EnumIcon } from '../../../assets/icons/project/Enum'
-import { StructureIcon } from '../../../assets/icons/project/Structure'
-import { useOpenPLCStore } from '../../../store'
-import type { FbInstanceInfo } from '../../../../middleware/shared/ports'
 import { startCase } from 'lodash'
 import { ComponentProps, useCallback, useMemo } from 'react'
+
+import type { FbInstanceInfo } from '../../../../middleware/shared/ports'
+import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
+import { ConfigIcon } from '../../../assets/icons/interface/Config'
+import { ArrayIcon } from '../../../assets/icons/project/Array'
+import { EnumIcon } from '../../../assets/icons/project/Enum'
+import { PLCIcon } from '../../../assets/icons/project/PLC'
+import { StructureIcon } from '../../../assets/icons/project/Structure'
+import { LanguageIcon, LanguageIconType } from '../../../data/constants/language-icons'
+import { PouIcon, PouIconType } from '../../../data/constants/pou-icons'
+import { useOpenPLCStore } from '../../../store'
 
 type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
   crumb: {

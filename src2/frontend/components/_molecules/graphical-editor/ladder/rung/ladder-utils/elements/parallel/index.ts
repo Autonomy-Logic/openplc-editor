@@ -1,3 +1,7 @@
+import type { Edge, Node } from '@xyflow/react'
+
+import type { RungLadderState } from '../../../../../../../../store/slices'
+import { newGraphicalEditorNodeID } from '../../../../../../../../utils/new-graphical-editor-node-id'
 import { checkIfElementIsNode, nodesBuilder } from '../../../../../../../_atoms/graphical-editor/ladder'
 import type {
   BasicNodeData,
@@ -5,10 +9,6 @@ import type {
   ParallelNode,
   PlaceholderNode,
 } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
-import type { RungLadderState } from '../../../../../../../../store/slices'
-import type { Edge, Node } from '@xyflow/react'
-
-import { newGraphicalEditorNodeID } from '../../../../../../../../utils/new-graphical-editor-node-id'
 import { buildEdge, connectNodes, removeEdge } from '../../edges'
 import { buildGenericNode, isNodeOfType, removeNode } from '../../nodes'
 import { removePlaceholderElements } from '../placeholder'

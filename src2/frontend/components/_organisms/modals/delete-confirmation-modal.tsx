@@ -1,10 +1,9 @@
-import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
-import { toast } from '../../_features/[app]/toast/use-toast'
-import { useOpenPLCStore } from '../../../store'
-import type { RungLadderState } from '../../../store/slices/ladder'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
-
+import { useOpenPLCStore } from '../../../store'
+import type { RungLadderState } from '../../../store/slices/ladder'
+import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
+import { toast } from '../../_features/[app]/toast/use-toast'
 import { Modal, ModalContent } from '../../_molecules/modal'
 
 type ConfirmDeleteElementProps = {
@@ -108,7 +107,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
           variableIndex = variables.findIndex((variable) => {
             if (variable.name.toLowerCase() !== variableData.name.toLowerCase()) return false
             if ('type' in variableData && variableData.type) {
-              return compareVariableTypes(variable.type, variableData.type as PLCVariable['type'])
+              return compareVariableTypes(variable.type, variableData.type)
             }
             return true
           })

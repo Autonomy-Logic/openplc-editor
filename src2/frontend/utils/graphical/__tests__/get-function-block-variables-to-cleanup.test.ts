@@ -1,6 +1,6 @@
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import type { Node } from '@xyflow/react'
 
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import {
   getFunctionBlockVariablesToCleanup,
   isFunctionBlockVariableInUse,

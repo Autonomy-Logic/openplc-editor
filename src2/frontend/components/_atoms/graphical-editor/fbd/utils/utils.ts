@@ -1,16 +1,16 @@
+import { Position } from '@xyflow/react'
+
+import { resolveArrayVariableByName } from '../../../../../../backend/shared/array-variable-utils'
+import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
+import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import type { EditorModel } from '../../../../../store/slices/editor'
 import type { FBDFlowType } from '../../../../../store/slices/fbd'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
-import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
-import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
-import { resolveArrayVariableByName } from '../../../../../../backend/shared/array-variable-utils'
-
-import { customNodeTypes } from '..'
-import type { BasicNodeData } from './types'
 import { BlockVariant } from '../../types/block'
-import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
+import { customNodeTypes } from '..'
 import { buildHandle } from '../handle'
-import { Position } from '@xyflow/react'
+import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
+import type { BasicNodeData } from './types'
 
 export const getFBDPouVariablesRungNodeAndEdges = (
   editor: EditorModel,
@@ -31,7 +31,7 @@ export const getFBDPouVariablesRungNodeAndEdges = (
   const rung = fbdFlows.find((flow) => flow.name === editor.meta.name)?.rung
   const node = rung?.nodes.find((node) => node.id === data.nodeId)
 
-  const variables: PLCVariable[] = (pou?.interface?.variables ?? []) as PLCVariable[]
+  const variables: PLCVariable[] = (pou?.interface?.variables ?? [])
   let variable = variables.find((variable) => {
     if (!node) return undefined
     switch (node.type as keyof typeof customNodeTypes) {

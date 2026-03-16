@@ -1,6 +1,6 @@
+import { useCapabilities } from '../../../../../middleware/shared/providers'
 import { OpenPLCIcon } from '../../../../assets/icons/oplc'
 import { useOpenPLCStore } from '../../../../store'
-import { useCapabilities } from '../../../../../middleware/shared/providers'
 import { cn } from '../../../../utils/cn'
 
 const TitleBarCenterSlot = () => {

@@ -1,5 +1,5 @@
-import formatTimestamp from '../format-timestamp'
 import type { TimestampFormat } from '../format-timestamp'
+import formatTimestamp from '../format-timestamp'
 
 describe('formatTimestamp', () => {
   it('returns "DD-MM-YY HH:MM:SS" when format is "full"', () => {

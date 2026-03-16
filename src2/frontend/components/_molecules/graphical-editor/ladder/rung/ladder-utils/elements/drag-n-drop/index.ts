@@ -1,7 +1,8 @@
-import type { RungLadderState } from '../../../../../../../../store/slices'
 import type { Edge, Node, ReactFlowInstance } from '@xyflow/react'
 import { toInteger } from 'lodash'
 
+import type { RungLadderState } from '../../../../../../../../store/slices'
+import { PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { isNodeOfType } from '../../nodes'
 import { removeElement } from '..'
 import { updateDiagramElementsPosition } from '../diagram'
@@ -10,7 +11,6 @@ import { removePlaceholderElements } from '../placeholder'
 import { renderPlaceholderElements, searchNearestPlaceholder } from '../placeholder'
 import { appendSerialConnection } from '../serial'
 import { removeVariableBlock } from '../variable-block'
-import { PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 
 export const onElementDragStart = (rung: RungLadderState, draggedNode: Node) => {
   /**

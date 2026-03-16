@@ -55,8 +55,8 @@ function makeTask(name: string): PLCTask {
   return { name, triggering: 'Cyclic', interval: 'T#20ms', priority: 0 }
 }
 
-function makeInstance(name: string, taskName = 'Task0', pouName = 'Main'): PLCInstance {
-  return { name, taskName, pouName }
+function makeInstance(name: string, task = 'Task0', program = 'Main'): PLCInstance {
+  return { name, task, program }
 }
 
 function makeModbusTcpServer(name: string): PLCServer {
@@ -1930,15 +1930,15 @@ describe('createProjectSlice', () => {
       const ioGroups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
       expect(ioGroups).toHaveLength(1)
       expect(ioGroups[0].ioPoints).toHaveLength(3)
-      expect(ioGroups[0].ioPoints[0].iecLocation).toBe('%IW0')
-      expect(ioGroups[0].ioPoints[1].iecLocation).toBe('%IW1')
+      expect(ioGroups[0].ioPoints![0].iecLocation).toBe('%IW0')
+      expect(ioGroups[0].ioPoints![1].iecLocation).toBe('%IW1')
     })
 
     it('generates bit addresses for function code 1 (coils)', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '1', 2)
       store.getState().projectActions.addIOGroup('Dev1', group)
-      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
       expect(points[0].iecLocation).toBe('%IX0.0')
       expect(points[1].iecLocation).toBe('%IX0.1')
     })
@@ -1947,7 +1947,7 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '5', 2)
       store.getState().projectActions.addIOGroup('Dev1', group)
-      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
       expect(points[0].iecLocation).toBe('%QX0.0')
     })
 
@@ -1955,7 +1955,7 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '6', 1)
       store.getState().projectActions.addIOGroup('Dev1', group)
-      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
       expect(points[0].iecLocation).toBe('%QW0')
     })
 
@@ -1963,7 +1963,7 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '2', 1)
       store.getState().projectActions.addIOGroup('Dev1', group)
-      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
       expect(points[0].iecLocation).toBe('%IX0.0')
     })
 
@@ -1971,7 +1971,7 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '4', 1)
       store.getState().projectActions.addIOGroup('Dev1', group)
-      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
       expect(points[0].iecLocation).toBe('%IW0')
     })
 
@@ -1979,7 +1979,7 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '15', 2)
       store.getState().projectActions.addIOGroup('Dev1', group)
-      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
       expect(points[0].iecLocation).toBe('%QX0.0')
       expect(points[1].iecLocation).toBe('%QX0.1')
     })
@@ -1988,7 +1988,7 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '16', 2)
       store.getState().projectActions.addIOGroup('Dev1', group)
-      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
       expect(points[0].iecLocation).toBe('%QW0')
       expect(points[1].iecLocation).toBe('%QW1')
     })
@@ -1998,7 +1998,7 @@ describe('createProjectSlice', () => {
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2))
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      const allLocations = groups.flatMap((g) => g.ioPoints.map((p) => p.iecLocation))
+      const allLocations = groups.flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
       const uniqueLocations = new Set(allLocations)
       expect(uniqueLocations.size).toBe(allLocations.length)
     })
@@ -2010,12 +2010,12 @@ describe('createProjectSlice', () => {
       // Second group should skip those addresses
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '1', 2))
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      const allLocations = groups.flatMap((g) => g.ioPoints.map((p) => p.iecLocation))
+      const allLocations = groups.flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
       const uniqueLocations = new Set(allLocations)
       expect(uniqueLocations.size).toBe(allLocations.length)
       // Second group should have addresses after the first
-      expect(groups[1].ioPoints[0].iecLocation).toBe('%IX0.2')
-      expect(groups[1].ioPoints[1].iecLocation).toBe('%IX0.3')
+      expect(groups[1].ioPoints![0].iecLocation).toBe('%IX0.2')
+      expect(groups[1].ioPoints![1].iecLocation).toBe('%IX0.3')
     })
 
     it('does nothing when device has no modbusTcpConfig', () => {
@@ -2032,8 +2032,8 @@ describe('createProjectSlice', () => {
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
       expect(groups).toHaveLength(1)
       // Default returns: type 'Unknown', iecPrefix '%MW', isBit false
-      expect(groups[0].ioPoints[0].type).toBe('Unknown')
-      expect(groups[0].ioPoints[0].iecLocation).toBe('%MW0')
+      expect(groups[0].ioPoints![0].type).toBe('Unknown')
+      expect(groups[0].ioPoints![0].iecLocation).toBe('%MW0')
     })
 
     it('skips word addresses that are already used (word-based collision)', () => {
@@ -2060,8 +2060,8 @@ describe('createProjectSlice', () => {
       // The generator should skip %IW0 and %IW1 and start at %IW2
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2))
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      expect(groups[1].ioPoints[0].iecLocation).toBe('%IW2')
-      expect(groups[1].ioPoints[1].iecLocation).toBe('%IW3')
+      expect(groups[1].ioPoints![0].iecLocation).toBe('%IW2')
+      expect(groups[1].ioPoints![1].iecLocation).toBe('%IW3')
     })
 
     it('skips bit addresses that are already used (bit-based collision with gaps)', () => {
@@ -2088,8 +2088,8 @@ describe('createProjectSlice', () => {
       // Add a new group; the generator should skip %IX0.0 (used), use %IX0.1 (free), skip %IX0.2 (used), use %IX0.3
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '1', 2))
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      expect(groups[1].ioPoints[0].iecLocation).toBe('%IX0.1')
-      expect(groups[1].ioPoints[1].iecLocation).toBe('%IX0.3')
+      expect(groups[1].ioPoints![0].iecLocation).toBe('%IX0.1')
+      expect(groups[1].ioPoints![1].iecLocation).toBe('%IX0.3')
     })
   })
 
@@ -2138,11 +2138,11 @@ describe('createProjectSlice', () => {
     it('updates a point alias', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
-      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints[0].id
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
       const result = store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'Temperature')
       expect(result.ok).toBe(true)
       expect(
-        store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints[0].alias,
+        store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].alias,
       ).toBe('Temperature')
     })
 

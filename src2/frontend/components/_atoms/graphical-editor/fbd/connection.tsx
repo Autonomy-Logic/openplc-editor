@@ -1,7 +1,7 @@
-import { useOpenPLCStore } from '../../../../store'
-import { cn } from '../../../../utils/cn'
 import { useEffect, useRef, useState } from 'react'
 
+import { useOpenPLCStore } from '../../../../store'
+import { cn } from '../../../../utils/cn'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { FBDBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'

@@ -1,7 +1,7 @@
-import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../../../_molecules/modal'
-import { cn } from '../../../../utils/cn'
 import { useEffect, useMemo, useState } from 'react'
 
+import { cn } from '../../../../utils/cn'
+import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../../../_molecules/modal'
 import ArrowButtonGroup from '../../[workspace]/editor/graphical/elements/arrow-button-group'
 
 type IntervalModalProps = {

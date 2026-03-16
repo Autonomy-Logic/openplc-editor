@@ -21,10 +21,10 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 
-import { useOpenPLCStore } from '../store'
-import { debugBridge } from '../services/debug/debug-bridge'
-import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 import type { DebugTreeNode } from '../../middleware/shared/ports/types'
+import { debugBridge } from '../services/debug/debug-bridge'
+import { useOpenPLCStore } from '../store'
+import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 
 /** Polling interval for Modbus RTU / simulator (matches desktop editor). */
 const SIMULATOR_POLL_INTERVAL_MS = 50

@@ -1,9 +1,9 @@
-import type { EditorState } from '../../../../../../store/slices/editor'
-import type { LibraryState } from '../../../../../../store/slices/library'
-import { PLCVariable } from '../../../../../../../middleware/shared/ports/types'
-import { PLCProject } from '../../../../../../../middleware/shared/ports/types'
 import * as monaco from 'monaco-editor'
 
+import { PLCVariable } from '../../../../../../../middleware/shared/ports/types'
+import { PLCProject } from '../../../../../../../middleware/shared/ports/types'
+import type { EditorState } from '../../../../../../store/slices/editor'
+import type { LibraryState } from '../../../../../../store/slices/library'
 import { pythonSnippets } from '../configs/languages/python/python.snippets'
 import { stSnippets } from '../configs/languages/st/st.snippets'
 import { parsePouToStText } from '../drag-and-drop/st'
@@ -330,7 +330,7 @@ export const libraryCompletion = ({
 }: {
   range: monaco.IRange
   library: LibraryState['libraries']
-  pous: PLCProject['data']['pous']
+  pous: PLCProject['pous']
   editor: EditorState['editor']
 }) => {
   const systemSuggestions = library.system

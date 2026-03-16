@@ -1,5 +1,5 @@
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
 import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
 
 const DTBaseTypeContainer = () => {
   const baseTypes = baseTypeSchema.options

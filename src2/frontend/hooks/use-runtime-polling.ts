@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
 
+import type { PlcStatus } from '../../middleware/shared/ports/types'
 import { useRuntime } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
-import type { PlcStatus } from '../../middleware/shared/ports/types'
 
 // Unified polling interval for both status and logs (in milliseconds).
 const POLL_INTERVAL_MS = 2000

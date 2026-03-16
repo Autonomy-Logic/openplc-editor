@@ -1,20 +1,20 @@
 // import * as PrimitiveSwitch from '@radix-ui/react-switch'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
+import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { GlobalVariablesTableType } from '../../../store/slices/editor'
-import { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
 import { cn } from '../../../utils/cn'
-import { useCallback, useEffect, useRef, useState } from 'react'
-
+import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { GlobalVariablesTable } from '../../_molecules/global-variables-table'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
-import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
 const GlobalVariablesEditor = () => {
@@ -26,7 +26,7 @@ const GlobalVariablesEditor = () => {
     },
     project: {
       data: {
-        configuration: {
+        configurations: {
           resource: { globalVariables },
         },
       },
@@ -81,7 +81,7 @@ const GlobalVariablesEditor = () => {
    */
   useEffect(() => {
     const variablesToTable = globalVariables.filter((variable) => variable.name)
-    setTableData(variablesToTable)
+    setTableData(variablesToTable as PLCGlobalVariable[])
   }, [editor, globalVariables])
 
   useEffect(() => {
@@ -230,8 +230,8 @@ const GlobalVariablesEditor = () => {
       return
     }
 
-    const variable: PLCGlobalVariable =
-      selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
+    const variable =
+      (selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]) as PLCGlobalVariable
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       createVariable({ scope: 'global', data: { ...variable } })

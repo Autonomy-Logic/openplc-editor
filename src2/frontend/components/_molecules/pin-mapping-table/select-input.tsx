@@ -1,8 +1,8 @@
-import type { DevicePin, PinType } from '../../../../middleware/shared/ports/types'
 import { CellContext } from '@tanstack/react-table'
 import { startCase } from 'lodash'
 import { useCallback, useEffect, useState } from 'react'
 
+import type { DevicePin, PinType } from '../../../../middleware/shared/ports/types'
 import { GenericSelectCell } from '../../_atoms/generic-table-inputs/generic-select-cell'
 import { toast } from '../../_features/[app]/toast/use-toast'
 

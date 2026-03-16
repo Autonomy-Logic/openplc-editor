@@ -1,5 +1,6 @@
-import { useOpenPLCStore } from '../store'
 import { useCallback, useMemo } from 'react'
+
+import { useOpenPLCStore } from '../store'
 
 /**
  * Hook that returns a memoized function to build composite keys for debug variable lookups.

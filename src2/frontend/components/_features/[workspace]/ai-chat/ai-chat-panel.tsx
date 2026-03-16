@@ -1,11 +1,11 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+
 import { useAIChat } from '../../../../hooks/useAI'
 import { collectProjectContext } from '../../../../services/ai/context-collector'
 import { trackChatMessage } from '../../../../services/ai/telemetry'
 import type { AIChatMessage } from '../../../../services/ai/types'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
-
 import { AIChatInput } from './ai-chat-input'
 import { AIChatMessage as ChatMessageComponent } from './ai-chat-message'
 
@@ -128,7 +128,7 @@ export const AIChatPanel = () => {
         {
           messages: apiMessages,
           pouContext,
-          language: language as 'st' | 'il' | 'python' | 'cpp' | undefined,
+          language: language,
         },
         (token) => {
           accumulated += token

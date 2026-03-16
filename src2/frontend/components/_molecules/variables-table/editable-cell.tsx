@@ -1,22 +1,22 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import type { CellContext, RowData } from '@tanstack/react-table'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { pinSelectors, remoteDeviceSelectors } from '../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../store'
 import { ProjectResponse } from '../../../store/slices/project'
+import { cn } from '../../../utils/cn'
+import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
 import { buildRemoteDeviceOptionGroups } from '../../../utils/remote-device-options'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
   type ReferenceImpactAnalysis,
 } from '../../../utils/variable-references'
-import { cn } from '../../../utils/cn'
-import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
-import type { CellContext, RowData } from '@tanstack/react-table'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
+import { GenericComboboxCell } from '../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { HighlightedText } from '../../_atoms/highlighted-text'
 import { InputWithRef } from '../../_atoms/input'
-import { GenericComboboxCell } from '../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../rename-impact-modal'
 

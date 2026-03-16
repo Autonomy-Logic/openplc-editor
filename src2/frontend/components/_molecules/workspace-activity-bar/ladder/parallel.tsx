@@ -1,6 +1,7 @@
+import { ComponentPropsWithoutRef } from 'react'
+
 import LoopIcon from '../../../../assets/icons/project/Loop'
 import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
-import { ComponentPropsWithoutRef } from 'react'
 
 export const ParallelButton = ({ onDragStart }: ComponentPropsWithoutRef<'div'>) => {
   return (

@@ -1,5 +1,6 @@
-import { openPLCStoreBase } from '../../../../../../store'
 import type * as monaco from 'monaco-editor'
+
+import { openPLCStoreBase } from '../../../../../../store'
 
 /** Maximum characters to extract before cursor for FIM prefix */
 const MAX_PREFIX_CHARS = 3000

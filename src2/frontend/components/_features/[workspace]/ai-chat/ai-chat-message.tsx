@@ -1,7 +1,8 @@
-import { useOpenPLCStore } from '../../../../store'
-import { trackChatRating } from '../../../../services/ai/telemetry'
-import type { ChatMessage } from '../../../../store/slices/ai/types'
 import Markdown from 'react-markdown'
+
+import { trackChatRating } from '../../../../services/ai/telemetry'
+import { useOpenPLCStore } from '../../../../store'
+import type { ChatMessage } from '../../../../store/slices/ai/types'
 import { AICodeBlock } from './ai-code-block'
 
 type AIMessageProps = {

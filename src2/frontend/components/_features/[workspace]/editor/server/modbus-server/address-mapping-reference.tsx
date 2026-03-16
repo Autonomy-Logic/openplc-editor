@@ -1,7 +1,8 @@
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
-import { cn } from '../../../../../../utils/cn'
 import { useMemo, useState } from 'react'
+
+import { cn } from '../../../../../../utils/cn'
 
 // ---------------------------------------------------------------------------
 // Types (self-contained — modbus utils not yet migrated to src2)
@@ -325,4 +326,4 @@ const AddressMappingReference = ({ bufferMapping, defaultExpanded = false }: Add
 }
 
 export { AddressMappingReference }
-export type { ModbusSlaveBufferMapping, AddressMappingRow, AddressMappingSection }
+export type { AddressMappingRow, AddressMappingSection,ModbusSlaveBufferMapping }

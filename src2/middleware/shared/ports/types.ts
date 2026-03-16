@@ -61,8 +61,8 @@ export interface PLCTask {
 
 export interface PLCInstance {
   name: string
-  taskName: string
-  pouName: string
+  task: string
+  program: string
 }
 
 export interface PLCStructureVariable {
@@ -180,12 +180,18 @@ export interface ModbusIOGroup {
   offset: string
   length: number
   errorHandling: 'keep-last-value' | 'set-to-zero'
-  ioPoints: ModbusIOPoint[]
+  ioPoints?: ModbusIOPoint[]
 }
 
 export interface ModbusRemoteTcpConfig {
+  transport?: 'tcp' | 'rtu'
   host: string
   port: number
+  serialPort?: string
+  baudRate?: number
+  parity?: 'N' | 'E' | 'O'
+  stopBits?: number
+  dataBits?: number
   slaveId: number
   timeout: number
   ioGroups: ModbusIOGroup[]
@@ -213,6 +219,7 @@ export interface S7CommPlcIdentity {
 }
 
 export interface S7CommBufferMapping {
+  type?: string
   startByte: number
   endByte: number
   iecAddresses: string[]
@@ -375,6 +382,9 @@ export interface PLCProjectData {
   remoteDevices?: PLCRemoteDevice[]
 }
 
+/** Alias used by Monaco completion providers */
+export type PLCProject = PLCProjectData
+
 export interface ProjectMeta {
   name: string
   type: 'plc-project' | 'plc-library'
@@ -530,6 +540,8 @@ export interface CompileProgressEvent {
   stage: 'xml' | 'st' | 'c' | 'glue' | 'arduino' | 'done' | 'error'
   message: string
   progress?: number
+  level?: string
+  firmwarePath?: string
 }
 
 export interface CompileResult {

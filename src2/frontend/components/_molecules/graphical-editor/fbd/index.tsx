@@ -1,16 +1,3 @@
-import { CustomFbdNodeTypes, customNodeTypes } from '../../../_atoms/graphical-editor/fbd'
-import { BasicNodeData, BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
-import { getVariableRestrictionType } from '../../../_atoms/graphical-editor/utils'
-import { ReactFlowPanel } from '../../../_atoms/react-flow'
-import { toast } from '../../../_features/[app]/toast/use-toast'
-import BlockElement from '../../../_features/[workspace]/editor/graphical/elements/fbd/block'
-import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
-import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
-import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
-import type { FBDRungState } from '../../../../store/slices/fbd'
-import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
-import { isFbdBlockDrag, getFbdBlockType } from '../../../../utils/graphical/drag-detection'
-import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import {
   addEdge,
   applyEdgeChanges,
@@ -28,6 +15,19 @@ import {
 import { debounce, isEqual } from 'lodash'
 import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
+import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
+import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
+import type { FBDRungState } from '../../../../store/slices/fbd'
+import { getFbdBlockType,isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
+import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
+import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
+import { CustomFbdNodeTypes, customNodeTypes } from '../../../_atoms/graphical-editor/fbd'
+import { BasicNodeData, BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
+import { getVariableRestrictionType } from '../../../_atoms/graphical-editor/utils'
+import { ReactFlowPanel } from '../../../_atoms/react-flow'
+import { toast } from '../../../_features/[app]/toast/use-toast'
+import BlockElement from '../../../_features/[workspace]/editor/graphical/elements/fbd/block'
 import { buildGenericNode } from './fbd-utils/nodes'
 import { useFBDClipboard } from './fbd-utils/useCopyPaste'
 
@@ -265,8 +265,8 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
   const updateRungState = () => {
     const stripDivergence = (node: FlowNode) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { hasDivergence: _hd, ...cleanData } = node.data as Record<string, unknown>
+       
+      const { hasDivergence: _hd, ...cleanData } = node.data
       return { ...node, data: cleanData }
     }
 
@@ -411,7 +411,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         }))
 
         if (pou.pouType === 'function') {
-          const variable = getVariableRestrictionType(pou.interface?.returnType)
+          const variable = getVariableRestrictionType(pou.interface?.returnType ?? '')
           variables.push({
             id: 'OUT',
             name: 'OUT',

@@ -1,11 +1,11 @@
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
+import type { PLCStructureVariable } from '../../../../../../middleware/shared/ports/types'
+import type { ProjectResponse } from '../../../../../store/slices/project/types'
+import { cn } from '../../../../../utils/cn'
 import { InputWithRef } from '../../../../_atoms/input'
 import { useToast } from '../../../../_features/[app]/toast/use-toast'
-import type { ProjectResponse } from '../../../../../store/slices/project/types'
-import type { PLCStructureVariable } from '../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../utils/cn'
 
 declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.
@@ -89,15 +89,8 @@ const EditableInitialValueCell = ({
 
   return (
     <InputWithRef
-      value={cellValue?.simpleValue.value ?? ''}
-      onChange={(e) =>
-        setCellValue((prev) => ({
-          ...prev,
-          simpleValue: {
-            value: e.target.value,
-          },
-        }))
-      }
+      value={cellValue ?? ''}
+      onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
       className={cn(
         `flex w-full flex-1 bg-transparent p-2 text-center outline-none ${!editable ? 'pointer-events-none' : ''}`,

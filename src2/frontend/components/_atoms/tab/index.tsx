@@ -1,8 +1,10 @@
-import { ArrayIcon } from '../../../assets/icons/project/Array'
+import { ComponentPropsWithoutRef, useCallback } from 'react'
+
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
-import { CppIcon } from '../../../assets/icons/project/Cpp'
 import { DeviceTransferIcon } from '../../../assets/icons/interface/DeviceTransfer'
+import { ArrayIcon } from '../../../assets/icons/project/Array'
+import { CppIcon } from '../../../assets/icons/project/Cpp'
 import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { FBDIcon } from '../../../assets/icons/project/FBD'
 import { ILIcon } from '../../../assets/icons/project/IL'
@@ -15,11 +17,10 @@ import { ServerIcon } from '../../../assets/icons/project/Server'
 import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
-import type { TabsProps } from '../../../store/slices/tabs'
 import { useOpenPLCStore } from '../../../store'
+import type { TabsProps } from '../../../store/slices/tabs'
 import { cn } from '../../../utils/cn'
 import { isUnsaved, unsavedLabel } from '../../../utils/unsaved-label'
-import { ComponentPropsWithoutRef, useCallback } from 'react'
 
 type ITabProps = ComponentPropsWithoutRef<'div'> & {
   fileName: string

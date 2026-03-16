@@ -1,6 +1,5 @@
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../store'
-
 import { Modal, ModalContent } from '../../_molecules/modal'
 
 const ConfirmDeviceSwitchModal = () => {

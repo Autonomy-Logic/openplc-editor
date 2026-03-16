@@ -1,7 +1,7 @@
-import { cn } from '../../../utils/cn'
 import { startCase } from 'lodash'
 import { useEffect, useRef, useState } from 'react'
 
+import { cn } from '../../../utils/cn'
 import ScrollAreaComponent from '../../ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../select'
 

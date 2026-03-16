@@ -1,8 +1,8 @@
-import { WarningIcon } from '../../../assets/icons/interface/Warning'
-import { useOpenPLCStore } from '../../../store'
-import { useWindow } from '../../../../middleware/shared/providers'
 import { ComponentPropsWithoutRef } from 'react'
 
+import { useWindow } from '../../../../middleware/shared/providers'
+import { WarningIcon } from '../../../assets/icons/interface/Warning'
+import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent } from '../../_molecules/modal'
 
 type QuitApplicationModalProps = ComponentPropsWithoutRef<typeof Modal> & {

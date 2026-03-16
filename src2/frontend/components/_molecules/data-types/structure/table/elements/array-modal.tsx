@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { z } from 'zod'
 
-import { DimensionsModal } from '../../../../../_atoms/dimensions-modal'
-import { toast } from '../../../../../_features/[app]/toast/use-toast'
+import { baseTypeSchema } from '../../../../../../../middleware/shared/ports/plc-schemas'
+import type { PLCDataType, PLCStructureVariable } from '../../../../../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../../../store'
 import { arrayValidation } from '../../../../../../store/slices/project/validation/variables'
-import { baseTypeSchema } from '../../../../../../../middleware/shared/ports/plc-schemas'
-import type { PLCStructureVariable } from '../../../../../../../middleware/shared/ports/types'
+import { DimensionsModal } from '../../../../../_atoms/dimensions-modal'
+import { toast } from '../../../../../_features/[app]/toast/use-toast'
 
 type BaseType = z.infer<typeof baseTypeSchema>
 
@@ -78,7 +78,7 @@ export const ArrayModal = ({
     const variable = structure.variable.find((variable) => variable.name === variableName)
     if (!variable) return
 
-    if (variable.type.definition === 'array') {
+    if (variable.type.definition === 'array' && variable.type.data) {
       setDimensions(variable.type.data.dimensions.map((dimension) => dimension.dimension))
       setTypeValue(variable.type.data.baseType.value)
     }
@@ -109,7 +109,7 @@ export const ArrayModal = ({
     setSelectedInput((index + 1).toString())
   }
 
-  const handleUpdateType = (value: BaseType) => {
+  const handleUpdateType = (value: string) => {
     setTypeValue(value)
   }
 
@@ -155,7 +155,6 @@ export const ArrayModal = ({
       return
     }
 
-    // @ts-expect-error - This is a valid operation. This is being fixed.
     const updatedVariables: PLCStructureVariable[] = structure.variable.map((variable) => {
       if (variable.name === variableName) {
         const isBaseType = baseTypes.includes(typeValue as BaseType)
@@ -173,7 +172,7 @@ export const ArrayModal = ({
               dimensions: dimensionToSave.map((value) => ({ dimension: value })),
             },
           },
-          initialValue: variable.initialValue?.simpleValue?.value === '' ? undefined : variable.initialValue,
+          initialValue: (variable.initialValue ?? '') === '' ? undefined : variable.initialValue,
         }
       }
       return variable
@@ -182,7 +181,7 @@ export const ArrayModal = ({
     updateDatatype(name, {
       ...structure,
       variable: updatedVariables,
-    })
+    } as unknown as PLCDataType)
 
     setArrayModalIsOpen(false)
     closeContainer()

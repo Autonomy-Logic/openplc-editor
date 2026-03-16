@@ -1,8 +1,9 @@
+import { ComponentPropsWithoutRef } from 'react'
+
+import type { DebugTreeNode } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import ViewIcon from '../../../assets/icons/interface/View'
 import { cn } from '../../../utils/cn'
-import { ComponentPropsWithoutRef } from 'react'
-import type { DebugTreeNode } from '../../../../middleware/shared/ports/types'
 
 type TreeNodeProps = ComponentPropsWithoutRef<'div'> & {
   node: DebugTreeNode

@@ -1,19 +1,20 @@
 import * as Popover from '@radix-ui/react-popover'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+
+import type { ModbusIOGroup, ModbusIOPoint } from '../../../../../../../middleware/shared/ports/types'
+import { useRuntime } from '../../../../../../../middleware/shared/providers/platform-context'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
+import { useOpenPLCStore } from '../../../../../../store'
+import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
-import ScrollAreaComponent from '../../../../../ui/scroll-area'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
-import { useOpenPLCStore } from '../../../../../../store'
-import { useRuntime } from '../../../../../../../middleware/shared/providers/platform-context'
-import type { ModbusIOGroup, ModbusIOPoint } from '../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../utils/cn'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
+import ScrollAreaComponent from '../../../../../ui/scroll-area'
 
 type FunctionCodeOption = {
   value: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16'
@@ -490,7 +491,7 @@ const IOGroupRow = ({
   onEdit,
   onUpdateAlias,
 }: IOGroupRowProps) => {
-  const firstIOPoint = ioGroup.ioPoints[0]
+  const firstIOPoint = ioGroup.ioPoints?.[0]
   const groupType = firstIOPoint?.type || '-'
   const groupAddress = firstIOPoint?.iecLocation || '-'
   const groupOffset = ioGroup.offset
@@ -529,7 +530,7 @@ const IOGroupRow = ({
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>-</td>
       </tr>
       {isExpanded &&
-        ioGroup.ioPoints.map((ioPoint: ModbusIOPoint, index: number) => (
+        (ioGroup.ioPoints ?? []).map((ioPoint: ModbusIOPoint, index: number) => (
           <IOPointRow
             key={ioPoint.id}
             ioPoint={ioPoint}

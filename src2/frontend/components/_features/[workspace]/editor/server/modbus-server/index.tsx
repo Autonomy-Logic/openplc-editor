@@ -1,12 +1,14 @@
 import * as AccordionPrimitive from '@radix-ui/react-accordion'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
-import { InputWithRef } from '../../../../../_atoms/input'
-import { Label } from '../../../../../_atoms/label'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
+
+import type { ModbusBufferMapping } from '../../../../../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { DEFAULT_BUFFER_MAPPING } from '../../../../../../utils/modbus/generate-modbus-slave-config'
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
+import { InputWithRef } from '../../../../../_atoms/input'
+import { Label } from '../../../../../_atoms/label'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 
 const DEFAULT_NETWORK_INTERFACE_OPTIONS = [
   { value: '0.0.0.0', label: 'All Interfaces (0.0.0.0)' },
@@ -135,15 +137,15 @@ const ModbusServerEditor = () => {
   const [iwCount, setIwCount] = useState(DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount.toString())
 
   // Helper function to reset buffer mapping state to defaults or provided values
-  const setBufferMappingState = useCallback((bufferMapping: typeof DEFAULT_BUFFER_MAPPING = DEFAULT_BUFFER_MAPPING) => {
-    setQwCount(bufferMapping.holdingRegisters.qwCount.toString())
-    setMwCount(bufferMapping.holdingRegisters.mwCount.toString())
-    setMdCount(bufferMapping.holdingRegisters.mdCount.toString())
-    setMlCount(bufferMapping.holdingRegisters.mlCount.toString())
-    setQxBits(bufferMapping.coils.qxBits.toString())
-    setMxBits(bufferMapping.coils.mxBits.toString())
-    setIxBits(bufferMapping.discreteInputs.ixBits.toString())
-    setIwCount(bufferMapping.inputRegisters.iwCount.toString())
+  const setBufferMappingState = useCallback((bufferMapping: ModbusBufferMapping | typeof DEFAULT_BUFFER_MAPPING = DEFAULT_BUFFER_MAPPING) => {
+    setQwCount((bufferMapping.holdingRegisters?.qwCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.qwCount).toString())
+    setMwCount((bufferMapping.holdingRegisters?.mwCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mwCount).toString())
+    setMdCount((bufferMapping.holdingRegisters?.mdCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mdCount).toString())
+    setMlCount((bufferMapping.holdingRegisters?.mlCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mlCount).toString())
+    setQxBits((bufferMapping.coils?.qxBits ?? DEFAULT_BUFFER_MAPPING.coils.qxBits).toString())
+    setMxBits((bufferMapping.coils?.mxBits ?? DEFAULT_BUFFER_MAPPING.coils.mxBits).toString())
+    setIxBits((bufferMapping.discreteInputs?.ixBits ?? DEFAULT_BUFFER_MAPPING.discreteInputs.ixBits).toString())
+    setIwCount((bufferMapping.inputRegisters?.iwCount ?? DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount).toString())
   }, [])
 
   // Accordion state
@@ -213,56 +215,56 @@ const ModbusServerEditor = () => {
     'holdingRegisters',
     'qwCount',
     qwCount,
-    bufferMapping.holdingRegisters.qwCount,
+    bufferMapping.holdingRegisters?.qwCount,
     MAX_REGISTER_COUNT,
   )
   const handleMwCountBlur = createBufferMappingHandler(
     'holdingRegisters',
     'mwCount',
     mwCount,
-    bufferMapping.holdingRegisters.mwCount,
+    bufferMapping.holdingRegisters?.mwCount,
     MAX_REGISTER_COUNT,
   )
   const handleMdCountBlur = createBufferMappingHandler(
     'holdingRegisters',
     'mdCount',
     mdCount,
-    bufferMapping.holdingRegisters.mdCount,
+    bufferMapping.holdingRegisters?.mdCount,
     MAX_REGISTER_COUNT,
   )
   const handleMlCountBlur = createBufferMappingHandler(
     'holdingRegisters',
     'mlCount',
     mlCount,
-    bufferMapping.holdingRegisters.mlCount,
+    bufferMapping.holdingRegisters?.mlCount,
     MAX_REGISTER_COUNT,
   )
   const handleQxBitsBlur = createBufferMappingHandler(
     'coils',
     'qxBits',
     qxBits,
-    bufferMapping.coils.qxBits,
+    bufferMapping.coils?.qxBits,
     MAX_BIT_COUNT,
   )
   const handleMxBitsBlur = createBufferMappingHandler(
     'coils',
     'mxBits',
     mxBits,
-    bufferMapping.coils.mxBits,
+    bufferMapping.coils?.mxBits,
     MAX_BIT_COUNT,
   )
   const handleIxBitsBlur = createBufferMappingHandler(
     'discreteInputs',
     'ixBits',
     ixBits,
-    bufferMapping.discreteInputs.ixBits,
+    bufferMapping.discreteInputs?.ixBits,
     MAX_BIT_COUNT,
   )
   const handleIwCountBlur = createBufferMappingHandler(
     'inputRegisters',
     'iwCount',
     iwCount,
-    bufferMapping.inputRegisters.iwCount,
+    bufferMapping.inputRegisters?.iwCount,
     MAX_REGISTER_COUNT,
   )
 

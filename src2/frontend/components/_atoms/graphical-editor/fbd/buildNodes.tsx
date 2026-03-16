@@ -1,15 +1,9 @@
-import type {
-  BlockBuilderProps,
-  CommentBuilderProps,
-  CommentNode,
-  ConnectionBuilderProps,
-  ConnectionNode,
-  VariableBuilderProps,
-  VariableNode,
-} from './utils/types'
+import { Position } from '@xyflow/react'
+
 import { generateNumericUUID } from '../../../../utils/generate-uuid'
-import { getBlockSize, getBlockVariantAndExecutionControl } from './utils'
 import { BlockVariant } from '../types/block'
+import { buildHandle } from './handle'
+import { getBlockSize, getBlockVariantAndExecutionControl } from './utils'
 import {
   CONNECTION_ELEMENT_HEIGHT,
   CONNECTION_ELEMENT_WIDTH,
@@ -24,8 +18,15 @@ import {
   VARIABLE_ELEMENT_HEIGHT,
   VARIABLE_ELEMENT_SIZE,
 } from './utils/constants'
-import { buildHandle } from './handle'
-import { Position } from '@xyflow/react'
+import type {
+  BlockBuilderProps,
+  CommentBuilderProps,
+  CommentNode,
+  ConnectionBuilderProps,
+  ConnectionNode,
+  VariableBuilderProps,
+  VariableNode,
+} from './utils/types'
 
 /**
  *

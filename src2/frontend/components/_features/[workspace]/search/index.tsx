@@ -1,11 +1,10 @@
 import { CloseIcon } from '../../../../assets/icons/interface/Close'
-import { Accordion } from '../../../_atoms/accordion'
 import { useOpenPLCStore } from '../../../../store'
 import type { Project } from '../../../../store/slices/search'
+import { extractSearchQuery } from '../../../../store/slices/search/utils'
 import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
-import { extractSearchQuery } from '../../../../store/slices/search/utils'
-
+import { Accordion } from '../../../_atoms/accordion'
 import { ProjectSearchTreeBranch, ProjectSearchTreeLeaf, ProjectSearchTreeRoot, ProjectSearchTreeVariableBranch, ProjectSearchTreeVariableLeaf, } from './display/tree-view'
 
 interface _SearchResult {

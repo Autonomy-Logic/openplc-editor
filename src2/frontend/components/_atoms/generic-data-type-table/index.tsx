@@ -1,6 +1,7 @@
-import { Table, TableBody, TableCell, TableRow } from '../table'
 import { flexRender, Table as ReactTable } from '@tanstack/react-table'
 import React, { RefObject } from 'react'
+
+import { Table, TableBody, TableCell, TableRow } from '../table'
 
 interface GenericTableProps {
   context: 'data-type-array' | 'data-type-enumerated'

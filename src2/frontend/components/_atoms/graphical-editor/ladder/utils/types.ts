@@ -1,9 +1,8 @@
-import { PLCVariable } from '../../../../../../middleware/shared/ports'
-
-import { CustomHandleProps } from '../handle'
-
-import { ReactNode } from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
+import { ReactNode } from 'react'
+
+import { PLCVariable } from '../../../../../../middleware/shared/ports'
+import { CustomHandleProps } from '../handle'
 
 export type BuilderBasicProps = {
   id: string

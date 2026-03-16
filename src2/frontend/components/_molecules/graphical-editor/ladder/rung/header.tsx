@@ -10,9 +10,9 @@ import { CloseIcon } from '../../../../../assets/icons/interface/Close'
 import { DragHandleIcon } from '../../../../../assets/icons/interface/DragHandle'
 import { DuplicateIcon } from '../../../../../assets/icons/interface/Duplicate'
 import { StickArrowIcon } from '../../../../../assets/icons/interface/StickArrow'
-import { cn } from '../../../../../utils/cn'
 import { useOpenPLCStore } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
+import { cn } from '../../../../../utils/cn'
 import { HighlightedTextArea } from '../../../../_atoms/highlighted-textarea'
 
 type RungHeaderProps = {

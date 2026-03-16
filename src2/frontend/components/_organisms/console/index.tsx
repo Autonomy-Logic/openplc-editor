@@ -1,8 +1,8 @@
-import { useOpenPLCStore } from '../../../store'
-import formatTimestamp from '../../../utils/format-timestamp'
 import { debounce } from 'lodash'
 import { memo, useEffect, useMemo, useRef } from 'react'
 
+import { useOpenPLCStore } from '../../../store'
+import formatTimestamp from '../../../utils/format-timestamp'
 import { LogComponent } from './log'
 
 const Console = memo(() => {
@@ -23,7 +23,7 @@ const Console = memo(() => {
       if (filters.searchTerm) {
         const searchLower = filters.searchTerm.toLowerCase()
         const messageMatch = log.message.toLowerCase().includes(searchLower)
-        const timestampMatch = log.tstamp.toISOString().includes(searchLower)
+        const timestampMatch = log.tstamp?.toISOString().includes(searchLower) ?? false
         if (!messageMatch && !timestampMatch) return false
       }
 
@@ -82,7 +82,7 @@ const Console = memo(() => {
             key={log.id}
             level={log.level}
             message={log.message}
-            tstamp={formatTimestamp(log.tstamp, filters.timestampFormat)}
+            tstamp={formatTimestamp(log.tstamp ?? new Date(), filters.timestampFormat)}
             searchTerm={filters.searchTerm}
           />
         ))}

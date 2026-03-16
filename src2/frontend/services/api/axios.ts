@@ -1,6 +1,8 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 
-const baseURL = import.meta.env?.VITE_EDGE_API_URL || 'http://localhost:3333'
+import { getEnv } from '../../utils/get-env'
+
+const baseURL = getEnv('VITE_EDGE_API_URL') || 'http://localhost:3333'
 
 export const api = axios.create({
   baseURL,

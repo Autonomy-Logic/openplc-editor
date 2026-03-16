@@ -1,13 +1,4 @@
 export { createSharedSlice } from './slice'
-export {
-  createDatatypeObject,
-  createEditorObjectForDatatype,
-  createEditorObjectForPou,
-  createEditorObjectForRemoteDevice,
-  createEditorObjectForServer,
-  createPouObject,
-  createTabObject,
-} from './utils'
 export type {
   DatatypeActions,
   PouActions,
@@ -21,3 +12,12 @@ export type {
   SharedWorkspaceActions,
   SnapshotActions,
 } from './types'
+export {
+  createDatatypeObject,
+  createEditorObjectForDatatype,
+  createEditorObjectForPou,
+  createEditorObjectForRemoteDevice,
+  createEditorObjectForServer,
+  createPouObject,
+  createTabObject,
+} from './utils'

@@ -1,14 +1,14 @@
-import { toast } from '../../../../_features/[app]/toast/use-toast'
-import { buildGenericNode } from '../../../../_molecules/graphical-editor/fbd/fbd-utils/nodes'
-import { useOpenPLCStore } from '../../../../../store'
-import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'
-import { PLCVariable } from '../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../utils/cn'
-import { expandArrayVariables } from '../../../../../../backend/shared/array-variable-utils'
 import { Node } from '@xyflow/react'
 import { isArray } from 'lodash'
 import { ComponentPropsWithRef, forwardRef, useMemo } from 'react'
 
+import { expandArrayVariables } from '../../../../../../backend/shared/array-variable-utils'
+import { PLCVariable } from '../../../../../../middleware/shared/ports/types'
+import { useOpenPLCStore } from '../../../../../store'
+import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'
+import { cn } from '../../../../../utils/cn'
+import { toast } from '../../../../_features/[app]/toast/use-toast'
+import { buildGenericNode } from '../../../../_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { BlockVariant } from '../../types/block'
 import { getVariableRestrictionType } from '../../utils'
@@ -194,7 +194,6 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         data: {
           id: crypto.randomUUID(),
           name: variableName,
-          // @ts-expect-error - type is dynamic
           type: {
             definition: variableTypeRestriction.definition as 'base-type' | 'derived' | 'array' | 'user-data-type',
             value: variableTypeRestriction.value,

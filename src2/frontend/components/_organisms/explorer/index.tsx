@@ -1,7 +1,7 @@
-import { useOpenPLCStore } from '../../../store'
 import { LegacyRef, ReactElement, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
+import { useOpenPLCStore } from '../../../store'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
 import { Info } from './info'
 import { Library } from './library'

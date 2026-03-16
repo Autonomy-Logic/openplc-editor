@@ -1,15 +1,15 @@
-import type { EditorModel } from '../../../../../store/slices/editor'
-import type { LadderFlowType } from '../../../../../store/slices/ladder'
-import { baseTypeSchema, genericTypeSchema } from '../../../../../../middleware/shared/ports'
-import type { PLCPou } from '../../../../../../middleware/shared/ports'
-import type { PLCVariable } from '../../../../../../middleware/shared/ports'
-import { resolveArrayVariableByName } from '../../../../../../backend/shared/array-variable-utils'
+import { Position } from '@xyflow/react'
 import { ZodLiteral } from 'zod'
 
-import type { BasicNodeData, BlockVariant } from './types'
-import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
-import { Position } from '@xyflow/react'
+import { resolveArrayVariableByName } from '../../../../../../backend/shared/array-variable-utils'
+import type { PLCPou } from '../../../../../../middleware/shared/ports'
+import type { PLCVariable } from '../../../../../../middleware/shared/ports'
+import { baseTypeSchema, genericTypeSchema } from '../../../../../../middleware/shared/ports'
+import type { EditorModel } from '../../../../../store/slices/editor'
+import type { LadderFlowType } from '../../../../../store/slices/ladder'
 import { buildHandle } from '../handle'
+import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
+import type { BasicNodeData, BlockVariant } from './types'
 
 export const getLadderPouVariablesRungNodeAndEdges = (
   editor: EditorModel,
@@ -34,7 +34,7 @@ export const getLadderPouVariablesRungNodeAndEdges = (
 
   const node = rung?.nodes.find((node) => node.id === data.nodeId)
 
-  const variables: PLCVariable[] = (pou?.interface?.variables ?? []) as PLCVariable[]
+  const variables: PLCVariable[] = (pou?.interface?.variables ?? [])
   let variable = variables.find((variable) => {
     if (!node) return undefined
     const nodeVariable = (node.data as BasicNodeData).variable

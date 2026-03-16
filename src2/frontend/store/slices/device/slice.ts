@@ -1,7 +1,7 @@
-import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { defaultDeviceConfiguration } from './data/constants'
 import type { DeviceSlice, PinUpdateResponse } from './types'
 import {

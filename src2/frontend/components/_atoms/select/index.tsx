@@ -1,7 +1,8 @@
 import * as PrimitiveSelect from '@radix-ui/react-select'
+import { ComponentPropsWithoutRef, ElementRef, forwardRef, ReactElement } from 'react'
+
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { cn } from '../../../utils/cn'
-import { ComponentPropsWithoutRef, ElementRef, forwardRef, ReactElement } from 'react'
 
 const Select = PrimitiveSelect.Root
 

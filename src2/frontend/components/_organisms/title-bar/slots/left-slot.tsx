@@ -1,7 +1,7 @@
-import { OpenPLCIcon } from '../../../../assets/icons/oplc'
-import { MenuBar } from '../../../_molecules/menu-bar'
-import { useOpenPLCStore } from '../../../../store'
 import { useCapabilities } from '../../../../../middleware/shared/providers'
+import { OpenPLCIcon } from '../../../../assets/icons/oplc'
+import { useOpenPLCStore } from '../../../../store'
+import { MenuBar } from '../../../_molecules/menu-bar'
 
 export const TitleBarLeftSlot = () => {
   const caps = useCapabilities()

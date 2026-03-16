@@ -14,15 +14,14 @@
  */
 
 import type { WebRTCActions, WebRTCConnectionStatus } from '../../../store/slices/webrtc/types'
-
+import { ChunkReassembler } from './webrtc-chunked-message'
+import { handleCommandResponse,setDataChannel } from './webrtc-command'
 import {
   closeWebRTCSession,
   createWebRTCSession,
   sendIceCandidate,
   subscribeToIceCandidates,
 } from './webrtc-signaling'
-import { setDataChannel, handleCommandResponse } from './webrtc-command'
-import { ChunkReassembler } from './webrtc-chunked-message'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -470,7 +469,7 @@ export class WebRTCConnectionManager {
     } else if (msg.type === 'ping') {
       this.channel?.send(JSON.stringify({ type: 'pong' }))
     } else if (msg.type === 'command_response') {
-      handleCommandResponse(msg as Parameters<typeof handleCommandResponse>[0])
+      handleCommandResponse(msg as unknown as Parameters<typeof handleCommandResponse>[0])
     } else if (msg.type === 'error') {
       this.handleError((msg.message as string) || 'Unknown error from agent')
     } else {

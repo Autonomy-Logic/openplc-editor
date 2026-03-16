@@ -1,6 +1,6 @@
-import { cn } from '../../../../../../../utils/cn'
 import { useCallback, useState } from 'react'
 
+import { cn } from '../../../../../../../utils/cn'
 import type { VariableTreeNode } from '../hooks/use-project-variables'
 
 interface VariableTreeProps {

@@ -1,11 +1,11 @@
-import { defaultCustomNodesStyles } from '../../../../../../../_atoms/graphical-editor/ladder'
-import type { CustomHandleProps } from '../../../../../../../_atoms/graphical-editor/ladder/handle'
-import type { BasicNodeData, ParallelNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
-// import type { VariableNode } from '../../../../../../../_atoms/graphical-editor/ladder/variable'
-import type { RungLadderState } from '../../../../../../../../store/slices'
 import type { Edge, Node } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 
+// import type { VariableNode } from '../../../../../../../_atoms/graphical-editor/ladder/variable'
+import type { RungLadderState } from '../../../../../../../../store/slices'
+import { defaultCustomNodesStyles } from '../../../../../../../_atoms/graphical-editor/ladder'
+import type { CustomHandleProps } from '../../../../../../../_atoms/graphical-editor/ladder/handle'
+import type { BasicNodeData, ParallelNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
 import {
   findAllParallelsDepthAndNodes,

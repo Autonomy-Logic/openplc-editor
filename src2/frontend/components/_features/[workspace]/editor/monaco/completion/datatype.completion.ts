@@ -1,7 +1,8 @@
-import type { VariableDTO } from '../../../../../../store/slices/project'
-import { PLCDataType, PLCStructureVariable } from '../../../../../../../middleware/shared/ports/types'
 import { escapeRegExp } from 'lodash'
 import * as monaco from 'monaco-editor'
+
+import { PLCDataType, PLCStructureVariable } from '../../../../../../../middleware/shared/ports/types'
+import type { VariableDTO } from '../../../../../../store/slices/project'
 
 interface DataTypeCompletionContext {
   isAfterDot: boolean

@@ -1,9 +1,9 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
+import { useEffect, useMemo, useRef, useState } from 'react'
+
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { cn } from '../../../utils/cn'
-import { useEffect, useMemo, useRef, useState } from 'react'
-
 import ScrollAreaComponent from '../../ui/scroll-area'
 import { InputWithRef } from '../input'
 

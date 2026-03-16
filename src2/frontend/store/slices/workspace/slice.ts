@@ -1,8 +1,8 @@
-import type { DebugTreeNode, FbInstanceInfo, PlcLogs } from '../../../../middleware/shared/ports/types'
-import { isV4Logs, LOG_BUFFER_CAP } from '../../../../middleware/shared/ports/types'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { DebugTreeNode, FbInstanceInfo, PlcLogs } from '../../../../middleware/shared/ports/types'
+import { isV4Logs, LOG_BUFFER_CAP } from '../../../../middleware/shared/ports/types'
 import type { WorkspaceSlice } from './types'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
@@ -52,6 +52,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugGraphList: [],
     debugDataStale: false,
     debugMd5Mismatch: null,
+    // Project loading state
+    isProjectLoading: false,
+    projectLoadingMessage: '',
   },
 
   workspaceActions: {
@@ -172,6 +175,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
             searchTerm: '',
             timestampFormat: 'full',
           }
+          workspace.isProjectLoading = false
+          workspace.projectLoadingMessage = ''
         }),
       )
     },
@@ -393,6 +398,14 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugForcedVariables.delete(compositeKey)
           workspace.debugVariableTree.delete(compositeKey)
           workspace.debugExpandedNodes.delete(compositeKey)
+        }),
+      )
+    },
+    setProjectLoading: (isLoading: boolean, message?: string) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isProjectLoading = isLoading
+          workspace.projectLoadingMessage = message ?? ''
         }),
       )
     },

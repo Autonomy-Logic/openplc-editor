@@ -1,10 +1,11 @@
+import { z } from 'zod'
+
 import {
   BaseLibraryPouSchema,
   BaseLibraryVariableSchema,
   baseTypeSchema,
   genericTypeSchema,
 } from '../../../../../middleware/shared/ports/plc-schemas'
-import { z } from 'zod'
 
 const blockVariantVariableSchema = BaseLibraryVariableSchema.extend({
   id: z.string().optional(),

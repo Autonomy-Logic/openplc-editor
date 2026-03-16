@@ -1,7 +1,8 @@
-import { CloseIcon } from '../../../assets/icons/interface/Close'
 import * as PrimitiveDialog from '@radix-ui/react-dialog'
-import { cn } from '../../../utils/cn'
 import { ComponentPropsWithoutRef, ElementRef, forwardRef } from 'react'
+
+import { CloseIcon } from '../../../assets/icons/interface/Close'
+import { cn } from '../../../utils/cn'
 
 const Modal = PrimitiveDialog.Root
 

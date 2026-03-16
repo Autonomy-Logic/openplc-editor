@@ -1,7 +1,8 @@
+import type { Node } from '@xyflow/react'
+
+import type { RungLadderState } from '../../../../../../store/slices/ladder'
 import { defaultCustomNodesStyles, nodesBuilder } from '../../../../../_atoms/graphical-editor/ladder'
 import type { BuilderBasicProps } from '../../../../../_atoms/graphical-editor/ladder/utils/types'
-import type { RungLadderState } from '../../../../../../store/slices/ladder'
-import type { Node } from '@xyflow/react'
 
 export const findNode = (
   rung: RungLadderState,

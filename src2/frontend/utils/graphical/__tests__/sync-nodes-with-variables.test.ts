@@ -1,6 +1,6 @@
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import type { Node } from '@xyflow/react'
 
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../sync-nodes-with-variables'
 
 const makeVariable = (name: string, typeValue = 'BOOL', definition = 'base-type', id = '1'): PLCVariable =>

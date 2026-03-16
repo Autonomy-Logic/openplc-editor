@@ -1,5 +1,4 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-
 import { getVariableBasedOnRowIdOrVariableId } from '../slices/project/utils'
 
 function makeVariable(name: string): PLCVariable {

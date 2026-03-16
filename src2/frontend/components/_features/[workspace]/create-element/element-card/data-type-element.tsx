@@ -1,6 +1,7 @@
-import { ComponentPropsWithoutRef } from 'react'
-import { EnumIcon, StructureIcon, ArrayIcon } from '../../../../../assets/icons/project'
 import { startCase } from 'lodash'
+import { ComponentPropsWithoutRef } from 'react'
+
+import { ArrayIcon,EnumIcon, StructureIcon } from '../../../../../assets/icons/project'
 
 type CreateDataTypeProps = ComponentPropsWithoutRef<'div'> & {
   derivation: 'enumerated' | 'structure' | 'array'

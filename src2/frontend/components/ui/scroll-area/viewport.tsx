@@ -1,6 +1,7 @@
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area'
-import { cn } from '../../../utils/cn'
 import { ComponentPropsWithoutRef, ElementRef, forwardRef } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 const Viewport = forwardRef<
   ElementRef<typeof ScrollAreaPrimitive.ScrollAreaViewport>,

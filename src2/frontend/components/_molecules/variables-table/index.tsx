@@ -1,6 +1,6 @@
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { ColumnFiltersState, createColumnHelper, OnChangeFn } from '@tanstack/react-table'
 
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { usePouSnapshot } from '../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../store'
 import { GenericTable } from '../../_atoms/generic-table'

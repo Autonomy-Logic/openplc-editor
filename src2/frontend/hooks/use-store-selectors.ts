@@ -99,7 +99,7 @@ const remoteDeviceSelectors = {
       for (const device of remoteDevices) {
         if (!device.modbusTcpConfig?.ioGroups) continue
         for (const ioGroup of device.modbusTcpConfig.ioGroups) {
-          for (const point of ioGroup.ioPoints) {
+          for (const point of ioGroup.ioPoints ?? []) {
             ioPoints.push({
               deviceName: device.name,
               ioGroupName: ioGroup.name,
@@ -107,7 +107,7 @@ const remoteDeviceSelectors = {
               ioPointName: point.name,
               ioPointType: point.type,
               iecLocation: point.iecLocation,
-              alias: point.alias,
+              alias: point.alias ?? '',
             })
           }
         }

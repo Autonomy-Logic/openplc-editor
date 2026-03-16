@@ -1,7 +1,8 @@
+import { ComponentPropsWithoutRef } from 'react'
+
 import { CloseFilledIcon } from '../../../../assets/icons/interface/Close'
 import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
 import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
-import { ComponentPropsWithoutRef } from 'react'
 
 export const ExitButton = ({ onClick }: ComponentPropsWithoutRef<'button'>) => {
   return (

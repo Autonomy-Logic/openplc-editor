@@ -1,5 +1,4 @@
 import type { PLCGlobalVariable, PLCVariable } from '../../../../../middleware/shared/ports/types'
-
 import { WorkspaceResponse } from '../types'
 
 /**

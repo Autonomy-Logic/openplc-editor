@@ -1,4 +1,4 @@
-import type { DebugTreeNode, FbInstanceInfo, PlcLogs, Platform, Architecture } from '../../../../middleware/shared/ports/types'
+import type { Architecture,DebugTreeNode, FbInstanceInfo, Platform, PlcLogs } from '../../../../middleware/shared/ports/types'
 
 // ---------------------------------------------------------------------------
 // PLC Log Filters
@@ -83,6 +83,9 @@ export type WorkspaceState = {
     debugGraphList: string[]
     debugDataStale: boolean
     debugMd5Mismatch: { runtimeMd5: string; localMd5: string } | null
+    // Project loading state
+    isProjectLoading: boolean
+    projectLoadingMessage: string
   }
 }
 
@@ -143,6 +146,8 @@ export type WorkspaceActions = {
   clearDebugState: () => void
   clearFbDebugContext: () => void
   removeDebugVariable: (compositeKey: string) => void
+  // Project loading
+  setProjectLoading: (isLoading: boolean, message?: string) => void
 }
 
 export type WorkspaceSlice = WorkspaceState & {

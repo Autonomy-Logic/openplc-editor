@@ -1,16 +1,16 @@
+import { useCallback, useEffect, useState } from 'react'
+
+import type { PLCInstance } from '../../../../middleware/shared/ports/types'
+import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { InstanceType } from '../../../store/slices/editor'
-import type { PLCInstance } from '../../../../middleware/shared/ports/types'
 import { cn } from '../../../utils/cn'
 import { parseResourceConfigurationToString } from '../../../utils/parse-resource-configuration-to-string'
 import { parseResourceStringToConfiguration } from '../../../utils/parse-resource-string-to-configuration'
-import { useCallback, useEffect, useState } from 'react'
-
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { InstancesTable } from '../../_molecules/instances-table'
@@ -26,7 +26,7 @@ const InstancesEditor = () => {
     },
     project: {
       data: {
-        configuration: {
+        configurations: {
           resource: { instances, tasks },
         },
       },
@@ -111,7 +111,6 @@ const InstancesEditor = () => {
         selectedRow: editorInstances.display === 'table' ? parseInt(editorInstances.selectedRow) : ROWS_NOT_SELECTED,
       })
     } else {
-      // @ts-expect-error: 'selectedRow' is not required when display is 'code'
       updateModelInstances({
         display: 'code',
       })
@@ -146,8 +145,8 @@ const InstancesEditor = () => {
       createInstance({
         data: {
           name: 'instance0',
-          pouName: '',
-          taskName: '',
+          program: '',
+          task: '',
         },
       })
       updateModelInstances({

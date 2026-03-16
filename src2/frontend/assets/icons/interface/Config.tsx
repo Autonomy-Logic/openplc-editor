@@ -1,5 +1,6 @@
-import { cn } from '../../../utils/cn'
 import { ComponentProps } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 type IConfigIconProps = ComponentProps<'svg'> & {
   size?: 'sm' | 'md' | 'lg'

@@ -1,11 +1,11 @@
 import { DownloadIcon } from '../../../../assets/icons/interface/Download'
 import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
 
-type DownloadButtonProps = { onClick?: () => void }
+type DownloadButtonProps = { onClick?: () => void; disabled?: boolean; className?: string }
 
-const DownloadButton = ({ onClick }: DownloadButtonProps) => {
+const DownloadButton = ({ onClick, disabled, className }: DownloadButtonProps) => {
   return (
-    <ActivityBarButton aria-label='Download' onClick={onClick}>
+    <ActivityBarButton aria-label='Download' onClick={onClick} disabled={disabled} className={className}>
       <DownloadIcon />
     </ActivityBarButton>
   )

@@ -1,3 +1,6 @@
+import { produce } from 'immer'
+import { StateCreator } from 'zustand'
+
 import type {
   ModbusIOPoint,
   OpcUaServerConfig,
@@ -7,11 +10,7 @@ import type {
   S7CommPlcIdentity,
   S7CommServerSettings,
 } from '../../../../middleware/shared/ports/types'
-import { produce } from 'immer'
-import { StateCreator } from 'zustand'
-
 import { isLegalIdentifier } from '../../../utils/keywords'
-
 import type { ProjectResponse, ProjectSlice } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import {
@@ -1040,7 +1039,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
           const usedAddresses = new Set<string>()
           for (const g of device.modbusTcpConfig.ioGroups) {
-            for (const p of g.ioPoints) {
+            for (const p of g.ioPoints ?? []) {
               usedAddresses.add(p.iecLocation)
             }
           }
@@ -1079,7 +1078,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (!device?.modbusTcpConfig) return
           const group = device.modbusTcpConfig.ioGroups.find((g) => g.id === groupId)
           if (!group) return
-          const point = group.ioPoints.find((p) => p.id === pointId)
+          const point = group.ioPoints?.find((p) => p.id === pointId)
           if (point) point.alias = alias
         }),
       )

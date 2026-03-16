@@ -1,6 +1,6 @@
 import { CustomHandle } from './handle'
-import { PowerRailProps } from './utils/types'
 import { DEFAULT_POWER_RAIL_HEIGHT, DEFAULT_POWER_RAIL_WIDTH } from './utils/constants'
+import { PowerRailProps } from './utils/types'
 
 export const PowerRail = ({ data }: PowerRailProps) => {
   return (

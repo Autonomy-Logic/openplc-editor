@@ -1,8 +1,8 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+
 import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
 import { cn } from '../../../utils/cn'
-import { useCallback, useEffect, useRef, useState } from 'react'
-
 import { InputWithRef } from '../input'
 
 export const GenericTextCell = ({

@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 
-import { createHistorySlice, HISTORY_LIMIT } from '../slices/history'
 import type { HistorySlice, HistorySnapshot } from '../slices/history'
+import { createHistorySlice, HISTORY_LIMIT } from '../slices/history'
 
 function makeStore() {
   return createStore<HistorySlice>()(createHistorySlice)
@@ -431,7 +431,7 @@ describe('createHistorySlice', () => {
           },
         ],
         tasks: [{ name: 'task-1', triggering: 'Cyclic', interval: 'T#20ms', priority: 0 }],
-        instances: [{ name: 'inst-1', taskName: 'task-1', pouName: 'myPOU' }],
+        instances: [{ name: 'inst-1', task: 'task-1', program: 'myPOU' }],
         dataTypes: [],
       })
 

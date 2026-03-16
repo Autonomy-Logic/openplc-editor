@@ -5,8 +5,7 @@
  * to build DebugTreeNode structures for displaying variables in the debugger.
  */
 
-import type { DebugTreeNode, PLCVariable } from '../../middleware/shared/ports/types'
-import type { PouDTO } from '../store/slices/project/types'
+import type { DebugTreeNode, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 import type { DebugVariableEntry } from './debug-parser'
 import type { DebugNodeVisitor, TraversalContext } from './debug-tree-traversal'
 import { traverseVariable } from './debug-tree-traversal'
@@ -14,11 +13,11 @@ import { buildDebugPath, buildGlobalDebugPath } from './debug-variable-finder'
 
 /**
  * Project data shape expected by the debug tree builder.
- * Uses the store's POU format (PouDTO discriminated union).
+ * Accepts either the middleware PLCPou type or the store's PLCProjectData.pous.
  */
 interface DebugProjectData {
   dataTypes: TraversalContext['dataTypes']
-  pous: PouDTO[]
+  pous: PLCPou[]
 }
 
 const DEBUG_TREE_LOGGING = false

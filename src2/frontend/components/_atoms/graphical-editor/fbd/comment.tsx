@@ -1,12 +1,12 @@
-import { useOpenPLCStore } from '../../../../store'
-import { cn } from '../../../../utils/cn'
 import { NodeResizer } from '@xyflow/react'
 import { memo, useEffect, useRef, useState } from 'react'
 
+import { useOpenPLCStore } from '../../../../store'
+import { cn } from '../../../../utils/cn'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils'
-import { CommentNode, CommentProps } from './utils/types'
 import { MINIMUM_ELEMENT_HEIGHT, MINIMUM_ELEMENT_WIDTH } from './utils/constants'
+import { CommentNode, CommentProps } from './utils/types'
 
 const CommentElement = (block: CommentProps) => {
   const { id, selected, data, width, height } = block

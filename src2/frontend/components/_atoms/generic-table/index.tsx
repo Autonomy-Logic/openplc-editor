@@ -1,5 +1,3 @@
-import type { ProjectResponse } from '../../../store/slices/project'
-import { cn } from '../../../utils/cn'
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -11,6 +9,8 @@ import {
 } from '@tanstack/react-table'
 import { useEffect, useRef } from 'react'
 
+import type { ProjectResponse } from '../../../store/slices/project'
+import { cn } from '../../../utils/cn'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../table'
 
 type GenericTableProps<T> = {

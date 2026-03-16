@@ -1,5 +1,4 @@
 import { DeviceEditorTemplate } from '../../../../../_templates/[editors]/device-editor-template'
-
 import { Board } from './board'
 import { Communication } from './communication'
 

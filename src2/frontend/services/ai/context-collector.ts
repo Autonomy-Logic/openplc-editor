@@ -69,15 +69,15 @@ export function collectProjectContext(state: StoreState, currentPouName: string,
     const dtLines = dataTypes
       .slice(0, 10)
       .map((dt) => {
-        if (dt.derivation === 'enumeration') {
-          return `TYPE ${dt.name} : (${dt.values.map((v) => v.value).join(', ')}); END_TYPE`
+        if (dt.derivation === 'enumerated') {
+          return `TYPE ${dt.name} : (${dt.values.map((v) => v.description).join(', ')}); END_TYPE`
         }
         if (dt.derivation === 'structure') {
           const fields = dt.variable.map((v) => `${v.name} : ${v.type.value}`).join('; ')
           return `TYPE ${dt.name} : STRUCT ${fields}; END_STRUCT; END_TYPE`
         }
         if (dt.derivation === 'array') {
-          return `TYPE ${dt.name} : ARRAY [${dt.dimensions.map((d) => `${d.lower}..${d.upper}`).join(', ')}] OF ${dt.baseType.value}; END_TYPE`
+          return `TYPE ${dt.name} : ARRAY [${dt.dimensions.map((d) => d.dimension).join(', ')}] OF ${dt.baseType.value}; END_TYPE`
         }
         return ''
       })

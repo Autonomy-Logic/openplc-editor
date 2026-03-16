@@ -1,8 +1,8 @@
-import { useOpenPLCStore } from '../../../../../../../store'
-import type { OpcUaServerConfig, OpcUaUser } from '../../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../../utils/cn'
 import { useCallback, useMemo, useState } from 'react'
 
+import type { OpcUaServerConfig, OpcUaUser } from '../../../../../../../../middleware/shared/ports/types'
+import { useOpenPLCStore } from '../../../../../../../store'
+import { cn } from '../../../../../../../utils/cn'
 import { UserModal } from './user-modal'
 
 interface UsersTabProps {

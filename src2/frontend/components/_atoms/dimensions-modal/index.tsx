@@ -1,10 +1,9 @@
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { Button } from '../buttons/default'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, ModalTrigger, } from '../../../components/_molecules/modal'
 import type { PLCBaseType } from '../../../utils/plc-constants'
-
+import { Button } from '../buttons/default'
 import TableActions from '../table-actions'
 import { TypeDropdownSelector } from '../type-dropdown-selector'
 import { ArrayDimensionsInput } from './array-dimensions-input'

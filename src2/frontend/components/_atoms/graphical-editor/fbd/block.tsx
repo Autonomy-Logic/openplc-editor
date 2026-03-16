@@ -19,6 +19,8 @@ import { BasicNodeData, BlockNodeData, BlockProps } from './utils'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_HEIGHT, DEFAULT_BLOCK_TYPE, DEFAULT_BLOCK_WIDTH, } from './utils/constants'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
+export type { BlockNode, BlockNodeData } from './utils/types'
+
 export const BlockNodeElement = <T extends object>({
   nodeId,
   data,
@@ -112,9 +114,7 @@ export const BlockNodeElement = <T extends object>({
     }
 
     const libraryBlock = libraries.system
-      // @ts-expect-error - type is dynamic
       .flatMap((block) => block.pous)
-      // @ts-expect-error - type is dynamic
       .find((pou) => pou.name === blockNameValue)
 
     if (!libraryBlock) {

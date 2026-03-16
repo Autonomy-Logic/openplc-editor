@@ -1,3 +1,5 @@
+import { ReactNode } from 'react'
+
 import {
   DefaultCoil,
   FallingEdgeCoil,
@@ -9,7 +11,6 @@ import {
 import { DefaultContact, FallingEdgeContact, NegatedContact, RisingEdgeContact } from '../../../../../assets/icons/flow/Contact'
 import { cn } from '../../../../../utils/cn'
 import { CoilType, ContactType } from './types'
-import { ReactNode } from 'react'
 
 // block
 

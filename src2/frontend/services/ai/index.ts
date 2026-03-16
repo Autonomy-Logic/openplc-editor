@@ -1,6 +1,7 @@
 export { AIRequestError, fetchAICredits, sendTelemetry, streamAIRequest } from './api-client'
-export { CompletionCache, buildCacheKey, hashString } from './completion-cache'
+export { buildCacheKey, CompletionCache, hashString } from './completion-cache'
 export { collectProjectContext } from './context-collector'
+export type { TelemetryTimer } from './telemetry'
 export {
   startTimer,
   trackChatMessage,
@@ -12,7 +13,6 @@ export {
   trackCompletionShown,
   trackCompletionTimeout,
 } from './telemetry'
-export type { TelemetryTimer } from './telemetry'
 export type {
   AIChatMessage,
   AIChatRequest,

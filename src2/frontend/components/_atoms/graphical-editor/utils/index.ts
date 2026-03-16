@@ -1,10 +1,9 @@
-import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { resolveArrayVariableByName } from '../../../../../backend/shared/array-variable-utils'
 import {
-  validateVariableType as _validateVariableType,
   getVariableRestrictionType,
+  validateVariableType as _validateVariableType,
 } from '../../../../../backend/shared/validate-variable-type'
-
+import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { BlockVariant } from '../ladder/utils/types'
 import { BlockVariant as newBlockVariant } from '../types/block'
 

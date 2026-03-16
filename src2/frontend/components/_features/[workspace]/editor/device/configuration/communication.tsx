@@ -1,11 +1,11 @@
+import { useEffect, useMemo } from 'react'
+
 import { communicationSelectors } from '../../../../../../hooks/use-store-selectors'
+import { useOpenPLCStore } from '../../../../../../store'
+import { cn } from '../../../../../../utils/cn'
 import { Checkbox } from '../../../../../_atoms/checkbox'
 import { Label } from '../../../../../_atoms/label'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
-import { useOpenPLCStore } from '../../../../../../store'
-import { cn } from '../../../../../../utils/cn'
-import { useEffect, useMemo } from 'react'
-
 import { ModbusRTUComponent } from './components/modbus-rtu'
 import { ModbusTCPComponent } from './components/modbus-tcp'
 

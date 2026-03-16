@@ -1,16 +1,18 @@
+import * as Popover from '@radix-ui/react-popover'
+import { useEffect, useRef, useState } from 'react'
+
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
-import { useEffect, useRef, useState } from 'react'
-import * as Popover from '@radix-ui/react-popover'
-
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { VariablesBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
+import { DEFAULT_CONTACT_BLOCK_HEIGHT,DEFAULT_CONTACT_BLOCK_WIDTH, DEFAULT_CONTACT_TYPES } from './utils/constants'
 import type { BasicNodeData, ContactProps } from './utils/types'
-import { VariablesBlockAutoComplete } from './autocomplete'
-import { DEFAULT_CONTACT_TYPES, DEFAULT_CONTACT_BLOCK_WIDTH, DEFAULT_CONTACT_BLOCK_HEIGHT } from './utils/constants'
+
+export type { ContactNode } from './utils/types'
 
 export const Contact = (block: ContactProps) => {
   const { selected, data, id } = block

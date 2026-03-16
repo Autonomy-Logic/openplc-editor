@@ -1,9 +1,10 @@
+import { useState } from 'react'
+
+import { useOpenPLCStore } from '../../../../../../../../store'
 import { CoilNode } from '../../../../../../../_atoms/graphical-editor/ladder/coil'
 import { DEFAULT_COIL_TYPES } from '../../../../../../../_atoms/graphical-editor/ladder/utils/constants'
 import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
-import { useOpenPLCStore } from '../../../../../../../../store'
-import { useState } from 'react'
 
 type CoilElementProps = {
   isOpen: boolean

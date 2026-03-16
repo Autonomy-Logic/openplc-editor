@@ -3,7 +3,6 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import { defaultCustomNodesStyles, nodesBuilder } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
-
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
 

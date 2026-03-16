@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { PouLanguageSources } from '../../../../../data/sources/POU'
-import { TimerIcon } from '../../../../../assets/icons/interface/Timer'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
-import { useOpenPLCStore } from '../../../../../store'
-import { cn } from '../../../../../utils/cn'
-import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
-import { useProject } from '../../../../../../middleware/shared/providers'
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { useProject } from '../../../../../../middleware/shared/providers'
+import { TimerIcon } from '../../../../../assets/icons/interface/Timer'
+import { PouLanguageSources } from '../../../../../data/sources/POU'
+import { useOpenPLCStore } from '../../../../../store'
+import { cn } from '../../../../../utils/cn'
+import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
 import { useToast } from '../../../[app]/toast/use-toast'
 import { IntervalModal } from '../interval-model'
 import { NewProjectStore } from '../store'
@@ -85,7 +85,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
         })
       }
       setEditingState('saved')
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
     } catch (_error) {
       toast({
         title: 'Cannot create a project!',

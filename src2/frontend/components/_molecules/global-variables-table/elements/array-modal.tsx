@@ -1,9 +1,10 @@
-import { DimensionsModal } from '../../../_atoms/dimensions-modal'
-import { toast } from '../../../_features/[app]/toast/use-toast'
+import { useEffect, useState } from 'react'
+
+import { baseTypeSchema } from '../../../../../middleware/shared/ports'
 import { useOpenPLCStore } from '../../../../store'
 import { arrayValidation } from '../../../../store/slices/workspace/utils/variables'
-import { baseTypeSchema } from '../../../../../middleware/shared/ports'
-import { useEffect, useState } from 'react'
+import { DimensionsModal } from '../../../_atoms/dimensions-modal'
+import { toast } from '../../../_features/[app]/toast/use-toast'
 
 type BaseType = (typeof baseTypeSchema.options)[number]
 
@@ -73,9 +74,9 @@ export const GlobalArrayModal = ({
     const variable = globalVariables.find((variable) => variable.name === variableName)
     if (!variable) return
 
-    if (variable.type.definition === 'array') {
-      setDimensions(variable.type.data?.dimensions.map((dimension) => dimension.dimension) ?? [])
-      setTypeValue(variable.type.data?.baseType ?? 'dint')
+    if (variable.type.definition === 'array' && variable.type.data) {
+      setDimensions(variable.type.data.dimensions.map((dimension) => dimension.dimension))
+      setTypeValue(variable.type.data.baseType.value ?? 'dint')
     } else {
       setDimensions([])
       setTypeValue('dint')
@@ -111,7 +112,7 @@ export const GlobalArrayModal = ({
     setSelectedInput((index + 1).toString())
   }
 
-  const handleUpdateType = (value: BaseType) => {
+  const handleUpdateType = (value: string) => {
     setTypeValue(value)
   }
 
@@ -155,7 +156,10 @@ export const GlobalArrayModal = ({
           definition: 'array',
           value: formatArrayName,
           data: {
-            baseType: isBaseType ? typeValue : typeValue,
+            baseType: {
+              definition: isBaseType ? ('base-type' as const) : ('user-data-type' as const),
+              value: typeValue,
+            },
             dimensions: dimensionToSave.map((dimension) => ({ dimension: dimension })),
           },
         },

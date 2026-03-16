@@ -1,5 +1,6 @@
-import { cn } from '../../../utils/cn'
 import { ComponentPropsWithRef, ElementType } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 type IWarningIconProps = ComponentPropsWithRef<'svg'> & {
   variant?: 'default' | 'primary' | 'secondary'

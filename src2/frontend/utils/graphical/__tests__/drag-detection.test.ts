@@ -1,12 +1,12 @@
 import {
-  MIME_TYPES,
-  VALID_FBD_BLOCK_TYPES,
-  VALID_LADDER_BLOCK_TYPES,
   getFbdBlockType,
   getLadderBlockType,
   getLibraryPath,
   isFbdBlockDrag,
   isLadderBlockDrag,
+  MIME_TYPES,
+  VALID_FBD_BLOCK_TYPES,
+  VALID_LADDER_BLOCK_TYPES,
 } from '../drag-detection'
 
 function createMockDataTransfer(

@@ -1,7 +1,7 @@
-import { Checkbox } from '../../../../../_atoms/checkbox'
-import { useOpenPLCStore } from '../../../../../../store'
 import { useEffect, useState } from 'react'
 
+import { useOpenPLCStore } from '../../../../../../store'
+import { Checkbox } from '../../../../../_atoms/checkbox'
 import { BoardConfiguration } from '../elements/board-configuration'
 import { RTUSettings } from '../elements/rtu-settings'
 import { TCPSettings } from '../elements/tcp-settings'

@@ -1,13 +1,13 @@
-import { toast } from '../../../../_features/[app]/toast/use-toast'
-import { useOpenPLCStore } from '../../../../../store'
-import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'
-import { PLCVariable } from '../../../../../../middleware/shared/ports'
-import { cn } from '../../../../../utils/cn'
-import { expandArrayVariables } from '../../../../../../backend/shared/array-variable-utils'
 import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { expandArrayVariables } from '../../../../../../backend/shared/array-variable-utils'
+import { PLCVariable } from '../../../../../../middleware/shared/ports'
+import { useOpenPLCStore } from '../../../../../store'
+import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'
+import { cn } from '../../../../../utils/cn'
+import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { getVariableRestrictionType } from '../../utils'
 import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
@@ -72,7 +72,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const variables = pou?.interface?.variables ?? []
     const variableRestrictions = blockTypeRestrictions(block, blockType)
 
-    const expandedVariables = expandArrayVariables(variables as PLCVariable[])
+    const expandedVariables = expandArrayVariables(variables)
 
     const filteredVariables =
       blockType !== 'block'
@@ -186,7 +186,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         data: {
           id: uuidv4(),
           name: variableName,
-          // @ts-expect-error - type is dynamic
           type: {
             definition: variableTypeRestriction.definition as 'base-type' | 'derived' | 'array' | 'user-data-type',
             value: variableTypeRestriction.value,

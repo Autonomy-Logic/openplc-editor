@@ -1,7 +1,7 @@
-import type { DevicePin } from '../../../../middleware/shared/ports/types'
 import { CellContext } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
+import type { DevicePin } from '../../../../middleware/shared/ports/types'
 import { GenericTextCell } from '../../_atoms/generic-table-inputs/generic-text-cell'
 import { toast } from '../../_features/[app]/toast/use-toast'
 

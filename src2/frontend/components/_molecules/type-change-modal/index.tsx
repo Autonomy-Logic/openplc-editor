@@ -1,6 +1,5 @@
-import type { TypeChangeValidationResult } from '../../../store/slices/project/validation/type-change'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
-
+import type { TypeChangeValidationResult } from '../../../store/slices/project/validation/type-change'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../modal'
 
 type TypeChangeModalProps = {

@@ -1,13 +1,13 @@
 import { createColumnHelper, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import React, { useEffect, useRef } from 'react'
 
-import { GenericDataTypeTable } from '../../../../_atoms/generic-data-type-table'
-import { toast } from '../../../../_features/[app]/toast/use-toast'
+import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
 import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../../../store'
 import { arrayValidation } from '../../../../../store/slices/project/validation/variables'
-import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
 import { cn } from '../../../../../utils/cn'
+import { GenericDataTypeTable } from '../../../../_atoms/generic-data-type-table'
+import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { DimensionCell } from './editable-cell'
 
 type PLCArrayDatatype = Extract<PLCDataType, { derivation: 'array' }>

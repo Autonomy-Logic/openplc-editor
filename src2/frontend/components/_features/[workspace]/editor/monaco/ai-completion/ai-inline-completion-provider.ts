@@ -1,5 +1,7 @@
-import { openPLCStoreBase } from '../../../../../../store'
 import type * as monaco from 'monaco-editor'
+
+import { openPLCStoreBase } from '../../../../../../store'
+import { getEnv } from '../../../../../../utils/get-env'
 import { buildFIMContext } from './context-builder'
 
 // ---------------------------------------------------------------------------
@@ -63,17 +65,17 @@ function startTimer(): TelemetryTimer {
   return { elapsed: () => Math.round(performance.now() - start) }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 function trackCompletionRequested(_data: Record<string, unknown>): void {}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 function trackCompletionShown(_data: Record<string, unknown>): void {}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 function trackCompletionAccepted(_data: Record<string, unknown>): void {}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 function trackCompletionDismissed(_data: Record<string, unknown>): void {}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 function trackCompletionError(_data: Record<string, unknown>): void {}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 function trackCompletionTimeout(_data: Record<string, unknown>): void {}
 
 // ---------------------------------------------------------------------------
@@ -120,8 +122,7 @@ async function* streamAIRequest(
 ): AsyncGenerator<string, void, unknown> {
   // Determine the base URL. In the web app, this comes from VITE_EDGE_API_URL.
   // Falls back to a relative path if the env var is not set.
-  const envBase =
-    typeof import.meta !== 'undefined' && (import.meta as Record<string, Record<string, string>>).env?.VITE_EDGE_API_URL
+  const envBase = getEnv('VITE_EDGE_API_URL')
   const baseUrl = envBase ? `${envBase}/ai` : '/api/ai'
 
   const response = await fetch(`${baseUrl}${endpoint}`, {
@@ -354,12 +355,12 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   freeInlineCompletions(_completions: monaco.languages.InlineCompletions): void {
     this.trackAcceptOrDismiss()
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   disposeInlineCompletions(_completions: monaco.languages.InlineCompletions): void {
     this.trackAcceptOrDismiss()
   }

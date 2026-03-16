@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useCapabilities, useDevice, useProject, useSystem, useWindow } from '../../middleware/shared/providers'
 import { FolderIcon } from '../assets/icons/interface/Folder'
 import { PlusIcon } from '../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
@@ -10,7 +11,6 @@ import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent } from '../components/_templates/[start]/main-content'
 import { StartSideContent } from '../components/_templates/[start]/side-content'
 import { useOpenPLCStore } from '../store'
-import { useCapabilities, useDevice, useProject, useSystem, useWindow } from '../../middleware/shared/providers'
 
 const StartScreen = () => {
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')

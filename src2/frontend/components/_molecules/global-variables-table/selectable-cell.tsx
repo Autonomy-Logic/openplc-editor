@@ -1,22 +1,22 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
-import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
-import { useOpenPLCStore } from '../../../store'
-import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
-import { propagateVariableTypeChange } from '../../../utils/variable-references'
-import type { PLCGlobalVariable, PLCVariable } from '../../../../middleware/shared/ports/types'
-import { baseTypeSchema } from '../../../../middleware/shared/ports'
-import { cn } from '../../../utils/cn'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
+import { baseTypeSchema } from '../../../../middleware/shared/ports'
+import type { PLCGlobalVariable, PLCVariable } from '../../../../middleware/shared/ports/types'
+import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
+import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
+import { useOpenPLCStore } from '../../../store'
+import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
+import { cn } from '../../../utils/cn'
+import { propagateVariableTypeChange } from '../../../utils/variable-references'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import { TypeChangeModal } from '../type-change-modal'
 import { GlobalArrayModal } from './elements/array-modal'
 
-type ISelectableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
+type ISelectableCellProps = CellContext<PLCGlobalVariable, unknown> & { editable?: boolean }
 
 const createVariableType = (
   definition: PLCVariable['type']['definition'],

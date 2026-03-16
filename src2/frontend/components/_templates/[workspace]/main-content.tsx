@@ -1,6 +1,7 @@
-import { cn } from '../../../utils/cn'
-import { useOpenPLCStore } from '../../../store'
 import { ComponentPropsWithoutRef } from 'react'
+
+import { useOpenPLCStore } from '../../../store'
+import { cn } from '../../../utils/cn'
 
 type IWorkspaceMainContentProps = ComponentPropsWithoutRef<'div'>
 const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {

@@ -1,13 +1,13 @@
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
+import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../_atoms/select'
-import TableActions from '../../../_atoms/table-actions'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../../store'
-import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../_atoms/select'
+import TableActions from '../../../_atoms/table-actions'
 import { EnumeratedTable } from './table'
 
 type PLCEnumeratedDatatype = Extract<PLCDataType, { derivation: 'enumerated' }>

@@ -1,10 +1,10 @@
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
-import { InputWithRef } from '../../../../_atoms/input'
-import { useOpenPLCStore } from '../../../../../store'
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { useOpenPLCStore } from '../../../../../store'
+import { InputWithRef } from '../../../../_atoms/input'
 import { useToast } from '../../../[app]/toast/use-toast'
 
 type OptionProps = {
@@ -250,7 +250,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
           const pouVariables = pou.interface?.variables ?? []
           acc[pouType].push({
             name: pou.name,
-            language: pou.body.language,
+            language: pou.body.language as 'ld' | 'sfc' | 'fbd' | 'il' | 'st' | 'python' | 'cpp',
             pouType: pou.pouType,
             body:
               (['st', 'il'].includes(pou.body.language) &&

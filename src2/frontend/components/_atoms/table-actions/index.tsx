@@ -1,6 +1,6 @@
-import { cn } from '../../../utils/cn'
 import React, { ButtonHTMLAttributes, ReactNode } from 'react'
 
+import { cn } from '../../../utils/cn'
 import { TableActionButton } from '../buttons/tables-actions'
 
 type TableAction = {

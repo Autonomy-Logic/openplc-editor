@@ -1,9 +1,9 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
+import { ReactNode, useEffect, useState } from 'react'
+
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { useOpenPLCStore } from '../../../store'
-import { ReactNode, useEffect, useState } from 'react'
-
 import { InputWithRef } from '../../_atoms/input'
 
 interface ProjectFilterBarProps {

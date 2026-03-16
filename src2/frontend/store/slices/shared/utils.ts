@@ -112,7 +112,7 @@ export function createEditorObjectForPou(
         name,
         path: name,
         pouType,
-        language: pouLanguage as 'ld' | 'sfc' | 'fbd',
+        language: pouLanguage,
       },
       variable: { display: 'table', description: '', classFilter: 'All', selectedRow: '' },
       graphical,

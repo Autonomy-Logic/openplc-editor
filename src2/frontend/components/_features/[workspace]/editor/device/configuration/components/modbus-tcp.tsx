@@ -1,15 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { tcpSelectors } from '../../../../../../../hooks/use-store-selectors'
-import { Checkbox } from '../../../../../../_atoms/checkbox'
-import { InputWithRef } from '../../../../../../_atoms/input'
-import { Label } from '../../../../../../_atoms/label'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
-import { useOpenPLCStore } from '../../../../../../../store'
-import { cn } from '../../../../../../../utils/cn'
 import { ComponentPropsWithoutRef, memo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
+import { tcpSelectors } from '../../../../../../../hooks/use-store-selectors'
+import { useOpenPLCStore } from '../../../../../../../store'
+import { cn } from '../../../../../../../utils/cn'
+import { Checkbox } from '../../../../../../_atoms/checkbox'
+import { InputWithRef } from '../../../../../../_atoms/input'
+import { Label } from '../../../../../../_atoms/label'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
 import { StaticHostConfigurationComponent } from './static-host'
 
 const INPUT_STYLES = {

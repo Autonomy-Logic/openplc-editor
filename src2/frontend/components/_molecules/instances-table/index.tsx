@@ -1,6 +1,6 @@
-import type { PLCInstance } from '../../../../middleware/shared/ports/types'
 import { createColumnHelper } from '@tanstack/react-table'
 
+import type { PLCInstance } from '../../../../middleware/shared/ports/types'
 import { usePouSnapshot } from '../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../store'
 import { GenericTable } from '../../_atoms/generic-table'
@@ -17,7 +17,7 @@ const columns = [
     maxSize: 150,
     cell: EditableNameCell,
   }),
-  columnHelper.accessor('pouName', {
+  columnHelper.accessor('program', {
     header: 'Program',
     size: 768,
     minSize: 150,
@@ -25,7 +25,7 @@ const columns = [
     enableResizing: true,
     cell: SelectableProgramCell,
   }),
-  columnHelper.accessor('taskName', {
+  columnHelper.accessor('task', {
     header: ' Task',
     enableResizing: true,
     size: 768,

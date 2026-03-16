@@ -1,16 +1,16 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
-import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
-import { useOpenPLCStore } from '../../../store'
-import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
-import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
-import { cn } from '../../../utils/cn'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
+import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
+import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
+import { useOpenPLCStore } from '../../../store'
+import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
+import { cn } from '../../../utils/cn'
+import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import { TypeChangeModal } from '../type-change-modal'
@@ -74,7 +74,7 @@ const SelectableTypeCell = ({
     {
       definition: 'system',
       values: sliceLibraries.system.flatMap((library) =>
-        library.pous.filter((pou) => pou.pouType === 'function-block').map((pou) => pou.name.toUpperCase()),
+        library.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
       ),
     },
     {
@@ -82,11 +82,11 @@ const SelectableTypeCell = ({
       values: sliceLibraries.user
         .filter((userLibrary) => userLibrary.name !== editor.meta.name)
         .flatMap((userLibrary) =>
-          'pous' in userLibrary && Array.isArray((userLibrary as { pous: { pouType: string; name: string }[] }).pous)
-            ? (userLibrary as { pous: { pouType: string; name: string }[] }).pous
-                .filter((pou) => pou.pouType === 'function-block')
+          'pous' in userLibrary && Array.isArray((userLibrary as { pous: { type: string; name: string }[] }).pous)
+            ? (userLibrary as { pous: { type: string; name: string }[] }).pous
+                .filter((pou) => pou.type === 'function-block')
                 .map((pou) => pou.name.toUpperCase())
-            : userLibrary.pouType === 'function-block'
+            : userLibrary.type === 'function-block'
               ? [userLibrary.name.toUpperCase()]
               : [],
         ),

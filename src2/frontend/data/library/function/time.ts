@@ -1,10 +1,11 @@
+import { z } from 'zod'
+
 import {
   BaseLibraryPouSchema,
   BaseLibraryVariableSchema,
   baseTypeSchema,
   genericTypeSchema,
 } from '../../../../middleware/shared/ports/plc-schemas'
-import { z } from 'zod'
 
 /** Library-level schema (name + version + paths). Not in plc-schemas so defined locally. */
 const BaseLibrarySchema = z.object({

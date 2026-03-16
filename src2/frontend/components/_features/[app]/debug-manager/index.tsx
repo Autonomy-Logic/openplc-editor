@@ -18,16 +18,17 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react'
-import { useOpenPLCStore } from '../../../../store'
-import { useWebRTCConnection } from '../../../../hooks/useWebRTCConnection'
-import { useDebugSession } from '../../../../hooks/useDebugSession'
+
 import { useDebugPolling } from '../../../../hooks/useDebugPolling'
+import { useDebugSession } from '../../../../hooks/useDebugSession'
+import { useWebRTCConnection } from '../../../../hooks/useWebRTCConnection'
 import { debugBridge } from '../../../../services/debug/debug-bridge'
 import { ModbusRtuTransport } from '../../../../services/debug/transports/modbus-rtu-transport'
-import { WebRTCTransport } from '../../../../services/debug/transports/webrtc-transport'
 import type { WebRTCTransportConfig } from '../../../../services/debug/transports/webrtc-transport'
+import { WebRTCTransport } from '../../../../services/debug/transports/webrtc-transport'
+import { clearDebugSessionControls,setDebugSessionControls } from '../../../../services/debug-session-controls'
 import { simulatorService } from '../../../../services/simulator/simulator-service'
-import { setDebugSessionControls, clearDebugSessionControls } from '../../../../services/debug-session-controls'
+import { useOpenPLCStore } from '../../../../store'
 
 export const DebugManager = () => {
   const { runtimeConnection, workspaceActions, consoleActions, webrtcActions } = useOpenPLCStore()

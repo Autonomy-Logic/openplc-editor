@@ -1,18 +1,24 @@
-import { AIChatPanel } from '../components/_features/[workspace]/ai-chat/ai-chat-panel'
+import * as Tabs from '@radix-ui/react-tabs'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ImperativePanelHandle } from 'react-resizable-panels'
+
+import { useCapabilities, useDebugger, useDevice } from '../../middleware/shared/providers'
+import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
-import { ConsoleFilters } from '../components/_organisms/console/filters'
+import { AIChatPanel } from '../components/_features/[workspace]/ai-chat/ai-chat-panel'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
+import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
+import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
+import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
 import { OpcUaServerEditor } from '../components/_features/[workspace]/editor/server/opcua-server'
 import { S7CommServerEditor } from '../components/_features/[workspace]/editor/server/s7comm-server'
-import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
-import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
-import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { Search } from '../components/_features/[workspace]/search'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
+import { ConsoleFilters } from '../components/_organisms/console/filters'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -23,14 +29,9 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent } from '../components/_templates/[workspace]/main-content'
 import { WorkspaceSideContent } from '../components/_templates/[workspace]/side-content'
-import { ExitIcon } from '../assets/icons/interface/Exit'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
-import { useCapabilities, useDebugger, useDevice } from '../../middleware/shared/providers'
-import * as Tabs from '@radix-ui/react-tabs'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ImperativePanelHandle } from 'react-resizable-panels'
 
 const SIMULATOR_BOARD_NAME = 'OpenPLC Simulator'
 
@@ -305,7 +306,7 @@ const WorkspaceScreen = () => {
               className='absolute bottom-0 top-0 z-[99] my-[2px] w-[4px] py-2 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700'
             />
 
-            <div id='workspaceContentPanel' className='flex h-full min-h-0 flex-1 grow flex-col gap-2'>
+            <div id='workspaceContentPanel' className='flex h-full min-h-0 flex-1 grow flex-col gap-2 overflow-hidden'>
               {tabs.length > 0 && <Navigation />}
               <ResizablePanelGroup id='editorPanelGroup' className={`flex h-full gap-2`} direction='vertical'>
                 <ResizablePanel
@@ -432,7 +433,7 @@ const WorkspaceScreen = () => {
                   <Tabs.Root
                     value={activeTab}
                     onValueChange={setActiveTab}
-                    className='relative flex h-full min-h-0 w-full flex-col gap-2'
+                    className='relative flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden'
                   >
                     <Tabs.List className='flex h-7 w-64 select-none gap-4'>
                       <Tabs.Trigger

@@ -1,11 +1,12 @@
+import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
+
+import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
+import { useOpenPLCStore } from '../../../../../store'
+import { extractSearchQuery } from '../../../../../store/slices/search/utils'
 import { InputWithRef } from '../../../../_atoms/input'
 import { ArrayDataType } from '../../../../_molecules/data-types/array'
 import { EnumeratorDataType } from '../../../../_molecules/data-types/enumerated'
 import { StructureDataType } from '../../../../_molecules/data-types/structure'
-import { useOpenPLCStore } from '../../../../../store'
-import { extractSearchQuery } from '../../../../../store/slices/search/utils'
-import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
-import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   dataTypeName: string

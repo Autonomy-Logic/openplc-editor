@@ -1,10 +1,10 @@
-import { Label } from '../../../../../../_atoms/label'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
-import { useOpenPLCStore } from '../../../../../../../store'
-import type { OpcUaServerConfig, OpcUaTrustedCertificate } from '../../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../../utils/cn'
 import { useCallback, useMemo, useState } from 'react'
 
+import type { OpcUaServerConfig, OpcUaTrustedCertificate } from '../../../../../../../../middleware/shared/ports/types'
+import { useOpenPLCStore } from '../../../../../../../store'
+import { cn } from '../../../../../../../utils/cn'
+import { Label } from '../../../../../../_atoms/label'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
 import { CertificateModal } from './certificate-modal'
 
 interface CertificatesTabProps {

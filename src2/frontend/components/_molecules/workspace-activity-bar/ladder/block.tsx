@@ -1,6 +1,7 @@
+import { ComponentPropsWithoutRef } from 'react'
+
 import BlockIcon from '../../../../assets/icons/project/ladder/Block'
 import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
-import { ComponentPropsWithoutRef } from 'react'
 
 export const BlockButton = ({ onDragStart, onDragEnd }: ComponentPropsWithoutRef<'div'>) => {
   return (

@@ -1,15 +1,15 @@
+import { useEffect, useState } from 'react'
+
 import {
   useAccelerator,
+  useCapabilities,
   useCompiler,
   useProject,
-  useWindow,
   useTheme,
-  useCapabilities,
+  useWindow,
 } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
-import { useEffect, useState } from 'react'
-
 import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {

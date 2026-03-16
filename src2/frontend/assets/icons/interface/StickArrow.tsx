@@ -1,5 +1,6 @@
-import { cn } from '../../../utils/cn'
 import { ComponentPropsWithoutRef } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 type IStickArrowIconProps = ComponentPropsWithoutRef<'svg'> & {
   size?: 'sm' | 'md' | 'lg'

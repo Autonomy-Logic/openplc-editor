@@ -1,5 +1,6 @@
-import { cn } from '../../../utils/cn'
 import { ComponentPropsWithRef, forwardRef } from 'react'
+
+import { cn } from '../../../utils/cn'
 
 const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { context?: string }>(
   ({ className, context, ...res }, ref) => (

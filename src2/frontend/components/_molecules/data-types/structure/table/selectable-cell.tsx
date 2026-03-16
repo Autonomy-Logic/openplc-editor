@@ -3,12 +3,12 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
-import { InputWithRef } from '../../../../_atoms/input'
-import { useOpenPLCStore } from '../../../../../store'
 import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCStructureVariable } from '../../../../../../middleware/shared/ports/types'
+import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
+import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
+import { InputWithRef } from '../../../../_atoms/input'
 import { ArrayModal } from './elements/array-modal'
 
 type ISelectableCellProps = CellContext<PLCStructureVariable, unknown> & { editable?: boolean }

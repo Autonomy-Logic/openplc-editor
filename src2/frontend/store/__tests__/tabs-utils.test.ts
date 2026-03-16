@@ -1,3 +1,4 @@
+import type { TabsProps } from '../slices/tabs/types'
 import {
   CreateDeviceEditor,
   CreateEditorModelObject,
@@ -8,7 +9,6 @@ import {
   CreateResourceEditor,
   CreateServerEditor,
 } from '../slices/tabs/utils'
-import type { TabsProps } from '../slices/tabs/types'
 
 describe('tabs/utils', () => {
   // -------------------------------------------------------------------------
