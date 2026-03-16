@@ -445,7 +445,7 @@ export const useProjectVariables = (): VariableTreeNode[] => {
       }
     }
 
-    const globalVars = projectData.configuration.resource.globalVariables
+    const globalVars = projectData.configurations.resource.globalVariables
     if (globalVars && globalVars.length > 0) {
       nodes.push(
         buildGlobalVariablesNode(
@@ -457,7 +457,7 @@ export const useProjectVariables = (): VariableTreeNode[] => {
     }
 
     return nodes
-  }, [projectData.pous, projectData.dataTypes, projectData.configuration.resource.globalVariables])
+  }, [projectData.pous, projectData.dataTypes, projectData.configurations.resource.globalVariables])
 }
 
 // Helper exports for tree manipulation

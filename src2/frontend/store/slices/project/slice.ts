@@ -344,7 +344,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
         }),
       )
-      return ok()
+      return ok(data)
     },
     setPouVariables: ({ pouName, variables }) => {
       setState(

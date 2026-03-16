@@ -126,7 +126,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       if (!sourceHandle) return undefined
 
       if (pouRef?.pouType !== 'function-block') {
-        const instances = project.data.configuration.resource.instances
+        const instances = project.data.configurations.resource.instances
         const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
         if (!programInstance) return undefined
       }
@@ -237,7 +237,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     debugForcedVariables,
     editor.meta.name,
     pouRef?.interface?.variables,
-    project.data.configuration.resource.instances,
+    project.data.configurations.resource.instances,
   ])
 
   const styledNodes = useMemo(() => {

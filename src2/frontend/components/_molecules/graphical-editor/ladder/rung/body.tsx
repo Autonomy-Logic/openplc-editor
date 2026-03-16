@@ -184,7 +184,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       if (!sourceHandle) return undefined
 
       if (pouRef?.pouType !== 'function-block') {
-        const instances = project.data.configuration.resource.instances
+        const instances = project.data.configurations.resource.instances
         const programInstance = instances.find((inst) => inst.program === editor.meta.name)
         if (!programInstance) return undefined
       }

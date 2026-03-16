@@ -44,6 +44,7 @@ export const Coil = (block: CoilProps) => {
       focus: () => void
       isFocused: boolean
       selectedVariable: { positionInArray: number; variableName: string }
+      triggerSubmit: () => void
     }
   >(null)
 
@@ -347,8 +348,11 @@ export const Coil = (block: CoilProps) => {
             onChange={onChangeHandler}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
-              if (e.key === 'Enter' && autocompleteRef.current?.selectedVariable.positionInArray !== -1) {
+              if (e.key === 'Enter' && openAutocomplete) {
+                e.preventDefault()
+                autocompleteRef.current?.triggerSubmit?.()
                 inputVariableRef.current?.blur({ submit: false })
+                return
               }
               setKeyPressedAtTextarea(e.key)
             }}

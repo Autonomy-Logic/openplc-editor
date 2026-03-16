@@ -85,13 +85,10 @@ function mapIpcPouToPortPou(ipcPou: IpcPou): PLCPou {
   return {
     name: ipcPou.data.name,
     pouType: ipcPou.type as PLCPou['pouType'],
-    interface:
-      ipcPou.data.variables.length > 0 || ipcPou.data.returnType
-        ? {
-            returnType: ipcPou.data.returnType,
-            variables: ipcPou.data.variables as PLCVariable[],
-          }
-        : undefined,
+    interface: {
+      returnType: ipcPou.data.returnType,
+      variables: ipcPou.data.variables as PLCVariable[],
+    },
     body: ipcPou.data.body as PLCPou['body'],
     documentation: ipcPou.data.documentation || undefined,
   }

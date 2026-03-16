@@ -199,7 +199,14 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         scope: 'local',
         associatedPou: editor.meta.name,
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        toast({
+          title: res.title ?? 'Error',
+          description: res.message ?? 'Failed to create variable',
+          variant: 'fail',
+        })
+        return
+      }
 
       const variable = res.data as PLCVariable | undefined
 

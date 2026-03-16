@@ -55,7 +55,11 @@ function makeFlow(overrides?: Partial<LadderFlowType>): LadderFlowType {
 
 function seedFlowWithRung(store: ReturnType<typeof makeStore>, editorName = 'editor-1', rung?: RungLadderState) {
   const r = rung ?? makeRung()
-  store.getState().ladderFlowActions.startLadderRung({ editorName, rung: r })
+  store.getState().ladderFlowActions.addLadderFlow({
+    name: editorName,
+    updated: true,
+    rungs: [r],
+  })
   return r
 }
 
@@ -144,22 +148,31 @@ describe('createLadderFlowSlice', () => {
   // startLadderRung
   // -------------------------------------------------------------------------
   it('startLadderRung creates a flow and adds the rung', () => {
-    const rung = makeRung({ id: 'rung-1' })
-    store.getState().ladderFlowActions.startLadderRung({ editorName: 'editor-1', rung })
+    store.getState().ladderFlowActions.startLadderRung({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      defaultBounds: [800, 200],
+    })
 
     const { ladderFlows } = store.getState()
     expect(ladderFlows).toHaveLength(1)
     expect(ladderFlows[0].name).toBe('editor-1')
     expect(ladderFlows[0].rungs).toHaveLength(1)
     expect(ladderFlows[0].rungs[0].id).toBe('rung-1')
+    expect(ladderFlows[0].rungs[0].nodes.length).toBeGreaterThanOrEqual(2)
   })
 
   it('startLadderRung appends rung to existing flow', () => {
-    const rung1 = makeRung({ id: 'rung-1' })
-    const rung2 = makeRung({ id: 'rung-2' })
-
-    store.getState().ladderFlowActions.startLadderRung({ editorName: 'editor-1', rung: rung1 })
-    store.getState().ladderFlowActions.startLadderRung({ editorName: 'editor-1', rung: rung2 })
+    store.getState().ladderFlowActions.startLadderRung({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      defaultBounds: [800, 200],
+    })
+    store.getState().ladderFlowActions.startLadderRung({
+      editorName: 'editor-1',
+      rungId: 'rung-2',
+      defaultBounds: [800, 200],
+    })
 
     const { ladderFlows } = store.getState()
     expect(ladderFlows).toHaveLength(1)
@@ -211,8 +224,10 @@ describe('createLadderFlowSlice', () => {
   // removeRung
   // -------------------------------------------------------------------------
   it('removeRung removes a rung by id', () => {
-    seedFlowWithRung(store, 'editor-1', makeRung({ id: 'rung-1' }))
-    store.getState().ladderFlowActions.startLadderRung({ editorName: 'editor-1', rung: makeRung({ id: 'rung-2' }) })
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({
+      name: 'editor-1',
+      rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
+    }))
 
     store.getState().ladderFlowActions.removeRung('editor-1', 'rung-1')
 
@@ -254,16 +269,18 @@ describe('createLadderFlowSlice', () => {
   // duplicateRung
   // -------------------------------------------------------------------------
   it('duplicateRung inserts new rung after the source rung', () => {
-    seedFlowWithRung(store, 'editor-1', makeRung({ id: 'rung-1' }))
-    store.getState().ladderFlowActions.startLadderRung({ editorName: 'editor-1', rung: makeRung({ id: 'rung-2' }) })
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({
+      name: 'editor-1',
+      rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
+    }))
 
-    const newRung = makeRung({ id: 'rung-dup' })
-    store.getState().ladderFlowActions.duplicateRung({ editorName: 'editor-1', rungId: 'rung-1', newRung })
+    store.getState().ladderFlowActions.duplicateRung({ editorName: 'editor-1', rungId: 'rung-1' })
 
     const flow = store.getState().ladderFlows[0]
     expect(flow.rungs).toHaveLength(3)
     expect(flow.rungs[0].id).toBe('rung-1')
-    expect(flow.rungs[1].id).toBe('rung-dup')
+    // The duplicated rung has a generated ID
+    expect(flow.rungs[1].id).toContain('rung_editor-1_')
     expect(flow.rungs[2].id).toBe('rung-2')
     expect(flow.updated).toBe(true)
   })
@@ -273,13 +290,13 @@ describe('createLadderFlowSlice', () => {
 
     store
       .getState()
-      .ladderFlowActions.duplicateRung({ editorName: 'editor-1', rungId: 'missing', newRung: makeRung() })
+      .ladderFlowActions.duplicateRung({ editorName: 'editor-1', rungId: 'missing' })
 
     expect(store.getState().ladderFlows[0].rungs).toHaveLength(1)
   })
 
   it('duplicateRung does nothing for nonexistent editor', () => {
-    store.getState().ladderFlowActions.duplicateRung({ editorName: 'nonexistent', rungId: 'rung-1', newRung: makeRung() })
+    store.getState().ladderFlowActions.duplicateRung({ editorName: 'nonexistent', rungId: 'rung-1' })
     expect(store.getState().ladderFlows).toEqual([])
   })
 
@@ -485,10 +502,10 @@ describe('createLadderFlowSlice', () => {
   })
 
   it('setSelectedNodes clears other rungs selected state when nodes are selected', () => {
-    seedFlowWithRung(store, 'editor-1', makeRung({ id: 'rung-1' }))
-    store
-      .getState()
-      .ladderFlowActions.startLadderRung({ editorName: 'editor-1', rung: makeRung({ id: 'rung-2' }) })
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({
+      name: 'editor-1',
+      rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
+    }))
 
     const node = makeNode({ id: 'n1', data: { draggable: true } })
     store.getState().ladderFlowActions.setNodes({
@@ -740,8 +757,10 @@ describe('createLadderFlowSlice', () => {
   })
 
   it('setSelectedNodes with empty array does not clear other rungs', () => {
-    seedFlowWithRung(store, 'editor-1', makeRung({ id: 'rung-1' }))
-    store.getState().ladderFlowActions.startLadderRung({ editorName: 'editor-1', rung: makeRung({ id: 'rung-2' }) })
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({
+      name: 'editor-1',
+      rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
+    }))
 
     store.getState().ladderFlowActions.setSelectedNodes({ editorName: 'editor-1', rungId: 'rung-1', nodes: [] })
 

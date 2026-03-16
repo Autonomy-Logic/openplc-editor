@@ -38,7 +38,7 @@ export function collectProjectContext(state: StoreState, currentPouName: string,
   }
 
   // 2. Global variables
-  const globals = state.project.data.configuration.resource['global-variables']
+  const globals = state.project.data.configurations.resource.globalVariables
   if (globals && globals.length > 0) {
     const globalLines = globals.map((v) => `  ${v.name} : ${v.type.value};`).join('\n')
     addSection(`(* Global Variables *)\nVAR_GLOBAL\n${globalLines}\nEND_VAR`)

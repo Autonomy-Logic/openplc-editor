@@ -109,10 +109,8 @@ export const BlockNodeElement = <T extends object>({
     if (!userPou) {
       return (
         libraries.system
-          // @ts-expect-error - type is dynamic
-          .flatMap((block) => block.pous)
-          // @ts-expect-error - type is dynamic
-          .find((pou) => pou.name.toLowerCase() === blockNameValue.toLowerCase())
+          .flatMap((block: { pous: Array<{ name: string }> }) => block.pous)
+          .find((pou: { name: string }) => pou.name.toLowerCase() === blockNameValue.toLowerCase())
       )
     }
 

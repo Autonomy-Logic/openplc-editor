@@ -62,19 +62,21 @@ type LadderFlowActions = {
   /**
    * Control the rungs of the flow
    */
-  startLadderRung: ({ editorName, rung }: { editorName: string; rung: RungLadderState }) => void
-  setRungs: ({ rungs, editorName }: { rungs: RungLadderState[]; editorName: string }) => void
-  removeRung: (editorName: string, rungId: string) => void
-  addComment: ({ editorName, rungId, comment }: { editorName: string; rungId: string; comment: string }) => void
-  duplicateRung: ({
+  startLadderRung: ({
     editorName,
     rungId,
-    newRung,
+    defaultBounds,
+    reactFlowViewport,
   }: {
     editorName: string
     rungId: string
-    newRung: RungLadderState
+    defaultBounds: [number, number]
+    reactFlowViewport?: [number, number]
   }) => void
+  setRungs: ({ rungs, editorName }: { rungs: RungLadderState[]; editorName: string }) => void
+  removeRung: (editorName: string, rungId: string) => void
+  addComment: ({ editorName, rungId, comment }: { editorName: string; rungId: string; comment: string }) => void
+  duplicateRung: ({ editorName, rungId }: { editorName: string; rungId: string }) => void
 
   /**
    * Control the rungs transactions

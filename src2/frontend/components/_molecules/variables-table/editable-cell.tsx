@@ -49,7 +49,7 @@ const EditableNameCell = ({
     searchQuery,
     projectActions: { getVariable, updatePou, updateVariable },
     project: {
-      data: { pous, configuration },
+      data: { pous, configurations },
     },
     workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
@@ -61,7 +61,7 @@ const EditableNameCell = ({
   const [impactAnalysis, setImpactAnalysis] = useState<ReferenceImpactAnalysis | null>(null)
   const confirmResolveRef = useRef<(v: boolean) => void>()
 
-  const globalVariables = configuration.resource.globalVariables
+  const globalVariables = configurations.resource.globalVariables
 
   const isExternalVariable = variable?.class === 'external'
 

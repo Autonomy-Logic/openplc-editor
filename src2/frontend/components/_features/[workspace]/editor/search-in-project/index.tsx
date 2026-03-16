@@ -309,7 +309,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
         type: dataType.derivation,
       }))
 
-    const resourceGlobalVar = data.configuration.resource.globalVariables.filter((variable) => {
+    const resourceGlobalVar = data.configurations.resource.globalVariables.filter((variable) => {
       const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
       return (
         resourceMatchesFilter &&
@@ -321,7 +321,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       )
     })
 
-    const resourceTasks = data.configuration.resource.tasks.filter((task) => {
+    const resourceTasks = data.configurations.resource.tasks.filter((task) => {
       const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
       return (
         resourceMatchesFilter &&
@@ -333,7 +333,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       )
     })
 
-    const resourceInstances = data.configuration.resource.instances.filter((instance) => {
+    const resourceInstances = data.configurations.resource.instances.filter((instance) => {
       const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
       return (
         resourceMatchesFilter &&

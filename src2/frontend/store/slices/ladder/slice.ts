@@ -2,7 +2,10 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { defaultCustomNodesStyles, nodesBuilder } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
+
 import { LadderFlowSlice, LadderFlowState } from './types'
+import { duplicateLadderRung } from './utils'
 
 export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], LadderFlowSlice> = (setState) => ({
   ladderFlows: [],
@@ -43,20 +46,58 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
     /**
      * Control the rungs of the flow
      */
-    startLadderRung: ({ editorName, rung }) => {
+    startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport }) => {
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
-          let flow = ladderFlows.find((f) => f.name === editorName)
-          if (!flow) {
-            flow = {
+          if (!ladderFlows.find((flow) => flow.name === editorName)) {
+            ladderFlows.push({
               name: editorName,
               updated: true,
               rungs: [],
-            }
-            ladderFlows.push(flow)
+            })
           }
 
-          flow.rungs.push(rung)
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const { powerRail } = defaultCustomNodesStyles
+          const railNodes = [
+            nodesBuilder.powerRail({
+              id: `left-rail-${rungId}`,
+              posX: 0,
+              posY: defaultBounds[1] / 2 - powerRail.height / 2,
+              connector: 'right',
+              handleX: powerRail.width,
+              handleY: defaultBounds[1] / 2,
+            }),
+            nodesBuilder.powerRail({
+              id: `right-rail-${rungId}`,
+              posX: defaultBounds[0],
+              posY: defaultBounds[1] / 2 - powerRail.height / 2,
+              connector: 'left',
+              handleX: defaultBounds[0] - powerRail.width,
+              handleY: defaultBounds[1] / 2,
+            }),
+          ]
+          flow.rungs.push({
+            id: rungId,
+            comment: '',
+            defaultBounds,
+            reactFlowViewport:
+              reactFlowViewport && reactFlowViewport > defaultBounds ? reactFlowViewport : defaultBounds,
+            nodes: [...railNodes],
+            edges: [
+              {
+                id: `e_${railNodes[0].id}_${railNodes[1].id}`,
+                source: railNodes[0].id,
+                target: railNodes[1].id,
+                sourceHandle: railNodes[0].data.handles[0].id,
+                targetHandle: railNodes[1].data.handles[0].id,
+                type: 'smoothstep',
+              },
+            ],
+            selectedNodes: [],
+          })
         }),
       )
     },
@@ -111,7 +152,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
         }),
       )
     },
-    duplicateRung({ editorName, rungId, newRung }) {
+    duplicateRung({ editorName, rungId }) {
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           const flow = ladderFlows.find((flow) => flow.name === editorName)
@@ -120,6 +161,8 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rungIndex = flow.rungs.findIndex((rung) => rung.id === rungId)
           if (rungIndex === -1) return
 
+          const rung = flow.rungs[rungIndex]
+          const newRung = duplicateLadderRung(flow.name, rung)
           flow.rungs.splice(rungIndex + 1, 0, newRung)
           flow.updated = true
         }),
