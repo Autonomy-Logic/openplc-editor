@@ -26,10 +26,7 @@ const Checkbox = ({ label, disabled, checked, className, ...props }: CheckboxPro
         </PrimitiveCheckbox.Indicator>
       </PrimitiveCheckbox.Root>
       {label && (
-        <label
-          htmlFor={props.id}
-          className='text-sm font-medium text-neutral-950 hover:cursor-pointer dark:text-white'
-        >
+        <label htmlFor={props.id} className='text-sm font-medium text-neutral-950 hover:cursor-pointer dark:text-white'>
           {label}
         </label>
       )}

@@ -137,16 +137,27 @@ const ModbusServerEditor = () => {
   const [iwCount, setIwCount] = useState(DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount.toString())
 
   // Helper function to reset buffer mapping state to defaults or provided values
-  const setBufferMappingState = useCallback((bufferMapping: ModbusBufferMapping | typeof DEFAULT_BUFFER_MAPPING = DEFAULT_BUFFER_MAPPING) => {
-    setQwCount((bufferMapping.holdingRegisters?.qwCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.qwCount).toString())
-    setMwCount((bufferMapping.holdingRegisters?.mwCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mwCount).toString())
-    setMdCount((bufferMapping.holdingRegisters?.mdCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mdCount).toString())
-    setMlCount((bufferMapping.holdingRegisters?.mlCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mlCount).toString())
-    setQxBits((bufferMapping.coils?.qxBits ?? DEFAULT_BUFFER_MAPPING.coils.qxBits).toString())
-    setMxBits((bufferMapping.coils?.mxBits ?? DEFAULT_BUFFER_MAPPING.coils.mxBits).toString())
-    setIxBits((bufferMapping.discreteInputs?.ixBits ?? DEFAULT_BUFFER_MAPPING.discreteInputs.ixBits).toString())
-    setIwCount((bufferMapping.inputRegisters?.iwCount ?? DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount).toString())
-  }, [])
+  const setBufferMappingState = useCallback(
+    (bufferMapping: ModbusBufferMapping | typeof DEFAULT_BUFFER_MAPPING = DEFAULT_BUFFER_MAPPING) => {
+      setQwCount(
+        (bufferMapping.holdingRegisters?.qwCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.qwCount).toString(),
+      )
+      setMwCount(
+        (bufferMapping.holdingRegisters?.mwCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mwCount).toString(),
+      )
+      setMdCount(
+        (bufferMapping.holdingRegisters?.mdCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mdCount).toString(),
+      )
+      setMlCount(
+        (bufferMapping.holdingRegisters?.mlCount ?? DEFAULT_BUFFER_MAPPING.holdingRegisters.mlCount).toString(),
+      )
+      setQxBits((bufferMapping.coils?.qxBits ?? DEFAULT_BUFFER_MAPPING.coils.qxBits).toString())
+      setMxBits((bufferMapping.coils?.mxBits ?? DEFAULT_BUFFER_MAPPING.coils.mxBits).toString())
+      setIxBits((bufferMapping.discreteInputs?.ixBits ?? DEFAULT_BUFFER_MAPPING.discreteInputs.ixBits).toString())
+      setIwCount((bufferMapping.inputRegisters?.iwCount ?? DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount).toString())
+    },
+    [],
+  )
 
   // Accordion state
   const [openSections, setOpenSections] = useState<string[]>(['holding-registers'])
@@ -385,10 +396,38 @@ const ModbusServerEditor = () => {
               </AccordionTrigger>
               <AccordionContent>
                 <div className='flex flex-col gap-3'>
-                  <BufferInput label='%QW' value={qwCount} onChange={setQwCount} onBlur={handleQwCountBlur} max={MAX_REGISTER_COUNT} description='Integer outputs' />
-                  <BufferInput label='%MW' value={mwCount} onChange={setMwCount} onBlur={handleMwCountBlur} max={MAX_REGISTER_COUNT} description='Integer memory' />
-                  <BufferInput label='%MD' value={mdCount} onChange={setMdCount} onBlur={handleMdCountBlur} max={MAX_REGISTER_COUNT} description='Double integer memory (2 regs each)' />
-                  <BufferInput label='%ML' value={mlCount} onChange={setMlCount} onBlur={handleMlCountBlur} max={MAX_REGISTER_COUNT} description='Long integer memory (4 regs each)' />
+                  <BufferInput
+                    label='%QW'
+                    value={qwCount}
+                    onChange={setQwCount}
+                    onBlur={handleQwCountBlur}
+                    max={MAX_REGISTER_COUNT}
+                    description='Integer outputs'
+                  />
+                  <BufferInput
+                    label='%MW'
+                    value={mwCount}
+                    onChange={setMwCount}
+                    onBlur={handleMwCountBlur}
+                    max={MAX_REGISTER_COUNT}
+                    description='Integer memory'
+                  />
+                  <BufferInput
+                    label='%MD'
+                    value={mdCount}
+                    onChange={setMdCount}
+                    onBlur={handleMdCountBlur}
+                    max={MAX_REGISTER_COUNT}
+                    description='Double integer memory (2 regs each)'
+                  />
+                  <BufferInput
+                    label='%ML'
+                    value={mlCount}
+                    onChange={setMlCount}
+                    onBlur={handleMlCountBlur}
+                    max={MAX_REGISTER_COUNT}
+                    description='Long integer memory (4 regs each)'
+                  />
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -400,8 +439,22 @@ const ModbusServerEditor = () => {
               </AccordionTrigger>
               <AccordionContent>
                 <div className='flex flex-col gap-3'>
-                  <BufferInput label='%QX' value={qxBits} onChange={setQxBits} onBlur={handleQxBitsBlur} max={MAX_BIT_COUNT} description='Boolean outputs' />
-                  <BufferInput label='%MX' value={mxBits} onChange={setMxBits} onBlur={handleMxBitsBlur} max={MAX_BIT_COUNT} description='Boolean memory' />
+                  <BufferInput
+                    label='%QX'
+                    value={qxBits}
+                    onChange={setQxBits}
+                    onBlur={handleQxBitsBlur}
+                    max={MAX_BIT_COUNT}
+                    description='Boolean outputs'
+                  />
+                  <BufferInput
+                    label='%MX'
+                    value={mxBits}
+                    onChange={setMxBits}
+                    onBlur={handleMxBitsBlur}
+                    max={MAX_BIT_COUNT}
+                    description='Boolean memory'
+                  />
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -413,7 +466,14 @@ const ModbusServerEditor = () => {
               </AccordionTrigger>
               <AccordionContent>
                 <div className='flex flex-col gap-3'>
-                  <BufferInput label='%IX' value={ixBits} onChange={setIxBits} onBlur={handleIxBitsBlur} max={MAX_BIT_COUNT} description='Boolean inputs' />
+                  <BufferInput
+                    label='%IX'
+                    value={ixBits}
+                    onChange={setIxBits}
+                    onBlur={handleIxBitsBlur}
+                    max={MAX_BIT_COUNT}
+                    description='Boolean inputs'
+                  />
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -425,7 +485,14 @@ const ModbusServerEditor = () => {
               </AccordionTrigger>
               <AccordionContent>
                 <div className='flex flex-col gap-3'>
-                  <BufferInput label='%IW' value={iwCount} onChange={setIwCount} onBlur={handleIwCountBlur} max={MAX_REGISTER_COUNT} description='Integer inputs' />
+                  <BufferInput
+                    label='%IW'
+                    value={iwCount}
+                    onChange={setIwCount}
+                    onBlur={handleIwCountBlur}
+                    max={MAX_REGISTER_COUNT}
+                    description='Integer inputs'
+                  />
                 </div>
               </AccordionContent>
             </AccordionItem>

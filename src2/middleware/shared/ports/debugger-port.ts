@@ -28,12 +28,7 @@
  *   - DebugTransport interface implementations
  */
 
-import type {
-  DebugSetResult,
-  DebugVariableResult,
-  Md5VerifyResult,
-  Unsubscribe,
-} from './types'
+import type { DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from './types'
 
 export interface DebuggerPort {
   /**
@@ -79,7 +74,10 @@ export interface DebuggerPort {
    * Editor: reads .dbg file from disk.
    * Web: reads from compiler API response.
    */
-  readDebugFile(projectPath: string, boardTarget: string): Promise<{ success: boolean; content?: string; error?: string }>
+  readDebugFile(
+    projectPath: string,
+    boardTarget: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }>
 
   /**
    * Subscribe to debugger disconnection events (e.g., simulator stopped, connection lost).

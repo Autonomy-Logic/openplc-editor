@@ -197,7 +197,7 @@ const VariableElement = (block: VariableProps) => {
 
     // For variable nodes (block pins), allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types
-    let variable: PLCVariable | { name: string } | undefined = ((pou.interface?.variables ?? [])).find(
+    let variable: PLCVariable | { name: string } | undefined = (pou.interface?.variables ?? []).find(
       (v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase(),
     )
     const literalTypes = getLiteralType(variableNameToSubmit)
@@ -241,7 +241,9 @@ const VariableElement = (block: VariableProps) => {
     if (!data.variable || !data.variable.name) return undefined
     const { pou } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId: id })
     if (!pou) return undefined
-    const variable = (pou.interface?.variables ?? []).find((v) => v.name.toLowerCase() === data.variable.name.toLowerCase())
+    const variable = (pou.interface?.variables ?? []).find(
+      (v) => v.name.toLowerCase() === data.variable.name.toLowerCase(),
+    )
     return variable?.type.value
   }
 

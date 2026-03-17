@@ -37,13 +37,7 @@
  *   - runtimeLogout()
  */
 
-import type {
-  PlcStatus,
-  RuntimeLogEntry,
-  SerialPort,
-  TimingStats,
-  Unsubscribe,
-} from './types'
+import type { PlcStatus, RuntimeLogEntry, SerialPort, TimingStats, Unsubscribe } from './types'
 
 export interface LoginParams {
   username: string

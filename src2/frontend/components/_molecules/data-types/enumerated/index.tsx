@@ -136,12 +136,12 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
       className='flex h-full w-full flex-1 flex-row gap-4 overflow-hidden bg-transparent'
       {...rest}
     >
-      <div className='flex w-full gap-8 justify-between'>
+      <div className='flex w-full justify-between gap-8'>
         <div className='w-[600px]'>
           <div aria-label='Enumerated base type container' className='flex flex-col gap-3'></div>
           <div
             aria-label='Enum data type table actions container'
-            className='flex h-8 w-full items-center justify-between mb-3'
+            className='mb-3 flex h-8 w-full items-center justify-between'
           >
             <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
               Description

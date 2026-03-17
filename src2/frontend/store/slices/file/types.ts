@@ -21,7 +21,13 @@ export type FileSliceDataObject = Record<string, FileSliceData>
 
 export type FileActions = {
   setFiles: (args: { files: FileSliceDataObject }) => void
-  addFile: (args: { name: string; type: FileSliceType; filePath: string; isNew?: boolean; cleanState?: unknown }) => boolean
+  addFile: (args: {
+    name: string
+    type: FileSliceType
+    filePath: string
+    isNew?: boolean
+    cleanState?: unknown
+  }) => boolean
   removeFile: (args: { name: string }) => void
   updateFile: (args: {
     name: string

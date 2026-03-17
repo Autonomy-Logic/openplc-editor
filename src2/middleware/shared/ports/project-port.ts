@@ -29,14 +29,7 @@
  *   - Project state in Zustand store
  */
 
-import type {
-  DeviceConfiguration,
-  DevicePin,
-  PLCProjectData,
-  ProjectMeta,
-  RecentProject,
-  Unsubscribe,
-} from './types'
+import type { DeviceConfiguration, DevicePin, PLCProjectData, ProjectMeta, RecentProject, Unsubscribe } from './types'
 
 export interface CreateProjectParams {
   name: string
@@ -62,7 +55,10 @@ export interface ProjectResponse {
 
 export interface SaveProjectParams {
   projectPath: string
-  projectData: PLCProjectData
+  projectData: PLCProjectData & {
+    /** Debug variable flags to persist (collected before save). */
+    debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
+  }
   deviceConfiguration: DeviceConfiguration
   devicePinMapping: DevicePin[]
 }

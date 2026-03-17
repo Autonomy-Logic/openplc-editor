@@ -9,7 +9,7 @@
  * Equivalent to `window.bridge.debugger*()` calls in the desktop editor.
  */
 
-import type { DebugConnectionType, DebugSetResult,DebugTransport, DebugTransportResult } from './types'
+import type { DebugConnectionType, DebugSetResult, DebugTransport, DebugTransportResult } from './types'
 
 type StopCallback = () => void
 

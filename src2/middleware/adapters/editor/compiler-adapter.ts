@@ -181,4 +181,4 @@ export function createEditorCompilerAdapter(): CompilerPort {
   }
 }
 
-export { portPouToIpcPou, toIpcProjectData, inferStage }
+export { inferStage,portPouToIpcPou, toIpcProjectData }

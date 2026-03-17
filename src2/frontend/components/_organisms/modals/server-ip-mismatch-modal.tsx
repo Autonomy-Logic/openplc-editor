@@ -101,7 +101,7 @@ const ServerIpMismatchModal = ({ isOpen, ...rest }: ServerIpMismatchModalProps) 
           <div className='mt-2 flex w-full flex-col gap-2 text-sm'>
             <button
               onClick={handleSwitchToAllInterfaces}
-              className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white hover:bg-brand/90'
+              className='hover:bg-brand/90 w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white'
             >
               Switch to All Interfaces (0.0.0.0)
             </button>

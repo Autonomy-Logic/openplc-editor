@@ -43,4 +43,4 @@ export const VARIABLE_ELEMENT_HEIGHT = 32
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 
-export const FBD_VARIABLE_NODE_TYPES = ['input-variable', 'output-variable', 'inout-variable'] as const
+export { FBD_VARIABLE_NODE_TYPES } from '../../../../../utils/graphical/constants'

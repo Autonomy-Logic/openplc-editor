@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-import { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
+import {
+  BaseLibraryPouSchema,
+  BaseLibraryVariableSchema,
+  baseTypeSchema,
+} from '../../../middleware/shared/ports/plc-schemas'
 
 /** Library-level schema (name + version + paths). Not in plc-schemas so defined locally. */
 const BaseLibrarySchema = z.object({
@@ -10,7 +14,6 @@ const BaseLibrarySchema = z.object({
   stPath: z.string(),
   cPath: z.string(),
 })
-
 
 const SequentMicrosystemsModulesVariablesSchema = BaseLibraryVariableSchema.extend({
   type: z.discriminatedUnion('definition', [

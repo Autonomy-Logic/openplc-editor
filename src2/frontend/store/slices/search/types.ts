@@ -2,13 +2,16 @@ export type Project = {
   searchQuery: string
   projectName: string
   functions: {
-    pous: Record<'program' | 'function' | 'function-block', Array<{
-      name: string
-      language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st' | 'python' | 'cpp'
-      pouType: 'program' | 'function' | 'function-block'
-      body: string
-      variable: string | null
-    }>>
+    pous: Record<
+      'program' | 'function' | 'function-block',
+      Array<{
+        name: string
+        language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st' | 'python' | 'cpp'
+        pouType: 'program' | 'function' | 'function-block'
+        body: string
+        variable: string | null
+      }>
+    >
     dataTypes: Array<{
       name: string
       type: 'array' | 'structure' | 'enumerated'

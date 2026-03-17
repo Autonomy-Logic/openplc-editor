@@ -13,8 +13,6 @@
  *   </PlatformProvider>
  */
 
-import type { PlatformPorts } from './shared/providers/types'
-import { EDITOR_CAPABILITIES } from './shared/ports/platform-capabilities'
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import type { EditorDebugConnectionConfig } from './adapters/editor/debugger-adapter'
@@ -22,10 +20,12 @@ import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
+import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
 import { createEditorSystemAdapter } from './adapters/editor/system-adapter'
 import { createEditorThemeAdapter } from './adapters/editor/theme-adapter'
-import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
 import { createEditorWindowAdapter } from './adapters/editor/window-adapter'
+import { EDITOR_CAPABILITIES } from './shared/ports/platform-capabilities'
+import type { PlatformPorts } from './shared/providers/types'
 
 /**
  * Runtime connection target — IP address of the OpenPLC runtime device.

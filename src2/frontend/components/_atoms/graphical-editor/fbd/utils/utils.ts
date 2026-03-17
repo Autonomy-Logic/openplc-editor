@@ -31,7 +31,7 @@ export const getFBDPouVariablesRungNodeAndEdges = (
   const rung = fbdFlows.find((flow) => flow.name === editor.meta.name)?.rung
   const node = rung?.nodes.find((node) => node.id === data.nodeId)
 
-  const variables: PLCVariable[] = (pou?.interface?.variables ?? [])
+  const variables: PLCVariable[] = pou?.interface?.variables ?? []
   let variable = variables.find((variable) => {
     if (!node) return undefined
     switch (node.type as keyof typeof customNodeTypes) {

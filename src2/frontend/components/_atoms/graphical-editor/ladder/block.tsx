@@ -19,8 +19,20 @@ import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildBlockNode } from './buildNodes'
 import { CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
-import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_HEIGHT, DEFAULT_BLOCK_TYPE, DEFAULT_BLOCK_WIDTH, } from './utils/constants'
-import type { BasicNodeData, BlockNodeData, BlockProps, BlockVariant, LadderBlockConnectedVariables, } from './utils/types'
+import {
+  DEFAULT_BLOCK_CONNECTOR_Y,
+  DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+  DEFAULT_BLOCK_HEIGHT,
+  DEFAULT_BLOCK_TYPE,
+  DEFAULT_BLOCK_WIDTH,
+} from './utils/constants'
+import type {
+  BasicNodeData,
+  BlockNodeData,
+  BlockProps,
+  BlockVariant,
+  LadderBlockConnectedVariables,
+} from './utils/types'
 
 export type { BlockNode, BlockNodeData, BlockVariant } from './utils/types'
 
@@ -110,11 +122,9 @@ export const BlockNodeElement = <T extends object>({
     const userPou = pous.find((pou) => pou.name.toLowerCase() === userLibrary?.name.toLowerCase())
 
     if (!userPou) {
-      return (
-        libraries.system
-          .flatMap((block: { pous: Array<{ name: string }> }) => block.pous)
-          .find((pou: { name: string }) => pou.name.toLowerCase() === blockNameValue.toLowerCase())
-      )
+      return libraries.system
+        .flatMap((block: { pous: Array<{ name: string }> }) => block.pous)
+        .find((pou: { name: string }) => pou.name.toLowerCase() === blockNameValue.toLowerCase())
     }
 
     const variables = (userPou.interface?.variables ?? []).map((variable) => ({
@@ -477,8 +487,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     if (nodeVariableName === selectedVariableName) {
       const typeMatches =
-        variable.type.definition === 'derived' &&
-        variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
+        variable.type.definition === 'derived' && variable.type.value.toLowerCase() === nodeBlockType.toLowerCase()
 
       if (!typeMatches) {
         setWrongVariable(true)
@@ -677,7 +686,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
       handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
-      variant: { name: libPou.name, documentation: libPou.documentation, type: blockVariant.type, variables: [...newNodeVariables] },
+      variant: {
+        name: libPou.name,
+        documentation: libPou.documentation,
+        type: blockVariant.type,
+        variables: [...newNodeVariables],
+      },
       executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
 
@@ -765,7 +779,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     >
       {data.hasDivergence && hoveringBlock && (
         <div
-          className='h-6 w-6 absolute right-[-12px] top-[-12px] pointer z-10 rounded-full bg-slate-600 flex justify-center items-center shadow-sm'
+          className='pointer absolute right-[-12px] top-[-12px] z-10 flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 shadow-sm'
           onClick={handleUpdateDivergence}
         >
           <TooltipProvider>

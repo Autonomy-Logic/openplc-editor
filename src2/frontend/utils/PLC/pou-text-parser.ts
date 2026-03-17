@@ -239,5 +239,3 @@ export const parseHybridPouFromString = (content: string, language: string, type
     throw new Error('Failed to parse hybrid POU: Unknown error')
   }
 }
-
-

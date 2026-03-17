@@ -121,20 +121,11 @@ export type DeviceActions = {
   updatePin: (updatedData: Partial<DevicePin>) => PinUpdateResponse
   setDeviceBoard: (board: string) => void
   setCommunicationPort: (port: string) => void
-  setCommunicationPreferences: (prefs: {
-    enableRTU?: boolean
-    enableTCP?: boolean
-    enableDHCP?: boolean
-  }) => void
+  setCommunicationPreferences: (prefs: { enableRTU?: boolean; enableTCP?: boolean; enableDHCP?: boolean }) => void
   setRTUConfig: (config: RTUConfigParam) => void
   setTCPConfig: (config: TCPConfigParam) => void
   setWifiConfig: (config: { tcpWifiSSID?: string; tcpWifiPassword?: string }) => void
-  setStaticHostConfiguration: (config: {
-    ipAddress?: string
-    dns?: string
-    gateway?: string
-    subnet?: string
-  }) => void
+  setStaticHostConfiguration: (config: { ipAddress?: string; dns?: string; gateway?: string; subnet?: string }) => void
   setCompileOnly: (compileOnly: boolean) => void
   setRuntimeIpAddress: (ipAddress: string) => void
   setRuntimeJwtToken: (token: string | null) => void

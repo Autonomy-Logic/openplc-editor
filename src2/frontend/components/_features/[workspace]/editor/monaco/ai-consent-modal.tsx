@@ -23,7 +23,7 @@ const AIConsentModal = () => {
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => onOpenChange('ai-consent', open)}>
-      <ModalContent className='flex !inset-x-0 !top-1/2 !bottom-auto !h-auto w-[400px] !-translate-y-1/2 select-none flex-col gap-5 rounded-lg p-6'>
+      <ModalContent className='!inset-x-0 !bottom-auto !top-1/2 flex !h-auto w-[400px] !-translate-y-1/2 select-none flex-col gap-5 rounded-lg p-6'>
         <ModalTitle className='text-base font-semibold text-neutral-950 dark:text-white'>AI-Assisted Coding</ModalTitle>
 
         <div className='flex flex-col gap-3 text-sm text-neutral-600 dark:text-neutral-300'>

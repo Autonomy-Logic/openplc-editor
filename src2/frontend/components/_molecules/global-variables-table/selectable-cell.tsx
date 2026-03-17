@@ -8,7 +8,7 @@ import type { PLCGlobalVariable, PLCVariable } from '../../../../middleware/shar
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
 import { useOpenPLCStore } from '../../../store'
-import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
+import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
 import { propagateVariableTypeChange } from '../../../utils/variable-references'
 import { InputWithRef } from '../../_atoms/input'

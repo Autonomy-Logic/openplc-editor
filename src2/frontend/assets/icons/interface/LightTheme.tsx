@@ -2,7 +2,6 @@ import { IconStyles } from '../../../data/constants/icon-styles'
 import { cn } from '../../../utils/cn'
 import { IIconProps } from '../Types/iconTypes'
 
-
 export const LightThemeIcon = (props: IIconProps) => {
   const { className, size = 'md', ...res } = props
   const sizeClasses = IconStyles.sizeClasses.small[size]

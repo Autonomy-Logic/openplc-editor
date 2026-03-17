@@ -509,7 +509,8 @@ const S7CommServerEditor = () => {
   const handleSaveDataBlock = useCallback(
     (dataBlock: S7CommUIDataBlock) => {
       // Cast UI data block to middleware type — the extra UI fields (startBuffer, bitAddressing) are ignored by the store
-      const middlewareBlock = dataBlock as unknown as import('../../../../../../../middleware/shared/ports/types').S7CommDataBlock
+      const middlewareBlock =
+        dataBlock as unknown as import('../../../../../../../middleware/shared/ports/types').S7CommDataBlock
       if (editingBlock) {
         projectActions.updateS7CommDataBlock(serverName, editingBlock.dbNumber, middlewareBlock)
       } else {
@@ -731,7 +732,9 @@ const S7CommServerEditor = () => {
                                 {db.sizeBytes} bytes
                               </td>
                               <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
-                                {BUFFER_TYPE_OPTIONS.find((o) => o.value === db.mapping.type)?.label || db.mapping.type || 'Unknown'}
+                                {BUFFER_TYPE_OPTIONS.find((o) => o.value === db.mapping.type)?.label ||
+                                  db.mapping.type ||
+                                  'Unknown'}
                               </td>
                               <td className='px-3 py-2 text-right'>
                                 <div className='flex justify-end gap-2'>

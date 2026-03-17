@@ -1,4 +1,10 @@
-import type { Architecture,DebugTreeNode, FbInstanceInfo, Platform, PlcLogs } from '../../../../middleware/shared/ports/types'
+import type {
+  Architecture,
+  DebugTreeNode,
+  FbInstanceInfo,
+  Platform,
+  PlcLogs,
+} from '../../../../middleware/shared/ports/types'
 
 // ---------------------------------------------------------------------------
 // PLC Log Filters

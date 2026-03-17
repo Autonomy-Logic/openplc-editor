@@ -205,9 +205,7 @@ describe('createWorkspaceSlice', () => {
         message: `msg${i}`,
       }))
       store.getState().workspaceActions.setPlcLogs(initial)
-      const extra: RuntimeLogEntry[] = [
-        { id: LOG_BUFFER_CAP, timestamp: 'tx', level: 'ERROR', message: 'extra' },
-      ]
+      const extra: RuntimeLogEntry[] = [{ id: LOG_BUFFER_CAP, timestamp: 'tx', level: 'ERROR', message: 'extra' }]
       store.getState().workspaceActions.appendPlcLogs(extra)
       const logs = store.getState().workspace.plcLogs as RuntimeLogEntry[]
       expect(logs.length).toBe(LOG_BUFFER_CAP)
@@ -303,7 +301,10 @@ describe('createWorkspaceSlice', () => {
   })
 
   it('setDebugVariableIndexes', () => {
-    const indexes = new Map([['var1', 0], ['var2', 1]])
+    const indexes = new Map([
+      ['var1', 0],
+      ['var2', 1],
+    ])
     store.getState().workspaceActions.setDebugVariableIndexes(indexes)
     expect(store.getState().workspace.debugVariableIndexes).toEqual(indexes)
   })
@@ -344,7 +345,10 @@ describe('createWorkspaceSlice', () => {
   })
 
   it('setDebugExpandedNodes', () => {
-    const expandedNodes = new Map([['node1', true], ['node2', false]])
+    const expandedNodes = new Map([
+      ['node1', true],
+      ['node2', false],
+    ])
     store.getState().workspaceActions.setDebugExpandedNodes(expandedNodes)
     expect(store.getState().workspace.debugExpandedNodes).toEqual(expandedNodes)
   })
@@ -417,14 +421,11 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setDebugVariableValues(new Map([['x', 'true']]))
     store.getState().workspaceActions.setDebugForcedVariables(new Map([['x', true]]))
     store.getState().workspaceActions.setDebugTick(100)
-    store.getState().workspaceActions.setDebugVariableTree(
-      new Map([
-        [
-          'x',
-          { name: 'x', fullPath: 'x', compositeKey: 'x', type: 'BOOL', isComplex: false },
-        ],
-      ]),
-    )
+    store
+      .getState()
+      .workspaceActions.setDebugVariableTree(
+        new Map([['x', { name: 'x', fullPath: 'x', compositeKey: 'x', type: 'BOOL', isComplex: false }]]),
+      )
     store.getState().workspaceActions.setDebugExpandedNodes(new Map([['n', true]]))
     store.getState().workspaceActions.setFbDebugInstances(
       new Map([
@@ -503,9 +504,11 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setDebugVariableIndexes(new Map([[key, 5]]))
     store.getState().workspaceActions.setDebugVariableValues(new Map([[key, '42']]))
     store.getState().workspaceActions.setDebugForcedVariables(new Map([[key, true]]))
-    store.getState().workspaceActions.setDebugVariableTree(
-      new Map([[key, { name: 'myVar', fullPath: key, compositeKey: key, type: 'INT', isComplex: false }]]),
-    )
+    store
+      .getState()
+      .workspaceActions.setDebugVariableTree(
+        new Map([[key, { name: 'myVar', fullPath: key, compositeKey: key, type: 'INT', isComplex: false }]]),
+      )
     store.getState().workspaceActions.setDebugExpandedNodes(new Map([[key, true]]))
 
     store.getState().workspaceActions.removeDebugVariable(key)

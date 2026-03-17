@@ -8,7 +8,7 @@ import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
 import { useOpenPLCStore } from '../../../store'
-import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
+import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { InputWithRef } from '../../_atoms/input'
@@ -271,10 +271,7 @@ const SelectableTypeCell = ({
         />
       )}
       <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
-        <PrimitiveDropdown.Trigger
-          asChild
-          disabled={isDebuggerVisible}
-        >
+        <PrimitiveDropdown.Trigger asChild disabled={isDebuggerVisible}>
           <div
             className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
               'pointer-events-none': !selected || isDebuggerVisible,

@@ -342,7 +342,13 @@ describe('createSharedSlice', () => {
         // Create a POU directly at the project level that will collide
         store.getState().projectActions.createPou({
           type: 'program',
-          data: { language: 'st', name: 'CollideName', variables: [], body: { language: 'st', value: '' }, documentation: '' },
+          data: {
+            language: 'st',
+            name: 'CollideName',
+            variables: [],
+            body: { language: 'st', value: '' },
+            documentation: '',
+          },
         })
 
         // Try to duplicate Source to CollideName -- the shared duplicate checks for
@@ -834,7 +840,9 @@ describe('createSharedSlice', () => {
         store.getState().projectActions.setPous(pous)
 
         store.getState().snapshotActions.pushToHistory('Main', {
-          variables: [{ name: 'x', type: { definition: 'base-type' as const, value: 'INT' }, location: '', documentation: '' }],
+          variables: [
+            { name: 'x', type: { definition: 'base-type' as const, value: 'INT' }, location: '', documentation: '' },
+          ],
           body: 'restored-body',
         })
 
@@ -848,7 +856,9 @@ describe('createSharedSlice', () => {
 
       it('restores the last snapshot and moves current state to future', () => {
         const snapshotWithVars = {
-          variables: [{ name: 'x', type: { definition: 'base-type' as const, value: 'INT' }, location: '', documentation: '' }],
+          variables: [
+            { name: 'x', type: { definition: 'base-type' as const, value: 'INT' }, location: '', documentation: '' },
+          ],
           body: 'old-body',
           globalVariables: [],
         }

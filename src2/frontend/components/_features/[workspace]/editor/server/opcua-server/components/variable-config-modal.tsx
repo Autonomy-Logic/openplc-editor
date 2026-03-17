@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import type { OpcUaFieldConfig, OpcUaNodeConfig, OpcUaPermissions } from '../../../../../../../../middleware/shared/ports/types'
+import type {
+  OpcUaFieldConfig,
+  OpcUaNodeConfig,
+  OpcUaPermissions,
+} from '../../../../../../../../middleware/shared/ports/types'
 import { cn } from '../../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'

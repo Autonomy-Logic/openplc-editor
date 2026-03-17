@@ -19,5 +19,5 @@ declare const BUILD_DATE: string
  * Vitest-compatible `vi` global — aliased to `jest` in Jest via jest-vi-shim.ts
  * so shared test files can use `vi.spyOn()` in both Jest and Vitest.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 declare const vi: typeof jest

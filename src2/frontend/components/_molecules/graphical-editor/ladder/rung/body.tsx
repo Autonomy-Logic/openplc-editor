@@ -531,7 +531,12 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       })
 
     if (pouRef) {
-      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
+      syncNodesWithVariables(
+        pouRef.interface?.variables ?? [],
+        ladderFlows,
+        ladderFlowActions.updateNode,
+        editor.meta.name,
+      )
     }
   }
 
@@ -603,7 +608,12 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     if (pouRef) {
-      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
+      syncNodesWithVariables(
+        pouRef.interface?.variables ?? [],
+        ladderFlows,
+        ladderFlowActions.updateNode,
+        editor.meta.name,
+      )
     }
   }
 
@@ -654,7 +664,12 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
 
     if (pouRef) {
-      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, editor.meta.name)
+      syncNodesWithVariables(
+        pouRef.interface?.variables ?? [],
+        ladderFlows,
+        ladderFlowActions.updateNode,
+        editor.meta.name,
+      )
     }
   }
 

@@ -277,7 +277,7 @@ const WorkspaceScreen = () => {
   }, [device, setAvailableOptions, setDeviceBoard])
 
   return (
-    <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950 overflow-hidden'>
+    <div className='flex h-full w-full overflow-hidden bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
         <WorkspaceActivityBar
           defaultActivityBar={{
@@ -428,7 +428,7 @@ const WorkspaceScreen = () => {
                   collapsible
                   defaultSize={31}
                   minSize={22}
-                  className='flex-1 grow min-h-0 rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
+                  className='min-h-0 flex-1 grow rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
                   <Tabs.Root
                     value={activeTab}
@@ -470,7 +470,7 @@ const WorkspaceScreen = () => {
                     <Tabs.Content
                       aria-label='Console panel content'
                       value='console'
-                      className='flex flex-col h-full min-h-0 w-full overflow-hidden p-2 data-[state=inactive]:hidden'
+                      className='flex h-full min-h-0 w-full flex-col overflow-hidden p-2 data-[state=inactive]:hidden'
                     >
                       <ConsoleComponent />
                     </Tabs.Content>
@@ -518,7 +518,7 @@ const WorkspaceScreen = () => {
                       <Tabs.Content
                         aria-label='PLC Logs panel content'
                         value='plc-logs'
-                        className='flex flex-col h-full min-h-0 w-full overflow-hidden p-2 data-[state=inactive]:hidden'
+                        className='flex h-full min-h-0 w-full flex-col overflow-hidden p-2 data-[state=inactive]:hidden'
                       >
                         <PlcLogs />
                       </Tabs.Content>
@@ -556,7 +556,7 @@ const WorkspaceScreen = () => {
                 order={3}
                 defaultSize={16}
                 maxSize={25}
-                className='relative flex h-full min-h-0 w-full min-w-xs'
+                className='min-w-xs relative flex h-full min-h-0 w-full'
               >
                 <AIChatPanel />
               </ResizablePanel>

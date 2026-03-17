@@ -73,9 +73,7 @@ const SelectItem = forwardRef<ElementRef<typeof PrimitiveSelect.Item>, ISelectIt
     return (
       <PrimitiveSelect.Item {...res} ref={forwardedRef}>
         <PrimitiveSelect.ItemText>{children}</PrimitiveSelect.ItemText>
-        <PrimitiveSelect.ItemIndicator>
-          {indicator}
-        </PrimitiveSelect.ItemIndicator>
+        <PrimitiveSelect.ItemIndicator>{indicator}</PrimitiveSelect.ItemIndicator>
       </PrimitiveSelect.Item>
     )
   },

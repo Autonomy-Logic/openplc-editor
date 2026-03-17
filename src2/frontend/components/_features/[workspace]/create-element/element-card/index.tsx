@@ -18,7 +18,11 @@ import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
 import { cn } from '../../../../../utils/cn'
-import { isArduinoTarget as checkIsArduinoTarget, isOpenPLCRuntimeV4Target, isSimulatorTarget } from '../../../../../utils/device'
+import {
+  isArduinoTarget as checkIsArduinoTarget,
+  isOpenPLCRuntimeV4Target,
+  isSimulatorTarget,
+} from '../../../../../utils/device'
 import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
 import { useToast } from '../../../[app]/toast/use-toast'
 

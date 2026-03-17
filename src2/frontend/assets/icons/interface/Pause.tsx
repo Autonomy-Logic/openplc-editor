@@ -2,7 +2,6 @@ import { IconStyles } from '../../../data/constants/icon-styles'
 import { cn } from '../../../utils/cn'
 import { IIconProps } from '../Types/iconTypes'
 
-
 export const PauseIcon = (props: IIconProps) => {
   const { className, size = 'sm', ...res } = props
   const sizeClasses = IconStyles.sizeClasses.small[size]

@@ -26,10 +26,7 @@ import { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/ladd
 import { getBlockSize } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
 import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
 import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
-import {
-  getBlockDocumentation,
-  getVariableRestrictionType,
-} from '../../../../../../../_atoms/graphical-editor/utils'
+import { getBlockDocumentation, getVariableRestrictionType } from '../../../../../../../_atoms/graphical-editor/utils'
 import { InputWithRef } from '../../../../../../../_atoms/input'
 import { updateDiagramElementsPosition } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'

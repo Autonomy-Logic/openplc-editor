@@ -1,5 +1,5 @@
-import { createEditorSimulatorAdapter } from '../simulator-adapter'
 import type { SimulatorPort } from '../../../shared/ports/simulator-port'
+import { createEditorSimulatorAdapter } from '../simulator-adapter'
 
 let adapter: SimulatorPort
 let simulatorStoppedCallback: (() => void) | null

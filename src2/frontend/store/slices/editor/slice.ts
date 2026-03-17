@@ -84,7 +84,8 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
 
           if (targetEditor.type === 'plc-resource') {
             if (variables.display === 'table') {
-              const prevSelectedRow = targetEditor.variable.display === 'table' ? targetEditor.variable.selectedRow : '-1'
+              const prevSelectedRow =
+                targetEditor.variable.display === 'table' ? targetEditor.variable.selectedRow : '-1'
               const prevDescription = targetEditor.variable.display === 'table' ? targetEditor.variable.description : ''
               targetEditor.variable = {
                 display: 'table',
@@ -100,8 +101,10 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
             }
           } else if (targetEditor.type === 'plc-textual' || targetEditor.type === 'plc-graphical') {
             if (variables.display === 'table') {
-              const prevSelectedRow = targetEditor.variable.display === 'table' ? targetEditor.variable.selectedRow : '-1'
-              const prevClassFilter = targetEditor.variable.display === 'table' ? targetEditor.variable.classFilter : 'All'
+              const prevSelectedRow =
+                targetEditor.variable.display === 'table' ? targetEditor.variable.selectedRow : '-1'
+              const prevClassFilter =
+                targetEditor.variable.display === 'table' ? targetEditor.variable.classFilter : 'All'
               const prevDescription = targetEditor.variable.display === 'table' ? targetEditor.variable.description : ''
               targetEditor.variable = {
                 display: 'table',
@@ -251,9 +254,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           if (oldEditor.meta.name === newEditor.meta.name) return
 
           if (oldEditor.type !== 'available') {
-            state.editors = state.editors.map((model) =>
-              model.meta.name === oldEditor.meta.name ? oldEditor : model,
-            )
+            state.editors = state.editors.map((model) => (model.meta.name === oldEditor.meta.name ? oldEditor : model))
           }
 
           state.editor = newEditor

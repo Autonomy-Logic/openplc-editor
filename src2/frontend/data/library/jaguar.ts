@@ -11,7 +11,6 @@ const BaseLibrarySchema = z.object({
   cPath: z.string(),
 })
 
-
 const JaguarVariablesSchema = BaseLibraryVariableSchema
 
 const JaguarPouSchema = BaseLibraryPouSchema.extend({

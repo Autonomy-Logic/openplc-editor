@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { type ReactNode } from 'react'
 
+import { EDITOR_CAPABILITIES } from '../middleware/shared/ports/platform-capabilities'
 import {
   PlatformProvider,
   useAccelerator,
@@ -17,7 +18,6 @@ import {
   useWindow,
 } from '../middleware/shared/providers'
 import type { PlatformPorts } from '../middleware/shared/providers/types'
-import { EDITOR_CAPABILITIES } from '../middleware/shared/ports/platform-capabilities'
 
 function createStubPort<T extends object>(): T {
   return new Proxy({} as T, {
@@ -55,9 +55,7 @@ describe('PlatformProvider', () => {
   it('throws when usePlatform is used outside PlatformProvider', () => {
     // Suppress expected React error boundary console output
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {})
-    expect(() => renderHook(() => usePlatform())).toThrow(
-      'usePlatform must be used within a PlatformProvider',
-    )
+    expect(() => renderHook(() => usePlatform())).toThrow('usePlatform must be used within a PlatformProvider')
     spy.mockRestore()
   })
 })

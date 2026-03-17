@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 /** Standard result for operations that can fail */
-export type Result<T = void> = { success: true } & T | { success: false; error: string }
+export type Result<T = void> = ({ success: true } & T) | { success: false; error: string }
 
 /** Unsubscribe function returned by event subscriptions */
 export type Unsubscribe = () => void

@@ -10,7 +10,13 @@ import { boardSelectors, compileOnlySelectors, pinSelectors } from '../../../../
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
-import { isArduinoTarget, isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import {
+  isArduinoTarget,
+  isOpenPLCRuntimeTarget,
+  isOpenPLCRuntimeV4Target,
+  isSimulatorTarget,
+  validateRuntimeVersion,
+} from '../../../../../../utils/device'
 import { Checkbox } from '../../../../../_atoms/checkbox'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
@@ -288,7 +294,15 @@ const Board = memo(function () {
     } catch (_error) {
       setRuntimeConnectionStatus('error')
     }
-  }, [runtime, runtimeIpAddress, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, openModal, deviceBoard])
+  }, [
+    runtime,
+    runtimeIpAddress,
+    connectionStatus,
+    setRuntimeConnectionStatus,
+    setRuntimeJwtToken,
+    openModal,
+    deviceBoard,
+  ])
 
   // Enable timing stats in global polling when this screen is visible
   useEffect(() => {

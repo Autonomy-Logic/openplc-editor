@@ -2,13 +2,7 @@
 // WebRTC connection status
 // ---------------------------------------------------------------------------
 
-export type WebRTCConnectionStatus =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'error'
-  | 'failed'
+export type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'failed'
 
 export type DebugTransport = 'http' | 'webrtc'
 

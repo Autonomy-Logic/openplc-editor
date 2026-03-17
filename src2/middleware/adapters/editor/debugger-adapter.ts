@@ -40,10 +40,7 @@ export function createEditorDebuggerAdapter(
         const config = getConnectionConfig()
         if (!config) return { success: false, error: 'No debug connection configured' }
 
-        const result = await window.bridge.debuggerConnect(
-          config.connectionType,
-          config.connectionParams,
-        )
+        const result = await window.bridge.debuggerConnect(config.connectionType, config.connectionParams)
         if (result.success) connected = true
         return result
       } catch (err) {
@@ -85,11 +82,7 @@ export function createEditorDebuggerAdapter(
         const config = getConnectionConfig()
         if (!config) return { success: false, error: 'No debug connection configured' }
 
-        return await window.bridge.debuggerVerifyMd5(
-          config.connectionType,
-          config.connectionParams,
-          expectedMd5,
-        )
+        return await window.bridge.debuggerVerifyMd5(config.connectionType, config.connectionParams, expectedMd5)
       } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : String(err) }
       }

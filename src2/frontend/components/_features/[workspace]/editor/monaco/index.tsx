@@ -5,11 +5,11 @@ import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
-import type { PLCPou,PLCVariable } from '../../../../../../middleware/shared/ports/types'
+import type { PLCPou, PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
-import { parseHybridPouFromString,parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
+import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
 import { AIInlineCompletionProvider } from './ai-completion/ai-inline-completion-provider'
@@ -67,10 +67,7 @@ type SnippetController = {
 
 type BlockCommentState = false | 'paren' | 'slash'
 
-function stripLineComments(
-  line: string,
-  state: BlockCommentState,
-): { stripped: string; state: BlockCommentState } {
+function stripLineComments(line: string, state: BlockCommentState): { stripped: string; state: BlockCommentState } {
   const chars = [...line]
   let i = 0
   let s = state
@@ -923,7 +920,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           if (!position) return
           editorInstance.executeEdits('ai-chat-insert', [
             {
-              range: new monacoInstance.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+              range: new monacoInstance.Range(
+                position.lineNumber,
+                position.column,
+                position.lineNumber,
+                position.column,
+              ),
               text: code,
             },
           ])
@@ -948,7 +950,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   // Template injection
   // -----------------------------------------------------------------------
 
-  function injectPythonTemplateIfNeeded(editorInst: monaco.editor.IStandaloneCodeEditor, pouObj: PLCPou, pouName: string) {
+  function injectPythonTemplateIfNeeded(
+    editorInst: monaco.editor.IStandaloneCodeEditor,
+    pouObj: PLCPou,
+    pouName: string,
+  ) {
     const editorModel = editorInst.getModel()
     if (!editorModel) return
 

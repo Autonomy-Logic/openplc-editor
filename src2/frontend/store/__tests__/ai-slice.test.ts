@@ -211,9 +211,7 @@ describe('createAISlice', () => {
 
       // Add MAX + 5 messages
       for (let i = 0; i < MAX_CONVERSATION_MESSAGES + 5; i++) {
-        store
-          .getState()
-          .aiActions.addMessage('MyPou', makeMessage({ id: `msg-${i}`, content: `Message ${i}` }))
+        store.getState().aiActions.addMessage('MyPou', makeMessage({ id: `msg-${i}`, content: `Message ${i}` }))
       }
 
       const messages = store.getState().ai.conversations[0].messages
@@ -368,18 +366,14 @@ describe('createAISliceFactory', () => {
   })
 
   it('overrides isEnabled and hasConsented from config', () => {
-    const store = createStore<AISlice>()(
-      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }),
-    )
+    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }))
     const { ai } = store.getState()
     expect(ai.isEnabled).toBe(true)
     expect(ai.hasConsented).toBe(true)
   })
 
   it('preserves other default values when config is provided', () => {
-    const store = createStore<AISlice>()(
-      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false }),
-    )
+    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false }))
     const { ai } = store.getState()
     expect(ai.model).toBe('haiku')
     expect(ai.creditsUsed).toBe(0)
@@ -393,9 +387,7 @@ describe('createAISliceFactory', () => {
   })
 
   it('creates functional actions when config is provided', () => {
-    const store = createStore<AISlice>()(
-      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }),
-    )
+    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }))
     store.getState().aiActions.setAIEnabled(false)
     expect(store.getState().ai.isEnabled).toBe(false)
   })

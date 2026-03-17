@@ -29,25 +29,27 @@ import { editorPorts } from './middleware/editor-platform'
 import { PlatformProvider } from './middleware/shared/providers'
 
 // Initialize system libraries at module load time (before first render)
-openPLCStoreBase.getState().libraryActions.setSystemLibraries([
-  AdditionalFunctionBlocks,
-  ArduinoFunctionBlocks,
-  CommunicationBlocks,
-  Jaguar,
-  MQTT,
-  P1AM,
-  SequentMicrosystemsModules,
-  StandardFunctionBlocks,
-  Arithmetic,
-  BitShift,
-  Bitwise,
-  CharacterString,
-  Comparison,
-  Numerical,
-  Selection,
-  Time,
-  TypeConversion,
-])
+openPLCStoreBase
+  .getState()
+  .libraryActions.setSystemLibraries([
+    AdditionalFunctionBlocks,
+    ArduinoFunctionBlocks,
+    CommunicationBlocks,
+    Jaguar,
+    MQTT,
+    P1AM,
+    SequentMicrosystemsModules,
+    StandardFunctionBlocks,
+    Arithmetic,
+    BitShift,
+    Bitwise,
+    CharacterString,
+    Comparison,
+    Numerical,
+    Selection,
+    Time,
+    TypeConversion,
+  ])
 
 export default function App() {
   const {

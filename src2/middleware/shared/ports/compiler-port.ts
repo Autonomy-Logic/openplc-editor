@@ -59,10 +59,7 @@ export interface CompilerPort {
    * Run the full compilation pipeline (XML -> ST -> C -> binary).
    * Emits progress events for UI feedback.
    */
-  compileProgram(
-    args: CompileProgramArgs,
-    onProgress: (event: CompileProgressEvent) => void,
-  ): Promise<CompileResult>
+  compileProgram(args: CompileProgramArgs, onProgress: (event: CompileProgressEvent) => void): Promise<CompileResult>
 
   /**
    * Run a debug-mode compilation that produces debug symbols.

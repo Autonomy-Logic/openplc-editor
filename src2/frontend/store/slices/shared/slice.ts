@@ -1,7 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { toast } from '../../../components/_features/[app]/toast/use-toast'
+import { toast } from '../../../utils/toast'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
@@ -295,8 +295,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         return { success: true }
       }
 
-      const editor =
-        getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
+      const editor = getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
       getState().editorActions.setEditor(editor)
       getState().tabsActions.setSelectedTab(nextTab.name)
       getState().workspaceActions.setSelectedProjectTreeLeaf({

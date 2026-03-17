@@ -8,7 +8,10 @@ function makeStore() {
 }
 
 // Helpers to create editor models
-function makeTextualEditor(name: string, overrides?: Partial<{ language: 'il' | 'st' | 'python' | 'cpp'; pouType: 'program' | 'function' | 'function-block' }>): EditorModel {
+function makeTextualEditor(
+  name: string,
+  overrides?: Partial<{ language: 'il' | 'st' | 'python' | 'cpp'; pouType: 'program' | 'function' | 'function-block' }>,
+): EditorModel {
   return {
     type: 'plc-textual',
     meta: {
@@ -36,7 +39,15 @@ function makeGraphicalEditor(name: string, language: 'ld' | 'sfc' | 'fbd' = 'ld'
     return { ...base, graphical: { language: 'ld', openedRungs: [] } }
   }
   if (language === 'fbd') {
-    return { ...base, graphical: { language: 'fbd', hoveringElement: { elementId: null, hovering: false }, canEditorZoom: true, canEditorPan: true } }
+    return {
+      ...base,
+      graphical: {
+        language: 'fbd',
+        hoveringElement: { elementId: null, hovering: false },
+        canEditorZoom: true,
+        canEditorPan: true,
+      },
+    }
   }
   return { ...base, graphical: { language: 'sfc' } }
 }

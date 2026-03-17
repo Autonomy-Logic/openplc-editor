@@ -396,10 +396,7 @@ const updateVariableValidation = (
   return response
 }
 
-const updateGlobalVariableValidation = (
-  variables: PLCVariable[],
-  dataToBeUpdated: Partial<PLCVariable>,
-) => {
+const updateGlobalVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Partial<PLCVariable>) => {
   let response: ProjectResponse = { ok: true }
 
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {

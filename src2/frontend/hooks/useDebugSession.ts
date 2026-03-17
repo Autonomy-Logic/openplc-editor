@@ -98,7 +98,7 @@ export function useDebugSession(): UseDebugSessionReturn {
 
         const pouTrees: DebugTreeNode[] = []
 
-        for (const variable of (pou.interface?.variables ?? [])) {
+        for (const variable of pou.interface?.variables ?? []) {
           const tree = buildDebugTree(variable, pou.name, instanceName, parsed.variables, projectData)
           pouTrees.push(tree)
         }
@@ -172,7 +172,7 @@ export function useDebugSession(): UseDebugSessionReturn {
           const progInstanceName = findInstanceName(programPou.name, instances)
           if (!progInstanceName) continue
 
-          for (const variable of (programPou.interface?.variables ?? [])) {
+          for (const variable of programPou.interface?.variables ?? []) {
             if (variable.type.definition === 'derived' && variable.type.value.toUpperCase() === fbTypeName) {
               const key = `${programPou.name}:${variable.name}`
               instanceList.push({

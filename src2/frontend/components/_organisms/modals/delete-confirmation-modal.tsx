@@ -28,7 +28,9 @@ const compareVariableTypes = (type1: PLCVariable['type'], type2: PLCVariable['ty
  * Resolve the element name and type from modal data.
  * Handles both the new format `{ name, elementType }` and the legacy format `{ leafLang, label }`.
  */
-function resolveDeleteTarget(data: unknown): { name: string; elementType: 'pou' | 'datatype' | 'server' | 'remote-device' } | null {
+function resolveDeleteTarget(
+  data: unknown,
+): { name: string; elementType: 'pou' | 'datatype' | 'server' | 'remote-device' } | null {
   if (!data || typeof data !== 'object') return null
 
   // New format from shared slice deleteRequest actions

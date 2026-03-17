@@ -38,7 +38,7 @@ interface LayerRule {
 const LAYER_RULES: Record<LayerName, LayerRule> = {
   utils: {
     name: 'Domain (frontend/utils/)',
-    allowedDeps: ['utils'],
+    allowedDeps: ['utils', 'ports', 'data'],
   },
   data: {
     name: 'Data (frontend/data/)',
@@ -189,17 +189,12 @@ function resolveImport(importPath: string, fromFile: string): string | null {
  * layer rule permits.
  */
 const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
-  // Syncs React Flow nodes with PLC variables — needs store types, port types, and component constants
-  'frontend/utils/graphical/sync-nodes-with-variables.ts': ['ports', 'store', 'components'],
-  // Determines which FB variables to clean up — needs port types and component block types
-  'frontend/utils/graphical/get-function-block-variables-to-cleanup.ts': ['ports', 'components'],
-  // FBD paste/duplicate helpers — needs component atom types and molecule node builders
+  // FBD paste/duplicate helpers — needs molecule-level buildGenericNode from components
   'frontend/store/slices/fbd/utils/index.ts': ['components'],
-  // Debug utilities need port types, store types, and library data for variable resolution
-  'frontend/utils/variable-sizes.ts': ['ports'],
-  'frontend/utils/pou-helpers.ts': ['ports', 'data', 'store'],
-  'frontend/utils/debug-tree-traversal.ts': ['ports', 'data', 'store'],
-  'frontend/utils/debug-tree-builder.ts': ['ports', 'store'],
+  // Ladder paste/duplicate helpers — needs nodesBuilder from component atoms
+  'frontend/store/slices/ladder/utils/index.ts': ['components'],
+  // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
+  'frontend/store/slices/ladder/slice.ts': ['components'],
 }
 
 // ---------------------------------------------------------------------------

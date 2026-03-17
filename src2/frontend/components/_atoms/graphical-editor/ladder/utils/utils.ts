@@ -34,7 +34,7 @@ export const getLadderPouVariablesRungNodeAndEdges = (
 
   const node = rung?.nodes.find((node) => node.id === data.nodeId)
 
-  const variables: PLCVariable[] = (pou?.interface?.variables ?? [])
+  const variables: PLCVariable[] = pou?.interface?.variables ?? []
   let variable = variables.find((variable) => {
     if (!node) return undefined
     const nodeVariable = (node.data as BasicNodeData).variable

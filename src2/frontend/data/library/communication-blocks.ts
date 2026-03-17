@@ -11,7 +11,6 @@ const BaseLibrarySchema = z.object({
   cPath: z.string(),
 })
 
-
 const CommunicationBlocksVariableSchema = BaseLibraryVariableSchema
 
 const CommunicationBlocksPouSchema = BaseLibraryPouSchema.extend({

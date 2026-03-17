@@ -1,7 +1,7 @@
 import type { Node } from '@xyflow/react'
 
+import type { BlockVariant } from '../../../middleware/shared/ports/block-types'
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import type { BlockVariant } from '../../components/_atoms/graphical-editor/types/block'
 
 type BlockNode = Node<{ variable?: { name: string }; variant: BlockVariant }>
 

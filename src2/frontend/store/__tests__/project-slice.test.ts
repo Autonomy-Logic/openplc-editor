@@ -907,7 +907,9 @@ describe('createProjectSlice', () => {
       const updated: PLCDataType = {
         name: 'MyStruct',
         derivation: 'structure',
-        variable: [{ name: 'field1', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' }],
+        variable: [
+          { name: 'field1', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+        ],
       }
       store.getState().projectActions.updateDatatype('MyStruct', updated)
       const storedDt = store.getState().project.data.dataTypes[0]
@@ -1500,7 +1502,10 @@ describe('createProjectSlice', () => {
         sizeBytes: 16,
       })
       expect(result.ok).toBe(true)
-      const slaveConfig = store.getState().project.data.servers![0].s7commSlaveConfig as unknown as Record<string, unknown>
+      const slaveConfig = store.getState().project.data.servers![0].s7commSlaveConfig as unknown as Record<
+        string,
+        unknown
+      >
       const peArea = slaveConfig.peArea as { enabled: boolean; sizeBytes: number }
       expect(peArea.enabled).toBe(true)
       expect(peArea.sizeBytes).toBe(16)
@@ -1510,7 +1515,10 @@ describe('createProjectSlice', () => {
       seedServer(store, makeS7CommServer('S7'))
       store.getState().projectActions.updateS7CommSystemArea('S7', 'mkArea', { enabled: true, sizeBytes: 8 })
       store.getState().projectActions.updateS7CommSystemArea('S7', 'mkArea', { sizeBytes: 32 })
-      const slaveConfig = store.getState().project.data.servers![0].s7commSlaveConfig as unknown as Record<string, unknown>
+      const slaveConfig = store.getState().project.data.servers![0].s7commSlaveConfig as unknown as Record<
+        string,
+        unknown
+      >
       const mkArea = slaveConfig.mkArea as { enabled: boolean; sizeBytes: number }
       expect(mkArea.enabled).toBe(true)
       expect(mkArea.sizeBytes).toBe(32)
@@ -1518,7 +1526,9 @@ describe('createProjectSlice', () => {
 
     it('does nothing when server has no s7commSlaveConfig', () => {
       seedServer(store, makeModbusTcpServer('Modbus'))
-      const result = store.getState().projectActions.updateS7CommSystemArea('Modbus', 'peArea', { enabled: true, sizeBytes: 1 })
+      const result = store
+        .getState()
+        .projectActions.updateS7CommSystemArea('Modbus', 'peArea', { enabled: true, sizeBytes: 1 })
       expect(result.ok).toBe(true)
     })
   })
@@ -1669,12 +1679,9 @@ describe('createProjectSlice', () => {
   describe('updateOpcUaServerCertificateStrategy', () => {
     it('updates to custom strategy with certificate and key', () => {
       seedServer(store, makeOpcUaServer('OPC'))
-      const result = store.getState().projectActions.updateOpcUaServerCertificateStrategy(
-        'OPC',
-        'custom',
-        'CERT-PEM',
-        'KEY-PEM',
-      )
+      const result = store
+        .getState()
+        .projectActions.updateOpcUaServerCertificateStrategy('OPC', 'custom', 'CERT-PEM', 'KEY-PEM')
       expect(result.ok).toBe(true)
       const security = store.getState().project.data.servers![0].opcuaServerConfig!.security
       expect(security.serverCertificateStrategy).toBe('custom')
@@ -1738,14 +1745,11 @@ describe('createProjectSlice', () => {
   describe('updateOpcUaAddressSpaceNamespace', () => {
     it('updates namespace URI', () => {
       seedServer(store, makeOpcUaServer('OPC'))
-      const result = store.getState().projectActions.updateOpcUaAddressSpaceNamespace(
-        'OPC',
+      const result = store.getState().projectActions.updateOpcUaAddressSpaceNamespace('OPC', 'urn:custom:namespace')
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.servers![0].opcuaServerConfig!.addressSpace.namespaceUri).toBe(
         'urn:custom:namespace',
       )
-      expect(result.ok).toBe(true)
-      expect(
-        store.getState().project.data.servers![0].opcuaServerConfig!.addressSpace.namespaceUri,
-      ).toBe('urn:custom:namespace')
     })
 
     it('does nothing when server has no opcuaServerConfig', () => {
@@ -2141,9 +2145,9 @@ describe('createProjectSlice', () => {
       const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
       const result = store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'Temperature')
       expect(result.ok).toBe(true)
-      expect(
-        store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].alias,
-      ).toBe('Temperature')
+      expect(store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].alias).toBe(
+        'Temperature',
+      )
     })
 
     it('does nothing when group not found', () => {
@@ -2339,7 +2343,9 @@ describe('createProjectSlice', () => {
 
     it('updateOpcUaServerCertificateStrategy on a server without opcuaServerConfig', () => {
       seedServer(store, { name: 'Modbus', protocol: 'modbus-tcp' })
-      const result = store.getState().projectActions.updateOpcUaServerCertificateStrategy('Modbus', 'custom', 'cert', 'key')
+      const result = store
+        .getState()
+        .projectActions.updateOpcUaServerCertificateStrategy('Modbus', 'custom', 'cert', 'key')
       expect(result.ok).toBe(true)
     })
 

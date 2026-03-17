@@ -53,12 +53,7 @@ describe('createDeviceSlice', () => {
       expect(s.deviceAvailableOptions.availableBoards).toBeInstanceOf(Map)
       expect(s.deviceAvailableOptions.availableBoards.size).toBe(0)
       expect(s.deviceAvailableOptions.availableCommunicationPorts).toEqual([])
-      expect(s.deviceAvailableOptions.availableRTUInterfaces).toEqual([
-        'Serial',
-        'Serial1',
-        'Serial2',
-        'Serial3',
-      ])
+      expect(s.deviceAvailableOptions.availableRTUInterfaces).toEqual(['Serial', 'Serial1', 'Serial2', 'Serial3'])
       expect(s.deviceAvailableOptions.availableRTUBaudRates).toEqual([
         '9600',
         '14400',
@@ -171,8 +166,7 @@ describe('createDeviceSlice', () => {
           communicationConfiguration: {
             modbusRTU: { rtuInterface: 'Serial2', rtuBaudRate: '9600', rtuSlaveId: 5, rtuRS485ENPin: null },
             modbusTCP: defaultDeviceConfiguration.communicationConfiguration.modbusTCP,
-            communicationPreferences:
-              defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
+            communicationPreferences: defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
           },
         },
       })
@@ -191,8 +185,7 @@ describe('createDeviceSlice', () => {
               tcpMacAddress: 'AA:BB:CC:DD:EE:FF',
               tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
             } as any,
-            communicationPreferences:
-              defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
+            communicationPreferences: defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
           },
         },
       })
@@ -210,10 +203,14 @@ describe('createDeviceSlice', () => {
             modbusTCP: {
               tcpInterface: 'Wi-Fi',
               tcpMacAddress: '11:22:33:44:55:66',
-              tcpStaticHostConfiguration: { ipAddress: '10.0.0.1', dns: '8.8.8.8', gateway: '10.0.0.1', subnet: '255.255.255.0' },
+              tcpStaticHostConfiguration: {
+                ipAddress: '10.0.0.1',
+                dns: '8.8.8.8',
+                gateway: '10.0.0.1',
+                subnet: '255.255.255.0',
+              },
             },
-            communicationPreferences:
-              defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
+            communicationPreferences: defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
           },
         },
       })
@@ -224,9 +221,7 @@ describe('createDeviceSlice', () => {
 
     it('sets pinMapping', () => {
       const store = makeStore()
-      const pins: DevicePin[] = [
-        makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0', name: 'sensor' }),
-      ]
+      const pins: DevicePin[] = [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0', name: 'sensor' })]
       store.getState().deviceActions.setDeviceDefinitions({ pinMapping: pins })
       expect(store.getState().deviceDefinitions.pinMapping.pins).toEqual(pins)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
@@ -257,7 +252,6 @@ describe('createDeviceSlice', () => {
       expect(after.configuration).toEqual(before.configuration)
       expect(after.pinMapping.pins).toEqual(before.pinMapping.pins)
     })
-
   })
 
   // -----------------------------------------------------------------------
@@ -360,9 +354,7 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       // Seed with a pin and select it
       store.getState().deviceActions.setDeviceDefinitions({
-        pinMapping: [
-          makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0', name: 'pin0' }),
-        ],
+        pinMapping: [makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0', name: 'pin0' })],
       })
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
@@ -532,10 +524,7 @@ describe('createDeviceSlice', () => {
       it('returns error for duplicate pin', () => {
         const store = makeStore()
         store.getState().deviceActions.setDeviceDefinitions({
-          pinMapping: [
-            makePin({ pin: 'D0', address: '%IX0.0' }),
-            makePin({ pin: 'D1', address: '%IX0.1' }),
-          ],
+          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0' }), makePin({ pin: 'D1', address: '%IX0.1' })],
         })
         store.getState().deviceActions.selectPinTableRow(1)
         const result = store.getState().deviceActions.updatePin({ pin: 'D0' })
@@ -774,8 +763,7 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setCommunicationPreferences({ enableRTU: true })
       expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences
-          .enabledRTU,
+        store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU,
       ).toBe(true)
       expect(store.getState().deviceUpdated.updated).toBe(true)
     })
@@ -784,8 +772,7 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setCommunicationPreferences({ enableTCP: true })
       expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences
-          .enabledTCP,
+        store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP,
       ).toBe(true)
     })
 
@@ -802,8 +789,7 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setCommunicationPreferences({ enableRTU: true })
       store.getState().deviceActions.setCommunicationPreferences({ enableTCP: true })
-      const prefs =
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences
+      const prefs = store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences
       expect(prefs.enabledRTU).toBe(true)
       expect(prefs.enabledTCP).toBe(true)
       expect(prefs.enabledDHCP).toBe(true) // default
@@ -817,34 +803,32 @@ describe('createDeviceSlice', () => {
     it('sets rtuInterface', () => {
       const store = makeStore()
       store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuInterface', value: 'Serial3' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuInterface,
-      ).toBe('Serial3')
+      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuInterface).toBe(
+        'Serial3',
+      )
       expect(store.getState().deviceUpdated.updated).toBe(true)
     })
 
     it('sets rtuBaudRate', () => {
       const store = makeStore()
       store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuBaudRate', value: '9600' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuBaudRate,
-      ).toBe('9600')
+      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuBaudRate).toBe(
+        '9600',
+      )
     })
 
     it('sets rtuSlaveId', () => {
       const store = makeStore()
       store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuSlaveId', value: 10 })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuSlaveId,
-      ).toBe(10)
+      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuSlaveId).toBe(10)
     })
 
     it('sets rtuRS485ENPin', () => {
       const store = makeStore()
       store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuRS485ENPin', value: 'D4' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuRS485ENPin,
-      ).toBe('D4')
+      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuRS485ENPin).toBe(
+        'D4',
+      )
     })
 
     it('sets rtuRS485ENPin to null', () => {
@@ -863,9 +847,9 @@ describe('createDeviceSlice', () => {
     it('sets tcpInterface', () => {
       const store = makeStore()
       store.getState().deviceActions.setTCPConfig({ tcpConfig: 'tcpInterface', value: 'Wi-Fi' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface,
-      ).toBe('Wi-Fi')
+      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface).toBe(
+        'Wi-Fi',
+      )
       expect(store.getState().deviceUpdated.updated).toBe(true)
     })
 
@@ -875,9 +859,9 @@ describe('createDeviceSlice', () => {
         tcpConfig: 'tcpMacAddress',
         value: 'AA:BB:CC:DD:EE:FF',
       })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpMacAddress,
-      ).toBe('AA:BB:CC:DD:EE:FF')
+      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpMacAddress).toBe(
+        'AA:BB:CC:DD:EE:FF',
+      )
     })
   })
 
@@ -889,9 +873,9 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setTCPConfig({ tcpConfig: 'tcpInterface', value: 'Wi-Fi' })
       store.getState().deviceActions.setWifiConfig({ tcpWifiSSID: 'MyNetwork' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID,
-      ).toBe('MyNetwork')
+      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID).toBe(
+        'MyNetwork',
+      )
     })
 
     it('sets wifi password when tcpInterface is Wi-Fi', () => {
@@ -927,8 +911,8 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setStaticHostConfiguration({ ipAddress: '192.168.1.100' })
       expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP
-          .tcpStaticHostConfiguration.ipAddress,
+        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
+          .ipAddress,
       ).toBe('192.168.1.100')
       expect(store.getState().deviceUpdated.updated).toBe(true)
     })
@@ -937,8 +921,8 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setStaticHostConfiguration({ dns: '8.8.8.8' })
       expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP
-          .tcpStaticHostConfiguration.dns,
+        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
+          .dns,
       ).toBe('8.8.8.8')
     })
 
@@ -946,8 +930,8 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setStaticHostConfiguration({ gateway: '192.168.1.1' })
       expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP
-          .tcpStaticHostConfiguration.gateway,
+        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
+          .gateway,
       ).toBe('192.168.1.1')
     })
 
@@ -955,8 +939,8 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setStaticHostConfiguration({ subnet: '255.255.255.0' })
       expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP
-          .tcpStaticHostConfiguration.subnet,
+        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
+          .subnet,
       ).toBe('255.255.255.0')
     })
 
@@ -965,8 +949,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setStaticHostConfiguration({ ipAddress: '10.0.0.1' })
       store.getState().deviceActions.setStaticHostConfiguration({ dns: '1.1.1.1' })
       const hostCfg =
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP
-          .tcpStaticHostConfiguration
+        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
       expect(hostCfg.ipAddress).toBe('10.0.0.1')
       expect(hostCfg.dns).toBe('1.1.1.1')
       expect(hostCfg.gateway).toBe('') // default

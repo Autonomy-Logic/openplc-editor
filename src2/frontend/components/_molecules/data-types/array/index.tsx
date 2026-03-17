@@ -217,7 +217,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         </div>
       </div>
 
-      <div className='w-[600px] gap-3 flex flex-col'>
+      <div className='flex w-[600px] flex-col gap-3'>
         <div aria-label='Array data type table actions container' className='flex h-fit items-center justify-between'>
           <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
             Dimensions

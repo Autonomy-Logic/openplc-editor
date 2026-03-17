@@ -1,7 +1,12 @@
 import { Edge, Node } from '@xyflow/react'
 
 import { CustomFbdNodeTypes } from '../../../../components/_atoms/graphical-editor/fbd'
-import { BlockNodeData, CommentNode, ConnectionNode, VariableNode } from '../../../../components/_atoms/graphical-editor/fbd/utils/types'
+import {
+  BlockNodeData,
+  CommentNode,
+  ConnectionNode,
+  VariableNode,
+} from '../../../../components/_atoms/graphical-editor/fbd/utils/types'
 import { BlockVariant } from '../../../../components/_atoms/graphical-editor/types/block'
 import { buildGenericNode } from '../../../../components/_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'

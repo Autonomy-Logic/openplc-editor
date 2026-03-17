@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { type DeviceResponse,listOrchestratorsRequest, type OrchestratorResponse,  } from '../../../../../../api/queries/orchestrators'
+import {
+  type DeviceResponse,
+  listOrchestratorsRequest,
+  type OrchestratorResponse,
+} from '../../../../../../api/queries/orchestrators'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
@@ -9,7 +13,7 @@ import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { isDev } from '../../../../../../utils/get-env'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
-import { RuntimeCreateUserModal,RuntimeLoginModal } from '../../../../../_organisms/modals'
+import { RuntimeCreateUserModal, RuntimeLoginModal } from '../../../../../_organisms/modals'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
@@ -440,7 +444,7 @@ const OrchestratorsList = () => {
             className={cn(
               'cursor-pointer rounded-lg border px-4 py-3',
               isSimulatorSelected && runtimeConnection.connectionStatus !== 'connected'
-                ? 'border-brand bg-brand/5 dark:border-brand dark:bg-brand/10'
+                ? 'bg-brand/5 dark:bg-brand/10 border-brand dark:border-brand'
                 : 'border-neutral-200 bg-neutral-50 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800',
             )}
             onClick={handleSimulatorSelect}

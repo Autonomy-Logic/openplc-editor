@@ -85,7 +85,6 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
         })
       }
       setEditingState('saved')
-       
     } catch (_error) {
       toast({
         title: 'Cannot create a project!',

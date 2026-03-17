@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { useCompiler, useDebugger,useRuntime, useSimulator } from '../../../../middleware/shared/providers'
+import { useCompiler, useDebugger, useRuntime, useSimulator } from '../../../../middleware/shared/providers'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
+import { isOpenPLCRuntimeTarget } from '../../../utils/device'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
 import { DownloadButton } from '../../_molecules/workspace-activity-bar/default/download'
@@ -43,7 +44,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     project: { data: projectData, meta: projectMeta },
     deviceDefinitions,
     deviceAvailableOptions: { availableBoards },
-    workspace: { editingState },
     consoleActions: { addLog },
   } = useOpenPLCStore()
 
@@ -104,7 +104,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               .trim()
               .split('\n')
               .forEach((line) => {
-                addLog({ id: crypto.randomUUID(), level: (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info', message: line })
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info',
+                  message: line,
+                })
               })
           }
           if (event.firmwarePath && isSimulatorBoard) {
@@ -221,9 +225,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       const statusResult = await runtime.getStatus()
       if (statusResult.success && statusResult.status) {
-        useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus(
-          statusResult.status as NonNullable<RuntimeConnection['plcStatus']>,
-        )
+        useOpenPLCStore
+          .getState()
+          .deviceActions.setPlcRuntimeStatus(statusResult.status as NonNullable<RuntimeConnection['plcStatus']>)
       }
     } catch (error: unknown) {
       addLog({
@@ -269,7 +273,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     setIsDebuggerProcessing(true)
 
     try {
-      const { workspace, workspaceActions } = useOpenPLCStore.getState()
+      const { workspace, workspaceActions, runtimeConnection } = useOpenPLCStore.getState()
 
       if (workspace.isDebuggerVisible) {
         // Disconnect
@@ -279,10 +283,81 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      // Verify MD5 before connecting
       const boardTarget = deviceDefinitions.configuration.deviceBoard
       const projectPath = projectMeta.path
+      const isRuntimeTarget = isOpenPLCRuntimeTarget(currentBoardInfo)
 
+      // Runtime target: require connection first
+      if (isRuntimeTarget) {
+        if (runtimeConnection.connectionStatus !== 'connected') {
+          await showDebuggerMessage(
+            'warning',
+            'Connection Required',
+            'You need to connect to the target before starting a debugger session.',
+            ['OK'],
+          )
+          return
+        }
+      }
+
+      // Non-runtime, non-simulator: check Modbus and DHCP
+      if (!isRuntimeTarget && !isSimulatorBoard) {
+        const { communicationPreferences, modbusTCP } =
+          deviceDefinitions.configuration.communicationConfiguration
+        const rtuEnabled = communicationPreferences.enabledRTU
+        const tcpEnabled = communicationPreferences.enabledTCP
+
+        if (!rtuEnabled && !tcpEnabled) {
+          await showDebuggerMessage(
+            'warning',
+            'Modbus Required',
+            'Modbus must be enabled on the target to start a debugger session.',
+            ['OK'],
+          )
+          return
+        }
+
+        // DHCP IP input for TCP mode
+        if (tcpEnabled && communicationPreferences.enabledDHCP) {
+          const ipAddress = modbusTCP.tcpStaticHostConfiguration?.ipAddress
+          if (!ipAddress || ipAddress === '0.0.0.0') {
+            useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
+              title: 'Target IP Address',
+              message: 'DHCP is enabled. Enter the IP address of the target device:',
+              defaultValue: '',
+              onSubmit: (ip: string) => {
+                useOpenPLCStore.getState().modalActions.closeModal()
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'info',
+                  message: `Using DHCP target IP: ${ip}`,
+                })
+              },
+              onCancel: () => {
+                useOpenPLCStore.getState().modalActions.closeModal()
+              },
+            })
+            return
+          }
+        }
+      }
+
+      // Check PLC status — if stopped and runtime target, offer to start
+      if (isRuntimeTarget && runtimeConnection.plcStatus === 'STOPPED') {
+        const choice = await showDebuggerMessage(
+          'question',
+          'PLC Stopped',
+          'The PLC is currently stopped. Would you like to start it before connecting the debugger?',
+          ['Start PLC', 'Continue Anyway', 'Cancel'],
+        )
+        if (choice === 0) {
+          await runtime.startPlc()
+        } else if (choice === 2) {
+          return
+        }
+      }
+
+      // Verify MD5 before connecting
       const md5Result = await debuggerPort.readProgramMd5(projectPath, boardTarget)
       if (!md5Result.success || !md5Result.md5) {
         const choice = await showDebuggerMessage(
@@ -322,7 +397,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } finally {
       setIsDebuggerProcessing(false)
     }
-  }, [debuggerPort, deviceDefinitions, projectMeta, isDebuggerProcessing, addLog])
+  }, [debuggerPort, runtime, deviceDefinitions, projectMeta, currentBoardInfo, isSimulatorBoard, isDebuggerProcessing, addLog])
 
   return (
     <>
@@ -354,11 +429,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       >
         <PlayButton
           onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
-          disabled={
-            isSimulatorBoard
-              ? isCompiling || isDebuggerProcessing
-              : connectionStatus !== 'connected'
-          }
+          disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
           className={cn(
             isSimulatorBoard
               ? isCompiling || isDebuggerProcessing

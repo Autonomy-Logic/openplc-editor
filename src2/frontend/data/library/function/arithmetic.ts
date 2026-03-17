@@ -16,7 +16,6 @@ const BaseLibrarySchema = z.object({
   cPath: z.string(),
 })
 
-
 const ArithmeticVariableSchema = BaseLibraryVariableSchema.extend({
   type: z.discriminatedUnion('definition', [
     z.object({

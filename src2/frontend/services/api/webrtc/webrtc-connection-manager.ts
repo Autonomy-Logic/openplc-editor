@@ -15,13 +15,8 @@
 
 import type { WebRTCActions, WebRTCConnectionStatus } from '../../../store/slices/webrtc/types'
 import { ChunkReassembler } from './webrtc-chunked-message'
-import { handleCommandResponse,setDataChannel } from './webrtc-command'
-import {
-  closeWebRTCSession,
-  createWebRTCSession,
-  sendIceCandidate,
-  subscribeToIceCandidates,
-} from './webrtc-signaling'
+import { handleCommandResponse, setDataChannel } from './webrtc-command'
+import { closeWebRTCSession, createWebRTCSession, sendIceCandidate, subscribeToIceCandidates } from './webrtc-signaling'
 
 // ---------------------------------------------------------------------------
 // Types

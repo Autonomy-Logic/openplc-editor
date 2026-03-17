@@ -11,7 +11,6 @@ const BaseLibrarySchema = z.object({
   cPath: z.string(),
 })
 
-
 const P1AMVariablesSchema = BaseLibraryVariableSchema
 
 const P1AMPouSchema = BaseLibraryPouSchema.extend({

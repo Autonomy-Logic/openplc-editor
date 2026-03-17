@@ -45,9 +45,7 @@ export function collectProjectContext(state: StoreState, currentPouName: string,
   }
 
   // 3. Referenced function blocks — signatures only
-  const derivedTypeNames = pouVariables
-    .filter((v) => v.type.definition === 'user-data-type')
-    .map((v) => v.type.value)
+  const derivedTypeNames = pouVariables.filter((v) => v.type.definition === 'user-data-type').map((v) => v.type.value)
 
   if (derivedTypeNames.length > 0) {
     const fbPous = pous.filter((p) => p.pouType === 'function-block' && derivedTypeNames.includes(p.name))

@@ -107,9 +107,7 @@ const LineChart = ({ data, isBool = false, range, now, startTime, label }: LineC
 
   return (
     <div className='relative w-full'>
-      {label && (
-        <div className='absolute left-12 top-1 z-10 text-xs font-medium text-neutral-400'>{label}</div>
-      )}
+      {label && <div className='absolute left-12 top-1 z-10 text-xs font-medium text-neutral-400'>{label}</div>}
       <Chart options={chartOptions} series={chartSeries} type='line' height={150} />
     </div>
   )

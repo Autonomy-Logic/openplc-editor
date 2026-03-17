@@ -1,6 +1,6 @@
+import type { LibraryState } from '../../middleware/shared/ports/library-types'
 import { baseTypeSchema } from '../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import { LibraryState } from '../store/slices/library/types'
 
 const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR: 'local',

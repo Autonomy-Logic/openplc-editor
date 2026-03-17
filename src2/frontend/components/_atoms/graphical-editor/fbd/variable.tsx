@@ -283,7 +283,9 @@ const VariableElement = (block: VariableProps) => {
     if (!data.variable || !data.variable.name) return undefined
     const { pou } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, { nodeId: id })
     if (!pou) return undefined
-    const variable = (pou.interface?.variables ?? []).find((v: PLCVariable) => v.name.toLowerCase() === data.variable.name.toLowerCase())
+    const variable = (pou.interface?.variables ?? []).find(
+      (v: PLCVariable) => v.name.toLowerCase() === data.variable.name.toLowerCase(),
+    )
     return variable?.type.value
   }
 
@@ -502,8 +504,8 @@ const VariableElement = (block: VariableProps) => {
     // For variable nodes, allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types
     let variable: PLCVariable | { name: string } | undefined =
-      ((pou.interface?.variables ?? [])).find((v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase()) ||
-      resolveArrayVariableByName((pou.interface?.variables ?? []), variableNameToSubmit)
+      (pou.interface?.variables ?? []).find((v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase()) ||
+      resolveArrayVariableByName(pou.interface?.variables ?? [], variableNameToSubmit)
     if (!variable) {
       setIsAVariable(false)
       variable = { name: variableNameToSubmit }

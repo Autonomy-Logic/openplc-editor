@@ -8,7 +8,12 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '../../../../../assets/icons/flow/Coil'
-import { DefaultContact, FallingEdgeContact, NegatedContact, RisingEdgeContact } from '../../../../../assets/icons/flow/Contact'
+import {
+  DefaultContact,
+  FallingEdgeContact,
+  NegatedContact,
+  RisingEdgeContact,
+} from '../../../../../assets/icons/flow/Contact'
 import { cn } from '../../../../../utils/cn'
 import { CoilType, ContactType } from './types'
 

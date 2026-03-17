@@ -112,9 +112,11 @@ function initializeServerProtocolConfig(serverData: PLCServer): PLCServer {
   return serverData
 }
 
-function getFunctionCodeInfo(
-  functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
-): { type: string; iecPrefix: string; isBit: boolean } {
+function getFunctionCodeInfo(functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16'): {
+  type: string
+  iecPrefix: string
+  isBit: boolean
+} {
   switch (functionCode) {
     case '1':
       return { type: 'Digital Input (Coil Status)', iecPrefix: '%IX', isBit: true }
@@ -443,9 +445,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
         let variableToDelete: PLCVariable | undefined
         if (variableName) {
-          variableToDelete = globalVars.find(
-            (v) => v.name.toLowerCase() === variableName.toLowerCase(),
-          )
+          variableToDelete = globalVars.find((v) => v.name.toLowerCase() === variableName.toLowerCase())
         } else {
           variableToDelete = getVariableBasedOnRowIdOrVariableId(globalVars, rowId, variableId)?.variable
         }

@@ -26,7 +26,7 @@ import { debugBridge } from '../../../../services/debug/debug-bridge'
 import { ModbusRtuTransport } from '../../../../services/debug/transports/modbus-rtu-transport'
 import type { WebRTCTransportConfig } from '../../../../services/debug/transports/webrtc-transport'
 import { WebRTCTransport } from '../../../../services/debug/transports/webrtc-transport'
-import { clearDebugSessionControls,setDebugSessionControls } from '../../../../services/debug-session-controls'
+import { clearDebugSessionControls, setDebugSessionControls } from '../../../../services/debug-session-controls'
 import { simulatorService } from '../../../../services/simulator/simulator-service'
 import { useOpenPLCStore } from '../../../../store'
 

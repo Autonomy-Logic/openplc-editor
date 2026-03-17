@@ -22,15 +22,7 @@ export default function ViewHiddenIcon(props: IIconProps) {
         fill={stroke || '#0464FB'}
       />
       {/* Diagonal line through the eye */}
-      <line
-        x1='2'
-        y1='11'
-        x2='13'
-        y2='1'
-        stroke={stroke || '#0464FB'}
-        strokeWidth='1.5'
-        strokeLinecap='round'
-      />
+      <line x1='2' y1='11' x2='13' y2='1' stroke={stroke || '#0464FB'} strokeWidth='1.5' strokeLinecap='round' />
     </svg>
   )
 }

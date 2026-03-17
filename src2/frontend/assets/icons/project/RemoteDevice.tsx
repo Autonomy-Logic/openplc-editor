@@ -33,12 +33,7 @@ export const RemoteDeviceIcon = (props: IRemoteDeviceIconProps) => {
         fill='#B4D0FE'
       />
       <circle cx='14' cy='15' r='4' stroke='#B4D0FE' strokeWidth='1.5' fill='none' />
-      <path
-        d='M14 8V10M14 20V22M8 15H6M22 15H20'
-        stroke='#B4D0FE'
-        strokeWidth='1.5'
-        strokeLinecap='round'
-      />
+      <path d='M14 8V10M14 20V22M8 15H6M22 15H20' stroke='#B4D0FE' strokeWidth='1.5' strokeLinecap='round' />
     </svg>
   )
 }

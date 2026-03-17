@@ -1,8 +1,10 @@
 import { ComponentPropsWithoutRef } from 'react'
 
-import { useCapabilities,useProject, useWindow } from '../../../../middleware/shared/providers'
+import { useCapabilities, useProject, useWindow } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../store'
+import { prepareSavePayload } from '../../../utils/save-project'
+import { toast } from '../../_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 /**
@@ -26,13 +28,18 @@ export type ValidationContext =
 export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
   validationContext: ValidationContext
+  /** Callback to execute after save+close completes (e.g., re-open recent project). */
+  onAfterAction?: () => void
 }
 
-const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModalProps) => {
+const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }: SaveChangeModalProps) => {
   const {
     project,
+    editor: activeEditor,
+    editors,
     deviceDefinitions,
     workspaceActions: { setEditingState },
+    fileActions: { setAllToSaved },
     modalActions: { closeModal, onOpenChange, openModal },
   } = useOpenPLCStore()
 
@@ -52,15 +59,30 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     closeModal()
 
     if (operation === 'save') {
-      const result = await projectPort.saveProject({
+      const params = prepareSavePayload({
         projectPath: project.meta.path,
         projectData: project.data,
         deviceConfiguration: deviceDefinitions.configuration,
         devicePinMapping: deviceDefinitions.pinMapping.pins,
+        editors,
+        activeEditor,
       })
+      const result = await projectPort.saveProject(params)
       if (!result.success) {
+        toast({
+          title: 'Error in the save request!',
+          description: result.error ?? 'Save failed',
+          variant: 'fail',
+        })
         return
       }
+      setEditingState('saved')
+      setAllToSaved()
+      toast({
+        title: 'Changes saved!',
+        description: 'The project was saved successfully!',
+        variant: 'default',
+      })
     }
 
     switch (validationContext) {
@@ -72,10 +94,9 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
         await projectPort.openProject()
         return
       case 'open-recent-project':
-        // Editor-specific: handled via IPC callback outside the modal
-        return
       case 'open-project-by-path':
-        // Editor-specific: handled via IPC callback outside the modal
+        // Execute the deferred action (e.g., re-open the recent project)
+        onAfterAction?.()
         return
       case 'close-project':
         clearAndClose()

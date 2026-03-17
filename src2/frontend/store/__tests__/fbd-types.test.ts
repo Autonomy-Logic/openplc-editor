@@ -91,7 +91,15 @@ describe('FBD Zod schemas', () => {
   })
 
   describe('zodFBDNodeTypesSchema', () => {
-    const validTypes = ['block', 'comment', 'connector', 'connection', 'input-variable', 'output-variable', 'inout-variable']
+    const validTypes = [
+      'block',
+      'comment',
+      'connector',
+      'connection',
+      'input-variable',
+      'output-variable',
+      'inout-variable',
+    ]
 
     it.each(validTypes)('accepts valid node type: %s', (type) => {
       const result = zodFBDNodeTypesSchema.safeParse(type)

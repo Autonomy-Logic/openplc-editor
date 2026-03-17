@@ -65,17 +65,16 @@ function startTimer(): TelemetryTimer {
   return { elapsed: () => Math.round(performance.now() - start) }
 }
 
- 
 function trackCompletionRequested(_data: Record<string, unknown>): void {}
- 
+
 function trackCompletionShown(_data: Record<string, unknown>): void {}
- 
+
 function trackCompletionAccepted(_data: Record<string, unknown>): void {}
- 
+
 function trackCompletionDismissed(_data: Record<string, unknown>): void {}
- 
+
 function trackCompletionError(_data: Record<string, unknown>): void {}
- 
+
 function trackCompletionTimeout(_data: Record<string, unknown>): void {}
 
 // ---------------------------------------------------------------------------
@@ -136,7 +135,11 @@ async function* streamAIRequest(
   if (!response.ok) {
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After')
-      throw new AIRequestError('Rate limited. Please wait before trying again.', 429, retryAfter ? Number(retryAfter) : undefined)
+      throw new AIRequestError(
+        'Rate limited. Please wait before trying again.',
+        429,
+        retryAfter ? Number(retryAfter) : undefined,
+      )
     }
     throw new AIRequestError(`AI request failed: ${response.statusText}`, response.status)
   }
@@ -355,12 +358,10 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     }
   }
 
-   
   freeInlineCompletions(_completions: monaco.languages.InlineCompletions): void {
     this.trackAcceptOrDismiss()
   }
 
-   
   disposeInlineCompletions(_completions: monaco.languages.InlineCompletions): void {
     this.trackAcceptOrDismiss()
   }

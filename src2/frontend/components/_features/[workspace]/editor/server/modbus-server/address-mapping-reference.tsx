@@ -326,4 +326,4 @@ const AddressMappingReference = ({ bufferMapping, defaultExpanded = false }: Add
 }
 
 export { AddressMappingReference }
-export type { AddressMappingRow, AddressMappingSection,ModbusSlaveBufferMapping }
+export type { AddressMappingRow, AddressMappingSection, ModbusSlaveBufferMapping }

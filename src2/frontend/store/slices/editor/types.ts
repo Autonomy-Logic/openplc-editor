@@ -30,13 +30,9 @@ export type StructureTableType = {
   selectedRow: string
 }
 
-export type TaskType =
-  | { display: 'table'; selectedRow: string }
-  | { display: 'code' }
+export type TaskType = { display: 'table'; selectedRow: string } | { display: 'code' }
 
-export type InstanceType =
-  | { display: 'table'; selectedRow: string }
-  | { display: 'code' }
+export type InstanceType = { display: 'table'; selectedRow: string } | { display: 'code' }
 
 // ---------------------------------------------------------------------------
 // Graphical schemas

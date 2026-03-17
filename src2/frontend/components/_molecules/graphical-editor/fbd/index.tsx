@@ -19,7 +19,7 @@ import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
-import { getFbdBlockType,isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
+import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { CustomFbdNodeTypes, customNodeTypes } from '../../../_atoms/graphical-editor/fbd'
@@ -102,7 +102,9 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       if (!variableName) return undefined
 
       if (!pouRef) return undefined
-      const variable = (pouRef.interface?.variables ?? []).find((v) => v.name.toLowerCase() === variableName.toLowerCase())
+      const variable = (pouRef.interface?.variables ?? []).find(
+        (v) => v.name.toLowerCase() === variableName.toLowerCase(),
+      )
       if (!variable || variable.type.value.toUpperCase() !== 'BOOL') return undefined
 
       const compositeKey = getCompositeKey(variableName)
@@ -265,7 +267,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
   const updateRungState = () => {
     const stripDivergence = (node: FlowNode) => {
-       
       const { hasDivergence: _hd, ...cleanData } = node.data
       return { ...node, data: cleanData }
     }

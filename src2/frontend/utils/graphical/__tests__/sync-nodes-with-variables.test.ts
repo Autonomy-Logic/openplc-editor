@@ -29,7 +29,11 @@ describe('syncNodesWithVariables', () => {
   it('updates a contact node when the variable type no longer matches BOOL', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'INT')
-    const node = makeNode('n1', 'contact', { name: 'myVar', id: '1', type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'] })
+    const node = makeNode('n1', 'contact', {
+      name: 'myVar',
+      id: '1',
+      type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
+    })
 
     const ladderFlows = [
       {
@@ -58,7 +62,11 @@ describe('syncNodesWithVariables', () => {
   it('refreshes a contact node when variable id changes', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'BOOL', 'base-type', '2')
-    const node = makeNode('n1', 'contact', { name: 'myVar', id: '1', type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'] })
+    const node = makeNode('n1', 'contact', {
+      name: 'myVar',
+      id: '1',
+      type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
+    })
 
     const ladderFlows = [
       {
@@ -112,7 +120,11 @@ describe('syncNodesWithVariables', () => {
   it('filters flows by editorName when provided', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'INT')
-    const node = makeNode('n1', 'contact', { name: 'myVar', id: '1', type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'] })
+    const node = makeNode('n1', 'contact', {
+      name: 'myVar',
+      id: '1',
+      type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
+    })
 
     const ladderFlows = [
       { name: 'editor1', rungs: [{ id: 'r1', nodes: [node], edges: [] }] },
@@ -217,11 +229,16 @@ describe('syncNodesWithVariables', () => {
   it('marks a block node with matching variant as wrongVariable when type mismatches', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'INT')
-    const node = makeNode('n1', 'block', {
-      name: 'myVar',
-      id: '1',
-      type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
-    }, { variant: { name: 'ADD' } })
+    const node = makeNode(
+      'n1',
+      'block',
+      {
+        name: 'myVar',
+        id: '1',
+        type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
+      },
+      { variant: { name: 'ADD' } },
+    )
 
     const ladderFlows = [
       {
@@ -276,9 +293,9 @@ describe('syncNodesWithVariablesFBD', () => {
   it('does not update when node has no variable', () => {
     const updateNode = vi.fn()
     const node = makeNode('n1', 'block')
-    const fbdFlows = [
-      { name: 'fbd1', rung: { nodes: [node], edges: [] } },
-    ] as unknown as Parameters<typeof syncNodesWithVariablesFBD>[1]
+    const fbdFlows = [{ name: 'fbd1', rung: { nodes: [node], edges: [] } }] as unknown as Parameters<
+      typeof syncNodesWithVariablesFBD
+    >[1]
 
     syncNodesWithVariablesFBD([makeVariable('x')], fbdFlows, updateNode)
     expect(updateNode).not.toHaveBeenCalled()
@@ -287,9 +304,9 @@ describe('syncNodesWithVariablesFBD', () => {
   it('does not update when variable not found', () => {
     const updateNode = vi.fn()
     const node = makeNode('n1', 'input-variable', { name: 'missing' } as Partial<PLCVariable>)
-    const fbdFlows = [
-      { name: 'fbd1', rung: { nodes: [node], edges: [] } },
-    ] as unknown as Parameters<typeof syncNodesWithVariablesFBD>[1]
+    const fbdFlows = [{ name: 'fbd1', rung: { nodes: [node], edges: [] } }] as unknown as Parameters<
+      typeof syncNodesWithVariablesFBD
+    >[1]
 
     syncNodesWithVariablesFBD([makeVariable('other')], fbdFlows, updateNode)
     expect(updateNode).not.toHaveBeenCalled()
@@ -298,15 +315,20 @@ describe('syncNodesWithVariablesFBD', () => {
   it('marks a block node as wrongVariable when type mismatches', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'INT')
-    const node = makeNode('n1', 'block', {
-      name: 'myVar',
-      id: '1',
-      type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
-    }, { variant: { name: 'ADD' } })
+    const node = makeNode(
+      'n1',
+      'block',
+      {
+        name: 'myVar',
+        id: '1',
+        type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
+      },
+      { variant: { name: 'ADD' } },
+    )
 
-    const fbdFlows = [
-      { name: 'fbd1', rung: { nodes: [node], edges: [] } },
-    ] as unknown as Parameters<typeof syncNodesWithVariablesFBD>[1]
+    const fbdFlows = [{ name: 'fbd1', rung: { nodes: [node], edges: [] } }] as unknown as Parameters<
+      typeof syncNodesWithVariablesFBD
+    >[1]
 
     syncNodesWithVariablesFBD([variable], fbdFlows, updateNode)
     expect(updateNode).toHaveBeenCalledWith(
@@ -324,9 +346,9 @@ describe('syncNodesWithVariablesFBD', () => {
     const newVariable = makeVariable('myVar', 'BOOL', 'base-type', '2')
     const node = makeNode('n1', 'block', oldVariable, { variant: { name: 'BOOL' } })
 
-    const fbdFlows = [
-      { name: 'fbd1', rung: { nodes: [node], edges: [] } },
-    ] as unknown as Parameters<typeof syncNodesWithVariablesFBD>[1]
+    const fbdFlows = [{ name: 'fbd1', rung: { nodes: [node], edges: [] } }] as unknown as Parameters<
+      typeof syncNodesWithVariablesFBD
+    >[1]
 
     syncNodesWithVariablesFBD([newVariable], fbdFlows, updateNode)
     expect(updateNode).toHaveBeenCalledWith(
@@ -369,9 +391,9 @@ describe('syncNodesWithVariablesFBD', () => {
       type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
     })
 
-    const fbdFlows = [
-      { name: 'fbd1', rung: { nodes: [node], edges: [] } },
-    ] as unknown as Parameters<typeof syncNodesWithVariablesFBD>[1]
+    const fbdFlows = [{ name: 'fbd1', rung: { nodes: [node], edges: [] } }] as unknown as Parameters<
+      typeof syncNodesWithVariablesFBD
+    >[1]
 
     syncNodesWithVariablesFBD([variable], fbdFlows, updateNode)
     expect(updateNode).not.toHaveBeenCalled()
@@ -390,9 +412,9 @@ describe('syncNodesWithVariablesFBD', () => {
       },
     }
 
-    const fbdFlows = [
-      { name: 'fbd1', rung: { nodes: [node], edges: [] } },
-    ] as unknown as Parameters<typeof syncNodesWithVariablesFBD>[1]
+    const fbdFlows = [{ name: 'fbd1', rung: { nodes: [node], edges: [] } }] as unknown as Parameters<
+      typeof syncNodesWithVariablesFBD
+    >[1]
 
     syncNodesWithVariablesFBD([variable], fbdFlows, updateNode)
     expect(updateNode).not.toHaveBeenCalled()

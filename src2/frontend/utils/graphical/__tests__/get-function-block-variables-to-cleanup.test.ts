@@ -6,11 +6,7 @@ import {
   isFunctionBlockVariableInUse,
 } from '../get-function-block-variables-to-cleanup'
 
-const makeBlockNode = (
-  id: string,
-  variableName: string,
-  variantType: string,
-): Node => ({
+const makeBlockNode = (id: string, variableName: string, variantType: string): Node => ({
   id,
   type: 'block',
   position: { x: 0, y: 0 },
@@ -64,10 +60,7 @@ describe('isFunctionBlockVariableInUse', () => {
   })
 
   it('checks across multiple rungs', () => {
-    const rungs = [
-      { nodes: [makeNonBlockNode('n1')] },
-      { nodes: [makeBlockNode('n2', 'myFB', 'function-block')] },
-    ]
+    const rungs = [{ nodes: [makeNonBlockNode('n1')] }, { nodes: [makeBlockNode('n2', 'myFB', 'function-block')] }]
     expect(isFunctionBlockVariableInUse('myFB', rungs)).toBe(true)
   })
 
@@ -105,10 +98,7 @@ describe('getFunctionBlockVariablesToCleanup', () => {
   })
 
   it('skips non-block and non-function-block nodes', () => {
-    const removedNodes = [
-      makeNonBlockNode('n1'),
-      makeBlockNode('n2', 'regularFn', 'function'),
-    ]
+    const removedNodes = [makeNonBlockNode('n1'), makeBlockNode('n2', 'regularFn', 'function')]
     const allRungs: Array<{ nodes: Node[] }> = [{ nodes: [] }]
     const allVariables = [makeVariable('regularFn', 'derived')]
 

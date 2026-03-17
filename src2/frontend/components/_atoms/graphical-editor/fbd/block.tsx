@@ -16,7 +16,13 @@ import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
 import { buildBlockNode } from './buildNodes'
 import { CustomHandle } from './handle'
 import { BasicNodeData, BlockNodeData, BlockProps } from './utils'
-import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_HEIGHT, DEFAULT_BLOCK_TYPE, DEFAULT_BLOCK_WIDTH, } from './utils/constants'
+import {
+  DEFAULT_BLOCK_CONNECTOR_Y,
+  DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+  DEFAULT_BLOCK_HEIGHT,
+  DEFAULT_BLOCK_TYPE,
+  DEFAULT_BLOCK_WIDTH,
+} from './utils/constants'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 export type { BlockNode, BlockNodeData } from './utils/types'
@@ -113,9 +119,7 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const libraryBlock = libraries.system
-      .flatMap((block) => block.pous)
-      .find((pou) => pou.name === blockNameValue)
+    const libraryBlock = libraries.system.flatMap((block) => block.pous).find((pou) => pou.name === blockNameValue)
 
     if (!libraryBlock) {
       setBlockNameValue(validBlockNameValue)
@@ -741,7 +745,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     >
       {data.hasDivergence && hoveringBlock && (
         <div
-          className='h-6 w-6 absolute right-[-12px] top-[-12px] pointer z-10 rounded-full bg-slate-600 flex justify-center items-center shadow-sm'
+          className='pointer absolute right-[-12px] top-[-12px] z-10 flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 shadow-sm'
           onClick={handleUpdateDivergence}
         >
           <TooltipProvider>

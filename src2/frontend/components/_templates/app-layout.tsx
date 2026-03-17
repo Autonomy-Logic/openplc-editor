@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
-import { useCapabilities,useProject, useSystem } from '../../../middleware/shared/providers'
+import { useCapabilities, useProject, useSystem } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
 import { cn } from '../../utils/cn'
@@ -83,6 +83,10 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
               isOpen={modals['save-changes-project'].open}
               validationContext={
                 (modals['save-changes-project'].data as SaveChangeModalProps)?.validationContext ?? 'close-project'
+              }
+              onAfterAction={
+                (modals['save-changes-project'].data as SaveChangeModalProps & { onAfterAction?: () => void })
+                  ?.onAfterAction
               }
             />
           )}

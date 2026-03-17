@@ -11,7 +11,6 @@ const BaseLibrarySchema = z.object({
   cPath: z.string(),
 })
 
-
 const MQTTVariablesSchema = BaseLibraryVariableSchema
 
 const MQTTPouSchema = BaseLibraryPouSchema.extend({

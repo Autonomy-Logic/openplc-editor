@@ -175,20 +175,33 @@ export function createEditorProjectAdapter(): ProjectPort {
       const projectName = pathParts[pathParts.length - 1] || 'untitled'
       const editorPous = params.projectData.pous.map(mapPortPouToIpcPou)
 
+      // Inject variablesText from sanitized POUs into IPC format
+      for (let i = 0; i < params.projectData.pous.length; i++) {
+        const portPou = params.projectData.pous[i] as PLCPou & { variablesText?: string }
+        if (portPou.variablesText != null) {
+          editorPous[i].data.variablesText = portPou.variablesText
+        }
+      }
+
+      const projectDataPayload: Record<string, unknown> = {
+        meta: { name: projectName, type: 'plc-project' as const },
+        data: {
+          dataTypes: params.projectData.dataTypes,
+          pous: editorPous,
+          configuration: params.projectData.configurations,
+          debugVariables: params.projectData.debugVariables,
+        },
+      }
+
       const response = (await window.bridge.saveProject({
         projectPath: params.projectPath,
         content: {
-          projectData: {
-            meta: { name: projectName, type: 'plc-project' as const },
-            data: {
-              dataTypes: params.projectData.dataTypes,
-              pous: editorPous,
-              configuration: params.projectData.configurations,
-            },
-          },
+          projectData: projectDataPayload,
           pous: editorPous,
           deviceConfiguration: params.deviceConfiguration,
           devicePinMapping: params.devicePinMapping,
+          servers: params.projectData.servers ?? [],
+          remoteDevices: params.projectData.remoteDevices ?? [],
         },
       } as never)) as unknown as IpcSaveResponse
 

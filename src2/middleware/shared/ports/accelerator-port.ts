@@ -39,7 +39,7 @@ export interface AcceleratorPort {
   // --- Project actions ---
   onCreateProject(callback: () => void): Unsubscribe
   onOpenProject(callback: () => void): Unsubscribe
-  onOpenRecent(callback: () => void): Unsubscribe
+  onOpenRecent(callback: (projectData?: unknown) => void): Unsubscribe
   onSaveProject(callback: () => void): Unsubscribe
   onSaveFile(callback: () => void): Unsubscribe
   onCloseProject(callback: () => void): Unsubscribe

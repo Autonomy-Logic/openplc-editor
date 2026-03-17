@@ -1,9 +1,20 @@
 import { Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { FBD_VARIABLE_NODE_TYPES } from '../../components/_atoms/graphical-editor/fbd/utils/constants'
-import type { FBDFlowActions, FBDFlowState } from '../../store/slices/fbd/types'
-import type { LadderFlowActions, LadderFlowState } from '../../store/slices/ladder/types'
+import { FBD_VARIABLE_NODE_TYPES } from './constants'
+
+type UpdateLadderNodeFn = (params: {
+  editorName: string
+  rungId: string
+  nodeId: string
+  node: import('@xyflow/react').Node
+}) => void
+
+type UpdateFBDNodeFn = (params: { editorName: string; nodeId: string; node: import('@xyflow/react').Node }) => void
+
+type LadderRung = { id: string; nodes: import('@xyflow/react').Node[] }
+type LadderFlow = { name: string; rungs: LadderRung[] }
+type FBDFlow = { name: string; rung: { nodes: import('@xyflow/react').Node[] } }
 
 const getBlockExpectedType = (node: Node): string => {
   const variant = (node.data as { variant?: { name?: string } }).variant
@@ -24,8 +35,8 @@ const sameType = (firstType: string, secondType: string) =>
 
 export const syncNodesWithVariables = (
   newVars: PLCVariable[],
-  ladderFlows: LadderFlowState['ladderFlows'],
-  updateNode: LadderFlowActions['updateNode'],
+  ladderFlows: LadderFlow[],
+  updateNode: UpdateLadderNodeFn,
   editorName?: string,
 ) => {
   const flowsToSync = editorName ? ladderFlows.filter((flow) => flow.name === editorName) : ladderFlows
@@ -118,8 +129,8 @@ export const syncNodesWithVariables = (
 
 export const syncNodesWithVariablesFBD = (
   newVars: PLCVariable[],
-  fbdFlows: FBDFlowState['fbdFlows'],
-  updateNode: FBDFlowActions['updateNode'],
+  fbdFlows: FBDFlow[],
+  updateNode: UpdateFBDNodeFn,
   editorName?: string,
 ) => {
   const flowsToSync = editorName ? fbdFlows.filter((flow) => flow.name === editorName) : fbdFlows

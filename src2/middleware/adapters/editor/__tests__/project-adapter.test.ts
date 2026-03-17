@@ -1,5 +1,5 @@
-import { createEditorProjectAdapter } from '../project-adapter'
 import type { ProjectPort } from '../../../shared/ports/project-port'
+import { createEditorProjectAdapter } from '../project-adapter'
 
 const mockIpcProjectResponse = {
   success: true,
@@ -21,7 +21,9 @@ const mockIpcProjectResponse = {
           type: 'program',
           data: {
             name: 'main',
-            variables: [{ name: 'x', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' }],
+            variables: [
+              { name: 'x', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            ],
             body: { language: 'st', value: 'x := TRUE;' },
             documentation: 'Main program',
           },
@@ -322,7 +324,11 @@ describe('createEditorProjectAdapter', () => {
     it('delegates to window.bridge.renamePouFile', async () => {
       const result = await adapter.renamePou({ filePath: '/path/to/old.st', newFileName: 'new_name' })
 
-      expect(window.bridge.renamePouFile).toHaveBeenCalledWith({ filePath: '/path/to/old.st', newFileName: 'new_name', fileContent: undefined })
+      expect(window.bridge.renamePouFile).toHaveBeenCalledWith({
+        filePath: '/path/to/old.st',
+        newFileName: 'new_name',
+        fileContent: undefined,
+      })
       expect(result).toEqual({ success: true, data: mockPouResponse.data })
     })
   })

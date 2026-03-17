@@ -82,10 +82,7 @@ export type PouActions = {
 }
 
 export type DatatypeActions = {
-  create: (args: {
-    name: string
-    derivation: 'array' | 'enumerated' | 'structure'
-  }) => SharedResponse
+  create: (args: { name: string; derivation: 'array' | 'enumerated' | 'structure' }) => SharedResponse
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
   rename: (oldName: string, newName: string) => SharedResponse

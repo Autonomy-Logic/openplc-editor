@@ -108,9 +108,7 @@ export type ProjectActions = {
   applyPouSnapshot: (name: string, variables: PLCVariable[], body: PLCBody) => void
 
   // Variables
-  createVariable: (
-    dto: Omit<VariableDTO, 'data'> & { data: PLCVariable; rowToInsert?: number },
-  ) => ProjectResponse
+  createVariable: (dto: Omit<VariableDTO, 'data'> & { data: PLCVariable; rowToInsert?: number }) => ProjectResponse
   setPouVariables: (args: { pouName: string; variables: PLCVariable[] }) => ProjectResponse
   setGlobalVariables: (args: { variables: PLCVariable[] }) => ProjectResponse
   updateVariable: (args: {
@@ -146,11 +144,7 @@ export type ProjectActions = {
   deleteDatatype: (name: string) => void
   updateDatatype: (name: string, data?: PLCDataType) => void
   createArrayDimension: (args: { name: string; derivation: 'array' | 'enumerated' | 'structure' }) => void
-  rearrangeStructureVariables: (args: {
-    associatedDataType?: string
-    rowId: number
-    newIndex: number
-  }) => void
+  rearrangeStructureVariables: (args: { associatedDataType?: string; rowId: number; newIndex: number }) => void
   applyDatatypeSnapshot: (name: string, data: PLCDataType) => void
 
   // Tasks

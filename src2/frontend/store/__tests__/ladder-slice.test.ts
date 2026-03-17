@@ -224,10 +224,12 @@ describe('createLadderFlowSlice', () => {
   // removeRung
   // -------------------------------------------------------------------------
   it('removeRung removes a rung by id', () => {
-    store.getState().ladderFlowActions.addLadderFlow(makeFlow({
-      name: 'editor-1',
-      rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
-    }))
+    store.getState().ladderFlowActions.addLadderFlow(
+      makeFlow({
+        name: 'editor-1',
+        rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
+      }),
+    )
 
     store.getState().ladderFlowActions.removeRung('editor-1', 'rung-1')
 
@@ -269,10 +271,12 @@ describe('createLadderFlowSlice', () => {
   // duplicateRung
   // -------------------------------------------------------------------------
   it('duplicateRung inserts new rung after the source rung', () => {
-    store.getState().ladderFlowActions.addLadderFlow(makeFlow({
-      name: 'editor-1',
-      rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
-    }))
+    store.getState().ladderFlowActions.addLadderFlow(
+      makeFlow({
+        name: 'editor-1',
+        rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
+      }),
+    )
 
     store.getState().ladderFlowActions.duplicateRung({ editorName: 'editor-1', rungId: 'rung-1' })
 
@@ -288,9 +292,7 @@ describe('createLadderFlowSlice', () => {
   it('duplicateRung does nothing for nonexistent rung', () => {
     seedFlowWithRung(store)
 
-    store
-      .getState()
-      .ladderFlowActions.duplicateRung({ editorName: 'editor-1', rungId: 'missing' })
+    store.getState().ladderFlowActions.duplicateRung({ editorName: 'editor-1', rungId: 'missing' })
 
     expect(store.getState().ladderFlows[0].rungs).toHaveLength(1)
   })
@@ -386,7 +388,9 @@ describe('createLadderFlowSlice', () => {
     seedFlowWithRung(store, 'editor-1', rung)
 
     const updated = makeNode({ id: 'n1', data: { label: 'new' } })
-    store.getState().ladderFlowActions.updateNode({ editorName: 'editor-1', rungId: 'rung-1', nodeId: 'n1', node: updated })
+    store
+      .getState()
+      .ladderFlowActions.updateNode({ editorName: 'editor-1', rungId: 'rung-1', nodeId: 'n1', node: updated })
 
     const nodes = store.getState().ladderFlows[0].rungs[0].nodes
     expect(nodes.find((n) => n.id === 'n1')?.data.label).toBe('new')
@@ -449,7 +453,11 @@ describe('createLadderFlowSlice', () => {
   it('removeNodes also cleans up selectedNodes', () => {
     const n1 = makeNode({ id: 'n1' })
     const rung = makeRung({
-      nodes: [makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }), makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }), n1],
+      nodes: [
+        makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+        makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }),
+        n1,
+      ],
       selectedNodes: [n1],
     })
     seedFlowWithRung(store, 'editor-1', rung)
@@ -466,7 +474,12 @@ describe('createLadderFlowSlice', () => {
     const n1 = makeNode({ id: 'n1', data: { draggable: true } })
     const n2 = makeNode({ id: 'n2', data: { draggable: false } })
     const rung = makeRung({
-      nodes: [makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }), makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }), n1, n2],
+      nodes: [
+        makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+        makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }),
+        n1,
+        n2,
+      ],
     })
     seedFlowWithRung(store, 'editor-1', rung)
 
@@ -486,13 +499,16 @@ describe('createLadderFlowSlice', () => {
     const n1 = makeNode({ id: 'n1', data: { draggable: true } })
     const n2 = makeNode({ id: 'n2', data: { draggable: true } })
     const rung = makeRung({
-      nodes: [makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }), makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }), n1, n2],
+      nodes: [
+        makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+        makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }),
+        n1,
+        n2,
+      ],
     })
     seedFlowWithRung(store, 'editor-1', rung)
 
-    store
-      .getState()
-      .ladderFlowActions.setSelectedNodes({ editorName: 'editor-1', rungId: 'rung-1', nodes: [n1, n2] })
+    store.getState().ladderFlowActions.setSelectedNodes({ editorName: 'editor-1', rungId: 'rung-1', nodes: [n1, n2] })
 
     const updatedRung = store.getState().ladderFlows[0].rungs[0]
     expect(updatedRung.selectedNodes).toHaveLength(2)
@@ -502,10 +518,12 @@ describe('createLadderFlowSlice', () => {
   })
 
   it('setSelectedNodes clears other rungs selected state when nodes are selected', () => {
-    store.getState().ladderFlowActions.addLadderFlow(makeFlow({
-      name: 'editor-1',
-      rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
-    }))
+    store.getState().ladderFlowActions.addLadderFlow(
+      makeFlow({
+        name: 'editor-1',
+        rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
+      }),
+    )
 
     const node = makeNode({ id: 'n1', data: { draggable: true } })
     store.getState().ladderFlowActions.setNodes({
@@ -566,7 +584,9 @@ describe('createLadderFlowSlice', () => {
   it('addEdge pushes a new edge to a rung', () => {
     seedFlowWithRung(store)
 
-    store.getState().ladderFlowActions.addEdge({ editorName: 'editor-1', rungId: 'rung-1', edge: makeEdge({ id: 'e1' }) })
+    store
+      .getState()
+      .ladderFlowActions.addEdge({ editorName: 'editor-1', rungId: 'rung-1', edge: makeEdge({ id: 'e1' }) })
 
     expect(store.getState().ladderFlows[0].rungs[0].edges).toHaveLength(1)
     expect(store.getState().ladderFlows[0].updated).toBe(true)
@@ -580,7 +600,11 @@ describe('createLadderFlowSlice', () => {
 
     store
       .getState()
-      .ladderFlowActions.updateReactFlowViewport({ editorName: 'editor-1', rungId: 'rung-1', reactFlowViewport: [1200, 400] })
+      .ladderFlowActions.updateReactFlowViewport({
+        editorName: 'editor-1',
+        rungId: 'rung-1',
+        reactFlowViewport: [1200, 400],
+      })
 
     expect(store.getState().ladderFlows[0].rungs[0].reactFlowViewport).toEqual([1200, 400])
   })
@@ -590,7 +614,11 @@ describe('createLadderFlowSlice', () => {
 
     store
       .getState()
-      .ladderFlowActions.updateReactFlowViewport({ editorName: 'editor-1', rungId: 'missing', reactFlowViewport: [1200, 400] })
+      .ladderFlowActions.updateReactFlowViewport({
+        editorName: 'editor-1',
+        rungId: 'missing',
+        reactFlowViewport: [1200, 400],
+      })
 
     expect(store.getState().ladderFlows[0].rungs[0].reactFlowViewport).toEqual([800, 200])
   })
@@ -713,13 +741,17 @@ describe('createLadderFlowSlice', () => {
   })
 
   it('updateNode does nothing for nonexistent editor', () => {
-    store.getState().ladderFlowActions.updateNode({ editorName: 'nonexistent', rungId: 'r', nodeId: 'n', node: makeNode() })
+    store
+      .getState()
+      .ladderFlowActions.updateNode({ editorName: 'nonexistent', rungId: 'r', nodeId: 'n', node: makeNode() })
     expect(store.getState().ladderFlows).toEqual([])
   })
 
   it('updateNode does nothing for nonexistent rung', () => {
     seedFlowWithRung(store)
-    store.getState().ladderFlowActions.updateNode({ editorName: 'editor-1', rungId: 'missing', nodeId: 'n', node: makeNode() })
+    store
+      .getState()
+      .ladderFlowActions.updateNode({ editorName: 'editor-1', rungId: 'missing', nodeId: 'n', node: makeNode() })
     expect(store.getState().ladderFlows[0].rungs[0].nodes).toHaveLength(2)
   })
 
@@ -757,10 +789,12 @@ describe('createLadderFlowSlice', () => {
   })
 
   it('setSelectedNodes with empty array does not clear other rungs', () => {
-    store.getState().ladderFlowActions.addLadderFlow(makeFlow({
-      name: 'editor-1',
-      rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
-    }))
+    store.getState().ladderFlowActions.addLadderFlow(
+      makeFlow({
+        name: 'editor-1',
+        rungs: [makeRung({ id: 'rung-1' }), makeRung({ id: 'rung-2' })],
+      }),
+    )
 
     store.getState().ladderFlowActions.setSelectedNodes({ editorName: 'editor-1', rungId: 'rung-1', nodes: [] })
 
@@ -780,13 +814,17 @@ describe('createLadderFlowSlice', () => {
   })
 
   it('updateEdge does nothing for nonexistent editor', () => {
-    store.getState().ladderFlowActions.updateEdge({ editorName: 'nonexistent', rungId: 'r', edgeId: 'e', edge: makeEdge() })
+    store
+      .getState()
+      .ladderFlowActions.updateEdge({ editorName: 'nonexistent', rungId: 'r', edgeId: 'e', edge: makeEdge() })
     expect(store.getState().ladderFlows).toEqual([])
   })
 
   it('updateEdge does nothing for nonexistent rung', () => {
     seedFlowWithRung(store)
-    store.getState().ladderFlowActions.updateEdge({ editorName: 'editor-1', rungId: 'missing', edgeId: 'e', edge: makeEdge() })
+    store
+      .getState()
+      .ladderFlowActions.updateEdge({ editorName: 'editor-1', rungId: 'missing', edgeId: 'e', edge: makeEdge() })
     expect(store.getState().ladderFlows[0].rungs[0].edges).toEqual([])
   })
 
@@ -802,7 +840,13 @@ describe('createLadderFlowSlice', () => {
   })
 
   it('updateReactFlowViewport does nothing for nonexistent editor', () => {
-    store.getState().ladderFlowActions.updateReactFlowViewport({ editorName: 'nonexistent', rungId: 'r', reactFlowViewport: [100, 100] })
+    store
+      .getState()
+      .ladderFlowActions.updateReactFlowViewport({
+        editorName: 'nonexistent',
+        rungId: 'r',
+        reactFlowViewport: [100, 100],
+      })
     expect(store.getState().ladderFlows).toEqual([])
   })
 

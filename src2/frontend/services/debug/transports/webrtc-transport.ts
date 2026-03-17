@@ -12,9 +12,9 @@
  * direct Modbus-over-DataChannel, we simply swap this transport implementation.
  */
 
-import { bytesToHex,hexToBytes } from '../../../utils/hex'
+import { bytesToHex, hexToBytes } from '../../../utils/hex'
 import { sendDebugCommandViaHttp } from '../../api/debug-transport'
-import type { DebugSetResult,DebugTransport, DebugTransportResult } from '../types'
+import type { DebugSetResult, DebugTransport, DebugTransportResult } from '../types'
 
 // Timeout for individual debug requests (matches desktop editor's 5000ms Modbus timeout)
 const REQUEST_TIMEOUT_MS = 5000

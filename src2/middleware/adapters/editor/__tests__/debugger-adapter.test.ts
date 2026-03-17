@@ -1,6 +1,6 @@
+import type { DebuggerPort } from '../../../shared/ports/debugger-port'
 import type { EditorDebugConnectionConfig } from '../debugger-adapter'
 import { createEditorDebuggerAdapter } from '../debugger-adapter'
-import type { DebuggerPort } from '../../../shared/ports/debugger-port'
 
 let adapter: DebuggerPort
 let mockConnectionConfig: EditorDebugConnectionConfig | null

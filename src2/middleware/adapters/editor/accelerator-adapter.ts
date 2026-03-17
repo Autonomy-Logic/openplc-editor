@@ -51,10 +51,10 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
       }
     },
 
-    onOpenRecent(callback: () => void): Unsubscribe {
+    onOpenRecent(callback: (projectData?: unknown) => void): Unsubscribe {
       let active = true
-      window.bridge.openRecentAccelerator(() => {
-        if (active) callback()
+      window.bridge.openRecentAccelerator((_event: unknown, response: unknown) => {
+        if (active) callback(response)
       })
       return () => {
         active = false

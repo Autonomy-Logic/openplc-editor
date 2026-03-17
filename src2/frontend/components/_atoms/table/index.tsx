@@ -4,7 +4,7 @@ import { cn } from '../../../utils/cn'
 
 const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { context?: string }>(
   ({ className, context, ...res }, ref) => (
-    <div aria-label='Table container' className={cn('h-fit select-none w-fit', className)}>
+    <div aria-label='Table container' className={cn('h-fit w-fit select-none', className)}>
       <table
         aria-label={`${context} table`}
         ref={ref}

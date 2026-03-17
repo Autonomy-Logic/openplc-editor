@@ -94,11 +94,7 @@ class SimulatorServiceFacade {
   /**
    * Force or release a variable in the simulator.
    */
-  async setVariable(
-    index: number,
-    force: boolean,
-    valueHex?: string,
-  ): Promise<{ success: boolean; error?: string }> {
+  async setVariable(index: number, force: boolean, valueHex?: string): Promise<{ success: boolean; error?: string }> {
     if (!this.port) return { success: false, error: 'SimulatorPort not registered' }
     return this.port.setDebugVariable(index, force, valueHex)
   }

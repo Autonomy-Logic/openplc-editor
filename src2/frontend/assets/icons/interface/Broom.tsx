@@ -1,4 +1,4 @@
-import { ComponentPropsWithRef } from "react"
+import { ComponentPropsWithRef } from 'react'
 
 type BroomIconProps = ComponentPropsWithRef<'svg'>
 

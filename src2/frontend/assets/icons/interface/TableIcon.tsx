@@ -1,4 +1,3 @@
-
 import { ComponentProps } from 'react'
 
 import { IconStyles } from '../../../data/constants/icon-styles'

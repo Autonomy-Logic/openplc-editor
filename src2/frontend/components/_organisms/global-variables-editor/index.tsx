@@ -1,7 +1,7 @@
 // import * as PrimitiveSwitch from '@radix-ui/react-switch'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
 import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
@@ -34,6 +34,7 @@ const GlobalVariablesEditor = () => {
     editorActions: { updateModelVariables, updateModelVariablesForName },
     projectActions: { createVariable, deleteVariable, rearrangeVariables, setGlobalVariables },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
+    workspaceActions: { removeDebugVariable },
   } = useOpenPLCStore()
 
   const {
@@ -230,8 +231,9 @@ const GlobalVariablesEditor = () => {
       return
     }
 
-    const variable =
-      (selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]) as PLCGlobalVariable
+    const variable = (
+      selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
+    ) as PLCGlobalVariable
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       createVariable({ scope: 'global', data: { ...variable } })
@@ -261,6 +263,10 @@ const GlobalVariablesEditor = () => {
     pushToHistory(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
+    const variableToDelete = globalVariables.filter((v) => v.name)[selectedRow]
+    if (variableToDelete) {
+      removeDebugVariable(`resource:${variableToDelete.name}`)
+    }
     deleteVariable({ scope: 'global', rowId: selectedRow })
 
     const variables = globalVariables.filter((variable) => variable.name)
@@ -321,7 +327,7 @@ const GlobalVariablesEditor = () => {
           {editorVariables.display === 'table' && (
             <div
               aria-label='Variables editor table actions container'
-              className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1 mr-2'
+              className='mr-2 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
               <TableActions
                 actions={[

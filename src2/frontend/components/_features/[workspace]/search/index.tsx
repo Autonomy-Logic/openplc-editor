@@ -5,7 +5,13 @@ import { extractSearchQuery } from '../../../../store/slices/search/utils'
 import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
 import { Accordion } from '../../../_atoms/accordion'
-import { ProjectSearchTreeBranch, ProjectSearchTreeLeaf, ProjectSearchTreeRoot, ProjectSearchTreeVariableBranch, ProjectSearchTreeVariableLeaf, } from './display/tree-view'
+import {
+  ProjectSearchTreeBranch,
+  ProjectSearchTreeLeaf,
+  ProjectSearchTreeRoot,
+  ProjectSearchTreeVariableBranch,
+  ProjectSearchTreeVariableLeaf,
+} from './display/tree-view'
 
 interface _SearchResult {
   searchID: string

@@ -2,8 +2,16 @@ import { render } from '@testing-library/react'
 
 // Mock react-resizable-panels
 vi.mock('react-resizable-panels', () => ({
-  Panel: ({ children, ...props }: { children?: React.ReactNode }) => <div data-testid='panel' {...props}>{children}</div>,
-  PanelGroup: ({ children, ...props }: { children?: React.ReactNode }) => <div data-testid='panel-group' {...props}>{children}</div>,
+  Panel: ({ children, ...props }: { children?: React.ReactNode }) => (
+    <div data-testid='panel' {...props}>
+      {children}
+    </div>
+  ),
+  PanelGroup: ({ children, ...props }: { children?: React.ReactNode }) => (
+    <div data-testid='panel-group' {...props}>
+      {children}
+    </div>
+  ),
   PanelResizeHandle: ({ children, ...props }: { children?: React.ReactNode }) => (
     <div data-testid='panel-resize-handle' {...props}>
       {children}

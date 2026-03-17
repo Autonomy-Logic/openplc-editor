@@ -23,25 +23,8 @@ export const DuplicateIcon = (props: IDuplicateIconProps) => {
       {...res}
     >
       <title>Duplicate Icon</title>
-      <rect
-        x='8'
-        y='8'
-        width='12'
-        height='12'
-        rx='2'
-        stroke={color || '#0464FB'}
-        strokeWidth='1.5'
-      />
-      <rect
-        x='4'
-        y='4'
-        width='12'
-        height='12'
-        rx='2'
-        stroke={color || '#0464FB'}
-        strokeWidth='1.5'
-        opacity='0.5'
-      />
+      <rect x='8' y='8' width='12' height='12' rx='2' stroke={color || '#0464FB'} strokeWidth='1.5' />
+      <rect x='4' y='4' width='12' height='12' rx='2' stroke={color || '#0464FB'} strokeWidth='1.5' opacity='0.5' />
     </svg>
   )
 }

@@ -15,20 +15,13 @@ import {
   rebuildVariablesForInputCount,
   removeLastExtensibleInput,
 } from '../../../../../../../../utils/PLC/extensible-block-variables'
-import {
-  BlockNode,
-  BlockNodeData,
-  BlockNodeElement,
-} from '../../../../../../../_atoms/graphical-editor/fbd/block'
+import { BlockNode, BlockNodeData, BlockNodeElement } from '../../../../../../../_atoms/graphical-editor/fbd/block'
 import { buildBlockNode } from '../../../../../../../_atoms/graphical-editor/fbd/buildNodes'
 import { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/fbd/utils/types'
 import { getBlockSize } from '../../../../../../../_atoms/graphical-editor/fbd/utils/utils'
 import { getFBDPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/fbd/utils/utils'
 import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
-import {
-  getBlockDocumentation,
-  getVariableRestrictionType,
-} from '../../../../../../../_atoms/graphical-editor/utils'
+import { getBlockDocumentation, getVariableRestrictionType } from '../../../../../../../_atoms/graphical-editor/utils'
 import { InputWithRef } from '../../../../../../../_atoms/input'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
 import ArrowButtonGroup from '../../arrow-button-group'

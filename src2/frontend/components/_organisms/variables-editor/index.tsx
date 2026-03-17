@@ -11,13 +11,20 @@ import { useOpenPLCStore } from '../../../store'
 import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
 import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
 import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
-import { TypeChangeValidationResult, validateTypeChange, } from '../../../store/slices/project/validation/type-change'
+import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
-import { syncNodesWithVariables as syncNodesWithVariablesUtil, syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil, } from '../../../utils/graphical/sync-nodes-with-variables'
+import {
+  syncNodesWithVariables as syncNodesWithVariablesUtil,
+  syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil,
+} from '../../../utils/graphical/sync-nodes-with-variables'
 import { baseTypes } from '../../../utils/plc-constants'
-import { findAllReferencesToVariable, propagateVariableRename, type ReferenceImpactAnalysis, } from '../../../utils/variable-references'
+import {
+  findAllReferencesToVariable,
+  propagateVariableRename,
+  type ReferenceImpactAnalysis,
+} from '../../../utils/variable-references'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import TableActions from '../../_atoms/table-actions'

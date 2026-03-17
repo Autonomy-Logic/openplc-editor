@@ -1,8 +1,10 @@
 import type { Node } from '@xyflow/react'
 
 import type { PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import type { FBDFlowState } from '../store/slices/fbd'
-import type { LadderFlowState } from '../store/slices/ladder'
+
+type LadderRung = { id: string; nodes: Node[] }
+type LadderFlow = { name: string; rungs: LadderRung[] }
+type FBDFlow = { name: string; rung: { nodes: Node[] } }
 
 export type VariableReferenceLocation = {
   pouName: string
@@ -28,8 +30,8 @@ export function findAllReferencesToVariable(
   _variableType: PLCVariable['type'],
   pouName: string,
   pous: PLCPou[],
-  ladderFlows: LadderFlowState['ladderFlows'],
-  fbdFlows: FBDFlowState['fbdFlows'],
+  ladderFlows: LadderFlow[],
+  fbdFlows: FBDFlow[],
   scope?: 'local' | 'global',
 ): ReferenceImpactAnalysis {
   const normalizedName = variableName.toLowerCase()
@@ -82,8 +84,8 @@ function searchWithinPou(
   pouName: string,
   normalizedName: string,
   variableName: string,
-  ladderFlows: LadderFlowState['ladderFlows'],
-  fbdFlows: FBDFlowState['fbdFlows'],
+  ladderFlows: LadderFlow[],
+  fbdFlows: FBDFlow[],
   references: VariableReferenceLocation[],
 ): void {
   const ladderFlow = ladderFlows.find((f) => f.name === pouName)
@@ -273,8 +275,8 @@ export function propagateVariableRename(
   oldName: string,
   newName: string,
   references: VariableReferenceLocation[],
-  ladderFlows: LadderFlowState['ladderFlows'],
-  fbdFlows: FBDFlowState['fbdFlows'],
+  ladderFlows: LadderFlow[],
+  fbdFlows: FBDFlow[],
   pous: PLCPou[],
   ladderFlowActions: {
     updateNode: (params: { editorName: string; rungId: string; nodeId: string; node: Node }) => void

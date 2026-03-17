@@ -270,7 +270,8 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasVariable: boolean = pous.some((pou) => (pou.interface?.variables ?? []).length > 0) || configurations !== null
+  const hasVariable: boolean =
+    pous.some((pou) => (pou.interface?.variables ?? []).length > 0) || configurations !== null
   useEffect(() => setBranchIsOpen(hasVariable), [hasVariable])
 
   return (
