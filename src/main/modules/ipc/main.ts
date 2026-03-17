@@ -1,4 +1,4 @@
-import { getProjectPath } from '@root/main/utils'
+import { getProjectPath } from '../../../backend/editor/utils'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -12,15 +12,15 @@ import https from 'https'
 import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
-import { ProjectState } from '../../../renderer/store/slices'
-import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
-import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
-import { logger } from '../../services'
-import { ModbusTcpClient } from '../modbus/modbus-client'
-import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
-import { SimulatorModule } from '../simulator/simulator-module'
-import { VirtualSerialPort } from '../simulator/virtual-serial-port'
-import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
+import { ProjectState } from '@root/frontend/store/slices/project'
+import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
+import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import { logger } from '../../../backend/editor/services'
+import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
+import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
+import { SimulatorModule } from '../../../backend/editor/simulator/simulator-module'
+import { VirtualSerialPort } from '../../../backend/editor/simulator/virtual-serial-port'
+import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
 
 type IDataToWrite = {
   projectPath: string
@@ -41,6 +41,7 @@ class MainProcessBridge implements MainIpcModule {
   pouService
   compilerModule
   hardwareModule
+  private registeredHandleChannels: string[] = []
   private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
   private debuggerWebSocketClient: WebSocketDebugClient | null = null
   private debuggerTargetIp: string | null = null
@@ -520,24 +521,46 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
+
+  /**
+   * Register an invoke handler and track the channel for cleanup.
+   */
+  private registerHandle(channel: string, handler: (...args: unknown[]) => unknown) {
+    this.registeredHandleChannels.push(channel)
+    this.ipcMain.handle(channel, handler)
+  }
+
+  /**
+   * Remove all previously registered invoke handlers so they can be
+   * re-registered with fresh references on macOS window reopen.
+   */
+  private cleanupHandlers() {
+    for (const channel of this.registeredHandleChannels) {
+      this.ipcMain.removeHandler(channel)
+    }
+    this.registeredHandleChannels = []
+  }
+
   setupMainIpcListener() {
+    this.cleanupHandlers()
+
     // Project-related handlers
-    this.ipcMain.handle('project:create', this.handleProjectCreate)
-    this.ipcMain.handle('project:open', this.handleProjectOpen)
-    this.ipcMain.handle('project:path-picker', this.handleProjectPathPicker)
-    this.ipcMain.handle('project:save', this.handleProjectSave)
-    this.ipcMain.handle('project:save-file', this.handleFileSave)
-    this.ipcMain.handle('project:open-by-path', this.handleProjectOpenByPath)
+    this.registerHandle('project:create', this.handleProjectCreate)
+    this.registerHandle('project:open', this.handleProjectOpen)
+    this.registerHandle('project:path-picker', this.handleProjectPathPicker)
+    this.registerHandle('project:save', this.handleProjectSave)
+    this.registerHandle('project:save-file', this.handleFileSave)
+    this.registerHandle('project:open-by-path', this.handleProjectOpenByPath)
 
     // Pou-related handlers
-    this.ipcMain.handle('pou:create', this.handleCreatePouFile)
-    this.ipcMain.handle('pou:delete', this.handleDeletePouFile)
-    this.ipcMain.handle('pou:rename', this.handleRenamePouFile)
+    this.registerHandle('pou:create', this.handleCreatePouFile)
+    this.registerHandle('pou:delete', this.handleDeletePouFile)
+    this.registerHandle('pou:rename', this.handleRenamePouFile)
 
     // App and system handlers
-    this.ipcMain.handle('open-external-link', this.handleOpenExternalLink)
-    this.ipcMain.handle('system:get-system-info', this.handleGetSystemInfo)
-    this.ipcMain.handle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
+    this.registerHandle('open-external-link', this.handleOpenExternalLink)
+    this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
+    this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
 
@@ -547,7 +570,7 @@ class MainProcessBridge implements MainIpcModule {
 
     // ===================== COMPILER SERVICE =====================
     // TODO: This handle should be refactored to use MessagePortMain for better performance.
-    this.ipcMain.handle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
+    this.registerHandle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
     this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
 
@@ -569,46 +592,46 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('window:rebuild-menu', this.handleWindowRebuildMenu)
 
     // ===================== HARDWARE =====================
-    this.ipcMain.handle('hardware:get-available-communication-ports', this.handleHardwareGetAvailableCommunicationPorts)
-    this.ipcMain.handle('hardware:get-available-boards', this.handleHardwareGetAvailableBoards)
-    this.ipcMain.handle('hardware:refresh-communication-ports', this.handleHardwareRefreshCommunicationPorts)
-    this.ipcMain.handle('hardware:refresh-available-boards', this.handleHardwareRefreshAvailableBoards)
+    this.registerHandle('hardware:get-available-communication-ports', this.handleHardwareGetAvailableCommunicationPorts)
+    this.registerHandle('hardware:get-available-boards', this.handleHardwareGetAvailableBoards)
+    this.registerHandle('hardware:refresh-communication-ports', this.handleHardwareRefreshCommunicationPorts)
+    this.registerHandle('hardware:refresh-available-boards', this.handleHardwareRefreshAvailableBoards)
 
     // ===================== UTILITIES =====================
-    this.ipcMain.handle('util:get-preview-image', this.handleUtilGetPreviewImage)
+    this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
-    this.ipcMain.handle('util:read-debug-file', this.handleReadDebugFile)
+    this.registerHandle('util:read-debug-file', this.handleReadDebugFile)
 
     // ===================== DEBUGGER =====================
-    this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
-    this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
-    this.ipcMain.handle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
-    this.ipcMain.handle('debugger:set-variable', this.handleDebuggerSetVariable)
-    this.ipcMain.handle('debugger:connect', this.handleDebuggerConnect)
-    this.ipcMain.handle('debugger:disconnect', this.handleDebuggerDisconnect)
+    this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
+    this.registerHandle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
+    this.registerHandle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
+    this.registerHandle('debugger:set-variable', this.handleDebuggerSetVariable)
+    this.registerHandle('debugger:connect', this.handleDebuggerConnect)
+    this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
 
     // ===================== RUNTIME API =====================
-    this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
-    this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
-    this.ipcMain.handle('runtime:login', this.handleRuntimeLogin)
-    this.ipcMain.handle('runtime:get-status', this.handleRuntimeGetStatus)
-    this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
-    this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
-    this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
-    this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
-    this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
-    this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+    this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
+    this.registerHandle('runtime:create-user', this.handleRuntimeCreateUser)
+    this.registerHandle('runtime:login', this.handleRuntimeLogin)
+    this.registerHandle('runtime:get-status', this.handleRuntimeGetStatus)
+    this.registerHandle('runtime:start-plc', this.handleRuntimeStartPlc)
+    this.registerHandle('runtime:stop-plc', this.handleRuntimeStopPlc)
+    this.registerHandle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
+    this.registerHandle('runtime:get-logs', this.handleRuntimeGetLogs)
+    this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
+    this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
 
     // ===================== SIMULATOR =====================
-    this.ipcMain.handle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
-    this.ipcMain.handle('simulator:stop', this.handleSimulatorStop)
-    this.ipcMain.handle('simulator:is-running', this.handleSimulatorIsRunning)
+    this.registerHandle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
+    this.registerHandle('simulator:stop', this.handleSimulatorStop)
+    this.registerHandle('simulator:is-running', this.handleSimulatorIsRunning)
 
     // ===================== FILE WATCHER =====================
-    this.ipcMain.handle('file:watch-start', this.handleFileWatchStart)
-    this.ipcMain.handle('file:watch-stop', this.handleFileWatchStop)
-    this.ipcMain.handle('file:watch-stop-all', this.handleFileWatchStopAll)
-    this.ipcMain.handle('file:read-content', this.handleFileReadContent)
+    this.registerHandle('file:watch-start', this.handleFileWatchStart)
+    this.registerHandle('file:watch-stop', this.handleFileWatchStop)
+    this.registerHandle('file:watch-stop-all', this.handleFileWatchStopAll)
+    this.registerHandle('file:read-content', this.handleFileReadContent)
   }
 
   // ===================== HANDLER METHODS =====================

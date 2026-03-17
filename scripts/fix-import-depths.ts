@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Fix relative import paths in src2/ that have incorrect depth (wrong number of ../ segments).
+ * Fix relative import paths in src/ that have incorrect depth (wrong number of ../ segments).
  *
  * For each relative import, resolves it from the importing file's directory.
  * If the target doesn't exist, tries removing or adding ../ segments until it resolves.
@@ -12,7 +12,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 
-const SRC2_DIR = path.resolve(__dirname, '..', 'src2')
+const SRC_DIR = path.resolve(__dirname, '..', 'src')
 const DRY_RUN = process.argv.includes('--dry-run')
 const EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx']
 const RESOLVE_EXTENSIONS = ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx']
@@ -71,9 +71,9 @@ function fixImportPath(fromDir: string, importPath: string): string | null {
   for (let add = 1; add <= 5; add++) {
     const newDotDots = dotdotCount + add
     const candidate = [...Array(newDotDots).fill('..'), ...tail].join('/')
-    // Safety: don't escape the src2 root
+    // Safety: don't escape the src root
     const resolved = path.resolve(fromDir, candidate)
-    if (!resolved.startsWith(SRC2_DIR)) break
+    if (!resolved.startsWith(SRC_DIR)) break
     if (resolveImport(fromDir, candidate)) {
       return candidate
     }
@@ -89,8 +89,8 @@ const IMPORT_RE = /(?:from\s+|import\s*\(?\s*)(['"])(\.\.?\/[^'"]+)\1/g
 let totalFixes = 0
 let totalFiles = 0
 
-const files = getAllFiles(SRC2_DIR)
-console.log(`Scanning ${files.length} files in src2/...`)
+const files = getAllFiles(SRC_DIR)
+console.log(`Scanning ${files.length} files in src/...`)
 
 for (const filePath of files) {
   const content = fs.readFileSync(filePath, 'utf-8')

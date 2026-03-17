@@ -1,4 +1,4 @@
-import { PLCLanguagesShortenedForm } from '@root/shared/data'
+import { PLCLanguagesShortenedForm } from '@root/frontend/utils/plc-constants'
 import { z } from 'zod'
 
 import { PLCVariableSchema } from './variable'

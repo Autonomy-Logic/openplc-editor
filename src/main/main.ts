@@ -15,14 +15,14 @@ import { platform, release } from 'os'
 import { join, resolve } from 'path'
 
 // TODO: Refactor this type declaration
-import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
+import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
+import { CompilerModule } from '../backend/editor/compiler'
+import { HardwareModule } from '../backend/editor/hardware'
+import { PouService, ProjectService, UserService } from '../backend/editor/services'
+import { resolveHtmlPath } from '../backend/editor/utils'
 import MenuBuilder from './menu'
-import { CompilerModule } from './modules/compiler'
-import { HardwareModule } from './modules/hardware'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { PouService, ProjectService, UserService } from './services'
-import { resolveHtmlPath } from './utils'
 
 enableMapSet()
 

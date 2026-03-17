@@ -1,0 +1,511 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { useCompiler, useDebugger, useProject, useRuntime, useSimulator } from '../../../../middleware/shared/providers'
+import { StopIcon } from '../../../assets/icons/interface/Stop'
+import { useOpenPLCStore } from '../../../store'
+import type { RuntimeConnection } from '../../../store/slices/device/types'
+import { cn } from '../../../utils/cn'
+import { isOpenPLCRuntimeTarget } from '../../../utils/device'
+import { prepareSavePayload } from '../../../utils/save-project'
+import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
+import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
+import { DownloadButton } from '../../_molecules/workspace-activity-bar/default/download'
+import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play'
+import { SearchButton } from '../../_molecules/workspace-activity-bar/default/search'
+import { ZoomButton } from '../../_molecules/workspace-activity-bar/default/zoom'
+import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
+
+const showDebuggerMessage = (
+  type: 'info' | 'warning' | 'error' | 'question',
+  title: string,
+  message: string,
+  buttons: string[],
+): Promise<number> => {
+  return new Promise((resolve) => {
+    useOpenPLCStore.getState().modalActions.openModal('debugger-message', {
+      type,
+      title,
+      message,
+      buttons,
+      onResponse: (buttonIndex: number) => resolve(buttonIndex),
+    })
+  })
+}
+
+const disabledButtonClass = 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
+
+type DefaultWorkspaceActivityBarProps = {
+  zoom?: {
+    onClick: () => void
+  }
+}
+
+export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBarProps) => {
+  const {
+    project: { data: projectData, meta: projectMeta },
+    deviceDefinitions,
+    deviceAvailableOptions: { availableBoards },
+    consoleActions: { addLog },
+  } = useOpenPLCStore()
+
+  const compiler = useCompiler()
+  const runtime = useRuntime()
+  const simulator = useSimulator()
+  const debuggerPort = useDebugger()
+  const projectPort = useProject()
+
+  const [isCompiling, setIsCompiling] = useState(false)
+  const [isDebuggerProcessing, setIsDebuggerProcessing] = useState(false)
+  const [simulatorRunning, setSimulatorRunning] = useState(false)
+  const pendingSimulatorDebugRef = useRef(false)
+
+  const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
+  const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
+  const editingState = useOpenPLCStore((state) => state.workspace.editingState)
+  const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
+
+  const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
+  const isSimulatorBoard = currentBoardInfo?.compiler === 'simulator'
+
+  // Sync simulatorRunning when the simulator stops externally
+  useEffect(() => {
+    const unsub = simulator.onStopped(() => {
+      pendingSimulatorDebugRef.current = false
+      setSimulatorRunning(false)
+      // Clean up debugger state if it was connected via simulator
+      const { workspace, workspaceActions } = useOpenPLCStore.getState()
+      if (workspace.isDebuggerVisible) {
+        void debuggerPort.disconnect()
+        workspaceActions.setDebuggerVisible(false)
+        workspaceActions.clearDebugState()
+      }
+    })
+    return unsub
+  }, [simulator, debuggerPort])
+
+  const executeSave = useCallback(async (): Promise<boolean> => {
+    const state = useOpenPLCStore.getState()
+    const { workspaceActions, fileActions, editors } = state
+    const activeEditor = editors[0] ?? { type: 'available', meta: { name: '' } }
+    try {
+      workspaceActions.setEditingState('save-request')
+      const payload = prepareSavePayload({
+        projectPath: projectMeta.path,
+        projectData,
+        deviceConfiguration: deviceDefinitions.configuration,
+        devicePinMapping: deviceDefinitions.pinMapping.pins,
+        editors,
+        activeEditor,
+      })
+      const res = await projectPort.saveProject(payload)
+      if (res.success) {
+        workspaceActions.setEditingState('saved')
+        fileActions.setAllToSaved()
+        return true
+      }
+      workspaceActions.setEditingState('unsaved')
+      addLog({ id: crypto.randomUUID(), level: 'error', message: `Save failed: ${res.error ?? 'Unknown error'}` })
+      return false
+    } catch {
+      workspaceActions.setEditingState('unsaved')
+      return false
+    }
+  }, [projectPort, projectMeta, projectData, deviceDefinitions, addLog])
+
+  const handleBuild = useCallback(async () => {
+    if (isCompiling) return
+
+    // Save before compile if there are unsaved changes
+    if (editingState === 'unsaved') {
+      const saved = await executeSave()
+      if (!saved) return
+    }
+
+    setIsCompiling(true)
+    addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
+
+    try {
+      const boardTarget = deviceDefinitions.configuration.deviceBoard
+      const projectPath = projectMeta.path
+      const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
+      const runtimeJwtToken = jwtToken || null
+
+      const result = await compiler.compileProgram(
+        {
+          projectData,
+          boardTarget,
+          projectPath,
+          compileOnly: deviceDefinitions.configuration.compileOnly,
+          isSimulator: isSimulatorBoard,
+          runtimeIpAddress,
+          runtimeJwtToken,
+        },
+        (event) => {
+          // Forward plcStatus updates to device store
+          if (event.plcStatus) {
+            useOpenPLCStore
+              .getState()
+              .deviceActions.setPlcRuntimeStatus(
+                event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>,
+              )
+          }
+
+          if (event.message) {
+            event.message
+              .trim()
+              .split('\n')
+              .forEach((line) => {
+                if (line) {
+                  addLog({
+                    id: crypto.randomUUID(),
+                    level: (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info',
+                    message: line,
+                  })
+                }
+              })
+          }
+          if (event.firmwarePath && isSimulatorBoard) {
+            void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
+              if (loadResult.success) {
+                setSimulatorRunning(true)
+                addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
+                if (pendingSimulatorDebugRef.current) {
+                  pendingSimulatorDebugRef.current = false
+                  void connectDebuggerAfterBuild()
+                }
+              } else {
+                pendingSimulatorDebugRef.current = false
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'error',
+                  message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}`,
+                })
+              }
+            })
+          }
+        },
+      )
+
+      if (!result.success) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: result.error ?? 'Compilation failed',
+        })
+      }
+    } catch (err: unknown) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Build error: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    } finally {
+      setIsCompiling(false)
+    }
+  }, [compiler, projectData, projectMeta, deviceDefinitions, isSimulatorBoard, simulator, addLog, isCompiling, editingState, executeSave, jwtToken])
+
+  const handleBuildRef = useRef(handleBuild)
+  handleBuildRef.current = handleBuild
+
+  const connectDebuggerAfterBuild = async () => {
+    const { workspaceActions, consoleActions: logActions } = useOpenPLCStore.getState()
+    const boardTarget = deviceDefinitions.configuration.deviceBoard
+    const projectPath = projectMeta.path
+
+    logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Connecting debugger...' })
+
+    try {
+      // Read debug file and set up variable mapping
+      const debugFileResult = await debuggerPort.readDebugFile(projectPath, boardTarget)
+      if (!debugFileResult.success || !debugFileResult.content) {
+        logActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Failed to read debug file: ${debugFileResult.error ?? 'No content'}`,
+        })
+        return
+      }
+
+      workspaceActions.setDebugCContent(debugFileResult.content)
+
+      // Connect debugger
+      const connectResult = await debuggerPort.connect()
+      if (!connectResult.success) {
+        logActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Debugger connection failed: ${connectResult.error ?? 'Unknown error'}`,
+        })
+        return
+      }
+
+      workspaceActions.setDebuggerVisible(true)
+      logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Debugger connected.' })
+    } catch (err: unknown) {
+      logActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Debugger error: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    }
+  }
+
+  const handlePlcControl = useCallback(async (): Promise<void> => {
+    if (!jwtToken || connectionStatus !== 'connected') return
+
+    try {
+      if (plcStatus === 'RUNNING') {
+        const result = await runtime.stopPlc()
+        if (!result.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Failed to stop PLC: ${result.error ?? 'Unknown error'}`,
+          })
+          return
+        }
+      } else {
+        const result = await runtime.startPlc()
+        if (!result.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Failed to start PLC: ${result.error ?? 'Unknown error'}`,
+          })
+          return
+        }
+      }
+
+      const statusResult = await runtime.getStatus()
+      if (statusResult.success && statusResult.status) {
+        useOpenPLCStore
+          .getState()
+          .deviceActions.setPlcRuntimeStatus(statusResult.status as NonNullable<RuntimeConnection['plcStatus']>)
+      }
+    } catch (error: unknown) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `PLC control error: ${String(error)}`,
+      })
+    }
+  }, [runtime, jwtToken, connectionStatus, plcStatus, addLog])
+
+  const handleSimulatorControl = useCallback(async (): Promise<void> => {
+    try {
+      if (simulatorRunning) {
+        // Stop: disconnect debugger first, then stop simulator
+        const { workspace, workspaceActions } = useOpenPLCStore.getState()
+        if (workspace.isDebuggerVisible) {
+          await debuggerPort.disconnect()
+          workspaceActions.setDebuggerVisible(false)
+          workspaceActions.clearDebugState()
+        }
+        await simulator.stop()
+        setSimulatorRunning(false)
+        addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator stopped.' })
+      } else {
+        // Start: build, load firmware, then auto-connect debugger
+        pendingSimulatorDebugRef.current = true
+        handleBuildRef.current().catch(() => {
+          pendingSimulatorDebugRef.current = false
+        })
+      }
+    } catch (error: unknown) {
+      pendingSimulatorDebugRef.current = false
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Simulator control error: ${String(error)}`,
+      })
+    }
+  }, [simulator, debuggerPort, simulatorRunning, addLog])
+
+  const handleDebuggerClick = useCallback(async () => {
+    if (isDebuggerProcessing) return
+    setIsDebuggerProcessing(true)
+
+    try {
+      const { workspace, workspaceActions, runtimeConnection } = useOpenPLCStore.getState()
+
+      if (workspace.isDebuggerVisible) {
+        // Disconnect
+        await debuggerPort.disconnect()
+        workspaceActions.setDebuggerVisible(false)
+        workspaceActions.clearDebugState()
+        return
+      }
+
+      const boardTarget = deviceDefinitions.configuration.deviceBoard
+      const projectPath = projectMeta.path
+      const isRuntimeTarget = isOpenPLCRuntimeTarget(currentBoardInfo)
+
+      // Runtime target: require connection first
+      if (isRuntimeTarget) {
+        if (runtimeConnection.connectionStatus !== 'connected') {
+          await showDebuggerMessage(
+            'warning',
+            'Connection Required',
+            'You need to connect to the target before starting a debugger session.',
+            ['OK'],
+          )
+          return
+        }
+      }
+
+      // Non-runtime, non-simulator: check Modbus and DHCP
+      if (!isRuntimeTarget && !isSimulatorBoard) {
+        const { communicationPreferences, modbusTCP } =
+          deviceDefinitions.configuration.communicationConfiguration
+        const rtuEnabled = communicationPreferences.enabledRTU
+        const tcpEnabled = communicationPreferences.enabledTCP
+
+        if (!rtuEnabled && !tcpEnabled) {
+          await showDebuggerMessage(
+            'warning',
+            'Modbus Required',
+            'Modbus must be enabled on the target to start a debugger session.',
+            ['OK'],
+          )
+          return
+        }
+
+        // DHCP IP input for TCP mode
+        if (tcpEnabled && communicationPreferences.enabledDHCP) {
+          const ipAddress = modbusTCP.tcpStaticHostConfiguration?.ipAddress
+          if (!ipAddress || ipAddress === '0.0.0.0') {
+            useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
+              title: 'Target IP Address',
+              message: 'DHCP is enabled. Enter the IP address of the target device:',
+              defaultValue: '',
+              onSubmit: (ip: string) => {
+                useOpenPLCStore.getState().modalActions.closeModal()
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'info',
+                  message: `Using DHCP target IP: ${ip}`,
+                })
+              },
+              onCancel: () => {
+                useOpenPLCStore.getState().modalActions.closeModal()
+              },
+            })
+            return
+          }
+        }
+      }
+
+      // Check PLC status — if stopped and runtime target, offer to start
+      if (isRuntimeTarget && runtimeConnection.plcStatus === 'STOPPED') {
+        const choice = await showDebuggerMessage(
+          'question',
+          'PLC Stopped',
+          'The PLC is currently stopped. Would you like to start it before connecting the debugger?',
+          ['Start PLC', 'Continue Anyway', 'Cancel'],
+        )
+        if (choice === 0) {
+          await runtime.startPlc()
+        } else if (choice === 2) {
+          return
+        }
+      }
+
+      // Verify MD5 before connecting
+      const md5Result = await debuggerPort.readProgramMd5(projectPath, boardTarget)
+      if (!md5Result.success || !md5Result.md5) {
+        const choice = await showDebuggerMessage(
+          'warning',
+          'Debug Data Not Found',
+          'No debug data found. Would you like to compile the project first?',
+          ['Compile', 'Cancel'],
+        )
+        if (choice === 0) {
+          await handleBuildRef.current()
+        }
+        return
+      }
+
+      const verifyResult = await debuggerPort.verifyMd5(md5Result.md5)
+      if (!verifyResult.success) {
+        const choice = await showDebuggerMessage(
+          'warning',
+          'Program Mismatch',
+          'The running program does not match the compiled program. Do you want to recompile?',
+          ['Recompile', 'Continue Anyway', 'Cancel'],
+        )
+        if (choice === 0) {
+          await handleBuildRef.current()
+          return
+        }
+        if (choice === 2) return
+      }
+
+      await connectDebuggerAfterBuild()
+    } catch (err: unknown) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Debugger error: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    } finally {
+      setIsDebuggerProcessing(false)
+    }
+  }, [debuggerPort, runtime, deviceDefinitions, projectMeta, currentBoardInfo, isSimulatorBoard, isDebuggerProcessing, addLog])
+
+  return (
+    <>
+      <TooltipSidebarWrapperButton tooltipContent='Search'>
+        <SearchButton />
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent='Open/Close Toolbox'>
+        <ZoomButton {...zoom} />
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to build and run' : 'Compile'}>
+        <DownloadButton
+          disabled={isCompiling || isSimulatorBoard}
+          className={cn((isCompiling || isSimulatorBoard) && disabledButtonClass)}
+          onClick={() => void handleBuild()}
+        />
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton
+        tooltipContent={
+          isSimulatorBoard
+            ? simulatorRunning
+              ? 'Stop Simulator'
+              : 'Start Simulator'
+            : connectionStatus !== 'connected'
+              ? 'Connect to runtime first'
+              : plcStatus === 'RUNNING'
+                ? 'Stop PLC'
+                : 'Start PLC'
+        }
+      >
+        <PlayButton
+          onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
+          disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
+          className={cn(
+            isSimulatorBoard
+              ? isCompiling || isDebuggerProcessing
+                ? disabledButtonClass
+                : ''
+              : connectionStatus !== 'connected'
+                ? disabledButtonClass
+                : '',
+          )}
+        >
+          {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
+        </PlayButton>
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to debug' : 'Debugger'}>
+        <DebuggerButton
+          onClick={() => void handleDebuggerClick()}
+          disabled={isDebuggerProcessing || isSimulatorBoard}
+          isActive={isDebuggerVisible}
+          className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
+        />
+      </TooltipSidebarWrapperButton>
+      <ChatButton />
+    </>
+  )
+}

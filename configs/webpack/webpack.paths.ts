@@ -4,7 +4,7 @@ const rootPath = join(__dirname, '../..')
 
 const dllPath = join(__dirname, '../dll')
 
-const srcPath = join(rootPath, 'src')
+const srcPath = join(rootPath, 'src_old')
 const srcMainPath = join(srcPath, 'main')
 const srcRendererPath = join(srcPath, 'renderer')
 
@@ -20,7 +20,7 @@ const distRendererPath = join(distPath, 'renderer')
 
 const buildPath = join(releasePath, 'build')
 
-const typesPath = join(srcPath, 'types')
+const typesPath = join(rootPath, 'src', 'types')
 
 export default {
   rootPath,

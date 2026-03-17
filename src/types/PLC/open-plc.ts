@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-import { zodFBDFlowSchema } from '../../renderer/store/slices/fbd/types'
-import { zodLadderFlowSchema } from '../../renderer/store/slices/ladder/types'
+import { zodFBDFlowSchema } from '../../frontend/store/slices/fbd/types'
+import { zodLadderFlowSchema } from '../../frontend/store/slices/ladder/types'
 
 const baseTypeSchema = z.enum([
   'bool',

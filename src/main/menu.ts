@@ -1,8 +1,8 @@
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
-import { i18n } from '../utils/i18n'
+import { i18n } from '@root/frontend/locales/i18n'
+import { ProjectService } from '../backend/editor/services'
 import { store } from './modules/store'
-import { ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.

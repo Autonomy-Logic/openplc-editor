@@ -1,4 +1,4 @@
-import { baseTypes } from '@root/shared/data'
+import { baseTypes } from '@root/frontend/utils/plc-constants'
 import { z } from 'zod'
 
 const dataTypeStructSchema = z.object({
