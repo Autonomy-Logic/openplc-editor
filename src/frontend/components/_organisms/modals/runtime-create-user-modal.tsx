@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { useRuntime } from '../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../store'
+import { getErrorMessage } from '../../../utils/get-error-message'
 import { Label } from '../../_atoms/label'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
@@ -53,7 +54,7 @@ const RuntimeCreateUserModal = () => {
         setError('Failed to create user: ' + (result.error || 'Unknown error'))
       }
     } catch (err) {
-      setError('Error: ' + String(err))
+      setError('Error: ' + getErrorMessage(err))
     } finally {
       setIsLoading(false)
     }

@@ -1,4 +1,11 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import {
+  BOOL_LOCATION_REGEX,
+  DWORD_LOCATION_REGEX,
+  LWORD_LOCATION_REGEX,
+  PLC_ADDRESS_PREFIX,
+  WORD_LOCATION_REGEX,
+} from '../../../../utils/PLC/address-constants'
 import type { ProjectResponse } from '../types'
 
 /**
@@ -40,38 +47,6 @@ const variableNameValidation = (variableName: string) => {
   const regex =
     /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
   return regex.test(variableName)
-}
-
-const checkVariableNameUnit = (variables: PLCVariable[], variableName: string) => {
-  // Check if there is a variable with the same name when removing the number at the end
-  const variableNameWithoutNumber = variableName.substring(
-    0,
-    variableName.length - extractNumberAtEnd(variableName).length,
-  )
-  const filteredVariables = variables.filter((variable: PLCVariable) =>
-    variable.name.toLowerCase().includes(variableNameWithoutNumber.toLowerCase()),
-  )
-
-  // If there is a variable with the same name, sort the variables by the number at the end and get the biggest number
-  const sortedVariables = filteredVariables.sort((a, b) => {
-    const numberA = extractNumberAtEnd(a.name).number
-    const numberB = extractNumberAtEnd(b.name).number
-    if (numberA && numberB) {
-      return numberA - numberB
-    }
-    return 0
-  })
-
-  // Get the biggest number at the end of the variable name
-  // If there is no number at the end of the variable name, return -1 (because the number at the end of the variable name is 0)
-  const biggestVariable =
-    sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: -1 }
-
-  return {
-    ok: filteredVariables.length > 0,
-    name: variableNameWithoutNumber,
-    number: biggestVariable.number + 1,
-  }
 }
 
 /**
@@ -140,24 +115,23 @@ const arrayValidation = ({ value }: { value: string }) => {
 const variableLocationValidation = (variableLocation: string, variableType: string) => {
   switch (variableType.toUpperCase()) {
     case 'BOOL': {
-      const boolRegex = /^%[QI]X\d+\.\d$/
-      const boolMatch = boolRegex.test(variableLocation) && variableLocation.split('.')[1] <= '7'
+      const boolMatch = BOOL_LOCATION_REGEX.test(variableLocation) && variableLocation.split('.')[1] <= '7'
       return boolMatch
     }
     case 'INT':
     case 'UINT':
     case 'WORD':
-      return /^%[QIM]W\d+$/.test(variableLocation)
+      return WORD_LOCATION_REGEX.test(variableLocation)
     case 'DINT':
     case 'UDINT':
     case 'REAL':
     case 'DWORD':
-      return /^%MD\d+$/.test(variableLocation)
+      return DWORD_LOCATION_REGEX.test(variableLocation)
     case 'LINT':
     case 'ULINT':
     case 'LREAL':
     case 'LWORD':
-      return /^%ML\d+$/.test(variableLocation)
+      return LWORD_LOCATION_REGEX.test(variableLocation)
     default:
       return false
   }
@@ -252,30 +226,33 @@ const createVariableValidation = (
 
     switch (variable.type.value.toUpperCase()) {
       case 'BOOL': {
-        const stringWithNoPrefix = variableFound.location.replace('%QX', '').replace('%IX', '')
+        const stringWithNoPrefix = variableFound.location
+          .replace(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, '')
+          .replace(PLC_ADDRESS_PREFIX.BOOL_INPUT, '')
         const position = parseInt(stringWithNoPrefix.split('.')[0])
         const dotPosition = parseInt(stringWithNoPrefix.split('.')[1])
 
-        if (variableFound?.location.startsWith('%QX')) {
-          response.location = `%QX${dotPosition === 7 ? position + 1 : position}.${dotPosition === 7 ? 0 : dotPosition + 1}`
-        } else {
-          response.location = `%IX${dotPosition === 7 ? position + 1 : position}.${dotPosition === 7 ? 0 : dotPosition + 1}`
-        }
+        const prefix = variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.BOOL_OUTPUT)
+          ? PLC_ADDRESS_PREFIX.BOOL_OUTPUT
+          : PLC_ADDRESS_PREFIX.BOOL_INPUT
+        response.location = `${prefix}${dotPosition === 7 ? position + 1 : position}.${dotPosition === 7 ? 0 : dotPosition + 1}`
         break
       }
 
       case 'INT':
       case 'UINT':
       case 'WORD': {
-        const stringWithNoPrefix = variableFound.location.replace('%QW', '').replace('%IW', '').replace('%MW', '')
+        const stringWithNoPrefix = variableFound.location
+          .replace(PLC_ADDRESS_PREFIX.WORD_OUTPUT, '')
+          .replace(PLC_ADDRESS_PREFIX.WORD_INPUT, '')
+          .replace(PLC_ADDRESS_PREFIX.WORD_MEMORY, '')
         const position = parseInt(stringWithNoPrefix)
-        if (variableFound?.location.startsWith('%QW')) {
-          response.location = `%QW${position + 1}`
-        } else if (variableFound?.location.startsWith('%IW')) {
-          response.location = `%IW${position + 1}`
-        } else {
-          response.location = `%MW${position + 1}`
-        }
+        const prefix = variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.WORD_OUTPUT)
+          ? PLC_ADDRESS_PREFIX.WORD_OUTPUT
+          : variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.WORD_INPUT)
+            ? PLC_ADDRESS_PREFIX.WORD_INPUT
+            : PLC_ADDRESS_PREFIX.WORD_MEMORY
+        response.location = `${prefix}${position + 1}`
         break
       }
 
@@ -283,9 +260,9 @@ const createVariableValidation = (
       case 'UDINT':
       case 'REAL':
       case 'DWORD': {
-        const stringWithNoPrefix = variableFound.location.replace('%MD', '')
+        const stringWithNoPrefix = variableFound.location.replace(PLC_ADDRESS_PREFIX.DWORD_MEMORY, '')
         const position = parseInt(stringWithNoPrefix)
-        response.location = `%MD${position + 1}`
+        response.location = `${PLC_ADDRESS_PREFIX.DWORD_MEMORY}${position + 1}`
         break
       }
 
@@ -293,9 +270,9 @@ const createVariableValidation = (
       case 'ULINT':
       case 'LREAL':
       case 'LWORD': {
-        const stringWithNoPrefix = variableFound.location.replace('%ML', '')
+        const stringWithNoPrefix = variableFound.location.replace(PLC_ADDRESS_PREFIX.LWORD_MEMORY, '')
         const position = parseInt(stringWithNoPrefix)
-        response.location = `%ML${position + 1}`
+        response.location = `${PLC_ADDRESS_PREFIX.LWORD_MEMORY}${position + 1}`
         break
       }
 
@@ -428,7 +405,6 @@ const updateGlobalVariableValidation = (variables: PLCVariable[], dataToBeUpdate
 export {
   arrayValidation,
   checkVariableName,
-  checkVariableNameUnit,
   createGlobalVariableValidation,
   createVariableValidation,
   enumeratedValidation,

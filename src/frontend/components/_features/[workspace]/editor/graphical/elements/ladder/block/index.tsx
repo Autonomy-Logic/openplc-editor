@@ -2,11 +2,11 @@ import * as Switch from '@radix-ui/react-switch'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { PLCPou } from '../../../../../../../../../middleware/shared/ports'
-import { useOpenPLCStore } from '../../../../../../../../store'
-import type { EditorModel } from '../../../../../../../../store/slices/editor'
-import type { LibraryState } from '../../../../../../../../store/slices/library'
-import { cn } from '../../../../../../../../utils/cn'
+import { PLCPou } from '@root/middleware/shared/ports'
+import { useOpenPLCStore } from '@root/frontend/store'
+import type { EditorModel } from '@root/frontend/store/slices/editor'
+import type { LibraryState } from '@root/frontend/store/slices/library'
+import { cn } from '@root/frontend/utils/cn'
 import {
   assembleVariables,
   buildNextExtensibleInput,
@@ -14,7 +14,7 @@ import {
   getMinInputCount,
   rebuildVariablesForInputCount,
   removeLastExtensibleInput,
-} from '../../../../../../../../utils/PLC/extensible-block-variables'
+} from '@root/frontend/utils/PLC/extensible-block-variables'
 import {
   BlockNode,
   BlockNodeData,

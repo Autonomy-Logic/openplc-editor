@@ -1,4 +1,4 @@
-import ArrowButton from '../../../../../../../assets/icons/interface/ArrowButton'
+import ArrowButton from '@root/frontend/assets/icons/interface/ArrowButton'
 
 type ArrowButtonGroupProps = {
   onIncrement: () => void

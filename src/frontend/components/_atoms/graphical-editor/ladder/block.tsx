@@ -6,7 +6,7 @@ import { PLCPou } from '../../../../../middleware/shared/ports'
 import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
 import { useOpenPLCStore } from '../../../../store'
 import { LibraryState } from '../../../../store/slices/library'
-import { checkVariableNameUnit } from '../../../../store/slices/project/validation/variables'
+import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
@@ -433,7 +433,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { name, number } = checkVariableNameUnit(
+            const { name, number } = checkVariableName(
               variables.all,
               (data.variant as BlockVariant).name.toUpperCase(),
             )

@@ -5,8 +5,8 @@ import type {
   OpcUaFieldConfig,
   OpcUaNodeConfig,
   OpcUaPermissions,
-} from '../../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../../utils/cn'
+} from '@root/middleware/shared/ports/types'
+import { cn } from '@root/frontend/utils/cn'
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'

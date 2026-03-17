@@ -1,21 +1,20 @@
 import { BrowserWindow, dialog } from 'electron'
 
-import { i18n } from '@root/frontend/locales/i18n'
 import { isEmptyDir } from './is-empty-dir'
 
 type GetProjectPathProps = InstanceType<typeof BrowserWindow>
 
 const getProjectPath = async (serviceManager: GetProjectPathProps) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(serviceManager, {
-    title: i18n.t('createProject:dialog.title'),
+    title: 'Choose an empty directory for new project',
     properties: ['openDirectory', 'createDirectory'],
   })
   if (canceled) {
     return {
       success: false,
       error: {
-        title: i18n.t('projectServiceResponses:createProject.errors.canceled.title'),
-        description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
+        title: 'Operation canceled',
+        description: 'Operation canceled by the user.',
       },
     }
   }
@@ -26,8 +25,8 @@ const getProjectPath = async (serviceManager: GetProjectPathProps) => {
     return {
       success: false,
       error: {
-        title: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.title'),
-        description: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.description'),
+        title: 'Directory is not empty',
+        description: 'The selected directory is not empty. Please choose an empty directory for a new project.',
       },
     }
   }

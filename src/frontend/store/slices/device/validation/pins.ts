@@ -1,11 +1,16 @@
 import type { DevicePin, PinType } from '../../../../../middleware/shared/ports/types'
+import { PLC_ADDRESS_PREFIX } from '../../../../utils/PLC/address-constants'
 
 // ---------------------------------------------------------------------------
 // Address manipulation
 // ---------------------------------------------------------------------------
 
 const removeAddressPrefix = (address: string) => {
-  return address.replace('%IX', '').replace('%QX', '').replace('%IW', '').replace('%QW', '')
+  return address
+    .replace(PLC_ADDRESS_PREFIX.BOOL_INPUT, '')
+    .replace(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, '')
+    .replace(PLC_ADDRESS_PREFIX.WORD_INPUT, '')
+    .replace(PLC_ADDRESS_PREFIX.WORD_OUTPUT, '')
 }
 
 const extractPositionForAnalogAddress = (address: string) => {
@@ -14,7 +19,7 @@ const extractPositionForAnalogAddress = (address: string) => {
 }
 
 const extractPositionsForDigitalAddress = (address: string) => {
-  const stringWithNoPrefix = address.replace('%IX', '').replace('%QX', '')
+  const stringWithNoPrefix = address.replace(PLC_ADDRESS_PREFIX.BOOL_INPUT, '').replace(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, '')
   const position = parseInt(stringWithNoPrefix.split('.')[0])
   const dotPosition = parseInt(stringWithNoPrefix.split('.')[1])
   return { position, dotPosition }
@@ -56,27 +61,27 @@ const handleAnalogAddress = (prefix: string, action: (typeof ADDRESS_ACTIONS)[nu
 const createNewAddress = (action: (typeof ADDRESS_ACTIONS)[number], address: string) => {
   const isFirstAddress = address.match(/(\d+)$/)
 
-  if (address.includes('%IX')) {
+  if (address.includes(PLC_ADDRESS_PREFIX.BOOL_INPUT)) {
     if (isFirstAddress === null) {
-      return '%IX0.0'
+      return `${PLC_ADDRESS_PREFIX.BOOL_INPUT}0.0`
     }
-    return handleDigitalAddress('%IX', action, address)
-  } else if (address.includes('%QX')) {
+    return handleDigitalAddress(PLC_ADDRESS_PREFIX.BOOL_INPUT, action, address)
+  } else if (address.includes(PLC_ADDRESS_PREFIX.BOOL_OUTPUT)) {
     if (isFirstAddress === null) {
-      return '%QX0.0'
+      return `${PLC_ADDRESS_PREFIX.BOOL_OUTPUT}0.0`
     }
-    return handleDigitalAddress('%QX', action, address)
-  } else if (address.includes('%IW')) {
+    return handleDigitalAddress(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, action, address)
+  } else if (address.includes(PLC_ADDRESS_PREFIX.WORD_INPUT)) {
     if (isFirstAddress === null) {
-      return '%IW0'
+      return `${PLC_ADDRESS_PREFIX.WORD_INPUT}0`
     }
-    return handleAnalogAddress('%IW', action, address)
+    return handleAnalogAddress(PLC_ADDRESS_PREFIX.WORD_INPUT, action, address)
   }
 
   if (isFirstAddress === null) {
-    return '%QW0'
+    return `${PLC_ADDRESS_PREFIX.WORD_OUTPUT}0`
   }
-  return handleAnalogAddress('%QW', action, address)
+  return handleAnalogAddress(PLC_ADDRESS_PREFIX.WORD_OUTPUT, action, address)
 }
 
 const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinType) => {
@@ -96,25 +101,25 @@ const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinType) => {
   switch (pinType) {
     case 'digitalInput': {
       const ordered = pinMap.filter((pin) => pin.pinType === 'digitalInput').sort(compareAddressPosition)
-      if (ordered.length === 0) return '%IX'
+      if (ordered.length === 0) return PLC_ADDRESS_PREFIX.BOOL_INPUT
       pinWithHighestAddress = ordered[ordered.length - 1]
       break
     }
     case 'digitalOutput': {
       const ordered = pinMap.filter((pin) => pin.pinType === 'digitalOutput').sort(compareAddressPosition)
-      if (ordered.length === 0) return '%QX'
+      if (ordered.length === 0) return PLC_ADDRESS_PREFIX.BOOL_OUTPUT
       pinWithHighestAddress = ordered[ordered.length - 1]
       break
     }
     case 'analogInput': {
       const ordered = pinMap.filter((pin) => pin.pinType === 'analogInput').sort(compareAddressPosition)
-      if (ordered.length === 0) return '%IW'
+      if (ordered.length === 0) return PLC_ADDRESS_PREFIX.WORD_INPUT
       pinWithHighestAddress = ordered[ordered.length - 1]
       break
     }
     case 'analogOutput': {
       const ordered = pinMap.filter((pin) => pin.pinType === 'analogOutput').sort(compareAddressPosition)
-      if (ordered.length === 0) return '%QW'
+      if (ordered.length === 0) return PLC_ADDRESS_PREFIX.WORD_OUTPUT
       pinWithHighestAddress = ordered[ordered.length - 1]
       break
     }

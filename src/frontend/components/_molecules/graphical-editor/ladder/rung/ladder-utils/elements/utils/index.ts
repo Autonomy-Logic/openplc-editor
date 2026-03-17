@@ -1,6 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 
-import type { RungLadderState } from '../../../../../../../../store/slices'
+import type { RungLadderState } from '@root/frontend/store/slices'
 import type { CustomHandleProps } from '../../../../../../../_atoms/graphical-editor/ladder/handle'
 import { BasicNodeData, ParallelNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'

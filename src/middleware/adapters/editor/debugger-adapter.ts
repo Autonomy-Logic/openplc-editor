@@ -12,6 +12,7 @@
  *     auto-reconnection using stored connection parameters.
  */
 
+import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { DebuggerPort } from '../../shared/ports/debugger-port'
 import type { DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from '../../shared/ports/types'
 
@@ -44,7 +45,7 @@ export function createEditorDebuggerAdapter(
         if (result.success) connected = true
         return result
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -65,7 +66,7 @@ export function createEditorDebuggerAdapter(
       try {
         return await window.bridge.debuggerGetVariablesList(indexes)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -73,7 +74,7 @@ export function createEditorDebuggerAdapter(
       try {
         return await window.bridge.debuggerSetVariable(index, force, valueBuffer)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -84,7 +85,7 @@ export function createEditorDebuggerAdapter(
 
         return await window.bridge.debuggerVerifyMd5(config.connectionType, config.connectionParams, expectedMd5)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -95,7 +96,7 @@ export function createEditorDebuggerAdapter(
       try {
         return await window.bridge.debuggerReadProgramStMd5(projectPath, boardTarget)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -106,7 +107,7 @@ export function createEditorDebuggerAdapter(
       try {
         return await window.bridge.readDebugFile(projectPath, boardTarget)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 

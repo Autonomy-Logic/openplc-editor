@@ -9,7 +9,8 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { CreateXMLFile } from '../utils'
-import { ProjectState } from '@root/frontend/store/slices/project'
+import { getErrorMessage } from '@root/utils/get-error-message'
+import type { PLCProjectData } from '@root/types/PLC/open-plc'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils/PLC/xml-generator'
 import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/utils/cpp/generateCBlocksCode'
@@ -367,7 +368,7 @@ class CompilerModule {
 
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
 
-  async handleGenerateXMLfromJSON(sourceTargetFolderPath: string, jsonData: ProjectState['data']) {
+  async handleGenerateXMLfromJSON(sourceTargetFolderPath: string, jsonData: PLCProjectData) {
     return new Promise<MethodsResult<{ xmlPath: string; xmlContent: string }>>((resolve, reject) => {
       const { data: xmlData } = XmlGenerator(jsonData, 'old-editor')
       if (typeof xmlData !== 'string') {
@@ -932,7 +933,7 @@ class CompilerModule {
   }
 
   async handleGenerateCBlocksHeader(
-    projectData: ProjectState['data'] & { originalCppPous?: CppPouDataCode[] },
+    projectData: PLCProjectData & { originalCppPous?: CppPouDataCode[] },
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
@@ -960,7 +961,7 @@ class CompilerModule {
   }
 
   async handleGenerateCBlocksCode(
-    projectData: ProjectState['data'] & { originalCppPous?: CppPouDataCode[] },
+    projectData: PLCProjectData & { originalCppPous?: CppPouDataCode[] },
     compilationPath: string,
     boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1111,7 +1112,7 @@ class CompilerModule {
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
-    dataToCreateXml: ProjectState['data'],
+    dataToCreateXml: PLCProjectData,
     parseTo: 'old-editor' | 'codesys',
   ): Promise<{ success: boolean; message: string }> {
     const { filePath } = await dialog.showSaveDialog({
@@ -1185,7 +1186,7 @@ class CompilerModule {
 
   async handleGenerateModbusSlaveConfig(
     sourceTargetFolderPath: string,
-    projectData: ProjectState['data'],
+    projectData: PLCProjectData,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     const modbusSlaveConfig = generateModbusSlaveConfig(projectData.servers)
@@ -1203,7 +1204,7 @@ class CompilerModule {
 
   async handleGenerateModbusMasterConfig(
     sourceTargetFolderPath: string,
-    projectData: ProjectState['data'],
+    projectData: PLCProjectData,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     const modbusMasterConfig = generateModbusMasterConfig(projectData.remoteDevices)
@@ -1221,7 +1222,7 @@ class CompilerModule {
 
   async handleGenerateS7CommConfig(
     sourceTargetFolderPath: string,
-    projectData: ProjectState['data'],
+    projectData: PLCProjectData,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     try {
@@ -1237,7 +1238,7 @@ class CompilerModule {
         handleOutputData('No S7Comm server configured, skipping s7comm.json generation', 'info')
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorMessage = getErrorMessage(error)
       handleOutputData(`Failed to generate S7Comm config: ${errorMessage}`, 'error')
       throw error
     }
@@ -1249,7 +1250,7 @@ class CompilerModule {
    */
   async handleGenerateOpcUaConfig(
     sourceTargetFolderPath: string,
-    projectData: ProjectState['data'],
+    projectData: PLCProjectData,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     try {
@@ -1304,7 +1305,7 @@ class CompilerModule {
       if (error instanceof OpcUaConfigError) {
         handleOutputData(`OPC-UA Configuration Error:\n${error.message}`, 'error')
       } else {
-        const errorMessage = error instanceof Error ? error.message : String(error)
+        const errorMessage = getErrorMessage(error)
         handleOutputData(`Failed to generate OPC-UA config: ${errorMessage}`, 'error')
       }
       throw error
@@ -1358,7 +1359,7 @@ class CompilerModule {
    */
   // Work in progress - we should specify the arguments and the return type correctly.
   async compileProgram(
-    args: Array<string | null | ProjectState['data']>,
+    args: Array<string | null | PLCProjectData>,
     _mainProcessPort: MessagePortMain,
     mainProcessBridge: {
       makeRuntimeApiRequest: <T = void>(
@@ -1381,7 +1382,7 @@ class CompilerModule {
       string,
       string | null,
       boolean,
-      ProjectState['data'],
+      PLCProjectData,
       string | null,
       string | null,
     ]
@@ -1917,7 +1918,7 @@ class CompilerModule {
                     .catch((error) => {
                       _mainProcessPort.postMessage({
                         logLevel: 'error',
-                        message: `Unexpected error in compilation polling: ${error instanceof Error ? error.message : String(error)}`,
+                        message: `Unexpected error in compilation polling: ${getErrorMessage(error)}`,
                       })
                       _mainProcessPort.postMessage({
                         message:
@@ -1958,7 +1959,7 @@ class CompilerModule {
       } catch (error) {
         _mainProcessPort.postMessage({
           logLevel: 'error',
-          message: `Failed to upload to runtime: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Failed to upload to runtime: ${getErrorMessage(error)}`,
         })
         _mainProcessPort.postMessage({
           message:
@@ -2138,14 +2139,14 @@ class CompilerModule {
   }
 
   async compileForDebugger(
-    args: Array<string | null | ProjectState['data']>,
+    args: Array<string | null | PLCProjectData>,
     _mainProcessPort: MessagePortMain,
   ): Promise<void> {
     _mainProcessPort.start()
 
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting debug compilation process...' })
 
-    const [projectPath, boardTarget, projectData] = args as [string, string, ProjectState['data']]
+    const [projectPath, boardTarget, projectData] = args as [string, string, PLCProjectData]
 
     const boardRuntime = await this.#getBoardRuntime(boardTarget)
     const normalizedProjectPath = projectPath.replace('project.json', '')
@@ -2180,7 +2181,7 @@ class CompilerModule {
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `${String(error)}\nStopping debug compilation process.`,
+        message: `${getErrorMessage(error)}\nStopping debug compilation process.`,
       })
       _mainProcessPort.close()
       return

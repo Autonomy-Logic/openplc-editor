@@ -1,6 +1,6 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 
-import { parseDimensionRange } from '../../../backend/shared/array-variable-utils'
+import { parseDimensionRange } from './dimension-range'
 
 const BASE_TYPE_TO_IEC: Record<string, string> = {
   bool: 'IEC_BOOL',

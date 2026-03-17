@@ -11,6 +11,7 @@ import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
 import { runtimeGetUsersInfo, runtimeLogout } from '../../../../../../services/api/runtime-api'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
+import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { isDev } from '../../../../../../utils/get-env'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
@@ -332,7 +333,7 @@ const OrchestratorsList = () => {
         modalActions.openModal('runtime-create-user')
       }
     } catch (err: unknown) {
-      setConnectionError('Error: ' + String(err))
+      setConnectionError('Error: ' + getErrorMessage(err))
       deviceActions.setRuntimeConnectionStatus('error')
     } finally {
       setIsConnecting(false)

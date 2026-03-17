@@ -5,6 +5,7 @@ import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
+import { getErrorMessage } from '../../../utils/get-error-message'
 import { isOpenPLCRuntimeTarget } from '../../../utils/device'
 import { prepareSavePayload } from '../../../utils/save-project'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
@@ -198,7 +199,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       addLog({
         id: crypto.randomUUID(),
         level: 'error',
-        message: `Build error: ${err instanceof Error ? err.message : String(err)}`,
+        message: `Build error: ${getErrorMessage(err)}`,
       })
     } finally {
       setIsCompiling(false)
@@ -246,7 +247,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       logActions.addLog({
         id: crypto.randomUUID(),
         level: 'error',
-        message: `Debugger error: ${err instanceof Error ? err.message : String(err)}`,
+        message: `Debugger error: ${getErrorMessage(err)}`,
       })
     }
   }
@@ -287,7 +288,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       addLog({
         id: crypto.randomUUID(),
         level: 'error',
-        message: `PLC control error: ${String(error)}`,
+        message: `PLC control error: ${getErrorMessage(error)}`,
       })
     }
   }, [runtime, jwtToken, connectionStatus, plcStatus, addLog])
@@ -317,7 +318,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       addLog({
         id: crypto.randomUUID(),
         level: 'error',
-        message: `Simulator control error: ${String(error)}`,
+        message: `Simulator control error: ${getErrorMessage(error)}`,
       })
     }
   }, [simulator, debuggerPort, simulatorRunning, addLog])
@@ -446,7 +447,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       addLog({
         id: crypto.randomUUID(),
         level: 'error',
-        message: `Debugger error: ${err instanceof Error ? err.message : String(err)}`,
+        message: `Debugger error: ${getErrorMessage(err)}`,
       })
     } finally {
       setIsDebuggerProcessing(false)

@@ -1,4 +1,4 @@
-import type { OpcUaNodeConfig } from '../../../../../../../../middleware/shared/ports/types'
+import type { OpcUaNodeConfig } from '@root/middleware/shared/ports/types'
 
 interface SelectedVariablesListProps {
   nodes: OpcUaNodeConfig[]

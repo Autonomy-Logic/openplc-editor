@@ -1,7 +1,7 @@
 import type { Edge, Node, ReactFlowInstance } from '@xyflow/react'
 import { toInteger } from 'lodash'
 
-import type { RungLadderState } from '../../../../../../../../store/slices'
+import type { RungLadderState } from '@root/frontend/store/slices'
 import { PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { isNodeOfType } from '../../nodes'
 import { removeElement } from '..'

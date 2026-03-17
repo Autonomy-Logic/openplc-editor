@@ -1,5 +1,7 @@
 import { io, Socket } from 'socket.io-client'
 
+import { getErrorMessage } from '@root/utils/get-error-message'
+
 import { ModbusDebugResponse, ModbusFunctionCode } from '../modbus/modbus-client'
 
 interface WebSocketDebugClientOptions {
@@ -140,7 +142,7 @@ export class WebSocketDebugClient {
           const md5String = responseBuffer.slice(2).toString('utf-8').trim()
           resolve(md5String)
         } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)))
+          reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
         }
       }
 
@@ -255,7 +257,7 @@ export class WebSocketDebugClient {
             data: variableData,
           })
         } catch (error) {
-          resolve({ success: false, error: String(error) })
+          resolve({ success: false, error: getErrorMessage(error) })
         }
       }
 
@@ -351,7 +353,7 @@ export class WebSocketDebugClient {
 
           resolve({ success: true })
         } catch (error) {
-          resolve({ success: false, error: String(error) })
+          resolve({ success: false, error: getErrorMessage(error) })
         }
       }
 

@@ -25,6 +25,43 @@ import {
 
 const MAX_HISTORY_SIZE = 50
 
+function deleteElement(
+  state: SharedRootState,
+  name: string,
+  deleteFromProject: (name: string) => void,
+  afterDelete?: (name: string) => void,
+) {
+  deleteFromProject(name)
+  state.editorActions.removeModel(name)
+  state.fileActions.removeFile({ name })
+  state.tabsActions.removeTab(name)
+  afterDelete?.(name)
+
+  const currentEditor = state.editor
+  if (currentEditor.type !== 'available' && currentEditor.meta.name === name) {
+    state.editorActions.clearEditor()
+  }
+  return { ok: true as const }
+}
+
+function renameElement(
+  state: SharedRootState,
+  oldName: string,
+  newName: string,
+  updateInProject: (oldName: string, newName: string) => { ok: boolean; message?: string } | void,
+  afterRename?: (oldName: string, newName: string) => void,
+) {
+  const result = updateInProject(oldName, newName)
+  if (result && !result.ok) return { ok: false as const, message: result.message }
+
+  state.editorActions.updateEditorName(oldName, newName)
+  state.fileActions.updateFile({ name: oldName, newName })
+  state.tabsActions.updateTabName(oldName, newName)
+  afterRename?.(oldName, newName)
+
+  return { ok: true as const }
+}
+
 const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (setState, getState) => ({
   undoRedo: {},
 
@@ -60,35 +97,23 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'pou' })
     },
 
-    delete: (name) => {
-      const state = getState()
-      state.projectActions.deletePou(name)
-      state.editorActions.removeModel(name)
-      state.fileActions.removeFile({ name })
-      state.tabsActions.removeTab(name)
-      state.libraryActions.removeUserLibrary(name)
-
-      // Reset editor if current editor was deleted
-      const currentEditor = state.editor
-      if (currentEditor.type !== 'available' && currentEditor.meta.name === name) {
-        state.editorActions.clearEditor()
-      }
-
-      return { ok: true }
-    },
+    delete: (name) =>
+      deleteElement(getState(), name, (n) => getState().projectActions.deletePou(n), (n) =>
+        getState().libraryActions.removeUserLibrary(n),
+      ),
 
     rename: (oldName, newName) => {
       const state = getState()
       const existing = state.project.data.pous.find((p) => p.name === newName)
       if (existing) return { ok: false, message: 'POU name already exists' }
 
-      state.projectActions.updatePouName(oldName, newName)
-      state.editorActions.updateEditorName(oldName, newName)
-      state.fileActions.updateFile({ name: oldName, newName })
-      state.tabsActions.updateTabName(oldName, newName)
-      state.libraryActions.updateLibraryName(oldName, newName)
-
-      return { ok: true }
+      return renameElement(
+        state,
+        oldName,
+        newName,
+        (o, n) => { state.projectActions.updatePouName(o, n) },
+        (o, n) => state.libraryActions.updateLibraryName(o, n),
+      )
     },
 
     duplicate: (sourceName, newName) => {
@@ -152,20 +177,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'datatype' })
     },
 
-    delete: (name) => {
-      const state = getState()
-      state.projectActions.deleteDatatype(name)
-      state.editorActions.removeModel(name)
-      state.fileActions.removeFile({ name })
-      state.tabsActions.removeTab(name)
-
-      const currentEditor = state.editor
-      if (currentEditor.type !== 'available' && currentEditor.meta.name === name) {
-        state.editorActions.clearEditor()
-      }
-
-      return { ok: true }
-    },
+    delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteDatatype(n)),
 
     rename: (oldName, newName) => {
       const state = getState()
@@ -176,13 +188,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!datatype) return { ok: false, message: 'Data type not found' }
 
       const updatedDatatype = { ...datatype, name: newName }
-      state.projectActions.updateDatatype(oldName, updatedDatatype)
 
-      state.editorActions.updateEditorName(oldName, newName)
-      state.fileActions.updateFile({ name: oldName, newName })
-      state.tabsActions.updateTabName(oldName, newName)
-
-      return { ok: true }
+      return renameElement(state, oldName, newName, () => {
+        state.projectActions.updateDatatype(oldName, updatedDatatype)
+      })
     },
 
     duplicate: (sourceName, newName) => {
@@ -211,32 +220,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'server' })
     },
 
-    delete: (name) => {
-      const state = getState()
-      state.projectActions.deleteServer(name)
-      state.editorActions.removeModel(name)
-      state.fileActions.removeFile({ name })
-      state.tabsActions.removeTab(name)
+    delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteServer(n)),
 
-      const currentEditor = state.editor
-      if (currentEditor.type !== 'available' && currentEditor.meta.name === name) {
-        state.editorActions.clearEditor()
-      }
-
-      return { ok: true }
-    },
-
-    rename: (oldName, newName) => {
-      const state = getState()
-      const result = state.projectActions.updateServerName(oldName, newName)
-      if (!result.ok) return { ok: false, message: result.message }
-
-      state.editorActions.updateEditorName(oldName, newName)
-      state.fileActions.updateFile({ name: oldName, newName })
-      state.tabsActions.updateTabName(oldName, newName)
-
-      return { ok: true }
-    },
+    rename: (oldName, newName) =>
+      renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateServerName(o, n)),
   },
 
   remoteDeviceActions: {
@@ -244,32 +231,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'remote-device' })
     },
 
-    delete: (name) => {
-      const state = getState()
-      state.projectActions.deleteRemoteDevice(name)
-      state.editorActions.removeModel(name)
-      state.fileActions.removeFile({ name })
-      state.tabsActions.removeTab(name)
+    delete: (name) =>
+      deleteElement(getState(), name, (n) => getState().projectActions.deleteRemoteDevice(n)),
 
-      const currentEditor = state.editor
-      if (currentEditor.type !== 'available' && currentEditor.meta.name === name) {
-        state.editorActions.clearEditor()
-      }
-
-      return { ok: true }
-    },
-
-    rename: (oldName, newName) => {
-      const state = getState()
-      const result = state.projectActions.updateRemoteDeviceName(oldName, newName)
-      if (!result.ok) return { ok: false, message: result.message }
-
-      state.editorActions.updateEditorName(oldName, newName)
-      state.fileActions.updateFile({ name: oldName, newName })
-      state.tabsActions.updateTabName(oldName, newName)
-
-      return { ok: true }
-    },
+    rename: (oldName, newName) =>
+      renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateRemoteDeviceName(o, n)),
   },
 
   sharedWorkspaceActions: {

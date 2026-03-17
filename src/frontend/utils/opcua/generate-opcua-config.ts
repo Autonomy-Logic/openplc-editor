@@ -8,6 +8,7 @@ import type {
   PLCServer,
 } from '@root/types/PLC/open-plc'
 
+import { getErrorMessage } from '../get-error-message'
 import { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from './resolve-indices'
 import type { DebugVariable, PLCInstanceInfo } from './types'
 
@@ -495,7 +496,7 @@ export const validateOpcUaConfig = (
       if (error instanceof OpcUaConfigError) {
         errors.push(error.message)
       } else {
-        errors.push(String(error))
+        errors.push(getErrorMessage(error))
       }
     }
   }

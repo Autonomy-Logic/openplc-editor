@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { useOpenPLCStore } from '../../../../../../../../store'
+import { useOpenPLCStore } from '@root/frontend/store'
 import { ContactNode } from '../../../../../../../_atoms/graphical-editor/ladder/contact'
 import { DEFAULT_CONTACT_TYPES } from '../../../../../../../_atoms/graphical-editor/ladder/utils/constants'
 import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'

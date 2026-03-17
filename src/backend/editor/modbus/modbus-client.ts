@@ -1,5 +1,7 @@
 import { Socket } from 'net'
 
+import { getErrorMessage } from '@root/utils/get-error-message'
+
 export enum ModbusFunctionCode {
   DEBUG_INFO = 0x41,
   DEBUG_SET = 0x42,
@@ -245,7 +247,7 @@ export class ModbusTcpClient {
         data: variableData,
       }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -320,7 +322,7 @@ export class ModbusTcpClient {
 
       return { success: true }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 }

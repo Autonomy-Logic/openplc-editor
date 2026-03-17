@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 
-import type { PLCDataType, PLCPou, PLCVariable } from '../../../../../../../../middleware/shared/ports/types'
-import { useOpenPLCStore } from '../../../../../../../store'
+import type { PLCDataType, PLCPou, PLCVariable } from '@root/middleware/shared/ports/types'
+import { useOpenPLCStore } from '@root/frontend/store'
 import {
   findFunctionBlockVariables,
   findStructureVariables,
@@ -9,7 +9,7 @@ import {
   isEnumerationType,
   isFunctionBlockType,
   type PouVariable,
-} from '../../../../../../../utils/pou-helpers'
+} from '@root/frontend/utils/pou-helpers'
 
 /**
  * Type for array data extracted from PLCVariable array type.

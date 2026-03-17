@@ -1,7 +1,7 @@
 import { ComponentPropsWithoutRef } from 'react'
 
-import { useOpenPLCStore } from '../../../../../../../store'
-import { cn } from '../../../../../../../utils/cn'
+import { useOpenPLCStore } from '@root/frontend/store'
+import { cn } from '@root/frontend/utils/cn'
 import { InputField } from '../../../../../../_molecules/input-field'
 import { SelectField } from '../../../../../../_molecules/select-field'
 

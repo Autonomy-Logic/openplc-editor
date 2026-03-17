@@ -2,7 +2,7 @@ import * as AccordionPrimitive from '@radix-ui/react-accordion'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { ModbusBufferMapping } from '../../../../../../../middleware/shared/ports/types'
+import type { ModbusBufferMapping } from '@root/middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { DEFAULT_BUFFER_MAPPING } from '../../../../../../utils/modbus/generate-modbus-slave-config'

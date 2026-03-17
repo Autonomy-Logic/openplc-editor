@@ -2,13 +2,14 @@ import * as Popover from '@radix-ui/react-popover'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import type { ModbusIOGroup, ModbusIOPoint } from '../../../../../../../middleware/shared/ports/types'
-import { useRuntime } from '../../../../../../../middleware/shared/providers/platform-context'
+import type { ModbusIOGroup, ModbusIOPoint } from '@root/middleware/shared/ports/types'
+import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
+import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
@@ -684,7 +685,7 @@ const RemoteDeviceEditor = () => {
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'warning',
-        message: `Error fetching serial ports: ${String(error)}`,
+        message: `Error fetching serial ports: ${getErrorMessage(error)}`,
       })
       setSerialPortOptions([])
     } finally {

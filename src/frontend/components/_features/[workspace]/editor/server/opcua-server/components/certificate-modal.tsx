@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { OpcUaTrustedCertificate } from '../../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../../utils/cn'
+import type { OpcUaTrustedCertificate } from '@root/middleware/shared/ports/types'
+import { cn } from '@root/frontend/utils/cn'
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../../_molecules/modal'

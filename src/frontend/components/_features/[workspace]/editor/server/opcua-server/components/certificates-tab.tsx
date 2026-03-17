@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 
-import type { OpcUaServerConfig, OpcUaTrustedCertificate } from '../../../../../../../../middleware/shared/ports/types'
-import { useOpenPLCStore } from '../../../../../../../store'
-import { cn } from '../../../../../../../utils/cn'
+import type { OpcUaServerConfig, OpcUaTrustedCertificate } from '@root/middleware/shared/ports/types'
+import { useOpenPLCStore } from '@root/frontend/store'
+import { cn } from '@root/frontend/utils/cn'
 import { Label } from '../../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
 import { CertificateModal } from './certificate-modal'

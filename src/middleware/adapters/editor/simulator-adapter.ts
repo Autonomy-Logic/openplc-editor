@@ -12,6 +12,7 @@
  * wires the VirtualSerialPort when debuggerConnect is called with 'simulator' type.
  */
 
+import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { SimulatorPort } from '../../shared/ports/simulator-port'
 import type { SimulatorDebugResult, Unsubscribe } from '../../shared/ports/types'
 
@@ -37,7 +38,7 @@ export function createEditorSimulatorAdapter(
         if (result.success) running = true
         return result
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 

@@ -1,7 +1,7 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { OpcUaServerConfig } from '../../../../../../../middleware/shared/ports/types'
+import type { OpcUaServerConfig } from '@root/middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'

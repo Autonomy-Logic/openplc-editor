@@ -2,6 +2,8 @@
 // @ts-ignore - serialport types are not available at build time but will be at runtime
 import { SerialPort } from 'serialport'
 
+import { getErrorMessage } from '@root/utils/get-error-message'
+
 import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-client'
 
 interface ModbusRtuClientOptions {
@@ -126,10 +128,10 @@ export class ModbusRtuClient {
         })
 
         this.serialPort.on('error', (error: unknown) => {
-          reject(error instanceof Error ? error : new Error(String(error)))
+          reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
         })
       } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)))
+        reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
       }
     })
   }
@@ -287,7 +289,7 @@ export class ModbusRtuClient {
         const md5String = response.slice(9).toString('utf-8').trim()
         return md5String
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error))
+        lastError = error instanceof Error ? error : new Error(getErrorMessage(error))
         if (attempt < MD5_REQUEST_MAX_RETRIES) {
           console.warn(`MD5 request attempt ${attempt + 1} failed: ${lastError.message}. Retrying...`)
         }
@@ -368,7 +370,7 @@ export class ModbusRtuClient {
         data: variableData,
       }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -426,7 +428,7 @@ export class ModbusRtuClient {
 
       return { success: true }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 }

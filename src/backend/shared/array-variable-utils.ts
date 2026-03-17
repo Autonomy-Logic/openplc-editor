@@ -1,15 +1,13 @@
 import type { PLCVariable } from '../../middleware/shared/ports/types'
 
+import { parseDimensionRange } from '../../frontend/utils/PLC/dimension-range'
+import type { DimensionRange } from '../../frontend/utils/PLC/dimension-range'
+
 const MAX_EXPANSION = 100
 
 interface ParsedArrayAccess {
   baseName: string
   indices: number[]
-}
-
-interface DimensionRange {
-  lower: number
-  upper: number
 }
 
 /**
@@ -37,20 +35,7 @@ export const parseArrayAccess = (name: string): ParsedArrayAccess | null => {
   return { baseName, indices }
 }
 
-/**
- * Parse a dimension range string like "0..5" into lower and upper bounds.
- */
-export const parseDimensionRange = (dimension: string): DimensionRange | null => {
-  const match = dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
-  if (!match) return null
-
-  const lower = parseInt(match[1], 10)
-  const upper = parseInt(match[2], 10)
-
-  if (lower > upper) return null
-
-  return { lower, upper }
-}
+export { parseDimensionRange }
 
 /**
  * Validate that indices are within the declared array dimensions.

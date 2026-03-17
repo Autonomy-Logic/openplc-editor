@@ -11,7 +11,6 @@ import {
   PLCServer,
   PLCServerSchema,
 } from '@root/types/PLC/open-plc'
-import { i18n } from '@root/frontend/locales/i18n'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { migrateProjectToNameTypeSystem, needsMigration } from '@root/utils/migrate-project-to-name-type-system'
 import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
@@ -50,10 +49,8 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
     return {
       success: false,
       error: {
-        title: i18n.t('projectServiceResponses:openProject.errors.directoryNotFound.title'),
-        description: i18n.t('projectServiceResponses:openProject.errors.directoryNotFound.description', {
-          basePath,
-        }),
+        title: 'Directory not found',
+        description: 'The selected directory does not exist.',
         error: new Error('Directory does not exist'),
       },
     }
@@ -74,10 +71,8 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
     error: hasProjectFile
       ? undefined
       : {
-          title: i18n.t('projectServiceResponses:openProject.errors.invalidProject.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.invalidProject.description', {
-            basePath,
-          }),
+          title: 'Invalid project',
+          description: 'The selected directory is not a valid OpenPLC project.',
           error: new Error('project.json not found in directory'),
         },
   }

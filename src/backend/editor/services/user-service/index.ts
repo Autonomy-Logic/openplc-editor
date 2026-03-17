@@ -4,6 +4,8 @@ import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
+import { getErrorMessage } from '@root/utils/get-error-message'
+
 import { ARDUINO_DATA } from './data/arduino'
 import { HISTORY_DATA } from './data/history'
 import { SETTINGS_DATA } from './data/settings'
@@ -45,9 +47,9 @@ class UserService {
         if (err instanceof Error && err.message.includes('EEXIST')) {
           console.warn(`Directory already exists at ${path}.\nSkipping creation.`)
         } else if (err instanceof Error) {
-          console.error(`Error creating directory at ${path}: ${String(err)}`)
+          console.error(`Error creating directory at ${path}: ${getErrorMessage(err)}`)
         } else {
-          console.error(`Error creating directory at ${path}: ${String(err)}`)
+          console.error(`Error creating directory at ${path}: ${getErrorMessage(err)}`)
         }
       }
     }
@@ -62,11 +64,11 @@ class UserService {
         console.warn(`File already exists at ${filePath}.\nSkipping creation.`)
         return
       } else if (err instanceof Error) {
-        console.error(`Error creating file at ${filePath}: ${String(err)}`)
-        throw new Error(`Failed to create file at ${filePath}: ${String(err)}`)
+        console.error(`Error creating file at ${filePath}: ${getErrorMessage(err)}`)
+        throw new Error(`Failed to create file at ${filePath}: ${getErrorMessage(err)}`)
       } else {
-        console.error(`Error creating file at ${filePath}: ${String(err)}`)
-        throw new Error(`Failed to create file at ${filePath}: ${String(err)}`)
+        console.error(`Error creating file at ${filePath}: ${getErrorMessage(err)}`)
+        throw new Error(`Failed to create file at ${filePath}: ${getErrorMessage(err)}`)
       }
     }
   }
@@ -75,8 +77,8 @@ class UserService {
     try {
       await rm(filePath, { recursive: true, force: true })
     } catch (err) {
-      console.error(`Error deleting file at ${filePath}: ${String(err)}`)
-      throw new Error(`Failed to delete file at ${filePath}: ${String(err)}`)
+      console.error(`Error deleting file at ${filePath}: ${getErrorMessage(err)}`)
+      throw new Error(`Failed to delete file at ${filePath}: ${getErrorMessage(err)}`)
     }
   }
 
@@ -97,7 +99,7 @@ class UserService {
       await rename(oldFilePath, newFilePath)
       return { success: true, data: { filePath: newFilePath } }
     } catch (err) {
-      console.error(`Error renaming file at ${oldFilePath} to ${newFileName}: ${String(err)}`)
+      console.error(`Error renaming file at ${oldFilePath} to ${newFileName}: ${getErrorMessage(err)}`)
       return {
         success: false,
         error: { title: 'File Rename Error', description: 'Failed to rename file', error: err as Error },
@@ -156,9 +158,9 @@ class UserService {
       if (err instanceof Error && err.message.includes('EEXIST')) {
         console.warn(`File already exists at ${pathToArduinoCliConfig}.\nSkipping creation.`)
       } else if (err instanceof Error) {
-        console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${String(err)}`)
+        console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
       } else {
-        console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${String(err)}`)
+        console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
       }
     }
   }

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import type { OpcUaSecurityProfile } from '../../../../../../../../middleware/shared/ports/types'
-import { cn } from '../../../../../../../utils/cn'
+import type { OpcUaSecurityProfile } from '@root/middleware/shared/ports/types'
+import { cn } from '@root/frontend/utils/cn'
 import { Checkbox } from '../../../../../../_atoms/checkbox'
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'

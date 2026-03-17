@@ -12,7 +12,6 @@ import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
 import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '../../../types/PLC/open-plc'
-import { i18n } from '@root/frontend/locales/i18n'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
 class ProjectService {
@@ -134,10 +133,8 @@ class ProjectService {
         return {
           success: false,
           error: {
-            title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
-            description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
-              filePath: projectPath,
-            }),
+            title: 'Failed to read project',
+            description: 'Could not read the project. Please check the project directory.',
             error: projectFiles.error,
           },
         }
@@ -161,10 +158,8 @@ class ProjectService {
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
-            filePath: projectPath,
-          }),
+          title: 'Failed to read project',
+          description: 'Could not read the project. Please check the project directory.',
           error: error,
         },
       }
@@ -173,7 +168,7 @@ class ProjectService {
 
   async openProject(): Promise<IProjectServiceResponse> {
     const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
-      title: i18n.t('openProject:dialog.title'),
+      title: 'Select a PLC project to open',
       properties: ['openDirectory'],
     })
 
@@ -181,8 +176,8 @@ class ProjectService {
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.canceled.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.canceled.description'),
+          title: 'Operation canceled',
+          description: 'Operation canceled by the user.',
           error: null,
         },
       }
@@ -201,10 +196,8 @@ class ProjectService {
         return {
           success: false,
           error: {
-            title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
-            description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
-              filePath: directoryPath,
-            }),
+            title: 'Failed to read project',
+            description: 'Could not read the project. Please check the project directory.',
             error: projectFiles.error,
           },
         }
@@ -228,10 +221,8 @@ class ProjectService {
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
-            filePath: directoryPath,
-          }),
+          title: 'Failed to read project',
+          description: 'Could not read the project. Please check the project directory.',
           error: error,
         },
       }
@@ -257,8 +248,8 @@ class ProjectService {
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:saveProject.errors.missingParams.title'),
-          description: i18n.t('projectServiceResponses:saveProject.errors.missingParams.description'),
+          title: 'Missing parameters',
+          description: 'Missing parameters',
           error: null,
         },
       }
@@ -283,10 +274,8 @@ class ProjectService {
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
-          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
-            filePath: projectPath,
-          }),
+          title: 'Failed to save file',
+          description: 'Unable to save the project file.',
           error,
         },
       }
@@ -352,10 +341,8 @@ class ProjectService {
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
-          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
-            filePath: directoryPath,
-          }),
+          title: 'Failed to save file',
+          description: 'Unable to save the project file.',
           error,
         },
       }
@@ -397,10 +384,8 @@ class ProjectService {
         return {
           success: false,
           error: {
-            title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
-            description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
-              filePath: directoryPath,
-            }),
+            title: 'Failed to save file',
+            description: 'Unable to save the project file.',
             error,
           },
         }
@@ -443,10 +428,8 @@ class ProjectService {
         return {
           success: false,
           error: {
-            title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
-            description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
-              filePath: directoryPath,
-            }),
+            title: 'Failed to save file',
+            description: 'Unable to save the project file.',
             error,
           },
         }
@@ -455,7 +438,7 @@ class ProjectService {
 
     return {
       success: true,
-      message: i18n.t('projectServiceResponses:saveProject.success.successToSaveFile.message'),
+      message: 'Your project was saved successfully',
     }
   }
 
@@ -486,17 +469,15 @@ class ProjectService {
 
       return {
         success: true,
-        message: i18n.t('projectServiceResponses:saveProject.success.successToSaveFile.message'),
+        message: 'Your project was saved successfully',
       }
     } catch (error) {
       console.error('Error saving file:', error)
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
-          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
-            filePath,
-          }),
+          title: 'Failed to save file',
+          description: 'Unable to save the project file.',
           error,
         },
       }

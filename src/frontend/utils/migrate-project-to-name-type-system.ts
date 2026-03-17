@@ -1,5 +1,7 @@
 import { PLCProjectData, PLCVariable } from '@root/types/PLC/open-plc'
 
+import { getErrorMessage } from './get-error-message'
+
 /**
  * Migration report detailing the changes made during migration
  */
@@ -120,7 +122,7 @@ export function migrateProjectToNameTypeSystem(projectData: PLCProjectData): {
     return { migratedProject, report }
   } catch (error) {
     report.success = false
-    report.errors.push(error instanceof Error ? error.message : String(error))
+    report.errors.push(getErrorMessage(error))
     return { migratedProject: projectData, report }
   }
 }

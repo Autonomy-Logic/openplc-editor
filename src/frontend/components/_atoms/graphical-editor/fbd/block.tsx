@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
 import { useOpenPLCStore } from '../../../../store'
-import { checkVariableNameUnit } from '../../../../store/slices/project/validation/variables'
+import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -386,7 +386,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { name, number } = checkVariableNameUnit(
+            const { name, number } = checkVariableName(
               variables.all,
               (data.variant as BlockVariant).name.toUpperCase(),
             )

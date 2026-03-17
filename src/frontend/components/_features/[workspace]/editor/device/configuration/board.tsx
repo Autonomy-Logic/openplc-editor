@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { TimingStats } from '../../../../../../../middleware/shared/ports/types'
-import { useDevice, useRuntime } from '../../../../../../../middleware/shared/providers/platform-context'
+import type { TimingStats } from '@root/middleware/shared/ports/types'
+import { useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'

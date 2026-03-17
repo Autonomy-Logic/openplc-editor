@@ -12,6 +12,7 @@
  *     updated on token-refresh events, cleared on clearCredentials().
  */
 
+import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type {
   CompilationStatusResult,
   LoginParams,
@@ -42,7 +43,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         }
         return result
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -51,7 +52,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         return await window.bridge.runtimeCreateUser(ip, params.username, params.password)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -60,7 +61,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         return await window.bridge.runtimeGetUsersInfo(ip)
       } catch (err) {
-        return { hasUsers: false, error: err instanceof Error ? err.message : String(err) }
+        return { hasUsers: false, error: getErrorMessage(err) }
       }
     },
 
@@ -69,7 +70,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         return await window.bridge.runtimeGetStatus(ip, jwtToken, includeStats)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -78,7 +79,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         return await window.bridge.runtimeStartPlc(ip, jwtToken)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -87,7 +88,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         return await window.bridge.runtimeStopPlc(ip, jwtToken)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -96,7 +97,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         return await window.bridge.runtimeGetLogs(ip, jwtToken, minId)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -105,7 +106,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         return await window.bridge.runtimeGetSerialPorts(ip, jwtToken)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
@@ -114,7 +115,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         return await window.bridge.runtimeGetCompilationStatus(ip, jwtToken)
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) }
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 
