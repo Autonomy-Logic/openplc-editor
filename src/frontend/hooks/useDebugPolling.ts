@@ -2,40 +2,37 @@
  * Debug Polling Hook
  *
  * When the debugger is visible, polls variable values from the runtime
- * via debugBridge.getVariablesList() at a transport-aware interval.
+ * via DebuggerPort.getVariablesList() at a board-aware interval.
  *
- * Mirrors the desktop editor's polling loop (workspace-screen.tsx lines 1533-1676):
+ * Platform-agnostic — the DebuggerPort adapter handles the actual transport
+ * (IPC to main process, HTTP, WebRTC, simulator virtual serial port, etc.).
+ *
+ * Polling behavior:
  * - Single-batch-per-cycle with round-robin offset
  * - Dynamic batch sizing (halves on ERROR_OUT_OF_MEMORY)
  * - lastIndex-aware advancement (runtime may return partial data)
  * - isPolling guard to skip tick if previous poll is in progress
  *
- * Polling intervals per transport:
- * - Simulator (Modbus RTU): 50ms  (matches desktop DEBUGGER_POLL_INTERVAL_MS)
- * - WebRTC DataChannel:    200ms
- * - HTTP fallback:        2000ms
- *
- * The hook subscribes to the store's debugTransport field so the interval
- * automatically adjusts when the transport changes (e.g. HTTP → WebRTC upgrade).
+ * Polling intervals:
+ * - Simulator board: 50ms  (Modbus RTU frame timing)
+ * - Other boards:   200ms  (general purpose)
  */
 
 import { useCallback, useEffect, useRef } from 'react'
 
 import type { DebugTreeNode } from '../../middleware/shared/ports/types'
-import { debugBridge } from '../services/debug/debug-bridge'
+import { useDebugger } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 
-/** Polling interval for Modbus RTU / simulator (matches desktop editor). */
+/** Polling interval for simulator boards (Modbus RTU). */
 const SIMULATOR_POLL_INTERVAL_MS = 50
-/** Polling interval for WebRTC DataChannel. */
-const WEBRTC_POLL_INTERVAL_MS = 200
-/** Polling interval for HTTP fallback. */
-const HTTP_POLL_INTERVAL_MS = 2000
+/** Polling interval for non-simulator boards. */
+const DEFAULT_POLL_INTERVAL_MS = 200
 
-/** Default batch size for WebRTC/HTTP transports. */
+/** Default batch size for variable polling. */
 const DEFAULT_BATCH_SIZE = 60
-/** Batch size for Modbus RTU / simulator (matches desktop editor). */
+/** Batch size for simulator (smaller due to RTU frame limits). */
 const RTU_BATCH_SIZE = 20
 const MIN_BATCH_SIZE = 2
 
@@ -62,22 +59,13 @@ function collectAllLeafIndexes(nodes: DebugTreeNode[]): Map<number, { compositeK
   return result
 }
 
-/**
- * Determine the polling interval based on the active transport.
- */
-function getPollInterval(isSimulator: boolean, debugTransport: 'http' | 'webrtc'): number {
-  if (isSimulator) return SIMULATOR_POLL_INTERVAL_MS
-  if (debugTransport === 'webrtc') return WEBRTC_POLL_INTERVAL_MS
-  return HTTP_POLL_INTERVAL_MS
-}
-
 export interface UseDebugPollingOptions {
   debugTreesRef: React.MutableRefObject<Record<string, DebugTreeNode[]>>
 }
 
 export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void {
+  const debuggerPort = useDebugger()
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
-  const debugTransport = useOpenPLCStore((state) => state.session.debugTransport)
   const { workspaceActions, consoleActions } = useOpenPLCStore()
 
   const pollingIntervalRef = useRef<number | null>(null)
@@ -86,7 +74,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const batchOffsetRef = useRef(0)
   const isPollingRef = useRef(false)
 
-  // Dynamic batch size — starts at max for the transport, halves on memory errors
+  // Dynamic batch size — starts at max, halves on memory errors
   const batchSizeRef = useRef(DEFAULT_BATCH_SIZE)
 
   // Cached leaf index data — computed once when debugger starts, cleared when it stops.
@@ -117,16 +105,12 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
   /**
    * Poll one batch of variables from the runtime.
-   * Mirrors the desktop editor's pollVariables() function.
    */
   const pollVariables = useCallback(async () => {
     const { allLeaves, sortedIndexes } = getLeafData()
     if (allLeaves.size === 0) return
 
-    // Determine batch size based on transport type
-    const connectionType = debugBridge.getConnectionType()
-    const maxBatchSize = connectionType === 'simulator' ? RTU_BATCH_SIZE : DEFAULT_BATCH_SIZE
-    let currentBatchSize = Math.min(batchSizeRef.current, maxBatchSize)
+    let currentBatchSize = batchSizeRef.current
 
     // Clamp offset to valid range
     let batchOffset = batchOffsetRef.current
@@ -137,11 +121,10 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     // Slice one batch from the current offset
     let batch = sortedIndexes.slice(batchOffset, batchOffset + currentBatchSize)
 
-    // Request variables from runtime via debugBridge
-    let result = await debugBridge.getVariablesList(batch)
+    // Request variables from runtime via debugger port
+    let result = await debuggerPort.getVariablesList(batch)
 
     // Handle ERROR_OUT_OF_MEMORY with retry (halve batch size, same offset)
-    // Matches desktop editor pattern (workspace-screen.tsx lines 1556-1560)
     while (!result.success && result.error === 'ERROR_OUT_OF_MEMORY' && currentBatchSize > MIN_BATCH_SIZE) {
       currentBatchSize = Math.max(MIN_BATCH_SIZE, Math.floor(currentBatchSize / 2))
       batchSizeRef.current = currentBatchSize
@@ -151,7 +134,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         message: `Reduced debug batch size to ${currentBatchSize} due to runtime memory error.`,
       })
       batch = sortedIndexes.slice(batchOffset, batchOffset + currentBatchSize)
-      result = await debugBridge.getVariablesList(batch)
+      result = await debuggerPort.getVariablesList(batch)
     }
 
     if (!result.success) {
@@ -163,11 +146,10 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     workspaceActions.setDebugDataStale(false)
 
     // Parse response buffer → variable values
-    // Matches desktop editor pattern (workspace-screen.tsx lines 1587-1627)
     let itemsProcessed = 0
 
     if (result.data && result.data.length > 0) {
-      const responseBuffer = result.data
+      const responseBuffer = new Uint8Array(result.data)
       const newValues = new Map<string, string>()
       let bufferOffset = 0
 
@@ -198,11 +180,10 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     }
 
     // Advance offset for next poll cycle (wraps around)
-    // Matches desktop editor (workspace-screen.tsx lines 1630-1632)
     if (itemsProcessed > 0) {
       batchOffsetRef.current = (batchOffset + itemsProcessed) % sortedIndexes.length
     }
-  }, [getLeafData, workspaceActions, consoleActions])
+  }, [debuggerPort, getLeafData, workspaceActions, consoleActions])
 
   // Ref-based poll so the interval never resets due to callback identity changes
   const pollRef = useRef(pollVariables)
@@ -216,16 +197,14 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   })
 
   // Set up polling interval when debugger becomes visible.
-  // Re-creates the interval when debugTransport changes (HTTP ↔ WebRTC upgrade/downgrade).
   useEffect(() => {
     if (isDebuggerVisible) {
       // Reset state on session start
-      const connectionType = debugBridge.getConnectionType()
-      batchSizeRef.current = connectionType === 'simulator' ? RTU_BATCH_SIZE : DEFAULT_BATCH_SIZE
+      batchSizeRef.current = isSimulatorBoard ? RTU_BATCH_SIZE : DEFAULT_BATCH_SIZE
       batchOffsetRef.current = 0
       lastResponseTimestampRef.current = 0
 
-      const pollIntervalMs = getPollInterval(isSimulatorBoard, debugTransport)
+      const pollIntervalMs = isSimulatorBoard ? SIMULATOR_POLL_INTERVAL_MS : DEFAULT_POLL_INTERVAL_MS
 
       // Fire first poll immediately, then schedule at fixed rate
       // Skip tick if previous poll is still in progress (isPolling guard)
@@ -273,7 +252,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       cachedSortedIndexesRef.current = []
       batchOffsetRef.current = 0
     }
-  }, [isDebuggerVisible, isSimulatorBoard, debugTransport, workspaceActions])
+  }, [isDebuggerVisible, isSimulatorBoard, workspaceActions])
 
   // Clean up on unmount
   useEffect(() => {

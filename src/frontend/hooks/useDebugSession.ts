@@ -1,268 +1,203 @@
 /**
  * Debug Session Hook
  *
- * Manages the debug session lifecycle: parse debug.c, build index/tree maps,
- * commit debug artifacts to the store, and delegate protocol operations to
- * the debugBridge singleton.
+ * Manages the debug session lifecycle: read debug.c, build index/tree maps,
+ * commit debug artifacts to the store, connect/disconnect via DebuggerPort.
  *
- * This hook is transport-agnostic — it never calls simulatorService or
- * sendDebugMessage directly. The debugBridge handles all transport concerns.
- *
- * Mirrors the desktop editor's session management in debugger-session.ts
- * and workspace-screen.tsx.
+ * Platform-agnostic — all protocol operations are delegated to the
+ * DebuggerPort and SimulatorPort provided by the PlatformProvider.
+ * The backend adapter decides the actual transport (IPC, HTTP, WebRTC, etc.).
  */
 
 import { useCallback, useRef } from 'react'
 
-import type { DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
-import { debugBridge } from '../services/debug/debug-bridge'
-import { simulatorService } from '../services/simulator/simulator-service'
+import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
+import { useDebugger, useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 import { parseDebugFile } from '../utils/debug-parser'
-import { buildDebugTree } from '../utils/debug-tree-builder'
-import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from '../utils/debug-variable-finder'
+import {
+  buildDebugVariableTreeMap,
+  buildFbInstanceMap,
+  buildVariableIndexMap,
+} from '../utils/debugger-session'
 import { hexToBytes } from '../utils/hex'
 
 export interface UseDebugSessionReturn {
-  /** Parse debug.c, build trees/indexes, commit to store, activate debugger.
-   *  Parameters deviceId/username/password are kept for API compatibility but unused
-   *  by the session hook — the caller sets up the transport on debugBridge first. */
-  startDebug: (deviceId: string, username: string, password: string, debugCContent: string, port?: number) => boolean
-  /** Stop the debug session and clean up all state. */
-  stopDebug: () => void
-  /** Force or release a variable via debugBridge. */
+  /**
+   * Connect to the debug target and start a debug session.
+   *
+   * Reads the debug file, parses it, builds variable index/tree/FB maps,
+   * connects via the debugger port, stores all artifacts in workspace,
+   * and activates the debugger UI.
+   *
+   * @param config — Connection target (simulator, TCP, RTU, WebSocket).
+   *                 If omitted, defaults to simulator.
+   */
+  connectAndStart: (config?: DebugConnectionConfig) => Promise<{ success: boolean; error?: string }>
+
+  /** Disconnect from the debug target and clear all debug state. */
+  stopSession: () => Promise<void>
+
+  /** Force or release a variable via the debugger port. */
   forceVariable: (index: number, force: boolean, valueHex?: string) => Promise<boolean>
+
   /** Debug tree nodes built for each POU, keyed by pouName. */
   debugTreesRef: React.MutableRefObject<Record<string, DebugTreeNode[]>>
 }
 
 export function useDebugSession(): UseDebugSessionReturn {
+  const debuggerPort = useDebugger()
+  const simulator = useSimulator()
+
   const {
-    project: { data: projectData },
-    workspace,
+    project: { data: projectData, meta: projectMeta },
+    deviceDefinitions,
     workspaceActions,
     consoleActions,
   } = useOpenPLCStore()
 
-  const localMd5Ref = useRef<string | null>(null)
   const debugTreesRef = useRef<Record<string, DebugTreeNode[]>>({})
 
-  /**
-   * Start a debug session: parse debug.c, build index maps, commit to store.
-   * The caller is responsible for setting up the transport on debugBridge first.
-   */
-  const startDebug = useCallback(
-    (...[, , , debugCContent]: [string, string, string, string, number?]): boolean => {
-      if (!debugCContent) {
-        consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'error',
-          message: 'No debug.c content available. Build the project first.',
+  const connectAndStart = useCallback(
+    async (config?: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> => {
+      const debugConfig = config ?? ({ connectionType: 'simulator', connectionParams: {} } as DebugConnectionConfig)
+      const { project, workspaceActions: wsActions, consoleActions: logActions } = useOpenPLCStore.getState()
+      const boardTarget = deviceDefinitions.configuration.deviceBoard
+      const projectPath = project.meta.path
+
+      logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Connecting debugger...' })
+
+      try {
+        // Read debug file
+        const debugFileResult = await debuggerPort.readDebugFile(projectPath, boardTarget)
+        if (!debugFileResult.success || !debugFileResult.content) {
+          const error = `Failed to read debug file: ${debugFileResult.error ?? 'No content'}`
+          logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+          return { success: false, error }
+        }
+
+        wsActions.setDebugCContent(debugFileResult.content)
+
+        // Parse debug file and build variable maps
+        const parsed = parseDebugFile(debugFileResult.content)
+        const instances = project.data.configurations.resource.instances
+
+        // Build variable index map
+        const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, parsed)
+        for (const w of warnings) {
+          logActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
+        }
+
+        // Build debug variable tree
+        let treeMap = new Map<string, DebugTreeNode>()
+        const pouTrees: Record<string, DebugTreeNode[]> = {}
+        try {
+          const treeResult = buildDebugVariableTreeMap(
+            project.data.pous,
+            instances,
+            parsed.variables,
+            project.data,
+          )
+          treeMap = treeResult.treeMap
+
+          // Group trees by POU name for polling hook
+          for (const node of treeResult.trees) {
+            const pouName = node.compositeKey.split(':')[0]
+            if (!pouTrees[pouName]) pouTrees[pouName] = []
+            pouTrees[pouName].push(node)
+          }
+
+          logActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Debug tree builder: Built ${treeResult.trees.length} trees (${treeResult.complexCount} complex).`,
+          })
+        } catch {
+          logActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'warning',
+            message: 'Debug tree builder encountered errors.',
+          })
+        }
+
+        debugTreesRef.current = pouTrees
+
+        // Build FB instance map
+        const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
+
+        const fbTypesCount = fbDebugInstancesMap.size
+        const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce(
+          (sum, list) => sum + list.length,
+          0,
+        )
+        if (fbTypesCount > 0) {
+          logActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `FB instance map: Found ${totalFbInstances} instances across ${fbTypesCount} FB types.`,
+          })
+        }
+
+        // Connect debugger via port
+        const connectResult = await debuggerPort.connect(debugConfig)
+        if (!connectResult.success) {
+          const error = `Debugger connection failed: ${connectResult.error ?? 'Unknown error'}`
+          logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+          return { success: false, error }
+        }
+
+        // Store debug artifacts in workspace
+        wsActions.setDebugVariableIndexes(indexMap)
+        wsActions.setDebugVariableTree(treeMap)
+        wsActions.setFbDebugInstances(fbDebugInstancesMap)
+
+        // Set default selected instance for each FB type
+        fbDebugInstancesMap.forEach((instanceList: FbInstanceInfo[], fbTypeName: string) => {
+          if (instanceList.length > 0) {
+            wsActions.setFbSelectedInstance(fbTypeName, instanceList[0].key)
+          }
         })
-        return false
-      }
 
-      const { editingState } = useOpenPLCStore.getState().workspace
-      if (editingState === 'unsaved') {
-        consoleActions.addLog({
+        // Set target IP for non-simulator connections
+        if (debugConfig.connectionType !== 'simulator' && debugConfig.connectionParams.ipAddress) {
+          wsActions.setDebuggerTargetIp(debugConfig.connectionParams.ipAddress)
+        }
+
+        wsActions.setDebuggerVisible(true)
+        logActions.addLog({
           id: crypto.randomUUID(),
-          level: 'warning',
-          message: 'Project has unsaved changes. The debugger will use the last compiled version.',
+          level: 'info',
+          message: `Debugger connected. Found ${indexMap.size} debug variables.`,
         })
+
+        return { success: true }
+      } catch (err: unknown) {
+        const error = `Debugger error: ${err instanceof Error ? err.message : String(err)}`
+        logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+        return { success: false, error }
       }
-
-      // Parse debug.c to extract variable indexes
-      const parsed = parseDebugFile(debugCContent)
-
-      // Build index map: path -> index
-      const indexMap = new Map<string, number>()
-      for (const v of parsed.variables) {
-        indexMap.set(v.name, v.index)
-      }
-
-      localMd5Ref.current = workspace.debugLocalMd5
-
-      // Build debug trees for each program POU
-      const instances: PLCInstanceMapping[] = (projectData.configurations?.resource?.instances || []).map((inst) => ({
-        name: inst.name,
-        program: inst.program,
-      }))
-
-      const trees: Record<string, DebugTreeNode[]> = {}
-
-      for (const pou of projectData.pous) {
-        if (pou.pouType !== 'program') continue
-
-        const instanceName = findInstanceName(pou.name, instances)
-        if (!instanceName) continue
-
-        const pouTrees: DebugTreeNode[] = []
-
-        for (const variable of pou.interface?.variables ?? []) {
-          const tree = buildDebugTree(variable, pou.name, instanceName, parsed.variables, projectData)
-          pouTrees.push(tree)
-        }
-
-        // Add compiler-generated _TMP_ variables (function block/function outputs)
-        // needed for painting block output edges in LD/FBD editors.
-        const instancePrefix = buildDebugPathPrefix(instanceName) + '.'
-        for (const dv of parsed.variables) {
-          if (!dv.name.startsWith(instancePrefix)) continue
-          const localName = dv.name.slice(instancePrefix.length)
-          if (!localName.startsWith('_TMP_')) continue
-
-          let typeName = dv.type
-          if (typeName.endsWith('_O_ENUM') || typeName.endsWith('_P_ENUM')) {
-            typeName = typeName.replace(/_(O|P)_ENUM$/, '')
-          } else if (typeName.endsWith('_ENUM')) {
-            typeName = typeName.replace(/_ENUM$/, '')
-          }
-
-          pouTrees.push({
-            name: localName,
-            fullPath: dv.name,
-            compositeKey: `${pou.name}:${localName}`,
-            type: typeName,
-            isComplex: false,
-            debugIndex: dv.index,
-          })
-        }
-
-        trees[pou.name] = pouTrees
-      }
-
-      debugTreesRef.current = trees
-
-      // Augment index map with composite keys from the debug tree
-      const addCompositeKeyIndexes = (node: DebugTreeNode) => {
-        if (node.debugIndex !== undefined) {
-          indexMap.set(node.compositeKey, node.debugIndex)
-        }
-        if (node.children) {
-          for (const child of node.children) {
-            addCompositeKeyIndexes(child)
-          }
-        }
-      }
-      for (const pouTrees of Object.values(trees)) {
-        for (const node of pouTrees) {
-          addCompositeKeyIndexes(node)
-        }
-      }
-      workspaceActions.setDebugVariableIndexes(indexMap)
-
-      // Flatten all trees into the store
-      const flatTree = new Map<string, DebugTreeNode>()
-      for (const pouTrees of Object.values(trees)) {
-        for (const node of pouTrees) {
-          flatTree.set(node.compositeKey, node)
-        }
-      }
-      workspaceActions.setDebugVariableTree(flatTree)
-
-      // Build FB instance maps from project data
-      const fbInstances = new Map<string, FbInstanceInfo[]>()
-      for (const pou of projectData.pous) {
-        if (pou.pouType !== 'function-block') continue
-        const fbTypeName = pou.name.toUpperCase()
-        const instanceList: FbInstanceInfo[] = []
-
-        for (const programPou of projectData.pous) {
-          if (programPou.pouType !== 'program') continue
-          const progInstanceName = findInstanceName(programPou.name, instances)
-          if (!progInstanceName) continue
-
-          for (const variable of programPou.interface?.variables ?? []) {
-            if (variable.type.definition === 'derived' && variable.type.value.toUpperCase() === fbTypeName) {
-              const key = `${programPou.name}:${variable.name}`
-              instanceList.push({
-                fbTypeName: pou.name,
-                programName: programPou.name,
-                programInstanceName: progInstanceName,
-                fbVariableName: variable.name,
-                key,
-              })
-            }
-          }
-        }
-
-        if (instanceList.length > 0) {
-          fbInstances.set(fbTypeName, instanceList)
-          workspaceActions.setFbSelectedInstance(fbTypeName, instanceList[0].key)
-        }
-      }
-      workspaceActions.setFbDebugInstances(fbInstances)
-
-      consoleActions.addLog({
-        id: crypto.randomUUID(),
-        level: 'info',
-        message: `Debug session starting: ${parsed.variables.length} variables indexed`,
-      })
-
-      // MD5 verification via debugBridge (transport-agnostic)
-      const localMd5Value = localMd5Ref.current
-      if (localMd5Value) {
-        void debugBridge
-          .verifyMd5(localMd5Value)
-          .then((result) => {
-            if (result.success && result.match === false) {
-              consoleActions.addLog({
-                id: crypto.randomUUID(),
-                level: 'warning',
-                message: `MD5 mismatch. Runtime: ${result.targetMd5}, Local: ${localMd5Value}`,
-              })
-              workspaceActions.setDebugMd5Mismatch({
-                runtimeMd5: result.targetMd5 ?? '',
-                localMd5: localMd5Value,
-              })
-            } else if (result.success) {
-              consoleActions.addLog({
-                id: crypto.randomUUID(),
-                level: 'info',
-                message: 'MD5 verification successful.',
-              })
-            }
-          })
-          .catch(() => {
-            consoleActions.addLog({
-              id: crypto.randomUUID(),
-              level: 'warning',
-              message: 'Could not verify MD5 hash. Continuing anyway.',
-            })
-          })
-      }
-
-      // Activate debugger
-      workspaceActions.setDebuggerVisible(true)
-      return true
     },
-    [workspace.debugLocalMd5, projectData, workspaceActions, consoleActions],
+    [debuggerPort, deviceDefinitions, projectData, projectMeta],
   )
 
-  /**
-   * Stop the debug session. Delegates disconnect to debugBridge.
-   */
-  const stopDebug = useCallback(() => {
+  const stopSession = useCallback(async () => {
     // If simulator is running, stop it
-    if (simulatorService.isRunning()) {
-      simulatorService.stop()
+    if (simulator.isRunning()) {
+      await simulator.stop()
     }
 
-    // Disconnect transport via bridge
-    void debugBridge.disconnect()
+    // Disconnect debugger
+    await debuggerPort.disconnect()
 
+    // Clear all debug state
     workspaceActions.clearDebugState()
     debugTreesRef.current = {}
-    localMd5Ref.current = null
-  }, [workspaceActions])
+  }, [simulator, debuggerPort, workspaceActions])
 
-  /**
-   * Force or release a variable via debugBridge (transport-agnostic).
-   */
   const forceVariable = useCallback(
     async (index: number, force: boolean, valueHex = '00'): Promise<boolean> => {
       const valueBuffer = hexToBytes(valueHex)
-      const result = await debugBridge.setVariable(index, force, force ? valueBuffer : undefined)
+      const result = await debuggerPort.setVariable(index, force, force ? valueBuffer : undefined)
       if (result.success) {
         consoleActions.addLog({
           id: crypto.randomUUID(),
@@ -279,12 +214,12 @@ export function useDebugSession(): UseDebugSessionReturn {
         return false
       }
     },
-    [consoleActions],
+    [debuggerPort, consoleActions],
   )
 
   return {
-    startDebug,
-    stopDebug,
+    connectAndStart,
+    stopSession,
     forceVariable,
     debugTreesRef,
   }
