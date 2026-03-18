@@ -55,7 +55,7 @@ const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
   const dimensions = dimensionParts.map((dimensionRange) => ({ dimension: dimensionRange }))
 
   // Determine the base type definition
-  const baseCheck = baseTypeSchema.safeParse(baseTypeStr.toUpperCase())
+  const baseCheck = baseTypeSchema.safeParse(baseTypeStr.toLowerCase())
 
   // Build the array type definition
   if (baseCheck.success) {
@@ -151,7 +151,7 @@ export const parseIecStringToVariables = (
       return
     }
 
-    const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
+    const baseCheck = baseTypeSchema.safeParse(parsedType.toLowerCase())
 
     const isUserFunctionBlock = pous?.some(
       (pou) => pou.pouType === 'function-block' && pou.name.toLowerCase() === parsedType.toLowerCase(),

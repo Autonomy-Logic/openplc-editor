@@ -5,42 +5,28 @@
  * methods. The main process manages Modbus clients (TCP, RTU, WebSocket) and the
  * simulator virtual serial port.
  *
- * Connection context:
- *   - Connection config (type + params): provided via getConnectionConfig() callback
- *     injected at creation. Set by the store/UI based on the current device config.
- *   - The main process persists the Modbus/WebSocket client between calls and handles
- *     auto-reconnection using stored connection parameters.
+ * Connection config is passed per-call via the DebugConnectionConfig parameter.
+ * The main process persists the Modbus/WebSocket client between calls and handles
+ * auto-reconnection using stored connection parameters.
  */
 
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { DebuggerPort } from '../../shared/ports/debugger-port'
-import type { DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from '../../shared/ports/types'
+import type {
+  DebugConnectionConfig,
+  DebugSetResult,
+  DebugVariableResult,
+  Md5VerifyResult,
+  Unsubscribe,
+} from '../../shared/ports/types'
 
-export type EditorDebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator'
-
-export interface EditorDebugConnectionConfig {
-  connectionType: EditorDebugConnectionType
-  connectionParams: {
-    ipAddress?: string
-    port?: string
-    baudRate?: number
-    slaveId?: number
-    jwtToken?: string
-  }
-}
-
-export function createEditorDebuggerAdapter(
-  getConnectionConfig: () => EditorDebugConnectionConfig | null,
-): DebuggerPort {
+export function createEditorDebuggerAdapter(): DebuggerPort {
   let connected = false
   const disconnectCallbacks: Array<() => void> = []
 
   return {
-    async connect(): Promise<{ success: boolean; error?: string }> {
+    async connect(config: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> {
       try {
-        const config = getConnectionConfig()
-        if (!config) return { success: false, error: 'No debug connection configured' }
-
         const result = await window.bridge.debuggerConnect(config.connectionType, config.connectionParams)
         if (result.success) connected = true
         return result
@@ -78,11 +64,8 @@ export function createEditorDebuggerAdapter(
       }
     },
 
-    async verifyMd5(expectedMd5: string): Promise<Md5VerifyResult> {
+    async verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult> {
       try {
-        const config = getConnectionConfig()
-        if (!config) return { success: false, error: 'No debug connection configured' }
-
         return await window.bridge.debuggerVerifyMd5(config.connectionType, config.connectionParams, expectedMd5)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }

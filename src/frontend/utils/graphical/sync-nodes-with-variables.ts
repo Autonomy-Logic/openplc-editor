@@ -1,7 +1,6 @@
 import { Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { FBD_VARIABLE_NODE_TYPES } from './constants'
 
 type UpdateLadderNodeFn = (params: {
   editorName: string
@@ -50,34 +49,7 @@ export const syncNodesWithVariables = (
 
         const target = newVars.find((v) => v.name.toLowerCase() === nodeVar.name.toLowerCase())
 
-        if (!target) {
-          return
-        }
-
-        const isVariableNode = node.type === 'variable'
-
-        if (isVariableNode) {
-          const needsUpdate =
-            nodeVar.name.toLowerCase() !== target.name.toLowerCase() ||
-            (node.data as { wrongVariable?: boolean }).wrongVariable
-
-          if (needsUpdate) {
-            updateNode({
-              editorName: flow.name,
-              rungId: rung.id,
-              nodeId: node.id,
-              node: {
-                ...node,
-                data: {
-                  ...node.data,
-                  variable: target,
-                  wrongVariable: false,
-                },
-              },
-            })
-          }
-          return
-        }
+        if (!target) return
 
         const expectedType = getBlockExpectedType(node)
 
@@ -92,7 +64,7 @@ export const syncNodesWithVariables = (
               ...node,
               data: {
                 ...node.data,
-                variable: target,
+                variable: { ...target, id: `broken-${node.id}` },
                 wrongVariable: true,
               },
             },
@@ -101,13 +73,7 @@ export const syncNodesWithVariables = (
           return
         }
 
-        const needsRefresh =
-          nodeVar.id !== target.id ||
-          nodeVar.name.toLowerCase() !== target.name.toLowerCase() ||
-          nodeVar.type.value.toLowerCase() !== target.type.value.toLowerCase() ||
-          (node.data as { wrongVariable?: boolean }).wrongVariable
-
-        if (needsRefresh) {
+        if ((node.data as { wrongVariable?: PLCVariable }).wrongVariable) {
           updateNode({
             editorName: flow.name,
             rungId: rung.id,
@@ -143,36 +109,7 @@ export const syncNodesWithVariablesFBD = (
 
       const target = newVars.find((v) => v.name.toLowerCase() === nodeVar.name.toLowerCase())
 
-      if (!target) {
-        return
-      }
-
-      const isVariableNode = FBD_VARIABLE_NODE_TYPES.includes(node.type as (typeof FBD_VARIABLE_NODE_TYPES)[number])
-
-      if (isVariableNode) {
-        const needsUpdate =
-          nodeVar.id !== target.id ||
-          nodeVar.name.toLowerCase() !== target.name.toLowerCase() ||
-          nodeVar.type.value.toLowerCase() !== target.type.value.toLowerCase() ||
-          nodeVar.type.definition !== target.type.definition ||
-          (node.data as { wrongVariable?: boolean }).wrongVariable
-
-        if (needsUpdate) {
-          updateNode({
-            editorName: flow.name,
-            nodeId: node.id,
-            node: {
-              ...node,
-              data: {
-                ...node.data,
-                variable: target,
-                wrongVariable: false,
-              },
-            },
-          })
-        }
-        return
-      }
+      if (!target) return
 
       const expectedType = getBlockExpectedType(node)
 
@@ -186,7 +123,7 @@ export const syncNodesWithVariablesFBD = (
             ...node,
             data: {
               ...node.data,
-              variable: target,
+              variable: { ...target, id: `broken-${node.id}` },
               wrongVariable: true,
             },
           },
@@ -195,9 +132,7 @@ export const syncNodesWithVariablesFBD = (
         return
       }
 
-      const needsRefresh = nodeVar !== target || (node.data as { wrongVariable?: boolean }).wrongVariable
-
-      if (needsRefresh) {
+      if ((node.data as { wrongVariable?: PLCVariable }).wrongVariable) {
         updateNode({
           editorName: flow.name,
           nodeId: node.id,

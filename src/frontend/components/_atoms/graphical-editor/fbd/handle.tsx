@@ -22,6 +22,8 @@ export const CustomHandle = ({
   position,
   isConnectable,
   isDebuggerVisible,
+  glbPosition: _glb,
+  relPosition: _rel,
   ...props
 }: CustomHandleProps) => {
   return (

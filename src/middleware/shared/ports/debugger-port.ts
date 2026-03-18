@@ -28,15 +28,15 @@
  *   - DebugTransport interface implementations
  */
 
-import type { DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from './types'
+import type { DebugConnectionConfig, DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from './types'
 
 export interface DebuggerPort {
   /**
    * Connect to a debug target.
-   * The adapter resolves the actual transport (TCP, RTU, WebSocket, WebRTC, simulator)
-   * based on the current device configuration and platform capabilities.
+   * @param config — Connection target (TCP host, RTU serial, WebSocket, or simulator).
+   *                 The adapter maps this to the platform's transport mechanism.
    */
-  connect(): Promise<{ success: boolean; error?: string }>
+  connect(config: DebugConnectionConfig): Promise<{ success: boolean; error?: string }>
 
   /** Disconnect from the current debug target. */
   disconnect(): Promise<{ success: boolean }>
@@ -59,8 +59,9 @@ export interface DebuggerPort {
   /**
    * Verify that the running program matches the expected MD5 hash.
    * Used to detect program mismatch before starting a debug session.
+   * @param config — Connection target used for the verification request.
    */
-  verifyMd5(expectedMd5: string): Promise<Md5VerifyResult>
+  verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult>
 
   /**
    * Read the MD5 hash of the compiled ST program from the debug artifacts.

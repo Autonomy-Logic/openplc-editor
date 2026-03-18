@@ -1,4 +1,3 @@
-import { createDirectory, fileOrDirectoryExists } from '../../../utils'
 import { projectDefaultFilesMapSchema, projectPouDirectories } from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -24,6 +23,8 @@ import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, extname, join, sep } from 'path'
 import { ZodTypeAny } from 'zod'
+
+import { createDirectory, fileOrDirectoryExists } from '../../../utils'
 
 /**
  * Checks if the given directory is a valid project directory according to the expected structure.
@@ -349,12 +350,30 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
       throw new Error(`Unsupported language: ${language}`)
     }
 
-    const result = PLCPouSchema.safeParse(pou)
-    if (!result.success) {
-      throw new Error(`Parsed POU failed validation: ${result.error.message}`)
+    // The text parser returns the port format ({name, pouType, interface, body})
+    // but the rest of the main process pipeline expects the old discriminated-union
+    // format ({type, data: {name, variables, body, documentation}}).
+    // Convert to old format for compatibility.
+    const portPou = pou as unknown as {
+      name: string
+      pouType: string
+      interface?: { returnType?: string; variables: unknown[] }
+      body: { language: string; value: unknown }
+      documentation?: string
     }
+    const oldFormatPou = {
+      type: portPou.pouType,
+      data: {
+        language: language as 'st' | 'il' | 'ld' | 'fbd' | 'python' | 'cpp',
+        name: portPou.name,
+        variables: portPou.interface?.variables ?? [],
+        ...(portPou.pouType === 'function' ? { returnType: portPou.interface?.returnType ?? '' } : {}),
+        body: portPou.body,
+        documentation: portPou.documentation ?? '',
+      },
+    } as PLCPou
 
-    return result.data
+    return oldFormatPou
   } catch (error: unknown) {
     if (error instanceof Error) {
       throw new Error(`Failed to parse POU file ${fileName}: ${error.message}`)

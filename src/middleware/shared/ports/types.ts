@@ -402,7 +402,7 @@ export interface ProjectMeta {
 export type CompilerType = 'arduino-cli' | 'openplc-compiler' | 'simulator'
 
 export interface BoardInfo {
-  compiler: CompilerType | string
+  compiler: CompilerType | (string & {})
   core: string
   preview: string
   specs: Record<string, string>
@@ -502,6 +502,19 @@ export interface RuntimeLogEntry {
 // ---------------------------------------------------------------------------
 // Debugger
 // ---------------------------------------------------------------------------
+
+export type DebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator'
+
+export interface DebugConnectionConfig {
+  connectionType: DebugConnectionType
+  connectionParams: {
+    ipAddress?: string
+    port?: string
+    baudRate?: number
+    slaveId?: number
+    jwtToken?: string
+  }
+}
 
 export interface DebugVariableResult {
   success: boolean

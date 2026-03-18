@@ -15,7 +15,6 @@
 
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
-import type { EditorDebugConnectionConfig } from './adapters/editor/debugger-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
@@ -32,14 +31,9 @@ import type { PlatformPorts } from './shared/providers/types'
  * Set by the store/UI when the user configures or connects to a device.
  */
 let _runtimeIpAddress = ''
-let _debugConnectionConfig: EditorDebugConnectionConfig | null = null
 
 export function setRuntimeIpAddress(ip: string): void {
   _runtimeIpAddress = ip
-}
-
-export function setDebugConnectionConfig(config: EditorDebugConnectionConfig | null): void {
-  _debugConnectionConfig = config
 }
 
 /**
@@ -48,7 +42,7 @@ export function setDebugConnectionConfig(config: EditorDebugConnectionConfig | n
 export const editorPorts: PlatformPorts = {
   compiler: createEditorCompilerAdapter(),
   runtime: createEditorRuntimeAdapter(() => _runtimeIpAddress),
-  debugger: createEditorDebuggerAdapter(() => _debugConnectionConfig),
+  debugger: createEditorDebuggerAdapter(),
   simulator: createEditorSimulatorAdapter(),
   project: createEditorProjectAdapter(),
   device: createEditorDeviceAdapter(),

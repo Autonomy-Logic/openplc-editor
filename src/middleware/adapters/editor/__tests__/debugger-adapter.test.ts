@@ -1,19 +1,17 @@
 import type { DebuggerPort } from '../../../shared/ports/debugger-port'
-import type { EditorDebugConnectionConfig } from '../debugger-adapter'
+import type { DebugConnectionConfig } from '../../../shared/ports/types'
 import { createEditorDebuggerAdapter } from '../debugger-adapter'
 
 let adapter: DebuggerPort
-let mockConnectionConfig: EditorDebugConnectionConfig | null
+const tcpConfig: DebugConnectionConfig = {
+  connectionType: 'tcp',
+  connectionParams: {
+    ipAddress: '192.168.1.100',
+    port: '502',
+  },
+}
 
 beforeEach(() => {
-  mockConnectionConfig = {
-    connectionType: 'tcp',
-    connectionParams: {
-      ipAddress: '192.168.1.100',
-      port: '502',
-    },
-  }
-
   window.bridge = {
     debuggerConnect: jest.fn().mockResolvedValue({ success: true }),
     debuggerDisconnect: jest.fn().mockResolvedValue({ success: true }),
@@ -39,7 +37,7 @@ beforeEach(() => {
     }),
   } as unknown as typeof window.bridge
 
-  adapter = createEditorDebuggerAdapter(() => mockConnectionConfig)
+  adapter = createEditorDebuggerAdapter()
 })
 
 // ---------------------------------------------------------------------------
@@ -48,7 +46,7 @@ beforeEach(() => {
 
 describe('connect', () => {
   it('delegates to bridge with connection type and params', async () => {
-    const result = await adapter.connect()
+    const result = await adapter.connect(tcpConfig)
 
     expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('tcp', {
       ipAddress: '192.168.1.100',
@@ -59,7 +57,7 @@ describe('connect', () => {
 
   it('sets connected state on success', async () => {
     expect(adapter.isConnected()).toBe(false)
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     expect(adapter.isConnected()).toBe(true)
   })
 
@@ -68,45 +66,32 @@ describe('connect', () => {
       success: false,
       error: 'Connection refused',
     })
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     expect(adapter.isConnected()).toBe(false)
-  })
-
-  it('returns error when no connection config', async () => {
-    mockConnectionConfig = null
-    const result = await adapter.connect()
-
-    expect(result).toEqual({ success: false, error: 'No debug connection configured' })
-    expect(window.bridge.debuggerConnect).not.toHaveBeenCalled()
   })
 
   it('catches bridge errors', async () => {
     ;(window.bridge.debuggerConnect as jest.Mock).mockRejectedValue(new Error('IPC failed'))
-    const result = await adapter.connect()
+    const result = await adapter.connect(tcpConfig)
 
     expect(result).toEqual({ success: false, error: 'IPC failed' })
   })
 
   it('supports simulator connection type', async () => {
-    mockConnectionConfig = {
-      connectionType: 'simulator',
-      connectionParams: {},
-    }
-    await adapter.connect()
+    await adapter.connect({ connectionType: 'simulator', connectionParams: {} })
 
     expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('simulator', {})
   })
 
   it('supports websocket connection type with JWT', async () => {
-    mockConnectionConfig = {
+    await adapter.connect({
       connectionType: 'websocket',
       connectionParams: {
         ipAddress: '10.0.0.1',
         port: '8443',
         jwtToken: 'my-jwt',
       },
-    }
-    await adapter.connect()
+    })
 
     expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('websocket', {
       ipAddress: '10.0.0.1',
@@ -116,15 +101,14 @@ describe('connect', () => {
   })
 
   it('supports RTU connection type with serial params', async () => {
-    mockConnectionConfig = {
+    await adapter.connect({
       connectionType: 'rtu',
       connectionParams: {
         port: '/dev/ttyUSB0',
         baudRate: 115200,
         slaveId: 1,
       },
-    }
-    await adapter.connect()
+    })
 
     expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('rtu', {
       port: '/dev/ttyUSB0',
@@ -140,7 +124,7 @@ describe('connect', () => {
 
 describe('disconnect', () => {
   it('delegates to bridge', async () => {
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     const result = await adapter.disconnect()
 
     expect(window.bridge.debuggerDisconnect).toHaveBeenCalled()
@@ -148,7 +132,7 @@ describe('disconnect', () => {
   })
 
   it('clears connected state', async () => {
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     expect(adapter.isConnected()).toBe(true)
 
     await adapter.disconnect()
@@ -161,7 +145,7 @@ describe('disconnect', () => {
     adapter.onDisconnected(cb1)
     adapter.onDisconnected(cb2)
 
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     await adapter.disconnect()
 
     expect(cb1).toHaveBeenCalledTimes(1)
@@ -173,7 +157,7 @@ describe('disconnect', () => {
     const cb = jest.fn()
     adapter.onDisconnected(cb)
 
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     const result = await adapter.disconnect()
 
     expect(adapter.isConnected()).toBe(false)
@@ -254,7 +238,7 @@ describe('setVariable', () => {
 
 describe('verifyMd5', () => {
   it('delegates to bridge with connection config and expected MD5', async () => {
-    const result = await adapter.verifyMd5('abc123def456abc123def456abc123de')
+    const result = await adapter.verifyMd5('abc123def456abc123def456abc123de', tcpConfig)
 
     expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith(
       'tcp',
@@ -268,33 +252,22 @@ describe('verifyMd5', () => {
     })
   })
 
-  it('returns error when no connection config', async () => {
-    mockConnectionConfig = null
-    const result = await adapter.verifyMd5('abc123')
-
-    expect(result).toEqual({ success: false, error: 'No debug connection configured' })
-    expect(window.bridge.debuggerVerifyMd5).not.toHaveBeenCalled()
-  })
-
-  it('reads config dynamically per call', async () => {
-    await adapter.verifyMd5('md5-1')
+  it('uses different configs per call', async () => {
+    await adapter.verifyMd5('md5-1', tcpConfig)
     expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith(
       'tcp',
       { ipAddress: '192.168.1.100', port: '502' },
       'md5-1',
     )
 
-    mockConnectionConfig = {
-      connectionType: 'simulator',
-      connectionParams: {},
-    }
-    await adapter.verifyMd5('md5-2')
+    const simConfig: DebugConnectionConfig = { connectionType: 'simulator', connectionParams: {} }
+    await adapter.verifyMd5('md5-2', simConfig)
     expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('simulator', {}, 'md5-2')
   })
 
   it('catches bridge errors', async () => {
     ;(window.bridge.debuggerVerifyMd5 as jest.Mock).mockRejectedValue(new Error('MD5 check failed'))
-    const result = await adapter.verifyMd5('abc123')
+    const result = await adapter.verifyMd5('abc123', tcpConfig)
 
     expect(result).toEqual({ success: false, error: 'MD5 check failed' })
   })
@@ -355,7 +328,7 @@ describe('onDisconnected', () => {
     const cb = jest.fn()
     const unsub = adapter.onDisconnected(cb)
 
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     unsub()
     await adapter.disconnect()
 
@@ -371,7 +344,7 @@ describe('onDisconnected', () => {
     adapter.onDisconnected(cb3)
 
     unsub2()
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     await adapter.disconnect()
 
     expect(cb1).toHaveBeenCalledTimes(1)
@@ -390,38 +363,13 @@ describe('isConnected', () => {
   })
 
   it('returns true after successful connect', async () => {
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     expect(adapter.isConnected()).toBe(true)
   })
 
   it('returns false after disconnect', async () => {
-    await adapter.connect()
+    await adapter.connect(tcpConfig)
     await adapter.disconnect()
     expect(adapter.isConnected()).toBe(false)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Connection config getter reactivity
-// ---------------------------------------------------------------------------
-
-describe('connection config getter', () => {
-  it('reads config dynamically on each call', async () => {
-    await adapter.connect()
-    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('tcp', {
-      ipAddress: '192.168.1.100',
-      port: '502',
-    })
-
-    mockConnectionConfig = {
-      connectionType: 'rtu',
-      connectionParams: { port: '/dev/ttyS0', baudRate: 9600, slaveId: 2 },
-    }
-    await adapter.connect()
-    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('rtu', {
-      port: '/dev/ttyS0',
-      baudRate: 9600,
-      slaveId: 2,
-    })
   })
 })

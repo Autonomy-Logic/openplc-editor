@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import type { DebugConnectionConfig, DebugTreeNode } from '../../../../middleware/shared/ports/types'
 import { useCompiler, useDebugger, useProject, useRuntime, useSimulator } from '../../../../middleware/shared/providers'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
-import { isOpenPLCRuntimeTarget } from '../../../utils/device'
+import { parseDebugFile } from '../../../utils/debug-parser'
+import {
+  buildDebugVariableTreeMap,
+  buildFbInstanceMap,
+  buildVariableIndexMap,
+} from '../../../utils/debugger-session'
+import { isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target } from '../../../utils/device'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { prepareSavePayload } from '../../../utils/save-project'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
@@ -31,6 +38,38 @@ const showDebuggerMessage = (
       onResponse: (buttonIndex: number) => resolve(buttonIndex),
     })
   })
+}
+
+const showDebuggerIpInput = (title: string, message: string, defaultValue: string): Promise<string | null> => {
+  return new Promise((resolve) => {
+    useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
+      title,
+      message,
+      defaultValue,
+      onSubmit: (value: string) => resolve(value),
+      onCancel: () => resolve(null),
+    })
+  })
+}
+
+/** Forward compile/debug progress lines to the console log. */
+const logCompilerEvent = (
+  event: { message?: string; level?: string },
+  log: (entry: { id: string; level: 'error' | 'debug' | 'info' | 'warning'; message: string }) => void,
+) => {
+  if (!event.message) return
+  event.message
+    .trim()
+    .split('\n')
+    .forEach((line) => {
+      if (line) {
+        log({
+          id: crypto.randomUUID(),
+          level: (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info',
+          message: line,
+        })
+      }
+    })
 }
 
 const disabledButtonClass = 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
@@ -78,7 +117,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const { workspace, workspaceActions } = useOpenPLCStore.getState()
       if (workspace.isDebuggerVisible) {
         void debuggerPort.disconnect()
-        workspaceActions.setDebuggerVisible(false)
         workspaceActions.clearDebugState()
       }
     })
@@ -150,20 +188,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               .deviceActions.setPlcRuntimeStatus(event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>)
           }
 
-          if (event.message) {
-            event.message
-              .trim()
-              .split('\n')
-              .forEach((line) => {
-                if (line) {
-                  addLog({
-                    id: crypto.randomUUID(),
-                    level: (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info',
-                    message: line,
-                  })
-                }
-              })
-          }
+          logCompilerEvent(event, addLog)
           if (event.firmwarePath && isSimulatorBoard) {
             void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
               if (loadResult.success) {
@@ -219,15 +244,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleBuildRef = useRef(handleBuild)
   handleBuildRef.current = handleBuild
 
-  const connectDebuggerAfterBuild = async () => {
-    const { workspaceActions, consoleActions: logActions } = useOpenPLCStore.getState()
+  // ---------------------------------------------------------------------------
+  // connectDebuggerAfterBuild — shared by simulator Start and debugger flows
+  // ---------------------------------------------------------------------------
+
+  const connectDebuggerAfterBuild = async (config?: DebugConnectionConfig) => {
+    const { project, workspaceActions, consoleActions: logActions } = useOpenPLCStore.getState()
     const boardTarget = deviceDefinitions.configuration.deviceBoard
-    const projectPath = projectMeta.path
+    const projectPath = project.meta.path
+
+    const debugConfig = config ?? { connectionType: 'simulator' as const, connectionParams: {} }
 
     logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Connecting debugger...' })
 
     try {
-      // Read debug file and set up variable mapping
+      // Read debug file
       const debugFileResult = await debuggerPort.readDebugFile(projectPath, boardTarget)
       if (!debugFileResult.success || !debugFileResult.content) {
         logActions.addLog({
@@ -240,8 +271,55 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       workspaceActions.setDebugCContent(debugFileResult.content)
 
+      // Parse debug file and build variable maps
+      const parsed = parseDebugFile(debugFileResult.content)
+      const instances = project.data.configurations.resource.instances
+
+      // Build variable index map
+      const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, parsed)
+      for (const w of warnings) {
+        logActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
+      }
+
+      // Build debug variable tree
+      let treeMap = new Map<string, DebugTreeNode>()
+      try {
+        const treeResult = buildDebugVariableTreeMap(
+          project.data.pous,
+          instances,
+          parsed.variables,
+          project.data,
+        )
+        treeMap = treeResult.treeMap
+
+        logActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: `Debug tree builder: Built ${treeResult.trees.length} trees (${treeResult.complexCount} complex).`,
+        })
+      } catch {
+        logActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: 'Debug tree builder encountered errors.',
+        })
+      }
+
+      // Build FB instance map
+      const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
+
+      const fbTypesCount = fbDebugInstancesMap.size
+      const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
+      if (fbTypesCount > 0) {
+        logActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: `FB instance map: Found ${totalFbInstances} instances across ${fbTypesCount} FB types.`,
+        })
+      }
+
       // Connect debugger
-      const connectResult = await debuggerPort.connect()
+      const connectResult = await debuggerPort.connect(debugConfig)
       if (!connectResult.success) {
         logActions.addLog({
           id: crypto.randomUUID(),
@@ -251,8 +329,29 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
+      // Store debug artifacts in workspace
+      workspaceActions.setDebugVariableIndexes(indexMap)
+      workspaceActions.setDebugVariableTree(treeMap)
+      workspaceActions.setFbDebugInstances(fbDebugInstancesMap)
+
+      // Set default selected instance for each FB type
+      fbDebugInstancesMap.forEach((instanceList, fbTypeName) => {
+        if (instanceList.length > 0) {
+          workspaceActions.setFbSelectedInstance(fbTypeName, instanceList[0].key)
+        }
+      })
+
+      // Set target IP for non-simulator connections
+      if (debugConfig.connectionType !== 'simulator' && debugConfig.connectionParams.ipAddress) {
+        workspaceActions.setDebuggerTargetIp(debugConfig.connectionParams.ipAddress)
+      }
+
       workspaceActions.setDebuggerVisible(true)
-      logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Debugger connected.' })
+      logActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: `Debugger connected. Found ${indexMap.size} debug variables.`,
+      })
     } catch (err: unknown) {
       logActions.addLog({
         id: crypto.randomUUID(),
@@ -261,6 +360,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       })
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // PLC control (Start/Stop for runtime targets)
+  // ---------------------------------------------------------------------------
 
   const handlePlcControl = useCallback(async (): Promise<void> => {
     if (!jwtToken || connectionStatus !== 'connected') return
@@ -303,6 +406,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
   }, [runtime, jwtToken, connectionStatus, plcStatus, addLog])
 
+  // ---------------------------------------------------------------------------
+  // Simulator control (Start/Stop simulator + auto-debug)
+  // ---------------------------------------------------------------------------
+
   const handleSimulatorControl = useCallback(async (): Promise<void> => {
     try {
       if (simulatorRunning) {
@@ -310,7 +417,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         const { workspace, workspaceActions } = useOpenPLCStore.getState()
         if (workspace.isDebuggerVisible) {
           await debuggerPort.disconnect()
-          workspaceActions.setDebuggerVisible(false)
           workspaceActions.clearDebugState()
         }
         await simulator.stop()
@@ -333,41 +439,312 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
   }, [simulator, debuggerPort, simulatorRunning, addLog])
 
+  // ---------------------------------------------------------------------------
+  // handleMd5Verification — runs after debug compilation for non-simulator
+  // ---------------------------------------------------------------------------
+
+  const handleMd5Verification = async (
+    projectPath: string,
+    boardTarget: string,
+    debugConfig: DebugConnectionConfig,
+    isRuntimeTarget: boolean,
+  ) => {
+    const targetIpAddress = debugConfig.connectionParams.ipAddress
+    const { consoleActions, runtimeConnection, deviceActions } = useOpenPLCStore.getState()
+
+    try {
+      // If runtime target + PLC stopped, offer to start
+      if (isRuntimeTarget) {
+        const currentPlcStatus = runtimeConnection.plcStatus
+        const currentJwtToken = runtimeConnection.jwtToken
+
+        if (currentPlcStatus === 'STOPPED' && currentJwtToken) {
+          const response = await showDebuggerMessage(
+            'question',
+            'PLC Stopped',
+            'The PLC is currently stopped. The debugger requires the PLC to be running. Would you like to start the PLC now?',
+            ['Yes', 'No'],
+          )
+
+          if (response === 1) {
+            consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Debugger session cancelled.' })
+            setIsDebuggerProcessing(false)
+            return
+          }
+
+          consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting PLC...' })
+
+          const startResult = await runtime.startPlc()
+          if (!startResult.success) {
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'error',
+              message: `Failed to start PLC: ${startResult.error || 'Unknown error'}`,
+            })
+            await showDebuggerMessage(
+              'error',
+              'Start PLC Failed',
+              `Could not start the PLC: ${startResult.error || 'Unknown error'}`,
+              ['OK'],
+            )
+            setIsDebuggerProcessing(false)
+            return
+          }
+
+          deviceActions.setPlcRuntimeStatus('RUNNING')
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: 'PLC started successfully. Waiting 2 seconds...',
+          })
+
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+        }
+      }
+
+      // Extract MD5 from compiled program
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: 'Extracting MD5 from compiled program...',
+      })
+
+      const programStResult = await debuggerPort.readProgramMd5(projectPath, boardTarget)
+
+      if (!programStResult.success || !programStResult.md5) {
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Failed to extract MD5: ${programStResult.error ?? 'Unknown error'}`,
+        })
+
+        await showDebuggerMessage(
+          'error',
+          'MD5 Extraction Failed',
+          programStResult.error ?? 'Could not extract MD5 from program.st',
+          ['OK'],
+        )
+        setIsDebuggerProcessing(false)
+        return
+      }
+
+      const expectedMd5 = programStResult.md5
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: `Program MD5: ${expectedMd5}`,
+      })
+
+      const targetDisplay =
+        debugConfig.connectionType === 'simulator'
+          ? 'simulator'
+          : debugConfig.connectionType === 'tcp' || debugConfig.connectionType === 'websocket'
+            ? targetIpAddress
+            : debugConfig.connectionParams.port
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: `Requesting MD5 from target at ${targetDisplay}...`,
+      })
+
+      // Verify MD5 against target
+      const verifyResult = await debuggerPort.verifyMd5(expectedMd5, debugConfig)
+
+      if (!verifyResult.success) {
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `MD5 verification failed: ${verifyResult.error ?? 'Unknown error'}`,
+        })
+
+        await showDebuggerMessage(
+          'error',
+          'Connection Error',
+          `Could not verify MD5 with target: ${verifyResult.error ?? 'Unknown error'}`,
+          ['OK'],
+        )
+        setIsDebuggerProcessing(false)
+        return
+      }
+
+      if (verifyResult.match) {
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: 'MD5 verification successful. Starting debugger...',
+        })
+
+        await connectDebuggerAfterBuild(debugConfig)
+        setIsDebuggerProcessing(false)
+      } else {
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${expectedMd5}`,
+        })
+
+        const response = await showDebuggerMessage(
+          'warning',
+          'Program Mismatch',
+          'The program running on the target does not match the program opened in the editor. Would you like to upload the current project to the target?',
+          ['Yes', 'No'],
+        )
+
+        if (response === 0) {
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: 'Uploading program to target...',
+          })
+
+          // Recompile with upload (compileOnly=false)
+          try {
+            const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
+            const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
+
+            const compileResult = await compiler.compileProgram(
+              {
+                projectData,
+                boardTarget,
+                projectPath,
+                compileOnly: false,
+                isSimulator: false,
+                runtimeIpAddress,
+                runtimeJwtToken,
+              },
+              (event) => logCompilerEvent(event, consoleActions.addLog),
+            )
+
+            if (compileResult.success) {
+              consoleActions.addLog({
+                id: crypto.randomUUID(),
+                level: 'info',
+                message: 'Upload completed. Restarting debugger verification...',
+              })
+
+              // Wait 2 seconds then re-verify
+              await new Promise((resolve) => setTimeout(resolve, 2000))
+              void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
+            } else {
+              consoleActions.addLog({
+                id: crypto.randomUUID(),
+                level: 'error',
+                message: `Upload failed: ${compileResult.error ?? 'Unknown error'}`,
+              })
+              setIsDebuggerProcessing(false)
+            }
+          } catch (err: unknown) {
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'error',
+              message: `Upload error: ${getErrorMessage(err)}`,
+            })
+            setIsDebuggerProcessing(false)
+          }
+        } else {
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: 'Debugger session cancelled.',
+          })
+          setIsDebuggerProcessing(false)
+        }
+      }
+    } catch (error: unknown) {
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Unexpected error during MD5 verification: ${getErrorMessage(error)}`,
+      })
+      setIsDebuggerProcessing(false)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // handleDebuggerClick — full debugger orchestration for non-simulator targets
+  // ---------------------------------------------------------------------------
+
   const handleDebuggerClick = useCallback(async () => {
+    // Simulator target uses the unified Start/Stop flow instead
+    if (isSimulatorBoard) return
+
+    const { workspace, project, deviceDefinitions: devDefs, workspaceActions, consoleActions, deviceActions } =
+      useOpenPLCStore.getState()
+
+    if (workspace.isDebuggerVisible) {
+      await debuggerPort.disconnect()
+      workspaceActions.setDebuggerTargetIp(null)
+      workspaceActions.setDebugForcedVariables(new Map())
+      workspaceActions.clearFbDebugContext()
+      workspaceActions.setDebuggerVisible(false)
+      return
+    }
+
     if (isDebuggerProcessing) return
     setIsDebuggerProcessing(true)
 
     try {
-      const { workspace, workspaceActions, runtimeConnection } = useOpenPLCStore.getState()
-
-      if (workspace.isDebuggerVisible) {
-        // Disconnect
-        await debuggerPort.disconnect()
-        workspaceActions.setDebuggerVisible(false)
-        workspaceActions.clearDebugState()
-        return
+      // Save if unsaved
+      if (editingState === 'unsaved') {
+        const saved = await executeSave()
+        if (!saved) {
+          setIsDebuggerProcessing(false)
+          return
+        }
       }
 
-      const boardTarget = deviceDefinitions.configuration.deviceBoard
-      const projectPath = projectMeta.path
-      const isRuntimeTarget = isOpenPLCRuntimeTarget(currentBoardInfo)
+      const boardTarget = devDefs.configuration.deviceBoard
+      const projectPath = project.meta.path
+      const boardInfo = availableBoards.get(boardTarget)
+      const isRuntimeTarget = isOpenPLCRuntimeTarget(boardInfo)
+      const isRuntimeV4 = isOpenPLCRuntimeV4Target(boardTarget)
 
-      // Runtime target: require connection first
+      let targetIpAddress: string | undefined
+      let debugConfig: DebugConnectionConfig = { connectionType: 'tcp', connectionParams: {} }
+
       if (isRuntimeTarget) {
-        if (runtimeConnection.connectionStatus !== 'connected') {
+        // Runtime target: require connection
+        const runtimeConnectionStatus = useOpenPLCStore.getState().runtimeConnection.connectionStatus
+        const runtimeIpAddress = devDefs.configuration.runtimeIpAddress
+
+        if (runtimeConnectionStatus !== 'connected' || !runtimeIpAddress) {
           await showDebuggerMessage(
             'warning',
             'Connection Required',
             'You need to connect to the target before starting a debugger session.',
             ['OK'],
           )
+          setIsDebuggerProcessing(false)
           return
         }
-      }
 
-      // Non-runtime, non-simulator: check Modbus and DHCP
-      if (!isRuntimeTarget && !isSimulatorBoard) {
-        const { communicationPreferences, modbusTCP } = deviceDefinitions.configuration.communicationConfiguration
+        targetIpAddress = runtimeIpAddress
+
+        if (isRuntimeV4) {
+          const currentJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || undefined
+          if (!currentJwtToken) {
+            await showDebuggerMessage(
+              'error',
+              'Authentication Required',
+              'JWT token is missing. Please reconnect to the runtime.',
+              ['OK'],
+            )
+            setIsDebuggerProcessing(false)
+            return
+          }
+          debugConfig = {
+            connectionType: 'websocket',
+            connectionParams: { ipAddress: runtimeIpAddress, jwtToken: currentJwtToken },
+          }
+        } else {
+          debugConfig = {
+            connectionType: 'tcp',
+            connectionParams: { ipAddress: runtimeIpAddress },
+          }
+        }
+      } else {
+        // Embedded hardware: determine TCP or RTU
+        const { modbusTCP, modbusRTU, communicationPreferences } = devDefs.configuration.communicationConfiguration
         const rtuEnabled = communicationPreferences.enabledRTU
         const tcpEnabled = communicationPreferences.enabledTCP
 
@@ -378,97 +755,138 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             'Modbus must be enabled on the target to start a debugger session.',
             ['OK'],
           )
+          setIsDebuggerProcessing(false)
           return
         }
 
-        // DHCP IP input for TCP mode
-        if (tcpEnabled && communicationPreferences.enabledDHCP) {
-          const ipAddress = modbusTCP.tcpStaticHostConfiguration?.ipAddress
-          if (!ipAddress || ipAddress === '0.0.0.0') {
-            useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
-              title: 'Target IP Address',
-              message: 'DHCP is enabled. Enter the IP address of the target device:',
-              defaultValue: '',
-              onSubmit: (ip: string) => {
-                useOpenPLCStore.getState().modalActions.closeModal()
-                addLog({
-                  id: crypto.randomUUID(),
-                  level: 'info',
-                  message: `Using DHCP target IP: ${ip}`,
-                })
-              },
-              onCancel: () => {
-                useOpenPLCStore.getState().modalActions.closeModal()
-              },
-            })
+        let useModbusTcp = false
+
+        if (rtuEnabled && tcpEnabled) {
+          const response = await showDebuggerMessage(
+            'question',
+            'Select Modbus Protocol',
+            'Both Modbus RTU and Modbus TCP are enabled. Which would you like to use?',
+            ['Modbus RTU (Serial)', 'Modbus TCP'],
+          )
+          useModbusTcp = response === 1
+        } else {
+          useModbusTcp = tcpEnabled
+        }
+
+        if (useModbusTcp) {
+          const dhcpEnabled = communicationPreferences.enabledDHCP
+
+          if (dhcpEnabled) {
+            const previousIp = useOpenPLCStore.getState().deviceDefinitions.temporaryDhcpIp || ''
+            const result = await showDebuggerIpInput(
+              'Target IP Address',
+              'Enter the IP address of the target device:',
+              previousIp,
+            )
+
+            if (result === null || !result) {
+              setIsDebuggerProcessing(false)
+              return
+            }
+
+            targetIpAddress = result
+            deviceActions.setTemporaryDhcpIp(targetIpAddress)
+          } else {
+            targetIpAddress = modbusTCP.tcpStaticHostConfiguration.ipAddress || undefined
+
+            if (!targetIpAddress) {
+              await showDebuggerMessage('error', 'Configuration Error', 'No IP address configured for Modbus TCP.', [
+                'OK',
+              ])
+              setIsDebuggerProcessing(false)
+              return
+            }
+          }
+
+          debugConfig = {
+            connectionType: 'tcp',
+            connectionParams: { ipAddress: targetIpAddress },
+          }
+        } else {
+          // Modbus RTU
+          const rtuPort = devDefs.configuration.communicationPort
+          const rtuBaudRate = parseInt(modbusRTU.rtuBaudRate, 10)
+          const rtuSlaveId = modbusRTU.rtuSlaveId ?? undefined
+
+          if (!rtuPort) {
+            await showDebuggerMessage(
+              'error',
+              'Configuration Error',
+              'No communication port selected for Modbus RTU.',
+              ['OK'],
+            )
+            setIsDebuggerProcessing(false)
             return
+          }
+
+          if (rtuSlaveId === undefined) {
+            await showDebuggerMessage('error', 'Configuration Error', 'No slave ID configured for Modbus RTU.', ['OK'])
+            setIsDebuggerProcessing(false)
+            return
+          }
+
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Using Modbus RTU: Port=${rtuPort}, Baud=${rtuBaudRate}, SlaveID=${rtuSlaveId}`,
+          })
+
+          debugConfig = {
+            connectionType: 'rtu',
+            connectionParams: { port: rtuPort, baudRate: rtuBaudRate, slaveId: rtuSlaveId },
           }
         }
       }
 
-      // Check PLC status — if stopped and runtime target, offer to start
-      if (isRuntimeTarget && runtimeConnection.plcStatus === 'STOPPED') {
-        const choice = await showDebuggerMessage(
-          'question',
-          'PLC Stopped',
-          'The PLC is currently stopped. Would you like to start it before connecting the debugger?',
-          ['Start PLC', 'Continue Anyway', 'Cancel'],
-        )
-        if (choice === 0) {
-          await runtime.startPlc()
-        } else if (choice === 2) {
-          return
-        }
-      }
+      // Run debug compilation
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: 'Starting debug compilation...',
+      })
 
-      // Verify MD5 before connecting
-      const md5Result = await debuggerPort.readProgramMd5(projectPath, boardTarget)
-      if (!md5Result.success || !md5Result.md5) {
-        const choice = await showDebuggerMessage(
-          'warning',
-          'Debug Data Not Found',
-          'No debug data found. Would you like to compile the project first?',
-          ['Compile', 'Cancel'],
-        )
-        if (choice === 0) {
-          await handleBuildRef.current()
-        }
+      const debugCompileResult = await compiler.compileForDebug(
+        { projectData, boardTarget, projectPath },
+        (event) => logCompilerEvent(event, consoleActions.addLog),
+      )
+
+      if (!debugCompileResult.success) {
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Debug compilation failed: ${debugCompileResult.error ?? 'Unknown error'}`,
+        })
+        setIsDebuggerProcessing(false)
         return
       }
 
-      const verifyResult = await debuggerPort.verifyMd5(md5Result.md5)
-      if (!verifyResult.success) {
-        const choice = await showDebuggerMessage(
-          'warning',
-          'Program Mismatch',
-          'The running program does not match the compiled program. Do you want to recompile?',
-          ['Recompile', 'Continue Anyway', 'Cancel'],
-        )
-        if (choice === 0) {
-          await handleBuildRef.current()
-          return
-        }
-        if (choice === 2) return
-      }
-
-      await connectDebuggerAfterBuild()
-    } catch (err: unknown) {
-      addLog({
+      // Proceed to MD5 verification
+      void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
+    } catch (error: unknown) {
+      consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'error',
-        message: `Debugger error: ${getErrorMessage(err)}`,
+        message: `Error during debugger initialization: ${getErrorMessage(error)}`,
       })
-    } finally {
       setIsDebuggerProcessing(false)
     }
   }, [
     debuggerPort,
     runtime,
+    compiler,
+    projectData,
     deviceDefinitions,
     projectMeta,
-    currentBoardInfo,
+    availableBoards,
     isSimulatorBoard,
     isDebuggerProcessing,
+    editingState,
+    executeSave,
     addLog,
   ])
 
