@@ -5,8 +5,14 @@
  * index.ts re-exports from here so that existing consumers are unaffected.
  */
 
+import type { Node } from '@xyflow/react'
+
 import * as buildNodes from './buildNodes'
 import * as constants from './utils/constants'
+
+export const checkIfElementIsNode = (element: unknown): element is Node => {
+  return (element as Node)?.data !== undefined
+}
 
 type CustomLadderNodeTypes = {
   [key: string]: {

@@ -103,7 +103,6 @@ export const BlockNodeElement = <T extends object>({
           break
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /**
@@ -114,7 +113,6 @@ export const BlockNodeElement = <T extends object>({
       setBlockNameValue(blockName)
       return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
   const resolveLibraryBlock = (blockNameValue: string, libraries: LibraryState['libraries'], pous: PLCPou[]) => {
@@ -433,10 +431,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { name, number } = checkVariableName(
-              variables.all,
-              (data.variant as BlockVariant).name.toUpperCase(),
-            )
+            const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
 
             handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`, true)
             hasCreatedRef.current = true
@@ -449,7 +444,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           break
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
   /**
@@ -513,7 +507,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     setWrongVariable(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pous, data.variable.name])
 
   /**

@@ -61,9 +61,7 @@ export default function App() {
   } = useOpenPLCStore()
 
   // Sync store runtime IP to the platform adapter so the runtime port can access it
-  const runtimeIpAddress = useOpenPLCStore(
-    (state) => state.deviceDefinitions.configuration.runtimeIpAddress || '',
-  )
+  const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
   useEffect(() => {
     setRuntimeIpAddress(runtimeIpAddress)
   }, [runtimeIpAddress])

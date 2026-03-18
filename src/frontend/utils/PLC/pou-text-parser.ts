@@ -1,5 +1,6 @@
 import type { PLCPou, PLCVariable, PouType } from '../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../generate-iec-string-to-variables'
+import { getLanguageFromExtension } from './pou-file-extensions'
 
 /**
  * Helper function to extract documentation from leading comments
@@ -344,4 +345,15 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
     }
     throw new Error('Failed to parse graphical POU: Unknown error')
   }
+}
+
+/**
+ * Detect language from file extension
+ * @param filePath - The file path with extension
+ * @returns The language code
+ * @throws Error if extension is not supported
+ */
+export const detectLanguageFromExtension = (filePath: string): string => {
+  const extension = filePath.slice(filePath.lastIndexOf('.'))
+  return getLanguageFromExtension(extension)
 }

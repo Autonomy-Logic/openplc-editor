@@ -1,8 +1,11 @@
-import { Edge, Node } from '@xyflow/react'
-
 import { RungLadderState } from '@root/frontend/store/slices'
 import { newGraphicalEditorNodeID } from '@root/frontend/utils/new-graphical-editor-node-id'
-import { defaultCustomNodesStyles, nodesBuilder } from '../../../../../../../_atoms/graphical-editor/ladder'
+import { Edge, Node } from '@xyflow/react'
+
+import {
+  defaultCustomNodesStyles,
+  nodesBuilder,
+} from '../../../../../../../_atoms/graphical-editor/ladder/node-builders'
 import { BlockNode, BlockVariant } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { buildEdge } from '../../edges'
 

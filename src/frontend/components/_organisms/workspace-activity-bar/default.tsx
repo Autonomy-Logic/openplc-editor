@@ -5,8 +5,8 @@ import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
-import { getErrorMessage } from '../../../utils/get-error-message'
 import { isOpenPLCRuntimeTarget } from '../../../utils/device'
+import { getErrorMessage } from '../../../utils/get-error-message'
 import { prepareSavePayload } from '../../../utils/save-project'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
@@ -147,9 +147,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           if (event.plcStatus) {
             useOpenPLCStore
               .getState()
-              .deviceActions.setPlcRuntimeStatus(
-                event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>,
-              )
+              .deviceActions.setPlcRuntimeStatus(event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>)
           }
 
           if (event.message) {
@@ -204,7 +202,19 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } finally {
       setIsCompiling(false)
     }
-  }, [compiler, projectData, projectMeta, deviceDefinitions, isSimulatorBoard, simulator, addLog, isCompiling, editingState, executeSave, jwtToken])
+  }, [
+    compiler,
+    projectData,
+    projectMeta,
+    deviceDefinitions,
+    isSimulatorBoard,
+    simulator,
+    addLog,
+    isCompiling,
+    editingState,
+    executeSave,
+    jwtToken,
+  ])
 
   const handleBuildRef = useRef(handleBuild)
   handleBuildRef.current = handleBuild
@@ -357,8 +367,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       // Non-runtime, non-simulator: check Modbus and DHCP
       if (!isRuntimeTarget && !isSimulatorBoard) {
-        const { communicationPreferences, modbusTCP } =
-          deviceDefinitions.configuration.communicationConfiguration
+        const { communicationPreferences, modbusTCP } = deviceDefinitions.configuration.communicationConfiguration
         const rtuEnabled = communicationPreferences.enabledRTU
         const tcpEnabled = communicationPreferences.enabledTCP
 
@@ -452,7 +461,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } finally {
       setIsDebuggerProcessing(false)
     }
-  }, [debuggerPort, runtime, deviceDefinitions, projectMeta, currentBoardInfo, isSimulatorBoard, isDebuggerProcessing, addLog])
+  }, [
+    debuggerPort,
+    runtime,
+    deviceDefinitions,
+    projectMeta,
+    currentBoardInfo,
+    isSimulatorBoard,
+    isDebuggerProcessing,
+    addLog,
+  ])
 
   return (
     <>

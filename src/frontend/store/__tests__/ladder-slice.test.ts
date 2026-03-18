@@ -9,12 +9,31 @@ function makeStore() {
   return createStore<LadderFlowSlice>()(createLadderFlowSlice)
 }
 
+const defaultBlockData = {
+  draggable: true,
+  handles: [],
+  inputHandles: [],
+  outputHandles: [],
+  inputConnector: { id: 'in', glbPosition: { x: 0, y: 50 } },
+  outputConnector: { id: 'out', glbPosition: { x: 150, y: 50 } },
+  variant: { variables: [] },
+  connectedVariables: [],
+}
+
+const defaultRailData = {
+  handles: [{ id: 'rail-handle', x: 0, y: 50, position: 'right', glbPosition: { x: 0, y: 50 } }],
+  inputConnector: { id: 'rail-in', glbPosition: { x: 0, y: 50 } },
+  outputConnector: { id: 'rail-out', glbPosition: { x: 0, y: 50 } },
+}
+
 function makeNode(overrides?: Partial<Node>): Node {
+  const type = overrides?.type ?? 'block'
+  const baseData = type === 'powerRail' ? defaultRailData : defaultBlockData
   return {
     id: overrides?.id ?? 'node-1',
-    type: overrides?.type ?? 'block',
+    type,
     position: overrides?.position ?? { x: 0, y: 0 },
-    data: overrides?.data ?? { draggable: true },
+    data: overrides?.data ? { ...baseData, ...overrides.data } : baseData,
     draggable: overrides?.draggable ?? true,
     selectable: overrides?.selectable ?? true,
   }
@@ -425,32 +444,62 @@ describe('createLadderFlowSlice', () => {
   // -------------------------------------------------------------------------
   // removeNodes
   // -------------------------------------------------------------------------
-  it('removeNodes removes specified nodes and their connected edges', () => {
+  it('removeNodes removes node and short-circuits wires via removeElements', () => {
+    const n1 = makeNode({
+      id: 'n1',
+      data: {
+        outputConnector: { id: 'n1-out', glbPosition: { x: 150, y: 50 } },
+        inputConnector: { id: 'n1-in', glbPosition: { x: 0, y: 50 } },
+      },
+    })
+    const n2 = makeNode({
+      id: 'n2',
+      data: {
+        outputConnector: { id: 'n2-out', glbPosition: { x: 300, y: 50 } },
+        inputConnector: { id: 'n2-in', glbPosition: { x: 150, y: 50 } },
+      },
+    })
     const rung = makeRung({
       nodes: [
         makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
         makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }),
-        makeNode({ id: 'n1' }),
-        makeNode({ id: 'n2' }),
+        n1,
+        n2,
       ],
       edges: [
-        makeEdge({ id: 'e1', source: 'n1', target: 'n2' }),
-        makeEdge({ id: 'e2', source: 'left-rail-rung-1', target: 'n1' }),
+        makeEdge({
+          id: 'e1',
+          source: 'left-rail-rung-1',
+          target: 'n1',
+          sourceHandle: 'rail-out',
+          targetHandle: 'n1-in',
+        }),
+        makeEdge({ id: 'e2', source: 'n1', target: 'n2', sourceHandle: 'n1-out', targetHandle: 'n2-in' }),
+        makeEdge({
+          id: 'e3',
+          source: 'n2',
+          target: 'right-rail-rung-1',
+          sourceHandle: 'n2-out',
+          targetHandle: 'rail-in',
+        }),
       ],
     })
     seedFlowWithRung(store, 'editor-1', rung)
 
-    store
-      .getState()
-      .ladderFlowActions.removeNodes({ editorName: 'editor-1', rungId: 'rung-1', nodes: [makeNode({ id: 'n1' })] })
+    store.getState().ladderFlowActions.removeNodes({ editorName: 'editor-1', rungId: 'rung-1', nodes: [n1] })
 
     const updatedRung = store.getState().ladderFlows[0].rungs[0]
-    expect(updatedRung.nodes.map((n) => n.id)).toEqual(['left-rail-rung-1', 'right-rail-rung-1', 'n2'])
-    expect(updatedRung.edges).toHaveLength(0) // Both edges reference n1
+    const nodeIds = updatedRung.nodes.filter((n) => n.type !== 'variable').map((n) => n.id)
+    expect(nodeIds.sort()).toEqual(['left-rail-rung-1', 'n2', 'right-rail-rung-1'])
+    // Wire is short-circuited: left-rail -> n2 (instead of deleting edges)
+    const mainEdges = updatedRung.edges.filter((e) => !e.source.includes('variable') && !e.target.includes('variable'))
+    expect(mainEdges).toHaveLength(2) // left-rail->n2 and n2->right-rail
+    expect(mainEdges.find((e) => e.source === 'left-rail-rung-1' && e.target === 'n2')).toBeDefined()
+    expect(mainEdges.find((e) => e.source === 'n2' && e.target === 'right-rail-rung-1')).toBeDefined()
     expect(store.getState().ladderFlows[0].updated).toBe(true)
   })
 
-  it('removeNodes also cleans up selectedNodes', () => {
+  it('removeNodes is a no-op when node has no output edge', () => {
     const n1 = makeNode({ id: 'n1' })
     const rung = makeRung({
       nodes: [
@@ -464,7 +513,9 @@ describe('createLadderFlowSlice', () => {
 
     store.getState().ladderFlowActions.removeNodes({ editorName: 'editor-1', rungId: 'rung-1', nodes: [n1] })
 
-    expect(store.getState().ladderFlows[0].rungs[0].selectedNodes).toEqual([])
+    const updatedRung = store.getState().ladderFlows[0].rungs[0]
+    // removeElements returns original rung when no output edge found
+    expect(updatedRung.nodes.map((n) => n.id)).toContain('n1')
   })
 
   // -------------------------------------------------------------------------
@@ -598,13 +649,11 @@ describe('createLadderFlowSlice', () => {
   it('updateReactFlowViewport updates the viewport', () => {
     seedFlowWithRung(store)
 
-    store
-      .getState()
-      .ladderFlowActions.updateReactFlowViewport({
-        editorName: 'editor-1',
-        rungId: 'rung-1',
-        reactFlowViewport: [1200, 400],
-      })
+    store.getState().ladderFlowActions.updateReactFlowViewport({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      reactFlowViewport: [1200, 400],
+    })
 
     expect(store.getState().ladderFlows[0].rungs[0].reactFlowViewport).toEqual([1200, 400])
   })
@@ -612,13 +661,11 @@ describe('createLadderFlowSlice', () => {
   it('updateReactFlowViewport does nothing for nonexistent rung', () => {
     seedFlowWithRung(store)
 
-    store
-      .getState()
-      .ladderFlowActions.updateReactFlowViewport({
-        editorName: 'editor-1',
-        rungId: 'missing',
-        reactFlowViewport: [1200, 400],
-      })
+    store.getState().ladderFlowActions.updateReactFlowViewport({
+      editorName: 'editor-1',
+      rungId: 'missing',
+      reactFlowViewport: [1200, 400],
+    })
 
     expect(store.getState().ladderFlows[0].rungs[0].reactFlowViewport).toEqual([800, 200])
   })
@@ -840,13 +887,11 @@ describe('createLadderFlowSlice', () => {
   })
 
   it('updateReactFlowViewport does nothing for nonexistent editor', () => {
-    store
-      .getState()
-      .ladderFlowActions.updateReactFlowViewport({
-        editorName: 'nonexistent',
-        rungId: 'r',
-        reactFlowViewport: [100, 100],
-      })
+    store.getState().ladderFlowActions.updateReactFlowViewport({
+      editorName: 'nonexistent',
+      rungId: 'r',
+      reactFlowViewport: [100, 100],
+    })
     expect(store.getState().ladderFlows).toEqual([])
   })
 

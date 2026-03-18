@@ -116,7 +116,10 @@ export function createEditorCompilerAdapter(): CompilerPort {
       )
 
       if (validationFailed) {
-        return { success: false, error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.' }
+        return {
+          success: false,
+          error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+        }
       }
 
       const ipcData = toIpcProjectData(processedData)

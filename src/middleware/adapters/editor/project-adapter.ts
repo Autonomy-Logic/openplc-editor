@@ -36,6 +36,7 @@ interface IpcPou {
   type: string
   data: {
     name: string
+    language?: string
     variables: unknown[]
     returnType?: string
     body: { language: string; value: unknown }
@@ -83,30 +84,6 @@ interface IpcPouResponse {
 }
 
 /**
- * Normalize base type values to UPPERCASE.
- * The main process (src_old/) uses lowercase ('bool', 'int') while the new src uses UPPERCASE ('BOOL', 'INT').
- */
-function normalizeVariableTypes(variables: PLCVariable[]): PLCVariable[] {
-  return variables.map((v) => {
-    const type = { ...v.type }
-    if (type.definition === 'base-type') {
-      type.value = type.value.toUpperCase()
-    } else if (type.definition === 'array' && type.data?.baseType) {
-      type.data = {
-        ...type.data,
-        baseType: {
-          ...type.data.baseType,
-          value: type.data.baseType.definition === 'base-type'
-            ? type.data.baseType.value.toUpperCase()
-            : type.data.baseType.value,
-        },
-      }
-    }
-    return { ...v, type } as PLCVariable
-  })
-}
-
-/**
  * Maps editor discriminated-union POU to port flat POU format.
  */
 function mapIpcPouToPortPou(ipcPou: IpcPou): PLCPou {
@@ -115,7 +92,7 @@ function mapIpcPouToPortPou(ipcPou: IpcPou): PLCPou {
     pouType: ipcPou.type as PLCPou['pouType'],
     interface: {
       returnType: ipcPou.data.returnType,
-      variables: normalizeVariableTypes(ipcPou.data.variables as PLCVariable[]),
+      variables: ipcPou.data.variables as PLCVariable[],
     },
     body: ipcPou.data.body as PLCPou['body'],
     documentation: ipcPou.data.documentation || undefined,
@@ -130,6 +107,7 @@ function mapPortPouToIpcPou(portPou: PLCPou): IpcPou {
     type: portPou.pouType,
     data: {
       name: portPou.name,
+      language: portPou.body.language,
       variables: (portPou.interface?.variables ?? []) as unknown[],
       ...(portPou.interface?.returnType ? { returnType: portPou.interface.returnType } : {}),
       body: portPou.body as { language: string; value: unknown },
@@ -153,15 +131,9 @@ function mapIpcResponse(
   }
 
   const { content, meta } = response.data
-  const projectMeta = content.project.meta ?? fallbackMeta
 
-  // Normalize global variable types to UPPERCASE
+  const projectMeta = content.project.meta ?? fallbackMeta
   const configuration = content.project.data.configuration
-  if (configuration?.resource?.globalVariables) {
-    configuration.resource.globalVariables = normalizeVariableTypes(
-      configuration.resource.globalVariables as PLCVariable[],
-    )
-  }
 
   return {
     success: true,

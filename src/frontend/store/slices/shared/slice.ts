@@ -3,10 +3,7 @@ import { StateCreator } from 'zustand'
 
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
-import {
-  syncNodesWithVariables,
-  syncNodesWithVariablesFBD,
-} from '../../../utils/graphical/sync-nodes-with-variables'
+import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { toast } from '../../../utils/toast'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
@@ -14,14 +11,7 @@ import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
 import { CreateEditorObjectFromTab } from '../tabs/utils'
 import type { SharedRootState, SharedSlice } from './types'
-import {
-  createDatatypeObject,
-  createEditorObjectForDatatype,
-  createEditorObjectForPou,
-  createEditorObjectForRemoteDevice,
-  createEditorObjectForServer,
-  createPouObject,
-} from './utils'
+import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
 
 const MAX_HISTORY_SIZE = 50
 
@@ -98,8 +88,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
 
     delete: (name) =>
-      deleteElement(getState(), name, (n) => getState().projectActions.deletePou(n), (n) =>
-        getState().libraryActions.removeUserLibrary(n),
+      deleteElement(
+        getState(),
+        name,
+        (n) => getState().projectActions.deletePou(n),
+        (n) => getState().libraryActions.removeUserLibrary(n),
       ),
 
     rename: (oldName, newName) => {
@@ -111,7 +104,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         state,
         oldName,
         newName,
-        (o, n) => { state.projectActions.updatePouName(o, n) },
+        (o, n) => {
+          state.projectActions.updatePouName(o, n)
+        },
         (o, n) => state.libraryActions.updateLibraryName(o, n),
       )
     },
@@ -231,8 +226,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'remote-device' })
     },
 
-    delete: (name) =>
-      deleteElement(getState(), name, (n) => getState().projectActions.deleteRemoteDevice(n)),
+    delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteRemoteDevice(n)),
 
     rename: (oldName, newName) =>
       renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateRemoteDeviceName(o, n)),
@@ -352,12 +346,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           try {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
             const iecString = generateIecVariablesToString((pou.interface?.variables ?? []) as any)
-            const reparsedVariables = parseIecStringToVariables(
-              iecString,
-              pous,
-              reclassDataTypes,
-              reclassLibraries,
-            )
+            const reparsedVariables = parseIecStringToVariables(iecString, pous, reclassDataTypes, reclassLibraries)
             getState().projectActions.setPouVariables({
               pouName: pou.name,
               variables: reparsedVariables,

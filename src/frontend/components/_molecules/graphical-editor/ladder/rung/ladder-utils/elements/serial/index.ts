@@ -1,8 +1,8 @@
-import type { Edge, Node } from '@xyflow/react'
-
 import type { RungLadderState } from '@root/frontend/store/slices'
 import { newGraphicalEditorNodeID } from '@root/frontend/utils/new-graphical-editor-node-id'
-import { checkIfElementIsNode } from '../../../../../../../_atoms/graphical-editor/ladder'
+import type { Edge, Node } from '@xyflow/react'
+
+import { checkIfElementIsNode } from '../../../../../../../_atoms/graphical-editor/ladder/node-builders'
 import { ParallelNode, PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { connectNodes } from '../../edges'
 import { buildGenericNode, isNodeOfType } from '../../nodes'

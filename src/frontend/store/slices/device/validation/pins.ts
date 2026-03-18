@@ -19,7 +19,9 @@ const extractPositionForAnalogAddress = (address: string) => {
 }
 
 const extractPositionsForDigitalAddress = (address: string) => {
-  const stringWithNoPrefix = address.replace(PLC_ADDRESS_PREFIX.BOOL_INPUT, '').replace(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, '')
+  const stringWithNoPrefix = address
+    .replace(PLC_ADDRESS_PREFIX.BOOL_INPUT, '')
+    .replace(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, '')
   const position = parseInt(stringWithNoPrefix.split('.')[0])
   const dotPosition = parseInt(stringWithNoPrefix.split('.')[1])
   return { position, dotPosition }

@@ -2,6 +2,7 @@ import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
+import { removeElements } from '../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
 import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default/exit'
 import { BlockButton } from '../../_molecules/workspace-activity-bar/ladder/block'
 import { CoilButton } from '../../_molecules/workspace-activity-bar/ladder/coil'
@@ -65,11 +66,12 @@ export const LadderToolbox = () => {
     const allNodesToRemove = flow?.rungs.flatMap((rung) => rung.selectedNodes || []) || []
 
     flow?.rungs.forEach((rung) => {
-      ladderFlowActions.removeNodes({
-        nodes: rung.selectedNodes || [],
-        editorName: editor.meta.name,
-        rungId: rung.id,
-      })
+      const selectedNodes = rung.selectedNodes || []
+      if (selectedNodes.length === 0) return
+
+      const { nodes: newNodes, edges: newEdges } = removeElements({ ...rung }, selectedNodes)
+      ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rung.id, nodes: newNodes })
+      ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rung.id, edges: newEdges })
       ladderFlowActions.setSelectedNodes({
         editorName: editor.meta.name,
         rungId: rung.id,

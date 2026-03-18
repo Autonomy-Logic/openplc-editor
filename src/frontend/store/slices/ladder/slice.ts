@@ -2,7 +2,11 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { defaultCustomNodesStyles, nodesBuilder } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
+import {
+  defaultCustomNodesStyles,
+  nodesBuilder,
+} from '../../../components/_atoms/graphical-editor/ladder/node-builders'
+import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
 
@@ -278,10 +282,9 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          const removedIds = new Set(nodes.map((n) => n.id))
-          rung.nodes = rung.nodes.filter((node) => !removedIds.has(node.id))
-          rung.edges = rung.edges.filter((edge) => !removedIds.has(edge.source) && !removedIds.has(edge.target))
-          rung.selectedNodes = rung.selectedNodes.filter((node) => !removedIds.has(node.id))
+          const { nodes: newNodes, edges: newEdges } = removeElements(rung, nodes)
+          rung.nodes = newNodes
+          rung.edges = newEdges
           flow.updated = true
         }),
       )
