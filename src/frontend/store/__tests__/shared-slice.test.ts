@@ -1,6 +1,5 @@
 import { createStore } from 'zustand/vanilla'
 
-import type { PLCPou } from '../../../middleware/shared/ports/types'
 import { createConsoleSlice } from '../slices/console/slice'
 import { createDeviceSlice } from '../slices/device/slice'
 import { createEditorSlice } from '../slices/editor/slice'

@@ -420,7 +420,7 @@ function readDirectoryRecursive(
             try {
               const fileContent = readFileSync(entryPath, 'utf-8')
               const pouType = detectPouTypeFromPath(entryPath)
-              const language = detectLanguageFromExtension(entryPath)
+              const language: string = detectLanguageFromExtension(entryPath)
               const fallbackPou = createFallbackPou(fileContent, language, pouType, pouName)
               projectFiles[entryKey] = fallbackPou
               pouNameMap.set(pouName, { key: entryKey, isTextBased })
@@ -437,7 +437,7 @@ function readDirectoryRecursive(
           try {
             const fileContent = readFileSync(entryPath, 'utf-8')
             const pouType = detectPouTypeFromPath(entryPath)
-            const language = detectLanguageFromExtension(entryPath)
+            const language: string = detectLanguageFromExtension(entryPath)
             const fallbackPou = createFallbackPou(fileContent, language, pouType, pouName)
             projectFiles[entryKey] = fallbackPou
             pouNameMap.set(pouName, { key: entryKey, isTextBased })
@@ -496,13 +496,13 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
         project.data.pous.map(async (pou) => {
           const pouType = pou.type.toLowerCase() + 's'
           const language = pou.data.body.language
-          const extension = getExtensionFromLanguage(language)
+          const extension: string = getExtensionFromLanguage(language)
           const pouFilePath = join(basePath, 'pous', pouType, `${pou.data.name}${extension}`)
 
           try {
             if (!fileOrDirectoryExists(pouFilePath)) {
               await promises.mkdir(dirname(pouFilePath), { recursive: true })
-              const textContent = serializePouToText(pou)
+              const textContent: string = serializePouToText(pou)
               await promises.writeFile(pouFilePath, textContent, 'utf-8')
             }
             pouFiles[join('pous', pouType, `${pou.data.name}${extension}`)] = pou

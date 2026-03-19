@@ -121,7 +121,7 @@ export function subscribeToIceCandidates(
 
   eventSource.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data) as IceCandidateEvent
+      const data = JSON.parse(event.data as string) as IceCandidateEvent
       if (data.type === 'ice-candidate') {
         onCandidate(data)
       }

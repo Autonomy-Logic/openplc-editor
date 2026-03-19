@@ -50,7 +50,6 @@ const StructureDataType = () => {
       const { description, selectedRow } = editor.structure
       setEditorStructure({ description: description, selectedRow: selectedRow })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor])
 
   const handleRowClick = (row: HTMLTableRowElement) => {

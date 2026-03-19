@@ -98,7 +98,6 @@ export const BlockNodeElement = <T extends object>({
           break
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /**
@@ -109,7 +108,6 @@ export const BlockNodeElement = <T extends object>({
       setBlockNameValue(blockName)
       return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
   const handleNameInputOnBlur = () => {
@@ -398,7 +396,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           break
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
   /**
@@ -440,7 +437,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     setWrongVariable(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pous])
 
   /**

@@ -59,7 +59,6 @@ const ConnectionElement = (block: ConnectionProps) => {
     if (inputConnectionRef.current && selected) {
       inputConnectionRef.current.focus()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /**
@@ -87,7 +86,6 @@ const ConnectionElement = (block: ConnectionProps) => {
     if ((connectionNode.data as BasicNodeData).variable.name !== connectionValue) {
       setConnectionValue((connectionNode.data as BasicNodeData).variable.name)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pous])
 
   /**

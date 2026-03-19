@@ -6,8 +6,6 @@ import { arrayValidation } from '../../../../store/slices/workspace/utils/variab
 import { DimensionsModal } from '../../../_atoms/dimensions-modal'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 
-type BaseType = (typeof baseTypeSchema.options)[number]
-
 type ArrayModalProps = {
   variableName: string
   variableRow?: number

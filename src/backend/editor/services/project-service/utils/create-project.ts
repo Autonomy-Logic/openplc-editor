@@ -211,8 +211,8 @@ const createProjectDefaultStructure = (
   try {
     if (!fileOrDirectoryExists(pouPath)) createDirectory(pouPath)
     const language = pou.data.body.language
-    const extension = getExtensionFromLanguage(language)
-    const textContent = serializePouToText(pou)
+    const extension: string = getExtensionFromLanguage(language)
+    const textContent: string = serializePouToText(pou)
     const filePath = `${pouPath}/${pou.data.name}${extension}`
     writeFileSync(filePath, textContent, 'utf-8')
   } catch (error) {

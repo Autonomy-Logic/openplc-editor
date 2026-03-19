@@ -270,7 +270,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       return edge
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     rungLocal.edges,
     rungLocal.nodes,
@@ -350,7 +349,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     return baseNodes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     rungLocal.edges,
     rungLocal.nodes,
@@ -374,7 +372,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       })),
     })
     updateReactFlowPanelExtent(rung)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rung.nodes])
 
   /**
@@ -395,7 +392,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       rungId: rung.id,
       nodes: rungLocal.selectedNodes,
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rungLocal.selectedNodes])
 
   useEffect(() => {
@@ -426,7 +422,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     } else {
       setSearchNodePosition({ x: 0, y: 0 })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, rungLocal, reactFlowInstance])
 
   /**
@@ -727,7 +722,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         selectedNodes: selectedNodes,
       }))
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rungLocal, rung, dragging],
   )
 
@@ -763,7 +757,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         setRungLocal((rung) => ({ ...rung, nodes }))
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, dragging, isDebuggerActive],
   )
 
@@ -805,7 +798,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const nodes = removePlaceholderElements(rungLocal.nodes)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, dragging, isDebuggerActive],
   )
 
@@ -843,7 +835,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         }),
       }))
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rung, rungLocal, isDebuggerActive],
   )
 
@@ -874,7 +865,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       // Then add the node to the rung
       handleAddNode(blockType, library)
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, isDebuggerActive],
   )
 

@@ -63,7 +63,7 @@ export interface UsersInfoResult {
 
 export interface RuntimeStatusResult {
   success: boolean
-  status?: PlcStatus | string
+  status?: PlcStatus | (string & {})
   timingStats?: TimingStats
   error?: string
 }

@@ -1,8 +1,6 @@
 import type {
   BoardInfo,
   CommunicationPort,
-  DevicePin,
-  PlcStatus,
   TimingStats,
 } from '../../../middleware/shared/ports/types'
 import type {

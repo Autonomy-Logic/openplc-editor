@@ -127,10 +127,10 @@ export class ModbusRtuClient {
         })
 
         this.serialPort.on('error', (error: unknown) => {
-          reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
+          reject(error instanceof Error ? error : new Error(getErrorMessage(error) as string))
         })
       } catch (error) {
-        reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
+        reject(error instanceof Error ? error : new Error(getErrorMessage(error) as string))
       }
     })
   }
@@ -288,7 +288,7 @@ export class ModbusRtuClient {
         const md5String = response.slice(9).toString('utf-8').trim()
         return md5String
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error(getErrorMessage(error))
+        lastError = error instanceof Error ? error : new Error(getErrorMessage(error) as string)
         if (attempt < MD5_REQUEST_MAX_RETRIES) {
           console.warn(`MD5 request attempt ${attempt + 1} failed: ${lastError.message}. Retrying...`)
         }

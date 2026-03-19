@@ -35,7 +35,6 @@ const CommentElement = (block: CommentProps) => {
     if (data.content) {
       setCommentValue(data.content)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -86,7 +85,6 @@ const CommentElement = (block: CommentProps) => {
     return () => {
       updateModelFBD({ canEditorZoom: true, canEditorPan: true })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commentFocused])
 
   const handleSubmitCommentaryValueOnTextareaBlur = () => {

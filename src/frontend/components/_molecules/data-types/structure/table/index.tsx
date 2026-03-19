@@ -7,8 +7,6 @@ import { GenericTable } from '../../../../_atoms/generic-table'
 import { EditableInitialValueCell, EditableNameCell } from './editable-cell'
 import { SelectableTypeCell } from './selectable-cell'
 
-type PLCStructureDatatype = Extract<PLCDataType, { derivation: 'structure' }>
-
 const columnHelper = createColumnHelper<PLCStructureVariable>()
 
 const columns = [

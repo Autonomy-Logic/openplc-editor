@@ -142,7 +142,10 @@ const rendererProcessBridge = {
     dataToCreateXml: PLCProjectData,
     parseTo: 'old-editor' | 'codesys',
   ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo),
+    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo) as Promise<{
+      success: boolean
+      message: string
+    }>,
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
   runCompileProgram: (
@@ -183,12 +186,18 @@ const rendererProcessBridge = {
     rendererProcessPort.addEventListener('close', () => {})
   },
   createBuildDirectory: async (pathToUserProject: string): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject),
+    ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject) as Promise<{
+      success: boolean
+      message: string
+    }>,
   createXmlFileToBuild: async (
     pathToUserProject: string,
     dataToCreateXml: PLCProjectData,
   ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:build-xml-file', pathToUserProject, dataToCreateXml),
+    ipcRenderer.invoke('compiler:build-xml-file', pathToUserProject, dataToCreateXml) as Promise<{
+      success: boolean
+      message: string
+    }>,
   exportProjectRequest: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('compiler:export-project-request', (_event, value) => callback(_event, value)),
   generateCFilesRequest: (pathToStProgram: string, callback: (args: CompilerPortMessage) => void) => {

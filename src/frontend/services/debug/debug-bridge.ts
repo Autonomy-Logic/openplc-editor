@@ -68,7 +68,7 @@ class DebugBridge {
    * Disconnect the active transport and clear state.
    * Mirrors handleDebuggerDisconnect in the desktop editor.
    */
-  async disconnect(): Promise<void> {
+  disconnect(): void {
     if (this.activeTransport) {
       this.activeTransport.disconnect()
     }

@@ -418,8 +418,8 @@ describe('createHistorySlice', () => {
 
       const fullSnapshot = makeSnapshot({
         body: 'full',
-        ladderFlow: { name: 'ladder-1', rungs: [] } as any,
-        fbdFlow: { name: 'fbd-1', rungs: [] } as any,
+        ladderFlow: { name: 'ladder-1', rungs: [] } as unknown as HistorySnapshot['ladderFlow'],
+        fbdFlow: { name: 'fbd-1', rungs: [] } as unknown as HistorySnapshot['fbdFlow'],
         globalVariables: [
           {
             name: 'gVar',
@@ -483,11 +483,11 @@ describe('createHistorySlice', () => {
       expect(popped).toBeDefined()
 
       // Mutate nested object in popped result
-      ;(popped!.body as any).nested.value = 999
+      ;(popped!.body as { nested: { value: number } }).nested.value = 999
 
       // Remaining snapshot in store should be unaffected
       const remaining = store.getState().history['deep-pou'].future[0]
-      expect((remaining.body as any).nested.value).toBe(42)
+      expect((remaining.body as { nested: { value: number } }).nested.value).toBe(42)
     })
   })
 })

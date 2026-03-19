@@ -35,7 +35,7 @@ class PouService {
 
     try {
       await UserService.createDirectoryIfNotExists(dirname(filePath))
-      const textContent = serializePouToText(pou)
+      const textContent: string = serializePouToText(pou)
       await promises.writeFile(filePath, textContent, 'utf-8')
 
       return { success: true, data: { pou } }
@@ -83,7 +83,7 @@ class PouService {
     if (isPou) {
       const pou = fileContent as PLCPou
       const language = pou.data.body.language
-      const extension = getExtensionFromLanguage(language)
+      const extension: string = getExtensionFromLanguage(language)
 
       // Convert .json paths to actual language extension paths
       if (filePath.endsWith('.json')) {
@@ -113,7 +113,7 @@ class PouService {
     if (fileContent && isPou) {
       try {
         const pou = fileContent as PLCPou
-        const textContent = serializePouToText(pou)
+        const textContent: string = serializePouToText(pou)
         await promises.writeFile(actualOldFilePath, textContent, 'utf-8')
       } catch (writeError) {
         console.error(`Error writing content before rename: ${String(writeError)}`)

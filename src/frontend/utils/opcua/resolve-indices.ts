@@ -1,4 +1,3 @@
-import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/types/PLC/open-plc'
 import {
   buildDebugPath,
   buildGlobalDebugPath,
@@ -7,7 +6,8 @@ import {
   findDebugVariableWithFallback,
   findInstanceName,
   type PLCInstanceMapping,
-} from '@root/utils/debug-variable-finder'
+} from '@root/frontend/utils/debug-variable-finder'
+import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/types/PLC/open-plc'
 
 import type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'
 

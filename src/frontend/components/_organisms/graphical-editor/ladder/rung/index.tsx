@@ -39,12 +39,10 @@ export const Rung = ({ className, index, id, rung, nodeDivergences, isDebuggerAc
 
   useEffect(() => {
     updateModelLadder({ openRung: { rungId: rung.id, open: isOpen } })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     setIsOpen(getIsRungOpen({ rungId: rung.id }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rung])
 
   const style = {

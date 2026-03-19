@@ -113,7 +113,7 @@ class MainProcessBridge implements MainIpcModule {
         ...getRuntimeHttpsOptions(),
       }
 
-      const req = https.request(reqOptions, (res: IncomingMessage) => {
+      const req = https.request(reqOptions as https.RequestOptions, (res: IncomingMessage) => {
         let data = ''
         res.on('data', (chunk: Buffer) => {
           data += chunk.toString()

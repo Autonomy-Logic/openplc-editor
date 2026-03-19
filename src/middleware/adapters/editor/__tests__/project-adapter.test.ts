@@ -92,7 +92,7 @@ beforeEach(() => {
     fileWatchStart: jest.fn().mockResolvedValue({ success: true }),
     fileWatchStop: jest.fn().mockResolvedValue({ success: true }),
     fileWatchStopAll: jest.fn().mockResolvedValue({ success: true }),
-    onFileExternalChange: jest.fn().mockImplementation((cb: unknown) => {
+    onFileExternalChange: jest.fn().mockImplementation((_cb: unknown) => {
       return () => {}
     }),
   } as unknown as typeof window.bridge

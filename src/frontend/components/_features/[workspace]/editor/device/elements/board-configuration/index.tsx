@@ -14,7 +14,7 @@ const BoardConfiguration = () => {
     deviceActions: { setDeviceBoard, setCommunicationPort },
   } = useOpenPLCStore()
 
-  const refreshCommunicationPorts = async (e: React.MouseEvent) => {
+  const refreshCommunicationPorts = (e: React.MouseEvent) => {
     e.preventDefault()
     try {
       setIsPressed(true)

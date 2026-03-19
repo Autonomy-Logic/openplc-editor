@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import { CONSTANTS } from '../../../utils'
 
-const { paths } = CONSTANTS
+const { paths } = CONSTANTS as { paths: Record<string, string> }
 
 export const ChildWindowSchema = z.object({
   parentWindow: z.any().optional(),

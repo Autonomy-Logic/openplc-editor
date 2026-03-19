@@ -5,7 +5,7 @@ import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
-import type { PLCPou, PLCVariable } from '../../../../../../middleware/shared/ports/types'
+import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
@@ -431,7 +431,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return { suggestions: uniqueSuggestions, labels }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [sliceLibraries],
   )
 
@@ -451,7 +450,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return { suggestions: uniqueSuggestions, labels }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [pouVariables, pous],
   )
 
@@ -618,7 +616,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     })
     return () => disposable.dispose()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pouVariables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
 
   // -----------------------------------------------------------------------
@@ -1251,7 +1248,6 @@ void loop()
     )
 
     return () => unsub()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // -----------------------------------------------------------------------

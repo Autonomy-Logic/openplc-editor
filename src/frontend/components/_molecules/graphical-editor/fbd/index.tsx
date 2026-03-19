@@ -23,7 +23,7 @@ import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/dra
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { CustomFbdNodeTypes, customNodeTypes } from '../../../_atoms/graphical-editor/fbd'
-import { BasicNodeData, BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
+import { BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
 import { getVariableRestrictionType } from '../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../_atoms/react-flow'
 import { toast } from '../../../_features/[app]/toast/use-toast'
@@ -230,7 +230,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       return edge
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     rungLocal.edges,
     rungLocal.nodes,
@@ -327,7 +326,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     // updating ref when state changes
     // now, ref.current will have the latest sendRequest with access to the latest state
     debounceUpdateRungRef.current = updateRungState
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragging, rungLocal, rung])
   // creating debounced callback only once - on mount
   const debouncedUpdateRungStateCallback = useMemo(() => {
@@ -343,13 +341,11 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
   useEffect(() => {
     updateRungLocalFromStore()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rung])
 
   useEffect(() => {
     debouncedUpdateRungStateCallback()
     return () => debouncedUpdateRungStateCallback.cancel()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rungLocal])
 
   /**
@@ -369,7 +365,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     )
 
     return () => unsub()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reactFlowInstance])
 
   useEffect(() => {
@@ -378,7 +373,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     setTimeout(() => {
       reactFlowInstance.setViewport(viewport, { duration: 0 })
     }, 0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reactFlowInstance, editor.meta.name])
 
   /**
@@ -585,7 +579,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         }
       })
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rungLocal, dragging],
   )
 
@@ -596,13 +589,11 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         edges: applyEdgeChanges(changes, rung.edges),
       }))
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rungLocal, dragging],
   )
 
   const onNodeDragStart = useCallback(() => {
     setDragging(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rungLocal, dragging])
 
   /**
@@ -620,7 +611,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         },
       })
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rungLocal, dragging],
   )
 
@@ -636,7 +626,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         return
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [reactFlowViewportRef],
   )
 
@@ -702,7 +691,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rung, reactFlowInstance],
   )
 

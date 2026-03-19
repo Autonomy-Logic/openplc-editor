@@ -184,7 +184,7 @@ describe('createDeviceSlice', () => {
             modbusTCP: {
               tcpMacAddress: 'AA:BB:CC:DD:EE:FF',
               tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
-            } as any,
+            } as Partial<typeof defaultDeviceConfiguration.communicationConfiguration.modbusTCP> as typeof defaultDeviceConfiguration.communicationConfiguration.modbusTCP,
             communicationPreferences: defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
           },
         },
@@ -594,7 +594,7 @@ describe('createDeviceSlice', () => {
           pinMapping: [makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
-        const result = store.getState().deviceActions.updatePin({ pinType: undefined } as any)
+        const result = store.getState().deviceActions.updatePin({ pinType: undefined } as Partial<DevicePin>)
         // pinType is falsy so both if-branches are skipped, hitting the break
         expect(result.ok).toBe(true)
       })
@@ -713,8 +713,8 @@ describe('createDeviceSlice', () => {
           pinMapping: [makePin({ pin: 'D0', address: '%IX0.0' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
-        // Cast to any to simulate an unknown key
-        const result = store.getState().deviceActions.updatePin({ address: '%IX9.9' } as any)
+        // Cast to Partial<DevicePin> to simulate an unknown key
+        const result = store.getState().deviceActions.updatePin({ address: '%IX9.9' } as Partial<DevicePin>)
         expect(result.ok).toBe(true)
       })
     })

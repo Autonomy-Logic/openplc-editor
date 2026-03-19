@@ -162,7 +162,7 @@ export const DebugManager = () => {
             consoleActions.addLog({
               id: crypto.randomUUID(),
               level: 'error',
-              message: `Debug connection failed: ${err instanceof Error ? err.message : err}`,
+              message: `Debug connection failed: ${err instanceof Error ? err.message : String(err)}`,
             })
             debugBridge.clearTransport()
             return false
@@ -170,7 +170,8 @@ export const DebugManager = () => {
         }
 
         // Start debug session (builds trees, indexes, commits to store)
-        const result = debugSessionRef.current.startDebug(deviceId, username, password, debugCContent, port)
+        const session = debugSessionRef.current as unknown as Record<string, (...args: unknown[]) => unknown>
+        const result = session.startDebug(deviceId, username, password, debugCContent, port)
 
         // If WebRTC main channel is connected, try to open debug channel in background
         if (!isSimulatorBoard) {
@@ -180,7 +181,7 @@ export const DebugManager = () => {
           }
         }
 
-        return result
+        return result as boolean
       },
 
       stopDebug: () => {
@@ -189,7 +190,7 @@ export const DebugManager = () => {
           webrtcCloseDebugChannel()
           webrtcTransportRef.current = null
         }
-        debugSessionRef.current.stopDebug()
+        ;(debugSessionRef.current as unknown as Record<string, (...args: unknown[]) => unknown>).stopDebug()
         debugBridge.clearTransport()
       },
 

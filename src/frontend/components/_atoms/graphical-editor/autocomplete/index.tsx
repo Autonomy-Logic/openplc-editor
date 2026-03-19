@@ -83,7 +83,6 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
             }
           : undefined,
       ].filter((variable) => variable !== undefined)
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [variables, searchValue])
 
     const closeModal = () => {
@@ -172,7 +171,6 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
           break
       }
       setKeyDown('')
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [keyDown])
 
     useEffect(() => {
@@ -181,7 +179,6 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
 
     useEffect(() => {
       scrollWhenSelectedIsChanged()
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedVariable])
 
     const scrollWhenSelectedIsChanged = () => {

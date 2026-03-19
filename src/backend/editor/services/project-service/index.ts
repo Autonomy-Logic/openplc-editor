@@ -27,7 +27,7 @@ class ProjectService {
   async getProjectName(projectPath: string): Promise<string> {
     try {
       const projectFile = await promises.readFile(projectPath, 'utf-8')
-      return (JSON.parse(projectFile) as PLCProject).meta.name || 'Unknown project'
+      return ((JSON.parse(projectFile) as PLCProject).meta.name as string) || 'Unknown project'
     } catch {
       console.error('Error reading project file', projectPath)
       return 'Unknown project'
@@ -300,9 +300,9 @@ class ProjectService {
         // Write/update each POU file
         for (const pou of pous) {
           const language = pou.data.body.language
-          const extension = getExtensionFromLanguage(language)
+          const extension: string = getExtensionFromLanguage(language)
           const filePath = join(dir, `${pou.data.name}${extension}`)
-          const textContent = serializePouToText(pou)
+          const textContent: string = serializePouToText(pou)
           await promises.writeFile(filePath, textContent, 'utf-8')
         }
       }
@@ -457,11 +457,11 @@ class ProjectService {
         let actualFilePath = filePath
         if (filePath.endsWith('.json')) {
           const language = pou.data.body.language
-          const extension = getExtensionFromLanguage(language)
+          const extension: string = getExtensionFromLanguage(language)
           actualFilePath = filePath.replace(/\.json$/, extension)
         }
 
-        const textContent = serializePouToText(pou)
+        const textContent: string = serializePouToText(pou)
         await promises.writeFile(actualFilePath, textContent, 'utf-8')
       } else {
         await promises.writeFile(filePath, JSON.stringify(content, null, 2))

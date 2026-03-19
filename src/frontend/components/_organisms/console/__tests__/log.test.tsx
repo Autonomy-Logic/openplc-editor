@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 
-import { LogComponent, type LogLevel } from '../log'
+import { LogComponent } from '../log'
 
 describe('LogComponent', () => {
   it('renders message text', () => {

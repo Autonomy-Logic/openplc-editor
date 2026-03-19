@@ -141,7 +141,7 @@ export class WebSocketDebugClient {
           const md5String = responseBuffer.slice(2).toString('utf-8').trim()
           resolve(md5String)
         } catch (error) {
-          reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
+          reject(error instanceof Error ? error : new Error(getErrorMessage(error) as string))
         }
       }
 

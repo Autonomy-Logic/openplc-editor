@@ -1,8 +1,6 @@
 import type {
   DeviceConfiguration,
   DevicePin,
-  PLCBody,
-  PLCDataType,
   PLCProjectData,
   PLCVariable,
   ProjectMeta,

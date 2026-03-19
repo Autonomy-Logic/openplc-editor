@@ -29,7 +29,7 @@ describe('newGraphicalEditorNodeID', () => {
   })
 
   it('falls back to uuidv4 when crypto.randomUUID is unavailable', () => {
-    const originalRandomUUID = crypto.randomUUID
+    const originalRandomUUID = crypto.randomUUID.bind(crypto)
     Object.defineProperty(crypto, 'randomUUID', { value: undefined, configurable: true })
 
     try {

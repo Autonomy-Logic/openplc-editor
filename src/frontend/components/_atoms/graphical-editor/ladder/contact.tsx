@@ -78,7 +78,6 @@ export const Contact = (block: ContactProps) => {
     if (inputVariableRef.current && selected) {
       inputVariableRef.current.focus()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /**
@@ -128,7 +127,6 @@ export const Contact = (block: ContactProps) => {
     }
 
     setWrongVariable(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pous])
 
   const getDebuggerStrokeColor = (): string | undefined => {

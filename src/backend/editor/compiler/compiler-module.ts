@@ -949,7 +949,7 @@ class CompilerModule {
       variables: pou.variables,
     })) as CppPouDataHeader[]
 
-    const headerContent = generateCBlocksHeader(cppPous)
+    const headerContent: string = generateCBlocksHeader(cppPous)
     const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
 
     try {
@@ -1126,7 +1126,10 @@ class CompilerModule {
       return { success: false, message: 'User canceled the save dialog' }
     }
 
-    const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml, parseTo)
+    const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml, parseTo) as {
+      data: string | undefined
+      message: string
+    }
     if (!projectDataAsString) {
       return { success: false, message: message }
     }
@@ -1189,7 +1192,7 @@ class CompilerModule {
     projectData: PLCProjectData,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
-    const modbusSlaveConfig = generateModbusSlaveConfig(projectData.servers)
+    const modbusSlaveConfig: string | null = generateModbusSlaveConfig(projectData.servers)
 
     if (modbusSlaveConfig) {
       const confFolderPath = join(sourceTargetFolderPath, 'conf')
@@ -1207,7 +1210,7 @@ class CompilerModule {
     projectData: PLCProjectData,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
-    const modbusMasterConfig = generateModbusMasterConfig(projectData.remoteDevices)
+    const modbusMasterConfig: string | null = generateModbusMasterConfig(projectData.remoteDevices)
 
     if (modbusMasterConfig) {
       const confFolderPath = join(sourceTargetFolderPath, 'conf')
@@ -1226,7 +1229,7 @@ class CompilerModule {
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     try {
-      const s7commConfig = generateS7CommConfig(projectData.servers)
+      const s7commConfig: string | null = generateS7CommConfig(projectData.servers)
 
       if (s7commConfig) {
         const confFolderPath = join(sourceTargetFolderPath, 'conf')
@@ -1283,7 +1286,7 @@ class CompilerModule {
       }))
 
       // Generate the OPC-UA configuration
-      const opcuaJson = generateOpcUaConfig(projectData.servers, debugContent, instances)
+      const opcuaJson: string | null = generateOpcUaConfig(projectData.servers, debugContent, instances)
 
       if (opcuaJson) {
         // Ensure conf directory exists
@@ -1783,7 +1786,7 @@ class CompilerModule {
                 Authorization: `Bearer ${runtimeJwtToken}`,
               },
               ...getRuntimeHttpsOptions(),
-            },
+            } as https.RequestOptions,
             (res: IncomingMessage) => {
               let data = ''
               res.on('data', (chunk: Buffer) => {

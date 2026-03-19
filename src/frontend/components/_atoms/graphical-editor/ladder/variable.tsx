@@ -180,7 +180,6 @@ const VariableElement = (block: VariableProps) => {
       setInputError(true)
       return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pous, data.variable?.name])
 
   /**

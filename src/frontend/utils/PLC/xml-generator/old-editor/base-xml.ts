@@ -1,4 +1,4 @@
-import { ProjectState } from '@root/frontend/store/slices'
+import type { PLCProject } from '@root/types/PLC/open-plc'
 import { BaseXml } from '@root/types/PLC/xml-data/old-editor/base-diagram'
 import { create } from 'xmlbuilder2'
 
@@ -70,8 +70,8 @@ const getBaseOldEditorXmlStructure = (): BaseXml => ({
  * This is not being used anymore.
  * @deprecated
  */
-export const parseProjectToXML = (project: ProjectState): string => {
-  let xmlResult = getBaseOldEditorXmlStructure()
+export const parseProjectToXML = (project: PLCProject): string => {
+  let xmlResult: BaseXml = getBaseOldEditorXmlStructure()
 
   /**
    * Parse POUs

@@ -1,4 +1,4 @@
-import type { ProjectState } from '@root/frontend/store/slices'
+import type { PLCProjectData } from '@root/types/PLC/open-plc'
 import { BaseXml as codeSysBaseXml } from '@root/types/PLC/xml-data/codesys'
 import { BaseXml as oldBaseXml } from '@root/types/PLC/xml-data/old-editor'
 import { create } from 'xmlbuilder2'
@@ -17,7 +17,7 @@ import {
 } from './xml-generator/old-editor'
 
 const XmlGenerator = (
-  projectToGenerateXML: ProjectState['data'],
+  projectToGenerateXML: PLCProjectData,
   xmlFormatTarget: 'old-editor' | 'codesys' = 'old-editor',
 ) => {
   let xmlResult = xmlFormatTarget === 'old-editor' ? getBaseOldEditorXmlStructure() : getBaseCodeSysXmlStructure()
@@ -31,33 +31,35 @@ const XmlGenerator = (
   if (!mainPou) return { ok: false, message: 'Main POU not found.', data: undefined }
 
   if (xmlFormatTarget === 'old-editor') {
-    xmlResult = oldEditorParsePousToXML(xmlResult as oldBaseXml, pous)
+    let oldXml = xmlResult as oldBaseXml
+    oldXml = oldEditorParsePousToXML(oldXml, pous)
 
     /**
      * Parse data types
      */
     const dataTypes = projectToGenerateXML.dataTypes
-    xmlResult = oldEditorParseDataTypesToXML(xmlResult, dataTypes)
+    oldXml = oldEditorParseDataTypesToXML(oldXml, dataTypes)
 
     /**
      * Parse instances
      */
     const configuration = projectToGenerateXML.configuration
-    xmlResult = oldEditorInstanceToXml(xmlResult, configuration)
+    xmlResult = oldEditorInstanceToXml(oldXml, configuration)
   } else {
-    xmlResult = codeSysParsePousToXML(xmlResult as codeSysBaseXml, pous)
+    let csXml = xmlResult as codeSysBaseXml
+    csXml = codeSysParsePousToXML(csXml, pous)
 
     /**
      * Parse data types
      */
     const dataTypes = projectToGenerateXML.dataTypes
-    xmlResult = codeSysParseDataTypesToXML(xmlResult, dataTypes)
+    csXml = codeSysParseDataTypesToXML(csXml, dataTypes)
 
     /**
      * Parse instances
      */
     const configuration = projectToGenerateXML.configuration
-    xmlResult = codeSysInstanceToXml(xmlResult, configuration)
+    xmlResult = codeSysInstanceToXml(csXml, configuration)
   }
 
   const doc = create(xmlResult)

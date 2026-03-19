@@ -185,13 +185,13 @@ export class WebRTCConnectionManager {
 
       channel.onmessage = (event) => {
         try {
-          const msg = JSON.parse(event.data)
+          const msg = JSON.parse(event.data as string) as { type: string; [key: string]: unknown }
 
           // Check for chunk protocol messages
           if (this.chunkReassembler?.isChunkMessage(msg.type)) {
-            const assembled = this.chunkReassembler.handleChunkMessage(msg)
+            const assembled = this.chunkReassembler.handleChunkMessage(msg as Record<string, unknown>)
             if (assembled) {
-              const fullMsg = JSON.parse(assembled)
+              const fullMsg = JSON.parse(assembled) as { type: string; [key: string]: unknown }
               this.dispatchMessage(fullMsg)
             }
             return
@@ -263,20 +263,22 @@ export class WebRTCConnectionManager {
       // 9. Subscribe to ICE candidates from agent via SSE
       this.cleanupSse = subscribeToIceCandidates(
         response.sessionId,
-        async (event) => {
-          try {
-            if (pc.remoteDescription) {
-              await pc.addIceCandidate({
-                candidate: event.candidate,
-                sdpMid: event.sdpMid,
-                sdpMLineIndex: event.sdpMLineIndex,
-              })
-            } else {
-              console.warn('[WebRTC] Cannot add ICE candidate — no remote description yet')
+        (event) => {
+          void (async () => {
+            try {
+              if (pc.remoteDescription) {
+                await pc.addIceCandidate({
+                  candidate: event.candidate,
+                  sdpMid: event.sdpMid,
+                  sdpMLineIndex: event.sdpMLineIndex,
+                })
+              } else {
+                console.warn('[WebRTC] Cannot add ICE candidate — no remote description yet')
+              }
+            } catch (err) {
+              console.warn('[WebRTC] Failed to add ICE candidate:', err)
             }
-          } catch (err) {
-            console.warn('[WebRTC] Failed to add ICE candidate:', err)
-          }
+          })()
         },
         (error) => {
           console.error('[WebRTC] SSE error:', error)
@@ -416,7 +418,7 @@ export class WebRTCConnectionManager {
 
       debugChannel.onmessage = (event) => {
         try {
-          const msg = JSON.parse(event.data)
+          const msg = JSON.parse(event.data as string) as { type: string; [key: string]: unknown }
           if (this.callbacks.onDebugMessage) {
             this.callbacks.onDebugMessage(msg)
           } else {
@@ -550,34 +552,36 @@ export class WebRTCConnectionManager {
 
     this.webrtcActions.setStatus('reconnecting')
 
-    this.reconnectTimeout = window.setTimeout(async () => {
-      this.reconnectTimeout = null
-      if (this.disposed) return
+    this.reconnectTimeout = window.setTimeout(() => {
+      void (async () => {
+        this.reconnectTimeout = null
+        if (this.disposed) return
 
-      this.isReconnecting = true
-      this.reconnectAttempt++
-      this.webrtcActions.setReconnectAttempt(this.reconnectAttempt)
+        this.isReconnecting = true
+        this.reconnectAttempt++
+        this.webrtcActions.setReconnectAttempt(this.reconnectAttempt)
 
-      try {
-        await this.connect(true)
-        console.log('[WebRTC] Signaling completed, waiting for data channel...')
-      } catch (err) {
-        console.error('[WebRTC] Reconnection attempt failed:', err)
-        // connect() already called handleError → cleanup.
-        // handleError's scheduleReconnect was skipped because isReconnecting was true.
-        // Check if we should try again.
-        this.isReconnecting = false
-        if (this.reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
-          this.scheduleReconnect()
-        } else {
-          console.log(`[WebRTC] Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up permanently`)
-          this.webrtcActions.setStatus('failed')
-          this.webrtcActions.setError(`WebRTC connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts`)
+        try {
+          await this.connect(true)
+          console.log('[WebRTC] Signaling completed, waiting for data channel...')
+        } catch (err) {
+          console.error('[WebRTC] Reconnection attempt failed:', err)
+          // connect() already called handleError → cleanup.
+          // handleError's scheduleReconnect was skipped because isReconnecting was true.
+          // Check if we should try again.
+          this.isReconnecting = false
+          if (this.reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
+            this.scheduleReconnect()
+          } else {
+            console.log(`[WebRTC] Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up permanently`)
+            this.webrtcActions.setStatus('failed')
+            this.webrtcActions.setError(`WebRTC connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts`)
+          }
+          return
         }
-        return
-      }
 
-      this.isReconnecting = false
+        this.isReconnecting = false
+      })()
     }, RECONNECT_DELAY_MS)
   }
 

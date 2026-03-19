@@ -430,7 +430,7 @@ const OrchestratorsList = () => {
             </p>
             <button
               type='button'
-              onClick={handleRefresh}
+              onClick={() => void handleRefresh()}
               disabled={isRefreshing}
               className={cn('group', isRefreshing && 'cursor-not-allowed opacity-50')}
               aria-label='Refresh orchestrators'

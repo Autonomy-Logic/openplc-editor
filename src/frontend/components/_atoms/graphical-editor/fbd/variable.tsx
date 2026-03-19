@@ -103,7 +103,6 @@ const VariableElement = (block: VariableProps) => {
         edge: connectedEdges[index],
         isSource: connectedEdges[index].source === id,
       }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow])
 
   const primaryConnection = useMemo(() => {
@@ -191,7 +190,6 @@ const VariableElement = (block: VariableProps) => {
       setVariableValue(data.variable.name)
       return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /**
@@ -276,7 +274,6 @@ const VariableElement = (block: VariableProps) => {
       setInputError(false)
       return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pous])
 
   const getVariableType = (): string | undefined => {

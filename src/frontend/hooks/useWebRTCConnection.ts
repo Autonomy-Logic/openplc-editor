@@ -73,7 +73,6 @@ export function useWebRTCConnection(options: UseWebRTCConnectionOptions): UseWeb
     // Only recreate when the device/agent identity changes.
     // webrtcActions is stable (defined in the Zustand slice creator).
     // Callbacks are synced separately below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId, agentId])
 
   // Keep callbacks up to date without recreating the manager.

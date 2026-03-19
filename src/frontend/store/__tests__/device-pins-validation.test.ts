@@ -558,7 +558,7 @@ describe('checkIfPinNameIsValid', () => {
 
   it('returns Unknown when findIndex fails to locate the duplicate name', () => {
     // Force findIndex to return -1 even though some() returned true
-    const originalFindIndex = Array.prototype.findIndex
+    const _originalFindIndex = Array.prototype.findIndex
     const spied = vi.spyOn(Array.prototype, 'findIndex').mockReturnValueOnce(-1)
     const result = checkIfPinNameIsValid(pins, 'motor1')
     expect(result.ok).toBe(false)

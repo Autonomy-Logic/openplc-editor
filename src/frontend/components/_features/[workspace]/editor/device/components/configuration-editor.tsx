@@ -30,7 +30,6 @@ const ConfigurationEditor = () => {
     }
 
     updateModbusConfig()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceBoard])
 
   const toggleModbus = (type: 'RTU' | 'TCP') => setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))

@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 
 import { createLibrarySlice } from '../slices/library/slice'
-import type { LibrarySlice, SystemLibrary, UserLibrary } from '../slices/library/types'
+import type { LibrarySlice, SystemLibrary } from '../slices/library/types'
 
 function makeStore() {
   return createStore<LibrarySlice>()(createLibrarySlice)

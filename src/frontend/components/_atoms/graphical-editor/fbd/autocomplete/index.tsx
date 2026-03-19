@@ -93,7 +93,6 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             definition: undefined,
           }
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pou])
 
     const expandedVariables = expandArrayVariables(variables.all)

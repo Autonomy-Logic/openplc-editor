@@ -31,7 +31,14 @@ export async function sendDebugCommandViaHttp(
   debugMessage: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const { data: result } = await api.post('/orchestrators/run-command', {
+    interface RunCommandResult {
+      response?: {
+        status?: string
+        debug_response?: Record<string, unknown>
+      }
+    }
+
+    const { data: result } = await api.post<RunCommandResult>('/orchestrators/run-command', {
       agent_id: agentId,
       device_id: deviceId,
       method: 'POST',
@@ -41,12 +48,12 @@ export async function sendDebugCommandViaHttp(
 
     const response = result.response
     if (response?.status === 'success' && response.debug_response) {
-      return response.debug_response as Record<string, unknown>
+      return response.debug_response
     }
 
     if (response?.status === 'error') {
       console.error('[DebugTransport] Agent returned error:', response.debug_response ?? response)
-      return response.debug_response as Record<string, unknown> | null
+      return response.debug_response ?? null
     }
 
     return null

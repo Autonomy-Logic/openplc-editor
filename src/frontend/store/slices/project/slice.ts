@@ -152,17 +152,17 @@ function generateIOPoints(
   for (let i = 0; i < length; i++) {
     let iecLocation: string
     if (isBit) {
-      do {
+      iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
+      while (usedAddresses.has(iecLocation)) {
+        currentAddress++
         iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
-        if (!usedAddresses.has(iecLocation)) break
-        currentAddress++
-      } while (true)
+      }
     } else {
-      do {
-        iecLocation = `${iecPrefix}${currentAddress}`
-        if (!usedAddresses.has(iecLocation)) break
+      iecLocation = `${iecPrefix}${currentAddress}`
+      while (usedAddresses.has(iecLocation)) {
         currentAddress++
-      } while (true)
+        iecLocation = `${iecPrefix}${currentAddress}`
+      }
     }
 
     points.push({ id: `${groupName}_${i}`, name: `${groupName}_${i}`, type, iecLocation, alias: '' })
@@ -539,7 +539,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
-    createArrayDimension: ({ name, derivation }) => {
+    createArrayDimension: ({ name, derivation: _derivation }) => {
       setState(
         produce((slice: ProjectSlice) => {
           const dt = slice.project.data.dataTypes.find((d) => d.name === name)

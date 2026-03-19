@@ -42,7 +42,6 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
     resetFormData()
     setEditingState('unsaved')
     clearTabs()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const renderStep = () => {

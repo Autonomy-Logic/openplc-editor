@@ -53,7 +53,6 @@ type BuildHandleProps = HandleProps & {
  * @param relY: number - The y coordinate of the handle based on the relative position (inside the node)
  * @returns CustomHandleProps
  */
-// eslint-disable-next-line react-refresh/only-export-components
 export const buildHandle = ({ glbX, glbY, relX, relY, ...rest }: BuildHandleProps) => {
   return {
     glbPosition: {

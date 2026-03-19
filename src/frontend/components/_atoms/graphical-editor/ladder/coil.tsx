@@ -78,7 +78,6 @@ export const Coil = (block: CoilProps) => {
     if (inputVariableRef.current && selected) {
       inputVariableRef.current.focus()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /**
@@ -130,7 +129,6 @@ export const Coil = (block: CoilProps) => {
     }
 
     setWrongVariable(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pous])
 
   const getDebuggerFillColor = (): string | undefined => {

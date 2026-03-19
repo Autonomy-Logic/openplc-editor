@@ -4,7 +4,7 @@ import { CONSTANTS } from '../../../utils'
 
 const {
   theme: { variants },
-} = CONSTANTS
+} = CONSTANTS as { theme: { variants: Record<string, string> } }
 
 const ThemeSchema = z.string().refine((theme) => Object.values(variants).includes(theme))
 
