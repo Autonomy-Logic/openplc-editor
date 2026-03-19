@@ -1,5 +1,3 @@
-import { createDirectory, fileOrDirectoryExists } from '../../../utils'
-import { CreateJSONFile } from '../../../utils'
 import {
   CreateProjectDefaultDirectoriesResponse,
   CreateProjectFileProps,
@@ -12,6 +10,9 @@ import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { writeFileSync } from 'fs'
+
+import { createDirectory, fileOrDirectoryExists } from '../../../utils'
+import { CreateJSONFile } from '../../../utils'
 
 const definePou = (language: CreateProjectFileProps['language']): PLCPou => ({
   type: 'program',

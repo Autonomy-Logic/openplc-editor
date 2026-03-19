@@ -1,8 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
-import { SerialPort } from 'serialport'
-
 import { getErrorMessage } from '@root/utils/get-error-message'
+import { SerialPort } from 'serialport'
 
 import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-client'
 

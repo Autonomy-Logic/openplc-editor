@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { useAccelerator, useSystem } from '../../../../middleware/shared/providers'
+import { useAccelerator, useCapabilities, useSystem } from '../../../../middleware/shared/providers'
 import openPlcLogo from '../../../assets/icons/about/logo.svg'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent } from '../../_molecules/modal'
@@ -10,6 +10,7 @@ const AboutModal = () => {
     workspaceActions: { setModalOpen },
     workspace: { isModalOpen },
   } = useOpenPLCStore()
+  const capabilities = useCapabilities()
   const system = useSystem()
   const accelerator = useAccelerator()
 
@@ -44,11 +45,12 @@ const AboutModal = () => {
   }
 
   useEffect(() => {
+    if (!capabilities.hasAboutDialog) return
     const unsubscribe = accelerator.onAbout(() => {
       openAboutModal()
     })
     return unsubscribe
-  }, [])
+  }, [capabilities.hasAboutDialog])
 
   return (
     <Modal onOpenChange={handleOpenChange} open={isAboutModalOpen}>

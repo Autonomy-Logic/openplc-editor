@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from 'react'
-
-import type { OpcUaServerConfig, OpcUaUser } from '@root/middleware/shared/ports/types'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
+import type { OpcUaServerConfig, OpcUaUser } from '@root/middleware/shared/ports/types'
+import { useCallback, useMemo, useState } from 'react'
+
 import { UserModal } from './user-modal'
 
 interface UsersTabProps {

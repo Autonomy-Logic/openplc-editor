@@ -140,6 +140,13 @@ export function createEditorCompilerAdapter(): CompilerPort {
             args.runtimeJwtToken ?? null,
           ],
           (data: Record<string, unknown>) => {
+            // Extract simulator firmware path BEFORE the closePort early return,
+            // because the backend sends both fields in the same message.
+            if (data.simulatorFirmwarePath) {
+              hexPath = data.simulatorFirmwarePath as string
+              onProgress({ stage: 'done', message: 'Simulator firmware ready', firmwarePath: hexPath })
+            }
+
             if (data.closePort) {
               onProgress({ stage: 'done', message: 'Compilation complete' })
               resolve(
@@ -148,10 +155,6 @@ export function createEditorCompilerAdapter(): CompilerPort {
                   : { success: true, message: 'Compilation complete', hexPath },
               )
               return
-            }
-
-            if (data.simulatorFirmwarePath) {
-              hexPath = data.simulatorFirmwarePath as string
             }
 
             // Forward plcStatus for runtime status updates

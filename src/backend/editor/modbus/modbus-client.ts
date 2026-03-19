@@ -1,6 +1,5 @@
-import { Socket } from 'net'
-
 import { getErrorMessage } from '@root/utils/get-error-message'
+import { Socket } from 'net'
 
 export enum ModbusFunctionCode {
   DEBUG_INFO = 0x41,

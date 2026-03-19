@@ -1,5 +1,4 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-
 import { encodeCharactersFromVariable } from './encodeCharactersFromVariable'
 import { injectPythonRuntime } from './injectPythonRuntime'
 

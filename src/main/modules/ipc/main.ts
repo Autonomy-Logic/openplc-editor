@@ -1,8 +1,9 @@
-import { getProjectPath } from '../../../backend/editor/utils'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { PLCPou, PLCProject, PLCProjectData } from '@root/types/PLC/open-plc'
 import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
+import { getErrorMessage } from '@root/utils/get-error-message'
 import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
@@ -12,15 +13,14 @@ import https from 'https'
 import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
-import { PLCPou, PLCProject, PLCProjectData } from '@root/types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
-import { logger } from '../../../backend/editor/services'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
+import { logger } from '../../../backend/editor/services'
 import { SimulatorModule } from '../../../backend/editor/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/editor/simulator/virtual-serial-port'
+import { getProjectPath } from '../../../backend/editor/utils'
 import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
-import { getErrorMessage } from '@root/utils/get-error-message'
 
 type IDataToWrite = {
   projectPath: string

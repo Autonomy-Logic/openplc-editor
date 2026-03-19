@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useCapabilities } from '../../../../middleware/shared/providers'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
@@ -11,6 +12,7 @@ import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '../../_mole
 type PouLeafLang = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 
 const Project = () => {
+  const capabilities = useCapabilities()
   const {
     project: {
       data: { pous, dataTypes, configurations, servers, remoteDevices },
@@ -252,18 +254,20 @@ const Project = () => {
                 })
               }
             />
-            <ProjectTreeLeaf
-              leafLang='devOrchestrators'
-              leafType='device'
-              label='Orchestrators'
-              onClick={() =>
-                handleCreateTab({
-                  name: 'Orchestrators',
-                  path: `/device/orchestrators`,
-                  elementType: { type: 'device', derivation: 'orchestrators' },
-                })
-              }
-            />
+            {capabilities.hasOrchestratorDevices && (
+              <ProjectTreeLeaf
+                leafLang='devOrchestrators'
+                leafType='device'
+                label='Orchestrators'
+                onClick={() =>
+                  handleCreateTab({
+                    name: 'Orchestrators',
+                    path: `/device/orchestrators`,
+                    elementType: { type: 'device', derivation: 'orchestrators' },
+                  })
+                }
+              />
+            )}
           </ProjectTreeBranch>
 
           {/* Project Servers tree branch */}

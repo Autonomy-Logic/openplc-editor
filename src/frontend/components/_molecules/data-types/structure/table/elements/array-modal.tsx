@@ -1,8 +1,8 @@
+import { baseTypeSchema } from '@root/middleware/shared/ports/plc-schemas'
+import type { PLCDataType, PLCStructureVariable } from '@root/middleware/shared/ports/types'
 import { useEffect, useState } from 'react'
 import type { z } from 'zod'
 
-import { baseTypeSchema } from '@root/middleware/shared/ports/plc-schemas'
-import type { PLCDataType, PLCStructureVariable } from '@root/middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../../../store'
 import { arrayValidation } from '../../../../../../store/slices/project/validation/variables'
 import { DimensionsModal } from '../../../../../_atoms/dimensions-modal'

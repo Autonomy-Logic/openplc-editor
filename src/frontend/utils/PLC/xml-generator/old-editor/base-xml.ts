@@ -2,7 +2,7 @@ import { ProjectState } from '@root/frontend/store/slices'
 import { BaseXml } from '@root/types/PLC/xml-data/old-editor/base-diagram'
 import { create } from 'xmlbuilder2'
 
-import formatDate from '../../../format-date'
+import { formatDate } from '../../../format-date'
 import { oldEditorInstanceToXml } from './instances-xml'
 import { oldEditorParsePousToXML } from './pou-xml'
 

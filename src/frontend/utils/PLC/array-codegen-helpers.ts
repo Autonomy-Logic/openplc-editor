@@ -1,5 +1,4 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-
 import { parseDimensionRange } from './dimension-range'
 
 const BASE_TYPE_TO_IEC: Record<string, string> = {

@@ -1,4 +1,3 @@
-import { fileOrDirectoryExists } from '../../utils'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
@@ -12,6 +11,7 @@ import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
 import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '../../../types/PLC/open-plc'
+import { fileOrDirectoryExists } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
 class ProjectService {

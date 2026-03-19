@@ -1,7 +1,6 @@
 /* eslint-disable no-useless-escape */
-import { languages } from 'monaco-editor'
-
 import { PLCDataType } from '@root/middleware/shared/ports/types'
+import { languages } from 'monaco-editor'
 
 type PLCEnumeratedDatatype = Extract<PLCDataType, { derivation: 'enumerated' }>
 type PLCStructureDatatype = Extract<PLCDataType, { derivation: 'structure' }>

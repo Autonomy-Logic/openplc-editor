@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from 'react'
-
 import { RefreshIcon } from '@root/frontend/assets/icons/interface/Refresh'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { useCallback, useMemo, useState } from 'react'
+
 import { SelectField } from '../../../../../../_molecules/select-field'
 
 const BoardConfiguration = () => {

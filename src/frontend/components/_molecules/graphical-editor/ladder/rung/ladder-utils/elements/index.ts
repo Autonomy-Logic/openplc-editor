@@ -1,6 +1,6 @@
+import type { RungLadderState } from '@root/frontend/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
-import type { RungLadderState } from '@root/frontend/store/slices'
 import type { BasicNodeData, PlaceholderNode } from '../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { disconnectNodes } from '../edges'
 import { isNodeOfType, removeNode } from '../nodes'

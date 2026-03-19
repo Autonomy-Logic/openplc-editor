@@ -1,7 +1,7 @@
+import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
 
-import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
-import { useOpenPLCStore } from '@root/frontend/store'
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'
 import {

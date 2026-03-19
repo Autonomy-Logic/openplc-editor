@@ -1,7 +1,7 @@
+import { PLCProject } from '@root/middleware/shared/ports/types'
 import { escapeRegExp } from 'lodash'
 import * as monaco from 'monaco-editor'
 
-import { PLCProject } from '@root/middleware/shared/ports/types'
 import { StandardFunctionBlocks } from '../../../../../../data/library/standard-function-blocks'
 import type { VariableDTO } from '../../../../../../store/slices/project'
 

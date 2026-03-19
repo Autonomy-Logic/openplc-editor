@@ -1,8 +1,8 @@
+import { BrowserWindow, IpcMain } from 'electron/main'
+
 import MenuBuilder from '../../../../../../main/menu'
 import { CompilerModule } from '../../../../compiler'
 import { HardwareModule } from '../../../../hardware'
-import { BrowserWindow, IpcMain } from 'electron/main'
-
 import { PouService, ProjectService } from '../../../../services'
 import { TStoreType } from '../store'
 

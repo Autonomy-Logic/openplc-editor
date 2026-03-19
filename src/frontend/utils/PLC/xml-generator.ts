@@ -1,8 +1,8 @@
+import type { ProjectState } from '@root/frontend/store/slices'
 import { BaseXml as codeSysBaseXml } from '@root/types/PLC/xml-data/codesys'
 import { BaseXml as oldBaseXml } from '@root/types/PLC/xml-data/old-editor'
 import { create } from 'xmlbuilder2'
 
-import type { ProjectState } from '@root/frontend/store/slices'
 import {
   codeSysInstanceToXml,
   codeSysParseDataTypesToXML,

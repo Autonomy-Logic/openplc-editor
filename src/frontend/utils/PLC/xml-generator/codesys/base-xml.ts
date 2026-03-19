@@ -1,6 +1,6 @@
 import { BaseXml } from '@root/types/PLC/xml-data/codesys/base-diagram'
 
-import formatDate from '../../../format-date'
+import { formatDate } from '../../../format-date'
 
 const getBaseCodeSysXmlStructure = (): BaseXml => ({
   project: {

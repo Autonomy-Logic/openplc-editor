@@ -1,9 +1,9 @@
 import * as Popover from '@radix-ui/react-popover'
+import type { ModbusIOGroup, ModbusIOPoint } from '@root/middleware/shared/ports/types'
+import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import type { ModbusIOGroup, ModbusIOPoint } from '@root/middleware/shared/ports/types'
-import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'

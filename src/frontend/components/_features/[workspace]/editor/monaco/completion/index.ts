@@ -1,7 +1,7 @@
-import * as monaco from 'monaco-editor'
-
 import { PLCVariable } from '@root/middleware/shared/ports/types'
 import { PLCProject } from '@root/middleware/shared/ports/types'
+import * as monaco from 'monaco-editor'
+
 import type { EditorState } from '../../../../../../store/slices/editor'
 import type { LibraryState } from '../../../../../../store/slices/library'
 import { pythonSnippets } from '../configs/languages/python/python.snippets'

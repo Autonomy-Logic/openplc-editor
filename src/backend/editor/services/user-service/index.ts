@@ -1,10 +1,9 @@
+import { getErrorMessage } from '@root/utils/get-error-message'
 import { exec } from 'child_process'
 import { app } from 'electron'
 import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { promisify } from 'util'
-
-import { getErrorMessage } from '@root/utils/get-error-message'
 
 import { ARDUINO_DATA } from './data/arduino'
 import { HISTORY_DATA } from './data/history'

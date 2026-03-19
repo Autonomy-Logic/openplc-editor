@@ -1,6 +1,5 @@
-import { io, Socket } from 'socket.io-client'
-
 import { getErrorMessage } from '@root/utils/get-error-message'
+import { io, Socket } from 'socket.io-client'
 
 import { ModbusDebugResponse, ModbusFunctionCode } from '../modbus/modbus-client'
 

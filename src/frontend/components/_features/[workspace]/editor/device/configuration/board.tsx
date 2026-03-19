@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+import type { TimingStats } from '@root/middleware/shared/ports/types'
+import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { TimingStats } from '@root/middleware/shared/ports/types'
-import { useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
@@ -26,6 +26,7 @@ import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-edi
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
+  const capabilities = useCapabilities()
   const device = useDevice()
   const runtime = useRuntime()
 
@@ -429,7 +430,7 @@ const Board = memo(function () {
                 )}
               </div>
             </>
-          ) : (
+          ) : capabilities.hasLocalSerialPorts ? (
             <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
               <Label
                 id='communication-ports-selector-label'
@@ -487,7 +488,7 @@ const Board = memo(function () {
                 <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
               </button>
             </div>
-          )}
+          ) : null}
           {!isOpenPLCRuntimeTarget(currentBoardInfo) && !isSimulatorTarget(currentBoardInfo) && (
             <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
               <Label id='board-specs-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
