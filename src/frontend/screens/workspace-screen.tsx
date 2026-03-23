@@ -2,10 +2,9 @@ import * as Tabs from '@radix-ui/react-tabs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
-import { useCapabilities, useDebugger, useDevice } from '../../middleware/shared/providers'
+import { useCapabilities, useChatPanel, useDebugger, useDevice } from '../../middleware/shared/providers'
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
-import { AIChatPanel } from '../components/_features/[workspace]/ai-chat/ai-chat-panel'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
@@ -37,6 +36,7 @@ const SIMULATOR_BOARD_NAME = 'OpenPLC Simulator'
 
 const WorkspaceScreen = () => {
   const capabilities = useCapabilities()
+  const ChatPanel = useChatPanel()
   const debuggerPort = useDebugger()
   const device = useDevice()
 
@@ -544,7 +544,7 @@ const WorkspaceScreen = () => {
               </ResizablePanelGroup>
             </div>
           </ResizablePanel>
-          {capabilities.hasAIAssistant && isChatOpen && isAIEnabled && hasAIConsented && (
+          {ChatPanel && capabilities.hasAIAssistant && isChatOpen && isAIEnabled && hasAIConsented && (
             <>
               <ResizableHandle
                 id='chatHandle'
@@ -558,7 +558,7 @@ const WorkspaceScreen = () => {
                 maxSize={25}
                 className='min-w-xs relative flex h-full min-h-0 w-full'
               >
-                <AIChatPanel />
+                <ChatPanel />
               </ResizablePanel>
             </>
           )}

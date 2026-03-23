@@ -1,3 +1,4 @@
+export { ExtensionPanelProvider, useChatPanel } from './extension-panels'
 export { PlatformProvider, usePlatform } from './platform-context'
 export {
   useAccelerator,

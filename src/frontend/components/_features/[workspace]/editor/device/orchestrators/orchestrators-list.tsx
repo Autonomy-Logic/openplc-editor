@@ -8,7 +8,17 @@ import {
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
-import { runtimeGetUsersInfo, runtimeLogout } from '../../../../../../services/api/runtime-api'
+// Runtime API stubs — inlined after removing dead runtime-api.ts
+function runtimeGetUsersInfo(
+  _orchestratorAgentId: string,
+  _deviceId: string,
+): Promise<{ error?: string; hasUsers: boolean }> {
+  return Promise.resolve({ hasUsers: false })
+}
+
+async function runtimeLogout(_orchestratorAgentId: string, _deviceId: string, _jwtToken: string): Promise<void> {
+  // Stub
+}
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { isDev } from '../../../../../../utils/get-env'

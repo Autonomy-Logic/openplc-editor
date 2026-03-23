@@ -503,7 +503,7 @@ export interface RuntimeLogEntry {
 // Debugger
 // ---------------------------------------------------------------------------
 
-export type DebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator'
+export type DebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator' | 'webrtc'
 
 export interface DebugConnectionConfig {
   connectionType: DebugConnectionType
@@ -513,6 +513,11 @@ export interface DebugConnectionConfig {
     baudRate?: number
     slaveId?: number
     jwtToken?: string
+    // WebRTC-specific (web only)
+    agentId?: string
+    deviceId?: string
+    username?: string
+    password?: string
   }
 }
 
