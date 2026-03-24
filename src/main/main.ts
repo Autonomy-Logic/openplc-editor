@@ -92,12 +92,16 @@ const installExtensions = async () => {
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS
   const extensions = ['REACT_DEVELOPER_TOOLS']
 
-  return installer
-    .default(
+  try {
+    return await installer.default(
       extensions.map((name) => installer[name as keyof typeof Installer]),
       forceDownload,
     )
-    .catch(console.log)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`Skipping development extension installation: ${message}`)
+    return []
+  }
 }
 
 const createMainWindow = async () => {

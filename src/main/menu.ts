@@ -32,7 +32,19 @@ export default class MenuBuilder {
     this.projectService = new ProjectService(mainWindow)
   }
 
+  private hasLiveWindow(): boolean {
+    return !this.mainWindow.isDestroyed()
+  }
+
+  private getFallbackMenu(): Menu {
+    return Menu.getApplicationMenu() ?? Menu.buildFromTemplate([])
+  }
+
   async buildMenu(): Promise<Menu> {
+    if (!this.hasLiveWindow()) {
+      return this.getFallbackMenu()
+    }
+
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true') {
       this.setupDevelopmentEnvironment()
     }
@@ -129,13 +141,18 @@ export default class MenuBuilder {
    */
 
   setupDevelopmentEnvironment(): void {
+    if (!this.hasLiveWindow()) return
+
     this.mainWindow.webContents.on('context-menu', (_, props) => {
+      if (!this.hasLiveWindow()) return
+
       const { x, y } = props
 
       Menu.buildFromTemplate([
         {
           label: 'Inspect element',
           click: () => {
+            if (!this.hasLiveWindow()) return
             this.mainWindow.webContents.inspectElement(x, y)
           },
         },
@@ -147,7 +164,9 @@ export default class MenuBuilder {
     const newTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
     nativeTheme.themeSource = newTheme
     store.set('theme', newTheme)
-    this.mainWindow.webContents.send('system:update-theme')
+    if (this.hasLiveWindow()) {
+      this.mainWindow.webContents.send('system:update-theme')
+    }
     void this.buildMenu()
   }
 
