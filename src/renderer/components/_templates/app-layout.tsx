@@ -28,22 +28,26 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
 
   useEffect(() => {
     const getUserSystemProps = async () => {
-      const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
-      const recent = await window.bridge.retrieveRecent()
+      try {
+        const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
+        const recent = await window.bridge.retrieveRecent()
 
-      setRecent(recent)
-      setSystemConfigs({
-        OS,
-        arch: architecture,
-        shouldUseDarkMode: prefersDarkMode,
-        isWindowMaximized,
-      })
-      if (OS === 'darwin' || OS === 'win32') {
-        setIsLinux(false)
+        setRecent(recent)
+        setSystemConfigs({
+          OS,
+          arch: architecture,
+          shouldUseDarkMode: prefersDarkMode,
+          isWindowMaximized,
+        })
+        if (OS === 'darwin' || OS === 'win32') {
+          setIsLinux(false)
+        }
+      } catch (error) {
+        console.error('Failed to read system info during app layout initialization:', error)
       }
     }
     void getUserSystemProps()
-  }, [setSystemConfigs])
+  }, [setRecent, setSystemConfigs])
 
   return (
     <>

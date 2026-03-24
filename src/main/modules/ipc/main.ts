@@ -751,11 +751,13 @@ class MainProcessBridge implements MainIpcModule {
       nativeTheme.themeSource = savedTheme
     }
 
+    const isWindowMaximized = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.isMaximized() : false
+
     return {
       OS: platform,
       architecture: 'x64',
       prefersDarkMode: nativeTheme.shouldUseDarkColors,
-      isWindowMaximized: this.mainWindow?.isMaximized(),
+      isWindowMaximized,
     }
   }
   handleStoreRetrieveRecent = async () => {
