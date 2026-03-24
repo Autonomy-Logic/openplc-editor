@@ -589,6 +589,14 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     remoteDevices: remoteDeviceFiles,
   }
 
+  const deletedPouKeys = new Set(
+    (returnData.project.data.deletedPous ?? []).map((deletedPou) => `${deletedPou.type}:${deletedPou.name}`),
+  )
+
+  if (deletedPouKeys.size > 0) {
+    returnData.pous = returnData.pous.filter((pou) => !deletedPouKeys.has(`${pou.type}:${pou.data.name}`))
+  }
+
   // Check if project needs migration from ID-based to name+type-based system
   if (needsMigration(returnData.project.data)) {
     console.log('Project needs migration from ID-based to name+type-based system')

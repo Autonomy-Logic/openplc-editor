@@ -363,8 +363,25 @@ export const createSharedSlice: StateCreator<
       getState().modalActions.openModal('confirm-delete-element', modalData)
     },
 
-    delete: (data) => {
+    delete: async (data) => {
       const { file: targetLabel } = data
+      const projectPath = getState().project.meta.path
+      const extension = getExtensionFromLanguage(data.pou.data.body.language)
+      const typeDir = getFolderFromPouType(data.pou.type)
+      const actualFilePath = `${projectPath}/pous/${typeDir}/${targetLabel}${extension}`
+      const legacyJsonFilePath = `${projectPath}/pous/${typeDir}/${targetLabel}.json`
+
+      try {
+        await window.bridge.deletePouFile(actualFilePath)
+      } catch (error) {
+        console.error(`Error deleting POU file ${actualFilePath}:`, error)
+      }
+
+      try {
+        await window.bridge.deletePouFile(legacyJsonFilePath)
+      } catch {
+        // Legacy JSON files are optional; ignore if missing.
+      }
 
       getState().projectActions.deletePou(targetLabel)
       getState().ladderFlowActions.removeLadderFlow(targetLabel)
@@ -2034,6 +2051,13 @@ export const createSharedSlice: StateCreator<
 
     saveFile: async (name) => {
       const { file } = getState().fileActions.getFile({ name: name })
+      const currentProject = getState().project
+      const deviceDefinitions = getState().deviceDefinitions
+      const hasPendingProjectStructureDeletes =
+        (currentProject.data.deletedPous?.length ?? 0) > 0 ||
+        (currentProject.data.deletedServers?.length ?? 0) > 0 ||
+        (currentProject.data.deletedRemoteDevices?.length ?? 0) > 0
+
       if (!file) {
         const editor = getState().editor
         if (editor.type === 'available') {
@@ -2055,6 +2079,10 @@ export const createSharedSlice: StateCreator<
           success: false,
           error: { title: 'Error saving file', description: `File with name ${name} does not exist.` },
         }
+      }
+
+      if (hasPendingProjectStructureDeletes) {
+        return await getState().sharedWorkspaceActions.saveProject(currentProject, deviceDefinitions)
       }
 
       const projectFilePath = getState().project.meta.path
