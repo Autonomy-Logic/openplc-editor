@@ -894,9 +894,19 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
           const boardCore = availableBoards.get(boardTarget)?.core || null
           const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
+          const { projectData: processedProjectData, validationFailed } = preprocessPous(
+            projectData,
+            isSimulatorTarget(currentBoardInfo),
+            (level, message) => consoleActions.addLog({ id: crypto.randomUUID(), level, message }),
+          )
+
+          if (validationFailed) {
+            setIsDebuggerProcessing(false)
+            return
+          }
 
           window.bridge.runCompileProgram(
-            [projectPath, boardTarget, boardCore, false, projectData, targetIpAddress ?? '', runtimeJwtToken],
+            [projectPath, boardTarget, boardCore, false, processedProjectData, targetIpAddress ?? '', runtimeJwtToken],
             (data: {
               logLevel?: 'info' | 'error' | 'warning'
               message: string | Buffer
