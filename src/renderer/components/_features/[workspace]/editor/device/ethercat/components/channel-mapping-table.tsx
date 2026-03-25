@@ -1,6 +1,6 @@
 import type { ESIChannel, EtherCATChannelMapping } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
-import { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 type ChannelMappingTableProps = {
   channels: ESIChannel[]
@@ -13,34 +13,40 @@ type FilterDirection = 'all' | 'input' | 'output'
 /**
  * Alias cell with local state to avoid re-rendering the entire table on every keystroke.
  */
-const AliasCell = ({
-  channelId,
-  alias,
-  onAliasChange,
-}: {
-  channelId: string
-  alias: string
-  onAliasChange: (channelId: string, newAlias: string) => void
-}) => {
-  const [localAlias, setLocalAlias] = useState(alias)
+const AliasCell = React.memo(
+  ({
+    channelId,
+    alias,
+    onAliasChange,
+  }: {
+    channelId: string
+    alias: string
+    onAliasChange: (channelId: string, newAlias: string) => void
+  }) => {
+    const [localAlias, setLocalAlias] = useState(alias)
 
-  const handleBlur = useCallback(() => {
-    if (localAlias !== alias) {
-      onAliasChange(channelId, localAlias)
-    }
-  }, [channelId, localAlias, alias, onAliasChange])
+    useEffect(() => {
+      setLocalAlias(alias)
+    }, [alias])
 
-  return (
-    <input
-      type='text'
-      value={localAlias}
-      onChange={(e) => setLocalAlias(e.target.value)}
-      onBlur={handleBlur}
-      placeholder='Alias'
-      className='h-[24px] w-full rounded border border-neutral-300 bg-white px-1.5 font-mono text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
-    />
-  )
-}
+    const handleBlur = useCallback(() => {
+      if (localAlias !== alias) {
+        onAliasChange(channelId, localAlias)
+      }
+    }, [channelId, localAlias, alias, onAliasChange])
+
+    return (
+      <input
+        type='text'
+        value={localAlias}
+        onChange={(e) => setLocalAlias(e.target.value)}
+        onBlur={handleBlur}
+        placeholder='Alias'
+        className='h-[24px] w-full rounded border border-neutral-300 bg-white px-1.5 font-mono text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+      />
+    )
+  },
+)
 
 /**
  * Channel Mapping Table Component

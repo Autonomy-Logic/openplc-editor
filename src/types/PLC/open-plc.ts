@@ -630,31 +630,31 @@ const EtherCATStartupChecksSchema = z.object({
 })
 
 const EtherCATAddressingSchema = z.object({
-  ethercatAddress: z.number(),
+  ethercatAddress: z.number().int().min(0).max(65535),
 })
 
 const EtherCATTimeoutsSchema = z.object({
-  sdoTimeoutMs: z.number(),
-  initToPreOpTimeoutMs: z.number(),
-  safeOpToOpTimeoutMs: z.number(),
+  sdoTimeoutMs: z.number().int().min(0),
+  initToPreOpTimeoutMs: z.number().int().min(0),
+  safeOpToOpTimeoutMs: z.number().int().min(0),
 })
 
 const EtherCATWatchdogSchema = z.object({
   smWatchdogEnabled: z.boolean(),
-  smWatchdogMs: z.number(),
+  smWatchdogMs: z.number().int().min(0),
   pdiWatchdogEnabled: z.boolean(),
-  pdiWatchdogMs: z.number(),
+  pdiWatchdogMs: z.number().int().min(0),
 })
 
 const EtherCATDistributedClocksSchema = z.object({
   dcEnabled: z.boolean(),
-  dcSyncUnitCycleUs: z.number(),
+  dcSyncUnitCycleUs: z.number().int().min(0),
   dcSync0Enabled: z.boolean(),
-  dcSync0CycleUs: z.number(),
-  dcSync0ShiftUs: z.number(),
+  dcSync0CycleUs: z.number().int().min(0),
+  dcSync0ShiftUs: z.number().int().min(0),
   dcSync1Enabled: z.boolean(),
-  dcSync1CycleUs: z.number(),
-  dcSync1ShiftUs: z.number(),
+  dcSync1CycleUs: z.number().int().min(0),
+  dcSync1ShiftUs: z.number().int().min(0),
 })
 
 const EtherCATSlaveConfigSchema = z.object({

@@ -42,6 +42,17 @@ interface ESIServiceResponse {
 class ESIService {
   private readonly ESI_DIR = 'devices/esi'
   private readonly REPOSITORY_FILE = 'repository.json'
+  private indexLock: Promise<void> = Promise.resolve()
+
+  /**
+   * Serialize access to the repository index to prevent race conditions.
+   */
+  private withIndexLock<T>(fn: () => Promise<T>): Promise<T> {
+    const current = this.indexLock
+    let resolve: () => void
+    this.indexLock = new Promise<void>((r) => (resolve = r))
+    return current.then(fn).finally(() => resolve!())
+  }
 
   /**
    * Get the ESI directory path for a project
@@ -272,23 +283,25 @@ class ESIService {
    * Delete a repository item and update the v2 index (no re-parsing)
    */
   async deleteRepositoryItemV2(projectPath: string, itemId: string): Promise<ESIServiceResponse> {
-    try {
-      // Delete the XML file
-      const deleteResult = await this.deleteXmlFile(projectPath, itemId)
-      if (!deleteResult.success) {
-        return deleteResult
-      }
+    return this.withIndexLock(async () => {
+      try {
+        // Delete the XML file
+        const deleteResult = await this.deleteXmlFile(projectPath, itemId)
+        if (!deleteResult.success) {
+          return deleteResult
+        }
 
-      // Update the v2 index without the deleted item
-      const currentItems = await this.loadLightItemsFromIndex(projectPath)
-      const updatedItems = currentItems.filter((i) => i.id !== itemId)
-      return this.saveRepositoryIndexV2(projectPath, updatedItems)
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to delete repository item',
+        // Update the v2 index without the deleted item
+        const currentItems = await this.loadLightItemsFromIndex(projectPath)
+        const updatedItems = currentItems.filter((i) => i.id !== itemId)
+        return this.saveRepositoryIndexV2(projectPath, updatedItems)
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to delete repository item',
+        }
       }
-    }
+    })
   }
 
   /**
@@ -398,73 +411,77 @@ class ESIService {
     filename: string,
     content: string,
   ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> {
-    try {
-      // Check for duplicate
-      const existingIndex = await this.loadRepositoryIndex(projectPath)
-      const existingFilenames = new Set(existingIndex?.items.map((i) => i.filename) ?? [])
-      if (existingFilenames.has(filename)) {
-        return { success: true } // skip duplicate silently
-      }
-
-      // Parse
-      const parseResult = parseESILight(content, filename)
-      if (!parseResult.success || !parseResult.vendor || !parseResult.devices) {
-        return { success: false, error: parseResult.error || 'Parse failed' }
-      }
-
-      // Save XML to disk
-      const itemId = uuidv4()
-      const saveResult = await this.saveXmlFile(projectPath, itemId, content)
-      if (!saveResult.success) {
-        return { success: false, error: saveResult.error ?? 'Failed to save XML file' }
-      }
-
-      const item: ESIRepositoryItemLight = {
-        id: itemId,
-        filename,
-        vendor: parseResult.vendor,
-        devices: parseResult.devices,
-        loadedAt: Date.now(),
-        warnings: parseResult.warnings,
-      }
-
-      // Append to v2 index
-      const currentItems = await this.loadLightItemsFromIndex(projectPath)
-      await this.saveRepositoryIndexV2(projectPath, [...currentItems, item])
-
-      return { success: true, item }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
+    // Parse outside the lock (CPU-bound, no index access)
+    const parseResult = parseESILight(content, filename)
+    if (!parseResult.success || !parseResult.vendor || !parseResult.devices) {
+      return { success: false, error: parseResult.error || 'Parse failed' }
     }
+
+    return this.withIndexLock(async () => {
+      try {
+        // Check for duplicate
+        const existingIndex = await this.loadRepositoryIndex(projectPath)
+        const existingFilenames = new Set(existingIndex?.items.map((i) => i.filename) ?? [])
+        if (existingFilenames.has(filename)) {
+          return { success: true } // skip duplicate silently
+        }
+
+        // Save XML to disk
+        const itemId = uuidv4()
+        const saveResult = await this.saveXmlFile(projectPath, itemId, content)
+        if (!saveResult.success) {
+          return { success: false, error: saveResult.error ?? 'Failed to save XML file' }
+        }
+
+        const item: ESIRepositoryItemLight = {
+          id: itemId,
+          filename,
+          vendor: parseResult.vendor!,
+          devices: parseResult.devices!,
+          loadedAt: Date.now(),
+          warnings: parseResult.warnings,
+        }
+
+        // Append to v2 index
+        const currentItems = await this.loadLightItemsFromIndex(projectPath)
+        await this.saveRepositoryIndexV2(projectPath, [...currentItems, item])
+
+        return { success: true, item }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    })
   }
 
   /**
    * Clear the entire ESI repository: delete all XML files and reset the index.
    */
   async clearRepository(projectPath: string): Promise<ESIServiceResponse> {
-    try {
-      const esiDir = this.getEsiDir(projectPath)
-      if (!fileOrDirectoryExists(esiDir)) return { success: true }
+    return this.withIndexLock(async () => {
+      try {
+        const esiDir = this.getEsiDir(projectPath)
+        if (!fileOrDirectoryExists(esiDir)) return { success: true }
 
-      // Delete all files in the ESI directory
-      const entries = await promises.readdir(esiDir)
-      await Promise.all(entries.map((entry) => promises.unlink(join(esiDir, entry))))
+        // Delete only XML files, not the index
+        const entries = await promises.readdir(esiDir)
+        const xmlFiles = entries.filter((entry) => entry.endsWith('.xml'))
+        await Promise.all(xmlFiles.map((entry) => promises.unlink(join(esiDir, entry))))
 
-      // Recreate directory with empty v2 index
-      await this.ensureEsiDir(projectPath)
-      const repoPath = this.getRepositoryPath(projectPath)
-      await promises.writeFile(repoPath, JSON.stringify({ version: 2, items: [] }, null, 2), 'utf-8')
+        // Write empty v2 index
+        const repoPath = this.getRepositoryPath(projectPath)
+        await promises.writeFile(repoPath, JSON.stringify({ version: 2, items: [] }, null, 2), 'utf-8')
 
-      return { success: true }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to clear repository',
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to clear repository',
+        }
       }
-    }
+    })
   }
 
   /**

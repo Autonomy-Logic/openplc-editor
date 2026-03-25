@@ -205,9 +205,10 @@ const EtherCATEditor = () => {
     try {
       const result = await window.bridge.etherCATGetInterfaces(ipAddress, jwtToken)
       if (result.success && result.data) {
-        setInterfaces(result.data)
-        if (result.data.length > 0 && !selectedInterface) {
-          setSelectedInterface(result.data[0].name)
+        const fetchedInterfaces = result.data
+        setInterfaces(fetchedInterfaces)
+        if (fetchedInterfaces.length > 0) {
+          setSelectedInterface((prev) => prev || fetchedInterfaces[0].name)
         }
       } else {
         setInterfaces([])
@@ -219,7 +220,7 @@ const EtherCATEditor = () => {
     } finally {
       setIsLoadingInterfaces(false)
     }
-  }, [isConnectedToRuntime, ipAddress, jwtToken, selectedInterface])
+  }, [isConnectedToRuntime, ipAddress, jwtToken])
 
   // Scan for EtherCAT devices
   const scanDevices = useCallback(async () => {
@@ -258,6 +259,11 @@ const EtherCATEditor = () => {
       setIsScanning(false)
     }
   }, [isConnectedToRuntime, ipAddress, jwtToken, selectedInterface])
+
+  // Reset repository loaded flag when project changes
+  useEffect(() => {
+    repositoryLoadedRef.current = false
+  }, [projectPath])
 
   // Load ESI repository
   useEffect(() => {

@@ -16,6 +16,7 @@ import type {
 import { cn } from '@root/utils'
 import { enrichDeviceData } from '@root/utils/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/utils/ethercat/esi-parser'
+import { extractDefaultSdoConfigurations } from '@root/utils/ethercat/sdo-config-defaults'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ChannelMappingTable } from './channel-mapping-table'
@@ -48,6 +49,12 @@ const inputClassName =
   'h-[26px] w-24 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
 
 const disabledInputClassName = 'cursor-not-allowed opacity-50'
+
+const parseNumericInput = (value: string, min = 0): number | undefined => {
+  const parsed = parseInt(value, 10)
+  if (isNaN(parsed) || parsed < min) return undefined
+  return parsed
+}
 
 /**
  * Configured Device Row Component
@@ -148,11 +155,13 @@ const ConfiguredDeviceRow = ({
   }, [
     isExpanded,
     projectPath,
-    device.esiDeviceRef,
+    device.esiDeviceRef.repositoryItemId,
+    device.esiDeviceRef.deviceIndex,
     device.channelMappings.length,
     device.channelInfo,
     device.rxPdos,
     device.txPdos,
+    device.sdoConfigurations,
     onUpdateChannelMappings,
     onEnrichDevice,
     externalAddresses,
@@ -178,15 +187,6 @@ const ConfiguredDeviceRow = ({
     },
     [config, onUpdateDevice],
   )
-
-  /**
-   * Parse a number input value, returning the parsed int or undefined if invalid.
-   */
-  const parseNumericInput = (value: string, min = 0): number | undefined => {
-    const parsed = parseInt(value, 10)
-    if (isNaN(parsed) || parsed < min) return undefined
-    return parsed
-  }
 
   return (
     <>
@@ -649,7 +649,11 @@ const ConfiguredDeviceRow = ({
                       CoE Object Dictionary available. Auto-configure startup parameters?
                     </p>
                     <button
-                      onClick={() => onEnrichDevice(enrichDeviceData({ coeObjects } as never))}
+                      onClick={() => {
+                        if (coeObjects) {
+                          onUpdateSdoConfigurations(extractDefaultSdoConfigurations(coeObjects))
+                        }
+                      }}
                       className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
                     >
                       Auto-configure from ESI defaults

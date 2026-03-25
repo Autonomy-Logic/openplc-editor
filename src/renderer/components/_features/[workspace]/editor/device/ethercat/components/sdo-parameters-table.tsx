@@ -1,7 +1,7 @@
 import { ArrowIcon } from '@root/renderer/assets/icons'
 import type { SDOConfigurationEntry } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 type SdoParametersTableProps = {
   sdoConfigurations: SDOConfigurationEntry[]
@@ -60,6 +60,10 @@ const ValueCell = ({
   onValueChange: (index: string, subIndex: number, value: string) => void
 }) => {
   const [localValue, setLocalValue] = useState(entry.value)
+
+  useEffect(() => {
+    setLocalValue(entry.value)
+  }, [entry.value])
 
   const handleBlur = useCallback(() => {
     if (localValue !== entry.value) {

@@ -46,6 +46,12 @@ const inputClassName =
 
 const disabledInputClassName = 'cursor-not-allowed opacity-50'
 
+const parseNumericInput = (value: string, min = 0): number | undefined => {
+  const parsed = parseInt(value, 10)
+  if (isNaN(parsed) || parsed < min) return undefined
+  return parsed
+}
+
 type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings'
 
 const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
@@ -177,12 +183,6 @@ const DeviceDetailPanel = ({
     },
     [config, onUpdateDevice],
   )
-
-  const parseNumericInput = (value: string, min = 0): number | undefined => {
-    const parsed = parseInt(value, 10)
-    if (isNaN(parsed) || parsed < min) return undefined
-    return parsed
-  }
 
   return (
     <div className='flex h-full flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900'>
