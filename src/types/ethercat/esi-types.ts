@@ -493,10 +493,6 @@ export interface EtherCATStartupChecks {
   checkVendorId: boolean
   /** Verify slave product code matches ESI definition */
   checkProductCode: boolean
-  /** Verify slave revision number matches ESI definition */
-  checkRevisionNumber: boolean
-  /** Download expected PDO/slot configuration to slave at startup */
-  downloadPdoConfig: boolean
 }
 
 /**
@@ -505,8 +501,6 @@ export interface EtherCATStartupChecks {
 export interface EtherCATAddressing {
   /** Fixed EtherCAT station address (configured address). 0 = auto-assign from position (1001+) */
   ethercatAddress: number
-  /** Mark slave as optional - network continues if this slave is absent */
-  optionalSlave: boolean
 }
 
 /**

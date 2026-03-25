@@ -318,24 +318,6 @@ const ConfiguredDeviceRow = ({
                         />
                         Verify Product Code
                       </label>
-                      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                        <Checkbox
-                          checked={config.startupChecks.checkRevisionNumber}
-                          onCheckedChange={(checked) =>
-                            updateConfig('startupChecks', { checkRevisionNumber: checked === true })
-                          }
-                        />
-                        Verify Revision
-                      </label>
-                      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                        <Checkbox
-                          checked={config.startupChecks.downloadPdoConfig}
-                          onCheckedChange={(checked) =>
-                            updateConfig('startupChecks', { downloadPdoConfig: checked === true })
-                          }
-                        />
-                        Download PDO Config
-                      </label>
                     </div>
                   </div>
 
@@ -360,13 +342,6 @@ const ConfiguredDeviceRow = ({
                         />
                         <span className='text-xs text-neutral-400 dark:text-neutral-500'>0 = auto</span>
                       </div>
-                      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                        <Checkbox
-                          checked={config.addressing.optionalSlave}
-                          onCheckedChange={(checked) => updateConfig('addressing', { optionalSlave: checked === true })}
-                        />
-                        Optional Slave
-                      </label>
                     </div>
                   </div>
 

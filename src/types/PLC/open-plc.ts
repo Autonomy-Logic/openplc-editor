@@ -627,13 +627,10 @@ const ESIDeviceRefSchema = z.object({
 const EtherCATStartupChecksSchema = z.object({
   checkVendorId: z.boolean(),
   checkProductCode: z.boolean(),
-  checkRevisionNumber: z.boolean(),
-  downloadPdoConfig: z.boolean(),
 })
 
 const EtherCATAddressingSchema = z.object({
   ethercatAddress: z.number(),
-  optionalSlave: z.boolean(),
 })
 
 const EtherCATTimeoutsSchema = z.object({

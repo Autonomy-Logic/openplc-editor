@@ -8,12 +8,9 @@ export const DEFAULT_SLAVE_CONFIG: Readonly<EtherCATSlaveConfig> = {
   startupChecks: {
     checkVendorId: true,
     checkProductCode: true,
-    checkRevisionNumber: false,
-    downloadPdoConfig: false,
   },
   addressing: {
     ethercatAddress: 0,
-    optionalSlave: false,
   },
   timeouts: {
     sdoTimeoutMs: 1000,

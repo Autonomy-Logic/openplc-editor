@@ -43,6 +43,37 @@ interface RuntimeSdoConfig {
   comment: string
 }
 
+interface RuntimeSlaveConfig {
+  startup_checks: {
+    check_vendor_id: boolean
+    check_product_code: boolean
+  }
+  addressing: {
+    ethercat_address: number
+  }
+  timeouts: {
+    sdo_timeout_ms: number
+    init_to_preop_timeout_ms: number
+    safeop_to_op_timeout_ms: number
+  }
+  watchdog: {
+    sm_watchdog_enabled: boolean
+    sm_watchdog_ms: number
+    pdi_watchdog_enabled: boolean
+    pdi_watchdog_ms: number
+  }
+  distributed_clocks: {
+    enabled: boolean
+    sync_unit_cycle_us: number
+    sync0_enabled: boolean
+    sync0_cycle_us: number
+    sync0_shift_us: number
+    sync1_enabled: boolean
+    sync1_cycle_us: number
+    sync1_shift_us: number
+  }
+}
+
 interface RuntimeSlave {
   position: number
   name: string
@@ -50,6 +81,7 @@ interface RuntimeSlave {
   vendor_id: string
   product_code: string
   revision: string
+  config: RuntimeSlaveConfig
   channels: RuntimeChannel[]
   sdo_configurations: RuntimeSdoConfig[]
   rx_pdos: RuntimePdo[]
@@ -189,6 +221,8 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
   const rxPdos = device.rxPdos ? convertPdos(device.rxPdos) : []
   const txPdos = device.txPdos ? convertPdos(device.txPdos) : []
 
+  const cfg = device.config
+
   return {
     position,
     name: device.name,
@@ -196,6 +230,36 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
     vendor_id: device.vendorId,
     product_code: device.productCode,
     revision: device.revisionNo,
+    config: {
+      startup_checks: {
+        check_vendor_id: cfg.startupChecks.checkVendorId,
+        check_product_code: cfg.startupChecks.checkProductCode,
+      },
+      addressing: {
+        ethercat_address: cfg.addressing.ethercatAddress,
+      },
+      timeouts: {
+        sdo_timeout_ms: cfg.timeouts.sdoTimeoutMs,
+        init_to_preop_timeout_ms: cfg.timeouts.initToPreOpTimeoutMs,
+        safeop_to_op_timeout_ms: cfg.timeouts.safeOpToOpTimeoutMs,
+      },
+      watchdog: {
+        sm_watchdog_enabled: cfg.watchdog.smWatchdogEnabled,
+        sm_watchdog_ms: cfg.watchdog.smWatchdogMs,
+        pdi_watchdog_enabled: cfg.watchdog.pdiWatchdogEnabled,
+        pdi_watchdog_ms: cfg.watchdog.pdiWatchdogMs,
+      },
+      distributed_clocks: {
+        enabled: cfg.distributedClocks.dcEnabled,
+        sync_unit_cycle_us: cfg.distributedClocks.dcSyncUnitCycleUs,
+        sync0_enabled: cfg.distributedClocks.dcSync0Enabled,
+        sync0_cycle_us: cfg.distributedClocks.dcSync0CycleUs,
+        sync0_shift_us: cfg.distributedClocks.dcSync0ShiftUs,
+        sync1_enabled: cfg.distributedClocks.dcSync1Enabled,
+        sync1_cycle_us: cfg.distributedClocks.dcSync1CycleUs,
+        sync1_shift_us: cfg.distributedClocks.dcSync1ShiftUs,
+      },
+    },
     channels,
     sdo_configurations: buildSdoConfigurations(device.sdoConfigurations),
     rx_pdos: rxPdos,
