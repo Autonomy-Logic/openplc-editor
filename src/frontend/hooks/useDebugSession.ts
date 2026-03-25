@@ -15,11 +15,7 @@ import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../..
 import { useDebugger, useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 import { parseDebugFile } from '../utils/debug-parser'
-import {
-  buildDebugVariableTreeMap,
-  buildFbInstanceMap,
-  buildVariableIndexMap,
-} from '../utils/debugger-session'
+import { buildDebugVariableTreeMap, buildFbInstanceMap, buildVariableIndexMap } from '../utils/debugger-session'
 import { hexToBytes } from '../utils/hex'
 
 export interface UseDebugSessionReturn {
@@ -92,12 +88,7 @@ export function useDebugSession(): UseDebugSessionReturn {
         let treeMap = new Map<string, DebugTreeNode>()
         const pouTrees: Record<string, DebugTreeNode[]> = {}
         try {
-          const treeResult = buildDebugVariableTreeMap(
-            project.data.pous,
-            instances,
-            parsed.variables,
-            project.data,
-          )
+          const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, parsed.variables, project.data)
           treeMap = treeResult.treeMap
 
           // Group trees by POU name for polling hook
@@ -126,10 +117,7 @@ export function useDebugSession(): UseDebugSessionReturn {
         const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
 
         const fbTypesCount = fbDebugInstancesMap.size
-        const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce(
-          (sum, list) => sum + list.length,
-          0,
-        )
+        const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
         if (fbTypesCount > 0) {
           logActions.addLog({
             id: crypto.randomUUID(),

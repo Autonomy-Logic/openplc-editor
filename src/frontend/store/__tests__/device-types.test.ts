@@ -1,8 +1,4 @@
-import type {
-  BoardInfo,
-  CommunicationPort,
-  TimingStats,
-} from '../../../middleware/shared/ports/types'
+import type { BoardInfo, CommunicationPort, TimingStats } from '../../../middleware/shared/ports/types'
 import type {
   ConnectionStatus,
   DeviceActions,

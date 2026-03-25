@@ -9,7 +9,14 @@
  * the editor and web platforms.
  */
 
-import type { DebugTreeNode, FbInstanceInfo, PLCDataType, PLCInstance, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
+import type {
+  DebugTreeNode,
+  FbInstanceInfo,
+  PLCDataType,
+  PLCInstance,
+  PLCPou,
+  PLCVariable,
+} from '../../middleware/shared/ports/types'
 import type { DebugVariableEntry, ParsedDebugData } from './debug-parser'
 import { buildDebugTree } from './debug-tree-builder'
 import {
@@ -251,9 +258,7 @@ export function buildFbInstanceMap(pous: PLCPou[], instances: PLCInstance[]): Ma
       const fbTypeNameRaw = v.type.value
       const fbTypeKey = fbTypeNameRaw.toUpperCase()
 
-      const isCustomFB = pous.some(
-        (p) => p.pouType === 'function-block' && p.name.toUpperCase() === fbTypeKey,
-      )
+      const isCustomFB = pous.some((p) => p.pouType === 'function-block' && p.name.toUpperCase() === fbTypeKey)
 
       // Accept derived types as FB instances if they are custom FBs or match any POU
       if (isCustomFB) {
@@ -274,4 +279,3 @@ export function buildFbInstanceMap(pous: PLCPou[], instances: PLCInstance[]): Ma
 
   return fbDebugInstancesMap
 }
-

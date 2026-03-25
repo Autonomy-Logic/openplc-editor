@@ -184,7 +184,9 @@ describe('createDeviceSlice', () => {
             modbusTCP: {
               tcpMacAddress: 'AA:BB:CC:DD:EE:FF',
               tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
-            } as Partial<typeof defaultDeviceConfiguration.communicationConfiguration.modbusTCP> as typeof defaultDeviceConfiguration.communicationConfiguration.modbusTCP,
+            } as Partial<
+              typeof defaultDeviceConfiguration.communicationConfiguration.modbusTCP
+            > as typeof defaultDeviceConfiguration.communicationConfiguration.modbusTCP,
             communicationPreferences: defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
           },
         },

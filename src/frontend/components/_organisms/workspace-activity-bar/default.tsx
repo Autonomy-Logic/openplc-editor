@@ -221,13 +221,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       if (plcStatus === 'RUNNING') {
         const result = await runtime.stopPlc()
         if (!result.success) {
-          addLog({ id: crypto.randomUUID(), level: 'error', message: `Failed to stop PLC: ${result.error ?? 'Unknown error'}` })
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Failed to stop PLC: ${result.error ?? 'Unknown error'}`,
+          })
           return
         }
       } else {
         const result = await runtime.startPlc()
         if (!result.success) {
-          addLog({ id: crypto.randomUUID(), level: 'error', message: `Failed to start PLC: ${result.error ?? 'Unknown error'}` })
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Failed to start PLC: ${result.error ?? 'Unknown error'}`,
+          })
           return
         }
       }
@@ -295,7 +303,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting PLC...' })
         const startResult = await runtime.startPlc()
         if (!startResult.success) {
-          await showDebuggerMessage('error', 'Start PLC Failed', `Could not start the PLC: ${startResult.error || 'Unknown error'}`, ['OK'])
+          await showDebuggerMessage(
+            'error',
+            'Start PLC Failed',
+            `Could not start the PLC: ${startResult.error || 'Unknown error'}`,
+            ['OK'],
+          )
           setIsDebuggerProcessing(false)
           return
         }
@@ -314,7 +327,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       const verifyResult = await debuggerPort.verifyMd5(md5Result.md5, debugConfig)
       if (!verifyResult.success) {
-        await showDebuggerMessage('error', 'Connection Error', `Could not verify MD5: ${verifyResult.error ?? 'Unknown error'}`, ['OK'])
+        await showDebuggerMessage(
+          'error',
+          'Connection Error',
+          `Could not verify MD5: ${verifyResult.error ?? 'Unknown error'}`,
+          ['OK'],
+        )
         setIsDebuggerProcessing(false)
         return
       }
@@ -339,15 +357,31 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
           const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
           const compileResult = await compiler.compileProgram(
-            { projectData, boardTarget, projectPath, compileOnly: false, isSimulator: false, runtimeIpAddress, runtimeJwtToken },
+            {
+              projectData,
+              boardTarget,
+              projectPath,
+              compileOnly: false,
+              isSimulator: false,
+              runtimeIpAddress,
+              runtimeJwtToken,
+            },
             (event) => logCompilerEvent(event, consoleActions.addLog),
           )
           if (compileResult.success) {
-            consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Upload completed. Re-verifying...' })
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'info',
+              message: 'Upload completed. Re-verifying...',
+            })
             await new Promise((resolve) => setTimeout(resolve, 2000))
             void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
           } else {
-            consoleActions.addLog({ id: crypto.randomUUID(), level: 'error', message: `Upload failed: ${compileResult.error ?? 'Unknown error'}` })
+            consoleActions.addLog({
+              id: crypto.randomUUID(),
+              level: 'error',
+              message: `Upload failed: ${compileResult.error ?? 'Unknown error'}`,
+            })
             setIsDebuggerProcessing(false)
           }
         } else {
@@ -355,7 +389,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
       }
     } catch (error: unknown) {
-      consoleActions.addLog({ id: crypto.randomUUID(), level: 'error', message: `MD5 verification error: ${getErrorMessage(error)}` })
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `MD5 verification error: ${getErrorMessage(error)}`,
+      })
       setIsDebuggerProcessing(false)
     }
   }
@@ -367,8 +405,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleDebuggerClick = useCallback(async () => {
     if (isSimulatorBoard) return
 
-    const { workspace, project, deviceDefinitions: devDefs, consoleActions, deviceActions } =
-      useOpenPLCStore.getState()
+    const { workspace, project, deviceDefinitions: devDefs, consoleActions, deviceActions } = useOpenPLCStore.getState()
 
     // Toggle off
     if (workspace.isDebuggerVisible) {
@@ -382,7 +419,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     try {
       if (editingState === 'unsaved') {
         const saved = await executeSave()
-        if (!saved) { setIsDebuggerProcessing(false); return }
+        if (!saved) {
+          setIsDebuggerProcessing(false)
+          return
+        }
       }
 
       const boardTarget = devDefs.configuration.deviceBoard
@@ -404,11 +444,19 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         if (isOpenPLCRuntimeV4Target(boardTarget)) {
           const token = rtConn.jwtToken || undefined
           if (!token) {
-            await showDebuggerMessage('error', 'Authentication Required', 'JWT token missing. Reconnect to the runtime.', ['OK'])
+            await showDebuggerMessage(
+              'error',
+              'Authentication Required',
+              'JWT token missing. Reconnect to the runtime.',
+              ['OK'],
+            )
             setIsDebuggerProcessing(false)
             return
           }
-          debugConfig = { connectionType: 'websocket', connectionParams: { ipAddress: runtimeIpAddress, jwtToken: token } }
+          debugConfig = {
+            connectionType: 'websocket',
+            connectionParams: { ipAddress: runtimeIpAddress, jwtToken: token },
+          }
         } else {
           debugConfig = { connectionType: 'tcp', connectionParams: { ipAddress: runtimeIpAddress } }
         }
@@ -423,7 +471,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
         let useModbusTcp = communicationPreferences.enabledTCP
         if (communicationPreferences.enabledRTU && communicationPreferences.enabledTCP) {
-          const resp = await showDebuggerMessage('question', 'Select Protocol', 'Which Modbus protocol?', ['RTU (Serial)', 'TCP'])
+          const resp = await showDebuggerMessage('question', 'Select Protocol', 'Which Modbus protocol?', [
+            'RTU (Serial)',
+            'TCP',
+          ])
           useModbusTcp = resp === 1
         }
 
@@ -432,7 +483,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           if (communicationPreferences.enabledDHCP) {
             const previousIp = useOpenPLCStore.getState().deviceDefinitions.temporaryDhcpIp || ''
             const result = await showDebuggerIpInput('Target IP Address', 'Enter the target device IP:', previousIp)
-            if (!result) { setIsDebuggerProcessing(false); return }
+            if (!result) {
+              setIsDebuggerProcessing(false)
+              return
+            }
             targetIp = result
             deviceActions.setTemporaryDhcpIp(targetIp)
           } else {
@@ -457,29 +511,57 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             setIsDebuggerProcessing(false)
             return
           }
-          consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: `Using RTU: Port=${rtuPort}, Baud=${modbusRTU.rtuBaudRate}, SlaveID=${rtuSlaveId}` })
-          debugConfig = { connectionType: 'rtu', connectionParams: { port: rtuPort, baudRate: parseInt(modbusRTU.rtuBaudRate, 10), slaveId: rtuSlaveId } }
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Using RTU: Port=${rtuPort}, Baud=${modbusRTU.rtuBaudRate}, SlaveID=${rtuSlaveId}`,
+          })
+          debugConfig = {
+            connectionType: 'rtu',
+            connectionParams: { port: rtuPort, baudRate: parseInt(modbusRTU.rtuBaudRate, 10), slaveId: rtuSlaveId },
+          }
         }
       }
 
       // Debug compilation
       consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting debug compilation...' })
-      const debugCompileResult = await compiler.compileForDebug(
-        { projectData, boardTarget, projectPath },
-        (event) => logCompilerEvent(event, consoleActions.addLog),
+      const debugCompileResult = await compiler.compileForDebug({ projectData, boardTarget, projectPath }, (event) =>
+        logCompilerEvent(event, consoleActions.addLog),
       )
       if (!debugCompileResult.success) {
-        consoleActions.addLog({ id: crypto.randomUUID(), level: 'error', message: `Debug compilation failed: ${debugCompileResult.error ?? 'Unknown error'}` })
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Debug compilation failed: ${debugCompileResult.error ?? 'Unknown error'}`,
+        })
         setIsDebuggerProcessing(false)
         return
       }
 
       void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
     } catch (error: unknown) {
-      consoleActions.addLog({ id: crypto.randomUUID(), level: 'error', message: `Debugger init error: ${getErrorMessage(error)}` })
+      consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Debugger init error: ${getErrorMessage(error)}`,
+      })
       setIsDebuggerProcessing(false)
     }
-  }, [debuggerPort, runtime, compiler, debugSession, projectData, deviceDefinitions, projectMeta, availableBoards, isSimulatorBoard, isDebuggerProcessing, editingState, executeSave, addLog])
+  }, [
+    debuggerPort,
+    runtime,
+    compiler,
+    debugSession,
+    projectData,
+    deviceDefinitions,
+    projectMeta,
+    availableBoards,
+    isSimulatorBoard,
+    isDebuggerProcessing,
+    editingState,
+    executeSave,
+    addLog,
+  ])
 
   // ---------------------------------------------------------------------------
   // JSX
@@ -503,10 +585,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       <TooltipSidebarWrapperButton
         tooltipContent={
           isSimulatorBoard
-            ? simulatorRunning ? 'Stop Simulator' : 'Start Simulator'
+            ? simulatorRunning
+              ? 'Stop Simulator'
+              : 'Start Simulator'
             : connectionStatus !== 'connected'
               ? 'Connect to runtime first'
-              : plcStatus === 'RUNNING' ? 'Stop PLC' : 'Start PLC'
+              : plcStatus === 'RUNNING'
+                ? 'Stop PLC'
+                : 'Start PLC'
         }
       >
         <PlayButton
@@ -514,8 +600,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
           className={cn(
             isSimulatorBoard
-              ? (isCompiling || isDebuggerProcessing) ? disabledButtonClass : ''
-              : connectionStatus !== 'connected' ? disabledButtonClass : '',
+              ? isCompiling || isDebuggerProcessing
+                ? disabledButtonClass
+                : ''
+              : connectionStatus !== 'connected'
+                ? disabledButtonClass
+                : '',
           )}
         >
           {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
