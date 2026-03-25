@@ -122,3 +122,77 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`.
 - Node.js >= 20.x < 24
 - npm >= 10.x
 - Supported platforms: macOS, Windows, Linux (x64 & ARM64)
+
+# Architecture Survey — Autonomy Logic
+
+## Objetivo
+Levantar a arquitetura deste repositório para documentação interna da equipe.
+Ao receber o comando `/survey`, execute as tarefas abaixo **sem modificar nenhum arquivo de código**.
+
+---
+
+## Instruções para o Claude Code (`/survey`)
+
+### 1. Identidade do projeto
+- Nome e propósito principal do repositório
+- Linguagem(ns) predominante(s) e versões relevantes (ex: C99, Python 3.11, Node 18)
+- Sistema alvo (ex: Linux PREEMPT_RT, Raspberry Pi 5, browser, servidor)
+
+### 2. Estrutura de módulos
+- Liste os diretórios/pacotes principais e a responsabilidade de cada um
+- Identifique o ponto de entrada da aplicação (main, entrypoint, init)
+- Identifique módulos de negócio vs. infraestrutura vs. utilitários
+
+### 3. Interfaces e APIs expostas
+- APIs HTTP/REST/gRPC: endpoints, métodos, contratos (se houver spec OpenAPI/Protobuf, aponte o caminho)
+- Sockets / IPC / pipes: protocolos usados
+- Shared memory ou mmap: estruturas compartilhadas
+- Bibliotecas exportadas: headers públicos ou módulos exportados
+
+### 4. Interfaces consumidas (dependências externas)
+- Bibliotecas de sistema (ex: libethercat, libpthread, libc)
+- Serviços externos (ex: MQTT broker, banco de dados, APIs REST de terceiros)
+- Hardware diretamente controlado (ex: NIC para EtherCAT, GPIO)
+- Dependências de outros repositórios da Autonomy Logic
+
+### 5. Fluxo de dados principal
+- Descreva o caminho dos dados do ponto de entrada até a saída principal
+- Identifique dados em tempo real (ciclos, streams) vs. dados de configuração/parametrização
+- Indique buffers, filas ou mecanismos de sincronização relevantes
+
+### 6. Dependências entre entidades internas da Autonomy Logic
+- Este repo chama ou é chamado por: runtime / orchestrator / autonomyedge / editor?
+- Qual o protocolo/mecanismo de comunicação entre eles?
+
+---
+
+## Formato de saída esperado
+
+Produza um arquivo `ARCHITECTURE_SURVEY.md` na raiz do repositório com as seções acima preenchidas, seguido de dois diagramas Mermaid:
+
+### Diagrama 1 — Estrutura interna (módulos)
+```mermaid
+graph TD
+  subgraph NOME_DO_REPO
+    A[Módulo A\nresponsabilidade] --> B[Módulo B\nresponsabilidade]
+    B --> C[Módulo C\nresponsabilidade]
+  end
+```
+
+### Diagrama 2 — Interfaces externas
+```mermaid
+graph LR
+  subgraph NOME_DO_REPO
+    core[Core]
+  end
+  core -->|protocolo/mecanismo| ext1[Dependência externa 1]
+  ext2[Entidade Autonomy Logic] -->|protocolo/mecanismo| core
+```
+
+---
+
+## Regras
+- Não modifique arquivos de código-fonte
+- Se não conseguir inferir algo com certeza, marque com `[INFERIDO]` ou `[VERIFICAR]`
+- Prefira nomes reais encontrados no código (funções, structs, classes, arquivos)
+- Se existir README, Makefile, CMakeLists.txt, package.json ou pyproject.toml, leia-os primeiro

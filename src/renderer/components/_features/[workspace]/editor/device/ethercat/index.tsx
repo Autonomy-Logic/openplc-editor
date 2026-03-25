@@ -274,6 +274,7 @@ const EtherCATEditor = () => {
           setRepository(result.items)
           repositoryLoadedRef.current = true
         } else if (result.needsMigration) {
+          // One-time migration from v1 to v2
           const migrationResult = await window.bridge.esiMigrateRepository(projectPath)
           if (migrationResult.success && migrationResult.items) {
             setRepository(migrationResult.items)
@@ -354,6 +355,7 @@ const EtherCATEditor = () => {
       const match = deviceMatches.find((dm) => dm.device.position === position)
       if (!match || match.matches.length === 0) continue
 
+      // Use the best match (first one, which is sorted by quality)
       const bestMatch = match.matches[0]
       const repoItem = repository.find((r) => r.id === bestMatch.repositoryItemId)
       if (!repoItem) continue
