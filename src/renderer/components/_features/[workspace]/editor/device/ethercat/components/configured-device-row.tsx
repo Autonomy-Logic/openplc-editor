@@ -199,7 +199,15 @@ const ConfiguredDeviceRow = ({
     <>
       {/* Main row */}
       <tr
+        tabIndex={0}
+        role='row'
         onClick={onSelect}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onSelect()
+          }
+        }}
         className={cn(
           'cursor-pointer border-b border-neutral-200 dark:border-neutral-800',
           isSelected && 'bg-brand/10 dark:bg-brand/20',
@@ -211,6 +219,8 @@ const ConfiguredDeviceRow = ({
               e.stopPropagation()
               onToggleExpand()
             }}
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${device.name}`}
             className='flex items-center justify-center'
           >
             <ArrowIcon

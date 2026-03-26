@@ -153,10 +153,19 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false, projectPath }
 
       {/* Drop zone */}
       <div
+        role='button'
+        tabIndex={isProcessing ? -1 : 0}
         onClick={handleClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            handleClick()
+          }
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        aria-label='Upload ESI XML files. Click or drag and drop.'
         className={cn(
           'flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors',
           isDragging

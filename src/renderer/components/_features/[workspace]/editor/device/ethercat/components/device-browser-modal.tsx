@@ -190,11 +190,13 @@ const DeviceBrowserModal = ({ isOpen, onClose, onSelectDevice, repository }: Dev
                         const isSelected =
                           selectedRef?.repositoryItemId === repoItem.id && selectedRef?.deviceIndex === deviceIndex
                         return (
-                          <div
+                          <button
+                            type='button'
                             key={`${repoItem.id}-${deviceIndex}`}
                             onClick={() => handleSelectDevice(repoItem.id, deviceIndex)}
+                            aria-pressed={isSelected}
                             className={cn(
-                              'flex cursor-pointer items-center gap-3 px-3 py-2 pl-8 hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
+                              'flex w-full cursor-pointer items-center gap-3 px-3 py-2 pl-8 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
                               isSelected && 'bg-brand/10 dark:bg-brand/20',
                             )}
                           >
@@ -238,7 +240,7 @@ const DeviceBrowserModal = ({ isOpen, onClose, onSelectDevice, repository }: Dev
                                 <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
                               </svg>
                             )}
-                          </div>
+                          </button>
                         )
                       })}
                     </div>

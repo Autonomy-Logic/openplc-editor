@@ -108,7 +108,12 @@ const RepositoryItemRow = ({ item, isExpanded, onToggleExpand, onRemove }: Repos
       {/* Main row */}
       <tr className='cursor-pointer border-b border-neutral-200 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50'>
         <td className='px-2 py-2'>
-          <button onClick={onToggleExpand} className='flex items-center justify-center'>
+          <button
+            onClick={onToggleExpand}
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${item.filename}`}
+            className='flex items-center justify-center'
+          >
             <ArrowIcon
               direction='right'
               className={cn('h-4 w-4 stroke-brand-light transition-all', isExpanded && 'rotate-270 stroke-brand')}
