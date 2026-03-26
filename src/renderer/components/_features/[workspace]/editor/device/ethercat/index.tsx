@@ -207,8 +207,11 @@ const EtherCATEditor = () => {
       if (result.success && result.data) {
         const fetchedInterfaces = result.data
         setInterfaces(fetchedInterfaces)
+        const names = new Set(fetchedInterfaces.map((i) => i.name))
         if (fetchedInterfaces.length > 0) {
-          setSelectedInterface((prev) => prev || fetchedInterfaces[0].name)
+          setSelectedInterface((prev) => (prev && names.has(prev) ? prev : fetchedInterfaces[0].name))
+        } else {
+          setSelectedInterface('')
         }
       } else {
         setInterfaces([])
@@ -267,6 +270,8 @@ const EtherCATEditor = () => {
 
   // Load ESI repository
   useEffect(() => {
+    let cancelled = false
+
     const loadRepository = async () => {
       if (!projectPath || repositoryLoadedRef.current) return
 
@@ -275,6 +280,7 @@ const EtherCATEditor = () => {
 
       try {
         const result = await window.bridge.esiLoadRepositoryLight(projectPath)
+        if (cancelled) return
 
         if (result.success && result.items) {
           setRepository(result.items)
@@ -282,6 +288,7 @@ const EtherCATEditor = () => {
         } else if (result.needsMigration) {
           // One-time migration from v1 to v2
           const migrationResult = await window.bridge.esiMigrateRepository(projectPath)
+          if (cancelled) return
           if (migrationResult.success && migrationResult.items) {
             setRepository(migrationResult.items)
             repositoryLoadedRef.current = true
@@ -294,14 +301,18 @@ const EtherCATEditor = () => {
           repositoryLoadedRef.current = true
         }
       } catch (error) {
+        if (cancelled) return
         console.error('Failed to load ESI repository:', error)
         setRepositoryError(String(error))
       } finally {
-        setIsLoadingRepository(false)
+        if (!cancelled) setIsLoadingRepository(false)
       }
     }
 
     void loadRepository()
+    return () => {
+      cancelled = true
+    }
   }, [projectPath, repositoryLoadRetry])
 
   // Check service status and fetch interfaces when runtime connection changes
@@ -356,8 +367,11 @@ const EtherCATEditor = () => {
 
   const handleAddSelectedFromScan = useCallback(async () => {
     const newDevices: ConfiguredEtherCATDevice[] = []
+    const existingPositions = new Set(configuredDevices.map((d) => d.position))
 
     for (const position of selectedScannedDevices) {
+      // Skip devices already configured at this position
+      if (existingPositions.has(position)) continue
       const match = deviceMatches.find((dm) => dm.device.position === position)
       if (!match || match.matches.length === 0) continue
 

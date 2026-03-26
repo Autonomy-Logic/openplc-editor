@@ -45,10 +45,10 @@ export function extractDefaultSdoConfigurations(coeObjects: ESICoEObject[]): SDO
         const subIdx = parseInt(sub.subIndex, 10)
         // Skip subIndex 0 (max subindex counter)
         if (subIdx === 0) continue
-        // Only include RW sub-items
+        // Only include RW sub-items with a defined default value
         if (sub.access !== 'RW') continue
-        // Must have a default value
-        const defaultValue = sub.defaultValue ?? ''
+        if (sub.defaultValue === undefined || sub.defaultValue === null) continue
+        const defaultValue = sub.defaultValue
 
         entries.push({
           index: obj.index,
@@ -64,7 +64,8 @@ export function extractDefaultSdoConfigurations(coeObjects: ESICoEObject[]): SDO
     } else {
       // Simple object: use object-level values
       if (obj.access !== 'RW') continue
-      const defaultValue = obj.defaultValue ?? ''
+      if (obj.defaultValue === undefined || obj.defaultValue === null) continue
+      const defaultValue = obj.defaultValue
 
       entries.push({
         index: obj.index,

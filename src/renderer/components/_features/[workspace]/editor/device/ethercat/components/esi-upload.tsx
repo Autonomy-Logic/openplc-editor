@@ -37,7 +37,7 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false, projectPath }
 
   const processFiles = useCallback(
     async (files: FileList) => {
-      const xmlFiles = Array.from(files).filter((file) => file.name.endsWith('.xml'))
+      const xmlFiles = Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.xml'))
 
       if (xmlFiles.length === 0) {
         onFilesLoaded(repository, [{ filename: '', error: 'No XML files found. Please upload .xml ESI files.' }])

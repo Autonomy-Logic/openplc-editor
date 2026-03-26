@@ -9,7 +9,7 @@ import type {
   PersistedPdo,
   SDOConfigurationEntry,
 } from '@root/types/ethercat/esi-types'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { ConfiguredDeviceRow } from './configured-device-row'
 
@@ -53,6 +53,13 @@ const ConfiguredDevices = ({
 }: ConfiguredDevicesProps) => {
   const [expandedDevices, setExpandedDevices] = useState<Set<string>>(new Set())
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+
+  // Clear stale selection when device list changes externally
+  useEffect(() => {
+    if (selectedDeviceId && !devices.some((d) => d.id === selectedDeviceId)) {
+      setSelectedDeviceId(null)
+    }
+  }, [devices, selectedDeviceId])
 
   const handleToggleExpand = useCallback((deviceId: string) => {
     setExpandedDevices((prev) => {

@@ -17,6 +17,7 @@ import type {
 import { cn } from '@root/utils'
 import { enrichDeviceData } from '@root/utils/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/utils/ethercat/esi-parser'
+import { extractDefaultSdoConfigurations } from '@root/utils/ethercat/sdo-config-defaults'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ChannelMappingTable } from './channel-mapping-table'
@@ -612,7 +613,11 @@ const DeviceDetailPanel = ({
                   CoE Object Dictionary available. Auto-configure startup parameters?
                 </p>
                 <button
-                  onClick={() => onEnrichDevice(enrichDeviceData({ coeObjects } as never))}
+                  onClick={() => {
+                    if (coeObjects) {
+                      onUpdateSdoConfigurations(extractDefaultSdoConfigurations(coeObjects))
+                    }
+                  }}
                   className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
                 >
                   Auto-configure from ESI defaults

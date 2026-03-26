@@ -105,8 +105,8 @@ class ESIService {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return null
       }
-      console.error('Error reading ESI repository index:', error)
-      return null
+      // Re-throw for corrupted/unreadable files so callers don't silently overwrite
+      throw error
     }
   }
 
@@ -247,17 +247,38 @@ class ESIService {
     projectPath: string,
     item: ESIRepositoryItem,
     xmlContent: string,
-    existingItems: ESIRepositoryItem[],
+    _existingItems: ESIRepositoryItem[],
   ): Promise<ESIServiceResponse> {
-    // Save the XML file
-    const xmlResult = await this.saveXmlFile(projectPath, item.id, xmlContent)
-    if (!xmlResult.success) {
-      return xmlResult
-    }
+    return this.withIndexLock(async () => {
+      // Save the XML file
+      const xmlResult = await this.saveXmlFile(projectPath, item.id, xmlContent)
+      if (!xmlResult.success) {
+        return xmlResult
+      }
 
-    // Update the index with the new item
-    const updatedItems = [...existingItems.filter((i) => i.id !== item.id), item]
-    return this.saveRepositoryIndex(projectPath, updatedItems)
+      // Read current index from disk instead of trusting caller snapshot
+      const currentIndex = await this.loadRepositoryIndex(projectPath)
+      const currentItems = currentIndex?.items ?? []
+      const updatedItems = [
+        ...currentItems.filter((i) => i.id !== item.id),
+        {
+          id: item.id,
+          filename: item.filename,
+          vendorId: item.vendor.id,
+          vendorName: item.vendor.name,
+          deviceCount: item.devices.length,
+          loadedAt: item.loadedAt,
+          warnings: item.warnings,
+        },
+      ]
+      const repoPath = this.getRepositoryPath(projectPath)
+      await promises.writeFile(
+        repoPath,
+        JSON.stringify({ version: currentIndex?.version ?? 1, items: updatedItems }, null, 2),
+        'utf-8',
+      )
+      return { success: true }
+    })
   }
 
   /**
@@ -266,17 +287,27 @@ class ESIService {
   async deleteRepositoryItem(
     projectPath: string,
     itemId: string,
-    existingItems: ESIRepositoryItem[],
+    _existingItems: ESIRepositoryItem[],
   ): Promise<ESIServiceResponse> {
-    // Delete the XML file
-    const deleteResult = await this.deleteXmlFile(projectPath, itemId)
-    if (!deleteResult.success) {
-      return deleteResult
-    }
+    return this.withIndexLock(async () => {
+      // Delete the XML file
+      const deleteResult = await this.deleteXmlFile(projectPath, itemId)
+      if (!deleteResult.success) {
+        return deleteResult
+      }
 
-    // Update the index without the deleted item
-    const updatedItems = existingItems.filter((i) => i.id !== itemId)
-    return this.saveRepositoryIndex(projectPath, updatedItems)
+      // Read current index from disk instead of trusting caller snapshot
+      const currentIndex = await this.loadRepositoryIndex(projectPath)
+      const currentItems = currentIndex?.items ?? []
+      const updatedItems = currentItems.filter((i) => i.id !== itemId)
+      const repoPath = this.getRepositoryPath(projectPath)
+      await promises.writeFile(
+        repoPath,
+        JSON.stringify({ version: currentIndex?.version ?? 1, items: updatedItems }, null, 2),
+        'utf-8',
+      )
+      return { success: true }
+    })
   }
 
   /**
@@ -361,45 +392,50 @@ class ESIService {
   async migrateRepositoryToV2(
     projectPath: string,
   ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> {
-    try {
-      const index = await this.loadRepositoryIndex(projectPath)
-      if (!index) {
-        return { success: true, items: [] }
-      }
+    return this.withIndexLock(async () => {
+      try {
+        const index = await this.loadRepositoryIndex(projectPath)
+        if (!index) {
+          return { success: true, items: [] }
+        }
 
-      const items: ESIRepositoryItemLight[] = []
+        const items: ESIRepositoryItemLight[] = []
 
-      for (const indexItem of index.items) {
-        try {
-          const xmlResult = await this.loadXmlFile(projectPath, indexItem.id)
-          if (xmlResult.success && xmlResult.content) {
-            const parseResult = parseESILight(xmlResult.content, indexItem.filename)
-            if (parseResult.success && parseResult.vendor && parseResult.devices) {
-              items.push({
-                id: indexItem.id,
-                filename: indexItem.filename,
-                vendor: parseResult.vendor,
-                devices: parseResult.devices,
-                loadedAt: indexItem.loadedAt,
-                warnings: parseResult.warnings || indexItem.warnings,
-              })
+        for (const indexItem of index.items) {
+          try {
+            const xmlResult = await this.loadXmlFile(projectPath, indexItem.id)
+            if (xmlResult.success && xmlResult.content) {
+              const parseResult = parseESILight(xmlResult.content, indexItem.filename)
+              if (parseResult.success && parseResult.vendor && parseResult.devices) {
+                items.push({
+                  id: indexItem.id,
+                  filename: indexItem.filename,
+                  vendor: parseResult.vendor,
+                  devices: parseResult.devices,
+                  loadedAt: indexItem.loadedAt,
+                  warnings: parseResult.warnings || indexItem.warnings,
+                })
+              }
             }
+          } catch (err) {
+            console.error(`Failed to migrate ESI file ${indexItem.filename}:`, err)
           }
-        } catch (err) {
-          console.error(`Failed to migrate ESI file ${indexItem.filename}:`, err)
+        }
+
+        // Save as v2
+        const saveResult = await this.saveRepositoryIndexV2(projectPath, items)
+        if (!saveResult.success) {
+          return { success: false, error: saveResult.error || 'Failed to save migrated index' }
+        }
+
+        return { success: true, items }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to migrate repository',
         }
       }
-
-      // Save as v2
-      await this.saveRepositoryIndexV2(projectPath, items)
-
-      return { success: true, items }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to migrate repository',
-      }
-    }
+    })
   }
 
   /**
