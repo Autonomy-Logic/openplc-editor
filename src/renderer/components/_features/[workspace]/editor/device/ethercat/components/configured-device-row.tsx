@@ -108,7 +108,7 @@ const ConfiguredDeviceRow = ({
 
   // Load full device data when expanded
   useEffect(() => {
-    if (!isExpanded || fullDeviceLoadedRef.current) return
+    if (!isExpanded || fullDeviceLoadedRef.current || isLoadingChannels) return
 
     const loadFullDevice = async () => {
       setIsLoadingChannels(true)

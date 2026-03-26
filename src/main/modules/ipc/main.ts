@@ -375,6 +375,78 @@ class MainProcessBridge implements MainIpcModule {
     })
   }
 
+  /**
+   * Make an authenticated POST request to the runtime API with automatic token refresh on 401/403.
+   */
+  makeRuntimeApiPostRequest<T>(
+    ipAddress: string,
+    jwtToken: string,
+    endpoint: string,
+    body: string,
+    responseParser: (data: string) => T,
+    timeoutMs?: number,
+  ): Promise<{ success: true; data: T } | { success: false; error: string }> {
+    const doRequest = (token: string): Promise<{ success: true; data: T } | { success: false; error: string }> => {
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: endpoint,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(body),
+              Authorization: `Bearer ${token}`,
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  resolve({ success: true, data: responseParser(data) })
+                } catch {
+                  resolve({ success: false, error: 'Invalid response format' })
+                }
+              } else {
+                resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
+              }
+            })
+          },
+        )
+        req.setTimeout(timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(body)
+        req.end()
+      })
+    }
+
+    return doRequest(jwtToken).then((result) => {
+      if (!result.success && this.isTokenExpiredError(undefined, result.error)) {
+        return this.attemptTokenRefresh().then((refreshResult) => {
+          if (refreshResult.success && refreshResult.accessToken) {
+            if (this.mainWindow && this.mainWindow.webContents) {
+              this.mainWindow.webContents.send('runtime:token-refreshed', refreshResult.accessToken)
+            }
+            return doRequest(refreshResult.accessToken)
+          }
+          return { success: false as const, error: `Token refresh failed: ${refreshResult.error || 'Unknown error'}` }
+        })
+      }
+      return result
+    })
+  }
+
   handleRuntimeGetStatus = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
@@ -598,70 +670,31 @@ class MainProcessBridge implements MainIpcModule {
         command: 'scan',
         params: { interface: scanRequest.interface, timeout_ms: scanRequest.timeout_ms },
       })
+      const scanTimeout = (scanRequest.timeout_ms || 5000) + 10000
 
-      return new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: '/api/plugin-command',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData),
-              Authorization: `Bearer ${jwtToken}`,
-            },
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  const pluginResponse = JSON.parse(data)
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        jwtToken,
+        '/api/plugin-command',
+        postData,
+        (data: string) => {
+          const pluginResponse = JSON.parse(data) as Record<string, unknown>
+          if (pluginResponse.error) throw new Error(pluginResponse.error as string)
+          return {
+            status: (pluginResponse.status as string) ?? 'success',
+            devices: (pluginResponse.devices as EtherCATScanResponse['devices']) ?? [],
+            message: (pluginResponse.message as string) ?? '',
+            scan_time_ms: 0,
+            interface: scanRequest.interface,
+          } as EtherCATScanResponse
+        },
+        scanTimeout,
+      )
 
-                  if (pluginResponse.error) {
-                    resolve({ success: false, error: pluginResponse.error })
-                    return
-                  }
-
-                  const response: EtherCATScanResponse = {
-                    status: pluginResponse.status ?? 'success',
-                    devices: pluginResponse.devices ?? [],
-                    message: pluginResponse.message ?? '',
-                    scan_time_ms: 0,
-                    interface: scanRequest.interface,
-                  }
-                  resolve({ success: true, data: response })
-                } catch {
-                  resolve({ success: false, error: 'Invalid response format' })
-                }
-              } else {
-                try {
-                  const errorResponse = JSON.parse(data)
-                  resolve({ success: false, error: errorResponse.error || `Unexpected status: ${res.statusCode}` })
-                } catch {
-                  resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
-                }
-              }
-            })
-          },
-        )
-        // Use longer timeout for scan operations (scan timeout + buffer)
-        const scanTimeout = (scanRequest.timeout_ms || 5000) + 10000
-        req.setTimeout(scanTimeout, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        req.write(postData)
-        req.end()
-      })
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
     } catch (error) {
       return { success: false, error: String(error) }
     }
@@ -678,59 +711,21 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> => {
     try {
       const postData = JSON.stringify(testRequest)
+      const testTimeout = (testRequest.timeout_ms || 3000) + 10000
 
-      return new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: '/api/discovery/ethercat/test',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData),
-              Authorization: `Bearer ${jwtToken}`,
-            },
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  const response = JSON.parse(data) as EtherCATTestResponse
-                  resolve({ success: true, data: response })
-                } catch {
-                  resolve({ success: false, error: 'Invalid response format' })
-                }
-              } else if (res.statusCode === 403) {
-                resolve({ success: false, error: 'Permission denied - CAP_NET_RAW required' })
-              } else if (res.statusCode === 404) {
-                resolve({ success: false, error: 'Interface not found' })
-              } else if (res.statusCode === 503) {
-                resolve({ success: false, error: 'Discovery service not available' })
-              } else if (res.statusCode === 504) {
-                resolve({ success: false, error: 'Connection test timeout' })
-              } else {
-                resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
-              }
-            })
-          },
-        )
-        const testTimeout = (testRequest.timeout_ms || 3000) + 10000
-        req.setTimeout(testTimeout, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        req.write(postData)
-        req.end()
-      })
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        jwtToken,
+        '/api/discovery/ethercat/test',
+        postData,
+        (data: string) => JSON.parse(data) as EtherCATTestResponse,
+        testTimeout,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
     } catch (error) {
       return { success: false, error: String(error) }
     }
@@ -748,51 +743,18 @@ class MainProcessBridge implements MainIpcModule {
     try {
       const postData = JSON.stringify(validateRequest)
 
-      return new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: '/api/discovery/ethercat/validate',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData),
-              Authorization: `Bearer ${jwtToken}`,
-            },
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  const response = JSON.parse(data) as EtherCATValidateResponse
-                  resolve({ success: true, data: response })
-                } catch {
-                  resolve({ success: false, error: 'Invalid response format' })
-                }
-              } else if (res.statusCode === 400) {
-                resolve({ success: false, error: 'Invalid configuration format' })
-              } else {
-                resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
-              }
-            })
-          },
-        )
-        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        req.write(postData)
-        req.end()
-      })
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        jwtToken,
+        '/api/discovery/ethercat/validate',
+        postData,
+        (data: string) => JSON.parse(data) as EtherCATValidateResponse,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
     } catch (error) {
       return { success: false, error: String(error) }
     }
@@ -812,63 +774,22 @@ class MainProcessBridge implements MainIpcModule {
         command: 'status',
       })
 
-      return new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: '/api/plugin-command',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData),
-              Authorization: `Bearer ${jwtToken}`,
-            },
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  const pluginResponse = JSON.parse(data)
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        jwtToken,
+        '/api/plugin-command',
+        postData,
+        (data: string) => {
+          const pluginResponse = JSON.parse(data) as Record<string, unknown>
+          if (pluginResponse.error) throw new Error(pluginResponse.error as string)
+          return pluginResponse as unknown as EtherCATRuntimeStatusResponse
+        },
+      )
 
-                  if (pluginResponse.error) {
-                    resolve({ success: false, error: pluginResponse.error })
-                    return
-                  }
-
-                  resolve({ success: true, data: pluginResponse as EtherCATRuntimeStatusResponse })
-                } catch {
-                  resolve({ success: false, error: 'Invalid response format' })
-                }
-              } else {
-                try {
-                  const errorResponse = JSON.parse(data)
-                  resolve({
-                    success: false,
-                    error: errorResponse.error || `Unexpected status: ${res.statusCode}`,
-                  })
-                } catch {
-                  resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
-                }
-              }
-            })
-          },
-        )
-        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        req.write(postData)
-        req.end()
-      })
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
     } catch (error) {
       return { success: false, error: String(error) }
     }

@@ -141,7 +141,7 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
           repository={repository}
           onRemoveItem={handleRemoveItem}
           onClearAll={handleClearAll}
-          isLoading={isSaving}
+          isLoading={isProcessing}
         />
       </div>
     </div>
