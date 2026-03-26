@@ -125,8 +125,8 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
           </div>
           {errorsExpanded && (
             <div className='max-h-32 overflow-auto border-t border-red-200 px-3 py-2 dark:border-red-800'>
-              {uploadErrors.map((error) => (
-                <div key={error.filename} className='py-0.5 text-xs text-red-600 dark:text-red-400'>
+              {uploadErrors.map((error, index) => (
+                <div key={`${error.filename}-${index}`} className='py-0.5 text-xs text-red-600 dark:text-red-400'>
                   <strong>{error.filename || 'File'}</strong>: {error.error}
                 </div>
               ))}

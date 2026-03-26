@@ -596,7 +596,7 @@ class MainProcessBridge implements MainIpcModule {
       const postData = JSON.stringify({
         plugin: 'ethercat',
         command: 'scan',
-        params: { interface: scanRequest.interface },
+        params: { interface: scanRequest.interface, timeout_ms: scanRequest.timeout_ms },
       })
 
       return new Promise((resolve) => {

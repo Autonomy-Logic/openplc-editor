@@ -132,14 +132,21 @@ const ConfiguredDeviceRow = ({
             onUpdateChannelMappings(generateDefaultChannelMappings(deviceChannels, externalAddresses))
           }
 
-          // Enrich if data is missing (backward compat for projects created before enrichment)
-          const needsEnrichment =
-            !device.channelInfo ||
-            !device.rxPdos ||
-            !device.txPdos ||
-            (device.sdoConfigurations === undefined && result.device.coeObjects?.length)
-          if (needsEnrichment) {
-            onEnrichDevice(enrichDeviceData(result.device))
+          // Only enrich PDO/channel data if missing (never overwrite user-edited sdoConfigurations)
+          if (!device.channelInfo || !device.rxPdos || !device.txPdos) {
+            const enriched = enrichDeviceData(result.device)
+            if (device.sdoConfigurations !== undefined) {
+              delete enriched.sdoConfigurations
+            }
+            onEnrichDevice(enriched)
+          } else if (device.sdoConfigurations === undefined && result.device.coeObjects?.length) {
+            onEnrichDevice({
+              channelInfo: device.channelInfo,
+              rxPdos: device.rxPdos,
+              txPdos: device.txPdos,
+              slaveType: device.slaveType ?? '',
+              sdoConfigurations: extractDefaultSdoConfigurations(result.device.coeObjects),
+            })
           }
         } else {
           setChannelLoadError(result.error || 'Failed to load device data')
@@ -637,31 +644,44 @@ const ConfiguredDeviceRow = ({
                   />
                 )}
 
-                {!isLoadingChannels && device.sdoConfigurations && device.sdoConfigurations.length === 0 && (
-                  <p className='py-4 text-center text-sm text-neutral-500 dark:text-neutral-400'>
-                    No configurable SDO parameters found in this device&apos;s CoE dictionary.
-                  </p>
-                )}
-
-                {!isLoadingChannels && !device.sdoConfigurations && coeObjects && coeObjects.length > 0 && (
-                  <div className='flex flex-col items-center gap-2 py-4'>
-                    <p className='text-sm text-neutral-500 dark:text-neutral-400'>
-                      CoE Object Dictionary available. Auto-configure startup parameters?
+                {!isLoadingChannels &&
+                  !channelLoadError &&
+                  device.sdoConfigurations &&
+                  device.sdoConfigurations.length === 0 && (
+                    <p className='py-4 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                      No configurable SDO parameters found in this device&apos;s CoE dictionary.
                     </p>
-                    <button
-                      onClick={() => {
-                        if (coeObjects) {
-                          onUpdateSdoConfigurations(extractDefaultSdoConfigurations(coeObjects))
-                        }
-                      }}
-                      className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
-                    >
-                      Auto-configure from ESI defaults
-                    </button>
+                  )}
+
+                {!isLoadingChannels &&
+                  !channelLoadError &&
+                  !device.sdoConfigurations &&
+                  coeObjects &&
+                  coeObjects.length > 0 && (
+                    <div className='flex flex-col items-center gap-2 py-4'>
+                      <p className='text-sm text-neutral-500 dark:text-neutral-400'>
+                        CoE Object Dictionary available. Auto-configure startup parameters?
+                      </p>
+                      <button
+                        onClick={() => {
+                          if (coeObjects) {
+                            onUpdateSdoConfigurations(extractDefaultSdoConfigurations(coeObjects))
+                          }
+                        }}
+                        className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
+                      >
+                        Auto-configure from ESI defaults
+                      </button>
+                    </div>
+                  )}
+
+                {channelLoadError && (
+                  <div className='rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'>
+                    {channelLoadError}
                   </div>
                 )}
 
-                {!isLoadingChannels && !device.sdoConfigurations && !coeObjects && (
+                {!isLoadingChannels && !channelLoadError && !device.sdoConfigurations && !coeObjects && (
                   <p className='py-4 text-center text-sm text-neutral-500 dark:text-neutral-400'>
                     No CoE Object Dictionary available for this device.
                   </p>

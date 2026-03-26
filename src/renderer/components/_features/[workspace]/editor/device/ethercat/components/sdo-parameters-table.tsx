@@ -99,16 +99,17 @@ const ValueCell = ({
 
   const range = getDataTypeRange(entry.dataType, entry.bitLength)
   const isFloat = ['REAL', 'REAL32', 'FLOAT', 'LREAL', 'REAL64', 'DOUBLE'].includes(entry.dataType.toUpperCase())
+  const isNumeric = range !== null
 
   return (
     <input
-      type='number'
+      type={isNumeric ? 'number' : 'text'}
       step={isFloat ? 'any' : undefined}
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
-      min={range?.min}
-      max={range?.max}
+      min={isNumeric ? range?.min : undefined}
+      max={isNumeric ? range?.max : undefined}
       className='h-[24px] w-full max-w-[120px] rounded border border-neutral-300 bg-white px-1.5 font-mono text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
     />
   )
