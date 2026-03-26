@@ -54,7 +54,10 @@ function findFinalType(
 
   // Start with the first variable (e.g., "LocalVar")
   const rootVariable = pouVariables.find((v) => v.name === instancePath[0])
-  if (!rootVariable || rootVariable.type?.definition !== 'derived') {
+  if (
+    !rootVariable ||
+    (rootVariable.type?.definition !== 'derived' && rootVariable.type?.definition !== 'user-data-type')
+  ) {
     return null
   }
 
@@ -85,7 +88,7 @@ function findFinalType(
         const field = customFB.data.variables.find(
           (v) => v.name === fieldName && (v.class === 'input' || v.class === 'output' || v.class === 'inOut'),
         )
-        if (field && field.type?.definition === 'derived') {
+        if (field && (field.type?.definition === 'derived' || field.type?.definition === 'user-data-type')) {
           currentTypeName = field.type.value
         } else {
           return null
@@ -115,7 +118,9 @@ function findFBType(
 ): { type: string; isStandard: boolean } | null {
   // First, check in POU variables (from the store)
   const pouVariable = pouVariables.find((variable) => {
-    const matches = variable.name === instanceName && variable.type?.definition === 'derived'
+    const matches =
+      variable.name === instanceName &&
+      (variable.type?.definition === 'derived' || variable.type?.definition === 'user-data-type')
     return matches
   })
 

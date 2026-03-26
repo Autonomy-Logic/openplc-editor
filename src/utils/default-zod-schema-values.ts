@@ -12,6 +12,7 @@ import {
   ZodNumber,
   ZodObject,
   ZodOptional,
+  ZodRecord,
   ZodString,
   ZodTuple,
   ZodTypeAny,
@@ -30,6 +31,7 @@ export const getDefaultSchemaValues = (schema: ZodTypeAny): unknown => {
   if (schema instanceof ZodBoolean) return false
   if (schema instanceof ZodEnum) return schema.options[0]
   if (schema instanceof ZodLiteral) return schema._def.value
+  if (schema instanceof ZodRecord) return {}
   if (schema instanceof ZodNullable) return null
   if (schema instanceof ZodOptional) return getDefaultSchemaValues(schema._def.innerType as ZodTypeAny)
   if (schema instanceof ZodUnion) return getDefaultSchemaValues(schema._def.options[0] as ZodTypeAny)

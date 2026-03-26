@@ -1,6 +1,7 @@
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
+import { store } from './modules/store'
 import { ProjectService } from './services'
 
 /**
@@ -143,7 +144,9 @@ export default class MenuBuilder {
   }
 
   updateAppTheme() {
-    nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
+    const newTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
+    nativeTheme.themeSource = newTheme
+    store.set('theme', newTheme)
     this.mainWindow.webContents.send('system:update-theme')
     void this.buildMenu()
   }

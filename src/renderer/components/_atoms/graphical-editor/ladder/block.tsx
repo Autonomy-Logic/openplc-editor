@@ -11,11 +11,12 @@ import type { VariableReference } from '@root/types/PLC/variable-reference'
 import { cn, generateNumericUUID } from '@root/utils'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Node, NodeProps, Position } from '@xyflow/react'
-import { FocusEvent, useEffect, useRef, useState } from 'react'
+import { FocusEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { BlockOutputDebugBadges } from '../block-output-debug-badges'
 import { BlockVariant as newBlockVariant } from '../types/block'
 import { getBlockDocumentation, getVariableRestrictionType, validateVariableType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
@@ -432,6 +433,18 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
     nodeId: id,
   })
+
+  const connectedOutputNames = useMemo(() => {
+    const names = new Set<string>()
+    if (data.connectedVariables) {
+      for (const cv of data.connectedVariables) {
+        if (cv.type === 'output' && cv.variable) {
+          names.add(cv.handleId)
+        }
+      }
+    }
+    return names
+  }, [data.connectedVariables])
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -896,6 +909,17 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
+      <BlockOutputDebugBadges
+        blockType={(data.variant as BlockVariant).type}
+        blockName={(data.variant as BlockVariant).name}
+        blockVariableName={data.variable?.name ?? ''}
+        numericId={data.numericId}
+        outputVariables={(data.variant as BlockVariant).variables}
+        connectorStartY={DEFAULT_BLOCK_CONNECTOR_Y}
+        connectorOffsetY={DEFAULT_BLOCK_CONNECTOR_Y_OFFSET}
+        blockWidth={width ?? DEFAULT_BLOCK_WIDTH}
+        connectedOutputNames={connectedOutputNames}
+      />
     </div>
   )
 }

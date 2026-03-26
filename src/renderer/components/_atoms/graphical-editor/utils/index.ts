@@ -1,12 +1,17 @@
 import { baseTypeSchema, genericTypeSchema } from '@root/types/PLC'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
+import { resolveArrayVariableByName } from '@root/utils/PLC/array-variable-utils'
 import { ZodLiteral } from 'zod'
 
 import { BlockVariant } from '../ladder/block'
 import { BlockVariant as newBlockVariant } from '../types/block'
 
-export const getVariableByName = (variables: PLCVariable[], name: string): PLCVariable | undefined =>
-  variables.find((variable) => variable.name === name && variable.type.definition !== 'derived')
+export const getVariableByName = (variables: PLCVariable[], name: string): PLCVariable | undefined => {
+  const exact = variables.find((variable) => variable.name === name && variable.type.definition !== 'derived')
+  if (exact) return exact
+
+  return resolveArrayVariableByName(variables, name)
+}
 
 export const getBlockDocumentation = (blockVariant: newBlockVariant): string => {
   const inputVariables = blockVariant.variables.filter(

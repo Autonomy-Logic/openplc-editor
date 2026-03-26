@@ -56,7 +56,7 @@ export const OpcUaServerEditor = () => {
     editor,
     project,
     projectActions: { updateOpcUaServerConfig },
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const [activeTab, setActiveTab] = useState('general')
@@ -96,9 +96,9 @@ export const OpcUaServerEditor = () => {
 
       // Persist to store
       updateOpcUaServerConfig(serverName, { server: updates })
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [localConfig, serverName, updateOpcUaServerConfig, setEditingState],
+    [localConfig, serverName, updateOpcUaServerConfig, handleFileAndWorkspaceSavedState],
   )
 
   // Handle cycle time update (top-level config field)
@@ -112,9 +112,9 @@ export const OpcUaServerEditor = () => {
       })
 
       updateOpcUaServerConfig(serverName, { cycleTimeMs })
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [localConfig, serverName, updateOpcUaServerConfig, setEditingState],
+    [localConfig, serverName, updateOpcUaServerConfig, handleFileAndWorkspaceSavedState],
   )
 
   if (protocol !== 'opcua') {
@@ -175,7 +175,7 @@ export const OpcUaServerEditor = () => {
             <SecurityProfilesTab
               config={localConfig}
               serverName={serverName}
-              onConfigChange={() => setEditingState('unsaved')}
+              onConfigChange={() => handleFileAndWorkspaceSavedState(serverName)}
             />
           </div>
         </Tabs.Content>
@@ -186,7 +186,11 @@ export const OpcUaServerEditor = () => {
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
           <div className='min-h-0 flex-1 overflow-auto pb-4'>
-            <UsersTab config={localConfig} serverName={serverName} onConfigChange={() => setEditingState('unsaved')} />
+            <UsersTab
+              config={localConfig}
+              serverName={serverName}
+              onConfigChange={() => handleFileAndWorkspaceSavedState(serverName)}
+            />
           </div>
         </Tabs.Content>
 
@@ -199,7 +203,7 @@ export const OpcUaServerEditor = () => {
             <CertificatesTab
               config={localConfig}
               serverName={serverName}
-              onConfigChange={() => setEditingState('unsaved')}
+              onConfigChange={() => handleFileAndWorkspaceSavedState(serverName)}
             />
           </div>
         </Tabs.Content>
@@ -213,7 +217,7 @@ export const OpcUaServerEditor = () => {
             <AddressSpaceTab
               config={localConfig}
               serverName={serverName}
-              onConfigChange={() => setEditingState('unsaved')}
+              onConfigChange={() => handleFileAndWorkspaceSavedState(serverName)}
             />
           </div>
         </Tabs.Content>

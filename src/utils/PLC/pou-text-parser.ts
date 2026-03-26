@@ -241,7 +241,18 @@ export const parseHybridPouFromString = (content: string, language: string, type
       ? parseIecStringToVariables(variablesString).map((v) => ({ ...v, debug: false }))
       : []
 
-    const bodyContent = remainingContent.slice(bodyStartIndex).trim()
+    // Strip the trailing END keyword from the body content, matching how textual/graphical parsers handle it
+    const endKeywords: Record<string, string> = {
+      program: 'END_PROGRAM',
+      function: 'END_FUNCTION',
+      'function-block': 'END_FUNCTION_BLOCK',
+    }
+    const endKeyword = endKeywords[type]
+    let bodyContent = remainingContent.slice(bodyStartIndex).trim()
+    if (endKeyword) {
+      const endKeywordRegex = new RegExp(`\\s*\\b${endKeyword}\\b\\s*$`, 'i')
+      bodyContent = bodyContent.replace(endKeywordRegex, '').trim()
+    }
 
     if (type === 'function') {
       return {

@@ -52,6 +52,7 @@ const VariablesEditor = () => {
       systemConfigs: { shouldUseDarkMode },
       isDebuggerVisible,
     },
+    workspaceActions: { removeDebugVariable },
     project: {
       data: { pous, dataTypes },
     },
@@ -374,9 +375,16 @@ const VariablesEditor = () => {
     addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
+    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    const variableToDelete = variables[selectedRow]
+
+    if (variableToDelete) {
+      const compositeKey = `${editor.meta.name}:${variableToDelete.name}`
+      removeDebugVariable(compositeKey)
+    }
+
     deleteVariable({ scope: 'local', associatedPou: editor.meta.name, rowId: selectedRow })
 
-    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     if (selectedRow === variables.length - 1) {
       updateModelVariables({
         display: 'table',

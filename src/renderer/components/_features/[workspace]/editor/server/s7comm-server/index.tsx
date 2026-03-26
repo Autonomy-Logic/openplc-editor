@@ -318,7 +318,7 @@ const S7CommServerEditor = () => {
     editor,
     project,
     projectActions,
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const serverName = editor.type === 'plc-server' ? editor.meta.name : ''
@@ -389,18 +389,18 @@ const S7CommServerEditor = () => {
     (newEnabled: boolean) => {
       setEnabled(newEnabled)
       projectActions.updateS7CommServerSettings(serverName, { enabled: newEnabled })
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [serverName, projectActions, setEditingState],
+    [serverName, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   const handleBindAddressChange = useCallback(
     (newAddress: string) => {
       setBindAddress(newAddress)
       projectActions.updateS7CommServerSettings(serverName, { bindAddress: newAddress })
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [serverName, projectActions, setEditingState],
+    [serverName, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   const handlePortBlur = useCallback(() => {
@@ -408,49 +408,49 @@ const S7CommServerEditor = () => {
     if (!isNaN(portNum) && portNum >= 1 && portNum <= 65535) {
       if (portNum !== config?.server.port) {
         projectActions.updateS7CommServerSettings(serverName, { port: portNum })
-        setEditingState('unsaved')
+        handleFileAndWorkspaceSavedState(serverName)
       }
     } else {
       // Reset to last valid value when validation fails
       setPort((config?.server.port ?? DEFAULT_SERVER_SETTINGS.port).toString())
     }
-  }, [port, serverName, config?.server.port, projectActions, setEditingState])
+  }, [port, serverName, config?.server.port, projectActions, handleFileAndWorkspaceSavedState])
 
   const handleMaxClientsBlur = useCallback(() => {
     const num = parseInt(maxClients, 10)
     if (!isNaN(num) && num >= 1 && num <= 1024) {
       if (num !== config?.server.maxClients) {
         projectActions.updateS7CommServerSettings(serverName, { maxClients: num })
-        setEditingState('unsaved')
+        handleFileAndWorkspaceSavedState(serverName)
       }
     } else {
       // Reset to last valid value when validation fails
       setMaxClients((config?.server.maxClients ?? DEFAULT_SERVER_SETTINGS.maxClients).toString())
     }
-  }, [maxClients, serverName, config?.server.maxClients, projectActions, setEditingState])
+  }, [maxClients, serverName, config?.server.maxClients, projectActions, handleFileAndWorkspaceSavedState])
 
   const handlePduSizeBlur = useCallback(() => {
     const num = parseInt(pduSize, 10)
     if (!isNaN(num) && num >= 240 && num <= 960) {
       if (num !== config?.server.pduSize) {
         projectActions.updateS7CommServerSettings(serverName, { pduSize: num })
-        setEditingState('unsaved')
+        handleFileAndWorkspaceSavedState(serverName)
       }
     } else {
       // Reset to last valid value when validation fails
       setPduSize((config?.server.pduSize ?? DEFAULT_SERVER_SETTINGS.pduSize).toString())
     }
-  }, [pduSize, serverName, config?.server.pduSize, projectActions, setEditingState])
+  }, [pduSize, serverName, config?.server.pduSize, projectActions, handleFileAndWorkspaceSavedState])
 
   // Handlers for PLC identity
   const handlePlcIdentityBlur = useCallback(
     (field: string, value: string, currentValue?: string) => {
       if (value !== currentValue) {
         projectActions.updateS7CommPlcIdentity(serverName, { [field]: value })
-        setEditingState('unsaved')
+        handleFileAndWorkspaceSavedState(serverName)
       }
     },
-    [serverName, projectActions, setEditingState],
+    [serverName, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   // Handlers for logging
@@ -460,9 +460,9 @@ const S7CommServerEditor = () => {
       if (field === 'logDataAccess') setLogDataAccess(value)
       if (field === 'logErrors') setLogErrors(value)
       projectActions.updateS7CommLogging(serverName, { [field]: value })
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [serverName, projectActions, setEditingState],
+    [serverName, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   // Handlers for data blocks
@@ -483,17 +483,17 @@ const S7CommServerEditor = () => {
       } else {
         projectActions.addS7CommDataBlock(serverName, dataBlock)
       }
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [serverName, editingBlock, projectActions, setEditingState],
+    [serverName, editingBlock, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   const handleDeleteDataBlock = useCallback(
     (dbNumber: number) => {
       projectActions.removeS7CommDataBlock(serverName, dbNumber)
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [serverName, projectActions, setEditingState],
+    [serverName, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   const inputStyles =

@@ -103,7 +103,7 @@ const ModbusServerEditor = () => {
     editor,
     project,
     projectActions,
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const serverName = editor.type === 'plc-server' ? editor.meta.name : ''
@@ -167,27 +167,27 @@ const ModbusServerEditor = () => {
     (newEnabled: boolean) => {
       setEnabled(newEnabled)
       projectActions.updateServerConfig(serverName, { enabled: newEnabled })
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [serverName, projectActions, setEditingState],
+    [serverName, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   const handleNetworkInterfaceChange = useCallback(
     (newInterface: string) => {
       setNetworkInterface(newInterface)
       projectActions.updateServerConfig(serverName, { networkInterface: newInterface })
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [serverName, projectActions, setEditingState],
+    [serverName, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   const handlePortBlur = useCallback(() => {
     const portNum = parseInt(port, 10)
     if (!isNaN(portNum) && portNum >= 1 && portNum <= 65535 && portNum !== server?.modbusSlaveConfig?.port) {
       projectActions.updateServerConfig(serverName, { port: portNum })
-      setEditingState('unsaved')
+      handleFileAndWorkspaceSavedState(serverName)
     }
-  }, [port, serverName, server?.modbusSlaveConfig?.port, projectActions, setEditingState])
+  }, [port, serverName, server?.modbusSlaveConfig?.port, projectActions, handleFileAndWorkspaceSavedState])
 
   // Buffer mapping update handlers
   const createBufferMappingHandler = useCallback(
@@ -200,11 +200,11 @@ const ModbusServerEditor = () => {
               [field]: { [subField]: num },
             },
           })
-          setEditingState('unsaved')
+          handleFileAndWorkspaceSavedState(serverName)
         }
       }
     },
-    [serverName, projectActions, setEditingState],
+    [serverName, projectActions, handleFileAndWorkspaceSavedState],
   )
 
   const bufferMapping = server?.modbusSlaveConfig?.bufferMapping || DEFAULT_BUFFER_MAPPING

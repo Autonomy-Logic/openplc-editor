@@ -1,3 +1,4 @@
+import { useDebugCompositeKey } from '@hooks/use-debug-composite-key'
 import * as Popover from '@radix-ui/react-popover'
 import {
   DefaultCoil,
@@ -126,33 +127,10 @@ export const Coil = (block: CoilProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: {
-      isDebuggerVisible,
-      debugVariableValues,
-      debugVariableIndexes,
-      debugForcedVariables,
-      fbSelectedInstance,
-      fbDebugInstances,
-    },
+    workspace: { isDebuggerVisible, debugVariableValues, debugVariableIndexes, debugForcedVariables },
     workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
-
-  // Helper to get composite key with FB instance context
-  const getCompositeKey = (variableName: string): string => {
-    const currentPou = pous.find((p) => p.data.name === editor.meta.name)
-    if (currentPou?.type === 'function-block') {
-      const fbTypeKey = currentPou.data.name.toUpperCase()
-      const selectedKey = fbSelectedInstance.get(fbTypeKey)
-      if (selectedKey) {
-        const instances = fbDebugInstances.get(fbTypeKey) || []
-        const selectedInstance = instances.find((inst) => inst.key === selectedKey)
-        if (selectedInstance) {
-          return `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${variableName}`
-        }
-      }
-    }
-    return `${editor.meta.name}:${variableName}`
-  }
+  const getCompositeKey = useDebugCompositeKey()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
   const [coilVariableValue, setCoilVariableValue] = useState<string>(data.variable.name)
@@ -164,7 +142,14 @@ export const Coil = (block: CoilProps) => {
     }
 
     const compositeKey = getCompositeKey(data.variable.name)
-    const value = debugVariableValues.get(compositeKey)
+    const isForced = debugForcedVariables.has(compositeKey)
+
+    // When forced, use immediate value from debugForcedVariables (no 200ms poll delay)
+    const value = isForced
+      ? debugForcedVariables.get(compositeKey)
+        ? '1'
+        : '0'
+      : debugVariableValues.get(compositeKey)
 
     if (value === undefined) {
       return undefined
@@ -173,10 +158,8 @@ export const Coil = (block: CoilProps) => {
     const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
     const displayState = data.variant === 'negated' ? !isTrue : isTrue
 
-    const isForced = debugForcedVariables.has(compositeKey)
     if (isForced) {
-      const forcedValue = debugForcedVariables.get(compositeKey)
-      return forcedValue ? '#80C000' : '#4080FF'
+      return displayState ? '#80C000' : '#4080FF'
     }
 
     return displayState ? '#00FF00' : '#0464FB'

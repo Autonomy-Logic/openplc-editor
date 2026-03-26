@@ -5,8 +5,11 @@ import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_m
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { baseTypeSchema, type PLCPou } from '@root/types/PLC/open-plc'
+import { getExtensionFromLanguage, getFolderFromPouType } from '@root/utils/PLC/pou-file-extensions'
+import { parseHybridPouFromString, parseTextualPouFromString } from '@root/utils/PLC/pou-text-parser'
+import type { IpcRendererEvent } from 'electron'
 import * as monaco from 'monaco-editor'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import {
@@ -54,11 +57,65 @@ type SnippetController = {
   insert: (snippet: string, options?: unknown) => void
 }
 
+// Cast window.bridge once for file-watcher methods that don't resolve in the renderer webpack context
+const bridge = window.bridge as unknown as {
+  fileWatchStart: (path: string) => Promise<{ success: boolean; error?: string }>
+  fileWatchStop: (path: string) => Promise<{ success: boolean }>
+  fileReadContent: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+  onFileExternalChange: (handler: (event: IpcRendererEvent, data: { filePath: string }) => void) => () => void
+}
+
+// Replaces comment regions with spaces so column positions are preserved.
+// Tracks block comment state across lines: (*..*), /*..*/, and // line comments.
+type BlockCommentState = false | 'paren' | 'slash'
+function stripLineComments(line: string, state: BlockCommentState): { stripped: string; state: BlockCommentState } {
+  const chars = [...line]
+  let i = 0
+  let s = state
+
+  while (i < chars.length) {
+    if (s) {
+      const endMarker = s === 'paren' ? ')' : '/'
+      if (chars[i] === '*' && chars[i + 1] === endMarker) {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = false
+      } else {
+        chars[i] = ' '
+        i++
+      }
+    } else {
+      if (chars[i] === '/' && chars[i + 1] === '/') {
+        for (let j = i; j < chars.length; j++) chars[j] = ' '
+        break
+      }
+      if (chars[i] === '(' && chars[i + 1] === '*') {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = 'paren'
+      } else if (chars[i] === '/' && chars[i + 1] === '*') {
+        chars[i] = ' '
+        chars[i + 1] = ' '
+        i += 2
+        s = 'slash'
+      } else {
+        i++
+      }
+    }
+  }
+
+  return { stripped: chars.join(''), state: s }
+}
+
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
+  const [editorMounted, setEditorMounted] = useState(false)
+  const [modelVersion, setModelVersion] = useState(0)
 
   const {
     editor,
@@ -67,8 +124,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     regularExpression,
     workspace: {
       systemConfigs: { shouldUseDarkMode },
+      isDebuggerVisible,
+      debugVariableValues,
+      fbSelectedInstance,
+      fbDebugInstances,
     },
     project: {
+      meta: { path: projectPath },
       data: {
         pous,
         configuration: {
@@ -87,6 +149,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
+  // Create a unique Monaco path by combining project path with relative path
+  // This prevents Monaco from caching models across different projects with same POU names
+  const uniqueMonacoPath = projectPath ? `${projectPath}${path}` : path
+
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
@@ -94,6 +160,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const pou = openPLCStoreBase.getState().project.data.pous.find((pou) => pou.data.name === name)
     return typeof pou?.data.body.value === 'string' ? pou.data.body.value : ''
   })
+  const watchedFilePathRef = useRef<string | null>(null)
 
   useEffect(() => {
     const pou = pous.find((p) => p.data.name === name)
@@ -153,6 +220,181 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       updateEnumValuesInTokenizer(dataTypes)
     }
   }, [dataTypes, language])
+
+  // File watching for external changes (auto-reload like VSCode)
+  useEffect(() => {
+    const projectPath = openPLCStoreBase.getState().project.meta.path
+    if (!projectPath || !pou) return
+
+    const actualExtension = getExtensionFromLanguage(language)
+    const pouFolder = getFolderFromPouType(pou.type)
+
+    // Construct full file path for the POU file
+    const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
+    watchedFilePathRef.current = fullPath
+
+    // Start watching the file
+    void bridge.fileWatchStart(fullPath)
+
+    // Listen for external file change events - VSCode-like behavior:
+    // - If file has no unsaved changes: auto-reload silently
+    // - If file has unsaved changes: do nothing (preserve local edits)
+    const handleExternalChange = (_event: IpcRendererEvent, data: { filePath: string }) => {
+      if (data.filePath !== watchedFilePathRef.current) return
+
+      // Check if the file has unsaved local changes
+      const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
+
+      if (isSaved) {
+        void reloadFromDisk()
+      }
+    }
+
+    // Function to reload content from disk
+    const reloadFromDisk = async () => {
+      if (!watchedFilePathRef.current) return
+
+      try {
+        const result = await bridge.fileReadContent(watchedFilePathRef.current)
+
+        if (result.success && result.content) {
+          const parsedPou =
+            language === 'st' || language === 'il'
+              ? parseTextualPouFromString(result.content, language, pou.type)
+              : parseHybridPouFromString(result.content, language, pou.type)
+          const newBodyValue = typeof parsedPou.data.body.value === 'string' ? parsedPou.data.body.value : ''
+
+          // Update local state and store
+          setLocalText(newBodyValue)
+          updatePou({ name, content: { language, value: newBodyValue } })
+        }
+      } catch (err) {
+        console.error('[Monaco FileWatch] Failed to reload file:', err)
+      }
+    }
+
+    const cleanup = bridge.onFileExternalChange(handleExternalChange)
+
+    return () => {
+      cleanup()
+      if (watchedFilePathRef.current) {
+        void bridge.fileWatchStop(watchedFilePathRef.current)
+        watchedFilePathRef.current = null
+      }
+    }
+  }, [pou?.type, name, language])
+
+  // Track when @monaco-editor/react switches models (tab changes with keepCurrentModel).
+  // onMount only fires once on initial mount, so we use onDidChangeModel to know when the
+  // model has actually switched, then bump modelVersion to trigger debugVarPositions recomputation.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const disposable = editor.onDidChangeModel(() => {
+      setModelVersion((v) => v + 1)
+    })
+    return () => disposable.dispose()
+  }, [editorMounted])
+
+  // Update readOnly when debugger visibility changes on an already-mounted editor
+  useEffect(() => {
+    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
+  }, [isDebuggerVisible])
+
+  // Resolve FB instance context for composite key building
+  const fbInstanceContext = useMemo(() => {
+    if (!pou || pou.type !== 'function-block') return null
+    const fbTypeKey = pou.data.name.toUpperCase()
+    const selectedKey = fbSelectedInstance.get(fbTypeKey)
+    if (!selectedKey) return null
+    const instances = fbDebugInstances.get(fbTypeKey) || []
+    return instances.find((inst) => inst.key === selectedKey) || null
+  }, [pou, fbSelectedInstance, fbDebugInstances])
+
+  // Stable key derived from the set of debug variable names (not values).
+  // Only changes when a variable is added/removed from the watch list.
+  const debugVarKeySet = useMemo(() => {
+    const keys: string[] = []
+    for (const key of debugVariableValues.keys()) keys.push(key)
+    return keys.sort().join('\0')
+  }, [debugVariableValues])
+
+  // Phase 1: scan the document for variable positions once.
+  // Re-runs only when the watched variable set, FB context, or editor identity changes —
+  // NOT on every 50ms value poll. The editor is read-only during debug so positions are stable.
+  const debugVarPositions = useMemo(() => {
+    if (!isDebuggerVisible || !editorRef.current || (language !== 'st' && language !== 'il')) return null
+
+    const model = editorRef.current.getModel()
+    if (!model) return null
+
+    // Guard: ensure the model matches the current POU. During tab switches the memo may
+    // fire before @monaco-editor/react has swapped the model, so we'd scan the wrong file.
+    const expectedUri = monaco.Uri.file(uniqueMonacoPath).toString()
+    if (model.uri.toString() !== expectedUri) return null
+
+    const prefix = fbInstanceContext
+      ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
+      : `${name}:`
+
+    // Extract variable names from the key set (values are irrelevant for position scanning)
+    const varNames: string[] = []
+    for (const key of debugVariableValues.keys()) {
+      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
+    }
+    if (varNames.length === 0) return null
+
+    // Sort longest first so "TON0.Q" is matched before "TON0" on the same line
+    varNames.sort((a, b) => b.length - a.length)
+
+    const exprPatterns = varNames.map((expr) => {
+      const escaped = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return { expr, pattern: new RegExp(`\\b${escaped}(?![\\w.\\[])`, 'gi') }
+    })
+
+    const positions: Array<{ expr: string; line: number; startCol: number; endCol: number }> = []
+    let blockCommentState: BlockCommentState = false
+
+    for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
+      const result = stripLineComments(model.getLineContent(lineNumber), blockCommentState)
+      blockCommentState = result.state
+      const claimed: Array<[number, number]> = []
+
+      for (const { expr, pattern } of exprPatterns) {
+        pattern.lastIndex = 0
+        let match: RegExpExecArray | null
+        while ((match = pattern.exec(result.stripped)) !== null) {
+          const startCol = match.index + 1
+          const endCol = startCol + match[0].length
+          if (claimed.some(([s, e]) => startCol < e && endCol > s)) continue
+          claimed.push([startCol, endCol])
+          positions.push({ expr, line: lineNumber, startCol, endCol })
+          break // Only first occurrence per expression per line
+        }
+      }
+    }
+
+    return { prefix, positions }
+  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
+
+  // Phase 2: stamp current values onto cached positions (runs on each poll, O(positions) map lookups only)
+  useEffect(() => {
+    if (!debugVarPositions || !editorRef.current) return
+
+    const { prefix, positions } = debugVarPositions
+    const decorations: monaco.editor.IModelDeltaDecoration[] = positions.map(({ expr, line, startCol, endCol }) => ({
+      range: new monaco.Range(line, startCol, line, endCol),
+      options: {
+        after: {
+          content: ` = ${debugVariableValues.get(prefix + expr) ?? '?'} `,
+          inlineClassName: 'debug-inline-value',
+        },
+      },
+    }))
+
+    const collection = editorRef.current.createDecorationsCollection(decorations)
+    return () => collection.clear()
+  }, [debugVarPositions, debugVariableValues])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
@@ -501,8 +743,23 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   ) {
     editorRef.current = editorInstance
     monacoRef.current = monacoInstance
+    setEditorMounted(true)
 
     if (!editorInstance || !monacoInstance) return
+
+    // Force-sync cached Monaco model with the store value.
+    // @monaco-editor/react's useUpdate skips the value→model sync on initial mount,
+    // so when keepCurrentModel=true a stale model from a previous session may persist
+    // (e.g. after "Don't Save" → reopen). At this point the onChange listener hasn't
+    // been wired up yet, so setValue won't trigger handleWriteInPou.
+    const model = editorInstance.getModel()
+    if (model) {
+      const storePou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+      const storeBodyValue = typeof storePou?.data.body.value === 'string' ? storePou.data.body.value : ''
+      if (model.getValue() !== storeBodyValue) {
+        model.setValue(storeBodyValue)
+      }
+    }
 
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
@@ -516,6 +773,45 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         openPLCStoreBase.getState().editorActions.setMonacoFocused(false)
       })
     }
+
+    // Check for external file changes when tab becomes active (editor mounts)
+    // This handles the case where a file was modified while another tab was in focus
+    void (async () => {
+      const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
+      if (!isSaved) return // Has local unsaved changes, don't reload
+
+      const currentPou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+      if (!currentPou) return
+
+      const projectPath = openPLCStoreBase.getState().project.meta.path
+      if (!projectPath) return
+
+      // Construct file path
+      const actualExtension = getExtensionFromLanguage(language)
+      const pouFolder = getFolderFromPouType(currentPou.type)
+      const fullPath = `${projectPath}/pous/${pouFolder}/${name}${actualExtension}`
+
+      try {
+        const result = await bridge.fileReadContent(fullPath)
+
+        if (result.success && result.content) {
+          const parsedPou =
+            language === 'st' || language === 'il'
+              ? parseTextualPouFromString(result.content, language, currentPou.type)
+              : parseHybridPouFromString(result.content, language, currentPou.type)
+          const newBodyValue = typeof parsedPou.data.body.value === 'string' ? parsedPou.data.body.value : ''
+
+          // Only update if content is different from what we have
+          const currentBodyValue = typeof currentPou.data.body.value === 'string' ? currentPou.data.body.value : ''
+          if (newBodyValue !== currentBodyValue) {
+            setLocalText(newBodyValue)
+            updatePou({ name, content: { language, value: newBodyValue } })
+          }
+        }
+      } catch (err) {
+        console.error('[Monaco] Failed to check for external changes on mount:', err)
+      }
+    })()
 
     if (searchQuery) {
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
@@ -693,6 +989,7 @@ void loop()
     dropIntoEditor: {
       enabled: true,
     },
+    readOnly: isDebuggerVisible,
   }
 
   const handleDrop = (ev: React.DragEvent<HTMLDivElement>) => {
@@ -838,7 +1135,7 @@ void loop()
           options={monacoEditorUserOptions}
           height='100%'
           width='100%'
-          path={path}
+          path={uniqueMonacoPath}
           language={language}
           defaultValue={''}
           value={localText}

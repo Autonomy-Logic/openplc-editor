@@ -26,6 +26,7 @@ export class ModbusTcpClient {
   private timeout: number
   private socket: Socket | null = null
   private transactionId: number = 0
+  private sendRequestMutex: Promise<void> = Promise.resolve()
 
   constructor(options: ModbusTcpClientOptions) {
     this.host = options.host
@@ -66,6 +67,48 @@ export class ModbusTcpClient {
     }
   }
 
+  private sendTcpRequestImpl(request: Buffer): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket) {
+        reject(new Error('Not connected to target'))
+        return
+      }
+
+      const timeoutHandle = setTimeout(() => {
+        this.socket?.removeListener('data', onData)
+        this.socket?.removeListener('error', onError)
+        reject(new Error('Request timeout'))
+      }, this.timeout)
+
+      const onData = (data: Buffer) => {
+        clearTimeout(timeoutHandle)
+        this.socket?.removeListener('data', onData)
+        this.socket?.removeListener('error', onError)
+        resolve(data)
+      }
+
+      const onError = (error: Error) => {
+        clearTimeout(timeoutHandle)
+        this.socket?.removeListener('data', onData)
+        this.socket?.removeListener('error', onError)
+        reject(error)
+      }
+
+      this.socket.once('data', onData)
+      this.socket.once('error', onError)
+      this.socket.write(request as unknown as Uint8Array)
+    })
+  }
+
+  private sendTcpRequest(request: Buffer): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+      this.sendRequestMutex = this.sendRequestMutex.then(
+        () => this.sendTcpRequestImpl(request).then(resolve, reject),
+        () => this.sendTcpRequestImpl(request).then(resolve, reject),
+      )
+    })
+  }
+
   async getMd5Hash(): Promise<string> {
     if (!this.socket) {
       throw new Error('Not connected to target')
@@ -87,59 +130,30 @@ export class ModbusTcpClient {
     request.writeUInt8(0, 10)
     request.writeUInt8(0, 11)
 
-    return new Promise((resolve, reject) => {
-      const timeoutHandle = setTimeout(() => {
-        reject(new Error('Request timeout'))
-      }, this.timeout)
+    const data = await this.sendTcpRequest(request)
 
-      const onData = (data: Buffer) => {
-        clearTimeout(timeoutHandle)
-        this.socket?.removeListener('data', onData)
-        this.socket?.removeListener('error', onError)
+    if (data.length < 9) {
+      throw new Error('Invalid response: too short')
+    }
 
-        try {
-          if (data.length < 9) {
-            reject(new Error('Invalid response: too short'))
-            return
-          }
+    const responseTransactionId = data.readUInt16BE(0)
+    const responseFunctionCode = data.readUInt8(7)
+    const statusCode = data.readUInt8(8)
 
-          const responseTransactionId = data.readUInt16BE(0)
-          const responseFunctionCode = data.readUInt8(7)
-          const statusCode = data.readUInt8(8)
+    if (responseTransactionId !== transactionId) {
+      throw new Error('Transaction ID mismatch')
+    }
 
-          if (responseTransactionId !== transactionId) {
-            reject(new Error('Transaction ID mismatch'))
-            return
-          }
+    if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
+      throw new Error('Function code mismatch')
+    }
 
-          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
-            reject(new Error('Function code mismatch'))
-            return
-          }
+    if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+      throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
+    }
 
-          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-            reject(new Error(`Target returned error code: 0x${statusCode.toString(16)}`))
-            return
-          }
-
-          const md5String = data.slice(9).toString('utf-8').trim()
-          resolve(md5String)
-        } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)))
-        }
-      }
-
-      const onError = (error: Error) => {
-        clearTimeout(timeoutHandle)
-        this.socket?.removeListener('data', onData)
-        this.socket?.removeListener('error', onError)
-        reject(error)
-      }
-
-      this.socket!.once('data', onData)
-      this.socket!.once('error', onError)
-      this.socket!.write(request as unknown as Uint8Array)
-    })
+    const md5String = data.slice(9).toString('utf-8').trim()
+    return md5String
   }
 
   async getVariablesList(variableIndexes: number[]): Promise<{
@@ -173,95 +187,66 @@ export class ModbusTcpClient {
       request.writeUInt16BE(variableIndexes[i], 10 + i * 2)
     }
 
-    return new Promise((resolve) => {
-      const timeoutHandle = setTimeout(() => {
-        resolve({ success: false, error: 'Request timeout' })
-      }, this.timeout)
+    try {
+      const data = await this.sendTcpRequest(request)
 
-      const onData = (data: Buffer) => {
-        clearTimeout(timeoutHandle)
-        this.socket?.removeListener('data', onData)
-        this.socket?.removeListener('error', onError)
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
 
-        try {
-          if (data.length < 9) {
-            resolve({ success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` })
-            return
-          }
+      const responseTransactionId = data.readUInt16BE(0)
+      const responseFunctionCode = data.readUInt8(7)
+      const statusCode = data.readUInt8(8)
 
-          const responseTransactionId = data.readUInt16BE(0)
-          const responseFunctionCode = data.readUInt8(7)
-          const statusCode = data.readUInt8(8)
+      if (responseTransactionId !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
 
-          if (responseTransactionId !== transactionId) {
-            resolve({ success: false, error: 'Transaction ID mismatch' })
-            return
-          }
+      if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
 
-          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
-            resolve({ success: false, error: 'Function code mismatch' })
-            return
-          }
+      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
+        return { success: false, error: 'ERROR_OUT_OF_BOUNDS' }
+      }
 
-          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-            resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
-            return
-          }
+      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
+        return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
+      }
 
-          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-            resolve({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
-            return
-          }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
 
-          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-            resolve({ success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` })
-            return
-          }
-
-          if (data.length < 17) {
-            resolve({
-              success: false,
-              error: `Incomplete success response (${data.length} bytes, expected at least 17)`,
-            })
-            return
-          }
-
-          const lastIndex = data.readUInt16BE(9)
-          const tick = data.readUInt32BE(11)
-          const responseSize = data.readUInt16BE(15)
-
-          if (data.length < 17 + responseSize) {
-            resolve({
-              success: false,
-              error: `Incomplete variable data (expected ${responseSize} bytes, got ${data.length - 17})`,
-            })
-            return
-          }
-
-          const variableData = data.slice(17, 17 + responseSize)
-
-          resolve({
-            success: true,
-            tick,
-            lastIndex,
-            data: variableData,
-          })
-        } catch (error) {
-          resolve({ success: false, error: String(error) })
+      if (data.length < 17) {
+        return {
+          success: false,
+          error: `Incomplete success response (${data.length} bytes, expected at least 17)`,
         }
       }
 
-      const onError = (error: Error) => {
-        clearTimeout(timeoutHandle)
-        this.socket?.removeListener('data', onData)
-        this.socket?.removeListener('error', onError)
-        resolve({ success: false, error: error.message })
+      const lastIndex = data.readUInt16BE(9)
+      const tick = data.readUInt32BE(11)
+      const responseSize = data.readUInt16BE(15)
+
+      if (data.length < 17 + responseSize) {
+        return {
+          success: false,
+          error: `Incomplete variable data (expected ${responseSize} bytes, got ${data.length - 17})`,
+        }
       }
 
-      this.socket!.once('data', onData)
-      this.socket!.once('error', onError)
-      this.socket!.write(request as unknown as Uint8Array)
-    })
+      const variableData = data.slice(17, 17 + responseSize)
+
+      return {
+        success: true,
+        tick,
+        lastIndex,
+        data: variableData,
+      }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   async setVariable(
@@ -272,10 +257,7 @@ export class ModbusTcpClient {
     success: boolean
     error?: string
   }> {
-    console.log('[ModbusTcpClient] setVariable called with:', { variableIndex, force, valueBuffer })
-
     if (!this.socket) {
-      console.log('[ModbusTcpClient] Socket not connected')
       return { success: false, error: 'Not connected to target' }
     }
 
@@ -305,101 +287,40 @@ export class ModbusTcpClient {
       request.writeUInt8(0, 13)
     }
 
-    console.log('[ModbusTcpClient] Sending request:', {
-      transactionId,
-      protocolId,
-      pduLength,
-      unitId,
-      functionCode: `0x${functionCode.toString(16)}`,
-      variableIndex,
-      forceFlag: force ? 1 : 0,
-      dataLength,
-      valueBuffer: valueBuffer?.toString('hex'),
-      requestHex: request.toString('hex'),
-    })
+    try {
+      const data = await this.sendTcpRequest(request)
 
-    return new Promise((resolve) => {
-      const timeoutHandle = setTimeout(() => {
-        resolve({ success: false, error: 'Request timeout' })
-      }, this.timeout)
-
-      const onData = (data: Buffer) => {
-        clearTimeout(timeoutHandle)
-        this.socket?.removeListener('data', onData)
-        this.socket?.removeListener('error', onError)
-
-        console.log('[ModbusTcpClient] Received response:', {
-          length: data.length,
-          hex: data.toString('hex'),
-        })
-
-        try {
-          if (data.length < 9) {
-            console.log('[ModbusTcpClient] Response too short')
-            resolve({ success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` })
-            return
-          }
-
-          const responseTransactionId = data.readUInt16BE(0)
-          const responseFunctionCode = data.readUInt8(7)
-          const statusCode = data.readUInt8(8)
-
-          console.log('[ModbusTcpClient] Response parsed:', {
-            responseTransactionId,
-            expectedTransactionId: transactionId,
-            responseFunctionCode: `0x${responseFunctionCode.toString(16)}`,
-            expectedFunctionCode: `0x${ModbusFunctionCode.DEBUG_SET.toString(16)}`,
-            statusCode: `0x${statusCode.toString(16)}`,
-          })
-
-          if (responseTransactionId !== transactionId) {
-            console.log('[ModbusTcpClient] Transaction ID mismatch')
-            resolve({ success: false, error: 'Transaction ID mismatch' })
-            return
-          }
-
-          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_SET as number)) {
-            console.log('[ModbusTcpClient] Function code mismatch')
-            resolve({ success: false, error: 'Function code mismatch' })
-            return
-          }
-
-          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
-            console.log('[ModbusTcpClient] ERROR_OUT_OF_BOUNDS')
-            resolve({ success: false, error: 'ERROR_OUT_OF_BOUNDS' })
-            return
-          }
-
-          if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
-            console.log('[ModbusTcpClient] ERROR_OUT_OF_MEMORY')
-            resolve({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
-            return
-          }
-
-          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-            console.log('[ModbusTcpClient] Unknown error code')
-            resolve({ success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` })
-            return
-          }
-
-          console.log('[ModbusTcpClient] Success!')
-          resolve({ success: true })
-        } catch (error) {
-          console.error('[ModbusTcpClient] Error parsing response:', error)
-          resolve({ success: false, error: String(error) })
-        }
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
       }
 
-      const onError = (error: Error) => {
-        clearTimeout(timeoutHandle)
-        this.socket?.removeListener('data', onData)
-        this.socket?.removeListener('error', onError)
-        resolve({ success: false, error: error.message })
+      const responseTransactionId = data.readUInt16BE(0)
+      const responseFunctionCode = data.readUInt8(7)
+      const statusCode = data.readUInt8(8)
+
+      if (responseTransactionId !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
       }
 
-      this.socket!.once('data', onData)
-      this.socket!.once('error', onError)
-      this.socket!.write(request as unknown as Uint8Array)
-    })
+      if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_SET as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+
+      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_BOUNDS as number)) {
+        return { success: false, error: 'ERROR_OUT_OF_BOUNDS' }
+      }
+
+      if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
+        return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
+      }
+
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   }
 }

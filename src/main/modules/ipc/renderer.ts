@@ -215,7 +215,7 @@ const rendererProcessBridge = {
     Map<
       string,
       {
-        compiler: 'arduino-cli' | 'openplc-compiler'
+        compiler: 'arduino-cli' | 'openplc-compiler' | 'simulator'
         core: string
         preview: string
         specs: {
@@ -256,7 +256,7 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
 
   debuggerVerifyMd5: (
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -293,7 +293,7 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('debugger:set-variable', variableIndex, force, valueBuffer),
 
   debuggerConnect: (
-    connectionType: 'tcp' | 'rtu' | 'websocket',
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
       ipAddress?: string
       port?: string
@@ -552,5 +552,28 @@ const rendererProcessBridge = {
     projectPath: string,
   ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> =>
     ipcRenderer.invoke('esi:migrate-repository', projectPath),
+
+  // ===================== SIMULATOR METHODS =====================
+  simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('simulator:load-firmware', hexPath),
+  simulatorStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('simulator:stop'),
+  simulatorIsRunning: (): Promise<boolean> => ipcRenderer.invoke('simulator:is-running'),
+  onSimulatorStopped: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('simulator:stopped', listener)
+    return () => ipcRenderer.removeListener('simulator:stopped', listener)
+  },
+
+  // ===================== FILE WATCHER METHODS =====================
+  fileWatchStart: (filePath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('file:watch-start', filePath),
+  fileWatchStop: (filePath: string): Promise<{ success: boolean }> => ipcRenderer.invoke('file:watch-stop', filePath),
+  fileWatchStopAll: (): Promise<{ success: boolean }> => ipcRenderer.invoke('file:watch-stop-all'),
+  fileReadContent: (filePath: string): Promise<{ success: boolean; content?: string; error?: string }> =>
+    ipcRenderer.invoke('file:read-content', filePath),
+  onFileExternalChange: (callback: (_event: IpcRendererEvent, data: { filePath: string }) => void) => {
+    ipcRenderer.on('file:external-change', callback)
+    return () => ipcRenderer.removeListener('file:external-change', callback)
+  },
 }
 export default rendererProcessBridge

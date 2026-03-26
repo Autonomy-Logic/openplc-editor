@@ -63,7 +63,7 @@ const runtimeConnectionSchema = z.object({
 type RuntimeConnection = z.infer<typeof runtimeConnectionSchema>
 
 const availableBoardInfo = z.object({
-  compiler: z.enum(['arduino-cli', 'openplc-compiler']),
+  compiler: z.enum(['arduino-cli', 'openplc-compiler', 'simulator']),
   core: z.string(),
   preview: z.string(),
   specs: z.object({

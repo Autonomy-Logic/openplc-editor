@@ -47,6 +47,7 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
     },
     projectActions: { updateInstance },
     snapshotActions: { addSnapshot },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   return (
@@ -58,7 +59,11 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
       updateData={(rowIndex, columnId, value) => {
         addSnapshot(name)
         // @ts-expect-error - The data value is a literal type that need to be parsed
-        return updateInstance({ rowId: rowIndex, data: { [columnId]: value } })
+        const result = updateInstance({ rowId: rowIndex, data: { [columnId]: value } })
+        if (result.ok) {
+          handleFileAndWorkspaceSavedState('Resource')
+        }
+        return result
       }}
       tableContext='Instances'
     />

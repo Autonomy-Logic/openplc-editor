@@ -7,6 +7,7 @@
  */
 
 import type { PLCDataType, PLCPou, PLCVariable } from '@root/types/PLC/open-plc'
+import { parseDimensionRange } from '@root/utils/PLC/array-variable-utils'
 
 import type { DebugVariableEntry } from './debug-parser'
 import {
@@ -97,12 +98,12 @@ function isFunctionBlock(typeName: string, projectPous: PLCPou[]): boolean {
 
 /**
  * Parse array dimension string (e.g., "1..10" or "-5..5") into start and end indices.
- * IEC 61131-3 allows negative array indices.
+ * Delegates to the shared parseDimensionRange utility.
  */
 function parseArrayDimension(dimension: string): [number, number] | null {
-  const match = dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
-  if (!match) return null
-  return [parseInt(match[1], 10), parseInt(match[2], 10)]
+  const range = parseDimensionRange(dimension)
+  if (!range) return null
+  return [range.lower, range.upper]
 }
 
 /**
@@ -208,22 +209,32 @@ function traverseNestedNode<T>(
     const children: T[] = []
 
     for (const field of structVariables) {
-      // Structure fields use .value. prefix
-      const fieldFullPath = `${fullPath}.value.${field.name.toUpperCase()}`
       const fieldCompositeKey = `${compositeKey}.${field.name}`
 
       if (field.type.definition === 'base-type') {
-        const debugVar = findDebugVariable(debugVariables, fieldFullPath)
+        // Use fallback to try both struct-style (.value.) and FB-style paths.
+        // The xml2st compiler converts structs to FBs, so debug.c may use either path style.
+        const result = findDebugVariableForField(debugVariables, fullPath, field.name)
         children.push(
           visitor.visitLeaf(
             field.name,
-            fieldFullPath,
+            result.matchedPath,
             fieldCompositeKey,
             field.type.value.toUpperCase(),
-            debugVar?.index,
+            result.match?.index,
           ),
         )
       } else if (field.type.definition === 'user-data-type') {
+        // Try FB-style path first (compiler may have converted struct to FB)
+        const fbStylePath = `${fullPath}.${field.name.toUpperCase()}`
+        const structStylePath = `${fullPath}.value.${field.name.toUpperCase()}`
+        const hasFbMatch = debugVariables.some(
+          (dv) =>
+            dv.name.toUpperCase().startsWith(fbStylePath.toUpperCase() + '.') ||
+            dv.name.toUpperCase() === fbStylePath.toUpperCase(),
+        )
+        const fieldFullPath = hasFbMatch ? fbStylePath : structStylePath
+
         const childTypeDef = isFunctionBlock(field.type.value, projectPous) ? 'derived' : 'user-data-type'
         children.push(
           traverseNestedNode(
@@ -237,6 +248,16 @@ function traverseNestedNode<T>(
           ),
         )
       } else if (field.type.definition === 'array' && field.type.data) {
+        // Use fallback path for array fields too
+        const fbStylePath = `${fullPath}.${field.name.toUpperCase()}`
+        const structStylePath = `${fullPath}.value.${field.name.toUpperCase()}`
+        const hasFbMatch = debugVariables.some(
+          (dv) =>
+            dv.name.toUpperCase().startsWith(fbStylePath.toUpperCase() + '.') ||
+            dv.name.toUpperCase() === fbStylePath.toUpperCase(),
+        )
+        const fieldFullPath = hasFbMatch ? fbStylePath : structStylePath
+
         children.push(
           traverseNestedNode(
             field.name,

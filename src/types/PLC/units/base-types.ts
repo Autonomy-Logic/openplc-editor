@@ -4,5 +4,6 @@ import { z } from 'zod'
 const PLCBaseTypesSchema = z.enum(baseTypes)
 
 type PLCBaseTypes = z.infer<typeof PLCBaseTypesSchema>
+type PLCBaseTypesLowercase = Lowercase<PLCBaseTypes>
 
-export { PLCBaseTypes, PLCBaseTypesSchema }
+export { PLCBaseTypes, PLCBaseTypesLowercase, PLCBaseTypesSchema }

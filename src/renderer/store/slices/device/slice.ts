@@ -71,12 +71,19 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     clearDeviceDefinitions: (): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
           deviceDefinitions.configuration = defaultDeviceConfiguration
           deviceDefinitions.pinMapping = {
             pins: [],
             currentSelectedPinTableRow: -1,
           }
+          // Reset runtime connection state to disconnect from any active runtime
+          runtimeConnection.jwtToken = null
+          runtimeConnection.connectionStatus = 'disconnected'
+          runtimeConnection.plcStatus = null
+          runtimeConnection.ipAddress = null
+          runtimeConnection.timingStats = null
+          runtimeConnection.includeTimingStatsInPolling = false
         }),
       )
     },

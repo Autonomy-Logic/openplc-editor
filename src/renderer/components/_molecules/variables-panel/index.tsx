@@ -127,7 +127,7 @@ const VariablesPanel = ({
     (node: DebugTreeNode) => {
       if (!isDebuggerVisible || node.isComplex) return false
       if (node.debugIndex !== undefined) return true
-      return debugVariableIndexes?.has(node.fullPath) ?? debugVariableIndexes?.has(node.compositeKey) ?? false
+      return debugVariableIndexes?.has(node.fullPath) || debugVariableIndexes?.has(node.compositeKey) || false
     },
     [isDebuggerVisible, debugVariableIndexes],
   )

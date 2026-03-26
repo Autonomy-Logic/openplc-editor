@@ -1,33 +1,9 @@
 import { PLCVariable } from '@root/types/PLC/open-plc'
+import { generateStructMember } from '@root/utils/PLC/array-codegen-helpers'
 
 type CppPouData = {
   name: string
   variables: PLCVariable[]
-}
-
-const mapTypeToIEC = (type: PLCVariable['type']): string => {
-  if (type.definition === 'base-type') {
-    const typeMap: Record<string, string> = {
-      bool: 'IEC_BOOL',
-      sint: 'IEC_SINT',
-      int: 'IEC_INT',
-      dint: 'IEC_DINT',
-      lint: 'IEC_LINT',
-      usint: 'IEC_USINT',
-      uint: 'IEC_UINT',
-      udint: 'IEC_UDINT',
-      ulint: 'IEC_ULINT',
-      byte: 'IEC_BYTE',
-      word: 'IEC_WORD',
-      dword: 'IEC_DWORD',
-      lword: 'IEC_LWORD',
-      real: 'IEC_REAL',
-      lreal: 'IEC_LREAL',
-      string: 'IEC_STRING',
-    }
-    return typeMap[type.value] || type.value.toUpperCase()
-  }
-  return type.value
 }
 
 const generateCBlocksHeader = (cppPous: CppPouData[]): string => {
@@ -48,13 +24,11 @@ const generateCBlocksHeader = (cppPous: CppPouData[]): string => {
     headerContent += `typedef struct {\n`
 
     inputVariables.forEach((variable) => {
-      const iecType = mapTypeToIEC(variable.type)
-      headerContent += `  ${iecType} *${variable.name.toUpperCase()};\n`
+      headerContent += generateStructMember(variable)
     })
 
     outputVariables.forEach((variable) => {
-      const iecType = mapTypeToIEC(variable.type)
-      headerContent += `  ${iecType} *${variable.name.toUpperCase()};\n`
+      headerContent += generateStructMember(variable)
     })
 
     headerContent += `} ${structName};\n`

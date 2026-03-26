@@ -49,6 +49,19 @@ C_runtime/**/*.o
 
 resources/st-compiler/**.spec
 
+# External tool binaries (downloaded by scripts/download-binaries.ts)
+# arduino-cli stays committed since we don't own its releases
+resources/bin/**/xml2st
+resources/bin/**/xml2st.exe
+resources/bin/**/xml2st/
+resources/bin/**/iec2c
+resources/bin/**/iec2c.exe
+resources/bin/**/iec2iec
+resources/bin/**/iec2iec.exe
+resources/bin/.binary-metadata.json
+resources/bin/**/.binary-metadata.json
+resources/sources/MatIEC/lib/
+
 # Playwright
 /test-results/
 playwright-report

@@ -568,7 +568,7 @@ const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
 }
 
 const RemoteDeviceEditor = () => {
-  const { editor, project, projectActions, workspaceActions, runtimeConnection } = useOpenPLCStore()
+  const { editor, project, projectActions, sharedWorkspaceActions, runtimeConnection } = useOpenPLCStore()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
   const protocol = editor.type === 'plc-remote-device' ? editor.meta.protocol : ''
@@ -681,25 +681,25 @@ const RemoteDeviceEditor = () => {
   const handleHostBlur = useCallback(() => {
     if (host !== remoteDevice?.modbusTcpConfig?.host) {
       projectActions.updateRemoteDeviceConfig(deviceName, { host })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     }
-  }, [host, deviceName, remoteDevice?.modbusTcpConfig?.host, projectActions, workspaceActions])
+  }, [host, deviceName, remoteDevice?.modbusTcpConfig?.host, projectActions, sharedWorkspaceActions])
 
   const handlePortBlur = useCallback(() => {
     const portNum = parseInt(port, 10)
     if (!isNaN(portNum) && portNum !== remoteDevice?.modbusTcpConfig?.port) {
       projectActions.updateRemoteDeviceConfig(deviceName, { port: portNum })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     }
-  }, [port, deviceName, remoteDevice?.modbusTcpConfig?.port, projectActions, workspaceActions])
+  }, [port, deviceName, remoteDevice?.modbusTcpConfig?.port, projectActions, sharedWorkspaceActions])
 
   const handleTimeoutBlur = useCallback(() => {
     const timeoutNum = parseInt(timeoutMs, 10)
     if (!isNaN(timeoutNum) && timeoutNum !== remoteDevice?.modbusTcpConfig?.timeout) {
       projectActions.updateRemoteDeviceConfig(deviceName, { timeout: timeoutNum })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     }
-  }, [timeoutMs, deviceName, remoteDevice?.modbusTcpConfig?.timeout, projectActions, workspaceActions])
+  }, [timeoutMs, deviceName, remoteDevice?.modbusTcpConfig?.timeout, projectActions, sharedWorkspaceActions])
 
   const handleSlaveIdBlur = useCallback(() => {
     const slaveIdNum = parseInt(slaveId, 10)
@@ -712,18 +712,18 @@ const RemoteDeviceEditor = () => {
       slaveIdNum !== remoteDevice?.modbusTcpConfig?.slaveId
     ) {
       projectActions.updateRemoteDeviceConfig(deviceName, { slaveId: slaveIdNum })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     }
-  }, [slaveId, transport, deviceName, remoteDevice?.modbusTcpConfig?.slaveId, projectActions, workspaceActions])
+  }, [slaveId, transport, deviceName, remoteDevice?.modbusTcpConfig?.slaveId, projectActions, sharedWorkspaceActions])
 
   // Transport type handler
   const handleTransportChange = useCallback(
     (newTransport: 'tcp' | 'rtu') => {
       setTransport(newTransport)
       projectActions.updateRemoteDeviceConfig(deviceName, { transport: newTransport })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     },
-    [deviceName, projectActions, workspaceActions],
+    [deviceName, projectActions, sharedWorkspaceActions],
   )
 
   // RTU field handlers
@@ -731,45 +731,45 @@ const RemoteDeviceEditor = () => {
     (value: string) => {
       setSerialPort(value)
       projectActions.updateRemoteDeviceConfig(deviceName, { serialPort: value })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     },
-    [deviceName, projectActions, workspaceActions],
+    [deviceName, projectActions, sharedWorkspaceActions],
   )
 
   const handleBaudRateChange = useCallback(
     (value: string) => {
       setBaudRate(value)
       projectActions.updateRemoteDeviceConfig(deviceName, { baudRate: parseInt(value, 10) })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     },
-    [deviceName, projectActions, workspaceActions],
+    [deviceName, projectActions, sharedWorkspaceActions],
   )
 
   const handleParityChange = useCallback(
     (value: 'N' | 'E' | 'O') => {
       setParity(value)
       projectActions.updateRemoteDeviceConfig(deviceName, { parity: value })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     },
-    [deviceName, projectActions, workspaceActions],
+    [deviceName, projectActions, sharedWorkspaceActions],
   )
 
   const handleStopBitsChange = useCallback(
     (value: string) => {
       setStopBits(value)
       projectActions.updateRemoteDeviceConfig(deviceName, { stopBits: parseInt(value, 10) })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     },
-    [deviceName, projectActions, workspaceActions],
+    [deviceName, projectActions, sharedWorkspaceActions],
   )
 
   const handleDataBitsChange = useCallback(
     (value: string) => {
       setDataBits(value)
       projectActions.updateRemoteDeviceConfig(deviceName, { dataBits: parseInt(value, 10) })
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     },
-    [deviceName, projectActions, workspaceActions],
+    [deviceName, projectActions, sharedWorkspaceActions],
   )
 
   const handleToggleExpand = useCallback((groupId: string) => {
@@ -822,25 +822,25 @@ const RemoteDeviceEditor = () => {
           ...data,
         })
       }
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     },
-    [deviceName, projectActions, editingGroup, workspaceActions],
+    [deviceName, projectActions, editingGroup, sharedWorkspaceActions],
   )
 
   const handleDeleteIOGroup = useCallback(() => {
     if (selectedGroupId) {
       projectActions.deleteIOGroup(deviceName, selectedGroupId)
       setSelectedGroupId(null)
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     }
-  }, [deviceName, selectedGroupId, projectActions, workspaceActions])
+  }, [deviceName, selectedGroupId, projectActions, sharedWorkspaceActions])
 
   const handleUpdateAlias = useCallback(
     (ioGroupId: string, ioPointId: string, alias: string) => {
       projectActions.updateIOPointAlias(deviceName, ioGroupId, ioPointId, alias)
-      workspaceActions.setEditingState('unsaved')
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     },
-    [deviceName, projectActions, workspaceActions],
+    [deviceName, projectActions, sharedWorkspaceActions],
   )
 
   const inputStyles =

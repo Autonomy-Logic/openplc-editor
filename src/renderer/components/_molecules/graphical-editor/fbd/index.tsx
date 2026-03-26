@@ -1,3 +1,4 @@
+import { useDebugCompositeKey } from '@hooks/use-debug-composite-key'
 import { CustomFbdNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
 import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/block'
 import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
@@ -47,35 +48,13 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     modals,
     modalActions: { closeModal, openModal },
     snapshotActions: { addSnapshot },
-    workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables, fbSelectedInstance, fbDebugInstances },
+    workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables },
   } = useOpenPLCStore()
+  const getCompositeKey = useDebugCompositeKey()
 
   const pous = project.data.pous
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
-
-  // Get FB instance context for function block POUs
-  const fbInstanceContext = useMemo(() => {
-    if (!pouRef || pouRef.type !== 'function-block') return null
-    const fbTypeKey = pouRef.data.name.toUpperCase() // Canonical key for map lookups
-    const selectedKey = fbSelectedInstance.get(fbTypeKey)
-    if (!selectedKey) return null
-    const instances = fbDebugInstances.get(fbTypeKey) || []
-    return instances.find((inst) => inst.key === selectedKey) || null
-  }, [pouRef, fbSelectedInstance, fbDebugInstances])
-
-  // Helper to get composite key for variable lookup, handling FB instance context
-  const getCompositeKey = useCallback(
-    (variableName: string): string => {
-      if (fbInstanceContext) {
-        // For FB POUs, transform to instance context: main:MOTOR_SPEED0.varName
-        return `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.${variableName}`
-      }
-      // For programs, use standard format: pouName:varName
-      return `${editor.meta.name}:${variableName}`
-    },
-    [fbInstanceContext, editor.meta.name],
-  )
 
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
@@ -132,7 +111,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       // For program POUs, verify the program instance exists
       // For FB POUs, skip this check since getCompositeKey already handles instance context
-      if (!fbInstanceContext) {
+      if (pouRef?.type !== 'function-block') {
         const instances = project.data.configuration.resource.instances
         const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
         if (!programInstance) return undefined
@@ -242,7 +221,8 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     debugVariableValues,
     debugForcedVariables,
     editor.meta.name,
-    project,
+    pouRef?.data.variables,
+    project.data.configuration.resource.instances,
   ])
 
   const styledNodes = useMemo(() => {
@@ -283,25 +263,32 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   }
 
   const updateRungState = () => {
+    const stripDivergence = (node: FlowNode) => {
+      const { hasDivergence: _hd, ...cleanData } = node.data
+      return { ...node, data: cleanData }
+    }
+
     const rungLocalCopy = {
       ...rungLocal,
-      nodes: rungLocal.nodes.map((node) => {
-        const localObjectData = { ...node.data }
-        return { ...node, data: localObjectData }
-      }),
+      nodes: rungLocal.nodes.map(stripDivergence),
+    }
+
+    const rungClean = {
+      ...rung,
+      nodes: rung.nodes.map(stripDivergence),
     }
 
     // Make node data mirror be the rung and not the rungLocal
     // This is made because the rungLocal is a local copy and may not reflect the latest changes in the store
     // And the store saves all the block data updates
     const isSelectedNodeDataEqual =
-      rung.selectedNodes.length > 0
-        ? rung.selectedNodes.every((node) => {
+      rungClean.selectedNodes.length > 0
+        ? rungClean.selectedNodes.every((node) => {
             const localNode = rungLocalCopy.nodes.find((n) => n.id === node.id)
             return localNode ? isEqual(localNode.data, node.data) : false
           })
         : true
-    const skipUpdate = (dragging || isEqual(rungLocalCopy, rung)) && isSelectedNodeDataEqual
+    const skipUpdate = (dragging || isEqual(rungLocalCopy, rungClean)) && isSelectedNodeDataEqual
 
     if (skipUpdate) {
       return

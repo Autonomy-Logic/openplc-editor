@@ -3,6 +3,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
+import { expandArrayVariables } from '@root/utils/PLC/array-variable-utils'
 import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef } from 'react'
 
@@ -72,15 +73,22 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const variables = pou?.data.variables || []
     const variableRestrictions = blockTypeRestrictions(block, blockType)
 
+    const expandedVariables = expandArrayVariables(variables as PLCVariable[])
+
     const filteredVariables =
       blockType !== 'block'
-        ? variables
+        ? expandedVariables
             .filter(
               (variable) =>
                 variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
                 // Variable type restrictions
                 (variableRestrictions.values === undefined ||
-                  variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
+                  (Array.isArray(variableRestrictions.values)
+                    ? variableRestrictions.values
+                    : [variableRestrictions.values]
+                  )
+                    .map((v) => v.toLowerCase())
+                    .includes(variable.type.value.toLowerCase())) &&
                 (variableRestrictions.limitations === undefined ||
                   !variableRestrictions.limitations.includes(variable.type.definition)),
             )
@@ -213,9 +221,9 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         return
       }
 
-      // Look up in the full variables list, not just filtered ones
+      // Look up in the expanded variables list (includes array elements)
       // This ensures we find the variable even if the filter state changed
-      const selectedVariable = variables.find(
+      const selectedVariable = expandedVariables.find(
         (variableItem) => variableItem.name.toLowerCase() === variable.name.toLowerCase(),
       )
       if (!selectedVariable) {
@@ -224,7 +232,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         return
       }
 
-      submitVariableToBlock(selectedVariable as PLCVariable)
+      submitVariableToBlock(selectedVariable)
     }
 
     return (
@@ -235,7 +243,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         setIsOpen={setIsOpen}
         keyPressed={keyPressed}
         searchValue={valueToSearch}
-        variables={filteredVariables as PLCVariable[]}
+        variables={filteredVariables}
         submit={submit}
       />
     )

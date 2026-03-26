@@ -5,6 +5,7 @@ import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validati
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
+import { expandArrayVariables } from '@root/utils/PLC/array-variable-utils'
 import { Node } from '@xyflow/react'
 import { isArray } from 'lodash'
 import { ComponentPropsWithRef, forwardRef, useMemo } from 'react'
@@ -95,13 +96,15 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       }
     }, [pou])
 
+    const expandedVariables = expandArrayVariables(variables.all)
+
     const filteredVariables = block.type?.includes('variable')
-      ? variables.all
+      ? expandedVariables
           .filter(
             (variable) =>
               variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
               (variableRestrictions.values === undefined ||
-                variableRestrictions.values.includes(variable.type.value.toLowerCase())),
+                variableRestrictions.values.map((v) => v.toLowerCase()).includes(variable.type.value.toLowerCase())),
           )
           .sort((a, b) => {
             const aNumber = extractNumberAtEnd(a.name).number

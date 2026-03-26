@@ -133,6 +133,10 @@ const EditableNameCell = ({
       })
     }
 
+    if (matchingGlobalVar.documentation) {
+      table.options.meta?.updateData(index, 'documentation', matchingGlobalVar.documentation)
+    }
+
     setCellValue(selectedName)
   }
 

@@ -104,6 +104,7 @@ const workspaceActionsSchema = z.object({
     .returns(z.void()),
   setFbSelectedInstance: z.function().args(z.string(), z.string()).returns(z.void()),
   clearFbDebugContext: z.function().returns(z.void()),
+  removeDebugVariable: z.function().args(z.string()).returns(z.void()),
   setPlcLogsVisible: z.function().args(z.boolean()).returns(z.void()),
   setPlcLogs: z.function().args(z.custom<PlcLogs>()).returns(z.void()),
   setPlcLogsLastId: z.function().args(z.number().nullable()).returns(z.void()),

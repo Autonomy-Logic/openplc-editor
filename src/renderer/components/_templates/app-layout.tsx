@@ -1,4 +1,8 @@
-import { ConfirmDeleteModalProps, SaveChangeModalProps } from '@root/renderer/components/_organisms/modals'
+import {
+  ConfirmDeleteModalProps,
+  SaveChangeModalProps,
+  SaveChangesFileModalData,
+} from '@root/renderer/components/_organisms/modals'
 import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
@@ -6,7 +10,12 @@ import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
-import { ConfirmDeleteElementModal, QuitApplicationModal, SaveChangesModal } from '../_organisms/modals'
+import {
+  ConfirmDeleteElementModal,
+  QuitApplicationModal,
+  SaveChangesFileModal,
+  SaveChangesModal,
+} from '../_organisms/modals'
 import { AcceleratorHandler } from './accelerator-handler'
 
 type AppLayoutProps = ComponentPropsWithoutRef<'main'>
@@ -54,6 +63,12 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             isOpen={modals['save-changes-project'].open}
             validationContext={(modals['save-changes-project'].data as SaveChangeModalProps).validationContext}
             recentResponse={(modals['save-changes-project'].data as SaveChangeModalProps).recentResponse}
+          />
+        )}
+        {modals?.['save-changes-file']?.open === true && (
+          <SaveChangesFileModal
+            isOpen={modals['save-changes-file'].open}
+            data={modals['save-changes-file'].data as SaveChangesFileModalData}
           />
         )}
         {modals?.['quit-application']?.open === true && (
