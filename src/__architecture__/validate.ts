@@ -54,7 +54,7 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
   },
   adapters: {
     name: 'Adapters (middleware/adapters/)',
-    allowedDeps: ['ports', 'provider', 'utils'],
+    allowedDeps: ['ports', 'provider', 'utils', 'backend-shared'],
   },
   'backend-shared': {
     name: 'Backend Shared (backend/shared/)',
@@ -62,19 +62,19 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
   },
   store: {
     name: 'Store (frontend/store/)',
-    allowedDeps: ['ports', 'provider', 'store', 'utils', 'backend-shared'],
+    allowedDeps: ['ports', 'provider', 'store', 'utils'],
   },
   services: {
     name: 'Services (frontend/services/)',
-    allowedDeps: ['ports', 'provider', 'store', 'services', 'utils', 'backend-shared'],
+    allowedDeps: ['ports', 'provider', 'store', 'services', 'utils'],
   },
   hooks: {
     name: 'Hooks (frontend/hooks/)',
-    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'utils', 'backend-shared'],
+    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'utils'],
   },
   components: {
     name: 'Components (frontend/components/)',
-    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'components', 'data', 'utils', 'backend-shared'],
+    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'components', 'data', 'utils'],
   },
   architecture: {
     name: 'Architecture (__architecture__/)',

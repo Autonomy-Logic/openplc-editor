@@ -32,16 +32,13 @@ const zodFBDNodeTypesSchema = z.enum([
 ])
 type ZodFBDNodeType = z.infer<typeof zodFBDNodeTypesSchema>
 
+import type { FBDRungState } from '../../../../middleware/shared/ports/types'
+
+export type { FBDRungState }
+
 /**
  * Types used at the slice
  */
-
-type FBDRungState = {
-  comment: string
-  selectedNodes: Node[]
-  nodes: Node[]
-  edges: Edge[]
-}
 
 type FBDFlowType = {
   name: string

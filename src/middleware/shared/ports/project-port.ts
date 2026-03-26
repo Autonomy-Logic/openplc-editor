@@ -55,6 +55,7 @@ export interface ProjectResponse {
 
 export interface SaveProjectParams {
   projectPath: string
+  projectName?: string
   projectData: PLCProjectData & {
     /** Debug variable flags to persist (collected before save). */
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }

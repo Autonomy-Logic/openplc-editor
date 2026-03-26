@@ -74,6 +74,10 @@ export function useDevice() {
   return usePlatform().device
 }
 
+export function useOrchestrator() {
+  return usePlatform().orchestrator
+}
+
 export function useSystem() {
   return usePlatform().system
 }

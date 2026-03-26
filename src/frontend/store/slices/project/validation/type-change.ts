@@ -1,6 +1,6 @@
 import { Node } from '@xyflow/react'
 
-import { validateVariableType } from '../../../../../backend/shared/validate-variable-type'
+import { validateVariableType } from '../../../../utils/PLC/validate-variable-type'
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { FBDFlowState } from '../../fbd'
 import { LadderFlowState } from '../../ladder'

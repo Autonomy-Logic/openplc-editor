@@ -6,6 +6,7 @@ export {
   useCompiler,
   useDebugger,
   useDevice,
+  useOrchestrator,
   useProject,
   useRuntime,
   useSimulator,

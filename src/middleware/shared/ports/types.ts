@@ -503,7 +503,7 @@ export interface RuntimeLogEntry {
 // Debugger
 // ---------------------------------------------------------------------------
 
-export type DebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator' | 'webrtc'
+export type DebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator'
 
 export interface DebugConnectionConfig {
   connectionType: DebugConnectionType
@@ -513,11 +513,6 @@ export interface DebugConnectionConfig {
     baudRate?: number
     slaveId?: number
     jwtToken?: string
-    // WebRTC-specific (web only)
-    agentId?: string
-    deviceId?: string
-    username?: string
-    password?: string
   }
 }
 
@@ -658,6 +653,80 @@ export interface RecentProject {
   path: string
   lastOpenedAt: string
   createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// AI Feature
+// ---------------------------------------------------------------------------
+
+/**
+ * Platform-provided configuration for the AI feature.
+ * Resolved by the composition root from environment variables and persistent storage.
+ */
+export interface AIFeatureConfig {
+  /** Whether the AI feature is enabled on this platform */
+  isFeatureEnabled: boolean
+  /** Whether the user has previously consented to AI usage */
+  hasUserConsented: boolean
+}
+
+// ---------------------------------------------------------------------------
+// AI Chat
+// ---------------------------------------------------------------------------
+
+export type ChatMessageRole = 'user' | 'assistant'
+
+export type ChatMessage = {
+  id: string
+  role: ChatMessageRole
+  content: string
+  timestamp: number
+  rating?: 'up' | 'down'
+}
+
+// ---------------------------------------------------------------------------
+// Graphical Editor Flow Data Shapes
+// ---------------------------------------------------------------------------
+
+/**
+ * FBD rung data — nodes + edges for one Function Block Diagram rung.
+ * Used by both the store slice and the compiler adapter.
+ */
+export type FBDRungState = {
+  comment: string
+  selectedNodes: import('@xyflow/react').Node[]
+  nodes: import('@xyflow/react').Node[]
+  edges: import('@xyflow/react').Edge[]
+}
+
+/**
+ * Ladder rung data — nodes + edges + layout for one Ladder rung.
+ * Used by both the store slice and the compiler adapter.
+ */
+export type RungLadderState = {
+  id: string
+  comment: string
+  defaultBounds: number[]
+  reactFlowViewport: number[]
+  selectedNodes: import('@xyflow/react').Node[]
+  nodes: import('@xyflow/react').Node[]
+  edges: import('@xyflow/react').Edge[]
+}
+
+// ---------------------------------------------------------------------------
+// WebRTC
+// ---------------------------------------------------------------------------
+
+export type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'failed'
+
+/** Narrow callback interface for the WebRTC connection manager. */
+export interface WebRTCSessionCallbacks {
+  setStatus: (status: WebRTCConnectionStatus) => void
+  setError: (error: string | null) => void
+  setSessionId: (id: string | null) => void
+  setReconnectAttempt: (attempt: number) => void
+  startSession: (params: { deviceId: string; deviceName: string; agentId: string }) => void
+  endSession: () => void
 }
 
 // ---------------------------------------------------------------------------

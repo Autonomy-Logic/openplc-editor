@@ -10,20 +10,19 @@ import {
   timer2Config,
   usart0Config,
 } from 'avr8js'
-import { readFile } from 'fs/promises'
 
 // ATmega2560 specs
 const CPU_FREQ_HZ = 16_000_000
 const FLASH_SIZE_BYTES = 256 * 1024
 // Expanded SRAM: fill the entire 16-bit address space (64 KB).
-// The CPU constructor adds 0x100 internally for registers + standard I/O (0x00–0xFF).
-// We supply 0xFF00 (65280) to cover extended I/O (0x100–0x1FF) plus usable SRAM
-// (0x200–0xFFFF = 65024 bytes ≈ 63.5 KB). This is the maximum addressable with
+// The CPU constructor adds 0x100 internally for registers + standard I/O (0x00-0xFF).
+// We supply 0xFF00 (65280) to cover extended I/O (0x100-0x1FF) plus usable SRAM
+// (0x200-0xFFFF = 65024 bytes ~ 63.5 KB). This is the maximum addressable with
 // AVR's 16-bit data pointers. The linker flags in hals.json tell avr-gcc about
 // the expanded space so it actually uses it.
 const SRAM_BYTES = 0xff00
 
-// SLEEP opcode – the firmware inserts `__asm volatile("sleep")` at the end
+// SLEEP opcode -- the firmware inserts `__asm volatile("sleep")` at the end
 // of each loop() iteration. We detect it before execution and fast-forward
 // the clock to the next timer event, avoiding millions of idle cycles.
 const SLEEP_OPCODE = 0x9588
@@ -41,7 +40,7 @@ const MAX_REAL_INSTRUCTIONS = 100_000
 const MAX_SIM_CYCLES_PER_BATCH = CPU_FREQ_HZ / 10 // 100ms
 
 // ---------------------------------------------------------------------------
-// ATmega2560 peripheral configs – register addresses are identical to the
+// ATmega2560 peripheral configs -- register addresses are identical to the
 // ATmega328p defaults exported by avr8js, only the interrupt vector addresses
 // differ because ATmega2560 has more interrupt sources.
 // Vector addresses are word addresses matching the datasheet.
@@ -137,7 +136,7 @@ function parseIntelHex(hex: string, flashSizeBytes: number): Uint16Array {
 // ---------------------------------------------------------------------------
 
 /**
- * Manages the avr8js ATmega2560 emulator lifecycle in the main process.
+ * Manages the avr8js ATmega2560 emulator lifecycle in the browser.
  *
  * The firmware is compiled with SIMULATOR_MODE which inserts a SLEEP
  * instruction at the end of each loop() iteration. When the CPU hits SLEEP,
@@ -158,7 +157,7 @@ export class SimulatorModule {
   private usart0: AVRUSART | null = null
   private clock: AVRClock | null = null
 
-  // RX byte queue – avr8js USART accepts one byte at a time (returns false
+  // RX byte queue -- avr8js USART accepts one byte at a time (returns false
   // while rxBusy). Incoming bytes are queued and drained after the firmware
   // reads UDR (via the read hook), ensuring the RXC ISR processes each byte
   // before the next one overwrites rxByte.
@@ -172,18 +171,19 @@ export class SimulatorModule {
   onUartByte: ((byte: number) => void) | null = null
 
   /**
-   * Loads an Intel HEX firmware file and starts the emulated ATmega2560.
+   * Loads Intel HEX firmware content and starts the emulated ATmega2560.
    * Stops any currently running emulation first.
+   *
+   * @param hexContent - Raw Intel HEX string (caller is responsible for reading the file)
    */
-  async loadAndRun(hexPath: string): Promise<void> {
+  loadAndRun(hexContent: string): void {
     this.stop()
 
-    const hexData = await readFile(hexPath, 'utf-8')
-    const progMem = parseIntelHex(hexData, FLASH_SIZE_BYTES)
+    const progMem = parseIntelHex(hexContent, FLASH_SIZE_BYTES)
 
     this.cpu = new CPU(progMem, SRAM_BYTES)
 
-    // Instantiate peripherals – they register read/write hooks on the CPU
+    // Instantiate peripherals -- they register read/write hooks on the CPU
     this.timer0 = new AVRTimer(this.cpu, mega2560Timer0Config)
     this.timer1 = new AVRTimer(this.cpu, mega2560Timer1Config)
     this.timer2 = new AVRTimer(this.cpu, mega2560Timer2Config)
@@ -235,12 +235,6 @@ export class SimulatorModule {
     const { cpu } = this
 
     // Kick-start the RX delivery chain if bytes are queued.
-    // feedByte() only attempts writeByte when the queue transitions from
-    // empty to non-empty.  If that initial attempt is rejected (rxBusy was
-    // true because a previous byte's clock event hadn't fired yet), no
-    // further delivery attempts happen until drainRxQueue() is called from
-    // the UDR read hook — which itself requires a successful delivery.
-    // Retrying here at the top of each batch breaks that deadlock.
     if (this.rxQueue.length > 0 && this.usart0) {
       const byte = this.rxQueue[0]
       if (this.usart0.writeByte(byte)) {
@@ -256,7 +250,7 @@ export class SimulatorModule {
         // Execute the SLEEP instruction (advances PC, adds 1 cycle)
         avrInstruction(cpu)
         // Fast-forward to next scheduled clock event.
-        // NOTE: nextClockEvent is private in avr8js — pinned to 0.20.0 in package.json.
+        // NOTE: nextClockEvent is private in avr8js -- pinned to 0.20.0 in package.json.
         // If upgrading avr8js, verify this field still exists and has a `cycles` property.
         const nextEvent = (cpu as unknown as { nextClockEvent: { cycles: number } | null }).nextClockEvent
         if (nextEvent && nextEvent.cycles > cpu.cycles) {
@@ -279,7 +273,7 @@ export class SimulatorModule {
     }
   }
 
-  /** Send a byte to the emulated USART0 RX (host → device) */
+  /** Send a byte to the emulated USART0 RX (host -> device) */
   feedByte(byte: number): void {
     this.rxQueue.push(byte)
     if (this.rxQueue.length === 1 && this.usart0) {
@@ -299,8 +293,7 @@ export class SimulatorModule {
   private drainRxQueue(): void {
     if (!this.usart0 || this.rxQueue.length === 0) return
     const byte = this.rxQueue[0]
-    const accepted = this.usart0.writeByte(byte)
-    if (accepted) {
+    if (this.usart0.writeByte(byte)) {
       this.rxQueue.shift()
     }
   }

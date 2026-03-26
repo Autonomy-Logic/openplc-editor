@@ -1,7 +1,7 @@
 import { Position } from '@xyflow/react'
 import { ZodLiteral } from 'zod'
 
-import { resolveArrayVariableByName } from '../../../../../../backend/shared/array-variable-utils'
+import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'
 import { baseTypeSchema, genericTypeSchema } from '../../../../../../middleware/shared/ports'

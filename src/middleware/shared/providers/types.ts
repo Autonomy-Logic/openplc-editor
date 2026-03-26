@@ -7,6 +7,7 @@ import type { AcceleratorPort } from '../ports/accelerator-port'
 import type { CompilerPort } from '../ports/compiler-port'
 import type { DebuggerPort } from '../ports/debugger-port'
 import type { DevicePort } from '../ports/device-port'
+import type { OrchestratorPort } from '../ports/orchestrator-port'
 import type { PlatformCapabilities } from '../ports/platform-capabilities'
 import type { ProjectPort } from '../ports/project-port'
 import type { RuntimePort } from '../ports/runtime-port'
@@ -22,6 +23,7 @@ export interface PlatformPorts {
   simulator: SimulatorPort
   project: ProjectPort
   device: DevicePort
+  orchestrator: OrchestratorPort
   system: SystemPort
   window: WindowPort
   accelerator: AcceleratorPort

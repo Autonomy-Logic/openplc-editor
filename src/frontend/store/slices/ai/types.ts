@@ -1,18 +1,13 @@
+import type { ChatMessage, ChatMessageRole } from '../../../../middleware/shared/ports/types'
+
+export type { ChatMessage, ChatMessageRole }
+
 // ---------------------------------------------------------------------------
 // AI model and message types
 // ---------------------------------------------------------------------------
 
 export type AIModel = 'haiku' | 'sonnet'
 export type AIAction = 'complete' | 'chat'
-export type ChatMessageRole = 'user' | 'assistant'
-
-export type ChatMessage = {
-  id: string
-  role: ChatMessageRole
-  content: string
-  timestamp: number
-  rating?: 'up' | 'down'
-}
 
 export type ChatConversation = {
   pouName: string

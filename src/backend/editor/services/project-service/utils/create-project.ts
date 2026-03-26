@@ -11,7 +11,7 @@ import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { writeFileSync } from 'fs'
 
-import { createDirectory, fileOrDirectoryExists } from '../../../utils'
+import { createDirectory, fileOrDirectoryExists, ipcPouToFlat } from '../../../utils'
 import { CreateJSONFile } from '../../../utils'
 
 const definePou = (language: CreateProjectFileProps['language']): PLCPou => ({
@@ -210,10 +210,10 @@ const createProjectDefaultStructure = (
 
   try {
     if (!fileOrDirectoryExists(pouPath)) createDirectory(pouPath)
-    const language = pou.data.body.language
-    const extension: string = getExtensionFromLanguage(language)
-    const textContent: string = serializePouToText(pou)
-    const filePath = `${pouPath}/${pou.data.name}${extension}`
+    const flat = ipcPouToFlat(pou)
+    const extension: string = getExtensionFromLanguage(flat.body.language)
+    const textContent: string = serializePouToText(flat)
+    const filePath = `${pouPath}/${flat.name}${extension}`
     writeFileSync(filePath, textContent, 'utf-8')
   } catch (error) {
     return {

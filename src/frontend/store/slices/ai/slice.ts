@@ -1,8 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { AIFeatureConfig } from '../../../../backend/shared/ai'
-import { resolveAIInitialState } from '../../../../backend/shared/ai'
+import type { AIFeatureConfig } from '../../../../middleware/shared/ports/types'
 import type { AISlice } from './types'
 import { MAX_CONVERSATION_MESSAGES } from './types'
 
@@ -22,7 +21,7 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
 }
 
 export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AISlice, [], [], AISlice> {
-  const overrides = config ? resolveAIInitialState(config) : {}
+  const overrides = config ? { isEnabled: config.isFeatureEnabled, hasConsented: config.hasUserConsented } : {}
   return (setState) => ({
     ai: { ...DEFAULT_AI_STATE, ...overrides },
 

@@ -1,8 +1,6 @@
-// ---------------------------------------------------------------------------
-// WebRTC connection status
-// ---------------------------------------------------------------------------
+import type { WebRTCConnectionStatus } from '../../../../middleware/shared/ports/types'
 
-export type WebRTCConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'failed'
+export type { WebRTCConnectionStatus }
 
 export type DebugTransport = 'http' | 'webrtc'
 

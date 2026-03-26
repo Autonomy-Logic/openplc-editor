@@ -1,6 +1,6 @@
 import { ZodLiteral } from 'zod'
 
-import { baseTypeSchema, genericTypeSchema } from '../../middleware/shared/ports/plc-schemas'
+import { baseTypeSchema, genericTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 
 export const validateVariableType = (
   selectedType: string,

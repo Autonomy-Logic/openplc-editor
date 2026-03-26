@@ -35,6 +35,7 @@ const testPorts: PlatformPorts = {
   simulator: createStubPort(),
   project: createStubPort(),
   device: createStubPort(),
+  orchestrator: createStubPort(),
   system: createStubPort(),
   window: createStubPort(),
   accelerator: createStubPort(),

@@ -17,6 +17,7 @@ import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-ad
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
+import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
@@ -46,6 +47,7 @@ export const editorPorts: PlatformPorts = {
   simulator: createEditorSimulatorAdapter(),
   project: createEditorProjectAdapter(),
   device: createEditorDeviceAdapter(),
+  orchestrator: createEditorOrchestratorAdapter(),
   system: createEditorSystemAdapter(),
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),

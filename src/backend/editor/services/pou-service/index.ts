@@ -5,6 +5,7 @@ import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { promises } from 'fs'
 import { basename, dirname, join } from 'path'
 
+import { ipcPouToFlat } from '../../utils'
 import { UserService } from '../user-service'
 
 class PouService {
@@ -12,10 +13,9 @@ class PouService {
 
   async createPouFile(props: CreatePouFileProps): Promise<PouServiceResponse> {
     const { pou } = props
-    const language = pou.data.body.language
-    const extension = getExtensionFromLanguage(language)
-    const pouName = pou.data.name
-    const filePath = join(dirname(props.path), `${pouName}${extension}`)
+    const flat = ipcPouToFlat(pou)
+    const extension = getExtensionFromLanguage(flat.body.language)
+    const filePath = join(dirname(props.path), `${flat.name}${extension}`)
 
     try {
       await promises.access(filePath)
@@ -35,7 +35,7 @@ class PouService {
 
     try {
       await UserService.createDirectoryIfNotExists(dirname(filePath))
-      const textContent: string = serializePouToText(pou)
+      const textContent: string = serializePouToText(flat)
       await promises.writeFile(filePath, textContent, 'utf-8')
 
       return { success: true, data: { pou } }
@@ -81,9 +81,8 @@ class PouService {
       typeof fileContent === 'object' && fileContent !== null && 'type' in fileContent && 'data' in fileContent
 
     if (isPou) {
-      const pou = fileContent as PLCPou
-      const language = pou.data.body.language
-      const extension: string = getExtensionFromLanguage(language)
+      const flat = ipcPouToFlat(fileContent as PLCPou)
+      const extension: string = getExtensionFromLanguage(flat.body.language)
 
       // Convert .json paths to actual language extension paths
       if (filePath.endsWith('.json')) {
@@ -112,8 +111,8 @@ class PouService {
 
     if (fileContent && isPou) {
       try {
-        const pou = fileContent as PLCPou
-        const textContent: string = serializePouToText(pou)
+        const flat = ipcPouToFlat(fileContent as PLCPou)
+        const textContent: string = serializePouToText(flat)
         await promises.writeFile(actualOldFilePath, textContent, 'utf-8')
       } catch (writeError) {
         console.error(`Error writing content before rename: ${String(writeError)}`)

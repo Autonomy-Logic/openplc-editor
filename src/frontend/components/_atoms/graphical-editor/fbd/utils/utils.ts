@@ -1,6 +1,6 @@
 import { Position } from '@xyflow/react'
 
-import { resolveArrayVariableByName } from '../../../../../../backend/shared/array-variable-utils'
+import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import type { EditorModel } from '../../../../../store/slices/editor'

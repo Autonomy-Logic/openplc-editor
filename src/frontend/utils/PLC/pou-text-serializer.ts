@@ -1,140 +1,75 @@
-import { PLCVariable as VariablePLC } from '@root/types/PLC'
-import { PLCPou } from '@root/types/PLC/open-plc'
-
+import type { PLCPou } from '../../../middleware/shared/ports/types'
 import { generateIecVariablesToString } from '../generate-iec-variables-to-string'
 import { getEndKeyword, getStartKeyword } from './pou-file-extensions'
 
-/**
- * Helper function to add documentation as IEC comment if it exists
- * @param documentation - The documentation string
- * @returns Formatted documentation comment or empty string
- */
-const formatDocumentation = (documentation: string): string => {
+/** PLCPou extended with optional variablesText from code-mode editing */
+type SerializablePou = PLCPou & { variablesText?: string }
+
+const formatDocumentation = (documentation: string | undefined): string => {
   if (documentation && documentation.trim()) {
     return `(* ${documentation.trim()} *)\n\n`
   }
   return ''
 }
 
-/**
- * Serialize a textual POU (ST, IL) to IEC 61131-3 text format
- * @param pou - The POU to serialize
- * @returns The serialized text string
- */
-export const serializeTextualPouToString = (pou: PLCPou): string => {
-  const { type, data } = pou
-  const { name, variables, body, documentation } = data
+const buildDeclaration = (pou: SerializablePou): string => {
+  const startKeyword = getStartKeyword(pou.pouType)
+  if (pou.pouType === 'function' && pou.interface?.returnType) {
+    return `${startKeyword} ${pou.name} : ${pou.interface.returnType}\n`
+  }
+  return `${startKeyword} ${pou.name}\n`
+}
 
-  if (body.language !== 'st' && body.language !== 'il') {
-    throw new Error(`serializeTextualPouToString only supports ST and IL languages, got: ${body.language}`)
+const buildVariables = (pou: SerializablePou): string => {
+  if (pou.variablesText != null) return pou.variablesText
+  const variables = pou.interface?.variables ?? []
+  return generateIecVariablesToString(variables)
+}
+
+export const serializeTextualPouToString = (pou: SerializablePou): string => {
+  if (pou.body.language !== 'st' && pou.body.language !== 'il') {
+    throw new Error(`serializeTextualPouToString only supports ST and IL languages, got: ${pou.body.language}`)
   }
 
-  let result = formatDocumentation(documentation)
-
-  const startKeyword = getStartKeyword(type)
-
-  if (type === 'function' && 'returnType' in data) {
-    result += `${startKeyword} ${name} : ${data.returnType}\n`
-  } else {
-    result += `${startKeyword} ${name}\n`
-  }
-
-  const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
-  const variablesString = useVariablesText
-    ? data.variablesText ?? ''
-    : generateIecVariablesToString(variables as VariablePLC[])
-  result += variablesString + '\n\n'
-
-  result += body.value + '\n\n'
-
-  const endKeyword = getEndKeyword(type)
-  result += endKeyword
+  let result = formatDocumentation(pou.documentation)
+  result += buildDeclaration(pou)
+  result += buildVariables(pou) + '\n\n'
+  result += pou.body.value + '\n\n'
+  result += getEndKeyword(pou.pouType)
 
   return result
 }
 
-/**
- * Serialize a hybrid POU (Python, C++) to text format with IEC variable declarations
- * @param pou - The POU to serialize
- * @returns The serialized text string
- */
-export const serializeHybridPouToString = (pou: PLCPou): string => {
-  const { type, data } = pou
-  const { name, variables, body, documentation } = data
-
-  if (body.language !== 'python' && body.language !== 'cpp') {
-    throw new Error(`serializeHybridPouToString only supports Python and C++ languages, got: ${body.language}`)
+export const serializeHybridPouToString = (pou: SerializablePou): string => {
+  if (pou.body.language !== 'python' && pou.body.language !== 'cpp') {
+    throw new Error(`serializeHybridPouToString only supports Python and C++ languages, got: ${pou.body.language}`)
   }
 
-  let result = formatDocumentation(documentation)
-
-  const startKeyword = getStartKeyword(type)
-
-  if (type === 'function' && 'returnType' in data) {
-    result += `${startKeyword} ${name} : ${data.returnType}\n`
-  } else {
-    result += `${startKeyword} ${name}\n`
-  }
-
-  const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
-  const variablesString = useVariablesText
-    ? data.variablesText ?? ''
-    : generateIecVariablesToString(variables as VariablePLC[])
-  result += variablesString + '\n'
-
-  result += body.value + '\n\n'
-
-  const endKeyword = getEndKeyword(type)
-  result += endKeyword
+  let result = formatDocumentation(pou.documentation)
+  result += buildDeclaration(pou)
+  result += buildVariables(pou) + '\n'
+  result += pou.body.value + '\n\n'
+  result += getEndKeyword(pou.pouType)
 
   return result
 }
 
-/**
- * Serialize a graphical POU (LD, FBD) to text format with JSON body
- * @param pou - The POU to serialize
- * @returns The serialized text string
- */
-export const serializeGraphicalPouToString = (pou: PLCPou): string => {
-  const { type, data } = pou
-  const { name, variables, body, documentation } = data
-
-  if (body.language !== 'ld' && body.language !== 'fbd') {
-    throw new Error(`serializeGraphicalPouToString only supports LD and FBD languages, got: ${body.language}`)
+export const serializeGraphicalPouToString = (pou: SerializablePou): string => {
+  if (pou.body.language !== 'ld' && pou.body.language !== 'fbd') {
+    throw new Error(`serializeGraphicalPouToString only supports LD and FBD languages, got: ${pou.body.language}`)
   }
 
-  let result = formatDocumentation(documentation)
-
-  const startKeyword = getStartKeyword(type)
-
-  if (type === 'function' && 'returnType' in data) {
-    result += `${startKeyword} ${name} : ${data.returnType}\n`
-  } else {
-    result += `${startKeyword} ${name}\n`
-  }
-
-  const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
-  const variablesString = useVariablesText
-    ? data.variablesText ?? ''
-    : generateIecVariablesToString(variables as VariablePLC[])
-  result += variablesString + '\n\n'
-
-  result += JSON.stringify(body.value, null, 2) + '\n'
-
-  const endKeyword = getEndKeyword(type)
-  result += endKeyword
+  let result = formatDocumentation(pou.documentation)
+  result += buildDeclaration(pou)
+  result += buildVariables(pou) + '\n\n'
+  result += JSON.stringify(pou.body.value, null, 2) + '\n'
+  result += getEndKeyword(pou.pouType)
 
   return result
 }
 
-/**
- * Helper function to serialize a POU to text format based on its language
- * Routes to the appropriate serializer based on the POU's language type
- * @param pou - The POU to serialize
- * @returns The serialized text string
- */
-export const serializePouToText = (pou: PLCPou): string => {
-  const language = pou.data.body.language
+export const serializePouToText = (pou: SerializablePou): string => {
+  const language = pou.body.language
 
   if (language === 'st' || language === 'il') {
     return serializeTextualPouToString(pou)

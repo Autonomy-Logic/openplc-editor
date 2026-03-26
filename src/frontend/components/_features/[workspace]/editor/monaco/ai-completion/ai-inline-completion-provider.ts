@@ -1,7 +1,7 @@
 import type * as monaco from 'monaco-editor'
 
 import { openPLCStoreBase } from '../../../../../../store'
-import { getEnv } from '../../../../../../utils/get-env'
+import { getEdgeApiBaseUrl } from '../../../../../../utils/get-env'
 import { buildFIMContext } from './context-builder'
 
 // ---------------------------------------------------------------------------
@@ -119,10 +119,7 @@ async function* streamAIRequest(
   body: AICompleteRequest,
   signal?: AbortSignal,
 ): AsyncGenerator<string, void, unknown> {
-  // Determine the base URL. In the web app, this comes from VITE_EDGE_API_URL.
-  // Falls back to a relative path if the env var is not set.
-  const envBase = getEnv('VITE_EDGE_API_URL')
-  const baseUrl = envBase ? `${envBase}/ai` : '/api/ai'
+  const baseUrl = `${getEdgeApiBaseUrl()}/ai`
 
   const response = await fetch(`${baseUrl}${endpoint}`, {
     method: 'POST',

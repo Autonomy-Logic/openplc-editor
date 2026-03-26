@@ -73,7 +73,7 @@ interface IpcProjectResponse {
 /** Editor IPC save response shape. */
 interface IpcSaveResponse {
   success: boolean
-  reason: { title: string; description: string }
+  error?: { title: string; description: string }
 }
 
 /** Editor IPC POU service response shape. */
@@ -217,7 +217,7 @@ export function createEditorProjectAdapter(): ProjectPort {
       } as never)) as unknown as IpcSaveResponse
 
       if (!response.success) {
-        return { success: false, error: response.reason?.description ?? 'Save failed' }
+        return { success: false, error: response.error?.description ?? 'Save failed' }
       }
 
       return { success: true }

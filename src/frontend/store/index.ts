@@ -6,7 +6,7 @@ import { subscribeWithSelector } from 'zustand/middleware'
 // Enable Immer's MapSet plugin for Map/Set support in store state
 enableMapSet()
 
-import type { AIFeatureConfig } from '../../backend/shared/ai'
+import type { AIFeatureConfig } from '../../middleware/shared/ports/types'
 import type { AISlice } from './slices/ai'
 import { createAISliceFactory } from './slices/ai'
 import type { ConsoleSlice } from './slices/console'

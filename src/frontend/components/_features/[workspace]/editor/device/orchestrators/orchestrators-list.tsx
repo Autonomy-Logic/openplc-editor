@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import {
-  type DeviceResponse,
-  listOrchestratorsRequest,
-  type OrchestratorResponse,
-} from '../../../../../../api/queries/orchestrators'
+import type { OrchestratorInfo } from '../../../../../../../middleware/shared/ports/orchestrator-port'
+import { useOrchestrator } from '../../../../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
@@ -21,102 +18,12 @@ async function runtimeLogout(_orchestratorAgentId: string, _deviceId: string, _j
 }
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
-import { isDev } from '../../../../../../utils/get-env'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
-
-/**
- * Local device interface for UI display
- * Uses a subset of DeviceResponse fields needed for the orchestrators list
- */
-interface Device {
-  id: string
-  name: string
-  status: string | null
-  active: boolean | null
-}
-
-/**
- * Local orchestrator interface for UI display
- */
-interface Orchestrator {
-  id: string
-  name: string
-  orchestrator_id: string
-  description: string | null
-  devices: Device[]
-}
-
-/**
- * Maps Edge API DeviceResponse to local Device interface
- * Derives 'active' from 'is_running' field since Edge API doesn't have 'active' directly
- */
-function mapDeviceResponseToDevice(device: DeviceResponse): Device {
-  return {
-    id: device.id,
-    name: device.name,
-    status: device.container_status || device.status,
-    // Derive 'active' from 'is_running' - device is active if its container is running
-    active: device.is_running ?? (device.status !== 'inactive' && device.status !== 'error'),
-  }
-}
-
-/**
- * Maps Edge API OrchestratorResponse to local Orchestrator interface
- */
-function mapOrchestratorResponse(orchestrator: OrchestratorResponse): Orchestrator {
-  return {
-    id: orchestrator.id,
-    name: orchestrator.name,
-    orchestrator_id: orchestrator.orchestrator_id,
-    description: orchestrator.description,
-    devices: orchestrator.devices.map(mapDeviceResponseToDevice),
-  }
-}
-
-// Mock data for development environment testing
-// This allows testing the orchestrators UI without a backend connection
-const MOCK_ORCHESTRATORS: Orchestrator[] = [
-  {
-    id: 'mock-orch-1',
-    name: 'Lab Orchestrator',
-    orchestrator_id: 'LAB12345',
-    description: 'Raspberry Pi in the development lab',
-    devices: [
-      { id: 'mock-dev-1', name: 'Lab PLC #1', status: 'running', active: true },
-      { id: 'mock-dev-2', name: 'Lab PLC #2', status: 'stopped', active: true },
-      { id: 'mock-dev-3', name: 'Inactive Device', status: 'offline', active: false },
-    ],
-  },
-  {
-    id: 'mock-orch-2',
-    name: 'QA Orchestrator',
-    orchestrator_id: 'QA98765',
-    description: 'QA test environment',
-    devices: [
-      { id: 'mock-dev-4', name: 'QA Runtime', status: 'running', active: true },
-      { id: 'mock-dev-5', name: 'QA Backup', status: 'idle', active: true },
-    ],
-  },
-  {
-    id: 'mock-orch-3',
-    name: 'Production Orchestrator',
-    orchestrator_id: 'PROD54321',
-    description: 'Production environment - handle with care',
-    devices: [{ id: 'mock-dev-6', name: 'Main PLC', status: 'running', active: true }],
-  },
-  {
-    id: 'mock-orch-4',
-    name: 'Empty Orchestrator',
-    orchestrator_id: 'EMPTY0000',
-    description: 'Orchestrator with no devices registered',
-    devices: [],
-  },
-]
 
 const SIMULATOR_BOARD_NAME = 'OpenPLC Simulator'
 const RUNTIME_BOARD_NAME = 'OpenPLC Runtime v3'
@@ -164,8 +71,9 @@ const StatusBadge = ({ status }: { status: string | null }) => {
 }
 
 const OrchestratorsList = () => {
+  const orchestratorPort = useOrchestrator()
   const { modalActions, deviceActions, runtimeConnection } = useOpenPLCStore()
-  const [orchestrators, setOrchestrators] = useState<Orchestrator[]>([])
+  const [orchestrators, setOrchestrators] = useState<OrchestratorInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedOrchestrators, setExpandedOrchestrators] = useState<Set<string>>(new Set())
@@ -217,29 +125,17 @@ const OrchestratorsList = () => {
   }, [runtimeConnection.connectionStatus, isSimulatorSelected, deviceActions])
 
   const fetchOrchestrators = useCallback(async () => {
-    console.info('[Orchestrators] Using Edge API to fetch orchestrators')
     try {
-      const response = await listOrchestratorsRequest()
-      // Map Edge API response to local interface format
-      const mappedOrchestrators = response.data.orchestrators.map(mapOrchestratorResponse)
-      setOrchestrators(mappedOrchestrators)
+      const result = await orchestratorPort.listOrchestrators()
+      setOrchestrators(result)
       setError(null)
     } catch (error) {
-      console.error('[Orchestrators] Edge API fetch failed', error)
-
-      // In development mode, fall back to mock data for local testing
-      if (isDev()) {
-        console.info('[Orchestrators] Using mock data for development')
-        await new Promise((resolve) => setTimeout(resolve, 300))
-        setOrchestrators(MOCK_ORCHESTRATORS)
-        setError(null)
-      } else {
-        setError('Failed to load orchestrators. Please try again.')
-      }
+      console.error('[Orchestrators] Fetch failed', error)
+      setError('Failed to load orchestrators. Please try again.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [orchestratorPort])
 
   useEffect(() => {
     void fetchOrchestrators()
@@ -564,7 +460,7 @@ const OrchestratorsList = () => {
                               onClick={() =>
                                 handleDeviceSelect(
                                   orchestrator.id,
-                                  orchestrator.orchestrator_id,
+                                  orchestrator.agentId,
                                   device.id,
                                   device.name,
                                   device.active !== false,

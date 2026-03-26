@@ -11,7 +11,7 @@ import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
 import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '../../../types/PLC/open-plc'
-import { fileOrDirectoryExists } from '../../utils'
+import { fileOrDirectoryExists, ipcPouToFlat } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
 class ProjectService {
@@ -299,10 +299,11 @@ class ProjectService {
 
         // Write/update each POU file
         for (const pou of pous) {
-          const language = pou.data.body.language
-          const extension: string = getExtensionFromLanguage(language)
-          const filePath = join(dir, `${pou.data.name}${extension}`)
-          const textContent: string = serializePouToText(pou)
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          const flat = ipcPouToFlat(pou)
+          const extension: string = getExtensionFromLanguage(flat.body.language)
+          const filePath = join(dir, `${flat.name}${extension}`)
+          const textContent: string = serializePouToText(flat)
           await promises.writeFile(filePath, textContent, 'utf-8')
         }
       }
@@ -452,16 +453,16 @@ class ProjectService {
       const isPou = typeof content === 'object' && content !== null && 'type' in content && 'data' in content
 
       if (isPou) {
-        const pou = content as PLCPou
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        const flat = ipcPouToFlat(content as PLCPou)
 
         let actualFilePath = filePath
         if (filePath.endsWith('.json')) {
-          const language = pou.data.body.language
-          const extension: string = getExtensionFromLanguage(language)
+          const extension: string = getExtensionFromLanguage(flat.body.language)
           actualFilePath = filePath.replace(/\.json$/, extension)
         }
 
-        const textContent: string = serializePouToText(pou)
+        const textContent: string = serializePouToText(flat)
         await promises.writeFile(actualFilePath, textContent, 'utf-8')
       } else {
         await promises.writeFile(filePath, JSON.stringify(content, null, 2))

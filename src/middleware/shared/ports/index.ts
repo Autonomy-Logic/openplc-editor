@@ -24,17 +24,18 @@
  *     const { compiler, runtime, debugger } = usePlatform()
  *     await compiler.compileProgram(args, onProgress)
  *
- * 10 Port Interfaces:
- *   1. CompilerPort    — PLC compilation pipeline
- *   2. RuntimePort     — Remote PLC runtime communication
- *   3. DebuggerPort    — Debug protocol (variable read/write)
- *   4. SimulatorPort   — Built-in AVR simulator
- *   5. ProjectPort     — Project lifecycle (create, open, save, POU management)
- *   6. DevicePort      — Board/hardware discovery
- *   7. SystemPort      — Platform services (store, links, logging)
- *   8. WindowPort      — Native window management
- *   9. AcceleratorPort — Keyboard shortcuts
- *  10. ThemePort       — Theme detection and switching
+ * 11 Port Interfaces:
+ *   1. CompilerPort      — PLC compilation pipeline
+ *   2. RuntimePort       — Remote PLC runtime communication
+ *   3. DebuggerPort      — Debug protocol (variable read/write)
+ *   4. SimulatorPort     — Built-in AVR simulator
+ *   5. ProjectPort       — Project lifecycle (create, open, save, POU management)
+ *   6. DevicePort        — Board/hardware discovery
+ *   7. OrchestratorPort  — Orchestrator discovery and device listing
+ *   8. SystemPort        — Platform services (store, links, logging)
+ *   9. WindowPort        — Native window management
+ *  10. AcceleratorPort   — Keyboard shortcuts
+ *  11. ThemePort         — Theme detection and switching
  *
  * Plus:
  *   - PlatformCapabilities — Feature toggle flags
@@ -46,6 +47,7 @@ export type { AcceleratorPort } from './accelerator-port'
 export type { CompilerPort } from './compiler-port'
 export type { DebuggerPort } from './debugger-port'
 export type { DevicePort } from './device-port'
+export type { OrchestratorPort } from './orchestrator-port'
 export type { ProjectPort } from './project-port'
 export type { RuntimePort } from './runtime-port'
 export type { SimulatorPort } from './simulator-port'
@@ -138,4 +140,5 @@ export type {
   RuntimeStatusResult,
   UsersInfoResult,
 } from './runtime-port'
+export type { OrchestratorDevice, OrchestratorInfo } from './orchestrator-port'
 export type { ThemeVariant } from './theme-port'

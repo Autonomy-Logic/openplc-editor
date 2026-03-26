@@ -2,7 +2,7 @@ import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { expandArrayVariables } from '../../../../../../backend/shared/array-variable-utils'
+import { expandArrayVariables } from '../../../../../utils/PLC/array-variable-utils'
 import { PLCVariable } from '../../../../../../middleware/shared/ports'
 import { useOpenPLCStore } from '../../../../../store'
 import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'

@@ -2,7 +2,7 @@ import { Node } from '@xyflow/react'
 import { isArray } from 'lodash'
 import { ComponentPropsWithRef, forwardRef, useMemo } from 'react'
 
-import { expandArrayVariables } from '../../../../../../backend/shared/array-variable-utils'
+import { expandArrayVariables } from '../../../../../utils/PLC/array-variable-utils'
 import { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../../store'
 import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'

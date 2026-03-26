@@ -24,7 +24,7 @@ import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, extname, join, sep } from 'path'
 import { ZodTypeAny } from 'zod'
 
-import { createDirectory, fileOrDirectoryExists } from '../../../utils'
+import { createDirectory, fileOrDirectoryExists, ipcPouToFlat } from '../../../utils'
 
 /**
  * Checks if the given directory is a valid project directory according to the expected structure.
@@ -494,19 +494,19 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     if (project.data.pous && project.data.pous.length > 0) {
       const migrationResults = await Promise.allSettled(
         project.data.pous.map(async (pou) => {
+          const flat = ipcPouToFlat(pou)
           const pouType = pou.type.toLowerCase() + 's'
-          const language = pou.data.body.language
-          const extension: string = getExtensionFromLanguage(language)
-          const pouFilePath = join(basePath, 'pous', pouType, `${pou.data.name}${extension}`)
+          const extension: string = getExtensionFromLanguage(flat.body.language)
+          const pouFilePath = join(basePath, 'pous', pouType, `${flat.name}${extension}`)
 
           try {
             if (!fileOrDirectoryExists(pouFilePath)) {
               await promises.mkdir(dirname(pouFilePath), { recursive: true })
-              const textContent: string = serializePouToText(pou)
+              const textContent: string = serializePouToText(flat)
               await promises.writeFile(pouFilePath, textContent, 'utf-8')
             }
-            pouFiles[join('pous', pouType, `${pou.data.name}${extension}`)] = pou
-            return { success: true, pouName: pou.data.name }
+            pouFiles[join('pous', pouType, `${flat.name}${extension}`)] = pou
+            return { success: true, pouName: flat.name }
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error'
             return { success: false, pouName: pou.data.name, error: errorMessage }

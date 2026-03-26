@@ -30,19 +30,13 @@ type ZodLadderFlowState = z.infer<typeof zodLadderFlowStateSchema>
 const zodLadderNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
 type ZodLadderNodeType = z.infer<typeof zodLadderNodeTypesSchema>
 
+import type { RungLadderState } from '../../../../middleware/shared/ports/types'
+
+export type { RungLadderState }
+
 /**
  * Types used at the slice
  */
-
-type RungLadderState = {
-  id: string
-  comment: string
-  defaultBounds: number[]
-  reactFlowViewport: number[]
-  selectedNodes: Node[]
-  nodes: Node[]
-  edges: Edge[]
-}
 
 type LadderFlowType = {
   name: string

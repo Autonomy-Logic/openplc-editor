@@ -100,6 +100,26 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     return unsub
   }, [simulator, debugSession])
 
+  // Stop simulator if the board is switched away while it's running
+  const prevIsSimulatorBoardRef = useRef(isSimulatorBoard)
+  useEffect(() => {
+    const wasSimulator = prevIsSimulatorBoardRef.current
+    prevIsSimulatorBoardRef.current = isSimulatorBoard
+
+    if (wasSimulator && !isSimulatorBoard && simulator.isRunning()) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: 'Board changed from simulator. Stopping simulator.',
+      })
+      void simulator.stop()
+      if (isDebuggerVisible) {
+        const { workspaceActions } = useOpenPLCStore.getState()
+        workspaceActions.clearDebugState()
+      }
+    }
+  }, [isSimulatorBoard, isDebuggerVisible, simulator, addLog])
+
   const executeSave = useCallback(async (): Promise<boolean> => {
     const state = useOpenPLCStore.getState()
     const { workspaceActions, fileActions, editors } = state

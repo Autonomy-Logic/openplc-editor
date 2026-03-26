@@ -17,8 +17,8 @@ import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { logger } from '../../../backend/editor/services'
-import { SimulatorModule } from '../../../backend/editor/simulator/simulator-module'
-import { VirtualSerialPort } from '../../../backend/editor/simulator/virtual-serial-port'
+import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
+import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import { getProjectPath } from '../../../backend/editor/utils'
 import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
 
@@ -1340,7 +1340,9 @@ class MainProcessBridge implements MainIpcModule {
     hexPath: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      await this.simulatorModule.loadAndRun(hexPath)
+      const fs = await import('fs/promises')
+      const hexContent = await fs.readFile(hexPath, 'utf-8')
+      this.simulatorModule.loadAndRun(hexContent)
       return { success: true }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }

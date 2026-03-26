@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { resolveArrayVariableByName } from '../../../../../backend/shared/array-variable-utils'
+import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
 import { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
