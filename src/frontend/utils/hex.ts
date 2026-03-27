@@ -18,10 +18,20 @@ export function hexToBytes(hex: string): Uint8Array {
 }
 
 /**
- * Convert a Uint8Array to a hex string (e.g. "0a1bff").
+ * Convert a Uint8Array to a compact hex string (e.g. "0a1bff").
  */
 export function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
+}
+
+/**
+ * Convert a Uint8Array to a space-separated uppercase hex string (e.g. "0A 1B FF").
+ * Matches the format used by the OpenPLC runtime debug protocol.
+ */
+export function bytesToHexSpaced(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).toUpperCase().padStart(2, '0'))
+    .join(' ')
 }
