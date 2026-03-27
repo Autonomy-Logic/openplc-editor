@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
-import { useCapabilities, useProject, useSystem } from '../../../middleware/shared/providers'
+import { useProject, useSystem } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
 import { cn } from '../../utils/cn'
@@ -22,7 +22,6 @@ import { AcceleratorHandler } from './accelerator-handler'
 
 type AppLayoutProps = ComponentPropsWithoutRef<'main'>
 const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
-  const capabilities = useCapabilities()
   const system = useSystem()
   const projectPort = useProject()
   const [showComponent, setShowComponent] = useState(true)
@@ -113,7 +112,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
-          {capabilities.hasNativeMenu && <AcceleratorHandler />}
+          <AcceleratorHandler />
         </main>
       </div>
       <ResolutionWarning />
