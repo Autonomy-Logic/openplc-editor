@@ -5,7 +5,7 @@
  * Mirrors the implicit interface from openplc-editor where ModbusTcpClient,
  * ModbusRtuClient, and WebSocketDebugClient all implement the same methods.
  *
- * openplc-web transports: ModbusRtuTransport (simulator), WebRTCTransport, HttpTransport.
+ * openplc-web transports: ModbusRtuTransport (simulator), ModbusDataChannelTransport (WebRTC), HttpTransport.
  */
 
 export type DebugConnectionType = 'webrtc' | 'http' | 'simulator'
