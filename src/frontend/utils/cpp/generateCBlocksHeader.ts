@@ -1,5 +1,5 @@
-import { PLCVariable } from '@root/types/PLC/open-plc'
-import { generateStructMember } from '@root/utils/PLC/array-codegen-helpers'
+import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { generateStructMember } from '../PLC/array-codegen-helpers'
 
 type CppPouData = {
   name: string

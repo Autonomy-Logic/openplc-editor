@@ -566,6 +566,8 @@ export interface CompileResult {
   success: boolean
   message?: string
   hexPath?: string
+  /** Generated Structured Text program — available for runtime upload after compilation. */
+  programSt?: string
   error?: string
 }
 

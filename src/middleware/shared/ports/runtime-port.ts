@@ -85,6 +85,9 @@ export interface RuntimeLogsResult {
 }
 
 export interface RuntimePort {
+  /** Set the target device for subsequent API calls. */
+  setDeviceContext?(context: { agentId: string; deviceId: string } | null): void
+
   /** Authenticate with the runtime. Returns JWT on success. */
   login(params: LoginParams): Promise<LoginResult>
 
@@ -114,6 +117,14 @@ export interface RuntimePort {
 
   /** Clear stored credentials (logout). */
   clearCredentials(): Promise<{ success: boolean }>
+
+  /**
+   * Check if the runtime connection is ready for debug operations.
+   * Each adapter implements its own readiness criteria:
+   *   - Web: device context set and authenticated (orchestrator connection)
+   *   - Editor: runtime IP address configured and authenticated
+   */
+  isReadyForDebug?(): boolean
 
   /**
    * Upload a compiled program to the runtime.

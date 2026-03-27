@@ -336,7 +336,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         await new Promise((resolve) => setTimeout(resolve, 2000))
       }
 
-      // Read and verify MD5
+      // Read local MD5
       consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Verifying program MD5...' })
       const md5Result = await debuggerPort.readProgramMd5(projectPath, boardTarget)
       if (!md5Result.success || !md5Result.md5) {
@@ -345,8 +345,24 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
+      // Connect debug transport before MD5 verification — the web platform
+      // needs an active transport (WebRTC or HTTP fallback) to query the device.
+      // connect() is idempotent: connectAndStart will reuse this connection.
+      const preConnectResult = await debuggerPort.connect(debugConfig)
+      if (!preConnectResult.success) {
+        await showDebuggerMessage(
+          'error',
+          'Connection Error',
+          `Could not connect to debug target: ${preConnectResult.error ?? 'Unknown error'}`,
+          ['OK'],
+        )
+        setIsDebuggerProcessing(false)
+        return
+      }
+
       const verifyResult = await debuggerPort.verifyMd5(md5Result.md5, debugConfig)
       if (!verifyResult.success) {
+        await debuggerPort.disconnect()
         await showDebuggerMessage(
           'error',
           'Connection Error',
@@ -362,6 +378,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         await debugSession.connectAndStart(debugConfig)
         setIsDebuggerProcessing(false)
       } else {
+        // Disconnect before re-upload; the recursive call will reconnect
+        await debuggerPort.disconnect()
+
         consoleActions.addLog({
           id: crypto.randomUUID(),
           level: 'warning',
@@ -409,6 +428,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
       }
     } catch (error: unknown) {
+      await debuggerPort.disconnect()
       consoleActions.addLog({
         id: crypto.randomUUID(),
         level: 'error',
@@ -456,7 +476,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       if (isRuntimeTarget) {
         const rtConn = useOpenPLCStore.getState().runtimeConnection
         const runtimeIpAddress = devDefs.configuration.runtimeIpAddress
-        if (rtConn.connectionStatus !== 'connected' || !runtimeIpAddress) {
+        if (!runtime.isReadyForDebug?.() || rtConn.connectionStatus !== 'connected') {
           await showDebuggerMessage('warning', 'Connection Required', 'Connect to the target first.', ['OK'])
           setIsDebuggerProcessing(false)
           return

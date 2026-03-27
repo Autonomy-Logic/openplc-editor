@@ -34,6 +34,10 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
   }
 
   return {
+    isReadyForDebug() {
+      return getIpAddress() !== '' && jwtToken !== ''
+    },
+
     async login(params: LoginParams): Promise<LoginResult> {
       try {
         const ip = requireIp()
