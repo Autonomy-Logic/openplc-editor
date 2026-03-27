@@ -128,6 +128,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       workspaceActions.setEditingState('save-request')
       const payload = prepareSavePayload({
         projectPath: projectMeta.path,
+        projectName: projectMeta.name,
         projectData,
         deviceConfiguration: deviceDefinitions.configuration,
         devicePinMapping: deviceDefinitions.pinMapping.pins,

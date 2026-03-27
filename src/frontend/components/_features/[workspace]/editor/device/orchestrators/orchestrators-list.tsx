@@ -1,21 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { OrchestratorInfo } from '../../../../../../../middleware/shared/ports/orchestrator-port'
-import { useOrchestrator } from '../../../../../../../middleware/shared/providers'
+import { useOrchestrator, useRuntime } from '../../../../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
-// Runtime API stubs — inlined after removing dead runtime-api.ts
-function runtimeGetUsersInfo(
-  _orchestratorAgentId: string,
-  _deviceId: string,
-): Promise<{ error?: string; hasUsers: boolean }> {
-  return Promise.resolve({ hasUsers: false })
-}
-
-async function runtimeLogout(_orchestratorAgentId: string, _deviceId: string, _jwtToken: string): Promise<void> {
-  // Stub
-}
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
@@ -72,6 +61,7 @@ const StatusBadge = ({ status }: { status: string | null }) => {
 
 const OrchestratorsList = () => {
   const orchestratorPort = useOrchestrator()
+  const runtimePort = useRuntime()
   const { modalActions, deviceActions, runtimeConnection } = useOpenPLCStore()
   const [orchestrators, setOrchestrators] = useState<OrchestratorInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -223,8 +213,14 @@ const OrchestratorsList = () => {
         deviceName: selectedDevice.deviceName,
       })
 
-      // Check if the runtime has users (token handling is done internally by runtimeGetUsersInfo)
-      const usersInfo = await runtimeGetUsersInfo(selectedDevice.orchestratorAgentId, selectedDevice.deviceId)
+      // Set device context so the runtime adapter knows which device to target
+      runtimePort.setDeviceContext?.({
+        agentId: selectedDevice.orchestratorAgentId,
+        deviceId: selectedDevice.deviceId,
+      })
+
+      // Check if the runtime has users via the runtime port
+      const usersInfo = await runtimePort.getUsersInfo()
 
       if (usersInfo.error) {
         setConnectionError('Failed to connect to runtime: ' + usersInfo.error)
@@ -244,7 +240,7 @@ const OrchestratorsList = () => {
     } finally {
       setIsConnecting(false)
     }
-  }, [selectedDevice, deviceActions, modalActions])
+  }, [selectedDevice, deviceActions, modalActions, runtimePort])
 
   // Helper to clear all connection state (store + local component state)
   // This centralizes the "tear down connection" logic to avoid duplication
@@ -263,22 +259,22 @@ const OrchestratorsList = () => {
     setConnectionError(null)
 
     try {
-      // Token handling is done internally by runtimeLogout
-      await runtimeLogout(
-        runtimeConnection.selectedDevice.orchestratorAgentId,
-        runtimeConnection.selectedDevice.deviceId,
-        runtimeConnection.jwtToken,
-      )
+      // Logout via the runtime port (clears JWT on the adapter side)
+      await runtimePort.clearCredentials()
+
+      // Clear device context since we're disconnecting
+      runtimePort.setDeviceContext?.(null)
 
       // Clear all connection state regardless of logout result
       clearConnectionState()
     } catch {
       // Still clear the connection state on error
+      runtimePort.setDeviceContext?.(null)
       clearConnectionState()
     } finally {
       setIsDisconnecting(false)
     }
-  }, [runtimeConnection.selectedDevice, runtimeConnection.jwtToken, clearConnectionState])
+  }, [runtimeConnection.selectedDevice, runtimeConnection.jwtToken, runtimePort, clearConnectionState])
 
   const handleSimulatorSelect = useCallback(() => {
     // If connected to an orchestrator device, disconnect first

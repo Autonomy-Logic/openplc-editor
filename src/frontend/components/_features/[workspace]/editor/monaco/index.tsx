@@ -862,6 +862,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         const state = openPLCStoreBase.getState()
         void projectPort.saveProject({
           projectPath: state.project.meta.path,
+          projectName: state.project.meta.name,
           projectData: state.project.data,
           deviceConfiguration: state.deviceDefinitions.configuration,
           devicePinMapping: state.deviceDefinitions.pinMapping.pins,
@@ -876,6 +877,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           const state = openPLCStoreBase.getState()
           void projectPort.saveProject({
             projectPath: state.project.meta.path,
+            projectName: state.project.meta.name,
             projectData: state.project.data,
             deviceConfiguration: state.deviceDefinitions.configuration,
             devicePinMapping: state.deviceDefinitions.pinMapping.pins,

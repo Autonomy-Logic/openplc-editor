@@ -15,6 +15,6 @@ export function ipcPouToFlat(pou: IpcPou): FlatPou & { variablesText?: string } 
     },
     body: pou.data.body as FlatPou['body'],
     documentation: pou.data.documentation,
-    variablesText: 'variablesText' in pou.data ? (pou.data.variablesText) : undefined,
+    variablesText: 'variablesText' in pou.data ? pou.data.variablesText : undefined,
   }
 }

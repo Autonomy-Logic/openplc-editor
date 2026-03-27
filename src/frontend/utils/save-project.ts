@@ -84,6 +84,7 @@ function collectDebugVariables(
 
 export interface PrepareSavePayloadArgs {
   projectPath: string
+  projectName: string
   projectData: {
     dataTypes: unknown[]
     pous: PLCPou[]
@@ -105,7 +106,7 @@ export interface PrepareSavePayloadArgs {
  * Returns a SaveProjectParams ready to be passed to `projectPort.saveProject()`.
  */
 export function prepareSavePayload(args: PrepareSavePayloadArgs): SaveProjectParams {
-  const { projectPath, projectData, deviceConfiguration, devicePinMapping, editors, activeEditor } = args
+  const { projectPath, projectName, projectData, deviceConfiguration, devicePinMapping, editors, activeEditor } = args
 
   // Build editor lookup for POU sanitization
   const editorsByName = new Map<string, EditorLike>()
@@ -133,6 +134,7 @@ export function prepareSavePayload(args: PrepareSavePayloadArgs): SaveProjectPar
 
   return {
     projectPath,
+    projectName,
     projectData: preparedProjectData as SaveProjectParams['projectData'],
     deviceConfiguration,
     devicePinMapping,

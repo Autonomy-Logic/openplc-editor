@@ -61,6 +61,7 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
     if (operation === 'save') {
       const params = prepareSavePayload({
         projectPath: project.meta.path,
+        projectName: project.meta.name,
         projectData: project.data,
         deviceConfiguration: deviceDefinitions.configuration,
         devicePinMapping: deviceDefinitions.pinMapping.pins,

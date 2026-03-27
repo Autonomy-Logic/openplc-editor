@@ -76,6 +76,7 @@ const AcceleratorHandler = () => {
     try {
       const params = prepareSavePayload({
         projectPath: project.meta.path,
+        projectName: project.meta.name,
         projectData: project.data,
         deviceConfiguration: deviceDefinitions.configuration,
         devicePinMapping: deviceDefinitions.pinMapping.pins,
