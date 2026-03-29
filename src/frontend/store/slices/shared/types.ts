@@ -115,6 +115,8 @@ export type OpenProjectResponseData = {
 export type SharedWorkspaceActions = {
   /** Mark a file as unsaved and set workspace editingState to 'unsaved'. */
   handleFileAndWorkspaceSavedState: (name: string) => void
+  /** Check save state, show modal if unsaved, or close the file. */
+  closeFile: (name: string) => { success: boolean }
   /** Remove a tab and select the next one. Does NOT check save state. */
   forceCloseFile: (name: string) => { success: boolean }
   /**

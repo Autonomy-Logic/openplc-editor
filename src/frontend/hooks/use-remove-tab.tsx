@@ -4,12 +4,12 @@ import { useOpenPLCStore } from '../store'
 
 const useHandleRemoveTab = () => {
   const {
-    sharedWorkspaceActions: { forceCloseFile },
+    sharedWorkspaceActions: { closeFile },
   } = useOpenPLCStore()
   const [selectedTab, setSelectedTab] = useState('')
 
   const handleRemoveTab = (tabToRemove: string) => {
-    const result = forceCloseFile(tabToRemove)
+    const result = closeFile(tabToRemove)
     if (result.success) {
       // Tab was closed successfully, update selected tab from current state
       setSelectedTab('')

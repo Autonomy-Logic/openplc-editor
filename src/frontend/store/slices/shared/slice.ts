@@ -249,6 +249,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       }
     },
 
+    closeFile: (name) => {
+      // Check if file has unsaved changes
+      const isSaved = getState().fileActions.getSavedState({ name })
+
+      if (!isSaved) {
+        // File has unsaved changes - show save prompt modal
+        getState().modalActions.openModal('save-changes-file', { fileName: name })
+        return { success: false }
+      }
+
+      // File is saved, proceed with close
+      return getState().sharedWorkspaceActions.forceCloseFile(name)
+    },
+
     forceCloseFile: (name) => {
       getState().tabsActions.removeTab(name)
 

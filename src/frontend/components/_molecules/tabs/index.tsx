@@ -1,7 +1,9 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 
+import { useHandleRemoveTab } from '../../../hooks/use-remove-tab'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
+import { CreateEditorObjectFromTab } from '../../../store/slices/tabs/utils'
 import { Tab } from '../../_atoms/tab'
 import { TabList } from '../../_atoms/tab-list'
 
@@ -9,65 +11,67 @@ const Tabs = () => {
   const {
     tabs,
     editor,
-    tabsActions: { sortTabs, removeTab },
+    tabsActions: { sortTabs },
     editorActions: { setEditor, getEditorFromEditors },
-    fileActions: { removeFile },
   } = useOpenPLCStore()
-
-  const selectedTab = editor.meta.name
+  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const hasTabs = tabs.length > 0
   const dndTab = useRef<number>(0)
   const replaceTab = useRef<number>(0)
 
-  const handleRemoveTab = (tabName: string | null) => {
-    if (!tabName) return
-    removeTab(tabName)
-    removeFile({ name: tabName })
+  const handleSort = () => {
+    const tabClone = [...tabs]
+    const draggedTab = tabClone[dndTab.current]
+    tabClone.splice(dndTab.current, 1)
+    tabClone.splice(replaceTab.current, 0, draggedTab)
+    sortTabs(tabClone)
   }
-
+  /**
+   * Todo: this tab handler should be refactored to fit all possibles cases
+   * @param tab the selected tab
+   */
   const handleClickedTab = (tab: TabsProps) => {
     if (tab.name === selectedTab) return
+    setSelectedTab(tab.name)
     const candidate = getEditorFromEditors(tab.name)
-    if (candidate) {
-      setEditor(candidate)
+    if (!candidate) {
+      setEditor(CreateEditorObjectFromTab(tab))
+      return
     }
-  }
-
-  const handleSortOnDragEnd = () => {
-    const tabsClone = [...tabs]
-    const draggedTab = tabsClone.splice(dndTab.current, 1)[0]
-    tabsClone.splice(replaceTab.current, 0, draggedTab)
-    sortTabs(tabsClone)
+    setEditor(candidate)
   }
 
   const handleDragStart = ({ tab, idx }: { tab: TabsProps; idx: number }) => {
     dndTab.current = idx
-    handleClickedTab(tab)
+    setSelectedTab(tab.name)
+    setEditor(CreateEditorObjectFromTab(tab))
   }
-
   const handleDragEnter = (idx: number) => {
     replaceTab.current = idx
   }
 
+  useEffect(() => {
+    setSelectedTab(editor.meta.name)
+  }, [editor.meta.name, setSelectedTab])
+
   return (
     <TabList>
       {hasTabs &&
-        tabs.map((tab, idx) => (
+        tabs.map((element, idx) => (
           <Tab
-            key={tab.name}
-            fileName={tab.name}
-            fileDerivation={tab.elementType}
-            currentTab={selectedTab === tab.name}
-            handleClickedTab={() => handleClickedTab(tab)}
-            handleDeleteTab={() => handleRemoveTab(tab.name)}
-            onDragStart={() => handleDragStart({ tab, idx })}
+            onDragStart={() => handleDragStart({ tab: element, idx })}
             onDragEnter={() => handleDragEnter(idx)}
-            onDragEnd={handleSortOnDragEnd}
+            onDragEnd={() => handleSort()}
             onDragOver={(e) => e.preventDefault()}
+            handleClickedTab={() => handleClickedTab(element)}
+            handleDeleteTab={() => handleRemoveTab(element.name)}
+            key={element.name}
+            fileName={element.name}
+            fileDerivation={element.elementType}
+            currentTab={selectedTab === element.name}
           />
         ))}
     </TabList>
   )
 }
-
 export { Tabs }
