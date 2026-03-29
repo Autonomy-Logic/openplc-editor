@@ -742,7 +742,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   useEffect(() => {
     const monacoInstance = monacoRef.current
     if (!monacoInstance) return
-    applyThemeNow(monacoInstance)
+    applyThemeNow(monacoInstance, shouldUseDarkMode)
   }, [shouldUseDarkMode])
 
   // -----------------------------------------------------------------------
@@ -782,11 +782,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     })
 
     // Apply theme
+    const isDark = openPLCStoreBase.getState().workspace.systemConfigs.shouldUseDarkMode
     if (!didApplyInitialTheme) {
-      applyThemeNow(monacoInstance)
+      applyThemeNow(monacoInstance, isDark)
       didApplyInitialTheme = true
     } else {
-      applyThemeNow(monacoInstance)
+      applyThemeNow(monacoInstance, isDark)
     }
 
     // Check for external file changes on mount (editor-only)

@@ -27,12 +27,11 @@ export function ensureOpenplcThemes(monacoInstance: typeof monaco) {
 
 /**
  * Applies the correct theme to the Monaco instance based on the current app theme.
- * Uses the DOM as the source of truth for the current theme state.
  *
  * @param monacoInstance - The Monaco instance to apply the theme to
+ * @param isDark - Whether dark mode is active (from the Zustand store)
  */
-export function applyThemeNow(monacoInstance: typeof monaco) {
-  const isDark = document.documentElement.classList.contains('dark')
+export function applyThemeNow(monacoInstance: typeof monaco, isDark: boolean) {
   const themeName = isDark ? 'openplc-dark' : 'openplc-light'
   monacoInstance.editor.setTheme(themeName)
 }
