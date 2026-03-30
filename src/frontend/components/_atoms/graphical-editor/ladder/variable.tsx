@@ -75,8 +75,11 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
+    const existing = Array.isArray((relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables)
+      ? (relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables
+      : []
     const connectedVariables: LadderBlockConnectedVariables = [
-      ...(relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables.filter(
+      ...existing.filter(
         (v) => v.type !== variableNode.data.variant || v.handleId !== variableNode.data.block.handleId,
       ),
       {

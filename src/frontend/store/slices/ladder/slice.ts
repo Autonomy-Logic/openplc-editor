@@ -2,10 +2,12 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import {
   defaultCustomNodesStyles,
   nodesBuilder,
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
+import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
@@ -21,11 +23,40 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           const flowIndex = ladderFlows.findIndex((f) => f.name === flow.name)
-          const rungs = flow.rungs.map((rung) => ({
-            ...rung,
-            selectedNodes: [],
-          }))
-          const newFlow = { ...flow, rungs }
+
+          // Check if any block node has legacy connectedVariables (object instead of array).
+          // Only scan + migrate if legacy data is detected — modern projects skip this entirely.
+          const needsMigration = flow.rungs.some((rung) =>
+            rung.nodes.some((node) => {
+              if (node.type !== 'block') return false
+              const cv = (node.data as { connectedVariables?: unknown }).connectedVariables
+              return cv != null && !Array.isArray(cv)
+            }),
+          )
+
+          const rungs = needsMigration
+            ? flow.rungs.map((rung) => ({
+                ...rung,
+                selectedNodes: [],
+                nodes: rung.nodes.map((node) => {
+                  if (node.type !== 'block') return node
+                  const data = node.data as { connectedVariables?: unknown }
+                  if (data.connectedVariables && !Array.isArray(data.connectedVariables)) {
+                    const converted: LadderBlockConnectedVariables = Object.entries(
+                      data.connectedVariables as Record<string, { variable?: PLCVariable; type?: string }>,
+                    ).map(([key, cv]) => ({
+                      handleId: key,
+                      variable: cv.variable,
+                      type: (cv.type as 'input' | 'output') ?? 'input',
+                    }))
+                    return { ...node, data: { ...node.data, connectedVariables: converted } }
+                  }
+                  return node
+                }),
+              }))
+            : flow.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
+
+          const newFlow = { ...flow, rungs, updated: needsMigration || flow.updated }
 
           if (flowIndex === -1) {
             ladderFlows.push(newFlow)

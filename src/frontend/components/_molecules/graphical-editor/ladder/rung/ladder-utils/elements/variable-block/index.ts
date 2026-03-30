@@ -27,7 +27,9 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
       : []
 
   inputHandles.forEach((inputHandle) => {
-    const connectedVariable = blockElement.data.connectedVariables.find((variable) => {
+    const connectedVariable = (
+      Array.isArray(blockElement.data.connectedVariables) ? blockElement.data.connectedVariables : []
+    ).find((variable) => {
       return variable.type === 'input' && variable.handleId === inputHandle.id
     })
 
@@ -67,7 +69,9 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
   })
 
   outputHandles.forEach((outputHandle) => {
-    const connectedVariable = blockElement.data.connectedVariables.find((variable) => {
+    const connectedVariable = (
+      Array.isArray(blockElement.data.connectedVariables) ? blockElement.data.connectedVariables : []
+    ).find((variable) => {
       return variable.type === 'output' && variable.handleId === outputHandle.id
     })
 

@@ -2,11 +2,11 @@ import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { expandArrayVariables } from '../../../../../utils/PLC/array-variable-utils'
 import { PLCVariable } from '../../../../../../middleware/shared/ports'
 import { useOpenPLCStore } from '../../../../../store'
 import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../../utils/cn'
+import { expandArrayVariables } from '../../../../../utils/PLC/array-variable-utils'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { getVariableRestrictionType } from '../../utils'
@@ -127,8 +127,11 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       const relatedBlock = rung.nodes.find((node) => node.id === (variableNode as VariableNode).data.block.id)
       if (!relatedBlock) return
 
+      const existingConnected = Array.isArray((relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables)
+        ? (relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables
+        : []
       const connectedVariables: LadderBlockConnectedVariables = [
-        ...(relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables.filter(
+        ...existingConnected.filter(
           (v) =>
             v.type !== variableNode.data.variant || v.handleId !== (variableNode as VariableNode).data.block.handleId,
         ),

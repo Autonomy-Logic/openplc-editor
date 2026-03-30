@@ -2,6 +2,7 @@ import { Edge, Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { nodesBuilder } from '../../../../components/_atoms/graphical-editor/ladder/node-builders'
+import type { LadderBlockConnectedVariables } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
 import type {
   BlockNode,
   BlockVariant,
@@ -61,7 +62,7 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
               (node as BlockNode<BlockVariant>).data.variant.type === 'function-block'
                 ? { name: '' }
                 : node.data.variable,
-            connectedVariables: (node as BlockNode<BlockVariant>).data.connectedVariables,
+            connectedVariables: normalizeConnectedVariables((node as BlockNode<BlockVariant>).data.connectedVariables),
           },
         } as BlockNode<BlockVariant>
       }
@@ -233,4 +234,21 @@ export const getFunctionBlockVariablesToCleanup = (
   }
 
   return variablesToDelete
+}
+
+/**
+ * Normalize connectedVariables from legacy object format to array format.
+ * Old projects stored { handleId: { variable, type } } instead of the
+ * current [{ handleId, variable, type }] array format.
+ */
+function normalizeConnectedVariables(raw: unknown): LadderBlockConnectedVariables {
+  if (Array.isArray(raw)) return raw as LadderBlockConnectedVariables
+  if (raw && typeof raw === 'object') {
+    return Object.entries(raw as Record<string, { variable?: PLCVariable; type?: string }>).map(([key, cv]) => ({
+      handleId: key,
+      variable: cv.variable,
+      type: (cv.type as 'input' | 'output') ?? 'input',
+    }))
+  }
+  return []
 }
