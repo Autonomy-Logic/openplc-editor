@@ -14,6 +14,16 @@ html:not(.dark) .react-flow {
   border: none;
 }
 
+/* Dark theme fallback for platforms using prefers-color-scheme (e.g. Electron) */
+@media (prefers-color-scheme: dark) {
+  html:not(.light) .react-flow {
+    --xy-controls-button-background-color-default: #2e3038;
+    --xy-controls-button-background-color-hover-default: #5e6275;
+    --xy-controls-button-border-color-default: #2e3038;
+    border: none;
+  }
+}
+
 .react-flow__controls {
   gap: 0.2rem;
   box-shadow: none;

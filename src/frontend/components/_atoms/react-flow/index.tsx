@@ -1,3 +1,5 @@
+import './style.css'
+
 import type { BackgroundProps, ControlProps, ReactFlowProps } from '@xyflow/react'
 import { Background, Controls, ReactFlow } from '@xyflow/react'
 import { PropsWithChildren } from 'react'
