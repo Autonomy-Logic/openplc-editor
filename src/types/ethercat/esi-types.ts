@@ -176,6 +176,20 @@ export interface SDOConfigurationEntry {
   objectName: string
 }
 
+// ===================== DEVICE ENRICHMENT =====================
+
+/**
+ * Data extracted from a full ESIDevice for persistence into ConfiguredEtherCATDevice.
+ * Returned by enrichDeviceData() and used by device configuration components.
+ */
+export type EnrichDeviceData = {
+  channelInfo?: PersistedChannelInfo[]
+  rxPdos?: PersistedPdo[]
+  txPdos?: PersistedPdo[]
+  slaveType?: string
+  sdoConfigurations?: SDOConfigurationEntry[]
+}
+
 // ===================== DEVICE =====================
 
 /**

@@ -2,24 +2,15 @@ import { MinusIcon, PlusIcon } from '@root/renderer/assets/icons'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import type {
   ConfiguredEtherCATDevice,
+  EnrichDeviceData,
   ESIRepositoryItemLight,
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
-  PersistedChannelInfo,
-  PersistedPdo,
   SDOConfigurationEntry,
 } from '@root/types/ethercat/esi-types'
 import { useCallback, useEffect, useState } from 'react'
 
 import { ConfiguredDeviceRow } from './configured-device-row'
-
-type EnrichDeviceData = {
-  channelInfo?: PersistedChannelInfo[]
-  rxPdos?: PersistedPdo[]
-  txPdos?: PersistedPdo[]
-  slaveType?: string
-  sdoConfigurations?: SDOConfigurationEntry[]
-}
 
 type ConfiguredDevicesProps = {
   devices: ConfiguredEtherCATDevice[]

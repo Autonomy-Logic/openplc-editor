@@ -12,7 +12,7 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/types/ethercat'
-import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import type { ESIRepositoryItem } from '@root/types/ethercat/esi-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -283,6 +283,18 @@ class MainProcessBridge implements MainIpcModule {
       lowerError.includes('expired') ||
       lowerError.includes('invalid token')
     )
+  }
+
+  /**
+   * Wrap a service call with standardized error handling.
+   * Returns { success: false, error } on any thrown exception.
+   */
+  private async wrapServiceCall<T>(fn: () => Promise<T>): Promise<T | { success: false; error: string }> {
+    try {
+      return await fn()
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   }
 
   makeRuntimeApiRequest<T = void>(
@@ -806,211 +818,70 @@ class MainProcessBridge implements MainIpcModule {
 
   // ===================== ESI REPOSITORY HANDLERS =====================
 
-  /**
-   * Load ESI repository index from project
-   */
-  handleESILoadRepositoryIndex = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-  ): Promise<{
-    success: boolean
-    data?: {
-      version: number
-      items: Array<{
-        id: string
-        filename: string
-        vendorId: string
-        vendorName: string
-        deviceCount: number
-        loadedAt: number
-        warnings?: string[]
-      }>
-    } | null
-    error?: string
-  }> => {
-    try {
+  handleESILoadRepositoryIndex = async (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.wrapServiceCall(async () => {
       const index = await this.esiService.loadRepositoryIndex(projectPath)
-      return { success: true, data: index }
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+      return { success: true as const, data: index }
+    })
 
-  /**
-   * Save ESI repository index to project
-   */
-  handleESISaveRepositoryIndex = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    items: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      return await this.esiService.saveRepositoryIndex(projectPath, items)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  handleESISaveRepositoryIndex = async (_event: IpcMainInvokeEvent, projectPath: string, items: ESIRepositoryItem[]) =>
+    this.wrapServiceCall(() => this.esiService.saveRepositoryIndex(projectPath, items))
 
-  /**
-   * Save an ESI XML file to project
-   */
-  handleESISaveXmlFile = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    itemId: string,
-    xmlContent: string,
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      return await this.esiService.saveXmlFile(projectPath, itemId, xmlContent)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  handleESISaveXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string, xmlContent: string) =>
+    this.wrapServiceCall(() => this.esiService.saveXmlFile(projectPath, itemId, xmlContent))
 
-  /**
-   * Load an ESI XML file from project
-   */
-  handleESILoadXmlFile = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    itemId: string,
-  ): Promise<{ success: boolean; content?: string; error?: string }> => {
-    try {
-      return await this.esiService.loadXmlFile(projectPath, itemId)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  handleESILoadXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string) =>
+    this.wrapServiceCall(() => this.esiService.loadXmlFile(projectPath, itemId))
 
-  /**
-   * Delete an ESI XML file from project
-   */
-  handleESIDeleteXmlFile = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    itemId: string,
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      return await this.esiService.deleteRepositoryItemV2(projectPath, itemId)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  handleESIDeleteXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string) =>
+    this.wrapServiceCall(() => this.esiService.deleteRepositoryItemV2(projectPath, itemId))
 
-  /**
-   * Save a complete ESI repository item (XML + update index)
-   */
   handleESISaveRepositoryItem = async (
     _event: IpcMainInvokeEvent,
     projectPath: string,
     item: ESIRepositoryItem,
     xmlContent: string,
     existingItems: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      return await this.esiService.saveRepositoryItem(projectPath, item, xmlContent, existingItems)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  ) => this.wrapServiceCall(() => this.esiService.saveRepositoryItem(projectPath, item, xmlContent, existingItems))
 
-  /**
-   * Delete an ESI repository item (XML + update index)
-   */
   handleESIDeleteRepositoryItem = async (
     _event: IpcMainInvokeEvent,
     projectPath: string,
     itemId: string,
     existingItems: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      return await this.esiService.deleteRepositoryItem(projectPath, itemId, existingItems)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  ) => this.wrapServiceCall(() => this.esiService.deleteRepositoryItem(projectPath, itemId, existingItems))
 
   // ===================== ESI OPTIMIZED HANDLERS =====================
 
-  /**
-   * Parse and save a single ESI file
-   */
   handleESIParseAndSaveFile = async (
     _event: IpcMainInvokeEvent,
     projectPath: string,
     filename: string,
     content: string,
-  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> => {
-    try {
-      return await this.esiService.parseAndSaveFile(projectPath, filename, content)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  ) => this.wrapServiceCall(() => this.esiService.parseAndSaveFile(projectPath, filename, content))
 
-  /**
-   * Clear the entire ESI repository
-   */
-  handleESIClearRepository = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      return await this.esiService.clearRepository(projectPath)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  handleESIClearRepository = async (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.wrapServiceCall(() => this.esiService.clearRepository(projectPath))
 
-  /**
-   * Load a full ESI device on-demand (with PDOs, SM, FMMU)
-   */
   handleESILoadDeviceFull = async (
     _event: IpcMainInvokeEvent,
     projectPath: string,
     itemId: string,
     deviceIndex: number,
-  ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> => {
-    try {
+  ) =>
+    this.wrapServiceCall(async () => {
       const xmlResult = await this.esiService.loadXmlFile(projectPath, itemId)
       if (!xmlResult.success || !xmlResult.content) {
-        return { success: false, error: xmlResult.error || 'XML file not found' }
+        return { success: false as const, error: xmlResult.error || 'XML file not found' }
       }
+      return parseESIDeviceFull(xmlResult.content, deviceIndex)
+    })
 
-      const result = parseESIDeviceFull(xmlResult.content, deviceIndex)
-      return result
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  handleESILoadRepositoryLight = async (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.wrapServiceCall(() => this.esiService.loadRepositoryLight(projectPath))
 
-  /**
-   * Load repository as lightweight items (instant from v2 cache)
-   */
-  handleESILoadRepositoryLight = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; needsMigration?: boolean; error?: string }> => {
-    try {
-      return await this.esiService.loadRepositoryLight(projectPath)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
-
-  /**
-   * Migrate v1 repository to v2 with device summaries
-   */
-  handleESIMigrateRepository = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> => {
-    try {
-      return await this.esiService.migrateRepositoryToV2(projectPath)
-    } catch (error) {
-      return { success: false, error: String(error) }
-    }
-  }
+  handleESIMigrateRepository = async (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.wrapServiceCall(() => this.esiService.migrateRepositoryToV2(projectPath))
 
   // ===================== IPC HANDLER REGISTRATION =====================
   setupMainIpcListener() {

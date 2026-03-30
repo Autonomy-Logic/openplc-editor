@@ -164,9 +164,10 @@ export interface PDOMappingEntry {
 }
 
 /**
- * Slave configuration for validation
+ * Slave configuration entry for validation requests.
+ * Not to be confused with EtherCATSlaveConfig from esi-types.ts (per-slave runtime config).
  */
-export interface EtherCATSlaveConfig {
+export interface EtherCATValidationSlaveEntry {
   /** Position in the EtherCAT chain (1-indexed) */
   position: number
   /** Vendor ID */
@@ -184,7 +185,7 @@ export interface EtherCATValidateRequest {
   /** Network interface to use */
   interface: string
   /** List of slave configurations */
-  slaves: EtherCATSlaveConfig[]
+  slaves: EtherCATValidationSlaveEntry[]
   /** Cycle time in milliseconds */
   cycle_time_ms?: number
 }

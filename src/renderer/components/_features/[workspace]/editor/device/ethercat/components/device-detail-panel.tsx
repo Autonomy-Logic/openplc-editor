@@ -1,35 +1,18 @@
 import * as Tabs from '@radix-ui/react-tabs'
-import { ArrowIcon } from '@root/renderer/assets/icons'
-import { Checkbox } from '@root/renderer/components/_atoms/checkbox'
-import { InputWithRef } from '@root/renderer/components/_atoms/input'
+import { useDeviceConfiguration } from '@root/renderer/hooks/use-device-configuration'
 import type {
   ConfiguredEtherCATDevice,
-  ESIChannel,
-  ESICoEObject,
+  EnrichDeviceData,
   ESIDeviceSummary,
   ESIRepositoryItemLight,
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
-  PersistedChannelInfo,
-  PersistedPdo,
   SDOConfigurationEntry,
 } from '@root/types/ethercat/esi-types'
 import { cn } from '@root/utils'
-import { enrichDeviceData } from '@root/utils/ethercat/enrich-device-data'
-import { generateDefaultChannelMappings, pdoToChannels } from '@root/utils/ethercat/esi-parser'
-import { extractDefaultSdoConfigurations } from '@root/utils/ethercat/sdo-config-defaults'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 
-import { ChannelMappingTable } from './channel-mapping-table'
-import { SdoParametersTable } from './sdo-parameters-table'
-
-type EnrichDeviceData = {
-  channelInfo?: PersistedChannelInfo[]
-  rxPdos?: PersistedPdo[]
-  txPdos?: PersistedPdo[]
-  slaveType?: string
-  sdoConfigurations?: SDOConfigurationEntry[]
-}
+import { ChannelMappingsSection, DeviceConfigurationForm, SdoParametersSection } from './device-configuration-form'
 
 type DeviceDetailPanelProps = {
   device: ConfiguredEtherCATDevice
@@ -40,17 +23,6 @@ type DeviceDetailPanelProps = {
   onUpdateChannelMappings: (mappings: EtherCATChannelMapping[]) => void
   onEnrichDevice: (data: EnrichDeviceData) => void
   onUpdateSdoConfigurations: (configs: SDOConfigurationEntry[]) => void
-}
-
-const inputClassName =
-  'h-[26px] w-24 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
-
-const disabledInputClassName = 'cursor-not-allowed opacity-50'
-
-const parseNumericInput = (value: string, min = 0): number | undefined => {
-  const parsed = parseInt(value, 10)
-  if (isNaN(parsed) || parsed < min) return undefined
-  return parsed
 }
 
 type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings'
@@ -93,9 +65,6 @@ const DeviceDetailPanel = ({
     return repository.find((r) => r.id === device.esiDeviceRef.repositoryItemId)
   }, [repository, device.esiDeviceRef.repositoryItemId])
 
-  const config = device.config
-
-  // Compute addresses used by other devices (excluding this device's own mappings)
   const externalAddresses = useMemo(() => {
     const filtered = new Set(usedAddresses)
     for (const mapping of device.channelMappings) {
@@ -104,96 +73,15 @@ const DeviceDetailPanel = ({
     return filtered
   }, [usedAddresses, device.channelMappings])
 
-  // Channel loading state
-  const [channels, setChannels] = useState<ESIChannel[]>([])
-  const [coeObjects, setCoeObjects] = useState<ESICoEObject[] | undefined>(undefined)
-  const [isLoadingChannels, setIsLoadingChannels] = useState(false)
-  const [channelLoadError, setChannelLoadError] = useState<string | null>(null)
-  const fullDeviceLoadedRef = useRef(false)
-
-  // Load full device data on mount
-  useEffect(() => {
-    if (fullDeviceLoadedRef.current) return
-
-    const loadFullDevice = async () => {
-      setIsLoadingChannels(true)
-      setChannelLoadError(null)
-
-      try {
-        const result = await window.bridge.esiLoadDeviceFull(
-          projectPath,
-          device.esiDeviceRef.repositoryItemId,
-          device.esiDeviceRef.deviceIndex,
-        )
-
-        if (result.success && result.device) {
-          const deviceChannels = pdoToChannels(result.device)
-          setChannels(deviceChannels)
-          setCoeObjects(result.device.coeObjects)
-          fullDeviceLoadedRef.current = true
-
-          if (device.channelMappings.length === 0 && deviceChannels.length > 0) {
-            onUpdateChannelMappings(generateDefaultChannelMappings(deviceChannels, externalAddresses))
-          }
-
-          // Only enrich PDO/channel data if missing (never overwrite user-edited sdoConfigurations)
-          if (!device.channelInfo || !device.rxPdos || !device.txPdos) {
-            const enriched = enrichDeviceData(result.device)
-            // Preserve existing sdoConfigurations if already set
-            if (device.sdoConfigurations !== undefined) {
-              delete enriched.sdoConfigurations
-            }
-            onEnrichDevice(enriched)
-          } else if (device.sdoConfigurations === undefined && result.device.coeObjects?.length) {
-            // Only backfill SDO configs when they've never been set
-            onEnrichDevice({
-              channelInfo: device.channelInfo,
-              rxPdos: device.rxPdos,
-              txPdos: device.txPdos,
-              slaveType: device.slaveType ?? '',
-              sdoConfigurations: extractDefaultSdoConfigurations(result.device.coeObjects),
-            })
-          }
-        } else {
-          setChannelLoadError(result.error || 'Failed to load device data')
-        }
-      } catch (error) {
-        setChannelLoadError(String(error))
-      } finally {
-        setIsLoadingChannels(false)
-      }
-    }
-
-    void loadFullDevice()
-  }, [
-    projectPath,
-    device.esiDeviceRef,
-    device.channelMappings.length,
-    device.channelInfo,
-    device.rxPdos,
-    device.txPdos,
-    onUpdateChannelMappings,
-    onEnrichDevice,
-    externalAddresses,
-  ])
-
-  const handleAliasChange = useCallback(
-    (channelId: string, alias: string) => {
-      const updated = device.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
-      onUpdateChannelMappings(updated)
-    },
-    [device.channelMappings, onUpdateChannelMappings],
-  )
-
-  const updateConfig = useCallback(
-    <K extends keyof EtherCATSlaveConfig>(section: K, updates: Partial<EtherCATSlaveConfig[K]>) => {
-      onUpdateDevice({
-        ...config,
-        [section]: { ...config[section], ...updates },
-      })
-    },
-    [config, onUpdateDevice],
-  )
+  const { channels, coeObjects, isLoadingChannels, channelLoadError, handleAliasChange, updateConfig } =
+    useDeviceConfiguration({
+      device,
+      projectPath,
+      externalAddresses,
+      onUpdateDevice,
+      onUpdateChannelMappings,
+      onEnrichDevice,
+    })
 
   return (
     <div className='flex h-full flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900'>
@@ -287,306 +175,7 @@ const DeviceDetailPanel = ({
         >
           <div className='flex-1 overflow-auto p-4'>
             <div className='flex flex-col gap-5'>
-              {/* Startup Checks */}
-              <div>
-                <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Startup Checks</h6>
-                <div className='flex flex-wrap gap-x-6 gap-y-2'>
-                  <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                    <Checkbox
-                      checked={config.startupChecks.checkVendorId}
-                      onCheckedChange={(checked) => updateConfig('startupChecks', { checkVendorId: checked === true })}
-                    />
-                    Verify Vendor ID
-                  </label>
-                  <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                    <Checkbox
-                      checked={config.startupChecks.checkProductCode}
-                      onCheckedChange={(checked) =>
-                        updateConfig('startupChecks', { checkProductCode: checked === true })
-                      }
-                    />
-                    Verify Product Code
-                  </label>
-                </div>
-              </div>
-
-              {/* Addressing */}
-              <div>
-                <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Addressing</h6>
-                <div className='flex flex-wrap items-center gap-x-6 gap-y-2'>
-                  <div className='flex items-center gap-2'>
-                    <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                      EtherCAT Address
-                    </span>
-                    <InputWithRef
-                      type='number'
-                      value={config.addressing.ethercatAddress}
-                      onChange={(e) => {
-                        const val = parseNumericInput(e.target.value)
-                        if (val !== undefined) updateConfig('addressing', { ethercatAddress: val })
-                      }}
-                      min={0}
-                      max={65535}
-                      className={inputClassName}
-                    />
-                    <span className='text-xs text-neutral-400 dark:text-neutral-500'>0 = auto</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Timeouts */}
-              <div>
-                <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Timeouts</h6>
-                <div className='grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3'>
-                  <div className='flex items-center gap-2'>
-                    <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>SDO (ms)</span>
-                    <InputWithRef
-                      type='number'
-                      value={config.timeouts.sdoTimeoutMs}
-                      onChange={(e) => {
-                        const val = parseNumericInput(e.target.value)
-                        if (val !== undefined) updateConfig('timeouts', { sdoTimeoutMs: val })
-                      }}
-                      min={0}
-                      className={inputClassName}
-                    />
-                  </div>
-                  <div className='flex items-center gap-2'>
-                    <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                      I&#8594;P (ms)
-                    </span>
-                    <InputWithRef
-                      type='number'
-                      value={config.timeouts.initToPreOpTimeoutMs}
-                      onChange={(e) => {
-                        const val = parseNumericInput(e.target.value)
-                        if (val !== undefined) updateConfig('timeouts', { initToPreOpTimeoutMs: val })
-                      }}
-                      min={0}
-                      className={inputClassName}
-                    />
-                  </div>
-                  <div className='flex items-center gap-2'>
-                    <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                      P&#8594;S/S&#8594;O (ms)
-                    </span>
-                    <InputWithRef
-                      type='number'
-                      value={config.timeouts.safeOpToOpTimeoutMs}
-                      onChange={(e) => {
-                        const val = parseNumericInput(e.target.value)
-                        if (val !== undefined) updateConfig('timeouts', { safeOpToOpTimeoutMs: val })
-                      }}
-                      min={0}
-                      className={inputClassName}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Watchdog */}
-              <div>
-                <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Watchdog</h6>
-                <div className='flex flex-col gap-2'>
-                  <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
-                    <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                      <Checkbox
-                        checked={config.watchdog.smWatchdogEnabled}
-                        onCheckedChange={(checked) => updateConfig('watchdog', { smWatchdogEnabled: checked === true })}
-                      />
-                      SM Watchdog
-                    </label>
-                    <div className='flex items-center gap-2'>
-                      <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                        Time (ms)
-                      </span>
-                      <InputWithRef
-                        type='number'
-                        value={config.watchdog.smWatchdogMs}
-                        disabled={!config.watchdog.smWatchdogEnabled}
-                        onChange={(e) => {
-                          const val = parseNumericInput(e.target.value)
-                          if (val !== undefined) updateConfig('watchdog', { smWatchdogMs: val })
-                        }}
-                        min={0}
-                        className={cn(inputClassName, !config.watchdog.smWatchdogEnabled && disabledInputClassName)}
-                      />
-                    </div>
-                  </div>
-                  <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
-                    <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                      <Checkbox
-                        checked={config.watchdog.pdiWatchdogEnabled}
-                        onCheckedChange={(checked) =>
-                          updateConfig('watchdog', { pdiWatchdogEnabled: checked === true })
-                        }
-                      />
-                      PDI Watchdog
-                    </label>
-                    <div className='flex items-center gap-2'>
-                      <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                        Time (ms)
-                      </span>
-                      <InputWithRef
-                        type='number'
-                        value={config.watchdog.pdiWatchdogMs}
-                        disabled={!config.watchdog.pdiWatchdogEnabled}
-                        onChange={(e) => {
-                          const val = parseNumericInput(e.target.value)
-                          if (val !== undefined) updateConfig('watchdog', { pdiWatchdogMs: val })
-                        }}
-                        min={0}
-                        className={cn(inputClassName, !config.watchdog.pdiWatchdogEnabled && disabledInputClassName)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Distributed Clocks (DC) */}
-              <div>
-                <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Distributed Clocks (DC)
-                </h6>
-                <div className='flex flex-col gap-2'>
-                  <div className='flex flex-wrap items-center gap-x-6 gap-y-2'>
-                    <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                      <Checkbox
-                        checked={config.distributedClocks.dcEnabled}
-                        onCheckedChange={(checked) =>
-                          updateConfig('distributedClocks', { dcEnabled: checked === true })
-                        }
-                      />
-                      Enable DC
-                    </label>
-                    <div className='flex items-center gap-2'>
-                      <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                        Sync Unit Cycle (us)
-                      </span>
-                      <InputWithRef
-                        type='number'
-                        value={config.distributedClocks.dcSyncUnitCycleUs}
-                        disabled={!config.distributedClocks.dcEnabled}
-                        onChange={(e) => {
-                          const val = parseNumericInput(e.target.value)
-                          if (val !== undefined) updateConfig('distributedClocks', { dcSyncUnitCycleUs: val })
-                        }}
-                        min={0}
-                        className={cn(inputClassName, !config.distributedClocks.dcEnabled && disabledInputClassName)}
-                      />
-                      <span className='text-xs text-neutral-400 dark:text-neutral-500'>0 = master cycle</span>
-                    </div>
-                  </div>
-
-                  {/* SYNC0 */}
-                  <div className='flex flex-wrap items-center gap-x-4 gap-y-2 pl-4'>
-                    <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                      <Checkbox
-                        checked={config.distributedClocks.dcSync0Enabled}
-                        disabled={!config.distributedClocks.dcEnabled}
-                        onCheckedChange={(checked) =>
-                          updateConfig('distributedClocks', { dcSync0Enabled: checked === true })
-                        }
-                      />
-                      SYNC0
-                    </label>
-                    <div className='flex items-center gap-2'>
-                      <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                        Cycle (us)
-                      </span>
-                      <InputWithRef
-                        type='number'
-                        value={config.distributedClocks.dcSync0CycleUs}
-                        disabled={!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync0Enabled}
-                        onChange={(e) => {
-                          const val = parseNumericInput(e.target.value)
-                          if (val !== undefined) updateConfig('distributedClocks', { dcSync0CycleUs: val })
-                        }}
-                        min={0}
-                        className={cn(
-                          inputClassName,
-                          (!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync0Enabled) &&
-                            disabledInputClassName,
-                        )}
-                      />
-                    </div>
-                    <div className='flex items-center gap-2'>
-                      <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                        Shift (us)
-                      </span>
-                      <InputWithRef
-                        type='number'
-                        value={config.distributedClocks.dcSync0ShiftUs}
-                        disabled={!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync0Enabled}
-                        onChange={(e) => {
-                          const val = parseNumericInput(e.target.value)
-                          if (val !== undefined) updateConfig('distributedClocks', { dcSync0ShiftUs: val })
-                        }}
-                        min={0}
-                        className={cn(
-                          inputClassName,
-                          (!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync0Enabled) &&
-                            disabledInputClassName,
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  {/* SYNC1 */}
-                  <div className='flex flex-wrap items-center gap-x-4 gap-y-2 pl-4'>
-                    <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-                      <Checkbox
-                        checked={config.distributedClocks.dcSync1Enabled}
-                        disabled={!config.distributedClocks.dcEnabled}
-                        onCheckedChange={(checked) =>
-                          updateConfig('distributedClocks', { dcSync1Enabled: checked === true })
-                        }
-                      />
-                      SYNC1
-                    </label>
-                    <div className='flex items-center gap-2'>
-                      <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                        Cycle (us)
-                      </span>
-                      <InputWithRef
-                        type='number'
-                        value={config.distributedClocks.dcSync1CycleUs}
-                        disabled={!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync1Enabled}
-                        onChange={(e) => {
-                          const val = parseNumericInput(e.target.value)
-                          if (val !== undefined) updateConfig('distributedClocks', { dcSync1CycleUs: val })
-                        }}
-                        min={0}
-                        className={cn(
-                          inputClassName,
-                          (!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync1Enabled) &&
-                            disabledInputClassName,
-                        )}
-                      />
-                    </div>
-                    <div className='flex items-center gap-2'>
-                      <span className='whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400'>
-                        Shift (us)
-                      </span>
-                      <InputWithRef
-                        type='number'
-                        value={config.distributedClocks.dcSync1ShiftUs}
-                        disabled={!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync1Enabled}
-                        onChange={(e) => {
-                          const val = parseNumericInput(e.target.value)
-                          if (val !== undefined) updateConfig('distributedClocks', { dcSync1ShiftUs: val })
-                        }}
-                        min={0}
-                        className={cn(
-                          inputClassName,
-                          (!config.distributedClocks.dcEnabled || !config.distributedClocks.dcSync1Enabled) &&
-                            disabledInputClassName,
-                        )}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <DeviceConfigurationForm config={device.config} updateConfig={updateConfig} />
             </div>
           </div>
         </Tabs.Content>
@@ -597,62 +186,13 @@ const DeviceDetailPanel = ({
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
           <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
-            {isLoadingChannels && (
-              <div className='flex items-center gap-2 py-4 text-sm text-neutral-500 dark:text-neutral-400'>
-                <ArrowIcon size='sm' className='animate-spin stroke-neutral-400' />
-                Loading CoE data...
-              </div>
-            )}
-
-            {!isLoadingChannels && device.sdoConfigurations && device.sdoConfigurations.length > 0 && (
-              <SdoParametersTable
-                sdoConfigurations={device.sdoConfigurations}
-                onUpdateSdoConfigurations={onUpdateSdoConfigurations}
-              />
-            )}
-
-            {!isLoadingChannels &&
-              !channelLoadError &&
-              device.sdoConfigurations &&
-              device.sdoConfigurations.length === 0 && (
-                <p className='py-4 text-center text-sm text-neutral-500 dark:text-neutral-400'>
-                  No configurable SDO parameters found in this device&apos;s CoE dictionary.
-                </p>
-              )}
-
-            {!isLoadingChannels &&
-              !channelLoadError &&
-              !device.sdoConfigurations &&
-              coeObjects &&
-              coeObjects.length > 0 && (
-                <div className='flex flex-col items-center gap-2 py-4'>
-                  <p className='text-sm text-neutral-500 dark:text-neutral-400'>
-                    CoE Object Dictionary available. Auto-configure startup parameters?
-                  </p>
-                  <button
-                    onClick={() => {
-                      if (coeObjects) {
-                        onUpdateSdoConfigurations(extractDefaultSdoConfigurations(coeObjects))
-                      }
-                    }}
-                    className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
-                  >
-                    Auto-configure from ESI defaults
-                  </button>
-                </div>
-              )}
-
-            {channelLoadError && (
-              <div className='rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'>
-                {channelLoadError}
-              </div>
-            )}
-
-            {!isLoadingChannels && !channelLoadError && !device.sdoConfigurations && !coeObjects && (
-              <p className='py-4 text-center text-sm text-neutral-500 dark:text-neutral-400'>
-                No CoE Object Dictionary available for this device.
-              </p>
-            )}
+            <SdoParametersSection
+              isLoading={isLoadingChannels}
+              loadError={channelLoadError}
+              sdoConfigurations={device.sdoConfigurations}
+              coeObjects={coeObjects}
+              onUpdateSdoConfigurations={onUpdateSdoConfigurations}
+            />
           </div>
         </Tabs.Content>
 
@@ -662,32 +202,13 @@ const DeviceDetailPanel = ({
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
           <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
-            {isLoadingChannels && (
-              <div className='flex items-center gap-2 py-4 text-sm text-neutral-500 dark:text-neutral-400'>
-                <ArrowIcon size='sm' className='animate-spin stroke-neutral-400' />
-                Loading channels...
-              </div>
-            )}
-
-            {channelLoadError && (
-              <div className='rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'>
-                {channelLoadError}
-              </div>
-            )}
-
-            {!isLoadingChannels && !channelLoadError && channels.length === 0 && (
-              <p className='py-4 text-center text-sm text-neutral-500 dark:text-neutral-400'>
-                No channels available for this device.
-              </p>
-            )}
-
-            {!isLoadingChannels && !channelLoadError && channels.length > 0 && (
-              <ChannelMappingTable
-                channels={channels}
-                mappings={device.channelMappings}
-                onAliasChange={handleAliasChange}
-              />
-            )}
+            <ChannelMappingsSection
+              isLoading={isLoadingChannels}
+              loadError={channelLoadError}
+              channels={channels}
+              mappings={device.channelMappings}
+              onAliasChange={handleAliasChange}
+            />
           </div>
         </Tabs.Content>
       </Tabs.Root>
