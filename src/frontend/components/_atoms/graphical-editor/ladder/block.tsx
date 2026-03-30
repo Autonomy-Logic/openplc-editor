@@ -398,7 +398,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
   const connectedOutputNames = useMemo(() => {
     const names = new Set<string>()
-    if (data.connectedVariables) {
+    if (Array.isArray(data.connectedVariables)) {
       for (const cv of data.connectedVariables) {
         if (cv.type === 'output' && cv.variable) {
           names.add(cv.handleId)
@@ -407,6 +407,33 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     }
     return names
   }, [data.connectedVariables])
+
+  // Migrate legacy connectedVariables from object format to array format.
+  // Old projects stored { handleId: { variable, type } } instead of [{ handleId, variable, type }].
+  useEffect(() => {
+    if (
+      data.connectedVariables &&
+      typeof data.connectedVariables === 'object' &&
+      !Array.isArray(data.connectedVariables)
+    ) {
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId: id })
+      if (!node || !rung) return
+
+      const legacy = data.connectedVariables as Record<string, { variable: PLCVariable | undefined; type: string }>
+      const migrated: LadderBlockConnectedVariables = Object.entries(legacy).map(([key, cv]) => ({
+        handleId: key,
+        variable: cv.variable,
+        type: cv.type as 'input' | 'output',
+      }))
+
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: { ...node, data: { ...node.data, connectedVariables: migrated } },
+      })
+    }
+  }, [data.connectedVariables, editor, pous, ladderFlows, id, updateNode])
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
