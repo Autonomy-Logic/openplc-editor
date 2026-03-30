@@ -100,7 +100,7 @@ export const getVariableRestrictionType = (variableType: string) => {
     }
   }
 
-  const isABaseType = baseTypeSchema.safeParse(variableType)
+  const isABaseType = baseTypeSchema.safeParse(variableType.toLowerCase())
 
   return {
     // For base types, lowercase is fine (they're standardized and compared case-insensitively)

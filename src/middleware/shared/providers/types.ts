@@ -4,6 +4,7 @@
  */
 
 import type { AcceleratorPort } from '../ports/accelerator-port'
+import type { AIPort } from '../ports/ai-port'
 import type { CompilerPort } from '../ports/compiler-port'
 import type { DebuggerPort } from '../ports/debugger-port'
 import type { DevicePort } from '../ports/device-port'
@@ -29,4 +30,5 @@ export interface PlatformPorts {
   accelerator: AcceleratorPort
   theme: ThemePort
   capabilities: PlatformCapabilities
+  ai?: AIPort
 }

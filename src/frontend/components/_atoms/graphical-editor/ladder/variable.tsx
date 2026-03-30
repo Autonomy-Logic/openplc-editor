@@ -108,15 +108,18 @@ const VariableElement = (block: VariableProps) => {
 
   /**
    * useEffect to sync variableValue with data.variable.name when it changes externally
-   * (e.g., from variable rename propagation or autocomplete selection)
-   * Only sync when autocomplete is closed to avoid overwriting user input while typing
+   * (e.g., from variable rename propagation or autocomplete selection).
+   * Only sync when autocomplete is closed to avoid overwriting user input while typing.
+   * Note: openAutocomplete is intentionally NOT in the dependency array to prevent a race
+   * condition where closing the autocomplete (before blur) would restore the old node value,
+   * overwriting the user's cleared input.
    */
   useEffect(() => {
     const name = data.variable?.name ?? ''
     if (!openAutocomplete && name !== '') {
       setVariableValue(name)
     }
-  }, [data.variable?.name, openAutocomplete])
+  }, [data.variable?.name])
 
   /**
    * Update inputError state when the table of variables is updated

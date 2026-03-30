@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
-import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
+import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
@@ -128,6 +128,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const isSyncingModelRef = useRef(false)
 
   const capabilities = useCapabilities()
+  const aiPort = useAI()
   const projectPort = useProject()
 
   const {
@@ -741,14 +742,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       return
     }
 
-    const provider = new AIInlineCompletionProvider(name, language)
+    if (!aiPort) return
+
+    const provider = new AIInlineCompletionProvider(name, language, aiPort)
     const disposable = monaco.languages.registerInlineCompletionsProvider(language, provider)
 
     return () => {
       disposable.dispose()
       provider.dispose()
     }
-  }, [name, language, aiState.isEnabled, aiState.hasConsented, modalActions, capabilities.hasAIAssistant])
+  }, [name, language, aiState.isEnabled, aiState.hasConsented, modalActions, capabilities.hasAIAssistant, aiPort])
 
   // -----------------------------------------------------------------------
   // Theme management

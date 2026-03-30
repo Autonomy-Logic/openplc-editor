@@ -1,12 +1,12 @@
 import * as Popover from '@radix-ui/react-popover'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
 import { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
 import {
   floatToBuffer,
   getVariableTypeInfo,
@@ -193,16 +193,19 @@ const VariableElement = (block: VariableProps) => {
   }, [])
 
   /**
-   * useEffect to sync variableValue from node props when autocomplete is closed
-   * This ensures the UI updates after autocomplete selection
+   * useEffect to sync variableValue from node props when the variable name changes externally
+   * (e.g., from autocomplete selection or variable rename propagation).
+   * Only sync when autocomplete is closed to avoid overwriting user input while typing.
+   * Note: openAutocomplete is intentionally NOT in the dependency array to prevent a race
+   * condition where closing the autocomplete (before blur) would restore the old node value,
+   * overwriting the user's cleared input.
    */
   useEffect(() => {
-    // Only sync when autocomplete is closed to avoid overwriting user input while typing
     const name = data.variable?.name ?? ''
     if (!openAutocomplete && name !== '') {
       setVariableValue(name)
     }
-  }, [data.variable?.name, openAutocomplete])
+  }, [data.variable?.name])
 
   /**
    * Update inputError state when the table of variables is updated

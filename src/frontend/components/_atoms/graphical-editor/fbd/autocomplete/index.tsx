@@ -6,6 +6,7 @@ import { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../../store'
 import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../../utils/cn'
+import { getLiteralType } from '../../../../../utils/keywords'
 import { expandArrayVariables } from '../../../../../utils/PLC/array-variable-utils'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { buildGenericNode } from '../../../../_molecules/graphical-editor/fbd/fbd-utils/nodes'
@@ -242,6 +243,12 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
 
     const submit = ({ variable }: { variable: { id: string; name: string } }) => {
       if (variable.id === 'add') {
+        // Check if the input is a literal value (e.g., 2.0, TRUE, 'hello')
+        // Literals should be submitted directly to the block, not created as variables
+        if (getLiteralType(valueToSearch)) {
+          submitVariableToBlock({ name: valueToSearch } as PLCVariable)
+          return
+        }
         submitAddVariable({ variableName: valueToSearch })
         return
       }

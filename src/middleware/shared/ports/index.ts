@@ -24,7 +24,7 @@
  *     const { compiler, runtime, debugger } = usePlatform()
  *     await compiler.compileProgram(args, onProgress)
  *
- * 11 Port Interfaces:
+ * 12 Port Interfaces:
  *   1. CompilerPort      — PLC compilation pipeline
  *   2. RuntimePort       — Remote PLC runtime communication
  *   3. DebuggerPort      — Debug protocol (variable read/write)
@@ -36,6 +36,7 @@
  *   9. WindowPort        — Native window management
  *  10. AcceleratorPort   — Keyboard shortcuts
  *  11. ThemePort         — Theme detection and switching
+ *  12. AIPort            — AI-assisted coding (completions, chat, credits, telemetry)
  *
  * Plus:
  *   - PlatformCapabilities — Feature toggle flags
@@ -44,6 +45,15 @@
 
 // --- Port interfaces ---
 export type { AcceleratorPort } from './accelerator-port'
+export type {
+  AIChatLanguage,
+  AIChatParams,
+  AICompleteParams,
+  AICompletionLanguage,
+  AICreditStatus,
+  AIPort,
+  AITelemetryEventName,
+} from './ai-port'
 export type { CompilerPort } from './compiler-port'
 export type { DebuggerPort } from './debugger-port'
 export type { DevicePort } from './device-port'
@@ -124,6 +134,7 @@ export { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeSchema, generi
 
 // --- Port parameter/result types ---
 export type { CompileProgramArgs, DebugCompileArgs, ExportXmlArgs } from './compiler-port'
+export type { OrchestratorDevice, OrchestratorInfo } from './orchestrator-port'
 export type {
   CreatePouParams,
   CreateProjectParams,
@@ -140,5 +151,4 @@ export type {
   RuntimeStatusResult,
   UsersInfoResult,
 } from './runtime-port'
-export type { OrchestratorDevice, OrchestratorInfo } from './orchestrator-port'
 export type { ThemeVariant } from './theme-port'

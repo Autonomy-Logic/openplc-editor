@@ -1,11 +1,11 @@
 import type * as monaco from 'monaco-editor'
 
+import type { AICompleteParams, AIPort } from '../../../../../../../middleware/shared/ports/ai-port'
 import { openPLCStoreBase } from '../../../../../../store'
-import { getEdgeApiBaseUrl } from '../../../../../../utils/get-env'
 import { buildFIMContext } from './context-builder'
 
 // ---------------------------------------------------------------------------
-// Inline utilities (self-contained — AI services are web-only)
+// Inline utilities
 // ---------------------------------------------------------------------------
 
 class CompletionCache<V> {
@@ -54,116 +54,11 @@ function hashString(str: string): string {
   return (hash >>> 0).toString(36)
 }
 
-// ---------------------------------------------------------------------------
-// Telemetry stubs — fire-and-forget, no-op when AI services are unavailable
-// ---------------------------------------------------------------------------
-
 type TelemetryTimer = { elapsed: () => number }
 
 function startTimer(): TelemetryTimer {
   const start = performance.now()
   return { elapsed: () => Math.round(performance.now() - start) }
-}
-
-function trackCompletionRequested(_data: Record<string, unknown>): void {}
-
-function trackCompletionShown(_data: Record<string, unknown>): void {}
-
-function trackCompletionAccepted(_data: Record<string, unknown>): void {}
-
-function trackCompletionDismissed(_data: Record<string, unknown>): void {}
-
-function trackCompletionError(_data: Record<string, unknown>): void {}
-
-function trackCompletionTimeout(_data: Record<string, unknown>): void {}
-
-// ---------------------------------------------------------------------------
-// AI request types & streaming (self-contained)
-// ---------------------------------------------------------------------------
-
-type AICompleteRequest = {
-  prefix: string
-  suffix: string
-  language: 'st' | 'il' | 'python' | 'cpp'
-  projectContext?: string
-  model?: 'haiku' | 'sonnet'
-  maxTokens?: number
-}
-
-class AIRequestError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly retryAfter?: number,
-  ) {
-    super(message)
-    this.name = 'AIRequestError'
-  }
-}
-
-type AISSEEvent = { type: string; text?: string }
-
-function parseSSELine(line: string): AISSEEvent | null {
-  if (!line.startsWith('data: ')) return null
-  const data = line.slice(6)
-  if (data === '[DONE]') return { type: 'message_stop' }
-  try {
-    return JSON.parse(data) as AISSEEvent
-  } catch {
-    return null
-  }
-}
-
-async function* streamAIRequest(
-  endpoint: string,
-  body: AICompleteRequest,
-  signal?: AbortSignal,
-): AsyncGenerator<string, void, unknown> {
-  const baseUrl = `${getEdgeApiBaseUrl()}/ai`
-
-  const response = await fetch(`${baseUrl}${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(body),
-    signal,
-  })
-
-  if (!response.ok) {
-    if (response.status === 429) {
-      const retryAfter = response.headers.get('Retry-After')
-      throw new AIRequestError(
-        'Rate limited. Please wait before trying again.',
-        429,
-        retryAfter ? Number(retryAfter) : undefined,
-      )
-    }
-    throw new AIRequestError(`AI request failed: ${response.statusText}`, response.status)
-  }
-
-  const reader = response.body?.getReader()
-  if (!reader) return
-
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-
-    for (const line of lines) {
-      const event = parseSSELine(line.trim())
-      if (!event) continue
-      if (event.type === 'message_stop') return
-      if (event.type === 'content_block_delta' && event.text) {
-        yield event.text
-      }
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +79,7 @@ type ShownCompletion = {
 
 /**
  * Monaco InlineCompletionsProvider powered by the AI backend.
- * Streams inline completions via SSE with caching, debouncing, and request cancellation.
+ * Streams inline completions via the AIPort with caching, debouncing, and request cancellation.
  */
 export class AIInlineCompletionProvider implements monaco.languages.InlineCompletionsProvider {
   private activeAbortController: AbortController | null = null
@@ -198,6 +93,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
   constructor(
     private readonly pouName: string,
     private readonly language: 'st' | 'il' | 'python' | 'cpp',
+    private readonly aiPort: AIPort,
   ) {}
 
   async provideInlineCompletions(
@@ -267,7 +163,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     const timer = startTimer()
 
     try {
-      const request: AICompleteRequest = {
+      const request: AICompleteParams = {
         prefix: fimContext.prefix,
         suffix: fimContext.suffix,
         language: fimContext.language,
@@ -276,7 +172,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         maxTokens: 256,
       }
 
-      trackCompletionRequested({
+      this.aiPort.sendTelemetry('completion_requested', {
         language: this.language,
         model: currentModel,
         prefixLength: request.prefix.length,
@@ -287,7 +183,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       // 6a. Start client-side timeout
       const timeoutId = setTimeout(() => {
         this.activeAbortController?.abort()
-        trackCompletionTimeout({
+        this.aiPort.sendTelemetry('completion_timeout', {
           language: this.language,
           model: currentModel,
           timeoutMs: AIInlineCompletionProvider.TIMEOUT_MS,
@@ -296,7 +192,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
 
       let completion = ''
       let ttftMs = -1
-      for await (const chunk of streamAIRequest('/complete', request, signal)) {
+      for await (const chunk of this.aiPort.streamCompletion(request, signal)) {
         if (ttftMs < 0) {
           ttftMs = timer.elapsed()
           clearTimeout(timeoutId)
@@ -333,24 +229,15 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return emptyResult
 
-      if (error instanceof AIRequestError) {
-        trackCompletionError({
-          language: this.language,
-          model: currentModel,
-          errorType: 'api_error',
-          statusCode: error.status,
-          latencyMs: timer.elapsed(),
-        })
-        console.warn(`[AI Completion] ${error.status}: ${error.message}`)
-      } else {
-        trackCompletionError({
-          language: this.language,
-          model: currentModel,
-          errorType: error instanceof Error ? error.name : 'unknown',
-          latencyMs: timer.elapsed(),
-        })
-        console.warn('[AI Completion] Unexpected error:', error)
-      }
+      const statusCode = (error as { status?: number }).status
+      this.aiPort.sendTelemetry('completion_error', {
+        language: this.language,
+        model: currentModel,
+        errorType: statusCode ? 'api_error' : error instanceof Error ? error.name : 'unknown',
+        ...(statusCode !== undefined && { statusCode }),
+        latencyMs: timer.elapsed(),
+      })
+      console.warn('[AI Completion]', error instanceof Error ? error.message : error)
       return emptyResult
     }
   }
@@ -385,7 +272,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       model,
       shownAt: performance.now(),
     }
-    trackCompletionShown({
+    this.aiPort.sendTelemetry('completion_shown', {
       language: this.language,
       model: openPLCStoreBase.getState().ai.model,
       completionLength: completionText.length,
@@ -409,12 +296,20 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       const accepted = textAfterPosition.startsWith(text.split('\n')[0])
 
       if (accepted) {
-        trackCompletionAccepted({ language: this.language, completionLength: text.length })
+        this.aiPort.sendTelemetry('completion_accepted', { language: this.language, completionLength: text.length })
       } else {
-        trackCompletionDismissed({ language: this.language, completionLength: text.length, shownDurationMs })
+        this.aiPort.sendTelemetry('completion_dismissed', {
+          language: this.language,
+          completionLength: text.length,
+          shownDurationMs,
+        })
       }
     } catch {
-      trackCompletionDismissed({ language: this.language, completionLength: text.length, shownDurationMs })
+      this.aiPort.sendTelemetry('completion_dismissed', {
+        language: this.language,
+        completionLength: text.length,
+        shownDurationMs,
+      })
     }
   }
 

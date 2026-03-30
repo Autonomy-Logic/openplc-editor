@@ -97,3 +97,7 @@ export function useTheme() {
 export function useCapabilities() {
   return usePlatform().capabilities
 }
+
+export function useAI() {
+  return usePlatform().ai
+}

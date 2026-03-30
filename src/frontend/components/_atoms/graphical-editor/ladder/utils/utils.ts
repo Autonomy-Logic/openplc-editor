@@ -1,12 +1,12 @@
 import { Position } from '@xyflow/react'
 import { ZodLiteral } from 'zod'
 
-import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'
 import { baseTypeSchema, genericTypeSchema } from '../../../../../../middleware/shared/ports'
 import type { EditorModel } from '../../../../../store/slices/editor'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
+import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import { buildHandle } from '../handle'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
 import type { BasicNodeData, BlockVariant } from './types'
@@ -187,7 +187,7 @@ export const getVariableRestrictionType = (variableType: string) => {
     }
   }
 
-  const isABaseType = baseTypeSchema.safeParse(variableType)
+  const isABaseType = baseTypeSchema.safeParse(variableType.toLowerCase())
 
   return {
     // For base types, lowercase is fine (they're standardized and compared case-insensitively)
