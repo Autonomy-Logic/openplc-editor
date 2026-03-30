@@ -8,10 +8,14 @@
  * (IPC to main process, HTTP, WebRTC, simulator virtual serial port, etc.).
  *
  * Polling behavior:
+ * - Polls ONLY variables that are actively needed (watched, forced, graphed,
+ *   visible on the active diagram, or referenced in ST/IL source text)
  * - Single-batch-per-cycle with round-robin offset
  * - Dynamic batch sizing (halves on ERROR_OUT_OF_MEMORY)
  * - lastIndex-aware advancement (runtime may return partial data)
  * - isPolling guard to skip tick if previous poll is in progress
+ * - Diagram/source scan results are cached per {pouName, language, fbContext}
+ *   since the editor is read-only during debug
  *
  * Polling intervals:
  * - Simulator board: 50ms  (Modbus RTU frame timing)
@@ -22,7 +26,8 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import type { DebugTreeNode } from '../../middleware/shared/ports/types'
 import { useDebugger } from '../../middleware/shared/providers'
-import { useOpenPLCStore } from '../store'
+import { openPLCStoreBase, useOpenPLCStore } from '../store'
+import { buildActiveIndexSet } from '../utils/debug-polling-filter'
 import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 
 /** Polling interval for simulator boards (Modbus RTU). */
@@ -38,8 +43,9 @@ const MIN_BATCH_SIZE = 2
 
 /**
  * Collect ALL leaf indexes from a tree (ignoring expansion state).
+ * Used to build the full index→metadata lookup for parsing responses.
  */
-function collectAllLeafIndexes(nodes: DebugTreeNode[]): Map<number, { compositeKey: string; type: string }> {
+function collectAllLeafMeta(nodes: DebugTreeNode[]): Map<number, { compositeKey: string; type: string }> {
   const result = new Map<number, { compositeKey: string; type: string }>()
 
   function walk(node: DebugTreeNode) {
@@ -77,49 +83,66 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   // Dynamic batch size — starts at max, halves on memory errors
   const batchSizeRef = useRef(DEFAULT_BATCH_SIZE)
 
-  // Cached leaf index data — computed once when debugger starts, cleared when it stops.
-  const cachedLeavesRef = useRef<Map<number, { compositeKey: string; type: string }> | null>(null)
-  const cachedSortedIndexesRef = useRef<number[]>([])
+  // Full leaf index→metadata map — computed once when debugger starts.
+  const allLeavesRef = useRef<Map<number, { compositeKey: string; type: string }> | null>(null)
 
-  const getLeafData = useCallback(() => {
-    if (cachedLeavesRef.current) {
-      return { allLeaves: cachedLeavesRef.current, sortedIndexes: cachedSortedIndexesRef.current }
-    }
+  // Cache for diagram/source-visible variable scan results.
+  // Keyed by {pouName, language, fbContextKey}. Invalidated on POU/FB switch.
+  const visibleVarsCacheRef = useRef<{
+    pouName: string
+    language: string
+    fbContextKey: string
+    keys: Set<string>
+  } | null>(null)
+
+  /** Build the full leaf metadata map from all debug trees (once per session). */
+  const getAllLeaves = useCallback(() => {
+    if (allLeavesRef.current) return allLeavesRef.current
 
     const allTrees = debugTreesRef.current
     const allLeaves = new Map<number, { compositeKey: string; type: string }>()
     for (const pouTrees of Object.values(allTrees)) {
-      const leaves = collectAllLeafIndexes(pouTrees)
+      const leaves = collectAllLeafMeta(pouTrees)
       for (const [index, meta] of leaves) {
         allLeaves.set(index, meta)
       }
     }
 
     if (allLeaves.size > 0) {
-      cachedLeavesRef.current = allLeaves
-      cachedSortedIndexesRef.current = Array.from(allLeaves.keys()).sort((a, b) => a - b)
+      allLeavesRef.current = allLeaves
     }
 
-    return { allLeaves, sortedIndexes: cachedSortedIndexesRef.current }
+    return allLeaves
   }, [debugTreesRef])
 
   /**
    * Poll one batch of variables from the runtime.
    */
   const pollVariables = useCallback(async () => {
-    const { allLeaves, sortedIndexes } = getLeafData()
+    const allLeaves = getAllLeaves()
     if (allLeaves.size === 0) return
+
+    // Build the filtered set of indexes to poll this tick
+    const state = openPLCStoreBase.getState()
+    const { activeIndexes, cacheResult } = buildActiveIndexSet(state, allLeaves, visibleVarsCacheRef.current)
+
+    // Update the diagram/source cache if it changed
+    if (cacheResult !== visibleVarsCacheRef.current) {
+      visibleVarsCacheRef.current = cacheResult
+    }
+
+    if (activeIndexes.length === 0) return
 
     let currentBatchSize = batchSizeRef.current
 
     // Clamp offset to valid range
     let batchOffset = batchOffsetRef.current
-    if (batchOffset >= sortedIndexes.length) {
+    if (batchOffset >= activeIndexes.length) {
       batchOffset = 0
     }
 
     // Slice one batch from the current offset
-    let batch = sortedIndexes.slice(batchOffset, batchOffset + currentBatchSize)
+    let batch = activeIndexes.slice(batchOffset, batchOffset + currentBatchSize)
 
     // Request variables from runtime via debugger port
     let result = await debuggerPort.getVariablesList(batch)
@@ -133,7 +156,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         level: 'warning',
         message: `Reduced debug batch size to ${currentBatchSize} due to runtime memory error.`,
       })
-      batch = sortedIndexes.slice(batchOffset, batchOffset + currentBatchSize)
+      batch = activeIndexes.slice(batchOffset, batchOffset + currentBatchSize)
       result = await debuggerPort.getVariablesList(batch)
     }
 
@@ -181,9 +204,9 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
     // Advance offset for next poll cycle (wraps around)
     if (itemsProcessed > 0) {
-      batchOffsetRef.current = (batchOffset + itemsProcessed) % sortedIndexes.length
+      batchOffsetRef.current = (batchOffset + itemsProcessed) % activeIndexes.length
     }
-  }, [debuggerPort, getLeafData, workspaceActions, consoleActions])
+  }, [debuggerPort, getAllLeaves, workspaceActions, consoleActions])
 
   // Ref-based poll so the interval never resets due to callback identity changes
   const pollRef = useRef(pollVariables)
@@ -203,6 +226,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       batchSizeRef.current = isSimulatorBoard ? RTU_BATCH_SIZE : DEFAULT_BATCH_SIZE
       batchOffsetRef.current = 0
       lastResponseTimestampRef.current = 0
+      visibleVarsCacheRef.current = null
 
       const pollIntervalMs = isSimulatorBoard ? SIMULATOR_POLL_INTERVAL_MS : DEFAULT_POLL_INTERVAL_MS
 
@@ -248,8 +272,8 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         clearInterval(staleCheckRef.current)
         staleCheckRef.current = null
       }
-      cachedLeavesRef.current = null
-      cachedSortedIndexesRef.current = []
+      allLeavesRef.current = null
+      visibleVarsCacheRef.current = null
       batchOffsetRef.current = 0
     }
   }, [isDebuggerVisible, isSimulatorBoard, workspaceActions])
