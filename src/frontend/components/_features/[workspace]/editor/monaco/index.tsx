@@ -124,6 +124,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
   const [editorMounted, setEditorMounted] = useState(false)
+  const [modelVersion, setModelVersion] = useState(0)
   const isSyncingModelRef = useRef(false)
 
   const capabilities = useCapabilities()
@@ -300,6 +301,18 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [pou?.pouType, name, language, capabilities.hasFileWatcher])
 
+  // Track when @monaco-editor/react switches models (tab changes with keepCurrentModel).
+  // onMount only fires once on initial mount, so we use onDidChangeModel to detect when the
+  // model has actually switched, then bump modelVersion to trigger debugVarPositions recomputation.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const disposable = editor.onDidChangeModel(() => {
+      setModelVersion((v) => v + 1)
+    })
+    return () => disposable.dispose()
+  }, [editorMounted])
+
   // Update readOnly when debugger visibility changes (editor-only)
   useEffect(() => {
     editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
@@ -325,10 +338,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }, [debugVariableValues])
 
   const debugVarPositions = useMemo(() => {
-    if (!isDebuggerVisible || !editorRef.current || (language !== 'st' && language !== 'il')) return null
+    if (!isDebuggerVisible || !editorRef.current || !monacoRef.current || (language !== 'st' && language !== 'il'))
+      return null
 
     const model = editorRef.current.getModel()
     if (!model) return null
+
+    // Guard: ensure the model matches the current POU. During tab switches the memo may
+    // fire before @monaco-editor/react has swapped the model, so we'd scan the wrong file.
+    const expectedUri = monacoRef.current.Uri.file(uniqueMonacoPath).toString()
+    if (model.uri.toString() !== expectedUri) return null
 
     const prefix = fbInstanceContext
       ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
@@ -370,7 +389,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     return { prefix, positions }
-  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted])
+  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
 
   useEffect(() => {
     if (!debugVarPositions || !editorRef.current) return
