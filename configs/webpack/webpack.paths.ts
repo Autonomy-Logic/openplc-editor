@@ -4,7 +4,7 @@ const rootPath = join(__dirname, '../..')
 
 const dllPath = join(__dirname, '../dll')
 
-const srcPath = join(rootPath, 'src_old')
+const srcPath = join(rootPath, 'src')
 const srcMainPath = join(srcPath, 'main')
 const srcRendererPath = join(srcPath, 'renderer')
 

@@ -14,10 +14,7 @@
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
     "lint": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx}",
     "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --debug --fix",
-    "lint:old": "cross-env NODE_ENV=development eslint ./src_old/**/*.{ts,tsx}",
-    "lint:old:fix": "cross-env NODE_ENV=development eslint ./src_old/**/*.{ts,tsx} --debug --fix",
     "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
-    "format:old": "cross-env NODE_ENV=development prettier --write \"./src_old/**/*.{ts,tsx}\"",
     "postinstall": "ts-node scripts/download-binaries.ts && ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "setup:binaries": "ts-node scripts/download-binaries.ts",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
@@ -25,16 +22,10 @@
     "prestart": "ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",
     "start:dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
-    "start:electron": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer\" \"cross-env PORT=1313 electronmon .\"",
+    "dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer\" \"cross-env PORT=1313 electronmon .\"",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
-    "prestart:old": "ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.old.dev.ts",
-    "start:dev:old": "ts-node scripts/check-port-in-use.js && npm run prestart:old && npm run start:renderer:old",
-    "start:main:old": "concurrently -k \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./configs/webpack/webpack.config.main.old.dev.ts\" \"electronmon .\"",
-    "start:renderer:old": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.old.dev.ts",
     "test": "jest --collectCoverage",
     "test:watch": "jest --watch --no-coverage",
-    "test:old": "jest --config jest.config.old.json --collectCoverage --",
-    "test:old:unit": "jest --config jest.config.old.json --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",
     "prepare": "husky"
@@ -188,8 +179,7 @@
       "!node_modules",
       "!node_modules/**/*",
       "!.*",
-      "src/**/*",
-      "src_old/**/*"
+      "src/**/*"
     ],
     "logLevel": "quiet"
   },
@@ -197,10 +187,6 @@
     "./src/**/*": [
       "npm run lint:fix",
       "npm run format"
-    ],
-    "./src_old/**/*": [
-      "npm run lint:old:fix",
-      "npm run format:old"
     ]
   }
 }
