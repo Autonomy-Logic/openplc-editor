@@ -12,7 +12,6 @@ import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../u
 import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
-import { AIInlineCompletionProvider } from './ai-completion/ai-inline-completion-provider'
 import { AIConsentModal } from './ai-consent-modal'
 import { AIStatusIndicator } from './ai-status-indicator'
 import {
@@ -742,15 +741,15 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       return
     }
 
-    if (!aiPort) return
+    if (!aiPort?.registerInlineCompletions) return
 
-    const provider = new AIInlineCompletionProvider(name, language, aiPort)
-    const disposable = monaco.languages.registerInlineCompletionsProvider(language, provider)
+    const registration = aiPort.registerInlineCompletions({
+      monacoInstance: monaco,
+      pouName: name,
+      language,
+    })
 
-    return () => {
-      disposable.dispose()
-      provider.dispose()
-    }
+    return () => registration.dispose()
   }, [name, language, aiState.isEnabled, aiState.hasConsented, modalActions, capabilities.hasAIAssistant, aiPort])
 
   // -----------------------------------------------------------------------
