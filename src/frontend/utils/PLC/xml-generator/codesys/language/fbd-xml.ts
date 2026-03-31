@@ -1,9 +1,11 @@
 import { CustomFbdNodeTypes } from '@root/frontend/components/_atoms/graphical-editor/fbd'
 import { BlockNode } from '@root/frontend/components/_atoms/graphical-editor/fbd/block'
-import { CommentNode } from '@root/frontend/components/_atoms/graphical-editor/fbd/comment'
-import { ConnectionNode } from '@root/frontend/components/_atoms/graphical-editor/fbd/connection'
-import { BasicNodeData } from '@root/frontend/components/_atoms/graphical-editor/fbd/utils'
-import { VariableNode } from '@root/frontend/components/_atoms/graphical-editor/fbd/variable'
+import {
+  BasicNodeData,
+  CommentNode,
+  ConnectionNode,
+  VariableNode,
+} from '@root/frontend/components/_atoms/graphical-editor/fbd/utils/types'
 import { BlockVariant } from '@root/frontend/components/_atoms/graphical-editor/types/block'
 import { FBDRungState } from '@root/frontend/store/slices'
 import {

@@ -1,6 +1,5 @@
+import { CONSTANTS } from '@root/frontend/utils/app-constants'
 import { z } from 'zod'
-
-import { CONSTANTS } from '../../../utils'
 
 const {
   theme: { variants },

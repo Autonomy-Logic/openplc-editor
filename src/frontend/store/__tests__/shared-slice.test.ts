@@ -981,6 +981,7 @@ describe('createSharedSlice', () => {
             Main: {
               past: [],
               future: [{ variables: [], body: 'redo-body' }],
+              savedAtDepth: null,
             },
           },
         })

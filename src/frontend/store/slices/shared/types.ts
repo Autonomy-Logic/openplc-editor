@@ -56,11 +56,15 @@ export type PouHistorySnapshot = {
   variables: PLCVariable[]
   body: unknown
   globalVariables?: PLCVariable[]
+  ladderFlow?: unknown
+  fbdFlow?: unknown
 }
 
 export type PouHistory = {
   past: PouHistorySnapshot[]
   future: PouHistorySnapshot[]
+  /** Depth of the past stack when the file was last saved. null = never saved or diverged. */
+  savedAtDepth: number | null
 }
 
 // ---------------------------------------------------------------------------

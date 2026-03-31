@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@root/utils/get-error-message'
+import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { Socket } from 'net'
 
 export enum ModbusFunctionCode {

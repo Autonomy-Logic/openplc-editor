@@ -69,7 +69,7 @@ export function migrateProjectToNameTypeSystem(projectData: PLCProjectData): {
       if (dataType.derivation === 'structure' && dataType.variable) {
         const structureVariableCount = dataType.variable.length
         dataType.variable = dataType.variable.map((structVar) => {
-          const { id, ...structVarWithoutId } = structVar
+          const { id, ...structVarWithoutId } = structVar as typeof structVar & { id?: unknown }
           return structVarWithoutId
         })
         report.variablesMigrated += structureVariableCount
@@ -78,13 +78,13 @@ export function migrateProjectToNameTypeSystem(projectData: PLCProjectData): {
     })
 
     migratedProject.configuration.resource.tasks = migratedProject.configuration.resource.tasks.map((task) => {
-      const { id, ...taskWithoutId } = task
+      const { id, ...taskWithoutId } = task as typeof task & { id?: unknown }
       return taskWithoutId
     })
 
     migratedProject.configuration.resource.instances = migratedProject.configuration.resource.instances.map(
       (instance) => {
-        const { id, ...instanceWithoutId } = instance
+        const { id, ...instanceWithoutId } = instance as typeof instance & { id?: unknown }
         return instanceWithoutId
       },
     )

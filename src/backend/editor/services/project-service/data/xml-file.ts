@@ -1,4 +1,4 @@
-import { formatDate } from '../../../../utils'
+import { formatDate } from '@root/frontend/utils/format-date'
 
 export const baseXmlStructure = {
   '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',

@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@root/utils/get-error-message'
+import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { exec } from 'child_process'
 import { app } from 'electron'
 import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'

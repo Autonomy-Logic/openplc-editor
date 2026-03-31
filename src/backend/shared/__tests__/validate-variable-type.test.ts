@@ -1,4 +1,4 @@
-import { getVariableRestrictionType, validateVariableType } from '../validate-variable-type'
+import { getVariableRestrictionType, validateVariableType } from '@root/frontend/utils/PLC/validate-variable-type'
 
 describe('validateVariableType', () => {
   it('returns valid for exact type match', () => {
@@ -72,7 +72,7 @@ describe('getVariableRestrictionType', () => {
   it('returns base-type for known base types', () => {
     const result = getVariableRestrictionType('BOOL')
     expect(result.definition).toBe('base-type')
-    expect(result.values).toBe('bool')
+    expect(result.values).toBe('BOOL')
   })
 
   it('returns derived for unknown types', () => {
@@ -91,6 +91,6 @@ describe('getVariableRestrictionType', () => {
     const result = getVariableRestrictionType('ANY_STRING')
     expect(result.definition).toBe('base-type')
     expect(Array.isArray(result.values)).toBe(true)
-    expect(result.values as string[]).toContain('string')
+    expect(result.values as string[]).toContain('STRING')
   })
 })

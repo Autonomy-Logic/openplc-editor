@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@root/utils/get-error-message'
+import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { io, Socket } from 'socket.io-client'
 
 import { ModbusDebugResponse, ModbusFunctionCode } from '../modbus/modbus-client'
@@ -141,7 +141,7 @@ export class WebSocketDebugClient {
           const md5String = responseBuffer.slice(2).toString('utf-8').trim()
           resolve(md5String)
         } catch (error) {
-          reject(error instanceof Error ? error : new Error(getErrorMessage(error) as string))
+          reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
         }
       }
 

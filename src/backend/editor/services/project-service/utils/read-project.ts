@@ -1,3 +1,16 @@
+import { getDefaultSchemaValues } from '@root/frontend/utils/default-zod-schema-values'
+import {
+  migrateProjectToNameTypeSystem,
+  needsMigration,
+} from '@root/frontend/utils/migrate-project-to-name-type-system'
+import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
+import {
+  detectLanguageFromExtension,
+  parseGraphicalPouFromString,
+  parseHybridPouFromString,
+  parseTextualPouFromString,
+} from '@root/frontend/utils/PLC/pou-text-parser'
+import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import { projectDefaultFilesMapSchema, projectPouDirectories } from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
@@ -10,16 +23,6 @@ import {
   PLCServer,
   PLCServerSchema,
 } from '@root/types/PLC/open-plc'
-import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { migrateProjectToNameTypeSystem, needsMigration } from '@root/utils/migrate-project-to-name-type-system'
-import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
-import {
-  detectLanguageFromExtension,
-  parseGraphicalPouFromString,
-  parseHybridPouFromString,
-  parseTextualPouFromString,
-} from '@root/utils/PLC/pou-text-parser'
-import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, extname, join, sep } from 'path'
 import { ZodTypeAny } from 'zod'
@@ -341,11 +344,11 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
     let pou: PLCPou
 
     if (language === 'st' || language === 'il') {
-      pou = parseTextualPouFromString(fileContent, language, pouType)
+      pou = parseTextualPouFromString(fileContent, language, pouType) as unknown as PLCPou
     } else if (language === 'python' || language === 'cpp') {
-      pou = parseHybridPouFromString(fileContent, language, pouType)
+      pou = parseHybridPouFromString(fileContent, language, pouType) as unknown as PLCPou
     } else if (language === 'ld' || language === 'fbd') {
-      pou = parseGraphicalPouFromString(fileContent, language, pouType)
+      pou = parseGraphicalPouFromString(fileContent, language, pouType) as unknown as PLCPou
     } else {
       throw new Error(`Unsupported language: ${language}`)
     }
@@ -364,7 +367,7 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
     const oldFormatPou = {
       type: portPou.pouType,
       data: {
-        language: language as 'st' | 'il' | 'ld' | 'fbd' | 'python' | 'cpp',
+        language: language,
         name: portPou.name,
         variables: portPou.interface?.variables ?? [],
         ...(portPou.pouType === 'function' ? { returnType: portPou.interface?.returnType ?? '' } : {}),

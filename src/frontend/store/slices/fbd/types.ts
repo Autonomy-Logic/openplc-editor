@@ -91,7 +91,7 @@ type FBDFlowSlice = FBDFlowState & {
   fbdFlowActions: FBDFlowActions
 }
 
-export type { FBDFlowActions, FBDFlowSlice, FBDFlowState, FBDFlowType, FBDRungState }
+export type { FBDFlowActions, FBDFlowSlice, FBDFlowState, FBDFlowType }
 
 /**
  * Zod exports

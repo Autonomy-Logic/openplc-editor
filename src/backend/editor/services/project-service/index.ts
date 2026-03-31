@@ -1,16 +1,16 @@
+import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
+import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
-import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
+import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '@root/types/PLC/open-plc'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
-import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '../../../types/PLC/open-plc'
 import { fileOrDirectoryExists, ipcPouToFlat } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
@@ -27,7 +27,7 @@ class ProjectService {
   async getProjectName(projectPath: string): Promise<string> {
     try {
       const projectFile = await promises.readFile(projectPath, 'utf-8')
-      return ((JSON.parse(projectFile) as PLCProject).meta.name as string) || 'Unknown project'
+      return (JSON.parse(projectFile) as PLCProject).meta.name || 'Unknown project'
     } catch {
       console.error('Error reading project file', projectPath)
       return 'Unknown project'
@@ -299,7 +299,6 @@ class ProjectService {
 
         // Write/update each POU file
         for (const pou of pous) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
           const flat = ipcPouToFlat(pou)
           const extension: string = getExtensionFromLanguage(flat.body.language)
           const filePath = join(dir, `${flat.name}${extension}`)
@@ -453,7 +452,6 @@ class ProjectService {
       const isPou = typeof content === 'object' && content !== null && 'type' in content && 'data' in content
 
       if (isPou) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         const flat = ipcPouToFlat(content as PLCPou)
 
         let actualFilePath = filePath

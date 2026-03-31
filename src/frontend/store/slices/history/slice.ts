@@ -10,6 +10,7 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
     'default-history': {
       past: [],
       future: [],
+      savedAtDepth: null,
     },
   },
   historyActions: {
@@ -17,7 +18,7 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
       setState(
         produce(({ history }: HistorySlice) => {
           if (history[pouName] === undefined) {
-            history[pouName] = { past: [], future: [] }
+            history[pouName] = { past: [], future: [], savedAtDepth: null }
           }
 
           history[pouName].future = []
@@ -33,7 +34,7 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
       setState(
         produce(({ history }: HistorySlice) => {
           if (history[pouName] === undefined) {
-            history[pouName] = { past: [], future: [] }
+            history[pouName] = { past: [], future: [], savedAtDepth: null }
           }
 
           history[pouName].future.push(snapshot)
@@ -46,7 +47,7 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
       setState(
         produce(({ history }: HistorySlice) => {
           if (history[pouName] === undefined) {
-            history[pouName] = { past: [], future: [] }
+            history[pouName] = { past: [], future: [], savedAtDepth: null }
             popped = undefined
             return
           }
@@ -71,7 +72,7 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
       setState(
         produce(({ history }: HistorySlice) => {
           if (history[pouName] === undefined) {
-            history[pouName] = { past: [], future: [] }
+            history[pouName] = { past: [], future: [], savedAtDepth: null }
             popped = undefined
             return
           }
@@ -101,6 +102,7 @@ const createHistorySlice: StateCreator<HistorySlice, [], [], HistorySlice> = (se
           history['default-history'] = {
             past: [],
             future: [],
+            savedAtDepth: null,
           }
         }),
       )
