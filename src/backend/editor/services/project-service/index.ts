@@ -450,22 +450,27 @@ class ProjectService {
         await promises.mkdir(dir, { recursive: true })
       }
 
-      const isPou = typeof content === 'object' && content !== null && 'type' in content && 'data' in content
-
-      if (isPou) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        const flat = ipcPouToFlat(content as PLCPou)
-
-        let actualFilePath = filePath
-        if (filePath.endsWith('.json')) {
-          const extension: string = getExtensionFromLanguage(flat.body.language)
-          actualFilePath = filePath.replace(/\.json$/, extension)
-        }
-
-        const textContent: string = serializePouToText(flat)
-        await promises.writeFile(actualFilePath, textContent, 'utf-8')
+      if (typeof content === 'string') {
+        // Pre-serialized content from frontend — write as-is
+        await promises.writeFile(filePath, content, 'utf-8')
       } else {
-        await promises.writeFile(filePath, JSON.stringify(content, null, 2))
+        const isPou = typeof content === 'object' && content !== null && 'type' in content && 'data' in content
+
+        if (isPou) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          const flat = ipcPouToFlat(content as PLCPou)
+
+          let actualFilePath = filePath
+          if (filePath.endsWith('.json')) {
+            const extension: string = getExtensionFromLanguage(flat.body.language)
+            actualFilePath = filePath.replace(/\.json$/, extension)
+          }
+
+          const textContent: string = serializePouToText(flat)
+          await promises.writeFile(actualFilePath, textContent, 'utf-8')
+        } else {
+          await promises.writeFile(filePath, JSON.stringify(content, null, 2))
+        }
       }
 
       return {

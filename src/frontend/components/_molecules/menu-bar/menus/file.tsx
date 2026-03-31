@@ -1,11 +1,11 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { useCallback, useEffect } from 'react'
+import { useEffect } from 'react'
 
 import { useCapabilities, useProject } from '../../../../../middleware/shared/providers'
 import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { useOpenPLCStore } from '../../../../store'
-import { executeSaveProject } from '../../../../utils/save-actions'
+import { executeSaveActiveFile, executeSaveProject } from '../../../../utils/save-actions'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
@@ -27,20 +27,15 @@ export const FileMenu = () => {
 
   const isSaving = editingState === 'save-request'
 
-  const executeSave = useCallback(
-    () => executeSaveProject(projectPort),
-    [projectPort],
-  )
-
   const handleSave = () => {
     if (activeEditor.meta.name && !isSaving) {
-      void executeSave()
+      void executeSaveActiveFile(projectPort)
     }
   }
 
   const handleSaveProject = () => {
     if (!isSaving) {
-      void executeSave()
+      void executeSaveProject(projectPort)
     }
   }
 

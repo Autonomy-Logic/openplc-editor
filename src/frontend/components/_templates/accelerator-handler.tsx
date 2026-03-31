@@ -10,7 +10,7 @@ import {
 } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
-import { executeSaveProject } from '../../utils/save-actions'
+import { executeSaveActiveFile, executeSaveProject } from '../../utils/save-actions'
 import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {
@@ -246,11 +246,11 @@ const AcceleratorHandler = () => {
   }, [selectedProjectTreeLeaf, accelerator, removeTab])
 
   /**
-   * Save file (Cmd+S) — saves entire project since files are part of project XML
+   * Save file (Cmd+S) — saves only the active file
    */
   useEffect(() => {
     const unsub = accelerator.onSaveFile(() => {
-      void executeSave()
+      void executeSaveActiveFile(projectPort)
     })
     return unsub
   }, [accelerator, executeSave])
