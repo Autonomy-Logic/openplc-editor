@@ -143,13 +143,11 @@ const VariableElement = (block: VariableProps) => {
       setIsAVariable(false)
     } else {
       const nodeVariableName = (variableNode as VariableNode).data.variable.name
-      const nodeVarRef = (variableNode as VariableNode).data.variable
 
       const namesMatchCI = variable.name.toLowerCase() === nodeVariableName.toLowerCase()
       const caseDiffers = variable.name !== nodeVariableName
-      const refStale = nodeVarRef !== variable
 
-      if (!namesMatchCI || caseDiffers || refStale) {
+      if (!namesMatchCI || caseDiffers) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,

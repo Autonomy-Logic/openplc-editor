@@ -473,7 +473,9 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (snapshot) {
             const flowIndex = ladderFlows.findIndex((ladderFlow) => ladderFlow.name === editorName)
             const rungs = snapshot.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
-            const newFlow = { ...snapshot, name: editorName, rungs }
+            // Don't set updated: true — snapshot restore is managed by the undo/redo
+            // handler which controls the saved flag directly.
+            const newFlow = { ...snapshot, name: editorName, rungs, updated: false }
 
             if (flowIndex === -1) {
               ladderFlows.push(newFlow)

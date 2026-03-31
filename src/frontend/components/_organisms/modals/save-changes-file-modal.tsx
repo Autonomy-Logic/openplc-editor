@@ -31,6 +31,7 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
     sharedWorkspaceActions: { forceCloseFile },
     fileActions: { updateFile, setAllToSaved },
     workspaceActions: { setEditingState },
+    snapshotActions: { markAllSaved },
     ladderFlowActions: { addLadderFlow },
     fbdFlowActions: { addFBDFlow },
   } = useOpenPLCStore()
@@ -62,6 +63,7 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
 
     setEditingState('saved')
     setAllToSaved()
+    markAllSaved()
     forceCloseFile(fileName)
   }
 

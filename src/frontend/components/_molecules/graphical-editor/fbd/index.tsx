@@ -593,8 +593,9 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   )
 
   const onNodeDragStart = useCallback(() => {
+    captureAndPush(editor.meta.name)
     setDragging(true)
-  }, [rungLocal, dragging])
+  }, [rungLocal, dragging, captureAndPush, editor.meta.name])
 
   /**
    * When the node drag stops, update the fbd rung state

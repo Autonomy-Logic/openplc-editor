@@ -1,12 +1,14 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { toast } from '../../../utils/toast'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
+import type { HistorySnapshot } from '../history'
 import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
 import { CreateEditorObjectFromTab } from '../tabs/utils'
@@ -385,34 +387,28 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           const updateLadderNode = freshState.ladderFlowActions.updateNode
           const updateFBDNode = freshState.fbdFlowActions.updateNode
 
-          ladderPous.forEach((pou) => {
-            const freshPou = freshPous.find((p) => p.name === pou.name)
-            if (freshPou) {
-              const pouFlow = freshLadderFlows.filter((flow) => flow.name === pou.name)
-              if (pouFlow.length > 0) {
-                syncNodesWithVariables(freshPou.interface?.variables ?? [], pouFlow, updateLadderNode)
+          try {
+            ladderPous.forEach((pou) => {
+              const freshPou = freshPous.find((p) => p.name === pou.name)
+              if (freshPou) {
+                const pouFlow = freshLadderFlows.filter((flow) => flow.name === pou.name)
+                if (pouFlow.length > 0) {
+                  syncNodesWithVariables(freshPou.interface?.variables ?? [], pouFlow, updateLadderNode)
+                }
               }
-            }
-          })
+            })
 
-          fbdPous.forEach((pou) => {
-            const freshPou = freshPous.find((p) => p.name === pou.name)
-            if (freshPou) {
-              const pouFlow = freshFBDFlows.filter((flow) => flow.name === pou.name)
-              if (pouFlow.length > 0) {
-                syncNodesWithVariablesFBD(freshPou.interface?.variables ?? [], pouFlow, updateFBDNode)
+            fbdPous.forEach((pou) => {
+              const freshPou = freshPous.find((p) => p.name === pou.name)
+              if (freshPou) {
+                const pouFlow = freshFBDFlows.filter((flow) => flow.name === pou.name)
+                if (pouFlow.length > 0) {
+                  syncNodesWithVariablesFBD(freshPou.interface?.variables ?? [], pouFlow, updateFBDNode)
+                }
               }
-            }
-          })
-
-          // Reset flow updated flags after sync. syncNodesWithVariables/syncNodesWithVariablesFBD
-          // call updateNode which sets flow.updated = true as a side effect. Since this is an
-          // internal sync during project load (not a user edit), reset all flags.
-          for (const flow of getState().ladderFlows) {
-            getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
-          }
-          for (const flow of getState().fbdFlows) {
-            getState().fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+            })
+          } catch (err) {
+            console.error('[SYNC] Error during node sync:', err)
           }
         }
       }
@@ -507,6 +503,17 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
       }
 
+      // Reset all graphical flow updated flags at the very end of project open.
+      // Various operations during load (syncNodesWithVariables, debug flag restoration,
+      // tab opening) call updateNode which sets flow.updated = true as a side effect.
+      // Since these are internal syncs (not user edits), reset all flags.
+      for (const flow of getState().ladderFlows) {
+        getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+      }
+      for (const flow of getState().fbdFlows) {
+        getState().fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+      }
+
       toast({
         title: 'Project opened!',
         description: 'Your project was opened, and loaded.',
@@ -520,14 +527,44 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       setState(
         produce((state: SharedRootState) => {
           if (!state.undoRedo[pouName]) {
-            state.undoRedo[pouName] = { past: [], future: [] }
+            state.undoRedo[pouName] = { past: [], future: [], savedAtDepth: 0 }
           }
           const history = state.undoRedo[pouName]
+          // If the saved state was in the future (ahead of current), it's being discarded
+          if (history.savedAtDepth !== null && history.savedAtDepth > history.past.length) {
+            history.savedAtDepth = null
+          }
           history.past.push(snapshot)
           if (history.past.length > MAX_HISTORY_SIZE) {
             history.past.shift()
+            // Adjust savedAtDepth since we shifted the stack
+            if (history.savedAtDepth !== null) {
+              history.savedAtDepth--
+              if (history.savedAtDepth < 0) history.savedAtDepth = null
+            }
           }
           history.future = []
+        }),
+      )
+    },
+
+    markSaved: (pouName) => {
+      setState(
+        produce((state: SharedRootState) => {
+          const history = state.undoRedo[pouName]
+          if (history) {
+            history.savedAtDepth = history.past.length
+          }
+        }),
+      )
+    },
+
+    markAllSaved: () => {
+      setState(
+        produce((state: SharedRootState) => {
+          for (const history of Object.values(state.undoRedo)) {
+            history.savedAtDepth = history.past.length
+          }
         }),
       )
     },
@@ -541,11 +578,17 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const pou = state.project.data.pous.find((p) => p.name === pouName)
       if (!pou) return
 
-      // Save current state to future
-      const currentSnapshot = {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        globalVariables: state.project.data.configurations.resource.globalVariables,
+      // Save current state to future (deep copy to avoid mutation)
+      const ladderFlow = state.ladderFlows.find((f) => f.name === pouName)
+      const fbdFlow = state.fbdFlows.find((f) => f.name === pouName)
+      const currentSnapshot: HistorySnapshot = {
+        variables: JSON.parse(JSON.stringify(pou.interface?.variables ?? [])) as PLCVariable[],
+        body: JSON.parse(JSON.stringify(pou.body.value)) as unknown,
+        ladderFlow: ladderFlow ? (JSON.parse(JSON.stringify(ladderFlow)) as LadderFlowType) : undefined,
+        fbdFlow: fbdFlow ? (JSON.parse(JSON.stringify(fbdFlow)) as FBDFlowType) : undefined,
+        globalVariables: JSON.parse(
+          JSON.stringify(state.project.data.configurations.resource.globalVariables),
+        ) as PLCVariable[],
       }
 
       setState(
@@ -565,6 +608,19 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (snapshot.globalVariables) {
         state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
       }
+      // Restore graphical flow state (nodes, edges, positions)
+      if (snapshot.ladderFlow) {
+        state.ladderFlowActions.applyLadderFlowSnapshot({ editorName: pouName, snapshot: snapshot.ladderFlow })
+      }
+      if (snapshot.fbdFlow) {
+        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow })
+      }
+
+      // Check if we've returned to the saved state
+      const afterUndo = getState().undoRedo[pouName]
+      if (afterUndo?.savedAtDepth !== null && afterUndo?.savedAtDepth === afterUndo?.past.length) {
+        getState().fileActions.updateFile({ name: pouName, saved: true })
+      }
     },
 
     redo: (pouName) => {
@@ -576,11 +632,17 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const pou = state.project.data.pous.find((p) => p.name === pouName)
       if (!pou) return
 
-      // Save current state to past
-      const currentSnapshot = {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        globalVariables: state.project.data.configurations.resource.globalVariables,
+      // Save current state to past (deep copy to avoid mutation)
+      const ladderFlow = state.ladderFlows.find((f) => f.name === pouName)
+      const fbdFlow = state.fbdFlows.find((f) => f.name === pouName)
+      const currentSnapshot: HistorySnapshot = {
+        variables: JSON.parse(JSON.stringify(pou.interface?.variables ?? [])) as PLCVariable[],
+        body: JSON.parse(JSON.stringify(pou.body.value)) as unknown,
+        ladderFlow: ladderFlow ? (JSON.parse(JSON.stringify(ladderFlow)) as LadderFlowType) : undefined,
+        fbdFlow: fbdFlow ? (JSON.parse(JSON.stringify(fbdFlow)) as FBDFlowType) : undefined,
+        globalVariables: JSON.parse(
+          JSON.stringify(state.project.data.configurations.resource.globalVariables),
+        ) as PLCVariable[],
       }
 
       setState(
@@ -599,6 +661,19 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
       if (snapshot.globalVariables) {
         state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
+      }
+      // Restore graphical flow state (nodes, edges, positions)
+      if (snapshot.ladderFlow) {
+        state.ladderFlowActions.applyLadderFlowSnapshot({ editorName: pouName, snapshot: snapshot.ladderFlow })
+      }
+      if (snapshot.fbdFlow) {
+        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow })
+      }
+
+      // Check if we've returned to the saved state
+      const afterRedo = getState().undoRedo[pouName]
+      if (afterRedo?.savedAtDepth !== null && afterRedo?.savedAtDepth === afterRedo?.past.length) {
+        getState().fileActions.updateFile({ name: pouName, saved: true })
       }
     },
   },

@@ -56,7 +56,7 @@ const AcceleratorHandler = () => {
     fileActions: { setAllToSaved },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
-    snapshotActions: { undo, redo },
+    snapshotActions: { undo, redo, markAllSaved },
   } = useOpenPLCStore()
   const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
   const selectedProjectTreeLeaf = useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf)
@@ -88,6 +88,7 @@ const AcceleratorHandler = () => {
       if (res.success) {
         setEditingState('saved')
         setAllToSaved()
+        markAllSaved()
         toast({
           title: 'Changes saved!',
           description: 'The project was saved successfully!',

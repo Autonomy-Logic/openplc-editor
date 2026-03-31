@@ -40,6 +40,7 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
     deviceDefinitions,
     workspaceActions: { setEditingState },
     fileActions: { setAllToSaved },
+    snapshotActions: { markAllSaved },
     modalActions: { closeModal, onOpenChange, openModal },
   } = useOpenPLCStore()
 
@@ -83,6 +84,7 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
       }
       setEditingState('saved')
       setAllToSaved()
+      markAllSaved()
       toast({
         title: 'Changes saved!',
         description: 'The project was saved successfully!',

@@ -24,6 +24,8 @@ export type HistorySnapshot = {
 export type PouHistoryBucket = {
   past: HistorySnapshot[]
   future: HistorySnapshot[]
+  /** Depth of the past stack when the file was last saved. null = never saved or diverged. */
+  savedAtDepth: number | null
 }
 
 export type HistoryState = Record<string, PouHistoryBucket>

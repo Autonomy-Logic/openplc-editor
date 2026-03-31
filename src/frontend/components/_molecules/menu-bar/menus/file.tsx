@@ -21,6 +21,7 @@ export const FileMenu = () => {
     workspaceActions: { setEditingState },
     sharedWorkspaceActions: { closeProject },
     fileActions: { setAllToSaved },
+    snapshotActions: { markAllSaved },
   } = useOpenPLCStore()
 
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
@@ -56,6 +57,7 @@ export const FileMenu = () => {
       if (res.success) {
         setEditingState('saved')
         setAllToSaved()
+        markAllSaved()
         toast({
           title: 'Changes saved!',
           description: 'The project was saved successfully!',

@@ -101,6 +101,8 @@ export type RemoteDeviceActions = {
 
 export type SnapshotActions = {
   pushToHistory: (pouName: string, snapshot: PouHistorySnapshot) => void
+  markSaved: (pouName: string) => void
+  markAllSaved: () => void
   undo: (pouName: string) => void
   redo: (pouName: string) => void
 }

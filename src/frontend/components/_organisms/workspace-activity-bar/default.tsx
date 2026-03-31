@@ -122,7 +122,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const executeSave = useCallback(async (): Promise<boolean> => {
     const state = useOpenPLCStore.getState()
-    const { workspaceActions, fileActions, editors } = state
+    const { workspaceActions, fileActions, snapshotActions, editors } = state
     const activeEditor = editors[0] ?? { type: 'available', meta: { name: '' } }
     try {
       workspaceActions.setEditingState('save-request')
@@ -139,6 +139,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       if (res.success) {
         workspaceActions.setEditingState('saved')
         fileActions.setAllToSaved()
+        snapshotActions.markAllSaved()
         return true
       }
       workspaceActions.setEditingState('unsaved')

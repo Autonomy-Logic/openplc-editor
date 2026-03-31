@@ -328,7 +328,9 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
                 ...snapshot.rung,
                 selectedNodes: [],
               },
-              updated: true,
+              // Don't set updated: true — snapshot restore is managed by the undo/redo
+              // handler which controls the saved flag directly.
+              updated: false,
             }
 
             if (index === -1) {
