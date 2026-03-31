@@ -1,13 +1,18 @@
 import { ComponentPropsWithoutRef } from 'react'
 
+import { useProject } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../store'
+import type { FBDFlowType } from '../../../store/slices/fbd'
+import type { LadderFlowType } from '../../../store/slices/ladder'
+import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
+import { parseGraphicalPouFromString, parseTextualPouFromString } from '../../../utils/PLC/pou-text-parser'
+import { prepareSavePayload } from '../../../utils/save-project'
+import { toast } from '../../_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 export type SaveChangesFileModalData = {
   fileName: string
-  onSave?: () => void
-  onDiscard?: () => void
 }
 
 export type SaveChangesFileModalProps = ComponentPropsWithoutRef<typeof Modal> & {
@@ -17,25 +22,87 @@ export type SaveChangesFileModalProps = ComponentPropsWithoutRef<typeof Modal> &
 
 const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalProps) => {
   const {
+    project,
+    editor: activeEditor,
+    editors,
+    deviceDefinitions,
     modalActions: { closeModal, onOpenChange },
+    projectActions: { updatePou },
     sharedWorkspaceActions: { forceCloseFile },
+    fileActions: { updateFile, setAllToSaved },
+    workspaceActions: { setEditingState },
+    ladderFlowActions: { addLadderFlow },
+    fbdFlowActions: { addFBDFlow },
   } = useOpenPLCStore()
 
+  const projectPort = useProject()
   const { fileName } = data
 
-  const handleSave = () => {
+  const handleSave = async () => {
     closeModal()
-    if (data.onSave) {
-      data.onSave()
+
+    const params = prepareSavePayload({
+      projectPath: project.meta.path,
+      projectName: project.meta.name,
+      projectData: project.data,
+      deviceConfiguration: deviceDefinitions.configuration,
+      devicePinMapping: deviceDefinitions.pinMapping.pins,
+      editors,
+      activeEditor,
+    })
+    const result = await projectPort.saveProject(params)
+    if (!result.success) {
+      toast({
+        title: 'Error saving file!',
+        description: result.error ?? 'Save failed',
+        variant: 'fail',
+      })
+      return
     }
+
+    setEditingState('saved')
+    setAllToSaved()
     forceCloseFile(fileName)
   }
 
-  const handleDontSave = () => {
+  const handleDontSave = async () => {
     closeModal()
-    if (data.onDiscard) {
-      data.onDiscard()
+
+    // Reload the POU from disk to discard in-memory changes
+    const pou = project.data.pous.find((p) => p.name === fileName)
+    if (pou) {
+      try {
+        const language = pou.body.language
+        const ext = getExtensionFromLanguage(language)
+        const folder = getFolderFromPouType(pou.pouType)
+        const fullPath = `${project.meta.path}/pous/${folder}/${fileName}${ext}`
+
+        const result = await projectPort.readFileContent(fullPath)
+        if (result.success && result.content) {
+          const isGraphical = language === 'ld' || language === 'fbd'
+
+          const parsed = isGraphical
+            ? parseGraphicalPouFromString(result.content, language, pou.pouType)
+            : parseTextualPouFromString(result.content, language, pou.pouType)
+
+          // Restore POU body in the project store
+          updatePou({ name: fileName, content: parsed.body })
+
+          // For graphical POUs, also restore the flow state (nodes, edges, positions).
+          // The parsed body.value is the full flow type (same as what addLadderFlow/addFBDFlow
+          // receive during project open).
+          if (language === 'ld' && parsed.body.value) {
+            addLadderFlow(parsed.body.value as LadderFlowType)
+          } else if (language === 'fbd' && parsed.body.value) {
+            addFBDFlow(parsed.body.value as FBDFlowType)
+          }
+        }
+      } catch {
+        // If reload fails, just close without restoring — same as web fallback
+      }
     }
+
+    updateFile({ name: fileName, saved: true })
     forceCloseFile(fileName)
   }
 
@@ -67,13 +134,13 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
           <div className='flex w-[300px] flex-col text-sm'>
             <div className='mb-6 flex flex-col gap-2'>
               <button
-                onClick={handleSave}
+                onClick={() => void handleSave()}
                 className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white'
               >
                 Save
               </button>
               <button
-                onClick={handleDontSave}
+                onClick={() => void handleDontSave()}
                 className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
               >
                 Don't Save

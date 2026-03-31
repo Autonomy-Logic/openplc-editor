@@ -47,8 +47,12 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
   const windowPort = useWindow()
   const capabilities = useCapabilities()
 
+  const {
+    sharedWorkspaceActions: { clearStatesOnCloseProject },
+  } = useOpenPLCStore()
+
   const clearAndClose = () => {
-    // Web navigates back; editor resets editing state
+    clearStatesOnCloseProject()
     setEditingState('initial-state')
     if (!capabilities.hasLocalFilesystem) {
       window.history.back()
