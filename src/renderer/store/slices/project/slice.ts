@@ -1,5 +1,6 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import type {
+  EthercatConfig,
   OpcUaNodeConfig,
   OpcUaSecurityProfile,
   OpcUaServerConfig,
@@ -2261,6 +2262,29 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       return response
     },
 
+    updateEthercatConfig: (deviceName: string, ethercatConfig: EthercatConfig): ProjectResponse => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          if (!project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = project.data.remoteDevices.find((d) => d.name === deviceName)
+          if (!device) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          if (device.protocol !== 'ethercat') {
+            response = { ok: false, message: 'Device is not an EtherCAT device' }
+            return
+          }
+          device.ethercatConfig = ethercatConfig
+        }),
+      )
+      return response
+    },
+
     addIOGroup: (
       deviceName: string,
       ioGroup: {
@@ -2305,6 +2329,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               for (const group of remoteDevice.modbusTcpConfig.ioGroups) {
                 for (const point of group.ioPoints) {
                   usedAddresses.add(point.iecLocation)
+                }
+              }
+            }
+            if (remoteDevice.ethercatConfig?.devices) {
+              for (const dev of remoteDevice.ethercatConfig.devices) {
+                for (const mapping of dev.channelMappings) {
+                  usedAddresses.add(mapping.iecLocation)
                 }
               }
             }
@@ -2362,6 +2393,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                   if (group.id === ioGroupId) continue
                   for (const point of group.ioPoints) {
                     usedAddresses.add(point.iecLocation)
+                  }
+                }
+              }
+              if (remoteDevice.ethercatConfig?.devices) {
+                for (const dev of remoteDevice.ethercatConfig.devices) {
+                  for (const mapping of dev.channelMappings) {
+                    usedAddresses.add(mapping.iecLocation)
                   }
                 }
               }
