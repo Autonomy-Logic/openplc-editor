@@ -37,7 +37,16 @@ const CommentElement = (block: CommentProps) => {
     }
   }, [])
 
+  const didMountRef = useRef(false)
   useEffect(() => {
+    // Skip the initial mount — commentFocused starts as false and the node
+    // already has the correct content. Calling updateNode here would mark
+    // the flow as updated (unsaved) without any user edit.
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })

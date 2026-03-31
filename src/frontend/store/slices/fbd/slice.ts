@@ -19,7 +19,8 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
             ...flow.rung,
             selectedNodes: [],
           }
-          const newFlow = { ...flow, rung }
+          // Reset updated to false on load — the flow is being loaded from a saved project.
+          const newFlow = { ...flow, rung, updated: false }
 
           if (flowIndex === -1) {
             fbdFlows.push(newFlow)

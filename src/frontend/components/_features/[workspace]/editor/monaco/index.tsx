@@ -1106,6 +1106,9 @@ void loop()
 
     setLocalText(value)
     if (isSyncingModelRef.current) return
+    // During debug the editor is read-only — any onChange event is a false positive
+    // from Monaco's internal state management (e.g. model sync), not a user edit.
+    if (isDebuggerVisible) return
     handleFileAndWorkspaceSavedState(name)
     updatePou({ name, content: { language, value } })
   }

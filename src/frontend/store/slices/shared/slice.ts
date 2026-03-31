@@ -404,6 +404,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
               }
             }
           })
+
+          // Reset flow updated flags after sync. syncNodesWithVariables/syncNodesWithVariablesFBD
+          // call updateNode which sets flow.updated = true as a side effect. Since this is an
+          // internal sync during project load (not a user edit), reset all flags.
+          for (const flow of getState().ladderFlows) {
+            getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+          }
+          for (const flow of getState().fbdFlows) {
+            getState().fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+          }
         }
       }
 

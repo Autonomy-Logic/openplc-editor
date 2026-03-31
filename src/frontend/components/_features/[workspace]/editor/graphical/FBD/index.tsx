@@ -93,7 +93,12 @@ export default function FbdEditor() {
     })
 
     fbdFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
-    handleFileAndWorkspaceSavedState(editor.meta.name)
+
+    // During debug the editor is read-only — any flow update is from internal state
+    // management (e.g. node styling for debug indicators), not a user edit.
+    if (!isDebuggerVisible) {
+      handleFileAndWorkspaceSavedState(editor.meta.name)
+    }
   }, [flowUpdated])
 
   return (

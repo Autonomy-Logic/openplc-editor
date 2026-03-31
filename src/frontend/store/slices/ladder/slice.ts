@@ -56,7 +56,9 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               }))
             : flow.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
 
-          const newFlow = { ...flow, rungs, updated: needsMigration || flow.updated }
+          // Reset updated to false on load — the flow is being loaded from a saved project.
+          // Only mark as updated if legacy data was migrated so the next save writes the new format.
+          const newFlow = { ...flow, rungs, updated: needsMigration }
 
           if (flowIndex === -1) {
             ladderFlows.push(newFlow)
