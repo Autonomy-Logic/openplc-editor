@@ -123,7 +123,7 @@ export function buildActiveIndexSet(
 
   if (currentPou) {
     const fbCtxKey =
-      currentPou.pouType === 'function-block' ? fbSelectedInstance.get(currentPou.name.toUpperCase()) ?? '' : ''
+      currentPou.pouType === 'function-block' ? (fbSelectedInstance.get(currentPou.name.toUpperCase()) ?? '') : ''
 
     // Check if cache is still valid
     if (
