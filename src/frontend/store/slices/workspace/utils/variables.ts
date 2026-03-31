@@ -100,7 +100,6 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
     const { name } = dataToBeUpdated
     if (name === '') {
-      console.error('Variable name is empty')
       response = {
         ok: false,
         title: 'Variable name is empty.',
@@ -110,7 +109,6 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
     }
 
     if (checkIfVariableExists(variables, name)) {
-      console.error(`Variable "${name}" already exists`)
       response = {
         ok: false,
         title: 'Variable already exists',
@@ -120,7 +118,6 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
     }
 
     if (!variableNameValidation(name)) {
-      console.error(`Variable "${name}" name is invalid`)
       response = {
         ok: false,
         title: 'Variable name is invalid.',
@@ -172,7 +169,6 @@ const updateGlobalVariableValidation = (
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
     const { name } = dataToBeUpdated
     if (name === '') {
-      console.error('Global Variable name is empty')
       response = {
         ok: false,
         title: 'Global Variable name is empty.',
@@ -182,7 +178,6 @@ const updateGlobalVariableValidation = (
     }
 
     if (checkIfGlobalVariableExists(variables, name)) {
-      console.error(`Global Variable "${name}" already exists`)
       response = {
         ok: false,
         title: 'Global Variable already exists',

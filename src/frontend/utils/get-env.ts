@@ -1,3 +1,9 @@
+// TODO: This file should NOT live in src/frontend/ — it belongs in src/middleware/adapters/web/.
+// All current consumers are web-only middleware adapters, except for
+// ai-inline-completion-provider.ts which should be migrated to use AIPort instead of calling
+// the Edge API directly (the editor version already uses AIPort). Once that migration is done,
+// move this file to src/middleware/adapters/web/utils/get-env.ts and update all import paths.
+
 /**
  * Platform-agnostic environment variable access.
  *

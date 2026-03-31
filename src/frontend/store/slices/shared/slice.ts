@@ -361,8 +361,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         pous.forEach((pou) => {
           try {
             const vars = pou.interface?.variables ?? []
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-            const iecString = generateIecVariablesToString(vars as any)
+            const iecString = generateIecVariablesToString(vars)
             const reparsedVariables = parseIecStringToVariables(iecString, pous, reclassDataTypes, reclassLibraries)
             getState().projectActions.setPouVariables({
               pouName: pou.name,

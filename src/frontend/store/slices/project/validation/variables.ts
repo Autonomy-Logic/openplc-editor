@@ -308,7 +308,6 @@ const updateVariableValidation = (
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
     const { name } = dataToBeUpdated
     if (name === '') {
-      console.error('Variable name is empty')
       response = {
         ok: false,
         title: 'Variable name is empty.',
@@ -318,7 +317,6 @@ const updateVariableValidation = (
     }
 
     if (checkIfVariableExists(variables, name)) {
-      console.error(`Variable "${name}" already exists`)
       response = {
         ok: false,
         title: 'Variable already exists',
@@ -328,7 +326,6 @@ const updateVariableValidation = (
     }
 
     if (!variableNameValidation(name)) {
-      console.error(`Variable "${name}" name is invalid`)
       response = {
         ok: false,
         title: 'Variable name is invalid.',
@@ -341,7 +338,6 @@ const updateVariableValidation = (
   if (dataToBeUpdated.location) {
     const { location } = dataToBeUpdated
     if (checkIfLocationExists(variables, location)) {
-      console.error(`Location "${location}" already exists`)
       response = {
         ok: false,
         title: 'Location already exists',
@@ -351,7 +347,6 @@ const updateVariableValidation = (
     }
 
     if (!variableLocationValidation(location, variableToUpdate.type.value)) {
-      console.error(`Location "${location}" is invalid`)
       response = {
         ok: false,
         title: 'Location is invalid.',
@@ -379,7 +374,6 @@ const updateGlobalVariableValidation = (variables: PLCVariable[], dataToBeUpdate
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
     const { name } = dataToBeUpdated
     if (name === '') {
-      console.error('Global Variable name is empty')
       response = {
         ok: false,
         title: 'Global Variable name is empty.',
@@ -389,7 +383,6 @@ const updateGlobalVariableValidation = (variables: PLCVariable[], dataToBeUpdate
     }
 
     if (checkIfGlobalVariableExists(variables, name)) {
-      console.error(`Global Variable "${name}" already exists`)
       response = {
         ok: false,
         title: 'Global Variable already exists',
