@@ -1,6 +1,8 @@
 import { PLCVariable } from '@root/types/PLC/open-plc'
 import { generateStructMember } from '@root/utils/PLC/array-codegen-helpers'
 
+import { getExposedCppVariables } from './shared'
+
 type CppPouData = {
   name: string
   variables: PLCVariable[]
@@ -17,17 +19,12 @@ const generateCBlocksHeader = (cppPous: CppPouData[]): string => {
     const setupFunctionName = `${pou.name.toLowerCase()}_setup`
     const loopFunctionName = `${pou.name.toLowerCase()}_loop`
 
-    const inputVariables = pou.variables.filter((v) => v.class === 'input')
-    const outputVariables = pou.variables.filter((v) => v.class === 'output')
+    const exposedVariables = getExposedCppVariables(pou.variables)
 
     headerContent += `//definition of external blocks - ${pou.name.toUpperCase()}\n`
     headerContent += `typedef struct {\n`
 
-    inputVariables.forEach((variable) => {
-      headerContent += generateStructMember(variable)
-    })
-
-    outputVariables.forEach((variable) => {
+    exposedVariables.forEach((variable) => {
       headerContent += generateStructMember(variable)
     })
 

@@ -309,7 +309,7 @@ const VariablesEditor = () => {
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     const language = 'language' in editor.meta ? editor.meta.language : null
-    const defaultClass: PLCVariable['class'] = language === 'python' || language === 'cpp' ? 'input' : 'local'
+    const defaultClass: PLCVariable['class'] = language === 'python' ? 'input' : 'local'
 
     if (variables.length === 0) {
       createVariable({

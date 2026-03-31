@@ -6,6 +6,8 @@ import {
   isArrayVariable,
 } from '@root/utils/PLC/array-codegen-helpers'
 
+import { getExposedCppVariables } from './shared'
+
 type STCodeGenerationParams = {
   pouName: string
   allVariables: PLCVariable[]
@@ -72,14 +74,16 @@ const generateOutputArrayCopyBack = (outputVariables: PLCVariable[]): string => 
 const generateSTCode = (params: STCodeGenerationParams): string => {
   const { pouName, allVariables } = params
 
-  const inputVariables = allVariables.filter((v) => v.class === 'input')
-  const outputVariables = allVariables.filter((v) => v.class === 'output')
+  const exposedVariables = getExposedCppVariables(allVariables)
+  const inputVariables = exposedVariables.filter((v) => v.class === 'input')
+  const outputVariables = exposedVariables.filter((v) => v.class === 'output')
+  const localVariables = exposedVariables.filter((v) => v.class === 'local')
 
   const structName = `${pouName.toUpperCase()}_VARS`
   const setupFunctionName = `${pouName.toLowerCase()}_setup`
   const loopFunctionName = `${pouName.toLowerCase()}_loop`
 
-  const allArrayVariables = [...inputVariables, ...outputVariables].filter(isArrayVariable)
+  const allArrayVariables = exposedVariables.filter(isArrayVariable)
 
   const flatArrayDecl = generateFlatArrayDeclarations(allArrayVariables)
   const flatArrayCopiesIn = generateFlatArrayCopiesIn(allArrayVariables)
@@ -89,6 +93,9 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
     variableAssignments += generateVariableAssignment(variable)
   })
   outputVariables.forEach((variable) => {
+    variableAssignments += generateVariableAssignment(variable)
+  })
+  localVariables.forEach((variable) => {
     variableAssignments += generateVariableAssignment(variable)
   })
 

@@ -441,8 +441,11 @@ const SelectableClassCell = ({
 
   const language = 'language' in editor.meta ? editor.meta.language : null
   const getVariableClasses = () => {
-    if (language === 'python' || language === 'cpp') {
+    if (language === 'python') {
       return ['input', 'output']
+    }
+    if (language === 'cpp') {
+      return ['input', 'output', 'local']
     }
     return ['input', 'output', 'inOut', 'external', 'local', 'temp']
   }
