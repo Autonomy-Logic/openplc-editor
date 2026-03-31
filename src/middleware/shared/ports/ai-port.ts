@@ -80,4 +80,15 @@ export interface AIPort extends AIFeatureConfig {
    * Send a telemetry event (fire-and-forget).
    */
   sendTelemetry(event: AITelemetryEventName, data: Record<string, unknown>): void
+
+  /**
+   * Register an inline completion provider with the given Monaco instance.
+   * All AI logic (provider creation, caching, store subscriptions) is handled internally.
+   * Returns a disposable to tear down the provider, or null if not supported.
+   *
+   * @param monacoInstance - The Monaco editor module (typed as unknown to avoid coupling)
+   */
+  registerInlineCompletions?(params: { monacoInstance: unknown; pouName: string; language: AICompletionLanguage }): {
+    dispose: () => void
+  }
 }
