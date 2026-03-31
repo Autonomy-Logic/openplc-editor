@@ -99,7 +99,7 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
     variableAssignments += generateVariableAssignment(variable)
   })
 
-  const outputCopyBack = generateOutputArrayCopyBack(outputVariables)
+  const outputCopyBack = generateOutputArrayCopyBack([...outputVariables, ...localVariables])
 
   let stCode = `{{
 ${structName} vars;
