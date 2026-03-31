@@ -5,23 +5,16 @@ import { useCapabilities, useProject } from '../../../../../middleware/shared/pr
 import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { useOpenPLCStore } from '../../../../store'
-import { prepareSavePayload } from '../../../../utils/save-project'
-import { toast } from '../../../_features/[app]/toast/use-toast'
+import { executeSaveProject } from '../../../../utils/save-actions'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const projectPort = useProject()
   const capabilities = useCapabilities()
   const {
-    project,
     editor: activeEditor,
-    editors,
-    deviceDefinitions,
     workspace: { editingState },
-    workspaceActions: { setEditingState },
     sharedWorkspaceActions: { closeProject },
-    fileActions: { setAllToSaved },
-    snapshotActions: { markAllSaved },
   } = useOpenPLCStore()
 
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
@@ -34,52 +27,10 @@ export const FileMenu = () => {
 
   const isSaving = editingState === 'save-request'
 
-  const executeSave = useCallback(async () => {
-    setEditingState('save-request')
-    toast({
-      title: 'Save changes',
-      description: 'Trying to save the changes in the project file.',
-      variant: 'warn',
-    })
-
-    try {
-      const params = prepareSavePayload({
-        projectPath: project.meta.path,
-        projectName: project.meta.name,
-        projectData: project.data,
-        deviceConfiguration: deviceDefinitions.configuration,
-        devicePinMapping: deviceDefinitions.pinMapping.pins,
-        editors,
-        activeEditor,
-      })
-
-      const res = await projectPort.saveProject(params)
-      if (res.success) {
-        setEditingState('saved')
-        setAllToSaved()
-        markAllSaved()
-        toast({
-          title: 'Changes saved!',
-          description: 'The project was saved successfully!',
-          variant: 'default',
-        })
-      } else {
-        setEditingState('unsaved')
-        toast({
-          title: 'Error in the save request!',
-          description: res.error ?? 'Save failed',
-          variant: 'fail',
-        })
-      }
-    } catch {
-      setEditingState('unsaved')
-      toast({
-        title: 'Error in the save request!',
-        description: 'An unexpected error occurred while saving.',
-        variant: 'fail',
-      })
-    }
-  }, [project, deviceDefinitions, editors, activeEditor, projectPort, setEditingState, setAllToSaved])
+  const executeSave = useCallback(
+    () => executeSaveProject(projectPort),
+    [projectPort],
+  )
 
   const handleSave = () => {
     if (activeEditor.meta.name && !isSaving) {

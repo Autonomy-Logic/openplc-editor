@@ -13,7 +13,7 @@ import type { PLCPou } from '../../middleware/shared/ports/types'
 // ---------------------------------------------------------------------------
 
 /** Minimal editor shape needed for POU sanitization. */
-interface EditorLike {
+export interface EditorLike {
   type: string
   meta: { name: string }
   variable?: { display: string; code?: string | null }
@@ -30,7 +30,7 @@ interface EditorLike {
  * editor model but hasn't been parsed back into structured variables yet.
  * Before saving we must capture that text so the IPC layer writes it to disk.
  */
-function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou {
+export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou {
   if (!editor || (editor.type !== 'plc-textual' && editor.type !== 'plc-graphical') || !editor.variable) {
     return pou
   }
@@ -53,7 +53,7 @@ function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou {
  * Collects debug flags from all variables (global + per-POU).
  * Returns undefined if no variables have debug enabled.
  */
-function collectDebugVariables(
+export function collectDebugVariables(
   globalVariables: { name: string; debug?: boolean }[],
   pous: PLCPou[],
 ): { global?: string[]; pous?: Record<string, string[]> } | undefined {

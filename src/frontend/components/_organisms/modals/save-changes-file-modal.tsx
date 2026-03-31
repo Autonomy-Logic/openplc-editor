@@ -7,8 +7,7 @@ import type { FBDFlowType } from '../../../store/slices/fbd'
 import type { LadderFlowType } from '../../../store/slices/ladder'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import { parseGraphicalPouFromString, parseTextualPouFromString } from '../../../utils/PLC/pou-text-parser'
-import { prepareSavePayload } from '../../../utils/save-project'
-import { toast } from '../../_features/[app]/toast/use-toast'
+import { executeSaveProject } from '../../../utils/save-actions'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 export type SaveChangesFileModalData = {
@@ -23,15 +22,10 @@ export type SaveChangesFileModalProps = ComponentPropsWithoutRef<typeof Modal> &
 const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalProps) => {
   const {
     project,
-    editor: activeEditor,
-    editors,
-    deviceDefinitions,
     modalActions: { closeModal, onOpenChange },
     projectActions: { updatePou },
     sharedWorkspaceActions: { forceCloseFile },
-    fileActions: { updateFile, setAllToSaved },
-    workspaceActions: { setEditingState },
-    snapshotActions: { markAllSaved },
+    fileActions: { updateFile },
     ladderFlowActions: { addLadderFlow },
     fbdFlowActions: { addFBDFlow },
   } = useOpenPLCStore()
@@ -42,28 +36,9 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
   const handleSave = async () => {
     closeModal()
 
-    const params = prepareSavePayload({
-      projectPath: project.meta.path,
-      projectName: project.meta.name,
-      projectData: project.data,
-      deviceConfiguration: deviceDefinitions.configuration,
-      devicePinMapping: deviceDefinitions.pinMapping.pins,
-      editors,
-      activeEditor,
-    })
-    const result = await projectPort.saveProject(params)
-    if (!result.success) {
-      toast({
-        title: 'Error saving file!',
-        description: result.error ?? 'Save failed',
-        variant: 'fail',
-      })
-      return
-    }
+    const result = await executeSaveProject(projectPort)
+    if (!result.success) return
 
-    setEditingState('saved')
-    setAllToSaved()
-    markAllSaved()
     forceCloseFile(fileName)
   }
 
