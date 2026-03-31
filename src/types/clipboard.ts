@@ -1,4 +1,4 @@
-import { edgeSchema, nodeSchema } from '@root/renderer/store/slices/react-flow'
+import { edgeSchema, nodeSchema } from '@root/frontend/store/slices/react-flow'
 import z from 'zod'
 
 export const clipboardSchema = z.discriminatedUnion('language', [

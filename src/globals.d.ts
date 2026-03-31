@@ -14,3 +14,10 @@ declare const APP_VERSION: string
  * @example "2026-01-26"
  */
 declare const BUILD_DATE: string
+
+/**
+ * Vitest-compatible `vi` global — aliased to `jest` in Jest via jest-vi-shim.ts
+ * so shared test files can use `vi.spyOn()` in both Jest and Vitest.
+ */
+
+declare const vi: typeof jest

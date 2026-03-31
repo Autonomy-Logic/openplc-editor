@@ -1,26 +1,26 @@
-import { getProjectPath } from '@root/main/utils'
+import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { PLCPou, PLCProject, PLCProjectData } from '@root/types/PLC/open-plc'
 import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
-import { getRuntimeHttpsOptions } from '@root/utils/runtime-https-config'
+import { getErrorMessage } from '@root/utils/get-error-message'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
-import type { IncomingMessage } from 'http'
+import type { IncomingHttpHeaders, IncomingMessage } from 'http'
 import https from 'https'
 import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
-import { ProjectState } from '../../../renderer/store/slices'
-import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
-import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
-import { logger } from '../../services'
-import { ModbusTcpClient } from '../modbus/modbus-client'
-import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
-import { SimulatorModule } from '../simulator/simulator-module'
-import { VirtualSerialPort } from '../simulator/virtual-serial-port'
-import { WebSocketDebugClient } from '../websocket/websocket-debug-client'
+import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
+import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
+import { logger } from '../../../backend/editor/services'
+import { getProjectPath } from '../../../backend/editor/utils'
+import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
+import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
+import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 
 type IDataToWrite = {
   projectPath: string
@@ -41,6 +41,7 @@ class MainProcessBridge implements MainIpcModule {
   pouService
   compilerModule
   hardwareModule
+  private registeredHandleChannels: string[] = []
   private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
   private debuggerWebSocketClient: WebSocketDebugClient | null = null
   private debuggerTargetIp: string | null = null
@@ -83,45 +84,79 @@ class MainProcessBridge implements MainIpcModule {
   private readonly RUNTIME_API_PORT = 8443
   private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
 
-  handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    try {
-      const url = `https://${ipAddress}:${this.RUNTIME_API_PORT}/api/get-users-info`
-
-      return new Promise((resolve) => {
-        const req = https.get(
-          url,
-          {
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              // Extract runtime version from response header
-              const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
-
-              if (res.statusCode === 404) {
-                resolve({ hasUsers: false, runtimeVersion })
-              } else if (res.statusCode === 200) {
-                resolve({ hasUsers: true, runtimeVersion })
-              } else {
-                resolve({ hasUsers: false, error: data || `Unexpected status: ${res.statusCode}`, runtimeVersion })
+  /**
+   * Low-level HTTP helper that handles data accumulation, timeout, and error handling.
+   * Returns the raw status code, response body, and headers for the caller to interpret.
+   */
+  private httpRequest(options: {
+    method: 'GET' | 'POST'
+    url: string
+    body?: string
+    headers?: Record<string, string>
+  }): Promise<{ statusCode: number; data: string; headers: IncomingHttpHeaders }> {
+    return new Promise((resolve, reject) => {
+      const parsedUrl = new URL(options.url)
+      const reqOptions = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port,
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: options.method,
+        headers: {
+          ...options.headers,
+          ...(options.body
+            ? {
+                'Content-Type': 'application/json',
+                'Content-Length': String(Buffer.byteLength(options.body)),
               }
-            })
-          },
-        )
-        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ hasUsers: false, error: 'Connection timeout' })
+            : {}),
+        },
+        ...getRuntimeHttpsOptions(),
+      }
+
+      const req = https.request(reqOptions as https.RequestOptions, (res: IncomingMessage) => {
+        let data = ''
+        res.on('data', (chunk: Buffer) => {
+          data += chunk.toString()
         })
-        req.on('error', (error: Error) => {
-          resolve({ hasUsers: false, error: error.message })
+        res.on('end', () => {
+          resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers })
         })
       })
+      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+        req.destroy()
+        reject(new Error('Connection timeout'))
+      })
+      req.on('error', (error: Error) => {
+        reject(error)
+      })
+      if (options.body) {
+        req.write(options.body)
+      }
+      req.end()
+    })
+  }
+
+  private runtimeUrl(ipAddress: string, endpoint: string): string {
+    return `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`
+  }
+
+  handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
+    try {
+      const res = await this.httpRequest({
+        method: 'GET',
+        url: this.runtimeUrl(ipAddress, '/api/get-users-info'),
+      })
+      const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
+
+      if (res.statusCode === 404) {
+        return { hasUsers: false, runtimeVersion }
+      } else if (res.statusCode === 200) {
+        return { hasUsers: true, runtimeVersion }
+      } else {
+        return { hasUsers: false, error: res.data || `Unexpected status: ${res.statusCode}`, runtimeVersion }
+      }
     } catch (error) {
-      return { hasUsers: false, error: String(error) }
+      return { hasUsers: false, error: getErrorMessage(error) }
     }
   }
 
@@ -132,47 +167,17 @@ class MainProcessBridge implements MainIpcModule {
     password: string,
   ) => {
     try {
-      const postData = JSON.stringify({ username, password, role: 'user' })
-
-      return new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: '/api/create-user',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData),
-            },
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 201) {
-                resolve({ success: true })
-              } else {
-                resolve({ success: false, error: data })
-              }
-            })
-          },
-        )
-        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        req.write(postData)
-        req.end()
+      const res = await this.httpRequest({
+        method: 'POST',
+        url: this.runtimeUrl(ipAddress, '/api/create-user'),
+        body: JSON.stringify({ username, password, role: 'user' }),
       })
+      if (res.statusCode === 201) {
+        return { success: true }
+      }
+      return { success: false, error: res.data }
     } catch (error) {
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -182,52 +187,22 @@ class MainProcessBridge implements MainIpcModule {
     password: string,
   ): Promise<{ success: boolean; accessToken?: string; error?: string }> {
     try {
-      const postData = JSON.stringify({ username, password })
-
-      return new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: '/api/login',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData),
-            },
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  const response = JSON.parse(data) as { access_token: string }
-                  resolve({ success: true, accessToken: response.access_token })
-                } catch {
-                  resolve({ success: false, error: 'Invalid response format' })
-                }
-              } else {
-                resolve({ success: false, error: data })
-              }
-            })
-          },
-        )
-        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        req.write(postData)
-        req.end()
+      const res = await this.httpRequest({
+        method: 'POST',
+        url: this.runtimeUrl(ipAddress, '/api/login'),
+        body: JSON.stringify({ username, password }),
       })
+      if (res.statusCode === 200) {
+        try {
+          const response = JSON.parse(res.data) as { access_token: string }
+          return { success: true, accessToken: response.access_token }
+        } catch {
+          return { success: false, error: 'Invalid response format' }
+        }
+      }
+      return { success: false, error: res.data }
     } catch (error) {
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -270,103 +245,66 @@ class MainProcessBridge implements MainIpcModule {
     )
   }
 
-  makeRuntimeApiRequest<T = void>(
+  private parseApiResponse<T>(
+    data: string,
+    responseParser?: (data: string) => T,
+  ): { success: true; data?: T } | { success: false; error: string } {
+    if (responseParser) {
+      try {
+        return { success: true, data: responseParser(data) }
+      } catch {
+        return { success: false, error: 'Invalid response format' }
+      }
+    }
+    return { success: true }
+  }
+
+  async makeRuntimeApiRequest<T = void>(
     ipAddress: string,
     jwtToken: string,
     endpoint: string,
     responseParser?: (data: string) => T,
   ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
-    return new Promise((resolve) => {
-      const req = https.get(
-        `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`,
-        {
-          headers: {
-            Authorization: `Bearer ${jwtToken}`,
-          },
-          ...getRuntimeHttpsOptions(),
-        },
-        (res: IncomingMessage) => {
-          let data = ''
-          res.on('data', (chunk: Buffer) => {
-            data += chunk.toString()
-          })
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              if (responseParser) {
-                try {
-                  const parsedData = responseParser(data)
-                  resolve({ success: true, data: parsedData })
-                } catch {
-                  resolve({ success: false, error: 'Invalid response format' })
-                }
-              } else {
-                resolve({ success: true })
-              }
-            } else if (this.isTokenExpiredError(res.statusCode, data)) {
-              void this.attemptTokenRefresh().then((refreshResult) => {
-                if (refreshResult.success && refreshResult.accessToken) {
-                  if (this.mainWindow && this.mainWindow.webContents) {
-                    this.mainWindow.webContents.send('runtime:token-refreshed', refreshResult.accessToken)
-                  }
-                  const retryReq = https.get(
-                    `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`,
-                    {
-                      headers: {
-                        Authorization: `Bearer ${refreshResult.accessToken}`,
-                      },
-                      ...getRuntimeHttpsOptions(),
-                    },
-                    (retryRes: IncomingMessage) => {
-                      let retryData = ''
-                      retryRes.on('data', (chunk: Buffer) => {
-                        retryData += chunk.toString()
-                      })
-                      retryRes.on('end', () => {
-                        if (retryRes.statusCode === 200) {
-                          if (responseParser) {
-                            try {
-                              const parsedData = responseParser(retryData)
-                              resolve({ success: true, data: parsedData })
-                            } catch {
-                              resolve({ success: false, error: 'Invalid response format' })
-                            }
-                          } else {
-                            resolve({ success: true })
-                          }
-                        } else {
-                          resolve({ success: false, error: retryData })
-                        }
-                      })
-                    },
-                  )
-                  retryReq.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-                    retryReq.destroy()
-                    resolve({ success: false, error: 'Connection timeout' })
-                  })
-                  retryReq.on('error', (error: Error) => {
-                    resolve({ success: false, error: error.message })
-                  })
-                } else {
-                  resolve({
-                    success: false,
-                    error: refreshResult.error ? `Token refresh failed: ${refreshResult.error}` : data,
-                  })
-                }
-              })
-            } else {
-              resolve({ success: false, error: data })
-            }
-          })
-        },
-      )
-      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-        req.destroy()
-        resolve({ success: false, error: 'Connection timeout' })
+    try {
+      const url = this.runtimeUrl(ipAddress, endpoint)
+      const res = await this.httpRequest({
+        method: 'GET',
+        url,
+        headers: { Authorization: `Bearer ${jwtToken}` },
       })
-      req.on('error', (error: Error) => {
-        resolve({ success: false, error: error.message })
+
+      if (res.statusCode === 200) {
+        return this.parseApiResponse(res.data, responseParser)
+      }
+
+      if (!this.isTokenExpiredError(res.statusCode, res.data)) {
+        return { success: false, error: res.data }
+      }
+
+      // Attempt token refresh and retry
+      const refreshResult = await this.attemptTokenRefresh()
+      if (!refreshResult.success || !refreshResult.accessToken) {
+        return {
+          success: false,
+          error: refreshResult.error ? `Token refresh failed: ${refreshResult.error}` : res.data,
+        }
+      }
+
+      this.mainWindow?.webContents?.send('runtime:token-refreshed', refreshResult.accessToken)
+
+      const retryRes = await this.httpRequest({
+        method: 'GET',
+        url,
+        headers: { Authorization: `Bearer ${refreshResult.accessToken}` },
       })
-    })
+
+      if (retryRes.statusCode === 200) {
+        return this.parseApiResponse(retryRes.data, responseParser)
+      }
+      return { success: false, error: retryRes.data }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
   }
 
   handleRuntimeGetStatus = async (
@@ -424,7 +362,7 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false, error: !result.success ? result.error : 'Unknown error' }
       }
     } catch (error) {
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -432,7 +370,7 @@ class MainProcessBridge implements MainIpcModule {
     try {
       return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/start-plc')
     } catch (error) {
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -440,7 +378,7 @@ class MainProcessBridge implements MainIpcModule {
     try {
       return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/stop-plc')
     } catch (error) {
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -457,7 +395,7 @@ class MainProcessBridge implements MainIpcModule {
       )
       return result
     } catch (error) {
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -479,7 +417,7 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false, error: result.error }
       }
     } catch (error) {
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -515,29 +453,51 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false, error: result.success ? 'No data returned' : result.error }
       }
     } catch (error) {
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
+
+  /**
+   * Register an invoke handler and track the channel for cleanup.
+   */
+  private registerHandle(channel: string, handler: (...args: unknown[]) => unknown) {
+    this.registeredHandleChannels.push(channel)
+    this.ipcMain.handle(channel, handler)
+  }
+
+  /**
+   * Remove all previously registered invoke handlers so they can be
+   * re-registered with fresh references on macOS window reopen.
+   */
+  private cleanupHandlers() {
+    for (const channel of this.registeredHandleChannels) {
+      this.ipcMain.removeHandler(channel)
+    }
+    this.registeredHandleChannels = []
+  }
+
   setupMainIpcListener() {
+    this.cleanupHandlers()
+
     // Project-related handlers
-    this.ipcMain.handle('project:create', this.handleProjectCreate)
-    this.ipcMain.handle('project:open', this.handleProjectOpen)
-    this.ipcMain.handle('project:path-picker', this.handleProjectPathPicker)
-    this.ipcMain.handle('project:save', this.handleProjectSave)
-    this.ipcMain.handle('project:save-file', this.handleFileSave)
-    this.ipcMain.handle('project:open-by-path', this.handleProjectOpenByPath)
+    this.registerHandle('project:create', this.handleProjectCreate)
+    this.registerHandle('project:open', this.handleProjectOpen)
+    this.registerHandle('project:path-picker', this.handleProjectPathPicker)
+    this.registerHandle('project:save', this.handleProjectSave)
+    this.registerHandle('project:save-file', this.handleFileSave)
+    this.registerHandle('project:open-by-path', this.handleProjectOpenByPath)
 
     // Pou-related handlers
-    this.ipcMain.handle('pou:create', this.handleCreatePouFile)
-    this.ipcMain.handle('pou:delete', this.handleDeletePouFile)
-    this.ipcMain.handle('pou:rename', this.handleRenamePouFile)
+    this.registerHandle('pou:create', this.handleCreatePouFile)
+    this.registerHandle('pou:delete', this.handleDeletePouFile)
+    this.registerHandle('pou:rename', this.handleRenamePouFile)
 
     // App and system handlers
-    this.ipcMain.handle('open-external-link', this.handleOpenExternalLink)
-    this.ipcMain.handle('system:get-system-info', this.handleGetSystemInfo)
-    this.ipcMain.handle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
+    this.registerHandle('open-external-link', this.handleOpenExternalLink)
+    this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
+    this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
 
@@ -547,7 +507,7 @@ class MainProcessBridge implements MainIpcModule {
 
     // ===================== COMPILER SERVICE =====================
     // TODO: This handle should be refactored to use MessagePortMain for better performance.
-    this.ipcMain.handle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
+    this.registerHandle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
     this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
 
@@ -569,46 +529,46 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('window:rebuild-menu', this.handleWindowRebuildMenu)
 
     // ===================== HARDWARE =====================
-    this.ipcMain.handle('hardware:get-available-communication-ports', this.handleHardwareGetAvailableCommunicationPorts)
-    this.ipcMain.handle('hardware:get-available-boards', this.handleHardwareGetAvailableBoards)
-    this.ipcMain.handle('hardware:refresh-communication-ports', this.handleHardwareRefreshCommunicationPorts)
-    this.ipcMain.handle('hardware:refresh-available-boards', this.handleHardwareRefreshAvailableBoards)
+    this.registerHandle('hardware:get-available-communication-ports', this.handleHardwareGetAvailableCommunicationPorts)
+    this.registerHandle('hardware:get-available-boards', this.handleHardwareGetAvailableBoards)
+    this.registerHandle('hardware:refresh-communication-ports', this.handleHardwareRefreshCommunicationPorts)
+    this.registerHandle('hardware:refresh-available-boards', this.handleHardwareRefreshAvailableBoards)
 
     // ===================== UTILITIES =====================
-    this.ipcMain.handle('util:get-preview-image', this.handleUtilGetPreviewImage)
+    this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
-    this.ipcMain.handle('util:read-debug-file', this.handleReadDebugFile)
+    this.registerHandle('util:read-debug-file', this.handleReadDebugFile)
 
     // ===================== DEBUGGER =====================
-    this.ipcMain.handle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
-    this.ipcMain.handle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
-    this.ipcMain.handle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
-    this.ipcMain.handle('debugger:set-variable', this.handleDebuggerSetVariable)
-    this.ipcMain.handle('debugger:connect', this.handleDebuggerConnect)
-    this.ipcMain.handle('debugger:disconnect', this.handleDebuggerDisconnect)
+    this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
+    this.registerHandle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
+    this.registerHandle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
+    this.registerHandle('debugger:set-variable', this.handleDebuggerSetVariable)
+    this.registerHandle('debugger:connect', this.handleDebuggerConnect)
+    this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
 
     // ===================== RUNTIME API =====================
-    this.ipcMain.handle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
-    this.ipcMain.handle('runtime:create-user', this.handleRuntimeCreateUser)
-    this.ipcMain.handle('runtime:login', this.handleRuntimeLogin)
-    this.ipcMain.handle('runtime:get-status', this.handleRuntimeGetStatus)
-    this.ipcMain.handle('runtime:start-plc', this.handleRuntimeStartPlc)
-    this.ipcMain.handle('runtime:stop-plc', this.handleRuntimeStopPlc)
-    this.ipcMain.handle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
-    this.ipcMain.handle('runtime:get-logs', this.handleRuntimeGetLogs)
-    this.ipcMain.handle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
-    this.ipcMain.handle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+    this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
+    this.registerHandle('runtime:create-user', this.handleRuntimeCreateUser)
+    this.registerHandle('runtime:login', this.handleRuntimeLogin)
+    this.registerHandle('runtime:get-status', this.handleRuntimeGetStatus)
+    this.registerHandle('runtime:start-plc', this.handleRuntimeStartPlc)
+    this.registerHandle('runtime:stop-plc', this.handleRuntimeStopPlc)
+    this.registerHandle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
+    this.registerHandle('runtime:get-logs', this.handleRuntimeGetLogs)
+    this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
+    this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
 
     // ===================== SIMULATOR =====================
-    this.ipcMain.handle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
-    this.ipcMain.handle('simulator:stop', this.handleSimulatorStop)
-    this.ipcMain.handle('simulator:is-running', this.handleSimulatorIsRunning)
+    this.registerHandle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
+    this.registerHandle('simulator:stop', this.handleSimulatorStop)
+    this.registerHandle('simulator:is-running', this.handleSimulatorIsRunning)
 
     // ===================== FILE WATCHER =====================
-    this.ipcMain.handle('file:watch-start', this.handleFileWatchStart)
-    this.ipcMain.handle('file:watch-stop', this.handleFileWatchStop)
-    this.ipcMain.handle('file:watch-stop-all', this.handleFileWatchStopAll)
-    this.ipcMain.handle('file:read-content', this.handleFileReadContent)
+    this.registerHandle('file:watch-start', this.handleFileWatchStart)
+    this.registerHandle('file:watch-stop', this.handleFileWatchStop)
+    this.registerHandle('file:watch-stop-all', this.handleFileWatchStopAll)
+    this.registerHandle('file:read-content', this.handleFileReadContent)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -633,9 +593,9 @@ class MainProcessBridge implements MainIpcModule {
         const res = await getProjectPath(windowManager)
         return res
       }
-      console.error('Window object not defined')
+      logger.error('Window object not defined')
     } catch (error) {
-      console.error('Error getting project path:', error)
+      logger.error('Error getting project path: ' + getErrorMessage(error))
     }
   }
   handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) => {
@@ -683,7 +643,7 @@ class MainProcessBridge implements MainIpcModule {
       const response = await this.pouService.createPouFile(props)
       return response
     } catch (error) {
-      console.error('Error creating POU file:', error)
+      logger.error('Error creating POU file: ' + getErrorMessage(error))
       return {
         success: false,
         error: {
@@ -699,7 +659,7 @@ class MainProcessBridge implements MainIpcModule {
       const response = await this.pouService.deletePouFile(filePath)
       return response
     } catch (error) {
-      console.error('Error deleting POU file:', error)
+      logger.error('Error deleting POU file: ' + getErrorMessage(error))
       return {
         success: false,
         error: {
@@ -722,7 +682,7 @@ class MainProcessBridge implements MainIpcModule {
       const response = await this.pouService.renamePouFile(data)
       return response
     } catch (error) {
-      console.error('Error renaming POU file:', error)
+      logger.error('Error renaming POU file: ' + getErrorMessage(error))
       return {
         success: false,
         error: {
@@ -740,7 +700,7 @@ class MainProcessBridge implements MainIpcModule {
       await shell.openExternal(url)
       return { success: true }
     } catch (error) {
-      console.error('Error opening external link:', error)
+      logger.error('Error opening external link: ' + getErrorMessage(error))
       return { success: false, error }
     }
   }
@@ -766,7 +726,7 @@ class MainProcessBridge implements MainIpcModule {
     try {
       return response
     } catch (error) {
-      console.error('Error reading history file:', error)
+      logger.error('Error reading history file: ' + getErrorMessage(error))
       return []
     }
   }
@@ -783,16 +743,16 @@ class MainProcessBridge implements MainIpcModule {
   handleCompilerExportProjectXml = (
     _ev: IpcMainInvokeEvent,
     pathToUserProject: string,
-    dataToCreateXml: ProjectState['data'],
+    dataToCreateXml: PLCProjectData,
     xmlFormatTarget: 'old-editor' | 'codesys',
   ) => this.compilerModule.createXmlFile(pathToUserProject, dataToCreateXml, xmlFormatTarget)
 
-  handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
+  handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileProgram(args, mainProcessPort, this)
   }
 
-  handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
+  handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileForDebugger(args, mainProcessPort)
   }
@@ -809,7 +769,7 @@ class MainProcessBridge implements MainIpcModule {
   // handleCompilerBuildXmlFile = (
   //   _ev: IpcMainInvokeEvent,
   //   pathToUserProject: string,
-  //   dataToCreateXml: ProjectState['data'],
+  //   dataToCreateXml: PLCProjectData,
   // ) => this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml)
   // handleCompilerBuildStProgram = (event: IpcMainEvent, pathToXMLFile: string) => {
   //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
@@ -1061,7 +1021,7 @@ class MainProcessBridge implements MainIpcModule {
         } catch (error) {
           this.debuggerWebSocketClient = null
           this.debuggerReconnecting = false
-          return { success: false, error: `Failed to reconnect: ${String(error)}`, needsReconnect: true }
+          return { success: false, error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
         }
       }
 
@@ -1083,7 +1043,7 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerWebSocketClient.disconnect()
           this.debuggerWebSocketClient = null
         }
-        return { success: false, error: String(error), needsReconnect: true }
+        return { success: false, error: getErrorMessage(error), needsReconnect: true }
       }
     }
 
@@ -1134,7 +1094,7 @@ class MainProcessBridge implements MainIpcModule {
       } catch (error) {
         this.debuggerModbusClient = null
         this.debuggerReconnecting = false
-        return { success: false, error: `Failed to reconnect: ${String(error)}`, needsReconnect: true }
+        return { success: false, error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
       }
     }
 
@@ -1156,7 +1116,7 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerModbusClient.disconnect()
         this.debuggerModbusClient = null
       }
-      return { success: false, error: String(error), needsReconnect: true }
+      return { success: false, error: getErrorMessage(error), needsReconnect: true }
     }
   }
 
@@ -1283,7 +1243,7 @@ class MainProcessBridge implements MainIpcModule {
       this.debuggerRtuBaudRate = null
       this.debuggerRtuSlaveId = null
       this.debuggerJwtToken = null
-      return { success: false, error: String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -1316,32 +1276,32 @@ class MainProcessBridge implements MainIpcModule {
 
     if (this.debuggerConnectionType === 'websocket') {
       if (!this.debuggerWebSocketClient) {
-        console.log('[IPC Handler] WebSocket client not connected')
+        logger.info('[IPC Handler] WebSocket client not connected')
         return { success: false, error: 'Not connected to debugger' }
       }
 
       try {
         const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, buffer)
-        console.log('[IPC Handler] WebSocket setVariable result:', result)
+        logger.info('[IPC Handler] WebSocket setVariable result: ' + JSON.stringify(result))
         return result
       } catch (error) {
-        console.error('[IPC Handler] WebSocket setVariable error:', error)
-        return { success: false, error: String(error) }
+        logger.error('[IPC Handler] WebSocket setVariable error: ' + getErrorMessage(error))
+        return { success: false, error: getErrorMessage(error) }
       }
     }
 
     if (!this.debuggerModbusClient) {
-      console.log('[IPC Handler] Modbus client not connected')
+      logger.info('[IPC Handler] Modbus client not connected')
       return { success: false, error: 'Not connected to debugger' }
     }
 
     try {
       const result = await this.debuggerModbusClient.setVariable(variableIndex, force, buffer)
-      console.log('[IPC Handler] Modbus setVariable result:', result)
+      logger.info('[IPC Handler] Modbus setVariable result: ' + JSON.stringify(result))
       return result
     } catch (error) {
-      console.error('[IPC Handler] Modbus setVariable error:', error)
-      return { success: false, error: String(error) }
+      logger.error('[IPC Handler] Modbus setVariable error: ' + getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -1380,10 +1340,12 @@ class MainProcessBridge implements MainIpcModule {
     hexPath: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      await this.simulatorModule.loadAndRun(hexPath)
+      const fs = await import('fs/promises')
+      const hexContent = await fs.readFile(hexPath, 'utf-8')
+      this.simulatorModule.loadAndRun(hexContent)
       return { success: true }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -1434,7 +1396,7 @@ class MainProcessBridge implements MainIpcModule {
           this.fileWatchers.set(filePath, { lastMtime: initialMtime })
           res({ success: true })
         } catch (error) {
-          res({ success: false, error: `Failed to watch file: ${String(error)}` })
+          res({ success: false, error: `Failed to watch file: ${getErrorMessage(error)}` })
         }
       })
     })
@@ -1480,7 +1442,10 @@ class MainProcessBridge implements MainIpcModule {
   // ===================== EVENT HANDLERS =====================
   mainIpcEventHandlers = {
     handleUpdateTheme: () => {
-      nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
+      const newTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
+      nativeTheme.themeSource = newTheme
+      const appStore = this.store as unknown as { set: (key: string, value: string) => void }
+      appStore.set('theme', newTheme)
     },
     createPou: () => this.mainWindow?.webContents.send('pou:createPou', { ok: true }),
   }

@@ -1,4 +1,4 @@
-import { formatDate } from '@root/utils'
+import { formatDate } from '@root/frontend/utils/format-date'
 import { z } from 'zod'
 
 import { dataTypeSchema } from './data-types/data-types-diagram'

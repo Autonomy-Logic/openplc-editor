@@ -16,16 +16,16 @@
     "outDir": "configs/dll",
     "paths": {
       "@root/*": ["./src/*"],
-      "@process:main/*": ["./src/main/*"],
-      "@process:renderer/*": ["./src/renderer/*"],
-      "@components/*": ["./src/renderer/components/*"],
-      "@features/*": ["./src/renderer/features/*"],
-      "@contracts/*": ["./src/renderer/contracts/*"],
-      "@utils/*": ["./src/utils/*"],
-      "@shared/*": ["./src/shared/*"],
-      "@oplc-icons/*": ["./src/renderer/assets/icons/*"],
-      "@hooks/*": ["./src/renderer/hooks/*"],
-      "@data/*": ["./src/renderer/data/*"]
+      "@process:main/*": ["./src_old/main/*"],
+      "@process:renderer/*": ["./src_old/renderer/*"],
+      "@components/*": ["./src_old/renderer/components/*"],
+      "@features/*": ["./src_old/renderer/features/*"],
+      "@contracts/*": ["./src_old/renderer/contracts/*"],
+      "@utils/*": ["./src_old/utils/*"],
+      "@shared/*": ["./src_old/shared/*"],
+      "@oplc-icons/*": ["./src_old/renderer/assets/icons/*"],
+      "@hooks/*": ["./src_old/renderer/hooks/*"],
+      "@data/*": ["./src_old/renderer/data/*"]
     }
   },
   "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]

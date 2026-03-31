@@ -1,0 +1,34 @@
+{
+  "setupFiles": ["<rootDir>/jest.setup.js"],
+  "modulePathIgnorePatterns": ["<rootDir>/release/"],
+  "moduleDirectories": ["node_modules", "release/app/node_modules"],
+  "moduleFileExtensions": ["js", "json", "jsx", "ts", "tsx"],
+  "moduleNameMapper": {
+    "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/configs/mocks/fileMock.js",
+    "\\.(css|less|sass|scss)$": "identity-obj-proxy",
+    "^@root/(.*)$": "<rootDir>/src_old/$1",
+    "^@process:renderer/(.*)$": "<rootDir>/src_old/renderer/$1",
+    "^@process:main/(.*)$": "<rootDir>/src_old/main/$1"
+  },
+  "testEnvironment": "node",
+  "testEnvironmentOptions": {
+    "url": "http://localhost/"
+  },
+  "roots": ["<rootDir>/src_old"],
+  "testMatch": ["**/?(*.)+(spec|test).(ts|tsx|js|jsx)", "**/__tests__/**/*.(ts|tsx|js|jsx)"],
+  "testPathIgnorePatterns": ["release/app/dist", "configs/dll", "e2e"],
+  "transform": {
+    "\\.(ts|tsx|js|jsx)$": [
+      "ts-jest",
+      {
+        "tsconfig": "tsconfig.json"
+      }
+    ],
+    "^.+.tsx?$": [
+      "ts-jest",
+      {
+        "tsconfig": "tsconfig.json"
+      }
+    ]
+  }
+}
