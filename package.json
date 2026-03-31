@@ -185,8 +185,8 @@
     "logLevel": "quiet"
   },
   "lint-staged": {
-    "./src/**/*": [
-      "npm run lint:fix",
+    "./src/**/*.{ts,tsx}": [
+      "npm run lint",
       "npm run format"
     ]
   }

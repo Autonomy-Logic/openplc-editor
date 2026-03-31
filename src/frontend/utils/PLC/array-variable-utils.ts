@@ -1,6 +1,6 @@
+import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import type { DimensionRange } from './dimension-range'
 import { parseDimensionRange } from './dimension-range'
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
 
 const MAX_EXPANSION = 100
 
