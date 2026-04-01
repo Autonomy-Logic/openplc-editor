@@ -87,6 +87,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isCurrentBoardSimulator = isSimulatorTarget(currentBoardInfo)
 
+  const prepareProjectForCompile = () => {
+    return preprocessPous(projectData, isCurrentBoardSimulator, (level, message) =>
+      addLog({ id: crypto.randomUUID(), level, message }),
+    )
+  }
+
   // Sync simulatorRunning when the main process stops the simulator
   // (e.g. on project open/create) so the UI reflects the actual state.
   useEffect(() => {
@@ -105,11 +111,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleRequest = () => {
     const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
 
-    const { projectData: processedProjectData, validationFailed } = preprocessPous(
-      projectData,
-      isCurrentBoardSimulator,
-      (level, message) => addLog({ id: crypto.randomUUID(), level, message }),
-    )
+    const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile()
     if (validationFailed) {
       setIsCompiling(false)
       return
@@ -577,11 +579,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: 'Starting debug compilation...',
       })
 
-      const { projectData: processedProjectData, validationFailed } = preprocessPous(
-        projectData,
-        isSimulatorTarget(currentBoardInfo),
-        (level, message) => consoleActions.addLog({ id: crypto.randomUUID(), level, message }),
-      )
+      const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile()
       if (validationFailed) {
         setIsDebuggerProcessing(false)
         return
@@ -894,11 +892,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
           const boardCore = availableBoards.get(boardTarget)?.core || null
           const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
-          const { projectData: processedProjectData, validationFailed } = preprocessPous(
-            projectData,
-            isSimulatorTarget(currentBoardInfo),
-            (level, message) => consoleActions.addLog({ id: crypto.randomUUID(), level, message }),
-          )
+          const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile()
 
           if (validationFailed) {
             setIsDebuggerProcessing(false)
