@@ -15,6 +15,7 @@
 
 // NOTE: Must use `import.meta.env` (not `import.meta?.env`) so Vite's
 // module transform recognises the expression and injects env values.
+// @ts-expect-error TS1343 — Vite/webpack replace import.meta.env at build time; tsc sees commonjs
 const metaEnv: Record<string, string | boolean | undefined> = import.meta.env ?? {}
 
 /**
