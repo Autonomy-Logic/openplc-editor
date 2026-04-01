@@ -83,6 +83,11 @@ export interface PlatformCapabilities {
    * Web: uploads zip via API. Editor: runtime compiles from uploaded source.
    */
   hasDirectProgramUpload: boolean
+
+  // --- Environment ---
+
+  /** True when running in a development build (Vite DEV / webpack development mode). */
+  isDevMode: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +113,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: false,
   hasProxiedRuntimeConnection: false,
   hasDirectProgramUpload: false,
+  isDevMode: false,
 }
 
 export const WEB_CAPABILITIES: PlatformCapabilities = {
@@ -129,4 +135,5 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: true,
   hasProxiedRuntimeConnection: true,
   hasDirectProgramUpload: true,
+  isDevMode: false,
 }

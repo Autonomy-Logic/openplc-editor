@@ -410,7 +410,7 @@ const AcceleratorHandler = () => {
     if (!capabilities.hasNativeWindowControls) return
 
     const handler = (e: BeforeUnloadEvent) => {
-      if (process.env.NODE_ENV !== 'production') return
+      if (capabilities.isDevMode) return
 
       if (!close.window) {
         e.returnValue = false
