@@ -28,7 +28,7 @@ import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
 import { CreateXMLFile } from '../utils'
-import type { ArduinoCoreControl, HalsFile } from './compiler-types'
+import type { ArduinoCoreControl, HalsFile } from './types'
 import { FormatMacAddress } from './utils/formatters'
 
 interface MethodsResult<T> {

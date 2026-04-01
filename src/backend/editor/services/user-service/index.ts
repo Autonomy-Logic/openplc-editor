@@ -5,10 +5,8 @@ import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
-import { ARDUINO_DATA } from './data/arduino'
-import { HISTORY_DATA } from './data/history'
-import { SETTINGS_DATA } from './data/settings'
-import type { ArduinoListOutput } from './user-service-types'
+import { ARDUINO_DATA, HISTORY_DATA, SETTINGS_DATA } from './data/types'
+import type { ArduinoListOutput } from './types'
 
 /**
  * UserService class responsible for user settings and history management.
