@@ -595,7 +595,7 @@ const EditableDocumentationCell = ({
           align='center'
           side='bottom'
           sideOffset={-32}
-          className='box h-fit w-[175px] rounded-lg bg-white p-2 lg:w-[275px] 2xl:w-[375px] dark:bg-neutral-950'
+          className='box h-fit w-[175px] rounded-lg bg-white p-2 dark:bg-neutral-950 lg:w-[275px] 2xl:w-[375px]'
           onInteractOutside={onBlur}
         >
           <textarea
