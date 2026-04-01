@@ -1,4 +1,4 @@
-import { clipboardSchema } from '../slices/clipboard'
+import { clipboardSchema } from '../slices/clipboard/types'
 
 describe('clipboardSchema', () => {
   it('parses a valid fbd clipboard entry', () => {

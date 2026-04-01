@@ -1,4 +1,4 @@
-import { CONSTANTS } from '../app-constants'
+import { CONSTANTS } from '../app-constants/types'
 
 describe('CONSTANTS', () => {
   it('has theme variants', () => {

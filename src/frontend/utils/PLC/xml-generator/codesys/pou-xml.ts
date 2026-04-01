@@ -1,6 +1,6 @@
 // import { PLCVariable } from '@root/types/PLC'
 import { FBDRungState, RungLadderState } from '@root/frontend/store/slices'
-import { baseTypes } from '@root/frontend/utils/plc-constants'
+import { baseTypes } from '@root/frontend/utils/plc-constants/types'
 import { PLCPou } from '@root/middleware/shared/ports/open-plc-types'
 import { BaseXml } from '@root/middleware/shared/ports/xml-types/codesys'
 import { InterfaceXML } from '@root/middleware/shared/ports/xml-types/codesys/pous/interface/interface-diagram'

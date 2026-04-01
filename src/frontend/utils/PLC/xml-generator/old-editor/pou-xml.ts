@@ -1,5 +1,5 @@
 import { FBDRungState, RungLadderState } from '@root/frontend/store/slices'
-import { baseTypes } from '@root/frontend/utils/plc-constants'
+import { baseTypes } from '@root/frontend/utils/plc-constants/types'
 import { PLCPou } from '@root/middleware/shared/ports/open-plc-types'
 import { BaseXml } from '@root/middleware/shared/ports/xml-types/old-editor'
 import { InterfaceXML } from '@root/middleware/shared/ports/xml-types/old-editor/pous/interface/interface-diagram'

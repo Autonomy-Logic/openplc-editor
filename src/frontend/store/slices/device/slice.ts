@@ -2,7 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
-import { defaultDeviceConfiguration } from './data/constants'
+import { defaultDeviceConfiguration } from './data/types'
 import type { DeviceSlice, PinUpdateResponse } from './types'
 import {
   checkIfPinIsValid,

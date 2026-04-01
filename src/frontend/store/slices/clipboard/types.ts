@@ -1,6 +1,6 @@
 import z from 'zod'
 
-import { edgeSchema, nodeSchema } from './react-flow'
+import { edgeSchema, nodeSchema } from '../react-flow'
 
 export const clipboardSchema = z.discriminatedUnion('language', [
   z.object({

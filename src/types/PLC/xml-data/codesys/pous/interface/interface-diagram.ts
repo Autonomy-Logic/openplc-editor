@@ -1,4 +1,4 @@
-import { baseTypes } from '@root/frontend/utils/plc-constants'
+import { baseTypes } from '@root/frontend/utils/plc-constants/types'
 import { z } from 'zod'
 
 import { variableXMLSchema } from '../../variable/variable-diagram'

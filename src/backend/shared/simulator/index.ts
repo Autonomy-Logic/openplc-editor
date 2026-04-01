@@ -1,6 +1,6 @@
 export type { SerialPortLike } from './modbus-rtu-client'
 export { ModbusRtuClient } from './modbus-rtu-client'
-export { ModbusDebugResponse, ModbusFunctionCode } from './modbus-types'
+export { ModbusDebugResponse, ModbusFunctionCode } from './types'
 export { SimulatorModule } from './simulator-module'
 export { simulatorService } from './simulator-service'
 export { VirtualSerialPort } from './virtual-serial-port'

@@ -1,5 +1,5 @@
 import type { DevicePin, PinType } from '../../../../../middleware/shared/ports/types'
-import { PLC_ADDRESS_PREFIX } from '../../../../utils/PLC/address-constants'
+import { PLC_ADDRESS_PREFIX } from '../../../../utils/PLC/address-constants/types'
 
 // ---------------------------------------------------------------------------
 // Address manipulation

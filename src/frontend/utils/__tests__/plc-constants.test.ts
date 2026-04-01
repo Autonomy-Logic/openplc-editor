@@ -5,7 +5,7 @@ import {
   PLCLanguages,
   PLCLanguagesShortenedForm,
   PLCProgramLanguages,
-} from '../plc-constants'
+} from '../plc-constants/types'
 
 describe('baseTypes', () => {
   it('contains all IEC 61131-3 base types', () => {

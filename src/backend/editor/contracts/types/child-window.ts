@@ -1,4 +1,4 @@
-import { CONSTANTS } from '@root/frontend/utils/app-constants'
+import { CONSTANTS } from '@root/frontend/utils/app-constants/types'
 import { z } from 'zod'
 
 const { paths } = CONSTANTS as { paths: Record<string, string> }
