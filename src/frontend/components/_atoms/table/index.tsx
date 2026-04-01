@@ -107,7 +107,7 @@ const TableHead = forwardRef<HTMLTableCellElement, TableHeadProps>(
       ref={ref}
       className={cn(
         // REVIEW: width is set to 200px, 300px, or 375px based on the screen size, but to make the table resizable we had to change it with Tanstack/react-table
-        'relative max-h-8 w-[200px] text-neutral-850 dark:text-neutral-300 lg:w-[300px] 2xl:w-[375px]',
+        'relative max-h-8 w-[200px] text-neutral-850 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-300',
         className,
       )}
       {...res}

@@ -101,7 +101,7 @@ const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({ setSearchFilterValu
       </div>
       <div
         id='project-filter-search-container'
-        className='mr-2 flex h-12 w-[704px] flex-grow items-center gap-4 rounded-lg border-[1.5px] border-neutral-100 bg-white px-8 font-caption text-base dark:border-neutral-800 dark:bg-neutral-900 xl:mr-4'
+        className='mr-2 flex h-12 w-[704px] flex-grow items-center gap-4 rounded-lg border-[1.5px] border-neutral-100 bg-white px-8 font-caption text-base xl:mr-4 dark:border-neutral-800 dark:bg-neutral-900'
       >
         <div id='project-filter-search-label'>
           <MagnifierIcon className='cursor-default stroke-brand' />
