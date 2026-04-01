@@ -1,5 +1,5 @@
-import type { PLCProject } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/old-editor/base-diagram'
+import type { PLCProject } from '@root/middleware/shared/ports/open-plc-types'
+import { BaseXml } from '@root/middleware/shared/ports/xml-types/old-editor/base-diagram'
 import { create } from 'xmlbuilder2'
 
 import { formatDate } from '../../../format-date'

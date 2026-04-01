@@ -18,7 +18,7 @@ import {
   LeftPowerRailLadderXML,
   OutVariableLadderXML,
   RightPowerRailLadderXML,
-} from '@root/types/PLC/xml-data/old-editor/pous/languages/ladder-diagram'
+} from '@root/middleware/shared/ports/xml-types/old-editor/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
 
 /**

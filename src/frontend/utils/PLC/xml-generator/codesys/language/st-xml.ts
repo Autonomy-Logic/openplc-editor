@@ -1,4 +1,4 @@
-import { StXML } from '@root/types/PLC/xml-data/codesys/pous/languages/st-diagram'
+import { StXML } from '@root/middleware/shared/ports/xml-types/codesys/pous/languages/st-diagram'
 
 const stToXML = (value: string) => {
   const stXML: {

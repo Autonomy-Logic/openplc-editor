@@ -6,7 +6,7 @@ import type {
   OpcUaTrustedCertificate,
   OpcUaUser,
   PLCServer,
-} from '@root/types/PLC/open-plc'
+} from '@root/middleware/shared/ports/open-plc-types'
 
 import { getErrorMessage } from '../get-error-message'
 import { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from './resolve-indices'

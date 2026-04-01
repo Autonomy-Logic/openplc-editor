@@ -1,4 +1,4 @@
-import type { OpcUaServerConfig, PLCServer } from '@root/types/PLC/open-plc'
+import type { OpcUaServerConfig, PLCServer } from '@root/middleware/shared/ports/open-plc-types'
 
 import { generateOpcUaConfig, parseDebugFile, validateOpcUaConfig } from '../generate-opcua-config'
 import { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from '../resolve-indices'

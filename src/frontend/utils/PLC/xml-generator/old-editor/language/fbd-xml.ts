@@ -16,7 +16,7 @@ import {
   FbdXML,
   InVariableFbdXML,
   OutVariableFbdXML,
-} from '@root/types/PLC/xml-data/old-editor/pous/languages/fbd-diagram'
+} from '@root/middleware/shared/ports/xml-types/old-editor/pous/languages/fbd-diagram'
 import { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react'
 
 const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {

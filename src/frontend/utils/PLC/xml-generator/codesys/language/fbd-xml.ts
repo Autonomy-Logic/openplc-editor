@@ -16,7 +16,7 @@ import {
   FbdXML,
   InVariableFbdXML,
   OutVariableFbdXML,
-} from '@root/types/PLC/xml-data/codesys/pous/languages/fbd-diagram'
+} from '@root/middleware/shared/ports/xml-types/codesys/pous/languages/fbd-diagram'
 
 /**
  * Translate react flow nodes to XML

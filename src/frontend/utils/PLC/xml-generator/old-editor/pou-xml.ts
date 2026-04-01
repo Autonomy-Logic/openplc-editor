@@ -1,9 +1,9 @@
 import { FBDRungState, RungLadderState } from '@root/frontend/store/slices'
 import { baseTypes } from '@root/frontend/utils/plc-constants'
-import { PLCPou } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
-import { InterfaceXML } from '@root/types/PLC/xml-data/old-editor/pous/interface/interface-diagram'
-import { VariableXML } from '@root/types/PLC/xml-data/old-editor/variable/variable-diagram'
+import { PLCPou } from '@root/middleware/shared/ports/open-plc-types'
+import { BaseXml } from '@root/middleware/shared/ports/xml-types/old-editor'
+import { InterfaceXML } from '@root/middleware/shared/ports/xml-types/old-editor/pous/interface/interface-diagram'
+import { VariableXML } from '@root/middleware/shared/ports/xml-types/old-editor/variable/variable-diagram'
 
 import { fbdToXml } from './language/fbd-xml'
 import { ilToXML } from './language/il-xml'

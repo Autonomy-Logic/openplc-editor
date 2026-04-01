@@ -2,7 +2,7 @@
 
 module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx,ejs,html}'],
-  darkMode: 'class',
+  darkMode: 'media',
   theme: {
     extend: {
       scrollbar: ['rounded'],

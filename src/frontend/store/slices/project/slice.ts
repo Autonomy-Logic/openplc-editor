@@ -756,7 +756,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           const server = slice.project.data.servers?.find((s) => s.name === name)
-          if (!server?.s7commSlaveConfig) return
+          if (!server?.s7commSlaveConfig?.plcIdentity) return
           Object.assign(server.s7commSlaveConfig.plcIdentity, identity)
         }),
       )
@@ -816,7 +816,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           const server = slice.project.data.servers?.find((s) => s.name === name)
-          if (!server?.s7commSlaveConfig) return
+          if (!server?.s7commSlaveConfig?.logging) return
           Object.assign(server.s7commSlaveConfig.logging, logging)
         }),
       )

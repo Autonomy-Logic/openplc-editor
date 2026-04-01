@@ -13,7 +13,6 @@
  * at build time, so this indirection has zero runtime cost after bundling.
  */
 
-// @ts-expect-error TS1343 — import.meta is resolved at build time by Vite / webpack
 // NOTE: Must use `import.meta.env` (not `import.meta?.env`) so Vite's
 // module transform recognises the expression and injects env values.
 const metaEnv: Record<string, string | boolean | undefined> = import.meta.env ?? {}

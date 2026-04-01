@@ -1,4 +1,4 @@
-import { PLCProjectData, PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCProjectData, PLCVariable } from '@root/middleware/shared/ports/open-plc-types'
 
 import { getErrorMessage } from './get-error-message'
 

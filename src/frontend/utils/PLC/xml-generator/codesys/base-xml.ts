@@ -1,4 +1,4 @@
-import { BaseXml } from '@root/types/PLC/xml-data/codesys/base-diagram'
+import { BaseXml } from '@root/middleware/shared/ports/xml-types/codesys/base-diagram'
 
 import { formatDate } from '../../../format-date'
 

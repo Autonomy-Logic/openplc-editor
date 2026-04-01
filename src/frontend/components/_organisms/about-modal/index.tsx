@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 
 import { useAccelerator, useCapabilities, useSystem } from '../../../../middleware/shared/providers'
+
+declare const APP_VERSION: string | undefined
+declare const BUILD_DATE: string | undefined
 import openPlcLogo from '../../../assets/icons/about/logo.svg'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent } from '../../_molecules/modal'

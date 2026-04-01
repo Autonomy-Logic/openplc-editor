@@ -17,7 +17,7 @@ import {
   LeftPowerRailLadderXML,
   OutVariableLadderXML,
   RightPowerRailLadderXML,
-} from '@root/types/PLC/xml-data/codesys/pous/languages/ladder-diagram'
+} from '@root/middleware/shared/ports/xml-types/codesys/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
 
 /**

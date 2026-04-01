@@ -146,7 +146,7 @@ function makeDataBlock(dbNumber: number): S7CommDataBlock {
     dbNumber,
     description: `DB${dbNumber}`,
     sizeBytes: 128,
-    mapping: { startByte: 0, endByte: 127, iecAddresses: [] },
+    mapping: { type: 'input', startBuffer: 0, bitAddressing: false },
   }
 }
 
@@ -907,9 +907,7 @@ describe('createProjectSlice', () => {
       const updated: PLCDataType = {
         name: 'MyStruct',
         derivation: 'structure',
-        variable: [
-          { name: 'field1', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
-        ],
+        variable: [{ name: 'field1', type: { definition: 'base-type', value: 'BOOL' }, documentation: '' }],
       }
       store.getState().projectActions.updateDatatype('MyStruct', updated)
       const storedDt = store.getState().project.data.dataTypes[0]
@@ -970,9 +968,9 @@ describe('createProjectSlice', () => {
         name: 'MyStruct',
         derivation: 'structure',
         variable: [
-          { name: 'a', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-          { name: 'b', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-          { name: 'c', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+          { name: 'a', type: { definition: 'base-type', value: 'INT' }, documentation: '' },
+          { name: 'b', type: { definition: 'base-type', value: 'INT' }, documentation: '' },
+          { name: 'c', type: { definition: 'base-type', value: 'INT' }, documentation: '' },
         ],
       }
       store.getState().projectActions.createDatatype({ data: dt })
@@ -1267,7 +1265,7 @@ describe('createProjectSlice', () => {
       const server = (store.getState().project.data.servers ?? [])[0]
       expect(server.s7commSlaveConfig).toBeDefined()
       expect(server.s7commSlaveConfig?.server.port).toBe(102)
-      expect(server.s7commSlaveConfig?.plcIdentity.name).toBe('OpenPLC Runtime')
+      expect(server.s7commSlaveConfig?.plcIdentity!.name).toBe('OpenPLC Runtime')
     })
 
     it('creates an opcua server with default config', () => {
@@ -1416,8 +1414,8 @@ describe('createProjectSlice', () => {
       seedServer(store, makeS7CommServer('S7'))
       const result = store.getState().projectActions.updateS7CommPlcIdentity('S7', { name: 'Custom PLC' })
       expect(result.ok).toBe(true)
-      expect(store.getState().project.data.servers![0].s7commSlaveConfig!.plcIdentity.name).toBe('Custom PLC')
-      expect(store.getState().project.data.servers![0].s7commSlaveConfig!.plcIdentity.moduleType).toBe(
+      expect(store.getState().project.data.servers![0].s7commSlaveConfig!.plcIdentity!.name).toBe('Custom PLC')
+      expect(store.getState().project.data.servers![0].s7commSlaveConfig!.plcIdentity!.moduleType).toBe(
         'CPU 315-2 PN/DP',
       ) // unchanged
     })
@@ -1538,7 +1536,7 @@ describe('createProjectSlice', () => {
       seedServer(store, makeS7CommServer('S7'))
       const result = store.getState().projectActions.updateS7CommLogging('S7', { logDataAccess: true })
       expect(result.ok).toBe(true)
-      const logging = store.getState().project.data.servers![0].s7commSlaveConfig!.logging
+      const logging = store.getState().project.data.servers![0].s7commSlaveConfig!.logging!
       expect(logging.logDataAccess).toBe(true)
       expect(logging.logConnections).toBe(true) // unchanged
     })
@@ -2256,7 +2254,7 @@ describe('createProjectSlice', () => {
         dbNumber: 1,
         description: 'DB',
         sizeBytes: 100,
-        mapping: { startByte: 0, endByte: 99, iecAddresses: [] },
+        mapping: { type: 'input', startBuffer: 0, bitAddressing: false },
       })
       expect(result.ok).toBe(true)
     })

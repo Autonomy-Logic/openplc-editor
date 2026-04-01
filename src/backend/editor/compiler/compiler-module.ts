@@ -373,7 +373,7 @@ class CompilerModule {
 
   async handleGenerateXMLfromJSON(sourceTargetFolderPath: string, jsonData: PLCProjectData) {
     return new Promise<MethodsResult<{ xmlPath: string; xmlContent: string }>>((resolve, reject) => {
-      const { data: xmlData } = XmlGenerator(jsonData, 'old-editor')
+      const { data: xmlData } = XmlGenerator(jsonData as Parameters<typeof XmlGenerator>[0], 'old-editor')
       if (typeof xmlData !== 'string') {
         reject(new Error('XML data is not a string'))
         return
@@ -1129,7 +1129,10 @@ class CompilerModule {
       return { success: false, message: 'User canceled the save dialog' }
     }
 
-    const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml, parseTo) as {
+    const { data: projectDataAsString, message } = XmlGenerator(
+      dataToCreateXml as Parameters<typeof XmlGenerator>[0],
+      parseTo,
+    ) as {
       data: string | undefined
       message: string
     }

@@ -86,7 +86,6 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// @ts-expect-error TS1343 — this script runs via `npx tsx` (ESM), not through webpack
 const SRC_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..')
 
 function collectFiles(dir: string, ext: string[]): string[] {

@@ -1,4 +1,4 @@
-import { IlXML } from '@root/types/PLC/xml-data/codesys'
+import { IlXML } from '@root/middleware/shared/ports/xml-types/codesys'
 
 const ilToXML = (value: string) => {
   const ilXML: {

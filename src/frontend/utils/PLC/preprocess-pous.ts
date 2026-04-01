@@ -1,4 +1,4 @@
-import type { PLCPou, PLCProjectData } from '../../../middleware/shared/ports/types'
+import type { PLCPou, PLCProjectData, PLCVariable } from '../../../middleware/shared/ports/types'
 import { addCppLocalVariables } from '../cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '../cpp/generateSTCode'
 import { validateCppCode } from '../cpp/validateCppCode'
@@ -10,7 +10,7 @@ import { wrapUnsupportedComments } from './wrap-unsupported-comments'
 type CppPouData = {
   name: string
   code: string
-  variables: unknown[]
+  variables: PLCVariable[]
 }
 
 type ProjectDataWithCpp = PLCProjectData & {

@@ -15,7 +15,7 @@ import { useOpenPLCStore } from '../store'
 const StartScreen = () => {
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')
   const capabilities = useCapabilities()
-  const _system = useSystem()
+  useSystem()
   const projectPort = useProject()
   const device = useDevice()
   const windowPort = useWindow()

@@ -7,7 +7,7 @@ import {
   findInstanceName,
   type PLCInstanceMapping,
 } from '@root/frontend/utils/debug-variable-finder'
-import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/types/PLC/open-plc'
+import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/ports/open-plc-types'
 
 import type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'
 

@@ -1,7 +1,7 @@
-import { PLCConfiguration } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
-import { PouInstance, TaskXML } from '@root/types/PLC/xml-data/old-editor/task/task-diagram'
-import { VariableXML } from '@root/types/PLC/xml-data/old-editor/variable/variable-diagram'
+import { PLCConfiguration } from '@root/middleware/shared/ports/open-plc-types'
+import { BaseXml } from '@root/middleware/shared/ports/xml-types/old-editor'
+import { PouInstance, TaskXML } from '@root/middleware/shared/ports/xml-types/old-editor/task/task-diagram'
+import { VariableXML } from '@root/middleware/shared/ports/xml-types/old-editor/variable/variable-diagram'
 
 import { convertTypeToXml } from './type-xml'
 

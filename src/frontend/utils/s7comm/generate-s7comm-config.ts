@@ -1,4 +1,4 @@
-import type { PLCServer } from '@root/types/PLC/open-plc'
+import type { PLCServer } from '@root/middleware/shared/ports/open-plc-types'
 
 /**
  * S7Comm Runtime Configuration Interfaces
