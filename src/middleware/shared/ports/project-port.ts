@@ -79,6 +79,36 @@ export interface RenamePouParams {
 
 import type { PouType } from './types'
 
+/** Raw file entry: a file path relative to the project root and its text content. */
+export interface RawProjectFile {
+  /** Path relative to the project root (e.g., 'pous/programs/main.st') */
+  relativePath: string
+  /** Raw text content of the file */
+  content: string
+}
+
+/** Raw project files as read from disk — no parsing, just plain strings. */
+export interface RawProjectFiles {
+  success: boolean
+  data?: {
+    /** Absolute path to the project directory */
+    projectPath: string
+    /** Raw content of project.json */
+    projectJson: string
+    /** Raw content of devices/configuration.json */
+    deviceConfig: string
+    /** Raw content of devices/pin-mapping.json */
+    pinMapping: string
+    /** Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json) */
+    pouFiles: RawProjectFile[]
+    /** Raw server config files from devices/servers/ */
+    serverFiles: RawProjectFile[]
+    /** Raw remote device config files from devices/remote/ */
+    remoteDeviceFiles: RawProjectFile[]
+  }
+  error?: { title: string; description: string }
+}
+
 export interface ProjectPort {
   /** Create a new project. */
   createProject(params: CreateProjectParams): Promise<ProjectResponse>
@@ -128,6 +158,14 @@ export interface ProjectPort {
    * Web: reads from in-memory project state or API.
    */
   readFileContent(filePath: string): Promise<{ success: boolean; content?: string; error?: string }>
+
+  /**
+   * Read all raw project files from disk without parsing.
+   * The frontend is responsible for parsing the returned content strings.
+   * Editor: reads from local filesystem via IPC.
+   * Web: reads from backend API.
+   */
+  readProjectFiles?(projectPath: string): Promise<RawProjectFiles>
 
   /**
    * Start watching a file for external changes.

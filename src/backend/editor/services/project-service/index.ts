@@ -121,6 +121,100 @@ class ProjectService {
     await this.writeProjectHistory(historyProjectsFilePath, updatedHistory)
   }
 
+  /**
+   * Read all project files as raw strings — no parsing, no transformation.
+   * The frontend is responsible for parsing the returned content.
+   */
+  async readRawProjectFiles(
+    projectPath: string,
+  ): Promise<{
+    success: boolean
+    data?: {
+      projectPath: string
+      projectJson: string
+      deviceConfig: string
+      pinMapping: string
+      pouFiles: Array<{ relativePath: string; content: string }>
+      serverFiles: Array<{ relativePath: string; content: string }>
+      remoteDeviceFiles: Array<{ relativePath: string; content: string }>
+    }
+    error?: { title: string; description: string }
+  }> {
+    try {
+      await promises.access(projectPath)
+
+      const readFileIfExists = async (filePath: string): Promise<string> => {
+        try {
+          return await promises.readFile(filePath, 'utf-8')
+        } catch {
+          return ''
+        }
+      }
+
+      const readDirRecursive = async (
+        dirPath: string,
+        basePath: string,
+      ): Promise<Array<{ relativePath: string; content: string }>> => {
+        const results: Array<{ relativePath: string; content: string }> = []
+        try {
+          const entries = await promises.readdir(dirPath, { withFileTypes: true })
+          for (const entry of entries) {
+            const fullPath = join(dirPath, entry.name)
+            const relPath = join(basePath, entry.name)
+            if (entry.isDirectory()) {
+              const subResults = await readDirRecursive(fullPath, relPath)
+              results.push(...subResults)
+            } else if (entry.isFile()) {
+              const content = await promises.readFile(fullPath, 'utf-8')
+              results.push({ relativePath: relPath, content })
+            }
+          }
+        } catch {
+          // Directory doesn't exist — return empty
+        }
+        return results
+      }
+
+      const projectJson = await readFileIfExists(join(projectPath, 'project.json'))
+      const deviceConfig = await readFileIfExists(join(projectPath, 'devices', 'configuration.json'))
+      const pinMapping = await readFileIfExists(join(projectPath, 'devices', 'pin-mapping.json'))
+
+      const pouDirs = ['pous/functions', 'pous/function-blocks', 'pous/programs']
+      const pouFiles: Array<{ relativePath: string; content: string }> = []
+      for (const pouDir of pouDirs) {
+        const files = await readDirRecursive(join(projectPath, ...pouDir.split('/')), pouDir)
+        pouFiles.push(...files)
+      }
+
+      const serverFiles = await readDirRecursive(join(projectPath, 'devices', 'servers'), 'devices/servers')
+      const remoteDeviceFiles = await readDirRecursive(
+        join(projectPath, 'devices', 'remote'),
+        'devices/remote',
+      )
+
+      return {
+        success: true,
+        data: {
+          projectPath,
+          projectJson,
+          deviceConfig,
+          pinMapping,
+          pouFiles,
+          serverFiles,
+          remoteDeviceFiles,
+        },
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          title: 'Error reading project files',
+          description: error instanceof Error ? error.message : 'Unknown error',
+        },
+      }
+    }
+  }
+
   async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
     try {
       await promises.access(projectPath)

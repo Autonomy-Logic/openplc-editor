@@ -488,6 +488,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:save', this.handleProjectSave)
     this.registerHandle('project:save-file', this.handleFileSave)
     this.registerHandle('project:open-by-path', this.handleProjectOpenByPath)
+    this.registerHandle('project:read-files', this.handleReadProjectFiles)
 
     // Pou-related handlers
     this.registerHandle('pou:create', this.handleCreatePouFile)
@@ -633,6 +634,23 @@ class MainProcessBridge implements MainIpcModule {
           title: 'Error opening project',
           description: 'Please try again',
         },
+      }
+    }
+  }
+
+  handleReadProjectFiles = async (_event: IpcMainInvokeEvent, projectPath: string) => {
+    try {
+      this.stopSimulatorAndNotify()
+      const result = await this.projectService.readRawProjectFiles(projectPath)
+      if (result.success) {
+        this.currentProjectPath = projectPath
+        await this.projectService.updateProjectHistory(projectPath)
+      }
+      return result
+    } catch (_error) {
+      return {
+        success: false,
+        error: { title: 'Error reading project', description: 'Failed to read project files' },
       }
     }
   }
