@@ -23,7 +23,7 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
   const {
     project,
     modalActions: { closeModal, onOpenChange },
-    projectActions: { updatePou },
+    projectActions: { applyPouSnapshot, updatePouDocumentation },
     sharedWorkspaceActions: { forceCloseFile },
     fileActions: { updateFile },
     ladderFlowActions: { addLadderFlow },
@@ -62,8 +62,12 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
             ? parseGraphicalPouFromString(result.content, language, pou.pouType)
             : parseTextualPouFromString(result.content, language, pou.pouType)
 
-          // Restore POU body in the project store
-          updatePou({ name: fileName, content: parsed.body })
+          // Restore the full POU from disk: variables, body, and documentation.
+          // applyPouSnapshot restores variables + body, then we restore documentation separately.
+          applyPouSnapshot(fileName, parsed.interface?.variables ?? [], parsed.body)
+          if (parsed.documentation !== undefined) {
+            updatePouDocumentation(fileName, parsed.documentation)
+          }
 
           // For graphical POUs, also restore the flow state (nodes, edges, positions).
           // The parsed body.value is the full flow type (same as what addLadderFlow/addFBDFlow

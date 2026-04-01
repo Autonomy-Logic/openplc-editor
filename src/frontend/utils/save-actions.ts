@@ -129,22 +129,6 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
         toast({ title: 'Error saving file', description: res.error ?? 'Save failed', variant: 'fail' })
         return { success: false }
       }
-
-      // Also save project.json with updated debug variables
-      const debugVariables = collectDebugVariables(
-        project.data.configurations.resource.globalVariables,
-        project.data.pous,
-      )
-      const projectJson = {
-        meta: { name: project.meta.name, type: 'plc-project' },
-        data: {
-          dataTypes: project.data.dataTypes,
-          pous: [],
-          configuration: project.data.configurations,
-          debugVariables,
-        },
-      }
-      await projectPort.saveFile(`${projectPath}/project.json`, JSON.stringify(projectJson, null, 2))
     } else if (file.type === 'device') {
       // Device config: two JSON files
       const configRes = await projectPort.saveFile(
@@ -159,8 +143,39 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
         toast({ title: 'Error saving device config', description: 'Save failed', variant: 'fail' })
         return { success: false }
       }
+    } else if (file.type === 'server') {
+      // Servers are saved as individual JSON files in devices/servers/
+      const server = project.data.servers?.find((s) => s.name === name)
+      if (!server) {
+        toast({ title: 'Error saving file', description: `Server "${name}" not found.`, variant: 'fail' })
+        return { success: false }
+      }
+      const res = await projectPort.saveFile(
+        `${projectPath}/devices/servers/${name}.json`,
+        JSON.stringify(server, null, 2),
+      )
+      if (!res.success) {
+        toast({ title: 'Error saving file', description: res.error ?? 'Save failed', variant: 'fail' })
+        return { success: false }
+      }
+    } else if (file.type === 'remote-device') {
+      // Remote devices are saved as individual JSON files in devices/remote/
+      const device = project.data.remoteDevices?.find((d) => d.name === name)
+      if (!device) {
+        toast({ title: 'Error saving file', description: `Remote device "${name}" not found.`, variant: 'fail' })
+        return { success: false }
+      }
+      const res = await projectPort.saveFile(
+        `${projectPath}/devices/remote/${name}.json`,
+        JSON.stringify(device, null, 2),
+      )
+      if (!res.success) {
+        toast({ title: 'Error saving file', description: res.error ?? 'Save failed', variant: 'fail' })
+        return { success: false }
+      }
     } else {
-      // data-type, resource, server, remote-device: all live in project.json
+      // data-type, resource: live in project.json
+      // Build project.json with the EXACT same structure the backend saveProject writes
       const debugVariables = collectDebugVariables(
         project.data.configurations.resource.globalVariables,
         project.data.pous,
@@ -171,8 +186,6 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
           dataTypes: project.data.dataTypes,
           pous: [],
           configuration: project.data.configurations,
-          servers: project.data.servers,
-          remoteDevices: project.data.remoteDevices,
           debugVariables,
         },
       }

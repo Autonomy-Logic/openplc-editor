@@ -253,7 +253,7 @@ const AcceleratorHandler = () => {
       void executeSaveActiveFile(projectPort)
     })
     return unsub
-  }, [accelerator, executeSave])
+  }, [accelerator, projectPort])
 
   /**
    * Find in project (Cmd+Shift+F)
