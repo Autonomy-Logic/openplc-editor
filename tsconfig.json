@@ -19,5 +19,5 @@
       "@root/*": ["./src/*"]
     }
   },
-  "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]
+  "exclude": ["test", "release/build", "release/app/dist", "configs/dll", "src/__architecture__"]
 }
