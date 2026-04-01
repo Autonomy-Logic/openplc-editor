@@ -302,7 +302,7 @@ describe('createEditorCompilerAdapter', () => {
       expect(args[3]).toBe(false)
     })
 
-    it('ignores callback data without message or closePort', async () => {
+    it('forwards plcStatus progress events even without a message', async () => {
       const progressEvents: CompileProgressEvent[] = []
       const promise = adapter.compileProgram(
         {
@@ -318,7 +318,9 @@ describe('createEditorCompilerAdapter', () => {
       compileCallback!({ closePort: true })
 
       await promise
-      expect(progressEvents).toHaveLength(1) // only 'done'
+      expect(progressEvents).toHaveLength(2) // plcStatus + done
+      expect(progressEvents[0]).toEqual({ stage: 'arduino', message: '', plcStatus: 'RUNNING' })
+      expect(progressEvents[1].stage).toBe('done')
     })
   })
 

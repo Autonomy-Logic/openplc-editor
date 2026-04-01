@@ -64,7 +64,7 @@ const mockErrorResponse = {
 }
 
 const mockSaveResponse = { success: true, reason: { title: '', description: '' } }
-const mockSaveErrorResponse = { success: false, reason: { title: 'Save Error', description: 'Disk full' } }
+const mockSaveErrorResponse = { success: false, error: { title: 'Save Error', description: 'Disk full' } }
 
 const mockPouResponse = { success: true, data: { filePath: '/path/to/pou.st', pou: {} } }
 const mockPouErrorResponse = {

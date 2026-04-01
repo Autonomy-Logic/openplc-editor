@@ -104,7 +104,8 @@ describe('createFBDFlowSlice', () => {
 
     const { fbdFlows } = store.getState()
     expect(fbdFlows).toHaveLength(1)
-    expect(fbdFlows[0].updated).toBe(true)
+    // addFBDFlow always resets updated to false on load — the flow is being loaded from a saved project.
+    expect(fbdFlows[0].updated).toBe(false)
   })
 
   // -------------------------------------------------------------------------
@@ -523,7 +524,9 @@ describe('createFBDFlowSlice', () => {
     expect(flow.name).toBe('editor-1')
     expect(flow.rung.comment).toBe('snap')
     expect(flow.rung.selectedNodes).toEqual([])
-    expect(flow.updated).toBe(true)
+    // applyFBDFlowSnapshot does not set updated: true — snapshot restore is managed
+    // by the undo/redo handler which controls the saved flag directly.
+    expect(flow.updated).toBe(false)
   })
 
   it('applyFBDFlowSnapshot replaces existing flow when snapshot is provided', () => {

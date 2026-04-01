@@ -533,15 +533,16 @@ describe('createProjectSlice', () => {
       expect(vars[1].name).toBe('b')
     })
 
-    it('fails when local variable already exists', () => {
+    it('auto-renames when local variable already exists', () => {
       seedPou(store, makePou('Main', 'program', [makeVariable('x')]))
       const result = store.getState().projectActions.createVariable({
         scope: 'local',
         associatedPou: 'Main',
         data: makeVariable('x'),
       })
-      expect(result.ok).toBe(false)
-      expect(result.message).toBe('Variable already exists')
+      expect(result.ok).toBe(true)
+      expect(result.data).toBeDefined()
+      expect((result.data as { name: string }).name).not.toBe('x')
     })
 
     it('fails when POU not found for local scope', () => {
@@ -575,28 +576,27 @@ describe('createProjectSlice', () => {
       expect(gv[1].name).toBe('b')
     })
 
-    it('fails when global variable already exists', () => {
+    it('auto-renames when global variable already exists', () => {
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
       const result = store.getState().projectActions.createVariable({
         scope: 'global',
         data: makeVariable('gx', 'global'),
       })
-      expect(result.ok).toBe(false)
-      expect(result.message).toBe('Variable already exists')
+      expect(result.ok).toBe(true)
+      expect(result.data).toBeDefined()
+      expect((result.data as { name: string }).name).not.toBe('gx')
     })
 
-    it('does nothing for local scope when POU interface is missing', () => {
+    it('fails for local scope when POU interface is missing', () => {
       const pou: PLCPou = { name: 'NoIface', pouType: 'program', body: makeBody() }
       seedPou(store, pou)
-      // Variable is checked against the empty interface -- pou has no interface, so findIndex returns fail
       const result = store.getState().projectActions.createVariable({
         scope: 'local',
         associatedPou: 'NoIface',
         data: makeVariable('x'),
       })
-      // The pou is found but the pou.interface?.variables is undefined so the check uses []
-      // The create succeeds validation but produce does nothing because pou?.interface is falsy
-      expect(result.ok).toBe(true)
+      // The pou is found but pou.interface is undefined, so the implementation returns fail('POU not found')
+      expect(result.ok).toBe(false)
     })
   })
 
@@ -662,7 +662,7 @@ describe('createProjectSlice', () => {
       expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('%QX0.0')
     })
 
-    it('returns ok even when variable not found (no-op)', () => {
+    it('fails when variable not found', () => {
       seedPou(store, makePou('Main'))
       const result = store.getState().projectActions.updateVariable({
         scope: 'local',
@@ -670,17 +670,17 @@ describe('createProjectSlice', () => {
         variableId: 'nonexistent',
         data: { name: 'foo' },
       })
-      expect(result.ok).toBe(true)
+      expect(result.ok).toBe(false)
     })
 
-    it('returns ok when variables array is not available (POU not found)', () => {
+    it('fails when POU not found', () => {
       const result = store.getState().projectActions.updateVariable({
         scope: 'local',
         associatedPou: 'Missing',
         variableId: 'x',
         data: { name: 'foo' },
       })
-      expect(result.ok).toBe(true)
+      expect(result.ok).toBe(false)
     })
   })
 
