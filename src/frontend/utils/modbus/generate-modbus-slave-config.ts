@@ -1,7 +1,7 @@
 import type { PLCServer } from '../../../middleware/shared/ports/types'
 
 // Default values matching runtime BUFFER_SIZE
-const DEFAULT_BUFFER_MAPPING = {
+export const DEFAULT_BUFFER_MAPPING = {
   holdingRegisters: { qwCount: 1024, mwCount: 1024, mdCount: 1024, mlCount: 1024 },
   coils: { qxBits: 8192, mxBits: 0 },
   discreteInputs: { ixBits: 8192 },

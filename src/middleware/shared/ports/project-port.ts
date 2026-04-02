@@ -46,6 +46,8 @@ export interface ProjectResponse {
     projectData: PLCProjectData
     deviceConfiguration?: DeviceConfiguration
     devicePinMapping?: DevicePin[]
+    /** Warnings from parsing (e.g. dropped files that failed validation). */
+    warnings?: string[]
   }
   error?: {
     title: string

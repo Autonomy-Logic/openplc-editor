@@ -321,6 +321,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       getState().workspaceActions.setEditingState('saved')
 
+      // Log any parsing warnings to the app console (after clear so they aren't wiped)
+      if (data.warnings) {
+        for (const message of data.warnings) {
+          getState().consoleActions.addLog({ id: crypto.randomUUID(), level: 'warning', message })
+        }
+      }
+
       // Set project data (setting meta.path triggers navigation from start to workspace)
       getState().projectActions.setProject({
         meta: data.meta,

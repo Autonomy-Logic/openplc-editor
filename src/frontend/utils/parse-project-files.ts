@@ -22,7 +22,6 @@ import type {
 } from '../../middleware/shared/ports/types'
 import { deviceConfigurationSchema, devicePinSchema } from '../../types/PLC/devices'
 import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../../types/PLC/open-plc'
-import { openPLCStoreBase } from '../store'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
 import {
   detectLanguageFromExtension,
@@ -60,6 +59,8 @@ export interface ParsedProjectData {
   }
   deviceConfiguration?: DeviceConfiguration
   devicePinMapping?: DevicePin[]
+  /** Warnings collected during parsing (e.g. dropped files that failed validation). */
+  warnings?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +319,8 @@ export function parseProjectFiles(
   serverFiles: RawProjectFile[],
   remoteDeviceFiles: RawProjectFile[],
 ): ParsedProjectData {
+  const warnings: string[] = []
+
   // Parse and Zod-validate project.json (matches old backend safeParseProjectFile behavior)
   let project: { meta?: { name?: string; type?: string }; data?: Record<string, unknown> }
   try {
@@ -327,22 +330,15 @@ export function parseProjectFiles(
       if (result.success) {
         project = result.data as typeof project
       } else {
-        openPLCStoreBase.getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'warning',
-          message: `project.json validation failed: ${result.error.message}. Using defaults.`,
-        })
+        console.error('[parseProjectFiles] project.json Zod errors:', result.error.issues)
+        warnings.push('project.json has invalid structure and was loaded with defaults.')
         project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
       }
     } else {
       project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
     }
   } catch {
-    openPLCStoreBase.getState().consoleActions.addLog({
-      id: crypto.randomUUID(),
-      level: 'warning',
-      message: 'project.json is malformed and could not be read. Using defaults.',
-    })
+    warnings.push('project.json is malformed and could not be read. Using defaults.')
     project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
   }
 
@@ -361,22 +357,15 @@ export function parseProjectFiles(
       if (result.success) {
         deviceConfiguration = result.data
       } else {
-        openPLCStoreBase.getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'warning',
-          message: `devices/configuration.json validation failed: ${result.error.message}. Using defaults.`,
-        })
+        console.error('[parseProjectFiles] devices/configuration.json Zod errors:', result.error.issues)
+        warnings.push('devices/configuration.json has invalid structure and was loaded with defaults.')
         deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
       }
     } else {
       deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
     }
   } catch {
-    openPLCStoreBase.getState().consoleActions.addLog({
-      id: crypto.randomUUID(),
-      level: 'warning',
-      message: 'devices/configuration.json is malformed and could not be read. Using defaults.',
-    })
+    warnings.push('devices/configuration.json is malformed and could not be read. Using defaults.')
     deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
   }
 
@@ -390,22 +379,15 @@ export function parseProjectFiles(
       if (result.success) {
         devicePinMapping = result.data
       } else {
-        openPLCStoreBase.getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'warning',
-          message: `devices/pin-mapping.json validation failed: ${result.error.message}. Using defaults.`,
-        })
+        console.error('[parseProjectFiles] devices/pin-mapping.json Zod errors:', result.error.issues)
+        warnings.push('devices/pin-mapping.json has invalid structure and was loaded with defaults.')
         devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
       }
     } else {
       devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
     }
   } catch {
-    openPLCStoreBase.getState().consoleActions.addLog({
-      id: crypto.randomUUID(),
-      level: 'warning',
-      message: 'devices/pin-mapping.json is malformed and could not be read. Using defaults.',
-    })
+    warnings.push('devices/pin-mapping.json is malformed and could not be read. Using defaults.')
     devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
   }
 
@@ -433,9 +415,12 @@ export function parseProjectFiles(
       const result = PLCServerSchema.safeParse(parsed)
       if (result.success) {
         servers.push(result.data)
+      } else {
+        console.error(`[parseProjectFiles] Server "${file.relativePath}" Zod errors:`, result.error.issues)
+        warnings.push(`Server file "${file.relativePath}" has invalid configuration and was skipped.`)
       }
     } catch {
-      // Silently skip invalid server files
+      // Skip unparseable JSON files
     }
   }
 
@@ -447,9 +432,12 @@ export function parseProjectFiles(
       const result = PLCRemoteDeviceSchema.safeParse(parsed)
       if (result.success) {
         remoteDevices.push(result.data)
+      } else {
+        console.error(`[parseProjectFiles] Remote device "${file.relativePath}" Zod errors:`, result.error.issues)
+        warnings.push(`Remote device file "${file.relativePath}" has invalid configuration and was skipped.`)
       }
     } catch {
-      // Silently skip invalid remote device files
+      // Skip unparseable JSON files
     }
   }
 
@@ -480,5 +468,6 @@ export function parseProjectFiles(
     },
     deviceConfiguration,
     devicePinMapping,
+    warnings: warnings.length > 0 ? warnings : undefined,
   }
 }

@@ -112,6 +112,8 @@ export type OpenProjectResponseData = {
   projectData: PLCProjectData
   deviceConfiguration?: DeviceConfiguration
   devicePinMapping?: DevicePin[]
+  /** Warnings from parsing (e.g. dropped files that failed validation). */
+  warnings?: string[]
 }
 
 export type SharedWorkspaceActions = {

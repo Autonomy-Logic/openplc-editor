@@ -11,6 +11,7 @@ import type {
   S7CommServerSettings,
 } from '../../../../middleware/shared/ports/types'
 import { isLegalIdentifier } from '../../../utils/keywords'
+import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import type { ProjectResponse, ProjectSlice } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
@@ -746,9 +747,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (config.networkInterface !== undefined) server.modbusSlaveConfig.networkInterface = config.networkInterface
           if (config.port !== undefined) server.modbusSlaveConfig.port = config.port
           if (config.bufferMapping) {
+            const base = server.modbusSlaveConfig.bufferMapping ?? DEFAULT_BUFFER_MAPPING
             server.modbusSlaveConfig.bufferMapping = {
-              ...server.modbusSlaveConfig.bufferMapping,
-              ...config.bufferMapping,
+              holdingRegisters: { ...base.holdingRegisters, ...config.bufferMapping.holdingRegisters },
+              coils: { ...base.coils, ...config.bufferMapping.coils },
+              discreteInputs: { ...base.discreteInputs, ...config.bufferMapping.discreteInputs },
+              inputRegisters: { ...base.inputRegisters, ...config.bufferMapping.inputRegisters },
             }
           }
         }),
