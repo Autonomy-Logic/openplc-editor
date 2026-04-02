@@ -11,7 +11,7 @@ import type { FileSliceDataObject } from '../file'
 import type { HistorySnapshot } from '../history'
 import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
-import { CreateEditorObjectFromTab } from '../tabs/utils'
+import { CreateEditorObjectFromTab, CreateRemoteDeviceEditor, CreateServerEditor } from '../tabs/utils'
 import type { SharedRootState, SharedSlice } from './types'
 import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
 
@@ -213,6 +213,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   },
 
   serverActions: {
+    create: ({ name, protocol }) => {
+      const state = getState()
+      const servers = state.project.data.servers ?? []
+      if (servers.some((s) => s.name === name)) return { ok: false, message: 'Server already exists' }
+
+      const result = state.projectActions.createServer({ data: { name, protocol } })
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateServerEditor(name, protocol)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name, type: 'server', filePath: name, isNew: true })
+      state.tabsActions.updateTabs({ name, elementType: { type: 'server', protocol } })
+      state.tabsActions.setSelectedTab(name)
+      state.editorActions.setEditor(editorModel)
+
+      return { ok: true }
+    },
+
     deleteRequest: (name) => {
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'server' })
     },
@@ -224,6 +242,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   },
 
   remoteDeviceActions: {
+    create: ({ name, protocol }) => {
+      const state = getState()
+      const devices = state.project.data.remoteDevices ?? []
+      if (devices.some((d) => d.name === name)) return { ok: false, message: 'Remote device already exists' }
+
+      const result = state.projectActions.createRemoteDevice({ data: { name, protocol } })
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateRemoteDeviceEditor(name, protocol)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name, type: 'remote-device', filePath: name, isNew: true })
+      state.tabsActions.updateTabs({ name, elementType: { type: 'remote-device', protocol } })
+      state.tabsActions.setSelectedTab(name)
+      state.editorActions.setEditor(editorModel)
+
+      return { ok: true }
+    },
+
     deleteRequest: (name) => {
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'remote-device' })
     },

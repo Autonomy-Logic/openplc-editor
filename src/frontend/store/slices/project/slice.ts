@@ -852,7 +852,15 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const server = slice.project.data.servers?.find((s) => s.name === name)
           if (!server?.opcuaServerConfig) return
-          Object.assign(server.opcuaServerConfig.server, config)
+          // The UI wraps sub-object updates (e.g. { server: { enabled: true } })
+          // while top-level fields (e.g. { cycleTimeMs: 100 }) are passed directly.
+          const { server: serverUpdates, ...topLevelUpdates } = config
+          if (serverUpdates && typeof serverUpdates === 'object') {
+            Object.assign(server.opcuaServerConfig.server, serverUpdates)
+          }
+          if (Object.keys(topLevelUpdates).length > 0) {
+            Object.assign(server.opcuaServerConfig, topLevelUpdates)
+          }
         }),
       )
       return ok()
