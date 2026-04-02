@@ -14,6 +14,9 @@ import { serializePouToText } from './PLC/pou-text-serializer'
 import { collectDebugVariables, sanitizePou } from './save-project'
 import { toast } from './toast'
 
+/** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
+const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')
+
 /**
  * Save the entire project (all files, device config, debug variables).
  * Equivalent to Ctrl+Shift+S / "Save Project" menu item.
@@ -143,82 +146,58 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
     return { success: false }
   }
 
+  setEditingState('save-request')
   const projectPath = project.meta.path
+
+  const fail = (description: string): { success: false } => {
+    setEditingState('unsaved')
+    toast({ title: 'Error saving file', description, variant: 'fail' })
+    return { success: false }
+  }
 
   try {
     const isPouType = file.type === 'program' || file.type === 'function' || file.type === 'function-block'
 
     if (isPouType) {
       const pou = project.data.pous.find((p) => p.name === fileName)
-      if (!pou) {
-        toast({ title: 'Error saving file', description: `POU "${fileName}" not found.`, variant: 'fail' })
-        return { success: false }
-      }
+      if (!pou) return fail(`POU "${fileName}" not found.`)
 
-      // Sanitize: sync variablesText from code-mode editor if applicable
       const editorModel = state.editorActions.getEditorFromEditors(fileName)
       const sanitized = sanitizePou(pou, editorModel ?? undefined)
-
-      // Serialize POU to IEC text on the frontend (single source of truth)
       const textContent = serializePouToText(sanitized)
-
-      // Compute file path
       const folder = getFolderFromPouType(pou.pouType)
       const ext = getExtensionFromLanguage(pou.body.language)
-      const filePath = `${projectPath}/pous/${folder}/${fileName}${ext}`
 
-      const res = await projectPort.saveFile(filePath, textContent)
-      if (!res.success) {
-        toast({ title: 'Error saving file', description: res.error ?? 'Save failed', variant: 'fail' })
-        return { success: false }
-      }
+      const res = await projectPort.saveFile(joinPath(projectPath, 'pous', folder, `${fileName}${ext}`), textContent)
+      if (!res.success) return fail(res.error ?? 'Save failed')
     } else if (file.type === 'device') {
-      // Device config: two JSON files
       const configRes = await projectPort.saveFile(
-        `${projectPath}/devices/configuration.json`,
+        joinPath(projectPath, 'devices/configuration.json'),
         JSON.stringify(state.deviceDefinitions.configuration, null, 2),
       )
       const pinRes = await projectPort.saveFile(
-        `${projectPath}/devices/pin-mapping.json`,
+        joinPath(projectPath, 'devices/pin-mapping.json'),
         JSON.stringify(state.deviceDefinitions.pinMapping.pins, null, 2),
       )
-      if (!configRes.success || !pinRes.success) {
-        toast({ title: 'Error saving device config', description: 'Save failed', variant: 'fail' })
-        return { success: false }
-      }
+      if (!configRes.success || !pinRes.success) return fail('Save failed')
     } else if (file.type === 'server') {
-      // Servers are saved as individual JSON files in devices/servers/
       const server = project.data.servers?.find((s) => s.name === fileName)
-      if (!server) {
-        toast({ title: 'Error saving file', description: `Server "${fileName}" not found.`, variant: 'fail' })
-        return { success: false }
-      }
+      if (!server) return fail(`Server "${fileName}" not found.`)
       const res = await projectPort.saveFile(
-        `${projectPath}/devices/servers/${fileName}.json`,
+        joinPath(projectPath, 'devices/servers', `${fileName}.json`),
         JSON.stringify(server, null, 2),
       )
-      if (!res.success) {
-        toast({ title: 'Error saving file', description: res.error ?? 'Save failed', variant: 'fail' })
-        return { success: false }
-      }
+      if (!res.success) return fail(res.error ?? 'Save failed')
     } else if (file.type === 'remote-device') {
-      // Remote devices are saved as individual JSON files in devices/remote/
       const device = project.data.remoteDevices?.find((d) => d.name === fileName)
-      if (!device) {
-        toast({ title: 'Error saving file', description: `Remote device "${fileName}" not found.`, variant: 'fail' })
-        return { success: false }
-      }
+      if (!device) return fail(`Remote device "${fileName}" not found.`)
       const res = await projectPort.saveFile(
-        `${projectPath}/devices/remote/${fileName}.json`,
+        joinPath(projectPath, 'devices/remote', `${fileName}.json`),
         JSON.stringify(device, null, 2),
       )
-      if (!res.success) {
-        toast({ title: 'Error saving file', description: res.error ?? 'Save failed', variant: 'fail' })
-        return { success: false }
-      }
+      if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
       // data-type, resource: live in project.json
-      // Build project.json with the EXACT same structure the backend saveProject writes
       const debugVariables = collectDebugVariables(
         project.data.configurations.resource.globalVariables,
         project.data.pous,
@@ -232,11 +211,11 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
           debugVariables,
         },
       }
-      const res = await projectPort.saveFile(`${projectPath}/project.json`, JSON.stringify(projectJson, null, 2))
-      if (!res.success) {
-        toast({ title: 'Error saving file', description: res.error ?? 'Save failed', variant: 'fail' })
-        return { success: false }
-      }
+      const res = await projectPort.saveFile(
+        joinPath(projectPath, 'project.json'),
+        JSON.stringify(projectJson, null, 2),
+      )
+      if (!res.success) return fail(res.error ?? 'Save failed')
     }
 
     // Mark only this file as saved
@@ -246,13 +225,14 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
     // If all files are now saved, update workspace editing state
     if (checkIfAllFilesAreSaved()) {
       setEditingState('saved')
+    } else {
+      setEditingState('unsaved')
     }
 
     toast({ title: 'File saved', description: `"${fileName}" saved successfully.`, variant: 'default' })
     return { success: true }
   } catch {
-    toast({ title: 'Error saving file', description: 'An unexpected error occurred.', variant: 'fail' })
-    return { success: false }
+    return fail('An unexpected error occurred.')
   }
 }
 

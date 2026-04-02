@@ -384,7 +384,8 @@ class ProjectService {
       }
     }
 
-    const dir = projectPath.endsWith('/project.json') ? projectPath.slice(0, -'/project.json'.length) : projectPath
+    const normalized = projectPath.replace(/\\/g, '/')
+    const dir = normalized.endsWith('/project.json') ? normalized.slice(0, -'/project.json'.length) : normalized
 
     try {
       // Ensure standard directories exist
@@ -404,10 +405,7 @@ class ProjectService {
       // Write POU files
       for (const file of pouFiles) {
         const filePath = join(dir, file.relativePath)
-        const fileDir = filePath.substring(0, filePath.lastIndexOf('/'))
-        if (!fileOrDirectoryExists(fileDir)) {
-          await promises.mkdir(fileDir, { recursive: true })
-        }
+        await promises.mkdir(dirname(filePath), { recursive: true })
         await promises.writeFile(filePath, file.content, 'utf-8')
       }
 
