@@ -32,8 +32,6 @@ import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
 
-const SIMULATOR_BOARD_NAME = 'OpenPLC Simulator'
-
 const WorkspaceScreen = () => {
   const capabilities = useCapabilities()
   const ChatPanel = useChatPanel()
@@ -63,7 +61,7 @@ const WorkspaceScreen = () => {
       toggleDebugExpandedNode,
       setDebugGraphList,
     },
-    deviceActions: { setAvailableOptions, setDeviceBoard },
+    deviceActions: { setAvailableOptions },
     searchResults,
     ai: { isChatOpen, isEnabled: isAIEnabled, hasConsented: hasAIConsented },
     project: {
@@ -261,20 +259,16 @@ const WorkspaceScreen = () => {
         const boardsMap = await device.getAvailableBoards()
         setAvailableOptions({ availableBoards: boardsMap })
 
-        // Default to simulator board if no orchestrator device is connected
-        const { runtimeConnection, deviceDefinitions } = useOpenPLCStore.getState()
-        const currentBoard = deviceDefinitions.configuration.deviceBoard
-        const currentBoardInfo = boardsMap.get(currentBoard)
-        if (runtimeConnection.connectionStatus !== 'connected' && currentBoardInfo?.compiler !== 'simulator') {
-          setDeviceBoard(SIMULATOR_BOARD_NAME)
-        }
+        // Respect the board saved in the project — do not override on load.
+        // The user explicitly chose a target board; resetting it would discard
+        // their selection every time the project reopens.
       } catch (error) {
         console.error('Failed to load boards data:', error)
       }
     }
 
     void loadAvailableBoards()
-  }, [device, setAvailableOptions, setDeviceBoard])
+  }, [device, setAvailableOptions])
 
   return (
     <div className='flex h-full w-full overflow-hidden bg-brand-dark dark:bg-neutral-950'>
