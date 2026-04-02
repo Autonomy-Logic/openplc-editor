@@ -7,8 +7,7 @@ import type { FBDFlowType } from '../../../store/slices/fbd'
 import type { LadderFlowType } from '../../../store/slices/ladder'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import { parseGraphicalPouFromString, parseTextualPouFromString } from '../../../utils/PLC/pou-text-parser'
-import { prepareSavePayload } from '../../../utils/save-project'
-import { toast } from '../../_features/[app]/toast/use-toast'
+import { executeSaveFile } from '../../../utils/save-actions'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 export type SaveChangesFileModalData = {
@@ -23,15 +22,10 @@ export type SaveChangesFileModalProps = ComponentPropsWithoutRef<typeof Modal> &
 const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalProps) => {
   const {
     project,
-    editor: activeEditor,
-    editors,
-    deviceDefinitions,
     modalActions: { closeModal, onOpenChange },
-    projectActions: { updatePou },
+    projectActions: { applyPouSnapshot, updatePouDocumentation },
     sharedWorkspaceActions: { forceCloseFile },
-    fileActions: { updateFile, setAllToSaved },
-    workspaceActions: { setEditingState },
-    snapshotActions: { markAllSaved },
+    fileActions: { updateFile },
     ladderFlowActions: { addLadderFlow },
     fbdFlowActions: { addFBDFlow },
   } = useOpenPLCStore()
@@ -42,28 +36,9 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
   const handleSave = async () => {
     closeModal()
 
-    const params = prepareSavePayload({
-      projectPath: project.meta.path,
-      projectName: project.meta.name,
-      projectData: project.data,
-      deviceConfiguration: deviceDefinitions.configuration,
-      devicePinMapping: deviceDefinitions.pinMapping.pins,
-      editors,
-      activeEditor,
-    })
-    const result = await projectPort.saveProject(params)
-    if (!result.success) {
-      toast({
-        title: 'Error saving file!',
-        description: result.error ?? 'Save failed',
-        variant: 'fail',
-      })
-      return
-    }
+    const result = await executeSaveFile(fileName, projectPort)
+    if (!result.success) return
 
-    setEditingState('saved')
-    setAllToSaved()
-    markAllSaved()
     forceCloseFile(fileName)
   }
 
@@ -87,8 +62,12 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
             ? parseGraphicalPouFromString(result.content, language, pou.pouType)
             : parseTextualPouFromString(result.content, language, pou.pouType)
 
-          // Restore POU body in the project store
-          updatePou({ name: fileName, content: parsed.body })
+          // Restore the full POU from disk: variables, body, and documentation.
+          // applyPouSnapshot restores variables + body, then we restore documentation separately.
+          applyPouSnapshot(fileName, parsed.interface?.variables ?? [], parsed.body)
+          if (parsed.documentation !== undefined) {
+            updatePouDocumentation(fileName, parsed.documentation)
+          }
 
           // For graphical POUs, also restore the flow state (nodes, edges, positions).
           // The parsed body.value is the full flow type (same as what addLadderFlow/addFBDFlow

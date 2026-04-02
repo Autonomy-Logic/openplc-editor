@@ -3,8 +3,7 @@ import { ComponentPropsWithoutRef } from 'react'
 import { useCapabilities, useProject, useWindow } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../store'
-import { prepareSavePayload } from '../../../utils/save-project'
-import { toast } from '../../_features/[app]/toast/use-toast'
+import { executeSaveProject } from '../../../utils/save-actions'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 /**
@@ -34,13 +33,7 @@ export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
 
 const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }: SaveChangeModalProps) => {
   const {
-    project,
-    editor: activeEditor,
-    editors,
-    deviceDefinitions,
     workspaceActions: { setEditingState },
-    fileActions: { setAllToSaved },
-    snapshotActions: { markAllSaved },
     modalActions: { closeModal, onOpenChange, openModal },
   } = useOpenPLCStore()
 
@@ -64,32 +57,8 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
     closeModal()
 
     if (operation === 'save') {
-      const params = prepareSavePayload({
-        projectPath: project.meta.path,
-        projectName: project.meta.name,
-        projectData: project.data,
-        deviceConfiguration: deviceDefinitions.configuration,
-        devicePinMapping: deviceDefinitions.pinMapping.pins,
-        editors,
-        activeEditor,
-      })
-      const result = await projectPort.saveProject(params)
-      if (!result.success) {
-        toast({
-          title: 'Error in the save request!',
-          description: result.error ?? 'Save failed',
-          variant: 'fail',
-        })
-        return
-      }
-      setEditingState('saved')
-      setAllToSaved()
-      markAllSaved()
-      toast({
-        title: 'Changes saved!',
-        description: 'The project was saved successfully!',
-        variant: 'default',
-      })
+      const result = await executeSaveProject(projectPort)
+      if (!result.success) return
     }
 
     switch (validationContext) {

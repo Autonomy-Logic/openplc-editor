@@ -10,7 +10,7 @@ import {
 } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
-import { prepareSavePayload } from '../../utils/save-project'
+import { executeSaveActiveFile, executeSaveProject } from '../../utils/save-actions'
 import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {
@@ -37,9 +37,6 @@ const AcceleratorHandler = () => {
   const {
     project,
     editor: { meta },
-    editor: activeEditor,
-    editors,
-    deviceDefinitions,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, handleOpenProjectResponse },
@@ -48,71 +45,19 @@ const AcceleratorHandler = () => {
       toggleMaximizedWindow,
       setCloseWindow,
       setCloseAppDarwin,
-      setEditingState,
       setModalOpen,
       toggleCollapse,
     },
     tabsActions: { removeTab },
-    fileActions: { setAllToSaved },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
-    snapshotActions: { undo, redo, markAllSaved },
+    snapshotActions: { undo, redo },
   } = useOpenPLCStore()
   const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
   const selectedProjectTreeLeaf = useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf)
   const pendingRecentProjectRef = useRef<unknown>(null)
 
-  /**
-   * Shared save logic: sanitizes POUs, collects debug variables, saves, and updates state.
-   */
-  const executeSave = useCallback(async (): Promise<{ success: boolean }> => {
-    setEditingState('save-request')
-    toast({
-      title: 'Save changes',
-      description: 'Trying to save the changes in the project file.',
-      variant: 'warn',
-    })
-
-    try {
-      const params = prepareSavePayload({
-        projectPath: project.meta.path,
-        projectName: project.meta.name,
-        projectData: project.data,
-        deviceConfiguration: deviceDefinitions.configuration,
-        devicePinMapping: deviceDefinitions.pinMapping.pins,
-        editors,
-        activeEditor,
-      })
-
-      const res = await projectPort.saveProject(params)
-      if (res.success) {
-        setEditingState('saved')
-        setAllToSaved()
-        markAllSaved()
-        toast({
-          title: 'Changes saved!',
-          description: 'The project was saved successfully!',
-          variant: 'default',
-        })
-      } else {
-        setEditingState('unsaved')
-        toast({
-          title: 'Error in the save request!',
-          description: res.error ?? 'Save failed',
-          variant: 'fail',
-        })
-      }
-      return { success: res.success }
-    } catch {
-      setEditingState('unsaved')
-      toast({
-        title: 'Error in the save request!',
-        description: 'An unexpected error occurred while saving.',
-        variant: 'fail',
-      })
-      return { success: false }
-    }
-  }, [project, deviceDefinitions, editors, activeEditor, projectPort, setEditingState, setAllToSaved])
+  const executeSave = useCallback(() => executeSaveProject(projectPort), [projectPort])
 
   /**
    * Export project accelerator
@@ -298,14 +243,14 @@ const AcceleratorHandler = () => {
   }, [selectedProjectTreeLeaf, accelerator, removeTab])
 
   /**
-   * Save file (Cmd+S) — saves entire project since files are part of project XML
+   * Save file (Cmd+S) — saves only the active file
    */
   useEffect(() => {
     const unsub = accelerator.onSaveFile(() => {
-      void executeSave()
+      void executeSaveActiveFile(projectPort)
     })
     return unsub
-  }, [accelerator, executeSave])
+  }, [accelerator, projectPort])
 
   /**
    * Find in project (Cmd+Shift+F)

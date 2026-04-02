@@ -46,6 +46,8 @@ export interface ProjectResponse {
     projectData: PLCProjectData
     deviceConfiguration?: DeviceConfiguration
     devicePinMapping?: DevicePin[]
+    /** Warnings from parsing (e.g. dropped files that failed validation). */
+    warnings?: string[]
   }
   error?: {
     title: string
@@ -53,15 +55,27 @@ export interface ProjectResponse {
   }
 }
 
-export interface SaveProjectParams {
+/**
+ * Pre-serialized project files for writing to disk.
+ * All content is already serialized to strings — the backend is a dumb file writer.
+ * Mirrors the read-side RawProjectFiles shape but oriented for writing.
+ */
+export interface WriteProjectFiles {
   projectPath: string
-  projectName?: string
-  projectData: PLCProjectData & {
-    /** Debug variable flags to persist (collected before save). */
-    debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
-  }
-  deviceConfiguration: DeviceConfiguration
-  devicePinMapping: DevicePin[]
+  /** Pre-serialized project.json content */
+  projectJson: string
+  /** Pre-serialized devices/configuration.json content */
+  deviceConfig: string
+  /** Pre-serialized devices/pin-mapping.json content */
+  pinMapping: string
+  /** POU files with pre-serialized IEC text content */
+  pouFiles: RawProjectFile[]
+  /** Server config files with pre-serialized JSON content */
+  serverFiles: RawProjectFile[]
+  /** Remote device config files with pre-serialized JSON content */
+  remoteDeviceFiles: RawProjectFile[]
+  /** Relative paths to delete from disk (e.g. 'pous/programs/OldPou.st') */
+  deletions: string[]
 }
 
 export interface CreatePouParams {
@@ -79,6 +93,36 @@ export interface RenamePouParams {
 
 import type { PouType } from './types'
 
+/** Raw file entry: a file path relative to the project root and its text content. */
+export interface RawProjectFile {
+  /** Path relative to the project root (e.g., 'pous/programs/main.st') */
+  relativePath: string
+  /** Raw text content of the file */
+  content: string
+}
+
+/** Raw project files as read from disk — no parsing, just plain strings. */
+export interface RawProjectFiles {
+  success: boolean
+  data?: {
+    /** Absolute path to the project directory */
+    projectPath: string
+    /** Raw content of project.json */
+    projectJson: string
+    /** Raw content of devices/configuration.json */
+    deviceConfig: string
+    /** Raw content of devices/pin-mapping.json */
+    pinMapping: string
+    /** Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json) */
+    pouFiles: RawProjectFile[]
+    /** Raw server config files from devices/servers/ */
+    serverFiles: RawProjectFile[]
+    /** Raw remote device config files from devices/remote/ */
+    remoteDeviceFiles: RawProjectFile[]
+  }
+  error?: { title: string; description: string }
+}
+
 export interface ProjectPort {
   /** Create a new project. */
   createProject(params: CreateProjectParams): Promise<ProjectResponse>
@@ -93,8 +137,8 @@ export interface ProjectPort {
   /** Open a project by its path or identifier. */
   openProjectByPath(projectPath: string): Promise<ProjectResponse>
 
-  /** Save the entire project (all files, configuration, pin mapping). */
-  saveProject(params: SaveProjectParams): Promise<{ success: boolean; error?: string }>
+  /** Save the entire project. All files are pre-serialized by the frontend. */
+  saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }>
 
   /**
    * Save a single file within the project.
@@ -128,6 +172,14 @@ export interface ProjectPort {
    * Web: reads from in-memory project state or API.
    */
   readFileContent(filePath: string): Promise<{ success: boolean; content?: string; error?: string }>
+
+  /**
+   * Read all raw project files from disk without parsing.
+   * The frontend is responsible for parsing the returned content strings.
+   * Editor: reads from local filesystem via IPC.
+   * Web: reads from backend API.
+   */
+  readProjectFiles(projectPath: string): Promise<RawProjectFiles>
 
   /**
    * Start watching a file for external changes.

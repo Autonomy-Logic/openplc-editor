@@ -10,6 +10,7 @@ import { useAI, useCapabilities, useProject } from '../../../../../../middleware
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
+import { executeSaveActiveFile, executeSaveProject } from '../../../../../utils/save-actions'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
 import { AIConsentModal } from './ai-consent-modal'
@@ -141,7 +142,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       debugVariableValues,
       fbSelectedInstance,
       fbDebugInstances,
-      editingState,
     },
     project: {
       meta: { path: projectPath },
@@ -880,32 +880,18 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       injectCppTemplateIfNeeded(editorInstance, pou, name)
     }
 
-    // Keyboard shortcuts: Ctrl+S (save project), Ctrl+Shift+S (save project)
+    // Keyboard shortcuts: Ctrl+S (save active file), Ctrl+Shift+S (save entire project)
     editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
-      if (editingState !== 'save-request') {
-        const state = openPLCStoreBase.getState()
-        void projectPort.saveProject({
-          projectPath: state.project.meta.path,
-          projectName: state.project.meta.name,
-          projectData: state.project.data,
-          deviceConfiguration: state.deviceDefinitions.configuration,
-          devicePinMapping: state.deviceDefinitions.pinMapping.pins,
-        })
+      if (openPLCStoreBase.getState().workspace.editingState !== 'save-request') {
+        void executeSaveActiveFile(projectPort)
       }
     })
 
     editorInstance.addCommand(
       monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyS,
       () => {
-        if (editingState !== 'save-request') {
-          const state = openPLCStoreBase.getState()
-          void projectPort.saveProject({
-            projectPath: state.project.meta.path,
-            projectName: state.project.meta.name,
-            projectData: state.project.data,
-            deviceConfiguration: state.deviceDefinitions.configuration,
-            devicePinMapping: state.deviceDefinitions.pinMapping.pins,
-          })
+        if (openPLCStoreBase.getState().workspace.editingState !== 'save-request') {
+          void executeSaveProject(projectPort)
         }
       },
     )
