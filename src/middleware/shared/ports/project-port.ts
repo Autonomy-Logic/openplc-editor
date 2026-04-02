@@ -53,15 +53,27 @@ export interface ProjectResponse {
   }
 }
 
-export interface SaveProjectParams {
+/**
+ * Pre-serialized project files for writing to disk.
+ * All content is already serialized to strings — the backend is a dumb file writer.
+ * Mirrors the read-side RawProjectFiles shape but oriented for writing.
+ */
+export interface WriteProjectFiles {
   projectPath: string
-  projectName?: string
-  projectData: PLCProjectData & {
-    /** Debug variable flags to persist (collected before save). */
-    debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
-  }
-  deviceConfiguration: DeviceConfiguration
-  devicePinMapping: DevicePin[]
+  /** Pre-serialized project.json content */
+  projectJson: string
+  /** Pre-serialized devices/configuration.json content */
+  deviceConfig: string
+  /** Pre-serialized devices/pin-mapping.json content */
+  pinMapping: string
+  /** POU files with pre-serialized IEC text content */
+  pouFiles: RawProjectFile[]
+  /** Server config files with pre-serialized JSON content */
+  serverFiles: RawProjectFile[]
+  /** Remote device config files with pre-serialized JSON content */
+  remoteDeviceFiles: RawProjectFile[]
+  /** Relative paths to delete from disk (e.g. 'pous/programs/OldPou.st') */
+  deletions: string[]
 }
 
 export interface CreatePouParams {
@@ -123,8 +135,8 @@ export interface ProjectPort {
   /** Open a project by its path or identifier. */
   openProjectByPath(projectPath: string): Promise<ProjectResponse>
 
-  /** Save the entire project (all files, configuration, pin mapping). */
-  saveProject(params: SaveProjectParams): Promise<{ success: boolean; error?: string }>
+  /** Save the entire project. All files are pre-serialized by the frontend. */
+  saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }>
 
   /**
    * Save a single file within the project.

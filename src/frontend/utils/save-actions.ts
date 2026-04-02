@@ -7,20 +7,24 @@
  * platform port, and update state on success/failure.
  */
 
-import type { ProjectPort } from '../../middleware/shared/ports/project-port'
+import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
 import { openPLCStoreBase } from '../store'
 import { getExtensionFromLanguage, getFolderFromPouType } from './PLC/pou-file-extensions'
 import { serializePouToText } from './PLC/pou-text-serializer'
-import { collectDebugVariables, prepareSavePayload, sanitizePou } from './save-project'
+import { collectDebugVariables, sanitizePou } from './save-project'
 import { toast } from './toast'
 
 /**
  * Save the entire project (all files, device config, debug variables).
  * Equivalent to Ctrl+Shift+S / "Save Project" menu item.
+ *
+ * All serialization happens here on the frontend using the same functions
+ * as the single-file save (serializePouToText, sanitizePou, etc.).
+ * The backend receives only pre-serialized strings via WriteProjectFiles.
  */
 export async function executeSaveProject(projectPort: ProjectPort): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
-  const { project, editors, editor: activeEditor, deviceDefinitions } = state
+  const { project, pendingDeletions, deviceDefinitions } = state
   const { setEditingState } = state.workspaceActions
   const { setAllToSaved } = state.fileActions
   const { markAllSaved } = state.snapshotActions
@@ -33,18 +37,60 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
   })
 
   try {
-    const params = prepareSavePayload({
-      projectPath: project.meta.path,
-      projectName: project.meta.name,
-      projectData: project.data,
-      deviceConfiguration: deviceDefinitions.configuration,
-      devicePinMapping: deviceDefinitions.pinMapping.pins,
-      editors,
-      activeEditor,
+    // Serialize all POUs using the same functions as single-file save
+    const pouFiles: RawProjectFile[] = project.data.pous.map((pou) => {
+      const editorModel = state.editorActions.getEditorFromEditors(pou.name)
+      const sanitized = sanitizePou(pou, editorModel ?? undefined)
+      const folder = getFolderFromPouType(pou.pouType)
+      const ext = getExtensionFromLanguage(pou.body.language)
+      return { relativePath: `pous/${folder}/${pou.name}${ext}`, content: serializePouToText(sanitized) }
     })
 
-    const res = await projectPort.saveProject(params)
+    // Serialize servers as individual JSON files
+    const serverFiles: RawProjectFile[] = (project.data.servers ?? []).map((s) => ({
+      relativePath: `devices/servers/${s.name}.json`,
+      content: JSON.stringify(s, null, 2),
+    }))
+
+    // Serialize remote devices as individual JSON files
+    const remoteDeviceFiles: RawProjectFile[] = (project.data.remoteDevices ?? []).map((d) => ({
+      relativePath: `devices/remote/${d.name}.json`,
+      content: JSON.stringify(d, null, 2),
+    }))
+
+    // Build project.json — same structure as single-file save
+    const debugVariables = collectDebugVariables(
+      project.data.configurations.resource.globalVariables,
+      project.data.pous,
+    )
+    const projectJson = JSON.stringify(
+      {
+        meta: { name: project.meta.name, type: 'plc-project' },
+        data: {
+          dataTypes: project.data.dataTypes,
+          pous: [],
+          configuration: project.data.configurations,
+          debugVariables,
+        },
+      },
+      null,
+      2,
+    )
+
+    const files: WriteProjectFiles = {
+      projectPath: project.meta.path,
+      projectJson,
+      deviceConfig: JSON.stringify(deviceDefinitions.configuration, null, 2),
+      pinMapping: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+      pouFiles,
+      serverFiles,
+      remoteDeviceFiles,
+      deletions: [...pendingDeletions],
+    }
+
+    const res = await projectPort.saveProject(files)
     if (res.success) {
+      state.projectActions.clearPendingDeletions()
       setEditingState('saved')
       setAllToSaved()
       markAllSaved()
