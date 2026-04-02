@@ -4,7 +4,6 @@ import {
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
 import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
-import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
@@ -12,7 +11,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
-import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { fileOrDirectoryExists, ipcPouToFlat } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
@@ -361,217 +360,86 @@ class ProjectService {
     }
   }
 
-  async saveProject(data: {
+  /**
+   * Write pre-serialized project files to disk.
+   * The frontend handles all serialization — this method is a dumb batch file writer.
+   */
+  async writeProjectFiles(files: {
     projectPath: string
-    content: {
-      projectData: PLCProject
-      pous: PLCPou[]
-      deviceConfiguration: DeviceConfiguration
-      devicePinMapping: DevicePin[]
-      servers?: PLCServer[]
-      remoteDevices?: PLCRemoteDevice[]
-    }
+    projectJson: string
+    deviceConfig: string
+    pinMapping: string
+    pouFiles: Array<{ relativePath: string; content: string }>
+    serverFiles: Array<{ relativePath: string; content: string }>
+    remoteDeviceFiles: Array<{ relativePath: string; content: string }>
+    deletions: string[]
   }): Promise<IProjectServiceResponse> {
-    const {
-      projectPath,
-      content: { deviceConfiguration, devicePinMapping, projectData, servers, remoteDevices },
-    } = data
-    if (!projectPath || !projectData) {
+    const { projectPath, projectJson, deviceConfig, pinMapping, pouFiles, serverFiles, remoteDeviceFiles, deletions } =
+      files
+
+    if (!projectPath) {
       return {
         success: false,
-        error: {
-          title: 'Missing parameters',
-          description: 'Missing parameters',
-          error: null,
-        },
+        error: { title: 'Missing parameters', description: 'Missing project path', error: null },
       }
     }
 
-    const directoryPath = projectPath.endsWith('/project.json')
-      ? projectPath.slice(0, -'/project.json'.length)
-      : projectPath
+    const dir = projectPath.endsWith('/project.json') ? projectPath.slice(0, -'/project.json'.length) : projectPath
 
     try {
-      // Write each part to its correct file based on projectDefaultFilesMapSchema
-      await Promise.all([
-        promises.writeFile(join(directoryPath, 'project.json'), JSON.stringify(projectData, null, 2)),
-        promises.writeFile(
-          join(directoryPath, 'devices/configuration.json'),
-          JSON.stringify(deviceConfiguration, null, 2),
+      // Ensure standard directories exist
+      await Promise.all(
+        ['pous/programs', 'pous/functions', 'pous/function-blocks', 'devices/servers', 'devices/remote'].map((d) =>
+          promises.mkdir(join(dir, d), { recursive: true }),
         ),
-        promises.writeFile(join(directoryPath, 'devices/pin-mapping.json'), JSON.stringify(devicePinMapping, null, 2)),
+      )
+
+      // Write config files
+      await Promise.all([
+        promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8'),
+        promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'),
+        promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'),
       ])
+
+      // Write POU files
+      for (const file of pouFiles) {
+        const filePath = join(dir, file.relativePath)
+        const fileDir = filePath.substring(0, filePath.lastIndexOf('/'))
+        if (!fileOrDirectoryExists(fileDir)) {
+          await promises.mkdir(fileDir, { recursive: true })
+        }
+        await promises.writeFile(filePath, file.content, 'utf-8')
+      }
+
+      // Write server files
+      for (const file of serverFiles) {
+        await promises.writeFile(join(dir, file.relativePath), file.content, 'utf-8')
+      }
+
+      // Write remote device files
+      for (const file of remoteDeviceFiles) {
+        await promises.writeFile(join(dir, file.relativePath), file.content, 'utf-8')
+      }
+
+      // Process deletions
+      for (const relativePath of deletions) {
+        const filePath = join(dir, relativePath)
+        try {
+          if (fileOrDirectoryExists(filePath)) {
+            await promises.unlink(filePath)
+          }
+        } catch (deleteError) {
+          console.error(`Error deleting file ${filePath}:`, deleteError)
+        }
+      }
+
+      return { success: true, message: 'Your project was saved successfully' }
     } catch (error) {
-      console.error(error)
+      console.error('Error writing project files:', error)
       return {
         success: false,
-        error: {
-          title: 'Failed to save file',
-          description: 'Unable to save the project file.',
-          error,
-        },
+        error: { title: 'Failed to save project', description: 'Unable to write project files.', error },
       }
-    }
-
-    // Save pous
-    try {
-      const savedPous = {
-        programs: data.content.pous.filter((pou) => pou.type === 'program'),
-        functions: data.content.pous.filter((pou) => pou.type === 'function'),
-        'function-blocks': data.content.pous.filter((pou) => pou.type === 'function-block'),
-      }
-
-      // Save each POU in its respective folder
-      for (const [type, pous] of Object.entries(savedPous)) {
-        const dir = join(directoryPath, 'pous', type)
-
-        if (!fileOrDirectoryExists(dir)) {
-          await promises.mkdir(dir, { recursive: true })
-        }
-
-        // Write/update each POU file
-        for (const pou of pous) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-          const flat = ipcPouToFlat(pou)
-          const extension: string = getExtensionFromLanguage(flat.body.language)
-          const filePath = join(dir, `${flat.name}${extension}`)
-          const textContent: string = serializePouToText(flat)
-          await promises.writeFile(filePath, textContent, 'utf-8')
-        }
-      }
-
-      if (projectData.data.deletedPous && projectData.data.deletedPous.length > 0) {
-        for (const deletedPou of projectData.data.deletedPous) {
-          const typeDir =
-            deletedPou.type === 'function'
-              ? 'functions'
-              : deletedPou.type === 'function-block'
-                ? 'function-blocks'
-                : 'programs'
-          const extension = getExtensionFromLanguage(deletedPou.language)
-          const filePath = join(directoryPath, 'pous', typeDir, `${deletedPou.name}${extension}`)
-
-          try {
-            if (fileOrDirectoryExists(filePath)) {
-              await promises.unlink(filePath)
-            }
-          } catch (deleteError) {
-            console.error(`Error deleting POU file ${filePath}:`, deleteError)
-          }
-
-          const jsonFilePath = join(directoryPath, 'pous', typeDir, `${deletedPou.name}.json`)
-          try {
-            if (fileOrDirectoryExists(jsonFilePath)) {
-              await promises.unlink(jsonFilePath)
-            }
-          } catch (deleteError) {
-            console.error(`Error deleting legacy JSON POU file ${jsonFilePath}:`, deleteError)
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error saving POUs:', error)
-      return {
-        success: false,
-        error: {
-          title: 'Failed to save file',
-          description: 'Unable to save the project file.',
-          error,
-        },
-      }
-    }
-
-    // Save servers
-    if (
-      (servers && servers.length > 0) ||
-      (projectData.data.deletedServers && projectData.data.deletedServers.length > 0)
-    ) {
-      try {
-        const serversDir = join(directoryPath, 'devices', 'servers')
-        if (!fileOrDirectoryExists(serversDir)) {
-          await promises.mkdir(serversDir, { recursive: true })
-        }
-
-        if (servers && servers.length > 0) {
-          for (const server of servers) {
-            const serverFilePath = join(serversDir, `${server.name}.json`)
-            await promises.writeFile(serverFilePath, JSON.stringify(server, null, 2), 'utf-8')
-          }
-        }
-
-        // Handle deleted servers
-        if (projectData.data.deletedServers && projectData.data.deletedServers.length > 0) {
-          for (const deletedServer of projectData.data.deletedServers) {
-            const serverFilePath = join(serversDir, `${deletedServer.name}.json`)
-            try {
-              if (fileOrDirectoryExists(serverFilePath)) {
-                await promises.unlink(serverFilePath)
-              }
-            } catch (deleteError) {
-              console.error(`Error deleting server file ${serverFilePath}:`, deleteError)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error saving servers:', error)
-        return {
-          success: false,
-          error: {
-            title: 'Failed to save file',
-            description: 'Unable to save the project file.',
-            error,
-          },
-        }
-      }
-    }
-
-    // Save remote devices
-    if (
-      (remoteDevices && remoteDevices.length > 0) ||
-      (projectData.data.deletedRemoteDevices && projectData.data.deletedRemoteDevices.length > 0)
-    ) {
-      try {
-        const remoteDevicesDir = join(directoryPath, 'devices', 'remote')
-        if (!fileOrDirectoryExists(remoteDevicesDir)) {
-          await promises.mkdir(remoteDevicesDir, { recursive: true })
-        }
-
-        if (remoteDevices && remoteDevices.length > 0) {
-          for (const remoteDevice of remoteDevices) {
-            const remoteDeviceFilePath = join(remoteDevicesDir, `${remoteDevice.name}.json`)
-            await promises.writeFile(remoteDeviceFilePath, JSON.stringify(remoteDevice, null, 2), 'utf-8')
-          }
-        }
-
-        // Handle deleted remote devices
-        if (projectData.data.deletedRemoteDevices && projectData.data.deletedRemoteDevices.length > 0) {
-          for (const deletedRemoteDevice of projectData.data.deletedRemoteDevices) {
-            const remoteDeviceFilePath = join(remoteDevicesDir, `${deletedRemoteDevice.name}.json`)
-            try {
-              if (fileOrDirectoryExists(remoteDeviceFilePath)) {
-                await promises.unlink(remoteDeviceFilePath)
-              }
-            } catch (deleteError) {
-              console.error(`Error deleting remote device file ${remoteDeviceFilePath}:`, deleteError)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error saving remote devices:', error)
-        return {
-          success: false,
-          error: {
-            title: 'Failed to save file',
-            description: 'Unable to save the project file.',
-            error,
-          },
-        }
-      }
-    }
-
-    return {
-      success: true,
-      message: 'Your project was saved successfully',
     }
   }
 

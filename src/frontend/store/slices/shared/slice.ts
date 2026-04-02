@@ -502,6 +502,25 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
       }
 
+      // For POUs with unparseable variables (variablesText present, variables empty),
+      // pre-create editor models in code mode so the raw text is displayed when opened.
+      pous.forEach((pou) => {
+        const pouWithText = pou as typeof pou & { variablesText?: string }
+        if (pouWithText.variablesText && (!pou.interface?.variables || pou.interface.variables.length === 0)) {
+          const language = pou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+          const model = createEditorObjectForPou(pou.name, pou.pouType, language)
+          // Switch to code mode with the raw variable text
+          if ('variable' in model) {
+            model.variable = { display: 'code', code: pouWithText.variablesText }
+          }
+          getState().editorActions.addModel(model)
+          // If this is the active editor (main POU), update it too
+          if (getState().editor.meta.name === pou.name) {
+            getState().editorActions.setEditor(model)
+          }
+        }
+      })
+
       // Reset all graphical flow updated flags at the very end of project open.
       // Various operations during load (syncNodesWithVariables, debug flag restoration,
       // tab opening) call updateNode which sets flow.updated = true as a side effect.

@@ -18,7 +18,7 @@ import type {
   ProjectResponse,
   RawProjectFiles,
   RenamePouParams,
-  SaveProjectParams,
+  WriteProjectFiles,
 } from '../../shared/ports/project-port'
 import type {
   DeviceConfiguration,
@@ -70,12 +70,6 @@ interface IpcProjectResponse {
       devicePinMapping: DevicePin[]
     }
   }
-}
-
-/** Editor IPC save response shape. */
-interface IpcSaveResponse {
-  success: boolean
-  error?: { title: string; description: string }
 }
 
 /** Editor IPC POU service response shape. */
@@ -218,45 +212,11 @@ export function createEditorProjectAdapter(): ProjectPort {
       return (await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles
     },
 
-    async saveProject(params: SaveProjectParams): Promise<{ success: boolean; error?: string }> {
-      const pathParts = params.projectPath.replace(/\\/g, '/').split('/')
-      const projectName = pathParts[pathParts.length - 1] || 'untitled'
-      const editorPous = params.projectData.pous.map(mapPortPouToIpcPou)
-
-      // Inject variablesText from sanitized POUs into IPC format
-      for (let i = 0; i < params.projectData.pous.length; i++) {
-        const portPou = params.projectData.pous[i] as PLCPou & { variablesText?: string }
-        if (portPou.variablesText != null) {
-          editorPous[i].data.variablesText = portPou.variablesText
-        }
-      }
-
-      const projectDataPayload: Record<string, unknown> = {
-        meta: { name: projectName, type: 'plc-project' as const },
-        data: {
-          dataTypes: params.projectData.dataTypes,
-          pous: editorPous,
-          configuration: params.projectData.configurations,
-          debugVariables: params.projectData.debugVariables,
-        },
-      }
-
-      const response = (await window.bridge.saveProject({
-        projectPath: params.projectPath,
-        content: {
-          projectData: projectDataPayload,
-          pous: editorPous,
-          deviceConfiguration: params.deviceConfiguration,
-          devicePinMapping: params.devicePinMapping,
-          servers: params.projectData.servers ?? [],
-          remoteDevices: params.projectData.remoteDevices ?? [],
-        },
-      } as never)) as unknown as IpcSaveResponse
-
+    async saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> {
+      const response = (await window.bridge.writeProjectFiles(files)) as { success: boolean; error?: string }
       if (!response.success) {
-        return { success: false, error: response.error?.description ?? 'Save failed' }
+        return { success: false, error: response.error ?? 'Save failed' }
       }
-
       return { success: true }
     },
 

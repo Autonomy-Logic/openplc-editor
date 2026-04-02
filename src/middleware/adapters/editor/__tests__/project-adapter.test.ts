@@ -63,8 +63,8 @@ const mockErrorResponse = {
   error: { title: 'Error', description: 'Something went wrong', error: new Error('fail') },
 }
 
-const mockSaveResponse = { success: true, reason: { title: '', description: '' } }
-const mockSaveErrorResponse = { success: false, reason: { title: 'Save Error', description: 'Disk full' } }
+const mockSaveResponse = { success: true }
+const mockSaveErrorResponse = { success: false, error: 'Disk full' }
 
 const mockPouResponse = { success: true, data: { filePath: '/path/to/pou.st', pou: {} } }
 const mockPouErrorResponse = {
@@ -81,7 +81,7 @@ beforeEach(() => {
     createProject: jest.fn().mockResolvedValue(mockIpcProjectResponse),
     openProject: jest.fn().mockResolvedValue(mockIpcProjectResponse),
     openProjectByPath: jest.fn().mockResolvedValue(mockIpcProjectResponse),
-    saveProject: jest.fn().mockResolvedValue(mockSaveResponse),
+    writeProjectFiles: jest.fn().mockResolvedValue(mockSaveResponse),
     saveFile: jest.fn().mockResolvedValue({ success: true }),
     createPouFile: jest.fn().mockResolvedValue(mockPouResponse),
     deletePouFile: jest.fn().mockResolvedValue({ success: true }),
@@ -214,64 +214,28 @@ describe('createEditorProjectAdapter', () => {
   })
 
   describe('saveProject', () => {
-    const saveParams = {
+    const writeFiles = {
       projectPath: '/home/user/projects/my-project',
-      projectData: {
-        dataTypes: [],
-        pous: [
-          {
-            name: 'main',
-            pouType: 'program' as const,
-            body: { language: 'st' as const, value: 'x := TRUE;' },
-            documentation: 'test',
-          },
-        ],
-        configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
-      },
-      deviceConfiguration: {
-        deviceBoard: 'Arduino Uno',
-        communicationPort: '',
-        compileOnly: false,
-        communicationConfiguration: {
-          modbusRTU: { rtuInterface: '', rtuBaudRate: '115200', rtuSlaveId: null, rtuRS485ENPin: null },
-          modbusTCP: {
-            tcpInterface: '',
-            tcpMacAddress: null,
-            tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
-          },
-          communicationPreferences: { enabledRTU: false, enabledTCP: false, enabledDHCP: true },
-        },
-      },
-      devicePinMapping: [],
+      projectJson: '{"meta":{"name":"my-project","type":"plc-project"},"data":{}}',
+      deviceConfig: '{}',
+      pinMapping: '[]',
+      pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'PROGRAM main\nEND_PROGRAM' }],
+      serverFiles: [],
+      remoteDeviceFiles: [],
+      deletions: [],
     }
 
-    it('delegates to window.bridge.saveProject with mapped data', async () => {
-      const result = await adapter.saveProject(saveParams)
+    it('delegates pre-serialized files to window.bridge.writeProjectFiles', async () => {
+      const result = await adapter.saveProject(writeFiles)
 
-      expect(window.bridge.saveProject).toHaveBeenCalledTimes(1)
+      expect(window.bridge.writeProjectFiles).toHaveBeenCalledWith(writeFiles)
       expect(result).toEqual({ success: true })
     })
 
-    it('converts flat POUs to discriminated union format', async () => {
-      await adapter.saveProject(saveParams)
-
-      const callArg = (window.bridge.saveProject as jest.Mock).mock.calls[0][0]
-      expect(callArg.content.pous[0]).toEqual(
-        expect.objectContaining({ type: 'program', data: expect.objectContaining({ name: 'main' }) }),
-      )
-    })
-
-    it('maps configurations back to configuration (singular)', async () => {
-      await adapter.saveProject(saveParams)
-
-      const callArg = (window.bridge.saveProject as jest.Mock).mock.calls[0][0]
-      expect(callArg.content.projectData.data.configuration).toEqual(saveParams.projectData.configurations)
-    })
-
     it('returns error message on save failure', async () => {
-      ;(window.bridge.saveProject as jest.Mock).mockResolvedValue(mockSaveErrorResponse)
+      ;(window.bridge.writeProjectFiles as jest.Mock).mockResolvedValue(mockSaveErrorResponse)
 
-      const result = await adapter.saveProject(saveParams)
+      const result = await adapter.saveProject(writeFiles)
 
       expect(result).toEqual({ success: false, error: 'Disk full' })
     })
