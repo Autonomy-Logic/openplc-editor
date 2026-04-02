@@ -20,7 +20,10 @@ import type {
   PLCTask,
   PLCVariable,
 } from '../../middleware/shared/ports/types'
-import { PLCRemoteDeviceSchema, PLCServerSchema } from '../../types/PLC/open-plc'
+import { deviceConfigurationSchema, devicePinSchema } from '../../types/PLC/devices'
+import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../../types/PLC/open-plc'
+import { openPLCStoreBase } from '../store'
+import { getDefaultSchemaValues } from './default-zod-schema-values'
 import {
   detectLanguageFromExtension,
   findLastEndVarIndex,
@@ -315,12 +318,32 @@ export function parseProjectFiles(
   serverFiles: RawProjectFile[],
   remoteDeviceFiles: RawProjectFile[],
 ): ParsedProjectData {
-  // Parse project.json
-  let project: { meta?: { name?: string; type?: string }; data?: Record<string, unknown> } = {}
+  // Parse and Zod-validate project.json (matches old backend safeParseProjectFile behavior)
+  let project: { meta?: { name?: string; type?: string }; data?: Record<string, unknown> }
   try {
-    project = projectJson ? (JSON.parse(projectJson) as typeof project) : {}
+    const raw = projectJson ? (JSON.parse(projectJson) as unknown) : null
+    if (raw) {
+      const result = PLCProjectSchema.safeParse(raw)
+      if (result.success) {
+        project = result.data as typeof project
+      } else {
+        openPLCStoreBase.getState().consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `project.json validation failed: ${result.error.message}. Using defaults.`,
+        })
+        project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
+      }
+    } else {
+      project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
+    }
   } catch {
-    project = {}
+    openPLCStoreBase.getState().consoleActions.addLog({
+      id: crypto.randomUUID(),
+      level: 'warning',
+      message: 'project.json is malformed and could not be read. Using defaults.',
+    })
+    project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
   }
 
   const meta = {
@@ -329,20 +352,61 @@ export function parseProjectFiles(
     path: projectPath,
   }
 
-  // Parse device configuration
+  // Parse and Zod-validate device configuration
   let deviceConfiguration: DeviceConfiguration | undefined
   try {
-    deviceConfiguration = deviceConfig ? (JSON.parse(deviceConfig) as DeviceConfiguration) : undefined
+    const raw = deviceConfig ? (JSON.parse(deviceConfig) as unknown) : null
+    if (raw) {
+      const result = deviceConfigurationSchema.safeParse(raw)
+      if (result.success) {
+        deviceConfiguration = result.data
+      } else {
+        openPLCStoreBase.getState().consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `devices/configuration.json validation failed: ${result.error.message}. Using defaults.`,
+        })
+        deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
+      }
+    } else {
+      deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
+    }
   } catch {
-    deviceConfiguration = undefined
+    openPLCStoreBase.getState().consoleActions.addLog({
+      id: crypto.randomUUID(),
+      level: 'warning',
+      message: 'devices/configuration.json is malformed and could not be read. Using defaults.',
+    })
+    deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
   }
 
-  // Parse pin mapping
+  // Parse and Zod-validate pin mapping
+  const pinMappingSchema = devicePinSchema.array()
   let devicePinMapping: DevicePin[] | undefined
   try {
-    devicePinMapping = pinMapping ? (JSON.parse(pinMapping) as DevicePin[]) : undefined
+    const raw = pinMapping ? (JSON.parse(pinMapping) as unknown) : null
+    if (raw) {
+      const result = pinMappingSchema.safeParse(raw)
+      if (result.success) {
+        devicePinMapping = result.data
+      } else {
+        openPLCStoreBase.getState().consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `devices/pin-mapping.json validation failed: ${result.error.message}. Using defaults.`,
+        })
+        devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
+      }
+    } else {
+      devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
+    }
   } catch {
-    devicePinMapping = undefined
+    openPLCStoreBase.getState().consoleActions.addLog({
+      id: crypto.randomUUID(),
+      level: 'warning',
+      message: 'devices/pin-mapping.json is malformed and could not be read. Using defaults.',
+    })
+    devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
   }
 
   // Deduplicate POU files (prefer text-based over JSON when both exist)

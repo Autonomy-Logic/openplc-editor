@@ -74,29 +74,26 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
 }
 
 /**
- * Save only the active file (the POU/resource currently open in the editor).
- * Equivalent to Ctrl+S / "Save" menu item.
+ * Save a single file by name.
+ *
+ * This is the core single-file save logic used by both executeSaveActiveFile()
+ * (Ctrl+S — saves whichever file is currently focused) and direct callers that
+ * need to save a specific file by name (e.g. the save-changes-file modal).
  *
  * For POUs: serializes to IEC text on the frontend, writes via projectPort.saveFile.
  * For device/data-type/resource/server/remote-device: writes appropriate JSON files.
  * Also updates project.json when debug variables may have changed.
  */
-export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{ success: boolean }> {
+export async function executeSaveFile(fileName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
-  const { project, editor: activeEditor, files } = state
+  const { project, files } = state
   const { setEditingState } = state.workspaceActions
   const { updateFile, checkIfAllFilesAreSaved } = state.fileActions
   const { markSaved } = state.snapshotActions
 
-  const name = activeEditor.meta.name
-  if (!name) {
-    toast({ title: 'No file open', description: 'There is no file to save.', variant: 'fail' })
-    return { success: false }
-  }
-
-  const file = files[name]
+  const file = files[fileName]
   if (!file) {
-    toast({ title: 'Error saving file', description: `File "${name}" not found.`, variant: 'fail' })
+    toast({ title: 'Error saving file', description: `File "${fileName}" not found.`, variant: 'fail' })
     return { success: false }
   }
 
@@ -106,14 +103,14 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
     const isPouType = file.type === 'program' || file.type === 'function' || file.type === 'function-block'
 
     if (isPouType) {
-      const pou = project.data.pous.find((p) => p.name === name)
+      const pou = project.data.pous.find((p) => p.name === fileName)
       if (!pou) {
-        toast({ title: 'Error saving file', description: `POU "${name}" not found.`, variant: 'fail' })
+        toast({ title: 'Error saving file', description: `POU "${fileName}" not found.`, variant: 'fail' })
         return { success: false }
       }
 
       // Sanitize: sync variablesText from code-mode editor if applicable
-      const editorModel = state.editorActions.getEditorFromEditors(name)
+      const editorModel = state.editorActions.getEditorFromEditors(fileName)
       const sanitized = sanitizePou(pou, editorModel ?? undefined)
 
       // Serialize POU to IEC text on the frontend (single source of truth)
@@ -122,7 +119,7 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
       // Compute file path
       const folder = getFolderFromPouType(pou.pouType)
       const ext = getExtensionFromLanguage(pou.body.language)
-      const filePath = `${projectPath}/pous/${folder}/${name}${ext}`
+      const filePath = `${projectPath}/pous/${folder}/${fileName}${ext}`
 
       const res = await projectPort.saveFile(filePath, textContent)
       if (!res.success) {
@@ -145,13 +142,13 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
       }
     } else if (file.type === 'server') {
       // Servers are saved as individual JSON files in devices/servers/
-      const server = project.data.servers?.find((s) => s.name === name)
+      const server = project.data.servers?.find((s) => s.name === fileName)
       if (!server) {
-        toast({ title: 'Error saving file', description: `Server "${name}" not found.`, variant: 'fail' })
+        toast({ title: 'Error saving file', description: `Server "${fileName}" not found.`, variant: 'fail' })
         return { success: false }
       }
       const res = await projectPort.saveFile(
-        `${projectPath}/devices/servers/${name}.json`,
+        `${projectPath}/devices/servers/${fileName}.json`,
         JSON.stringify(server, null, 2),
       )
       if (!res.success) {
@@ -160,13 +157,13 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
       }
     } else if (file.type === 'remote-device') {
       // Remote devices are saved as individual JSON files in devices/remote/
-      const device = project.data.remoteDevices?.find((d) => d.name === name)
+      const device = project.data.remoteDevices?.find((d) => d.name === fileName)
       if (!device) {
-        toast({ title: 'Error saving file', description: `Remote device "${name}" not found.`, variant: 'fail' })
+        toast({ title: 'Error saving file', description: `Remote device "${fileName}" not found.`, variant: 'fail' })
         return { success: false }
       }
       const res = await projectPort.saveFile(
-        `${projectPath}/devices/remote/${name}.json`,
+        `${projectPath}/devices/remote/${fileName}.json`,
         JSON.stringify(device, null, 2),
       )
       if (!res.success) {
@@ -189,10 +186,7 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
           debugVariables,
         },
       }
-      const res = await projectPort.saveFile(
-        `${projectPath}/project.json`,
-        JSON.stringify(projectJson, null, 2),
-      )
+      const res = await projectPort.saveFile(`${projectPath}/project.json`, JSON.stringify(projectJson, null, 2))
       if (!res.success) {
         toast({ title: 'Error saving file', description: res.error ?? 'Save failed', variant: 'fail' })
         return { success: false }
@@ -200,18 +194,33 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
     }
 
     // Mark only this file as saved
-    updateFile({ name, saved: true, isNew: false })
-    markSaved(name)
+    updateFile({ name: fileName, saved: true, isNew: false })
+    markSaved(fileName)
 
     // If all files are now saved, update workspace editing state
     if (checkIfAllFilesAreSaved()) {
       setEditingState('saved')
     }
 
-    toast({ title: 'File saved', description: `"${name}" saved successfully.`, variant: 'default' })
+    toast({ title: 'File saved', description: `"${fileName}" saved successfully.`, variant: 'default' })
     return { success: true }
   } catch {
     toast({ title: 'Error saving file', description: 'An unexpected error occurred.', variant: 'fail' })
     return { success: false }
   }
+}
+
+/**
+ * Save the currently active file (the one focused in the editor).
+ * Equivalent to Ctrl+S / "Save" menu item.
+ *
+ * Thin wrapper around executeSaveFile that resolves the active editor name.
+ */
+export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{ success: boolean }> {
+  const name = openPLCStoreBase.getState().editor.meta.name
+  if (!name) {
+    toast({ title: 'No file open', description: 'There is no file to save.', variant: 'fail' })
+    return { success: false }
+  }
+  return executeSaveFile(name, projectPort)
 }

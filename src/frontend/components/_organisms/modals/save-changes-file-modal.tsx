@@ -7,7 +7,7 @@ import type { FBDFlowType } from '../../../store/slices/fbd'
 import type { LadderFlowType } from '../../../store/slices/ladder'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import { parseGraphicalPouFromString, parseTextualPouFromString } from '../../../utils/PLC/pou-text-parser'
-import { executeSaveProject } from '../../../utils/save-actions'
+import { executeSaveFile } from '../../../utils/save-actions'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 export type SaveChangesFileModalData = {
@@ -36,7 +36,7 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
   const handleSave = async () => {
     closeModal()
 
-    const result = await executeSaveProject(projectPort)
+    const result = await executeSaveFile(fileName, projectPort)
     if (!result.success) return
 
     forceCloseFile(fileName)
