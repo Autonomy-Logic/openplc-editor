@@ -15,12 +15,15 @@ import type {
   PLCDataType,
   PLCInstance,
   PLCPou,
+  PLCRemoteDevice,
   PLCServer,
   PLCTask,
   PLCVariable,
 } from '../../middleware/shared/ports/types'
+import { PLCRemoteDeviceSchema, PLCServerSchema } from '../../types/PLC/open-plc'
 import {
   detectLanguageFromExtension,
+  findLastEndVarIndex,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
   parseTextualPouFromString,
@@ -30,6 +33,8 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
+type FallbackPou = PLCPou & { variablesText?: string }
+
 export interface ParsedProjectData {
   meta: {
     name: string
@@ -38,7 +43,7 @@ export interface ParsedProjectData {
   }
   projectData: {
     dataTypes: PLCDataType[]
-    pous: PLCPou[]
+    pous: (PLCPou & { variablesText?: string })[]
     configurations: {
       resource: {
         tasks: PLCTask[]
@@ -47,7 +52,7 @@ export interface ParsedProjectData {
       }
     }
     servers?: PLCServer[]
-    remoteDevices?: unknown[]
+    remoteDevices?: PLCRemoteDevice[]
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
   }
   deviceConfiguration?: DeviceConfiguration
@@ -60,14 +65,14 @@ export interface ParsedProjectData {
 
 /**
  * Detect POU type from the file's relative path.
- * e.g., 'pous/programs/main.st' → 'program'
+ * Throws if the path does not match any known POU directory.
  */
 function detectPouTypeFromPath(relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/')
-  if (normalized.includes('pous/programs/')) return 'program'
-  if (normalized.includes('pous/functions/') && !normalized.includes('pous/function-blocks/')) return 'function'
-  if (normalized.includes('pous/function-blocks/')) return 'function-block'
-  return 'program' // fallback
+  if (normalized.includes('/programs/')) return 'program'
+  if (normalized.includes('/function-blocks/')) return 'function-block'
+  if (normalized.includes('/functions/')) return 'function'
+  throw new Error(`Cannot determine POU type from path: ${relativePath}`)
 }
 
 /**
@@ -83,10 +88,118 @@ function getLanguageFromExt(relativePath: string): string | null {
 }
 
 /**
+ * Extract the base filename without extension from a relative path.
+ */
+function getBaseNameFromPath(relativePath: string): string {
+  return (
+    relativePath
+      .split('/')
+      .pop()
+      ?.replace(/\.\w+$/, '') ?? 'unknown'
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Fallback POU creation
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a POU from raw file content when normal parsing fails.
+ * Preserves as much data as possible: documentation, raw variable text, body.
+ *
+ * This is a direct port of the old backend's createFallbackPou logic
+ * (read-project.ts:190-315), adapted to return the flat port format.
+ */
+function createFallbackPou(content: string, language: string, pouType: string, pouName: string): FallbackPou {
+  // 1. Extract documentation from leading (* ... *) comment
+  const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
+  const documentation = docMatch ? docMatch[1].trim() : ''
+  const remainingContent = docMatch ? content.slice(docMatch[0].length) : content
+
+  // 2. Find POU declaration to determine where body starts
+  const pouTypeKeywords: Record<string, string> = {
+    program: 'PROGRAM',
+    function: 'FUNCTION',
+    'function-block': 'FUNCTION_BLOCK',
+  }
+  const typeKeyword = pouTypeKeywords[pouType]
+  const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
+  const declarationMatch = remainingContent.match(declarationRegex)
+  let bodyStartIndex = declarationMatch ? declarationMatch[0].length : 0
+
+  // 3. Extract raw VAR blocks as variablesText
+  const varStartIndex = remainingContent.search(
+    /\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i,
+  )
+  let variablesText = 'VAR\nEND_VAR'
+  if (varStartIndex !== -1) {
+    const lastEnd = findLastEndVarIndex(remainingContent, varStartIndex)
+    if (lastEnd !== -1) {
+      variablesText = remainingContent.slice(varStartIndex, lastEnd)
+      bodyStartIndex = lastEnd
+    }
+  }
+
+  // 4. Extract body content
+  const endKeywords: Record<string, string> = {
+    program: 'END_PROGRAM',
+    function: 'END_FUNCTION',
+    'function-block': 'END_FUNCTION_BLOCK',
+  }
+  const endKeyword = endKeywords[pouType]
+  let bodyValue: unknown
+
+  if (language === 'ld' || language === 'fbd') {
+    const endRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
+    const endMatch = remainingContent.slice(bodyStartIndex).search(endRegex)
+    const bodyContent =
+      endMatch !== -1
+        ? remainingContent.slice(bodyStartIndex, bodyStartIndex + endMatch).trim()
+        : remainingContent.slice(bodyStartIndex).trim()
+    try {
+      bodyValue = JSON.parse(bodyContent)
+    } catch {
+      bodyValue = { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }
+    }
+  } else if (language === 'st' || language === 'il' || language === 'python' || language === 'cpp') {
+    const endRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
+    const endMatch = remainingContent.slice(bodyStartIndex).search(endRegex)
+    bodyValue =
+      endMatch !== -1
+        ? remainingContent.slice(bodyStartIndex, bodyStartIndex + endMatch).trim()
+        : remainingContent.slice(bodyStartIndex).trim()
+  } else {
+    bodyValue = ''
+  }
+
+  // 5. Build flat-format POU
+  return {
+    name: pouName,
+    pouType: pouType as PLCPou['pouType'],
+    interface: {
+      ...(pouType === 'function' ? { returnType: 'BOOL' } : {}),
+      variables: [],
+    },
+    body: {
+      language: language as PLCPou['body']['language'],
+      value: bodyValue,
+    },
+    documentation,
+    variablesText,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POU file parsing
+// ---------------------------------------------------------------------------
+
+/**
  * Parse a single POU file from its raw text content.
  * Returns null if the file format is not recognized.
+ * On parse failure, falls back to createFallbackPou which preserves
+ * documentation, raw variable text, and body content.
  */
-function parsePouFile(file: RawProjectFile): PLCPou | null {
+function parsePouFile(file: RawProjectFile): (PLCPou & { variablesText?: string }) | null {
   const ext = file.relativePath.split('.').pop()?.toLowerCase()
   if (!ext) return null
 
@@ -130,17 +243,52 @@ function parsePouFile(file: RawProjectFile): PLCPou | null {
     }
   } catch (err) {
     console.error(`[parseProjectFiles] Failed to parse POU: ${file.relativePath}`, err)
-    // Fallback: create a minimal POU with raw body
-    return {
-      name: file.relativePath.split('/').pop()?.replace(/\.\w+$/, '') ?? 'unknown',
-      pouType: pouType as PLCPou['pouType'],
-      interface: { variables: [] },
-      body: { language: language as PLCPou['body']['language'], value: file.content },
-      documentation: '',
+    // Fallback: preserve as much data as possible
+    try {
+      const pouName = getBaseNameFromPath(file.relativePath)
+      return createFallbackPou(file.content, language, pouType, pouName)
+    } catch (fallbackErr) {
+      console.error(`[parseProjectFiles] Fallback also failed: ${file.relativePath}`, fallbackErr)
+      return null
     }
   }
 
   return null
+}
+
+// ---------------------------------------------------------------------------
+// POU deduplication
+// ---------------------------------------------------------------------------
+
+/**
+ * Deduplicate POU files: when both a text-based file (.st, .il, etc.) and
+ * a JSON file exist for the same POU name, the text-based file wins.
+ * This matches the old backend's readDirectoryRecursive behavior.
+ */
+function deduplicatePouFiles(pouFiles: RawProjectFile[]): RawProjectFile[] {
+  const pouNameMap = new Map<string, { index: number; isTextBased: boolean }>()
+  const result: RawProjectFile[] = []
+
+  for (const file of pouFiles) {
+    const ext = file.relativePath.split('.').pop()?.toLowerCase() ?? ''
+    const baseName = getBaseNameFromPath(file.relativePath)
+    const isTextBased = ext !== 'json'
+    const existing = pouNameMap.get(baseName)
+
+    if (existing) {
+      if (isTextBased && !existing.isTextBased) {
+        // Replace JSON entry with text-based entry
+        result[existing.index] = file
+        pouNameMap.set(baseName, { index: existing.index, isTextBased })
+      }
+      // If existing is text-based and new is JSON, skip the JSON
+    } else {
+      pouNameMap.set(baseName, { index: result.length, isTextBased })
+      result.push(file)
+    }
+  }
+
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -197,42 +345,56 @@ export function parseProjectFiles(
     devicePinMapping = undefined
   }
 
+  // Deduplicate POU files (prefer text-based over JSON when both exist)
+  const filteredPouFiles = deduplicatePouFiles(pouFiles)
+
   // Parse POU files
-  const pous: PLCPou[] = []
-  for (const file of pouFiles) {
+  const pous: (PLCPou & { variablesText?: string })[] = []
+  for (const file of filteredPouFiles) {
     const pou = parsePouFile(file)
     if (pou) {
+      // Ensure all POUs have a name (derive from filename if missing)
+      if (!pou.name) {
+        pou.name = getBaseNameFromPath(file.relativePath)
+      }
       pous.push(pou)
     }
   }
 
-  // Parse server configs
+  // Parse server configs with Zod validation (matching old backend behavior)
   const servers: PLCServer[] = []
   for (const file of serverFiles) {
     try {
-      const server = JSON.parse(file.content) as PLCServer
-      servers.push(server)
+      const parsed = JSON.parse(file.content) as unknown
+      const result = PLCServerSchema.safeParse(parsed)
+      if (result.success) {
+        servers.push(result.data)
+      }
     } catch {
-      console.error(`[parseProjectFiles] Failed to parse server: ${file.relativePath}`)
+      // Silently skip invalid server files
     }
   }
 
-  // Parse remote device configs
-  const remoteDevices: unknown[] = []
+  // Parse remote device configs with Zod validation (matching old backend behavior)
+  const remoteDevices: PLCRemoteDevice[] = []
   for (const file of remoteDeviceFiles) {
     try {
-      const device = JSON.parse(file.content) as unknown
-      remoteDevices.push(device)
+      const parsed = JSON.parse(file.content) as unknown
+      const result = PLCRemoteDeviceSchema.safeParse(parsed)
+      if (result.success) {
+        remoteDevices.push(result.data)
+      }
     } catch {
-      console.error(`[parseProjectFiles] Failed to parse remote device: ${file.relativePath}`)
+      // Silently skip invalid remote device files
     }
   }
 
   // Extract project data fields
   const data = project.data ?? {}
-  const configuration = (data.configuration ?? data.configurations ?? {
-    resource: { tasks: [], instances: [], globalVariables: [] },
-  }) as ParsedProjectData['projectData']['configurations']
+  const configuration = (data.configuration ??
+    data.configurations ?? {
+      resource: { tasks: [], instances: [], globalVariables: [] },
+    }) as ParsedProjectData['projectData']['configurations']
 
   // Ensure resource has all required fields
   if (!configuration.resource) {
@@ -249,7 +411,7 @@ export function parseProjectFiles(
       pous,
       configurations: configuration,
       servers: servers.length > 0 ? servers : (data.servers as PLCServer[]) ?? [],
-      remoteDevices: remoteDevices.length > 0 ? remoteDevices : (data.remoteDevices as unknown[]) ?? [],
+      remoteDevices: remoteDevices.length > 0 ? remoteDevices : (data.remoteDevices as PLCRemoteDevice[]) ?? [],
       debugVariables: data.debugVariables as ParsedProjectData['projectData']['debugVariables'],
     },
     deviceConfiguration,

@@ -40,7 +40,7 @@ const formatParseError = (message: string, lineNumber?: number): string => {
  * @param startIndex - The index to start searching from
  * @returns The index after the last END_VAR, or -1 if not found
  */
-const findLastEndVarIndex = (content: string, startIndex: number): number => {
+export const findLastEndVarIndex = (content: string, startIndex: number): number => {
   let lastEndVarIndex = -1
   let searchIndex = startIndex
 

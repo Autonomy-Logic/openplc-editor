@@ -165,7 +165,7 @@ export interface ProjectPort {
    * Editor: reads from local filesystem via IPC.
    * Web: reads from backend API.
    */
-  readProjectFiles?(projectPath: string): Promise<RawProjectFiles>
+  readProjectFiles(projectPath: string): Promise<RawProjectFiles>
 
   /**
    * Start watching a file for external changes.

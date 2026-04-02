@@ -3,7 +3,9 @@ import {
   IProjectRecentHistoryEntry,
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
+import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { app, BrowserWindow, dialog } from 'electron'
@@ -125,9 +127,7 @@ class ProjectService {
    * Read all project files as raw strings — no parsing, no transformation.
    * The frontend is responsible for parsing the returned content.
    */
-  async readRawProjectFiles(
-    projectPath: string,
-  ): Promise<{
+  async readRawProjectFiles(projectPath: string): Promise<{
     success: boolean
     data?: {
       projectPath: string
@@ -140,15 +140,48 @@ class ProjectService {
     }
     error?: { title: string; description: string }
   }> {
+    const VALID_POU_EXTENSIONS = ['.st', '.il', '.ld', '.fbd', '.py', '.cpp', '.json']
+
     try {
       await promises.access(projectPath)
 
-      const readFileIfExists = async (filePath: string): Promise<string> => {
-        try {
-          return await promises.readFile(filePath, 'utf-8')
-        } catch {
-          return ''
+      // Validate that the directory contains a project.json file
+      try {
+        await promises.access(join(projectPath, 'project.json'))
+      } catch {
+        return {
+          success: false,
+          error: {
+            title: 'Invalid project',
+            description: 'The selected directory is not a valid OpenPLC project.',
+          },
         }
+      }
+
+      /**
+       * Read a default config file, creating it with schema defaults if missing or empty.
+       * This mirrors the old backend's readAndParseFile behavior.
+       */
+      const readOrCreateDefault = async (
+        filePath: string,
+        schemaKey: keyof typeof projectDefaultFilesMapSchema,
+      ): Promise<string> => {
+        let content: string
+        try {
+          content = await promises.readFile(filePath, 'utf-8')
+        } catch {
+          content = ''
+        }
+        if (!content.trim()) {
+          const schema = projectDefaultFilesMapSchema[schemaKey]
+          const defaultValue = getDefaultSchemaValues(schema)
+          const defaultJson = JSON.stringify(defaultValue, null, 2)
+          const dir = dirname(filePath)
+          await promises.mkdir(dir, { recursive: true })
+          await promises.writeFile(filePath, defaultJson, 'utf-8')
+          return defaultJson
+        }
+        return content
       }
 
       const readDirRecursive = async (
@@ -165,6 +198,8 @@ class ProjectService {
               const subResults = await readDirRecursive(fullPath, relPath)
               results.push(...subResults)
             } else if (entry.isFile()) {
+              const ext = entry.name.slice(entry.name.lastIndexOf('.'))
+              if (!VALID_POU_EXTENSIONS.includes(ext)) continue
               const content = await promises.readFile(fullPath, 'utf-8')
               results.push({ relativePath: relPath, content })
             }
@@ -175,9 +210,15 @@ class ProjectService {
         return results
       }
 
-      const projectJson = await readFileIfExists(join(projectPath, 'project.json'))
-      const deviceConfig = await readFileIfExists(join(projectPath, 'devices', 'configuration.json'))
-      const pinMapping = await readFileIfExists(join(projectPath, 'devices', 'pin-mapping.json'))
+      const projectJson = await readOrCreateDefault(join(projectPath, 'project.json'), 'project.json')
+      const deviceConfig = await readOrCreateDefault(
+        join(projectPath, 'devices', 'configuration.json'),
+        'devices/configuration.json',
+      )
+      const pinMapping = await readOrCreateDefault(
+        join(projectPath, 'devices', 'pin-mapping.json'),
+        'devices/pin-mapping.json',
+      )
 
       const pouDirs = ['pous/functions', 'pous/function-blocks', 'pous/programs']
       const pouFiles: Array<{ relativePath: string; content: string }> = []
@@ -187,10 +228,7 @@ class ProjectService {
       }
 
       const serverFiles = await readDirRecursive(join(projectPath, 'devices', 'servers'), 'devices/servers')
-      const remoteDeviceFiles = await readDirRecursive(
-        join(projectPath, 'devices', 'remote'),
-        'devices/remote',
-      )
+      const remoteDeviceFiles = await readDirRecursive(join(projectPath, 'devices', 'remote'), 'devices/remote')
 
       return {
         success: true,
