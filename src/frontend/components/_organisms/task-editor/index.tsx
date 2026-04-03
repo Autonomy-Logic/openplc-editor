@@ -198,7 +198,7 @@ const TaskEditor = () => {
       return
     }
 
-    createTask({ data: { ...task }, rowToInsert: selectedRow + 1 })
+    createTask({ data: { ...task, name: getNextTaskName(filteredTasks) }, rowToInsert: selectedRow + 1 })
     updateModelTasks({
       display: 'table',
       selectedRow: selectedRow + 1,

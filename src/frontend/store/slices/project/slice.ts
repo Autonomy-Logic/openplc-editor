@@ -618,7 +618,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
           if (dto.rowId >= 0 && dto.rowId < tasks.length) {
-            tasks[dto.rowId] = dto.data
+            tasks[dto.rowId] = { ...tasks[dto.rowId], ...dto.data }
           }
         }),
       )
@@ -675,7 +675,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const instances = slice.project.data.configurations.resource.instances
           if (dto.rowId >= 0 && dto.rowId < instances.length) {
-            instances[dto.rowId] = dto.data
+            instances[dto.rowId] = { ...instances[dto.rowId], ...dto.data }
           }
         }),
       )

@@ -133,6 +133,18 @@ const InstancesEditor = () => {
     handleFileAndWorkspaceSavedState('Resource')
   }
 
+  const getNextInstanceName = (existingInstances: PLCInstance[]) => {
+    const baseName = 'instance'
+    const numbers = existingInstances
+      .map((inst) => {
+        const match = inst.name.match(/^instance(\d+)$/i)
+        return match ? parseInt(match[1], 10) : -1
+      })
+      .filter((num) => num >= 0)
+    const maxNumber = numbers.length === 0 ? -1 : Math.max(...numbers)
+    return `${baseName}${maxNumber + 1}`
+  }
+
   const handleCreateInstance = () => {
     if (editorInstances.display === 'code') return
 
@@ -166,7 +178,7 @@ const InstancesEditor = () => {
     }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createInstance({ data: { ...instance } })
+      createInstance({ data: { ...instance, name: getNextInstanceName(instances) } })
       updateModelInstances({
         display: 'table',
         selectedRow: instances.length,
@@ -175,7 +187,7 @@ const InstancesEditor = () => {
       return
     }
 
-    createInstance({ data: { ...instance }, rowToInsert: selectedRow + 1 })
+    createInstance({ data: { ...instance, name: getNextInstanceName(instances) }, rowToInsert: selectedRow + 1 })
     updateModelInstances({
       display: 'table',
       selectedRow: selectedRow + 1,
