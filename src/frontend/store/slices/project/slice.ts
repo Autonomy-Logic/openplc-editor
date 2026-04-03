@@ -15,11 +15,7 @@ import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-sl
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import type { ProjectResponse, ProjectSlice } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
-import {
-  createVariableValidation,
-  updateGlobalVariableValidation,
-  updateVariableValidation,
-} from './validation/variables'
+import { createVariableValidation, updateVariableValidation } from './validation/variables'
 
 const ok = (data?: unknown): ProjectResponse => ({ ok: true, data })
 const fail = (message: string, title?: string): ProjectResponse => ({ ok: false, message, title })
@@ -425,19 +421,20 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response.data = pou.interface.variables[found.index]
           } else {
             const globalVars = slice.project.data.configurations.resource.globalVariables
-            const validationResponse = updateGlobalVariableValidation(globalVars, updates)
-            if (!validationResponse.ok) {
-              response = validationResponse
-              return
-            }
             const found = getVariableBasedOnRowIdOrVariableId(globalVars, rowId, variableId)
             if (!found) {
               response = { ok: false, title: 'Variable not found' }
               return
             }
+            const validationResponse = updateVariableValidation(globalVars, updates, found.variable)
+            if (!validationResponse.ok) {
+              response = validationResponse
+              return
+            }
             globalVars[found.index] = {
               ...globalVars[found.index],
               ...updates,
+              ...(validationResponse.data ? validationResponse.data : {}),
             }
             response.data = globalVars[found.index]
           }

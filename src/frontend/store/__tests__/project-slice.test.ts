@@ -657,9 +657,9 @@ describe('createProjectSlice', () => {
       store.getState().projectActions.updateVariable({
         scope: 'global',
         variableId: 'gx',
-        data: { location: '%QX0.0' },
+        data: { location: '%QW0' },
       })
-      expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('%QX0.0')
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('%QW0')
     })
 
     it('fails when variable not found', () => {
