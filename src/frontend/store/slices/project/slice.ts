@@ -346,32 +346,34 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
+          // Resolve the target variables array (local POU or global)
+          let variables: PLCVariable[] | undefined
           if (scope === 'local' && associatedPou) {
             const pou = slice.project.data.pous.find((p) => p.name === associatedPou)
             if (!pou?.interface) {
               response = fail('POU not found')
               return
             }
-            data = { ...data, ...createVariableValidation(pou.interface.variables, data) }
-            if (rowToInsert !== undefined) {
-              const pouVariables = pou.interface.variables.filter((variable) => variable.name !== 'OUT')
-              pouVariables.splice(rowToInsert, 0, data)
-              pou.interface.variables = [...pouVariables]
-            } else {
-              pou.interface.variables.push(data)
-            }
-            response.data = data
+            variables = pou.interface.variables
           } else {
-            const vars = slice.project.data.configurations.resource.globalVariables
-            const validated = createVariableValidation(vars, data)
-            data = { ...data, name: validated.name, location: validated.location }
-            if (rowToInsert !== undefined) {
-              vars.splice(rowToInsert, 0, data)
-            } else {
-              vars.push(data)
-            }
-            response.data = data
+            variables = slice.project.data.configurations.resource.globalVariables
           }
+
+          // Validate and auto-increment name/location
+          data = { ...data, ...createVariableValidation(variables, data) }
+
+          // Insert or append
+          if (rowToInsert !== undefined) {
+            const filtered = scope === 'local' ? variables.filter((v) => v.name !== 'OUT') : variables
+            filtered.splice(rowToInsert, 0, data)
+            if (scope === 'local' && associatedPou) {
+              const pou = slice.project.data.pous.find((p) => p.name === associatedPou)!
+              pou.interface!.variables = [...filtered]
+            }
+          } else {
+            variables.push(data)
+          }
+          response.data = data
         }),
       )
       return response
@@ -397,47 +399,37 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
+          // Resolve the target variables array (local POU or global)
+          let variables: PLCVariable[] | undefined
           if (scope === 'local' && associatedPou) {
             const pou = slice.project.data.pous.find((p) => p.name === associatedPou)
             if (!pou?.interface) {
               response = fail('POU not found')
               return
             }
-            const found = getVariableBasedOnRowIdOrVariableId(pou.interface.variables, rowId, variableId)
-            if (!found) {
-              response = { ok: false, title: 'Variable not found', message: 'Internal error' }
-              return
-            }
-            const validationResponse = updateVariableValidation(pou.interface.variables, updates, found.variable)
-            if (!validationResponse.ok) {
-              response = validationResponse
-              return
-            }
-            pou.interface.variables[found.index] = {
-              ...pou.interface.variables[found.index],
-              ...updates,
-              ...(validationResponse.data ? validationResponse.data : {}),
-            }
-            response.data = pou.interface.variables[found.index]
+            variables = pou.interface.variables
           } else {
-            const globalVars = slice.project.data.configurations.resource.globalVariables
-            const found = getVariableBasedOnRowIdOrVariableId(globalVars, rowId, variableId)
-            if (!found) {
-              response = { ok: false, title: 'Variable not found' }
-              return
-            }
-            const validationResponse = updateVariableValidation(globalVars, updates, found.variable)
-            if (!validationResponse.ok) {
-              response = validationResponse
-              return
-            }
-            globalVars[found.index] = {
-              ...globalVars[found.index],
-              ...updates,
-              ...(validationResponse.data ? validationResponse.data : {}),
-            }
-            response.data = globalVars[found.index]
+            variables = slice.project.data.configurations.resource.globalVariables
           }
+
+          const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
+          if (!found) {
+            response = { ok: false, title: 'Variable not found' }
+            return
+          }
+
+          const validationResponse = updateVariableValidation(variables, updates, found.variable)
+          if (!validationResponse.ok) {
+            response = validationResponse
+            return
+          }
+
+          variables[found.index] = {
+            ...variables[found.index],
+            ...updates,
+            ...(validationResponse.data ? validationResponse.data : {}),
+          }
+          response.data = variables[found.index]
         }),
       )
       return response
