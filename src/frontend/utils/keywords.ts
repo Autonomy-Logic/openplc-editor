@@ -333,9 +333,9 @@ export function sanitizeVariableInput(e: HTMLInputElement) {
   // numbers at the beginning are invalid, so help the user by preceding with an underscore
   workingValue = workingValue.replace(/^([0-9])/, '_$1')
   // substitute whitespace and hyphens with underscores
-  workingValue = workingValue.replaceAll(/[\s-]/g, '_')
+  workingValue = workingValue.replace(/[\s-]/g, '_')
   // remove any invalid characters remaining
-  workingValue = workingValue.replaceAll(/[^a-zA-Z0-9_]/g, '')
+  workingValue = workingValue.replace(/[^a-zA-Z0-9_]/g, '')
   e.value = workingValue
   // need to adjust the cursor position, by default the cursor will go to the end when changing el.value
   const cursorOffset = workingValue.length - originalValue.length

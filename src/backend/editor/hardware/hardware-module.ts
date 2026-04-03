@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
-import type { AvailableBoards, HalsFile, SerialPort } from './hardware-types'
+import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
 // interface MethodsResult<T> {
 //   success: boolean

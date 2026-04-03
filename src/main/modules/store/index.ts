@@ -1,6 +1,5 @@
+import { TStoreType } from '@root/backend/editor/contracts/types/modules/store'
 import Store from 'electron-store'
-
-import { TStoreType } from '../../contracts/types/modules/store'
 
 export const store = new Store<TStoreType>({
   schema: {

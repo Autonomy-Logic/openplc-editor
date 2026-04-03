@@ -1,5 +1,5 @@
-import { PLCDataType } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
+import { PLCDataType } from '@root/middleware/shared/ports/open-plc-types'
+import { BaseXml } from '@root/middleware/shared/ports/xml-types/old-editor'
 
 const parseDimensions = (dimensions: Array<{ dimension: string }>) => {
   return (
@@ -109,15 +109,15 @@ export const oldEditorParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataTyp
                       '@name': variable.name,
                       type: {
                         array: {
-                          dimension: parseDimensions(variable.type.data.dimensions),
+                          dimension: parseDimensions(variable.type.data!.dimensions),
                           baseType: {
-                            [variable.type.data.baseType.definition === 'user-data-type'
+                            [variable.type.data!.baseType.definition === 'user-data-type'
                               ? 'derived'
-                              : variable.type.data.baseType.value === 'string'
+                              : variable.type.data!.baseType.value === 'string'
                                 ? 'string'
-                                : variable.type.data.baseType.value.toUpperCase()]:
-                              variable.type.data.baseType.definition === 'user-data-type'
-                                ? { '@name': variable.type.data.baseType.value }
+                                : variable.type.data!.baseType.value.toUpperCase()]:
+                              variable.type.data!.baseType.definition === 'user-data-type'
+                                ? { '@name': variable.type.data!.baseType.value }
                                 : '',
                           },
                         },

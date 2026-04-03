@@ -76,20 +76,22 @@ const EditableInitialValueCell = ({
   editable = true,
 }: IEditableCellProps) => {
   const initialValue = getValue<PLCStructureVariable['initialValue']>()
+  const displayValue = initialValue?.simpleValue?.value ?? ''
 
-  const [cellValue, setCellValue] = useState(initialValue)
+  const [cellValue, setCellValue] = useState(displayValue)
 
   const onBlur = () => {
-    table.options.meta?.updateData(index, id, cellValue)
+    const newInitialValue: PLCStructureVariable['initialValue'] = { simpleValue: { value: cellValue } }
+    table.options.meta?.updateData(index, id, newInitialValue)
   }
 
   useEffect(() => {
-    setCellValue(initialValue)
-  }, [initialValue])
+    setCellValue(displayValue)
+  }, [displayValue])
 
   return (
     <InputWithRef
-      value={cellValue ?? ''}
+      value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
       className={cn(

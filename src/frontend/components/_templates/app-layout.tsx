@@ -33,6 +33,15 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     workspaceActions: { setSystemConfigs, setRecent },
   } = useOpenPLCStore()
 
+  // Theme initialization - applies dark class before DisplayMenu mounts
+  useEffect(() => {
+    const stored = localStorage.getItem('theme')
+    const prefersDark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    document.documentElement.classList.toggle('dark', prefersDark)
+    document.documentElement.classList.toggle('light', !prefersDark)
+    setSystemConfigs({ shouldUseDarkMode: prefersDark })
+  }, [setSystemConfigs])
+
   // System initialization
   useEffect(() => {
     const initSystem = async () => {

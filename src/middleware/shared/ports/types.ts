@@ -68,12 +68,12 @@ export interface PLCInstance {
 export interface PLCStructureVariable {
   name: string
   type: PLCVariableType
-  initialValue?: string | null
+  initialValue?: { simpleValue: { value: string } }
   documentation?: string
 }
 
 export type PLCDataType =
-  | { name: string; derivation: 'structure'; variable: PLCVariable[] }
+  | { name: string; derivation: 'structure'; variable: PLCStructureVariable[] }
   | {
       name: string
       derivation: 'enumerated'
@@ -218,11 +218,29 @@ export interface S7CommPlcIdentity {
   moduleName: string
 }
 
+export type S7CommBufferType =
+  | 'input'
+  | 'output'
+  | 'memory'
+  | 'bool_input'
+  | 'bool_output'
+  | 'bool_memory'
+  | 'byte_input'
+  | 'byte_output'
+  | 'int_input'
+  | 'int_output'
+  | 'int_memory'
+  | 'dint_input'
+  | 'dint_output'
+  | 'dint_memory'
+  | 'lint_input'
+  | 'lint_output'
+  | 'lint_memory'
+
 export interface S7CommBufferMapping {
-  type?: string
-  startByte: number
-  endByte: number
-  iecAddresses: string[]
+  type: S7CommBufferType
+  startBuffer: number
+  bitAddressing: boolean
 }
 
 export interface S7CommDataBlock {
@@ -238,6 +256,12 @@ export interface S7CommSystemArea {
   mapping?: S7CommBufferMapping
 }
 
+export interface S7CommSystemAreas {
+  peArea?: S7CommSystemArea
+  paArea?: S7CommSystemArea
+  mkArea?: S7CommSystemArea
+}
+
 export interface S7CommLogging {
   logConnections: boolean
   logDataAccess: boolean
@@ -246,9 +270,10 @@ export interface S7CommLogging {
 
 export interface S7CommSlaveConfig {
   server: S7CommServerSettings
-  plcIdentity: S7CommPlcIdentity
+  plcIdentity?: S7CommPlcIdentity
   dataBlocks: S7CommDataBlock[]
-  logging: S7CommLogging
+  systemAreas?: S7CommSystemAreas
+  logging?: S7CommLogging
 }
 
 // OPC-UA
@@ -554,7 +579,7 @@ export interface SimulatorDebugResult {
 // ---------------------------------------------------------------------------
 
 export interface CompileProgressEvent {
-  stage: 'xml' | 'st' | 'c' | 'glue' | 'arduino' | 'done' | 'error'
+  stage: 'xml' | 'st' | 'c' | 'glue' | 'arduino' | 'upload' | 'done' | 'error'
   message: string
   progress?: number
   level?: string

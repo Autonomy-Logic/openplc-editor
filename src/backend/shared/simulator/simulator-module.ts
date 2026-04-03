@@ -151,11 +151,11 @@ export class SimulatorModule {
   private timerHandle: ReturnType<typeof setTimeout> | null = null
 
   // Peripherals (kept alive so they process register read/write hooks)
-  private timer0: AVRTimer | null = null
-  private timer1: AVRTimer | null = null
-  private timer2: AVRTimer | null = null
+  private _timer0: AVRTimer | null = null
+  private _timer1: AVRTimer | null = null
+  private _timer2: AVRTimer | null = null
   private usart0: AVRUSART | null = null
-  private clock: AVRClock | null = null
+  private _clock: AVRClock | null = null
 
   // RX byte queue -- avr8js USART accepts one byte at a time (returns false
   // while rxBusy). Incoming bytes are queued and drained after the firmware
@@ -184,11 +184,11 @@ export class SimulatorModule {
     this.cpu = new CPU(progMem, SRAM_BYTES)
 
     // Instantiate peripherals -- they register read/write hooks on the CPU
-    this.timer0 = new AVRTimer(this.cpu, mega2560Timer0Config)
-    this.timer1 = new AVRTimer(this.cpu, mega2560Timer1Config)
-    this.timer2 = new AVRTimer(this.cpu, mega2560Timer2Config)
+    this._timer0 = new AVRTimer(this.cpu, mega2560Timer0Config)
+    this._timer1 = new AVRTimer(this.cpu, mega2560Timer1Config)
+    this._timer2 = new AVRTimer(this.cpu, mega2560Timer2Config)
     this.usart0 = new AVRUSART(this.cpu, mega2560Usart0Config, CPU_FREQ_HZ)
-    this.clock = new AVRClock(this.cpu, CPU_FREQ_HZ, clockConfig)
+    this._clock = new AVRClock(this.cpu, CPU_FREQ_HZ, clockConfig)
 
     // Wrap the UDR read hook so that after the firmware reads a received byte,
     // the next queued byte is fed into the USART. This ensures the RXC ISR
@@ -311,10 +311,10 @@ export class SimulatorModule {
     }
     this.rxQueue = []
     this.cpu = null
-    this.timer0 = null
-    this.timer1 = null
-    this.timer2 = null
-    this.clock = null
+    this._timer0 = null
+    this._timer1 = null
+    this._timer2 = null
+    this._clock = null
     this.onUartByte = null
   }
 

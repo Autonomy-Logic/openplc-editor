@@ -9,7 +9,7 @@ import {
   ModalTitle,
   ModalTrigger,
 } from '../../../components/_molecules/modal'
-import type { PLCBaseType } from '../../../utils/plc-constants'
+import type { PLCBaseType } from '../../../utils/plc-constants/types'
 import { Button } from '../buttons/default'
 import TableActions from '../table-actions'
 import { TypeDropdownSelector } from '../type-dropdown-selector'

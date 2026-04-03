@@ -1,10 +1,12 @@
 import { BlockNode, BlockVariant } from '@root/frontend/components/_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '@root/frontend/components/_atoms/graphical-editor/ladder/coil'
 import { ContactNode } from '@root/frontend/components/_atoms/graphical-editor/ladder/contact'
-import { ParallelNode } from '@root/frontend/components/_atoms/graphical-editor/ladder/parallel'
-import { PowerRailNode } from '@root/frontend/components/_atoms/graphical-editor/ladder/power-rail'
-import { BasicNodeData } from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
-import { VariableNode } from '@root/frontend/components/_atoms/graphical-editor/ladder/variable'
+import {
+  BasicNodeData,
+  ParallelNode,
+  PowerRailNode,
+  VariableNode,
+} from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
 import { RungLadderState } from '@root/frontend/store/slices'
 import {
   BlockLadderXML,
@@ -15,7 +17,7 @@ import {
   LeftPowerRailLadderXML,
   OutVariableLadderXML,
   RightPowerRailLadderXML,
-} from '@root/types/PLC/xml-data/codesys/pous/languages/ladder-diagram'
+} from '@root/middleware/shared/ports/xml-types/codesys/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
 
 /**

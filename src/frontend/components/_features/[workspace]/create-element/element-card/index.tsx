@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import * as Popover from '@radix-ui/react-popover'
 
@@ -169,7 +168,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
         initialValue: '',
         dimensions: [],
       } as PLCArrayDatatype
-      const res = createDatatype(draft)
+      createDatatype(draft)
     }
     if (data.derivation === 'enumerated') {
       const draft = {
@@ -178,7 +177,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
         initialValue: '',
         values: [],
       } as PLCEnumeratedDatatype
-      const res = createDatatype(draft)
+      createDatatype(draft)
     }
     if (data.derivation === 'structure') {
       const draft = {
@@ -186,7 +185,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
         derivation: data.derivation,
         variable: [],
       } as PLCStructureDatatype
-      const res = createDatatype(draft)
+      createDatatype(draft)
     }
     closeContainer((prev) => !prev)
     setIsOpen(false)

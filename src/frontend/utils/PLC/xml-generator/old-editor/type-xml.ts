@@ -1,4 +1,4 @@
-import { PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCVariable } from '@root/middleware/shared/ports/open-plc-types'
 
 type VariableType = PLCVariable['type']
 
@@ -10,7 +10,7 @@ export const convertTypeToXml = (type: VariableType): Record<string, unknown> =>
   if (type.definition === 'array') {
     return {
       array: {
-        dimension: type.data.dimensions.map((dimension) => {
+        dimension: type.data!.dimensions.map((dimension) => {
           const lower = dimension.dimension.split('..')[0]
           const upper = dimension.dimension.split('..')[1]
           return {
@@ -19,12 +19,12 @@ export const convertTypeToXml = (type: VariableType): Record<string, unknown> =>
           }
         }),
         baseType: {
-          [type.data.baseType.definition === 'user-data-type'
+          [type.data!.baseType.definition === 'user-data-type'
             ? 'derived'
-            : type.data.baseType.value === 'string'
-              ? type.data.baseType.value
-              : type.data.baseType.value.toUpperCase()]:
-            type.data.baseType.definition === 'user-data-type' ? { '@name': type.data.baseType.value } : '',
+            : type.data!.baseType.value === 'string'
+              ? type.data!.baseType.value
+              : type.data!.baseType.value.toUpperCase()]:
+            type.data!.baseType.definition === 'user-data-type' ? { '@name': type.data!.baseType.value } : '',
         },
       },
     }

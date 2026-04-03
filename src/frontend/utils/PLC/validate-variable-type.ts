@@ -23,7 +23,7 @@ export const validateVariableType = (
       const subValues: string[] = []
       validTypes.forEach((value) => {
         if (typeof value === 'string') {
-          subValues.push(value.toLowerCase())
+          subValues.push(value.toUpperCase())
           return
         }
 
@@ -31,7 +31,7 @@ export const validateVariableType = (
         if (value instanceof ZodLiteral) {
           ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
             (subValue) => {
-              subValues.push(subValue.toLowerCase())
+              subValues.push(subValue.toUpperCase())
             },
           )
           return
@@ -39,10 +39,8 @@ export const validateVariableType = (
       })
 
       return {
-        isValid: subValues.includes(upperSelectedType.toLowerCase()),
-        error: subValues.includes(upperSelectedType.toLowerCase())
-          ? undefined
-          : `Expected one of: ${subValues.join(', ')}`,
+        isValid: subValues.includes(upperSelectedType),
+        error: subValues.includes(upperSelectedType) ? undefined : `Expected one of: ${subValues.join(', ')}`,
       }
     }
     return {
@@ -75,7 +73,7 @@ export const getVariableRestrictionType = (variableType: string) => {
       const subValues: string[] = []
       values.forEach((value) => {
         if (typeof value === 'string') {
-          subValues.push(value.toLowerCase())
+          subValues.push(value.toUpperCase())
           return
         }
 
@@ -83,7 +81,7 @@ export const getVariableRestrictionType = (variableType: string) => {
         if (value instanceof ZodLiteral) {
           ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
             (subValue) => {
-              subValues.push(subValue.toLowerCase())
+              subValues.push(subValue.toUpperCase())
             },
           )
           return
@@ -95,17 +93,15 @@ export const getVariableRestrictionType = (variableType: string) => {
       }
     }
     return {
-      values: (values as string[]).map((value) => value.toLowerCase()),
+      values: (values as string[]).map((value) => value.toUpperCase()),
       definition: 'base-type',
     }
   }
 
-  const isABaseType = baseTypeSchema.safeParse(variableType.toLowerCase())
+  const isABaseType = baseTypeSchema.safeParse(variableType.toUpperCase())
 
   return {
-    // For base types, lowercase is fine (they're standardized and compared case-insensitively)
-    // For derived/custom types, preserve original case to match user-defined type names
-    values: isABaseType.success ? variableType.toLowerCase() : variableType,
+    values: isABaseType.success ? variableType.toUpperCase() : variableType,
     definition: isABaseType.success ? 'base-type' : 'derived',
   }
 }

@@ -96,7 +96,6 @@ export const generateModbusSlaveConfig = (servers: PLCServer[] | undefined): str
   return JSON.stringify(config, null, 2)
 }
 
-export { DEFAULT_BUFFER_MAPPING }
 export type {
   ModbusSlaveBufferMapping,
   ModbusSlaveCoils,

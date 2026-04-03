@@ -7,6 +7,7 @@
     "lib": ["dom", "es2022"],
     "jsx": "react-jsx",
     "strict": true,
+    "skipLibCheck": true,
     "sourceMap": true,
     "moduleResolution": "node",
     "esModuleInterop": true,
@@ -15,18 +16,8 @@
     "allowJs": true,
     "outDir": "configs/dll",
     "paths": {
-      "@root/*": ["./src/*"],
-      "@process:main/*": ["./src_old/main/*"],
-      "@process:renderer/*": ["./src_old/renderer/*"],
-      "@components/*": ["./src_old/renderer/components/*"],
-      "@features/*": ["./src_old/renderer/features/*"],
-      "@contracts/*": ["./src_old/renderer/contracts/*"],
-      "@utils/*": ["./src_old/utils/*"],
-      "@shared/*": ["./src_old/shared/*"],
-      "@oplc-icons/*": ["./src_old/renderer/assets/icons/*"],
-      "@hooks/*": ["./src_old/renderer/hooks/*"],
-      "@data/*": ["./src_old/renderer/data/*"]
+      "@root/*": ["./src/*"]
     }
   },
-  "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]
+  "exclude": ["test", "release/build", "release/app/dist", "configs/dll", "src/__architecture__"]
 }

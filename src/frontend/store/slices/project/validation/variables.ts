@@ -5,7 +5,7 @@ import {
   LWORD_LOCATION_REGEX,
   PLC_ADDRESS_PREFIX,
   WORD_LOCATION_REGEX,
-} from '../../../../utils/PLC/address-constants'
+} from '../../../../utils/PLC/address-constants/types'
 import type { ProjectResponse } from '../types'
 
 /**

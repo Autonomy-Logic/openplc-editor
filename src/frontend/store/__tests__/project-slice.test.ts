@@ -146,7 +146,7 @@ function makeDataBlock(dbNumber: number): S7CommDataBlock {
     dbNumber,
     description: `DB${dbNumber}`,
     sizeBytes: 128,
-    mapping: { startByte: 0, endByte: 127, iecAddresses: [] },
+    mapping: { type: 'input', startBuffer: 0, bitAddressing: false },
   }
 }
 
@@ -533,15 +533,16 @@ describe('createProjectSlice', () => {
       expect(vars[1].name).toBe('b')
     })
 
-    it('fails when local variable already exists', () => {
+    it('auto-renames when local variable already exists', () => {
       seedPou(store, makePou('Main', 'program', [makeVariable('x')]))
       const result = store.getState().projectActions.createVariable({
         scope: 'local',
         associatedPou: 'Main',
         data: makeVariable('x'),
       })
-      expect(result.ok).toBe(false)
-      expect(result.message).toBe('Variable already exists')
+      expect(result.ok).toBe(true)
+      expect(result.data).toBeDefined()
+      expect((result.data as { name: string }).name).not.toBe('x')
     })
 
     it('fails when POU not found for local scope', () => {
@@ -575,28 +576,27 @@ describe('createProjectSlice', () => {
       expect(gv[1].name).toBe('b')
     })
 
-    it('fails when global variable already exists', () => {
+    it('auto-renames when global variable already exists', () => {
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
       const result = store.getState().projectActions.createVariable({
         scope: 'global',
         data: makeVariable('gx', 'global'),
       })
-      expect(result.ok).toBe(false)
-      expect(result.message).toBe('Variable already exists')
+      expect(result.ok).toBe(true)
+      expect(result.data).toBeDefined()
+      expect((result.data as { name: string }).name).not.toBe('gx')
     })
 
-    it('does nothing for local scope when POU interface is missing', () => {
+    it('fails for local scope when POU interface is missing', () => {
       const pou: PLCPou = { name: 'NoIface', pouType: 'program', body: makeBody() }
       seedPou(store, pou)
-      // Variable is checked against the empty interface -- pou has no interface, so findIndex returns fail
       const result = store.getState().projectActions.createVariable({
         scope: 'local',
         associatedPou: 'NoIface',
         data: makeVariable('x'),
       })
-      // The pou is found but the pou.interface?.variables is undefined so the check uses []
-      // The create succeeds validation but produce does nothing because pou?.interface is falsy
-      expect(result.ok).toBe(true)
+      // The pou is found but pou.interface is undefined, so the implementation returns fail('POU not found')
+      expect(result.ok).toBe(false)
     })
   })
 
@@ -662,7 +662,7 @@ describe('createProjectSlice', () => {
       expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('%QX0.0')
     })
 
-    it('returns ok even when variable not found (no-op)', () => {
+    it('fails when variable not found', () => {
       seedPou(store, makePou('Main'))
       const result = store.getState().projectActions.updateVariable({
         scope: 'local',
@@ -670,17 +670,17 @@ describe('createProjectSlice', () => {
         variableId: 'nonexistent',
         data: { name: 'foo' },
       })
-      expect(result.ok).toBe(true)
+      expect(result.ok).toBe(false)
     })
 
-    it('returns ok when variables array is not available (POU not found)', () => {
+    it('fails when POU not found', () => {
       const result = store.getState().projectActions.updateVariable({
         scope: 'local',
         associatedPou: 'Missing',
         variableId: 'x',
         data: { name: 'foo' },
       })
-      expect(result.ok).toBe(true)
+      expect(result.ok).toBe(false)
     })
   })
 
@@ -907,9 +907,7 @@ describe('createProjectSlice', () => {
       const updated: PLCDataType = {
         name: 'MyStruct',
         derivation: 'structure',
-        variable: [
-          { name: 'field1', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
-        ],
+        variable: [{ name: 'field1', type: { definition: 'base-type', value: 'BOOL' }, documentation: '' }],
       }
       store.getState().projectActions.updateDatatype('MyStruct', updated)
       const storedDt = store.getState().project.data.dataTypes[0]
@@ -970,9 +968,9 @@ describe('createProjectSlice', () => {
         name: 'MyStruct',
         derivation: 'structure',
         variable: [
-          { name: 'a', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-          { name: 'b', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-          { name: 'c', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+          { name: 'a', type: { definition: 'base-type', value: 'INT' }, documentation: '' },
+          { name: 'b', type: { definition: 'base-type', value: 'INT' }, documentation: '' },
+          { name: 'c', type: { definition: 'base-type', value: 'INT' }, documentation: '' },
         ],
       }
       store.getState().projectActions.createDatatype({ data: dt })
@@ -1267,7 +1265,7 @@ describe('createProjectSlice', () => {
       const server = (store.getState().project.data.servers ?? [])[0]
       expect(server.s7commSlaveConfig).toBeDefined()
       expect(server.s7commSlaveConfig?.server.port).toBe(102)
-      expect(server.s7commSlaveConfig?.plcIdentity.name).toBe('OpenPLC Runtime')
+      expect(server.s7commSlaveConfig?.plcIdentity!.name).toBe('OpenPLC Runtime')
     })
 
     it('creates an opcua server with default config', () => {
@@ -1416,8 +1414,8 @@ describe('createProjectSlice', () => {
       seedServer(store, makeS7CommServer('S7'))
       const result = store.getState().projectActions.updateS7CommPlcIdentity('S7', { name: 'Custom PLC' })
       expect(result.ok).toBe(true)
-      expect(store.getState().project.data.servers![0].s7commSlaveConfig!.plcIdentity.name).toBe('Custom PLC')
-      expect(store.getState().project.data.servers![0].s7commSlaveConfig!.plcIdentity.moduleType).toBe(
+      expect(store.getState().project.data.servers![0].s7commSlaveConfig!.plcIdentity!.name).toBe('Custom PLC')
+      expect(store.getState().project.data.servers![0].s7commSlaveConfig!.plcIdentity!.moduleType).toBe(
         'CPU 315-2 PN/DP',
       ) // unchanged
     })
@@ -1538,7 +1536,7 @@ describe('createProjectSlice', () => {
       seedServer(store, makeS7CommServer('S7'))
       const result = store.getState().projectActions.updateS7CommLogging('S7', { logDataAccess: true })
       expect(result.ok).toBe(true)
-      const logging = store.getState().project.data.servers![0].s7commSlaveConfig!.logging
+      const logging = store.getState().project.data.servers![0].s7commSlaveConfig!.logging!
       expect(logging.logDataAccess).toBe(true)
       expect(logging.logConnections).toBe(true) // unchanged
     })
@@ -1557,8 +1555,7 @@ describe('createProjectSlice', () => {
     it('updates OPC-UA server config', () => {
       seedServer(store, makeOpcUaServer('OPC'))
       const result = store.getState().projectActions.updateOpcUaServerConfig('OPC', {
-        enabled: true,
-        port: 4841,
+        server: { enabled: true, port: 4841 },
       })
       expect(result.ok).toBe(true)
       const srvConfig = store.getState().project.data.servers![0].opcuaServerConfig!.server
@@ -2256,7 +2253,7 @@ describe('createProjectSlice', () => {
         dbNumber: 1,
         description: 'DB',
         sizeBytes: 100,
-        mapping: { startByte: 0, endByte: 99, iecAddresses: [] },
+        mapping: { type: 'input', startBuffer: 0, bitAddressing: false },
       })
       expect(result.ok).toBe(true)
     })

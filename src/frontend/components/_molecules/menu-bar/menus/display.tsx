@@ -26,11 +26,9 @@ export const DisplayMenu = () => {
   const [theme, setTheme] = useState(getThemePreference())
 
   useEffect(() => {
+    document.documentElement.classList.remove('dark', 'light')
     document.documentElement.classList.add(theme)
     setSystemConfigs({ shouldUseDarkMode: theme === 'dark' })
-    return () => {
-      document.documentElement.classList.remove(theme)
-    }
   }, [theme, setSystemConfigs])
 
   const toggleTheme = () => {

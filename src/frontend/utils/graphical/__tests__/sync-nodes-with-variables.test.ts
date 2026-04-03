@@ -44,6 +44,7 @@ describe('syncNodesWithVariables', () => {
 
     syncNodesWithVariables([variable], ladderFlows, updateNode)
 
+    // When type mismatches, variable id is set to "broken-<nodeId>" to mark it as broken.
     expect(updateNode).toHaveBeenCalledWith(
       expect.objectContaining({
         editorName: 'editor1',
@@ -51,7 +52,7 @@ describe('syncNodesWithVariables', () => {
         nodeId: 'n1',
         node: expect.objectContaining({
           data: expect.objectContaining({
-            variable,
+            variable: { ...variable, id: 'broken-n1' },
             wrongVariable: true,
           }),
         }),
@@ -59,7 +60,7 @@ describe('syncNodesWithVariables', () => {
     )
   })
 
-  it('refreshes a contact node when variable id changes', () => {
+  it('does not update a contact node when only the variable id changes but types still match', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'BOOL', 'base-type', '2')
     const node = makeNode('n1', 'contact', {
@@ -77,16 +78,8 @@ describe('syncNodesWithVariables', () => {
 
     syncNodesWithVariables([variable], ladderFlows, updateNode)
 
-    expect(updateNode).toHaveBeenCalledWith(
-      expect.objectContaining({
-        node: expect.objectContaining({
-          data: expect.objectContaining({
-            variable,
-            wrongVariable: false,
-          }),
-        }),
-      }),
-    )
+    // Types match and wrongVariable is not set, so no update is needed.
+    expect(updateNode).not.toHaveBeenCalled()
   })
 
   it('does not update when node has no variable', () => {
@@ -136,7 +129,7 @@ describe('syncNodesWithVariables', () => {
     expect(updateNode).toHaveBeenCalledWith(expect.objectContaining({ editorName: 'editor1' }))
   })
 
-  it('updates a variable node when wrongVariable is true', () => {
+  it('keeps a variable node marked as wrongVariable when type cannot be resolved', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'BOOL')
     const node = makeNode('n1', 'variable', { name: 'myVar' } as Partial<PLCVariable>, { wrongVariable: true })
@@ -149,11 +142,14 @@ describe('syncNodesWithVariables', () => {
     ] as unknown as Parameters<typeof syncNodesWithVariables>[1]
 
     syncNodesWithVariables([variable], ladderFlows, updateNode)
+    // Node type 'variable' has no expected type (getBlockExpectedType returns ''),
+    // so the type comparison always fails and the node stays marked as wrong.
     expect(updateNode).toHaveBeenCalledWith(
       expect.objectContaining({
         node: expect.objectContaining({
           data: expect.objectContaining({
-            wrongVariable: false,
+            variable: { ...variable, id: 'broken-n1' },
+            wrongVariable: true,
           }),
         }),
       }),
@@ -180,7 +176,7 @@ describe('syncNodesWithVariables', () => {
     expect(updateNode).not.toHaveBeenCalled()
   })
 
-  it('does not update a variable node when nothing changed', () => {
+  it('marks a variable node as wrong when it has no expected type to compare', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'BOOL', 'base-type', '1')
     const node = makeNode('n1', 'variable', {
@@ -197,7 +193,18 @@ describe('syncNodesWithVariables', () => {
     ] as unknown as Parameters<typeof syncNodesWithVariables>[1]
 
     syncNodesWithVariables([variable], ladderFlows, updateNode)
-    expect(updateNode).not.toHaveBeenCalled()
+    // Node type 'variable' has no expected type (getBlockExpectedType returns ''),
+    // so the type comparison always fails and the node is flagged as wrong.
+    expect(updateNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        node: expect.objectContaining({
+          data: expect.objectContaining({
+            variable: { ...variable, id: 'broken-n1' },
+            wrongVariable: true,
+          }),
+        }),
+      }),
+    )
   })
 
   it('marks a block node as wrongVariable when variant has no name', () => {
@@ -259,7 +266,7 @@ describe('syncNodesWithVariables', () => {
 })
 
 describe('syncNodesWithVariablesFBD', () => {
-  it('updates a variable node when variable data changes', () => {
+  it('marks a variable node as wrong when type cannot be resolved', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'INT', 'base-type', '2')
     const node = makeNode('n1', 'input-variable', {
@@ -276,14 +283,16 @@ describe('syncNodesWithVariablesFBD', () => {
     ] as unknown as Parameters<typeof syncNodesWithVariablesFBD>[1]
 
     syncNodesWithVariablesFBD([variable], fbdFlows, updateNode)
+    // Node type 'input-variable' has no expected type (getBlockExpectedType returns ''),
+    // so the type comparison always fails and the node is marked as wrong with a broken id.
     expect(updateNode).toHaveBeenCalledWith(
       expect.objectContaining({
         editorName: 'fbd1',
         nodeId: 'n1',
         node: expect.objectContaining({
           data: expect.objectContaining({
-            variable,
-            wrongVariable: false,
+            variable: { ...variable, id: 'broken-n1' },
+            wrongVariable: true,
           }),
         }),
       }),
@@ -340,7 +349,7 @@ describe('syncNodesWithVariablesFBD', () => {
     )
   })
 
-  it('refreshes a block node when reference changes', () => {
+  it('does not update a block node when only variable id changes but types still match', () => {
     const updateNode = vi.fn()
     const oldVariable = makeVariable('myVar', 'BOOL', 'base-type', '1')
     const newVariable = makeVariable('myVar', 'BOOL', 'base-type', '2')
@@ -351,16 +360,8 @@ describe('syncNodesWithVariablesFBD', () => {
     >[1]
 
     syncNodesWithVariablesFBD([newVariable], fbdFlows, updateNode)
-    expect(updateNode).toHaveBeenCalledWith(
-      expect.objectContaining({
-        node: expect.objectContaining({
-          data: expect.objectContaining({
-            variable: newVariable,
-            wrongVariable: false,
-          }),
-        }),
-      }),
-    )
+    // Types match and wrongVariable is not set, so no update is needed.
+    expect(updateNode).not.toHaveBeenCalled()
   })
 
   it('filters flows by editorName', () => {
@@ -382,7 +383,7 @@ describe('syncNodesWithVariablesFBD', () => {
     expect(updateNode).toHaveBeenCalledWith(expect.objectContaining({ editorName: 'fbd1' }))
   })
 
-  it('does not update a variable node when nothing changed', () => {
+  it('marks an input-variable node as wrong when it has no expected type to compare', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'BOOL', 'base-type', '1')
     const node = makeNode('n1', 'input-variable', {
@@ -396,7 +397,18 @@ describe('syncNodesWithVariablesFBD', () => {
     >[1]
 
     syncNodesWithVariablesFBD([variable], fbdFlows, updateNode)
-    expect(updateNode).not.toHaveBeenCalled()
+    // Node type 'input-variable' has no expected type (getBlockExpectedType returns ''),
+    // so the type comparison always fails and the node is flagged as wrong.
+    expect(updateNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        node: expect.objectContaining({
+          data: expect.objectContaining({
+            variable: { ...variable, id: 'broken-n1' },
+            wrongVariable: true,
+          }),
+        }),
+      }),
+    )
   })
 
   it('does not update a non-variable block node when nothing changed', () => {

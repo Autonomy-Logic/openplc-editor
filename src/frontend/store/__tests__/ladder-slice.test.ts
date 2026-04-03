@@ -138,7 +138,9 @@ describe('createLadderFlowSlice', () => {
 
     const { ladderFlows } = store.getState()
     expect(ladderFlows).toHaveLength(1)
-    expect(ladderFlows[0].updated).toBe(true)
+    // addLadderFlow resets updated based on whether legacy migration was needed.
+    // Modern data (no legacy connectedVariables) results in updated: false.
+    expect(ladderFlows[0].updated).toBe(false)
   })
 
   // -------------------------------------------------------------------------

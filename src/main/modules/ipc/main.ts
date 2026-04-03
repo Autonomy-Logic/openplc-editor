@@ -1,9 +1,9 @@
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { PLCProjectData } from '@root/types/PLC/open-plc'
 import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
-import { getErrorMessage } from '@root/utils/get-error-message'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
@@ -451,7 +451,8 @@ class MainProcessBridge implements MainIpcModule {
   /**
    * Register an invoke handler and track the channel for cleanup.
    */
-  private registerHandle(channel: string, handler: (...args: unknown[]) => unknown) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private registerHandle(channel: string, handler: (event: IpcMainInvokeEvent, ...args: any[]) => any) {
     this.registeredHandleChannels.push(channel)
     this.ipcMain.handle(channel, handler)
   }

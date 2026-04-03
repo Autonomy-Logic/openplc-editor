@@ -1,4 +1,4 @@
-import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-types'
+import { ModbusDebugResponse, ModbusFunctionCode } from './types'
 
 export interface SerialPortLike {
   isOpen: boolean

@@ -52,5 +52,5 @@ export const editorPorts: PlatformPorts = {
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
-  capabilities: EDITOR_CAPABILITIES,
+  capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

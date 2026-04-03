@@ -1,6 +1,6 @@
-import type { PLCProjectData } from '@root/types/PLC/open-plc'
-import { BaseXml as codeSysBaseXml } from '@root/types/PLC/xml-data/codesys'
-import { BaseXml as oldBaseXml } from '@root/types/PLC/xml-data/old-editor'
+import type { PLCProjectData } from '@root/middleware/shared/ports/open-plc-types'
+import { BaseXml as codeSysBaseXml } from '@root/middleware/shared/ports/xml-types/codesys'
+import { BaseXml as oldBaseXml } from '@root/middleware/shared/ports/xml-types/old-editor'
 import { create } from 'xmlbuilder2'
 
 import {

@@ -2,41 +2,14 @@ import * as AccordionPrimitive from '@radix-ui/react-accordion'
 import { ChevronDownIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 
+import type { S7CommBufferType, S7CommDataBlock } from '../../../../../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 
-// UI-specific types for S7Comm buffer mapping.
-// These differ from the middleware S7CommDataBlock which uses startByte/endByte/iecAddresses.
-// The UI works with buffer type + start buffer + bit addressing for user-friendly configuration.
-type S7CommBufferType =
-  | 'bool_input'
-  | 'bool_output'
-  | 'bool_memory'
-  | 'byte_input'
-  | 'byte_output'
-  | 'int_input'
-  | 'int_output'
-  | 'int_memory'
-  | 'dint_input'
-  | 'dint_output'
-  | 'dint_memory'
-  | 'lint_input'
-  | 'lint_output'
-  | 'lint_memory'
-
-type S7CommUIDataBlock = {
-  dbNumber: number
-  description: string
-  sizeBytes: number
-  mapping: {
-    type: S7CommBufferType
-    startBuffer: number
-    bitAddressing: boolean
-  }
-}
+type S7CommUIDataBlock = S7CommDataBlock
 
 // Default configurations
 const DEFAULT_SERVER_SETTINGS = {

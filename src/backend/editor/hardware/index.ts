@@ -1,2 +1,2 @@
 export * from './hardware-module'
-export * from './hardware-types'
+export * from './types'

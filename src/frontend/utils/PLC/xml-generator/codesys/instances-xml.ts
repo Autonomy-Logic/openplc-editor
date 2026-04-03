@@ -1,6 +1,6 @@
-import { PLCConfiguration } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/codesys'
-import { PouInstance, TaskXML } from '@root/types/PLC/xml-data/codesys/task/task-diagram'
+import { PLCConfiguration } from '@root/middleware/shared/ports/open-plc-types'
+import { BaseXml } from '@root/middleware/shared/ports/xml-types/codesys'
+import { PouInstance, TaskXML } from '@root/middleware/shared/ports/xml-types/codesys/task/task-diagram'
 
 export const codeSysInstanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => {
   const { instances, tasks, globalVariables } = configuration.resource

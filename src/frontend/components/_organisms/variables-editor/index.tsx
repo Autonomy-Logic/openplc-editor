@@ -19,7 +19,7 @@ import {
   syncNodesWithVariables as syncNodesWithVariablesUtil,
   syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil,
 } from '../../../utils/graphical/sync-nodes-with-variables'
-import { baseTypes } from '../../../utils/plc-constants'
+import { baseTypes } from '../../../utils/plc-constants/types'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,

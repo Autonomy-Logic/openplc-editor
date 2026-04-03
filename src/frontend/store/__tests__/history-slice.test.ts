@@ -40,7 +40,7 @@ describe('createHistorySlice', () => {
       const { history } = store.getState()
 
       expect(history).toHaveProperty('default-history')
-      expect(history['default-history']).toEqual({ past: [], future: [] })
+      expect(history['default-history']).toEqual({ past: [], future: [], savedAtDepth: null })
     })
 
     it('should expose all history actions', () => {
@@ -208,7 +208,7 @@ describe('createHistorySlice', () => {
 
       expect(popped).toBeUndefined()
       // Bucket should now exist (created inside the produce)
-      expect(store.getState().history['nonexistent']).toEqual({ past: [], future: [] })
+      expect(store.getState().history['nonexistent']).toEqual({ past: [], future: [], savedAtDepth: null })
     })
 
     it('should return a deep clone — mutating the returned snapshot must not affect the store', () => {
@@ -273,7 +273,7 @@ describe('createHistorySlice', () => {
       const popped = store.getState().historyActions.popFutureHistory('missing-pou')
 
       expect(popped).toBeUndefined()
-      expect(store.getState().history['missing-pou']).toEqual({ past: [], future: [] })
+      expect(store.getState().history['missing-pou']).toEqual({ past: [], future: [], savedAtDepth: null })
     })
 
     it('should return a deep clone — mutating the returned snapshot must not affect the store', () => {
@@ -352,7 +352,7 @@ describe('createHistorySlice', () => {
 
       const history = store.getState().history
       expect(Object.keys(history)).toEqual(['default-history'])
-      expect(history['default-history']).toEqual({ past: [], future: [] })
+      expect(history['default-history']).toEqual({ past: [], future: [], savedAtDepth: null })
     })
 
     it('should remove custom buckets after clear', () => {
@@ -390,7 +390,7 @@ describe('createHistorySlice', () => {
       expect(history['pou-3'].past).toHaveLength(1)
       expect(history['pou-3'].future).toEqual([])
       // default-history should still be there untouched
-      expect(history['default-history']).toEqual({ past: [], future: [] })
+      expect(history['default-history']).toEqual({ past: [], future: [], savedAtDepth: null })
     })
 
     it('should handle popping from a bucket until empty', () => {

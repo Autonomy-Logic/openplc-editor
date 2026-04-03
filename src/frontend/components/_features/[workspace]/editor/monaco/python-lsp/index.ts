@@ -24,7 +24,8 @@ export async function initPythonLSP(monacoModule: typeof monaco): Promise<void> 
       diagnosticsInterval: 1000,
     })
 
-    await pyrightProvider.init(monacoModule)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- monaco version mismatch between project and monaco-pyright-lsp
+    await pyrightProvider.init(monacoModule as any)
   } finally {
     isInitializing = false
   }
@@ -36,7 +37,8 @@ export async function setupPythonLSPForEditor(editor: monaco.editor.IStandaloneC
   }
 
   try {
-    await pyrightProvider.setupDiagnostics(editor)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- monaco version mismatch between project and monaco-pyright-lsp
+    await pyrightProvider.setupDiagnostics(editor as any)
   } catch (error) {
     // The library can throw if the internal LSP client isn't ready yet.
     // This is a known race condition in monaco-pyright-lsp.

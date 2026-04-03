@@ -9,23 +9,26 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/frontend/utils/cpp/generateCBlocksCode'
+import {
+  type CppPouData as CppPouDataHeader,
+  generateCBlocksHeader,
+} from '@root/frontend/utils/cpp/generateCBlocksHeader'
+import { getErrorMessage } from '@root/frontend/utils/get-error-message'
+import { generateModbusMasterConfig } from '@root/frontend/utils/modbus/generate-modbus-master-config'
+import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
+import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
+import { XmlGenerator } from '@root/frontend/utils/PLC/xml-generator'
+import { parsePlcStatus } from '@root/frontend/utils/plc-status'
+import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import type { PLCProjectData } from '@root/types/PLC/open-plc'
-import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/utils/cpp/generateCBlocksCode'
-import { type CppPouData as CppPouDataHeader, generateCBlocksHeader } from '@root/utils/cpp/generateCBlocksHeader'
-import { getErrorMessage } from '@root/utils/get-error-message'
-import { generateModbusMasterConfig } from '@root/utils/modbus/generate-modbus-master-config'
-import { generateModbusSlaveConfig } from '@root/utils/modbus/generate-modbus-slave-config'
-import { generateOpcUaConfig, OpcUaConfigError } from '@root/utils/opcua'
-import { XmlGenerator } from '@root/utils/PLC/xml-generator'
-import { parsePlcStatus } from '@root/utils/plc-status'
-import { generateS7CommConfig } from '@root/utils/s7comm'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
 import { CreateXMLFile } from '../utils'
-import type { ArduinoCoreControl, HalsFile } from './compiler-types'
+import type { ArduinoCoreControl, HalsFile } from './types'
 import { FormatMacAddress } from './utils/formatters'
 
 interface MethodsResult<T> {
@@ -370,7 +373,7 @@ class CompilerModule {
 
   async handleGenerateXMLfromJSON(sourceTargetFolderPath: string, jsonData: PLCProjectData) {
     return new Promise<MethodsResult<{ xmlPath: string; xmlContent: string }>>((resolve, reject) => {
-      const { data: xmlData } = XmlGenerator(jsonData, 'old-editor')
+      const { data: xmlData } = XmlGenerator(jsonData as Parameters<typeof XmlGenerator>[0], 'old-editor')
       if (typeof xmlData !== 'string') {
         reject(new Error('XML data is not a string'))
         return
@@ -1126,7 +1129,10 @@ class CompilerModule {
       return { success: false, message: 'User canceled the save dialog' }
     }
 
-    const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml, parseTo) as {
+    const { data: projectDataAsString, message } = XmlGenerator(
+      dataToCreateXml as Parameters<typeof XmlGenerator>[0],
+      parseTo,
+    ) as {
       data: string | undefined
       message: string
     }
@@ -1192,7 +1198,9 @@ class CompilerModule {
     projectData: PLCProjectData,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
-    const modbusSlaveConfig: string | null = generateModbusSlaveConfig(projectData.servers)
+    const modbusSlaveConfig: string | null = generateModbusSlaveConfig(
+      projectData.servers as Parameters<typeof generateModbusSlaveConfig>[0],
+    )
 
     if (modbusSlaveConfig) {
       const confFolderPath = join(sourceTargetFolderPath, 'conf')
@@ -1210,7 +1218,9 @@ class CompilerModule {
     projectData: PLCProjectData,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
-    const modbusMasterConfig: string | null = generateModbusMasterConfig(projectData.remoteDevices)
+    const modbusMasterConfig: string | null = generateModbusMasterConfig(
+      projectData.remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
+    )
 
     if (modbusMasterConfig) {
       const confFolderPath = join(sourceTargetFolderPath, 'conf')

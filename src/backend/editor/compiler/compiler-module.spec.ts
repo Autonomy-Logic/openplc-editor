@@ -1,5 +1,20 @@
 import { CompilerModule } from './compiler-module'
 
+jest.mock('electron', () => ({
+  app: {
+    getPath: jest.fn().mockReturnValue('/tmp/mock-user-data'),
+  },
+  dialog: {
+    showSaveDialog: jest.fn().mockResolvedValue({ filePath: '/tmp/mock-save-path' }),
+  },
+}))
+
+jest.mock('electron/main', () => ({}), { virtual: true })
+
+// CompilerModule uses process.resourcesPath (Electron-specific) when not in dev mode.
+// In Jest, NODE_ENV is 'test', so DEVELOPMENT_MODE is false. Provide a fallback.
+;(process as unknown as { resourcesPath: string }).resourcesPath ??= process.cwd()
+
 describe('CompilerModule', () => {
   let compilerModule: CompilerModule
 

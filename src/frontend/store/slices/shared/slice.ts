@@ -645,8 +645,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const currentSnapshot: HistorySnapshot = {
         variables: JSON.parse(JSON.stringify(pou.interface?.variables ?? [])) as PLCVariable[],
         body: JSON.parse(JSON.stringify(pou.body.value)) as unknown,
-        ladderFlow: ladderFlow ? (JSON.parse(JSON.stringify(ladderFlow)) as LadderFlowType) : undefined,
-        fbdFlow: fbdFlow ? (JSON.parse(JSON.stringify(fbdFlow)) as FBDFlowType) : undefined,
+        ladderFlow: ladderFlow ? JSON.parse(JSON.stringify(ladderFlow)) : undefined,
+        fbdFlow: fbdFlow ? JSON.parse(JSON.stringify(fbdFlow)) : undefined,
         globalVariables: JSON.parse(
           JSON.stringify(state.project.data.configurations.resource.globalVariables),
         ) as PLCVariable[],
@@ -671,10 +671,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       }
       // Restore graphical flow state (nodes, edges, positions)
       if (snapshot.ladderFlow) {
-        state.ladderFlowActions.applyLadderFlowSnapshot({ editorName: pouName, snapshot: snapshot.ladderFlow })
+        state.ladderFlowActions.applyLadderFlowSnapshot({
+          editorName: pouName,
+          snapshot: snapshot.ladderFlow as LadderFlowType,
+        })
       }
       if (snapshot.fbdFlow) {
-        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow })
+        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
       }
 
       // Check if we've returned to the saved state
@@ -699,8 +702,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const currentSnapshot: HistorySnapshot = {
         variables: JSON.parse(JSON.stringify(pou.interface?.variables ?? [])) as PLCVariable[],
         body: JSON.parse(JSON.stringify(pou.body.value)) as unknown,
-        ladderFlow: ladderFlow ? (JSON.parse(JSON.stringify(ladderFlow)) as LadderFlowType) : undefined,
-        fbdFlow: fbdFlow ? (JSON.parse(JSON.stringify(fbdFlow)) as FBDFlowType) : undefined,
+        ladderFlow: ladderFlow ? JSON.parse(JSON.stringify(ladderFlow)) : undefined,
+        fbdFlow: fbdFlow ? JSON.parse(JSON.stringify(fbdFlow)) : undefined,
         globalVariables: JSON.parse(
           JSON.stringify(state.project.data.configurations.resource.globalVariables),
         ) as PLCVariable[],
@@ -725,10 +728,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       }
       // Restore graphical flow state (nodes, edges, positions)
       if (snapshot.ladderFlow) {
-        state.ladderFlowActions.applyLadderFlowSnapshot({ editorName: pouName, snapshot: snapshot.ladderFlow })
+        state.ladderFlowActions.applyLadderFlowSnapshot({
+          editorName: pouName,
+          snapshot: snapshot.ladderFlow as LadderFlowType,
+        })
       }
       if (snapshot.fbdFlow) {
-        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow })
+        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
       }
 
       // Check if we've returned to the saved state

@@ -6,15 +6,16 @@ import type { PLCPou as IpcPou } from '@root/types/PLC/open-plc'
  * format expected by shared utilities (e.g. serializePouToText).
  */
 export function ipcPouToFlat(pou: IpcPou): FlatPou & { variablesText?: string } {
+  const data = pou.data as Record<string, unknown>
   return {
     name: pou.data.name,
     pouType: pou.type as FlatPou['pouType'],
     interface: {
-      returnType: 'returnType' in pou.data ? (pou.data as { returnType?: string }).returnType : undefined,
-      variables: pou.data.variables as FlatPou['interface']['variables'],
+      returnType: (data.returnType as string | undefined) ?? undefined,
+      variables: (data.variables ?? []) as NonNullable<FlatPou['interface']>['variables'],
     },
     body: pou.data.body as FlatPou['body'],
     documentation: pou.data.documentation,
-    variablesText: 'variablesText' in pou.data ? pou.data.variablesText : undefined,
+    variablesText: (data.variablesText as string | undefined) ?? undefined,
   }
 }

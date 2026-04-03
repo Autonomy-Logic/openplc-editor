@@ -1,3 +1,6 @@
+import { getDefaultSchemaValues } from '@root/frontend/utils/default-zod-schema-values'
+import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
+import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import {
   CreateProjectDefaultDirectoriesResponse,
   CreateProjectFileProps,
@@ -6,9 +9,6 @@ import {
 } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
-import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
-import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { writeFileSync } from 'fs'
 
 import { createDirectory, fileOrDirectoryExists, ipcPouToFlat } from '../../../utils'

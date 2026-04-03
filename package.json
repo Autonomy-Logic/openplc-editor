@@ -14,10 +14,7 @@
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
     "lint": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx}",
     "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --fix",
-    "lint:old": "cross-env NODE_ENV=development eslint ./src_old/**/*.{ts,tsx}",
-    "lint:old:fix": "cross-env NODE_ENV=development eslint ./src_old/**/*.{ts,tsx} --fix",
     "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
-    "format:old": "cross-env NODE_ENV=development prettier --write \"./src_old/**/*.{ts,tsx}\"",
     "postinstall": "ts-node scripts/download-binaries.ts && ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "setup:binaries": "ts-node scripts/download-binaries.ts",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
@@ -25,16 +22,10 @@
     "prestart": "ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",
     "start:dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
-    "start:electron": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer\" \"cross-env PORT=1313 electronmon .\"",
+    "dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer\" \"cross-env PORT=1313 electronmon .\"",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
-    "prestart:old": "ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.old.dev.ts",
-    "start:dev:old": "ts-node scripts/check-port-in-use.js && npm run prestart:old && npm run start:renderer:old",
-    "start:main:old": "concurrently -k \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./configs/webpack/webpack.config.main.old.dev.ts\" \"electronmon .\"",
-    "start:renderer:old": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.old.dev.ts",
     "test": "jest --collectCoverage",
     "test:watch": "jest --watch --no-coverage",
-    "test:old": "jest --config jest.config.old.json --collectCoverage --",
-    "test:old:unit": "jest --config jest.config.old.json --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",
     "prepare": "husky"
@@ -140,7 +131,8 @@
     "electronmon": "^2.0.2",
     "eslint": "^9.20.1",
     "eslint-config-prettier": "^10.0.1",
-    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.26",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-webpack-plugin": "^4.2.0",
     "file-loader": "^6.2.0",
@@ -154,7 +146,7 @@
     "mini-css-extract-plugin": "^2.7.6",
     "postcss": "^8.4.31",
     "postcss-loader": "^7.3.3",
-    "prettier": "^3.2.5",
+    "prettier": "3.4.2",
     "prettier-plugin-tailwindcss": "^0.5.14",
     "react-refresh": "^0.14.0",
     "react-test-renderer": "^18.2.0",
@@ -164,7 +156,7 @@
     "serialport": "^12.0.0",
     "style-loader": "^3.3.3",
     "tailwind-scrollbar": "^3.1.0",
-    "tailwindcss": "^3.3.3",
+    "tailwindcss": "^3.4.19",
     "terser-webpack-plugin": "^5.3.9",
     "ts-jest": "^29.4.0",
     "ts-loader": "^9.4.4",
@@ -188,17 +180,12 @@
       "!node_modules",
       "!node_modules/**/*",
       "!.*",
-      "src/**/*",
-      "src_old/**/*"
+      "src/**/*"
     ],
     "logLevel": "quiet"
   },
   "lint-staged": {
     "./src/**/*.{ts,tsx}": [
-      "cross-env NODE_ENV=development eslint --fix",
-      "prettier --write"
-    ],
-    "./src_old/**/*.{ts,tsx}": [
       "cross-env NODE_ENV=development eslint --fix",
       "prettier --write"
     ]

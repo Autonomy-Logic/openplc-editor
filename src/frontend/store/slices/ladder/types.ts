@@ -148,7 +148,7 @@ type LadderFlowSlice = LadderFlowState & {
   ladderFlowActions: LadderFlowActions
 }
 
-export type { LadderFlowActions, LadderFlowSlice, LadderFlowState, LadderFlowType, RungLadderState }
+export type { LadderFlowActions, LadderFlowSlice, LadderFlowState, LadderFlowType }
 
 /**
  * Zod exports

@@ -1,19 +1,16 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import eslint from '@eslint/js'
+import js from '@eslint/js'
 import eslintConfigPrettier from 'eslint-config-prettier'
-import reactRecommended from 'eslint-plugin-react/configs/recommended.js'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
 import simpleImportSort from 'eslint-plugin-simple-import-sort'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
-/** @type {import('@types/eslint').Linter.FlatConfig} */
-export default [
+export default tseslint.config(
   {
-    files: ['src/**/*.ts', 'src/**/*.tsx', 'src_old/**/*.ts', 'src_old/**/*.tsx'],
     ignores: [
+      'dist',
       '**/*.d.ts',
-      '**/*.test.{js,jsx,ts,tsx}',
-      '**/*.spec.{js,jsx,ts,tsx}',
       '**/*.config.{js,ts,mjs,cjs}',
       'configs/dll/**/*.{js,ts,jsx,tsx}',
       '**/scripts/**',
@@ -23,11 +20,28 @@ export default [
       '**/resources/**',
     ],
   },
-  eslint.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
   {
+    extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
+    files: ['src/**/*.{ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.browser,
+      parserOptions: {
+        projectService: {
+          allowDefaultProject: ['src/__architecture__/*.ts'],
+        },
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+      'simple-import-sort': simpleImportSort,
+    },
     rules: {
-      '@typescript-eslint/no-floating-promises': ['warn', { ignoreIIFE: true }],
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -41,75 +55,23 @@ export default [
           ignoreRestSiblings: true,
         },
       ],
+      '@typescript-eslint/no-floating-promises': ['warn', { ignoreIIFE: true }],
+      '@typescript-eslint/no-unsafe-argument': 'warn',
       '@typescript-eslint/no-unsafe-assignment': 'warn',
-      '@typescript-eslint/no-unsafe-member-access': 'warn',
       '@typescript-eslint/no-unsafe-call': 'warn',
+      '@typescript-eslint/no-unsafe-enum-comparison': 'warn',
+      '@typescript-eslint/no-unsafe-member-access': 'warn',
+      '@typescript-eslint/no-unsafe-return': 'warn',
+      '@typescript-eslint/no-base-to-string': 'warn',
       '@typescript-eslint/no-misused-promises': 'warn',
-    },
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      parserOptions: {
-        project: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-  },
-  {
-    ...reactRecommended,
-    name: 'eslint-plugin-react',
-    files: ['**/*.{js,jsx,ts,tsx}'],
-    ignores: ['src_old/main/**/*'],
-    languageOptions: {
-      parserOptions: {
-        project: true,
-        ecmaFeatures: {
-          jsx: true,
-        },
-      },
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      globals: {
-        ...globals.amd,
-        ...globals.browser,
-        ...globals.serviceworker,
-        ...globals.node,
-      },
-    },
-    rules: {
-      'require-render-return': 'off',
-      'jsx-filename-extension': 'off',
-      'react-in-jsx-scope': 'off',
-      'prop-types': 'off',
-      'require-default-props': 'off',
-      'jsx-props-no-spreading': 'off',
-    },
-    settings: {
-      react: {
-        version: 'detect',
-      },
-    },
-  },
-  {
-    name: 'simple-import-sort',
-    files: ['**/*.{js,jsx,ts,tsx}'],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      globals: {
-        ...globals.amd,
-        ...globals.browser,
-        ...globals.serviceworker,
-        ...globals.node,
-      },
-    },
-    plugins: {
-      'simple-import-sort': simpleImportSort,
-    },
-    rules: {
-      'simple-import-sort/exports': 'error',
+      '@typescript-eslint/no-redundant-type-constituents': 'warn',
+      '@typescript-eslint/only-throw-error': 'warn',
+      '@typescript-eslint/require-await': 'warn',
+      '@typescript-eslint/restrict-plus-operands': 'warn',
+      '@typescript-eslint/unbound-method': 'warn',
       'simple-import-sort/imports': 'error',
+      'simple-import-sort/exports': 'error',
     },
   },
   eslintConfigPrettier,
-]
+)

@@ -1,5 +1,5 @@
-import type { PlcStatus } from '@root/types/plc-status'
-import { isValidPlcStatus } from '@root/types/plc-status'
+import type { PlcStatus } from '@root/middleware/shared/ports/plc-status'
+import { isValidPlcStatus } from '@root/middleware/shared/ports/plc-status'
 
 /**
  * Parses raw PLC status string from the runtime API

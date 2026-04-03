@@ -1,10 +1,10 @@
 // import { PLCVariable } from '@root/types/PLC'
 import { FBDRungState, RungLadderState } from '@root/frontend/store/slices'
-import { baseTypes } from '@root/frontend/utils/plc-constants'
-import { PLCPou } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/codesys'
-import { InterfaceXML } from '@root/types/PLC/xml-data/codesys/pous/interface/interface-diagram'
-import { VariableXML } from '@root/types/PLC/xml-data/codesys/variable/variable-diagram'
+import { baseTypes } from '@root/frontend/utils/plc-constants/types'
+import { PLCPou } from '@root/middleware/shared/ports/open-plc-types'
+import { BaseXml } from '@root/middleware/shared/ports/xml-types/codesys'
+import { InterfaceXML } from '@root/middleware/shared/ports/xml-types/codesys/pous/interface/interface-diagram'
+import { VariableXML } from '@root/middleware/shared/ports/xml-types/codesys/variable/variable-diagram'
 
 import { fbdToXml } from './language/fbd-xml'
 import { ilToXML } from './language/il-xml'
@@ -23,7 +23,7 @@ export const codeSysParseInterface = (pou: PLCPou) => {
     if (variable.type.definition === 'array') {
       vType = {
         array: {
-          dimension: variable.type.data.dimensions.map((dimension) => {
+          dimension: variable.type.data!.dimensions.map((dimension) => {
             const lower = dimension.dimension.split('..')[0]
             const upper = dimension.dimension.split('..')[1]
             return {
@@ -32,13 +32,13 @@ export const codeSysParseInterface = (pou: PLCPou) => {
             }
           }),
           baseType: {
-            [variable.type.data.baseType.definition === 'user-data-type'
+            [variable.type.data!.baseType.definition === 'user-data-type'
               ? 'derived'
-              : variable.type.data.baseType.value === 'string'
-                ? variable.type.data.baseType.value
-                : variable.type.data.baseType.value.toUpperCase()]:
-              variable.type.data.baseType.definition === 'user-data-type'
-                ? { '@name': variable.type.data.baseType.value }
+              : variable.type.data!.baseType.value === 'string'
+                ? variable.type.data!.baseType.value
+                : variable.type.data!.baseType.value.toUpperCase()]:
+              variable.type.data!.baseType.definition === 'user-data-type'
+                ? { '@name': variable.type.data!.baseType.value }
                 : '',
           },
         },

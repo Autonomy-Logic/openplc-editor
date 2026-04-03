@@ -5,14 +5,12 @@ import {
 } from '@root/types/IPC/project-service'
 import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
-import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
-import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
-import { fileOrDirectoryExists, ipcPouToFlat } from '../../utils'
+import { PLCProject } from '../../../types/PLC/open-plc'
+import { fileOrDirectoryExists } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
 class ProjectService {
@@ -441,35 +439,14 @@ class ProjectService {
     }
   }
 
-  async saveFile(filePath: string, content: unknown): Promise<IProjectServiceResponse> {
+  async saveFile(filePath: string, content: string): Promise<IProjectServiceResponse> {
     try {
       if (!fileOrDirectoryExists(filePath)) {
         const dir = dirname(filePath)
         await promises.mkdir(dir, { recursive: true })
       }
 
-      if (typeof content === 'string') {
-        // Pre-serialized content from frontend — write as-is
-        await promises.writeFile(filePath, content, 'utf-8')
-      } else {
-        const isPou = typeof content === 'object' && content !== null && 'type' in content && 'data' in content
-
-        if (isPou) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-          const flat = ipcPouToFlat(content as PLCPou)
-
-          let actualFilePath = filePath
-          if (filePath.endsWith('.json')) {
-            const extension: string = getExtensionFromLanguage(flat.body.language)
-            actualFilePath = filePath.replace(/\.json$/, extension)
-          }
-
-          const textContent: string = serializePouToText(flat)
-          await promises.writeFile(actualFilePath, textContent, 'utf-8')
-        } else {
-          await promises.writeFile(filePath, JSON.stringify(content, null, 2))
-        }
-      }
+      await promises.writeFile(filePath, content, 'utf-8')
 
       return {
         success: true,
