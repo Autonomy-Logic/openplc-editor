@@ -9,6 +9,7 @@ import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { InstanceType } from '../../../store/slices/editor'
 import { cn } from '../../../utils/cn'
+import { getNextName } from '../../../utils/next-name'
 import { parseResourceConfigurationToString } from '../../../utils/parse-resource-configuration-to-string'
 import { parseResourceStringToConfiguration } from '../../../utils/parse-resource-string-to-configuration'
 import TableActions from '../../_atoms/table-actions'
@@ -165,8 +166,10 @@ const InstancesEditor = () => {
       return
     }
 
+    const instanceNames = instances.map((i) => i.name)
+
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createInstance({ data: { ...instance } })
+      createInstance({ data: { ...instance, name: getNextName(instance.name, instanceNames) } })
       updateModelInstances({
         display: 'table',
         selectedRow: instances.length,
@@ -175,7 +178,10 @@ const InstancesEditor = () => {
       return
     }
 
-    createInstance({ data: { ...instance }, rowToInsert: selectedRow + 1 })
+    createInstance({
+      data: { ...instance, name: getNextName(instance.name, instanceNames) },
+      rowToInsert: selectedRow + 1,
+    })
     updateModelInstances({
       display: 'table',
       selectedRow: selectedRow + 1,

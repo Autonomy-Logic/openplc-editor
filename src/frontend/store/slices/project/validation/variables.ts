@@ -283,14 +283,6 @@ const createVariableValidation = (
   return response
 }
 
-const createGlobalVariableValidation = (variables: PLCVariable[], variableName: string) => {
-  if (checkIfGlobalVariableExists(variables, variableName)) {
-    const { name: variableNameWithoutNumber, number } = checkVariableName(variables, variableName)
-    return `${variableNameWithoutNumber}${number}`
-  }
-  return variableName
-}
-
 /**
  * This is a validation to check the name of the variable at update.
  * If the variable name is invalid, create a response.
@@ -398,7 +390,6 @@ const updateGlobalVariableValidation = (variables: PLCVariable[], dataToBeUpdate
 export {
   arrayValidation,
   checkVariableName,
-  createGlobalVariableValidation,
   createVariableValidation,
   enumeratedValidation,
   updateGlobalVariableValidation,

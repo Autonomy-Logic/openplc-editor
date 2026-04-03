@@ -16,7 +16,6 @@ import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/P
 import type { ProjectResponse, ProjectSlice } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import {
-  createGlobalVariableValidation,
   createVariableValidation,
   updateGlobalVariableValidation,
   updateVariableValidation,
@@ -368,7 +367,8 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response.data = data
           } else {
             const vars = slice.project.data.configurations.resource.globalVariables
-            data.name = createGlobalVariableValidation(vars, data.name)
+            const validated = createVariableValidation(vars, data)
+            data = { ...data, name: validated.name, location: validated.location }
             if (rowToInsert !== undefined) {
               vars.splice(rowToInsert, 0, data)
             } else {
@@ -618,7 +618,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
           if (dto.rowId >= 0 && dto.rowId < tasks.length) {
-            tasks[dto.rowId] = dto.data
+            tasks[dto.rowId] = { ...tasks[dto.rowId], ...dto.data }
           }
         }),
       )
@@ -675,7 +675,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const instances = slice.project.data.configurations.resource.instances
           if (dto.rowId >= 0 && dto.rowId < instances.length) {
-            instances[dto.rowId] = dto.data
+            instances[dto.rowId] = { ...instances[dto.rowId], ...dto.data }
           }
         }),
       )

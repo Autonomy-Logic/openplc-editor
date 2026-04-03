@@ -917,6 +917,18 @@ class MainProcessBridge implements MainIpcModule {
         if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
           return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
         }
+
+        // Reuse existing RTU client if already connected to the same port
+        if (
+          this.debuggerModbusClient &&
+          this.debuggerConnectionType === 'rtu' &&
+          this.debuggerRtuPort === connectionParams.port
+        ) {
+          const targetMd5 = await this.debuggerModbusClient.getMd5Hash()
+          const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+          return { success: true, match, targetMd5 }
+        }
+
         client = new ModbusRtuClient({
           port: connectionParams.port,
           baudRate: connectionParams.baudRate,
