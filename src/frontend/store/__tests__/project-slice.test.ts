@@ -1555,8 +1555,7 @@ describe('createProjectSlice', () => {
     it('updates OPC-UA server config', () => {
       seedServer(store, makeOpcUaServer('OPC'))
       const result = store.getState().projectActions.updateOpcUaServerConfig('OPC', {
-        enabled: true,
-        port: 4841,
+        server: { enabled: true, port: 4841 },
       })
       expect(result.ok).toBe(true)
       const srvConfig = store.getState().project.data.servers![0].opcuaServerConfig!.server

@@ -2,8 +2,7 @@ import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
-import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCPou, PLCProject, PLCProjectData } from '@root/types/PLC/open-plc'
+import { PLCProjectData } from '@root/types/PLC/open-plc'
 import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
@@ -21,16 +20,6 @@ import { getProjectPath } from '../../../backend/editor/utils'
 import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
-
-type IDataToWrite = {
-  projectPath: string
-  content: {
-    pous: PLCPou[]
-    projectData: PLCProject
-    deviceConfiguration: DeviceConfiguration
-    devicePinMapping: DevicePin[]
-  }
-}
 
 class MainProcessBridge implements MainIpcModule {
   ipcMain
@@ -486,9 +475,10 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:create', this.handleProjectCreate)
     this.registerHandle('project:open', this.handleProjectOpen)
     this.registerHandle('project:path-picker', this.handleProjectPathPicker)
-    this.registerHandle('project:save', this.handleProjectSave)
+    this.registerHandle('project:write-files', this.handleWriteProjectFiles)
     this.registerHandle('project:save-file', this.handleFileSave)
     this.registerHandle('project:open-by-path', this.handleProjectOpenByPath)
+    this.registerHandle('project:read-files', this.handleReadProjectFiles)
 
     // Pou-related handlers
     this.registerHandle('pou:create', this.handleCreatePouFile)
@@ -617,8 +607,8 @@ class MainProcessBridge implements MainIpcModule {
     }
     return result
   }
-  handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
-    this.projectService.saveProject({ projectPath, content })
+  handleWriteProjectFiles = (_event: IpcMainInvokeEvent, files: unknown) =>
+    this.projectService.writeProjectFiles(files as Parameters<typeof this.projectService.writeProjectFiles>[0])
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
     this.stopSimulatorAndNotify()
     try {
@@ -634,6 +624,23 @@ class MainProcessBridge implements MainIpcModule {
           title: 'Error opening project',
           description: 'Please try again',
         },
+      }
+    }
+  }
+
+  handleReadProjectFiles = async (_event: IpcMainInvokeEvent, projectPath: string) => {
+    try {
+      this.stopSimulatorAndNotify()
+      const result = await this.projectService.readRawProjectFiles(projectPath)
+      if (result.success) {
+        this.currentProjectPath = projectPath
+        await this.projectService.updateProjectHistory(projectPath)
+      }
+      return result
+    } catch (_error) {
+      return {
+        success: false,
+        error: { title: 'Error reading project', description: 'Failed to read project files' },
       }
     }
   }
@@ -911,6 +918,18 @@ class MainProcessBridge implements MainIpcModule {
         if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
           return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
         }
+
+        // Reuse existing RTU client if already connected to the same port
+        if (
+          this.debuggerModbusClient &&
+          this.debuggerConnectionType === 'rtu' &&
+          this.debuggerRtuPort === connectionParams.port
+        ) {
+          const targetMd5 = await this.debuggerModbusClient.getMd5Hash()
+          const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+          return { success: true, match, targetMd5 }
+        }
+
         client = new ModbusRtuClient({
           port: connectionParams.port,
           baudRate: connectionParams.baudRate,

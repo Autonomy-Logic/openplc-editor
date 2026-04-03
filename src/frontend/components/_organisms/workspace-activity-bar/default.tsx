@@ -11,7 +11,7 @@ import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
 import { isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target } from '../../../utils/device'
 import { getErrorMessage } from '../../../utils/get-error-message'
-import { prepareSavePayload } from '../../../utils/save-project'
+import { executeSaveProject } from '../../../utils/save-actions'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
 import { DownloadButton } from '../../_molecules/workspace-activity-bar/default/download'
@@ -121,35 +121,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }, [isSimulatorBoard, isDebuggerVisible, simulator, addLog])
 
   const executeSave = useCallback(async (): Promise<boolean> => {
-    const state = useOpenPLCStore.getState()
-    const { workspaceActions, fileActions, snapshotActions, editors } = state
-    const activeEditor = editors[0] ?? { type: 'available', meta: { name: '' } }
-    try {
-      workspaceActions.setEditingState('save-request')
-      const payload = prepareSavePayload({
-        projectPath: projectMeta.path,
-        projectName: projectMeta.name,
-        projectData,
-        deviceConfiguration: deviceDefinitions.configuration,
-        devicePinMapping: deviceDefinitions.pinMapping.pins,
-        editors,
-        activeEditor,
-      })
-      const res = await projectPort.saveProject(payload)
-      if (res.success) {
-        workspaceActions.setEditingState('saved')
-        fileActions.setAllToSaved()
-        snapshotActions.markAllSaved()
-        return true
-      }
-      workspaceActions.setEditingState('unsaved')
-      addLog({ id: crypto.randomUUID(), level: 'error', message: `Save failed: ${res.error ?? 'Unknown error'}` })
-      return false
-    } catch {
-      workspaceActions.setEditingState('unsaved')
-      return false
-    }
-  }, [projectPort, projectMeta, projectData, deviceDefinitions, addLog])
+    const result = await executeSaveProject(projectPort)
+    return result.success
+  }, [projectPort])
 
   // ---------------------------------------------------------------------------
   // Build (Compile)

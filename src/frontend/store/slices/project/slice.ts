@@ -11,10 +11,11 @@ import type {
   S7CommServerSettings,
 } from '../../../../middleware/shared/ports/types'
 import { isLegalIdentifier } from '../../../utils/keywords'
+import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
+import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import type { ProjectResponse, ProjectSlice } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import {
-  createGlobalVariableValidation,
   createVariableValidation,
   updateGlobalVariableValidation,
   updateVariableValidation,
@@ -184,6 +185,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       remoteDevices: [],
     },
   },
+  pendingDeletions: [],
 
   projectActions: {
     // -----------------------------------------------------------------------
@@ -216,6 +218,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               remoteDevices: [],
             },
           }
+          slice.pendingDeletions = []
+        }),
+      )
+    },
+    clearPendingDeletions: () => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.pendingDeletions = []
         }),
       )
     },
@@ -272,6 +282,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     deletePou: (name) => {
       setState(
         produce((slice: ProjectSlice) => {
+          const pou = slice.project.data.pous.find((p) => p.name === name)
+          if (pou) {
+            const folder = getFolderFromPouType(pou.pouType)
+            const ext = getExtensionFromLanguage(pou.body.language)
+            slice.pendingDeletions.push(`pous/${folder}/${name}${ext}`)
+          }
           slice.project.data.pous = slice.project.data.pous.filter((p) => p.name !== name)
         }),
       )
@@ -351,7 +367,8 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response.data = data
           } else {
             const vars = slice.project.data.configurations.resource.globalVariables
-            data.name = createGlobalVariableValidation(vars, data.name)
+            const validated = createVariableValidation(vars, data)
+            data = { ...data, name: validated.name, location: validated.location }
             if (rowToInsert !== undefined) {
               vars.splice(rowToInsert, 0, data)
             } else {
@@ -601,7 +618,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
           if (dto.rowId >= 0 && dto.rowId < tasks.length) {
-            tasks[dto.rowId] = dto.data
+            tasks[dto.rowId] = { ...tasks[dto.rowId], ...dto.data }
           }
         }),
       )
@@ -658,7 +675,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const instances = slice.project.data.configurations.resource.instances
           if (dto.rowId >= 0 && dto.rowId < instances.length) {
-            instances[dto.rowId] = dto.data
+            instances[dto.rowId] = { ...instances[dto.rowId], ...dto.data }
           }
         }),
       )
@@ -702,6 +719,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.servers) return
+          slice.pendingDeletions.push(`devices/servers/${name}.json`)
           slice.project.data.servers = slice.project.data.servers.filter((s) => s.name !== name)
         }),
       )
@@ -729,9 +747,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (config.networkInterface !== undefined) server.modbusSlaveConfig.networkInterface = config.networkInterface
           if (config.port !== undefined) server.modbusSlaveConfig.port = config.port
           if (config.bufferMapping) {
+            const base = server.modbusSlaveConfig.bufferMapping ?? DEFAULT_BUFFER_MAPPING
             server.modbusSlaveConfig.bufferMapping = {
-              ...server.modbusSlaveConfig.bufferMapping,
-              ...config.bufferMapping,
+              holdingRegisters: { ...base.holdingRegisters, ...config.bufferMapping.holdingRegisters },
+              coils: { ...base.coils, ...config.bufferMapping.coils },
+              discreteInputs: { ...base.discreteInputs, ...config.bufferMapping.discreteInputs },
+              inputRegisters: { ...base.inputRegisters, ...config.bufferMapping.inputRegisters },
             }
           }
         }),
@@ -831,7 +852,15 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const server = slice.project.data.servers?.find((s) => s.name === name)
           if (!server?.opcuaServerConfig) return
-          Object.assign(server.opcuaServerConfig.server, config)
+          // The UI wraps sub-object updates (e.g. { server: { enabled: true } })
+          // while top-level fields (e.g. { cycleTimeMs: 100 }) are passed directly.
+          const { server: serverUpdates, ...topLevelUpdates } = config
+          if (serverUpdates && typeof serverUpdates === 'object') {
+            Object.assign(server.opcuaServerConfig.server, serverUpdates)
+          }
+          if (Object.keys(topLevelUpdates).length > 0) {
+            Object.assign(server.opcuaServerConfig, topLevelUpdates)
+          }
         }),
       )
       return ok()
@@ -1000,6 +1029,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.remoteDevices) return
+          slice.pendingDeletions.push(`devices/remote/${name}.json`)
           slice.project.data.remoteDevices = slice.project.data.remoteDevices.filter((d) => d.name !== name)
         }),
       )

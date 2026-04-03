@@ -1,10 +1,7 @@
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
-import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
-
-import { PLCPou, PLCProject, PLCProjectData } from '../../../types/PLC/open-plc'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
@@ -15,26 +12,6 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
-}
-
-type IDataToWrite = {
-  projectPath: string
-  content: {
-    projectData: PLCProject
-    pous: PLCPou[]
-    deviceConfiguration: DeviceConfiguration
-    devicePinMapping: DevicePin[]
-    servers?: PLCProjectData['servers']
-    remoteDevices?: PLCProjectData['remoteDevices']
-  }
-}
-
-export type ISaveDataResponse = {
-  success: boolean
-  reason: {
-    title: string
-    description: string
-  }
 }
 
 /**
@@ -65,6 +42,7 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
   pathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
     ipcRenderer.invoke('project:path-picker'),
+  readProjectFiles: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('project:read-files', projectPath),
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
@@ -76,8 +54,8 @@ const rendererProcessBridge = {
   saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:save-file', filePath, content),
   saveFileAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-file-accelerator', callback),
-  saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
-    ipcRenderer.invoke('project:save', dataToWrite),
+  writeProjectFiles: (files: unknown): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:write-files', files),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),

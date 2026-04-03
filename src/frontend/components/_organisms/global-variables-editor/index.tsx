@@ -235,8 +235,10 @@ const GlobalVariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
     ) as PLCGlobalVariable
 
+    const newVarData = { ...variable, documentation: '' }
+
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'global', data: { ...variable } })
+      createVariable({ scope: 'global', data: newVarData })
       updateModelVariables({
         display: 'table',
         selectedRow: variables.length,
@@ -247,7 +249,7 @@ const GlobalVariablesEditor = () => {
 
     createVariable({
       scope: 'global',
-      data: { ...variable },
+      data: newVarData,
       rowToInsert: selectedRow + 1,
     })
     updateModelVariables({

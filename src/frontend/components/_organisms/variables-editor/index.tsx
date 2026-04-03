@@ -348,15 +348,18 @@ const VariablesEditor = () => {
     const variable: PLCVariable =
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
+    const newVarData = {
+      ...variable,
+      class: defaultClass,
+      type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'DINT' } : variable.type,
+      documentation: '',
+    }
+
     if (selectedRow === ROWS_NOT_SELECTED) {
       createVariable({
         scope: 'local',
         associatedPou: editor.meta.name,
-        data: {
-          ...variable,
-          class: defaultClass,
-          type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'DINT' } : variable.type,
-        },
+        data: newVarData,
       })
       updateModelVariables({
         display: 'table',
@@ -368,11 +371,7 @@ const VariablesEditor = () => {
     createVariable({
       scope: 'local',
       associatedPou: editor.meta.name,
-      data: {
-        ...variable,
-        class: defaultClass,
-        type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'DINT' } : variable.type,
-      },
+      data: newVarData,
       rowToInsert: selectedRow + 1,
     })
     updateModelVariables({

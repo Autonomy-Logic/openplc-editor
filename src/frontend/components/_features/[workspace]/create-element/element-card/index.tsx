@@ -124,8 +124,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const {
     pouActions: { create },
     datatypeActions: { create: createDatatype },
-    projectActions: { createServer, createRemoteDevice },
-    fileActions: { addFile },
+    serverActions: { create: createServer },
+    remoteDeviceActions: { create: createRemoteDevice },
     deviceAvailableOptions: { availableBoards },
   } = useOpenPLCStore()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
@@ -192,46 +192,22 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateServer: SubmitHandler<CreateServerFormProps> = (data) => {
-    const serverWasCreated = createServer({ data: { name: data.name, protocol: data.protocol } })
-    if (!serverWasCreated.ok) {
-      serverSetError('name', {
-        type: 'already-exists',
-      })
+    const result = createServer({ name: data.name, protocol: data.protocol })
+    if (!result.ok) {
+      serverSetError('name', { type: 'already-exists' })
       return
     }
-
-    addFile({
-      name: data.name,
-      type: 'server',
-      filePath: `/project.json`,
-      isNew: true,
-    })
-
-    toast({
-      title: 'Server created successfully',
-      description: 'The server has been created',
-      variant: 'default',
-    })
+    toast({ title: 'Server created successfully', description: 'The server has been created', variant: 'default' })
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
 
   const handleCreateRemoteDevice: SubmitHandler<CreateRemoteDeviceFormProps> = (data) => {
-    const remoteDeviceWasCreated = createRemoteDevice({ data: { name: data.name, protocol: data.protocol } })
-    if (!remoteDeviceWasCreated.ok) {
-      remoteDeviceSetError('name', {
-        type: 'already-exists',
-      })
+    const result = createRemoteDevice({ name: data.name, protocol: data.protocol })
+    if (!result.ok) {
+      remoteDeviceSetError('name', { type: 'already-exists' })
       return
     }
-
-    addFile({
-      name: data.name,
-      type: 'remote-device',
-      filePath: `/project.json`,
-      isNew: true,
-    })
-
     toast({
       title: 'Remote device created successfully',
       description: 'The remote device has been created',

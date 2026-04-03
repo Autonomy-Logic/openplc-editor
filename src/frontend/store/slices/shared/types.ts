@@ -92,12 +92,14 @@ export type DatatypeActions = {
 }
 
 export type ServerActions = {
+  create: (args: { name: string; protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' }) => SharedResponse
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
   rename: (oldName: string, newName: string) => SharedResponse
 }
 
 export type RemoteDeviceActions = {
+  create: (args: { name: string; protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet' }) => SharedResponse
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
   rename: (oldName: string, newName: string) => SharedResponse
@@ -116,6 +118,8 @@ export type OpenProjectResponseData = {
   projectData: PLCProjectData
   deviceConfiguration?: DeviceConfiguration
   devicePinMapping?: DevicePin[]
+  /** Warnings from parsing (e.g. dropped files that failed validation). */
+  warnings?: string[]
 }
 
 export type SharedWorkspaceActions = {

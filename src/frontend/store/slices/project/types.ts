@@ -90,6 +90,7 @@ export type ProjectActions = {
   setProject: (state: ProjectState) => void
   setPous: (pous: PLCProjectData['pous']) => void
   clearProjects: () => void
+  clearPendingDeletions: () => void
 
   // Meta
   updateMetaName: (name: string) => void
@@ -246,5 +247,7 @@ export type ProjectActions = {
 
 export type ProjectSlice = {
   project: ProjectState
+  /** Relative file paths queued for deletion on next full project save. */
+  pendingDeletions: string[]
   projectActions: ProjectActions
 }

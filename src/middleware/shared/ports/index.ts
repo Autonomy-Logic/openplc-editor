@@ -140,7 +140,7 @@ export type {
   CreateProjectParams,
   ProjectResponse,
   RenamePouParams,
-  SaveProjectParams,
+  WriteProjectFiles,
 } from './project-port'
 export type {
   CompilationStatusResult,

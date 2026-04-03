@@ -1,16 +1,17 @@
-import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
-import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
-import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCPou, PLCProject, PLCRemoteDevice, PLCServer } from '@root/types/PLC/open-plc'
+import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
+import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
+import { getExtensionFromLanguage } from '@root/utils/PLC/pou-file-extensions'
+import { serializePouToText } from '@root/utils/PLC/pou-text-serializer'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { fileOrDirectoryExists, ipcPouToFlat } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
@@ -27,7 +28,7 @@ class ProjectService {
   async getProjectName(projectPath: string): Promise<string> {
     try {
       const projectFile = await promises.readFile(projectPath, 'utf-8')
-      return (JSON.parse(projectFile) as PLCProject).meta.name || 'Unknown project'
+      return ((JSON.parse(projectFile) as PLCProject).meta.name as string) || 'Unknown project'
     } catch {
       console.error('Error reading project file', projectPath)
       return 'Unknown project'
@@ -119,6 +120,136 @@ class ProjectService {
     const historyData = await this.readProjectHistory(historyProjectsFilePath)
     const updatedHistory = historyData.filter((project) => project.path !== projectPath)
     await this.writeProjectHistory(historyProjectsFilePath, updatedHistory)
+  }
+
+  /**
+   * Read all project files as raw strings — no parsing, no transformation.
+   * The frontend is responsible for parsing the returned content.
+   */
+  async readRawProjectFiles(projectPath: string): Promise<{
+    success: boolean
+    data?: {
+      projectPath: string
+      projectJson: string
+      deviceConfig: string
+      pinMapping: string
+      pouFiles: Array<{ relativePath: string; content: string }>
+      serverFiles: Array<{ relativePath: string; content: string }>
+      remoteDeviceFiles: Array<{ relativePath: string; content: string }>
+    }
+    error?: { title: string; description: string }
+  }> {
+    const VALID_POU_EXTENSIONS = ['.st', '.il', '.ld', '.fbd', '.py', '.cpp', '.json']
+
+    try {
+      await promises.access(projectPath)
+
+      // Validate that the directory contains a project.json file
+      try {
+        await promises.access(join(projectPath, 'project.json'))
+      } catch {
+        return {
+          success: false,
+          error: {
+            title: 'Invalid project',
+            description: 'The selected directory is not a valid OpenPLC project.',
+          },
+        }
+      }
+
+      /**
+       * Read a default config file, creating it with schema defaults if missing or empty.
+       * This mirrors the old backend's readAndParseFile behavior.
+       */
+      const readOrCreateDefault = async (
+        filePath: string,
+        schemaKey: keyof typeof projectDefaultFilesMapSchema,
+      ): Promise<string> => {
+        let content: string
+        try {
+          content = await promises.readFile(filePath, 'utf-8')
+        } catch {
+          content = ''
+        }
+        if (!content.trim()) {
+          const schema = projectDefaultFilesMapSchema[schemaKey]
+          const defaultValue = getDefaultSchemaValues(schema)
+          const defaultJson = JSON.stringify(defaultValue, null, 2)
+          const dir = dirname(filePath)
+          await promises.mkdir(dir, { recursive: true })
+          await promises.writeFile(filePath, defaultJson, 'utf-8')
+          return defaultJson
+        }
+        return content
+      }
+
+      const readDirRecursive = async (
+        dirPath: string,
+        basePath: string,
+      ): Promise<Array<{ relativePath: string; content: string }>> => {
+        const results: Array<{ relativePath: string; content: string }> = []
+        try {
+          const entries = await promises.readdir(dirPath, { withFileTypes: true })
+          for (const entry of entries) {
+            const fullPath = join(dirPath, entry.name)
+            const relPath = join(basePath, entry.name)
+            if (entry.isDirectory()) {
+              const subResults = await readDirRecursive(fullPath, relPath)
+              results.push(...subResults)
+            } else if (entry.isFile()) {
+              const ext = entry.name.slice(entry.name.lastIndexOf('.'))
+              if (!VALID_POU_EXTENSIONS.includes(ext)) continue
+              const content = await promises.readFile(fullPath, 'utf-8')
+              results.push({ relativePath: relPath, content })
+            }
+          }
+        } catch {
+          // Directory doesn't exist — return empty
+        }
+        return results
+      }
+
+      const projectJson = await readOrCreateDefault(join(projectPath, 'project.json'), 'project.json')
+      const deviceConfig = await readOrCreateDefault(
+        join(projectPath, 'devices', 'configuration.json'),
+        'devices/configuration.json',
+      )
+      const pinMapping = await readOrCreateDefault(
+        join(projectPath, 'devices', 'pin-mapping.json'),
+        'devices/pin-mapping.json',
+      )
+
+      const pouDirs = ['pous/functions', 'pous/function-blocks', 'pous/programs']
+      const pouFiles: Array<{ relativePath: string; content: string }> = []
+      for (const pouDir of pouDirs) {
+        const files = await readDirRecursive(join(projectPath, ...pouDir.split('/')), pouDir)
+        pouFiles.push(...files)
+      }
+
+      const serverFiles = await readDirRecursive(join(projectPath, 'devices', 'servers'), 'devices/servers')
+      const remoteDeviceFiles = await readDirRecursive(join(projectPath, 'devices', 'remote'), 'devices/remote')
+
+      return {
+        success: true,
+        data: {
+          projectPath,
+          projectJson,
+          deviceConfig,
+          pinMapping,
+          pouFiles,
+          serverFiles,
+          remoteDeviceFiles,
+        },
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          title: 'Error reading project files',
+          description: error instanceof Error ? error.message : 'Unknown error',
+        },
+      }
+    }
   }
 
   async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
@@ -229,216 +360,84 @@ class ProjectService {
     }
   }
 
-  async saveProject(data: {
+  /**
+   * Write pre-serialized project files to disk.
+   * The frontend handles all serialization — this method is a dumb batch file writer.
+   */
+  async writeProjectFiles(files: {
     projectPath: string
-    content: {
-      projectData: PLCProject
-      pous: PLCPou[]
-      deviceConfiguration: DeviceConfiguration
-      devicePinMapping: DevicePin[]
-      servers?: PLCServer[]
-      remoteDevices?: PLCRemoteDevice[]
-    }
+    projectJson: string
+    deviceConfig: string
+    pinMapping: string
+    pouFiles: Array<{ relativePath: string; content: string }>
+    serverFiles: Array<{ relativePath: string; content: string }>
+    remoteDeviceFiles: Array<{ relativePath: string; content: string }>
+    deletions: string[]
   }): Promise<IProjectServiceResponse> {
-    const {
-      projectPath,
-      content: { deviceConfiguration, devicePinMapping, projectData, servers, remoteDevices },
-    } = data
-    if (!projectPath || !projectData) {
+    const { projectPath, projectJson, deviceConfig, pinMapping, pouFiles, serverFiles, remoteDeviceFiles, deletions } =
+      files
+
+    if (!projectPath) {
       return {
         success: false,
-        error: {
-          title: 'Missing parameters',
-          description: 'Missing parameters',
-          error: null,
-        },
+        error: { title: 'Missing parameters', description: 'Missing project path', error: null },
       }
     }
 
-    const directoryPath = projectPath.endsWith('/project.json')
-      ? projectPath.slice(0, -'/project.json'.length)
-      : projectPath
+    const normalized = projectPath.replace(/\\/g, '/')
+    const dir = normalized.endsWith('/project.json') ? normalized.slice(0, -'/project.json'.length) : normalized
 
     try {
-      // Write each part to its correct file based on projectDefaultFilesMapSchema
-      await Promise.all([
-        promises.writeFile(join(directoryPath, 'project.json'), JSON.stringify(projectData, null, 2)),
-        promises.writeFile(
-          join(directoryPath, 'devices/configuration.json'),
-          JSON.stringify(deviceConfiguration, null, 2),
+      // Ensure standard directories exist
+      await Promise.all(
+        ['pous/programs', 'pous/functions', 'pous/function-blocks', 'devices/servers', 'devices/remote'].map((d) =>
+          promises.mkdir(join(dir, d), { recursive: true }),
         ),
-        promises.writeFile(join(directoryPath, 'devices/pin-mapping.json'), JSON.stringify(devicePinMapping, null, 2)),
+      )
+
+      // Write config files
+      await Promise.all([
+        promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8'),
+        promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'),
+        promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'),
       ])
+
+      // Write POU files
+      for (const file of pouFiles) {
+        const filePath = join(dir, file.relativePath)
+        await promises.mkdir(dirname(filePath), { recursive: true })
+        await promises.writeFile(filePath, file.content, 'utf-8')
+      }
+
+      // Write server files
+      for (const file of serverFiles) {
+        await promises.writeFile(join(dir, file.relativePath), file.content, 'utf-8')
+      }
+
+      // Write remote device files
+      for (const file of remoteDeviceFiles) {
+        await promises.writeFile(join(dir, file.relativePath), file.content, 'utf-8')
+      }
+
+      // Process deletions
+      for (const relativePath of deletions) {
+        const filePath = join(dir, relativePath)
+        try {
+          if (fileOrDirectoryExists(filePath)) {
+            await promises.unlink(filePath)
+          }
+        } catch (deleteError) {
+          console.error(`Error deleting file ${filePath}:`, deleteError)
+        }
+      }
+
+      return { success: true, message: 'Your project was saved successfully' }
     } catch (error) {
-      console.error(error)
+      console.error('Error writing project files:', error)
       return {
         success: false,
-        error: {
-          title: 'Failed to save file',
-          description: 'Unable to save the project file.',
-          error,
-        },
+        error: { title: 'Failed to save project', description: 'Unable to write project files.', error },
       }
-    }
-
-    // Save pous
-    try {
-      const savedPous = {
-        programs: data.content.pous.filter((pou) => pou.type === 'program'),
-        functions: data.content.pous.filter((pou) => pou.type === 'function'),
-        'function-blocks': data.content.pous.filter((pou) => pou.type === 'function-block'),
-      }
-
-      // Save each POU in its respective folder
-      for (const [type, pous] of Object.entries(savedPous)) {
-        const dir = join(directoryPath, 'pous', type)
-
-        if (!fileOrDirectoryExists(dir)) {
-          await promises.mkdir(dir, { recursive: true })
-        }
-
-        // Write/update each POU file
-        for (const pou of pous) {
-          const flat = ipcPouToFlat(pou)
-          const extension: string = getExtensionFromLanguage(flat.body.language)
-          const filePath = join(dir, `${flat.name}${extension}`)
-          const textContent: string = serializePouToText(flat)
-          await promises.writeFile(filePath, textContent, 'utf-8')
-        }
-      }
-
-      if (projectData.data.deletedPous && projectData.data.deletedPous.length > 0) {
-        for (const deletedPou of projectData.data.deletedPous) {
-          const typeDir =
-            deletedPou.type === 'function'
-              ? 'functions'
-              : deletedPou.type === 'function-block'
-                ? 'function-blocks'
-                : 'programs'
-          const extension = getExtensionFromLanguage(deletedPou.language)
-          const filePath = join(directoryPath, 'pous', typeDir, `${deletedPou.name}${extension}`)
-
-          try {
-            if (fileOrDirectoryExists(filePath)) {
-              await promises.unlink(filePath)
-            }
-          } catch (deleteError) {
-            console.error(`Error deleting POU file ${filePath}:`, deleteError)
-          }
-
-          const jsonFilePath = join(directoryPath, 'pous', typeDir, `${deletedPou.name}.json`)
-          try {
-            if (fileOrDirectoryExists(jsonFilePath)) {
-              await promises.unlink(jsonFilePath)
-            }
-          } catch (deleteError) {
-            console.error(`Error deleting legacy JSON POU file ${jsonFilePath}:`, deleteError)
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error saving POUs:', error)
-      return {
-        success: false,
-        error: {
-          title: 'Failed to save file',
-          description: 'Unable to save the project file.',
-          error,
-        },
-      }
-    }
-
-    // Save servers
-    if (
-      (servers && servers.length > 0) ||
-      (projectData.data.deletedServers && projectData.data.deletedServers.length > 0)
-    ) {
-      try {
-        const serversDir = join(directoryPath, 'devices', 'servers')
-        if (!fileOrDirectoryExists(serversDir)) {
-          await promises.mkdir(serversDir, { recursive: true })
-        }
-
-        if (servers && servers.length > 0) {
-          for (const server of servers) {
-            const serverFilePath = join(serversDir, `${server.name}.json`)
-            await promises.writeFile(serverFilePath, JSON.stringify(server, null, 2), 'utf-8')
-          }
-        }
-
-        // Handle deleted servers
-        if (projectData.data.deletedServers && projectData.data.deletedServers.length > 0) {
-          for (const deletedServer of projectData.data.deletedServers) {
-            const serverFilePath = join(serversDir, `${deletedServer.name}.json`)
-            try {
-              if (fileOrDirectoryExists(serverFilePath)) {
-                await promises.unlink(serverFilePath)
-              }
-            } catch (deleteError) {
-              console.error(`Error deleting server file ${serverFilePath}:`, deleteError)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error saving servers:', error)
-        return {
-          success: false,
-          error: {
-            title: 'Failed to save file',
-            description: 'Unable to save the project file.',
-            error,
-          },
-        }
-      }
-    }
-
-    // Save remote devices
-    if (
-      (remoteDevices && remoteDevices.length > 0) ||
-      (projectData.data.deletedRemoteDevices && projectData.data.deletedRemoteDevices.length > 0)
-    ) {
-      try {
-        const remoteDevicesDir = join(directoryPath, 'devices', 'remote')
-        if (!fileOrDirectoryExists(remoteDevicesDir)) {
-          await promises.mkdir(remoteDevicesDir, { recursive: true })
-        }
-
-        if (remoteDevices && remoteDevices.length > 0) {
-          for (const remoteDevice of remoteDevices) {
-            const remoteDeviceFilePath = join(remoteDevicesDir, `${remoteDevice.name}.json`)
-            await promises.writeFile(remoteDeviceFilePath, JSON.stringify(remoteDevice, null, 2), 'utf-8')
-          }
-        }
-
-        // Handle deleted remote devices
-        if (projectData.data.deletedRemoteDevices && projectData.data.deletedRemoteDevices.length > 0) {
-          for (const deletedRemoteDevice of projectData.data.deletedRemoteDevices) {
-            const remoteDeviceFilePath = join(remoteDevicesDir, `${deletedRemoteDevice.name}.json`)
-            try {
-              if (fileOrDirectoryExists(remoteDeviceFilePath)) {
-                await promises.unlink(remoteDeviceFilePath)
-              }
-            } catch (deleteError) {
-              console.error(`Error deleting remote device file ${remoteDeviceFilePath}:`, deleteError)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error saving remote devices:', error)
-        return {
-          success: false,
-          error: {
-            title: 'Failed to save file',
-            description: 'Unable to save the project file.',
-            error,
-          },
-        }
-      }
-    }
-
-    return {
-      success: true,
-      message: 'Your project was saved successfully',
     }
   }
 
@@ -449,21 +448,27 @@ class ProjectService {
         await promises.mkdir(dir, { recursive: true })
       }
 
-      const isPou = typeof content === 'object' && content !== null && 'type' in content && 'data' in content
-
-      if (isPou) {
-        const flat = ipcPouToFlat(content as PLCPou)
-
-        let actualFilePath = filePath
-        if (filePath.endsWith('.json')) {
-          const extension: string = getExtensionFromLanguage(flat.body.language)
-          actualFilePath = filePath.replace(/\.json$/, extension)
-        }
-
-        const textContent: string = serializePouToText(flat)
-        await promises.writeFile(actualFilePath, textContent, 'utf-8')
+      if (typeof content === 'string') {
+        // Pre-serialized content from frontend — write as-is
+        await promises.writeFile(filePath, content, 'utf-8')
       } else {
-        await promises.writeFile(filePath, JSON.stringify(content, null, 2))
+        const isPou = typeof content === 'object' && content !== null && 'type' in content && 'data' in content
+
+        if (isPou) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          const flat = ipcPouToFlat(content as PLCPou)
+
+          let actualFilePath = filePath
+          if (filePath.endsWith('.json')) {
+            const extension: string = getExtensionFromLanguage(flat.body.language)
+            actualFilePath = filePath.replace(/\.json$/, extension)
+          }
+
+          const textContent: string = serializePouToText(flat)
+          await promises.writeFile(actualFilePath, textContent, 'utf-8')
+        } else {
+          await promises.writeFile(filePath, JSON.stringify(content, null, 2))
+        }
       }
 
       return {

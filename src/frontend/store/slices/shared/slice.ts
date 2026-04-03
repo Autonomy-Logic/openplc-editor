@@ -11,7 +11,7 @@ import type { FileSliceDataObject } from '../file'
 import type { HistorySnapshot } from '../history'
 import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
-import { CreateEditorObjectFromTab } from '../tabs/utils'
+import { CreateEditorObjectFromTab, CreateRemoteDeviceEditor, CreateServerEditor } from '../tabs/utils'
 import type { SharedRootState, SharedSlice } from './types'
 import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
 
@@ -213,6 +213,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   },
 
   serverActions: {
+    create: ({ name, protocol }) => {
+      const state = getState()
+      const servers = state.project.data.servers ?? []
+      if (servers.some((s) => s.name === name)) return { ok: false, message: 'Server already exists' }
+
+      const result = state.projectActions.createServer({ data: { name, protocol } })
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateServerEditor(name, protocol)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name, type: 'server', filePath: name, isNew: true })
+      state.tabsActions.updateTabs({ name, elementType: { type: 'server', protocol } })
+      state.tabsActions.setSelectedTab(name)
+      state.editorActions.setEditor(editorModel)
+
+      return { ok: true }
+    },
+
     deleteRequest: (name) => {
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'server' })
     },
@@ -224,6 +242,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   },
 
   remoteDeviceActions: {
+    create: ({ name, protocol }) => {
+      const state = getState()
+      const devices = state.project.data.remoteDevices ?? []
+      if (devices.some((d) => d.name === name)) return { ok: false, message: 'Remote device already exists' }
+
+      const result = state.projectActions.createRemoteDevice({ data: { name, protocol } })
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateRemoteDeviceEditor(name, protocol)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name, type: 'remote-device', filePath: name, isNew: true })
+      state.tabsActions.updateTabs({ name, elementType: { type: 'remote-device', protocol } })
+      state.tabsActions.setSelectedTab(name)
+      state.editorActions.setEditor(editorModel)
+
+      return { ok: true }
+    },
+
     deleteRequest: (name) => {
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'remote-device' })
     },
@@ -320,6 +356,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     handleOpenProjectResponse: (data) => {
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       getState().workspaceActions.setEditingState('saved')
+
+      // Log any parsing warnings to the app console (after clear so they aren't wiped)
+      if (data.warnings) {
+        for (const message of data.warnings) {
+          getState().consoleActions.addLog({ id: crypto.randomUUID(), level: 'warning', message })
+        }
+      }
 
       // Set project data (setting meta.path triggers navigation from start to workspace)
       getState().projectActions.setProject({
@@ -501,6 +544,25 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().tabsActions.setSelectedTab(mainPou.name)
         getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
       }
+
+      // For POUs with unparseable variables (variablesText present, variables empty),
+      // pre-create editor models in code mode so the raw text is displayed when opened.
+      pous.forEach((pou) => {
+        const pouWithText = pou as typeof pou & { variablesText?: string }
+        if (pouWithText.variablesText && (!pou.interface?.variables || pou.interface.variables.length === 0)) {
+          const language = pou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+          const model = createEditorObjectForPou(pou.name, pou.pouType, language)
+          // Switch to code mode with the raw variable text
+          if ('variable' in model) {
+            model.variable = { display: 'code', code: pouWithText.variablesText }
+          }
+          getState().editorActions.addModel(model)
+          // If this is the active editor (main POU), update it too
+          if (getState().editor.meta.name === pou.name) {
+            getState().editorActions.setEditor(model)
+          }
+        }
+      })
 
       // Reset all graphical flow updated flags at the very end of project open.
       // Various operations during load (syncNodesWithVariables, debug flag restoration,
