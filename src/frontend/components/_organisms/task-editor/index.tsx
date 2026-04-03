@@ -129,23 +129,17 @@ const TaskEditor = () => {
     handleFileAndWorkspaceSavedState('Resource')
   }
 
-  const getNextTaskName = (existingTasks: PLCTask[]) => {
-    const baseName = 'Task'
-    // Find all tasks that match the pattern "Task" followed by a number
-    const taskNumbers = existingTasks
-      .map((task) => {
-        const match = task.name.match(/^Task(\d+)$/i)
-        return match ? parseInt(match[1], 10) : -1
+  const getNextName = (baseName: string, existingNames: string[]) => {
+    const baseWithoutNumber = baseName.replace(/\d+$/, '')
+    const numbers = existingNames
+      .filter((n) => n.toLowerCase().startsWith(baseWithoutNumber.toLowerCase()))
+      .map((n) => {
+        const suffix = n.slice(baseWithoutNumber.length)
+        return /^\d+$/.test(suffix) ? parseInt(suffix, 10) : -1
       })
-      .filter((num) => num >= 0)
-
-    if (taskNumbers.length === 0) {
-      return 'Task0'
-    }
-
-    // Get the highest number and increment
-    const maxNumber = Math.max(...taskNumbers)
-    return `${baseName}${maxNumber + 1}`
+      .filter((n) => n >= 0)
+    const maxNumber = numbers.length === 0 ? -1 : Math.max(...numbers)
+    return `${baseWithoutNumber}${maxNumber + 1}`
   }
 
   const handleCreateTask = () => {
@@ -181,13 +175,13 @@ const TaskEditor = () => {
       return
     }
 
+    const taskNames = filteredTasks.map((t) => t.name)
+
     if (selectedRow === ROWS_NOT_SELECTED) {
       createTask({
         data: {
-          name: getNextTaskName(filteredTasks),
-          triggering: 'Cyclic',
-          interval: 'T#20ms',
-          priority: 0,
+          ...task,
+          name: getNextName(task.name, taskNames),
         },
       })
       updateModelTasks({
@@ -198,7 +192,7 @@ const TaskEditor = () => {
       return
     }
 
-    createTask({ data: { ...task, name: getNextTaskName(filteredTasks) }, rowToInsert: selectedRow + 1 })
+    createTask({ data: { ...task, name: getNextName(task.name, taskNames) }, rowToInsert: selectedRow + 1 })
     updateModelTasks({
       display: 'table',
       selectedRow: selectedRow + 1,

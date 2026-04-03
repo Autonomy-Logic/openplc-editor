@@ -133,16 +133,17 @@ const InstancesEditor = () => {
     handleFileAndWorkspaceSavedState('Resource')
   }
 
-  const getNextInstanceName = (existingInstances: PLCInstance[]) => {
-    const baseName = 'instance'
-    const numbers = existingInstances
-      .map((inst) => {
-        const match = inst.name.match(/^instance(\d+)$/i)
-        return match ? parseInt(match[1], 10) : -1
+  const getNextName = (baseName: string, existingNames: string[]) => {
+    const baseWithoutNumber = baseName.replace(/\d+$/, '')
+    const numbers = existingNames
+      .filter((n) => n.toLowerCase().startsWith(baseWithoutNumber.toLowerCase()))
+      .map((n) => {
+        const suffix = n.slice(baseWithoutNumber.length)
+        return /^\d+$/.test(suffix) ? parseInt(suffix, 10) : -1
       })
-      .filter((num) => num >= 0)
+      .filter((n) => n >= 0)
     const maxNumber = numbers.length === 0 ? -1 : Math.max(...numbers)
-    return `${baseName}${maxNumber + 1}`
+    return `${baseWithoutNumber}${maxNumber + 1}`
   }
 
   const handleCreateInstance = () => {
@@ -177,8 +178,10 @@ const InstancesEditor = () => {
       return
     }
 
+    const instanceNames = instances.map((i) => i.name)
+
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createInstance({ data: { ...instance, name: getNextInstanceName(instances) } })
+      createInstance({ data: { ...instance, name: getNextName(instance.name, instanceNames) } })
       updateModelInstances({
         display: 'table',
         selectedRow: instances.length,
@@ -187,7 +190,10 @@ const InstancesEditor = () => {
       return
     }
 
-    createInstance({ data: { ...instance, name: getNextInstanceName(instances) }, rowToInsert: selectedRow + 1 })
+    createInstance({
+      data: { ...instance, name: getNextName(instance.name, instanceNames) },
+      rowToInsert: selectedRow + 1,
+    })
     updateModelInstances({
       display: 'table',
       selectedRow: selectedRow + 1,
