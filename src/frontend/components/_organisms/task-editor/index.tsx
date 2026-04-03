@@ -9,6 +9,7 @@ import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { TaskType } from '../../../store/slices/editor'
 import { cn } from '../../../utils/cn'
+import { getNextName } from '../../../utils/next-name'
 import { parseResourceConfigurationToString } from '../../../utils/parse-resource-configuration-to-string'
 import { parseResourceStringToConfiguration } from '../../../utils/parse-resource-string-to-configuration'
 import TableActions from '../../_atoms/table-actions'
@@ -127,19 +128,6 @@ const TaskEditor = () => {
       selectedRow: parseInt(editorTasks.selectedRow) + index,
     })
     handleFileAndWorkspaceSavedState('Resource')
-  }
-
-  const getNextName = (baseName: string, existingNames: string[]) => {
-    const baseWithoutNumber = baseName.replace(/\d+$/, '')
-    const numbers = existingNames
-      .filter((n) => n.toLowerCase().startsWith(baseWithoutNumber.toLowerCase()))
-      .map((n) => {
-        const suffix = n.slice(baseWithoutNumber.length)
-        return /^\d+$/.test(suffix) ? parseInt(suffix, 10) : -1
-      })
-      .filter((n) => n >= 0)
-    const maxNumber = numbers.length === 0 ? -1 : Math.max(...numbers)
-    return `${baseWithoutNumber}${maxNumber + 1}`
   }
 
   const handleCreateTask = () => {
