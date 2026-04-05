@@ -9,6 +9,7 @@ import {
   connectAndActivateDebugger,
   disconnectDebugger,
 } from '@root/renderer/utils/debugger-session'
+import type { PLCProjectData } from '@root/types/PLC/project/data'
 import type { DebugTreeNode } from '@root/types/debugger'
 import { BufferToStringArray, cn, isOpenPLCRuntimeTarget, isSimulatorTarget } from '@root/utils'
 import { parseDebugFile } from '@root/utils/debug-parser'
@@ -87,8 +88,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isCurrentBoardSimulator = isSimulatorTarget(currentBoardInfo)
 
-  const prepareProjectForCompile = () => {
-    return preprocessPous(projectData, isCurrentBoardSimulator, (level, message) =>
+  const prepareProjectForCompile = (data: PLCProjectData) => {
+    return preprocessPous(data, isCurrentBoardSimulator, (level, message) =>
       addLog({ id: crypto.randomUUID(), level, message }),
     )
   }
@@ -111,7 +112,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleRequest = () => {
     const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
 
-    const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile()
+    const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile(projectData)
     if (validationFailed) {
       setIsCompiling(false)
       return
@@ -579,7 +580,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: 'Starting debug compilation...',
       })
 
-      const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile()
+      const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile(projectData)
       if (validationFailed) {
         setIsDebuggerProcessing(false)
         return
@@ -890,9 +891,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             message: 'Uploading program to target...',
           })
 
+          const latestProjectData = useOpenPLCStore.getState().project.data
           const boardCore = availableBoards.get(boardTarget)?.core || null
           const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
-          const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile()
+          const { projectData: processedProjectData, validationFailed } = prepareProjectForCompile(latestProjectData)
 
           if (validationFailed) {
             setIsDebuggerProcessing(false)
