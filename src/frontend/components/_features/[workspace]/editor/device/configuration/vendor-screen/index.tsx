@@ -1,0 +1,66 @@
+import { memo } from 'react'
+
+import { SectionRenderer } from './section-renderer'
+
+type ScreenSection = {
+  id: string
+  title: string
+  layout: string
+  collapsible?: boolean
+  collapsed?: boolean
+  maxSlots?: number
+  moduleSource?: string
+  fields?: unknown[]
+  actions?: unknown[]
+  persistence?: string
+}
+
+type ScreenDefinition = {
+  sections: ScreenSection[]
+}
+
+type ModuleDefinition = {
+  id: string
+  name: string
+  io: { digitalInputs: number; digitalOutputs: number; analogInputs: number; analogOutputs: number }
+  parameters?: Array<{
+    id: string
+    name: string
+    type: string
+    options?: string[]
+    default?: unknown
+    min?: number
+    max?: number
+  }>
+  addressMapping?: unknown
+}
+
+type ModuleSystem = {
+  enabled: boolean
+  maxSlots: number
+  modules: ModuleDefinition[]
+} | null
+
+type VendorScreenRendererProps = {
+  screenDefinition: unknown
+  moduleSystem: ModuleSystem
+}
+
+const VendorScreenRenderer = memo(function VendorScreenRenderer({
+  screenDefinition,
+  moduleSystem,
+}: VendorScreenRendererProps) {
+  const screen = screenDefinition as ScreenDefinition
+  if (!screen?.sections) return null
+
+  return (
+    <div className='flex w-full flex-col gap-6'>
+      {screen.sections.map((section) => (
+        <SectionRenderer key={section.id} section={section} moduleSystem={moduleSystem} />
+      ))}
+    </div>
+  )
+})
+
+export { VendorScreenRenderer }
+export type { ModuleDefinition, ModuleSystem, ScreenDefinition, ScreenSection }

@@ -34,6 +34,8 @@ export type WorkspaceProjectTreeLeafType =
   | 'resource'
   | 'server'
   | 'remote-device'
+  | 'vendor-screen'
+  | 'package-manager'
   | null
 
 // ---------------------------------------------------------------------------
