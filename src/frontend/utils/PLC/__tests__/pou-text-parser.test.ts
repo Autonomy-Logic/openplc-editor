@@ -164,7 +164,7 @@ END_PROGRAM`
     expect(result.name).toBe('Main')
     expect(result.interface?.variables).toEqual([])
     // Body includes the VAR line since there was no END_VAR
-    expect((result.body.value as string)).toContain('VAR x : INT;')
+    expect(result.body.value as string).toContain('VAR x : INT;')
   })
 
   // -------------------------------------------------------------------------
@@ -396,9 +396,7 @@ END_PROGRAM`
 
   it('throws when declaration is not found', () => {
     const content = '{}\nEND_PROGRAM'
-    expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow(
-      'Could not find PROGRAM declaration',
-    )
+    expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow('Could not find PROGRAM declaration')
   })
 
   it('throws when function has no return type', () => {

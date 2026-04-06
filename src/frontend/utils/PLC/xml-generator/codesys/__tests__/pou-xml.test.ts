@@ -1,12 +1,14 @@
-import type { PLCPou } from '@root/middleware/shared/ports/open-plc-types'
+import type { PLCPou, PLCVariable } from '@root/middleware/shared/ports/open-plc-types'
 
 import { getBaseCodeSysXmlStructure } from '../base-xml'
 import { codeSysParseInterface, codeSysParsePousToXML } from '../pou-xml'
 
+/** Recursive record type for deeply nested XML structures in test assertions. */
+type XmlNode = Record<string, unknown>
+
 const makeBaseXml = () => getBaseCodeSysXmlStructure()
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const makeStPou = (overrides: Record<string, any> = {}): PLCPou =>
+const makeStPou = (overrides: Record<string, unknown> = {}): PLCPou =>
   ({
     type: 'program',
     data: {
@@ -34,12 +36,48 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'a', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
-          { name: 'b', class: 'output', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-          { name: 'c', class: 'inOut', type: { definition: 'base-type', value: 'REAL' }, location: '', documentation: '' },
-          { name: 'd', class: 'external', type: { definition: 'base-type', value: 'DINT' }, location: '', documentation: '' },
-          { name: 'e', class: 'local', type: { definition: 'base-type', value: 'LINT' }, location: '', documentation: '' },
-          { name: 'f', class: 'temp', type: { definition: 'base-type', value: 'BYTE' }, location: '', documentation: '' },
+          {
+            name: 'a',
+            class: 'input',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'b',
+            class: 'output',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'c',
+            class: 'inOut',
+            type: { definition: 'base-type', value: 'REAL' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'd',
+            class: 'external',
+            type: { definition: 'base-type', value: 'DINT' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'e',
+            class: 'local',
+            type: { definition: 'base-type', value: 'LINT' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'f',
+            class: 'temp',
+            type: { definition: 'base-type', value: 'BYTE' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -60,7 +98,13 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'unknown' as any, type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+          {
+            name: 'x',
+            class: 'unknown' as unknown as PLCVariable['class'],
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -77,7 +121,13 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -93,7 +143,13 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 's', class: 'local', type: { definition: 'base-type', value: 'string' }, location: '', documentation: '' },
+          {
+            name: 's',
+            class: 'local',
+            type: { definition: 'base-type', value: 'string' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -109,7 +165,13 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'd', class: 'local', type: { definition: 'derived', value: 'MyType' }, location: '', documentation: '' },
+          {
+            name: 'd',
+            class: 'local',
+            type: { definition: 'derived', value: 'MyType' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -125,7 +187,13 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'u', class: 'local', type: { definition: 'user-data-type', value: 'UDT1' }, location: '', documentation: '' },
+          {
+            name: 'u',
+            class: 'local',
+            type: { definition: 'user-data-type', value: 'UDT1' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -159,9 +227,9 @@ describe('codeSysParseInterface', () => {
       },
     })
     const result = codeSysParseInterface(pou)
-    const t = result.localVars!.variable![0].type as any
-    expect(t.array.dimension).toEqual([{ '@lower': '0', '@upper': '9' }])
-    expect(t.array.baseType).toEqual({ INT: '' })
+    const t = result.localVars!.variable![0].type as XmlNode
+    expect((t.array as XmlNode).dimension).toEqual([{ '@lower': '0', '@upper': '9' }])
+    expect((t.array as XmlNode).baseType).toEqual({ INT: '' })
   })
 
   it('handles array type with string base', () => {
@@ -190,8 +258,8 @@ describe('codeSysParseInterface', () => {
       },
     })
     const result = codeSysParseInterface(pou)
-    const t = result.localVars!.variable![0].type as any
-    expect(t.array.baseType).toEqual({ string: '' })
+    const t = result.localVars!.variable![0].type as XmlNode
+    expect((t.array as XmlNode).baseType).toEqual({ string: '' })
   })
 
   it('handles array type with user-data-type base', () => {
@@ -220,8 +288,8 @@ describe('codeSysParseInterface', () => {
       },
     })
     const result = codeSysParseInterface(pou)
-    const t = result.localVars!.variable![0].type as any
-    expect(t.array.baseType).toEqual({ derived: { '@name': 'MyStruct' } })
+    const t = result.localVars!.variable![0].type as XmlNode
+    expect((t.array as XmlNode).baseType).toEqual({ derived: { '@name': 'MyStruct' } })
   })
 
   it('sets address when variable has location', () => {
@@ -232,7 +300,13 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'BOOL' }, location: '%IX0.0', documentation: '' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '%IX0.0',
+            documentation: '',
+          },
         ],
       },
     })
@@ -248,7 +322,14 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', initialValue: '10', documentation: '' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            initialValue: '10',
+            documentation: '',
+          },
         ],
       },
     })
@@ -264,7 +345,13 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: 'A var' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            documentation: 'A var',
+          },
         ],
       },
     })
@@ -280,7 +367,13 @@ describe('codeSysParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -298,7 +391,13 @@ describe('codeSysParseInterface', () => {
           language: 'st',
           returnType: 'INT',
           variables: [
-            { name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'x',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: '' },
           documentation: '',
@@ -316,7 +415,13 @@ describe('codeSysParseInterface', () => {
           language: 'st',
           returnType: 'STRING',
           variables: [
-            { name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'x',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: '' },
           documentation: '',
@@ -334,7 +439,13 @@ describe('codeSysParseInterface', () => {
           language: 'st',
           returnType: 'MyCustomType',
           variables: [
-            { name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'x',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: '' },
           documentation: '',
@@ -350,7 +461,13 @@ describe('codeSysParseInterface', () => {
           name: 'main',
           language: 'st',
           variables: [
-            { name: 'x', class: 'local', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'x',
+              class: 'local',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: '' },
           documentation: '',
@@ -413,7 +530,10 @@ describe('codeSysParsePousToXML', () => {
         name: 'fbdProg',
         language: 'fbd',
         variables: [],
-        body: { language: 'fbd', value: { name: 'fbdProg', rung: { comment: '', selectedNodes: [], nodes: [], edges: [] } } },
+        body: {
+          language: 'fbd',
+          value: { name: 'fbdProg', rung: { comment: '', selectedNodes: [], nodes: [], edges: [] } },
+        },
         documentation: '',
       },
     }
@@ -460,9 +580,9 @@ describe('codeSysParsePousToXML', () => {
       type: 'program',
       data: {
         name: 'pyProg',
-        language: 'python' as any,
+        language: 'python',
         variables: [],
-        body: { language: 'python' as any, value: 'print("hello")' },
+        body: { language: 'python', value: 'print("hello")' },
         documentation: '',
       },
     }

@@ -10,12 +10,7 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (
-  name: string,
-  cls: 'input' | 'output',
-  baseType: string,
-  dimension: string,
-): PLCVariable => ({
+const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -35,10 +30,7 @@ describe('generateSTCode', () => {
   it('generates ST code with struct, setup, and loop calls for scalar variables', () => {
     const result = generateSTCode({
       pouName: 'MyBlock',
-      allVariables: [
-        makeScalarVar('speed', 'input', 'INT'),
-        makeScalarVar('result', 'output', 'REAL'),
-      ],
+      allVariables: [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')],
     })
 
     // Struct variable declaration

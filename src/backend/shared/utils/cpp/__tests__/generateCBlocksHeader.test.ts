@@ -10,12 +10,7 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (
-  name: string,
-  cls: 'input' | 'output',
-  baseType: string,
-  dimension: string,
-): PLCVariable => ({
+const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -40,10 +35,7 @@ describe('generateCBlocksHeader', () => {
   })
 
   it('generates struct and function declarations for a pou with scalar variables', () => {
-    const variables: PLCVariable[] = [
-      makeScalarVar('speed', 'input', 'INT'),
-      makeScalarVar('result', 'output', 'REAL'),
-    ]
+    const variables: PLCVariable[] = [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')]
 
     const result = generateCBlocksHeader([{ name: 'MyBlock', variables }])
 

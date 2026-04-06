@@ -31,7 +31,12 @@ function makeDerivedVariable(name: string, typeName: string, cls: PLCVariable['c
   }
 }
 
-function makeArrayVariable(name: string, baseType: string, dimension: string, cls: PLCVariable['class'] = 'local'): PLCVariable {
+function makeArrayVariable(
+  name: string,
+  baseType: string,
+  dimension: string,
+  cls: PLCVariable['class'] = 'local',
+): PLCVariable {
   return {
     name,
     class: cls,
@@ -141,10 +146,7 @@ describe('logCompilerEvent', () => {
 
 describe('buildVariableIndexMap', () => {
   it('builds index map for simple base-type variables', () => {
-    const pou = makePou('Main', 'program', [
-      makeBaseVariable('SPEED', 'INT'),
-      makeBaseVariable('TEMP', 'REAL'),
-    ])
+    const pou = makePou('Main', 'program', [makeBaseVariable('SPEED', 'INT'), makeBaseVariable('TEMP', 'REAL')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const parsed: ParsedDebugData = {
       variables: [
@@ -313,20 +315,22 @@ describe('buildVariableIndexMap', () => {
   })
 
   it('skips array variables with invalid dimension format', () => {
-    const pou = makePou('Main', 'program', [{
-      name: 'BAD',
-      class: 'local',
-      type: {
-        definition: 'array',
-        value: 'ARRAY',
-        data: {
-          baseType: { definition: 'base-type', value: 'INT' },
-          dimensions: [{ dimension: 'bad' }],
+    const pou = makePou('Main', 'program', [
+      {
+        name: 'BAD',
+        class: 'local',
+        type: {
+          definition: 'array',
+          value: 'ARRAY',
+          data: {
+            baseType: { definition: 'base-type', value: 'INT' },
+            dimensions: [{ dimension: 'bad' }],
+          },
         },
+        location: '',
+        documentation: '',
       },
-      location: '',
-      documentation: '',
-    }])
+    ])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
 
@@ -335,20 +339,22 @@ describe('buildVariableIndexMap', () => {
   })
 
   it('skips array variables with no dimensions', () => {
-    const pou = makePou('Main', 'program', [{
-      name: 'EMPTY_ARR',
-      class: 'local',
-      type: {
-        definition: 'array',
-        value: 'ARRAY',
-        data: {
-          baseType: { definition: 'base-type', value: 'INT' },
-          dimensions: [],
+    const pou = makePou('Main', 'program', [
+      {
+        name: 'EMPTY_ARR',
+        class: 'local',
+        type: {
+          definition: 'array',
+          value: 'ARRAY',
+          data: {
+            baseType: { definition: 'base-type', value: 'INT' },
+            dimensions: [],
+          },
         },
+        location: '',
+        documentation: '',
       },
-      location: '',
-      documentation: '',
-    }])
+    ])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
 
@@ -394,10 +400,7 @@ describe('buildVariableIndexMap', () => {
 
 describe('buildDebugVariableTreeMap', () => {
   it('builds tree map for simple base-type variables', () => {
-    const pou = makePou('Main', 'program', [
-      makeBaseVariable('X', 'INT'),
-      makeBaseVariable('Y', 'BOOL'),
-    ])
+    const pou = makePou('Main', 'program', [makeBaseVariable('X', 'INT'), makeBaseVariable('Y', 'BOOL')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const debugVars = [
       makeDebugVar('RES0__INSTANCE0.X', 'INT_ENUM', 0),
@@ -585,10 +588,7 @@ describe('buildFbInstanceMap', () => {
 
   it('groups multiple instances of the same FB type', () => {
     const customFb = makePou('MyFB', 'function-block', [])
-    const program = makePou('Main', 'program', [
-      makeDerivedVariable('fb1', 'MyFB'),
-      makeDerivedVariable('fb2', 'MyFB'),
-    ])
+    const program = makePou('Main', 'program', [makeDerivedVariable('fb1', 'MyFB'), makeDerivedVariable('fb2', 'MyFB')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
 
     const result = buildFbInstanceMap([program, customFb], instances)

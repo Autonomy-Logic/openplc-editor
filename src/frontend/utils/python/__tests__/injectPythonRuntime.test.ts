@@ -19,12 +19,7 @@ const makeStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => ({
   debug: false,
 })
 
-const makeArrayVar = (
-  name: string,
-  cls: 'input' | 'output',
-  baseType: string,
-  dimension: string,
-): PLCVariable => ({
+const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -58,7 +53,7 @@ describe('injectPythonRuntime', () => {
     expect(result).toContain('plc_pid = %d')
     expect(result).toContain('block_init()')
     expect(result).toContain('block_loop()')
-    expect(result).toContain("Stopping Python block: test")
+    expect(result).toContain('Stopping Python block: test')
     expect(result).toContain('shm_in.close()')
     expect(result).toContain('shm_out.close()')
   })

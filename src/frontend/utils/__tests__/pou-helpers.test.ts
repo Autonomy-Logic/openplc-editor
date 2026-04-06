@@ -1,16 +1,15 @@
+import type { PLCDataType, PLCPou } from '../../../middleware/shared/ports/types'
 import {
-  normalizeTypeString,
-  isBaseType,
   findFunctionBlockVariables,
-  isFunctionBlockType,
-  findStructureVariables,
-  isStructureType,
-  isEnumerationType,
   findLeafVariables,
+  findStructureVariables,
   getPouVariables,
+  isBaseType,
+  isEnumerationType,
+  isFunctionBlockType,
+  isStructureType,
+  normalizeTypeString,
 } from '../pou-helpers'
-import type { PLCPou, PLCDataType } from '../../../middleware/shared/ports/types'
-import type { PouVariable } from '../pou-helpers'
 
 // ---------------------------------------------------------------------------
 // normalizeTypeString
@@ -38,7 +37,28 @@ describe('normalizeTypeString', () => {
 
 describe('isBaseType', () => {
   it('returns true for all base types (case-insensitive)', () => {
-    const types = ['BOOL', 'SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT', 'REAL', 'LREAL', 'TIME', 'DATE', 'TOD', 'DT', 'STRING', 'BYTE', 'WORD', 'DWORD', 'LWORD']
+    const types = [
+      'BOOL',
+      'SINT',
+      'INT',
+      'DINT',
+      'LINT',
+      'USINT',
+      'UINT',
+      'UDINT',
+      'ULINT',
+      'REAL',
+      'LREAL',
+      'TIME',
+      'DATE',
+      'TOD',
+      'DT',
+      'STRING',
+      'BYTE',
+      'WORD',
+      'DWORD',
+      'LWORD',
+    ]
     types.forEach((t) => {
       expect(isBaseType(t)).toBe(true)
       expect(isBaseType(t.toLowerCase())).toBe(true)
@@ -72,9 +92,7 @@ describe('findFunctionBlockVariables', () => {
       name: 'MyCustomFB',
       pouType: 'function-block',
       interface: {
-        variables: [
-          { name: 'in1', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-        ],
+        variables: [{ name: 'in1', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' }],
       },
       body: { language: 'st', value: '' },
     }
@@ -253,22 +271,16 @@ describe('findLeafVariables', () => {
       {
         name: 'Inner',
         derivation: 'structure',
-        variable: [
-          { name: 'val', type: { definition: 'base-type', value: 'REAL' } },
-        ],
+        variable: [{ name: 'val', type: { definition: 'base-type', value: 'REAL' } }],
       },
       {
         name: 'Outer',
         derivation: 'structure',
-        variable: [
-          { name: 'inner', type: { definition: 'user-data-type', value: 'Inner' } },
-        ],
+        variable: [{ name: 'inner', type: { definition: 'user-data-type', value: 'Inner' } }],
       },
     ]
     const leaves = findLeafVariables('Outer', emptyPous, dataTypes, 'o')
-    expect(leaves).toEqual([
-      { relativePath: 'o.inner.val', typeName: 'REAL' },
-    ])
+    expect(leaves).toEqual([{ relativePath: 'o.inner.val', typeName: 'REAL' }])
   })
 
   it('handles circular type references without infinite recursion', () => {
@@ -285,9 +297,7 @@ describe('findLeafVariables', () => {
     ]
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const leaves = findLeafVariables('Circular', emptyPous, dataTypes)
-    expect(leaves).toEqual([
-      { relativePath: 'val', typeName: 'INT' },
-    ])
+    expect(leaves).toEqual([{ relativePath: 'val', typeName: 'INT' }])
     consoleSpy.mockRestore()
   })
 
@@ -305,17 +315,27 @@ describe('findLeafVariables', () => {
         pouType: 'function-block',
         interface: {
           variables: [
-            { name: 'state', class: 'local', type: { definition: 'user-data-type', value: 'MyEnum' }, location: '', documentation: '' },
-            { name: 'out', class: 'output', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'state',
+              class: 'local',
+              type: { definition: 'user-data-type', value: 'MyEnum' },
+              location: '',
+              documentation: '',
+            },
+            {
+              name: 'out',
+              class: 'output',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
         },
         body: { language: 'st', value: '' },
       },
     ]
     const leaves = findLeafVariables('CustomFB', pous, dataTypes, 'fb')
-    expect(leaves).toEqual([
-      { relativePath: 'fb.out', typeName: 'BOOL' },
-    ])
+    expect(leaves).toEqual([{ relativePath: 'fb.out', typeName: 'BOOL' }])
   })
 
   it('skips enumeration-typed fields in structures', () => {
@@ -335,9 +355,7 @@ describe('findLeafVariables', () => {
       },
     ]
     const leaves = findLeafVariables('WithEnum', emptyPous, dataTypes, 's')
-    expect(leaves).toEqual([
-      { relativePath: 's.v', typeName: 'INT' },
-    ])
+    expect(leaves).toEqual([{ relativePath: 's.v', typeName: 'INT' }])
   })
 
   it('skips array-typed fields in FBs', () => {
@@ -361,16 +379,20 @@ describe('findLeafVariables', () => {
               location: '',
               documentation: '',
             },
-            { name: 'flag', class: 'output', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'flag',
+              class: 'output',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
         },
         body: { language: 'st', value: '' },
       },
     ]
     const leaves = findLeafVariables('ArrayFB', pous, emptyDataTypes, 'fb')
-    expect(leaves).toEqual([
-      { relativePath: 'fb.flag', typeName: 'BOOL' },
-    ])
+    expect(leaves).toEqual([{ relativePath: 'fb.flag', typeName: 'BOOL' }])
   })
 
   it('uses empty pathPrefix by default', () => {
@@ -378,9 +400,7 @@ describe('findLeafVariables', () => {
       {
         name: 'Simple',
         derivation: 'structure',
-        variable: [
-          { name: 'a', type: { definition: 'base-type', value: 'BOOL' } },
-        ],
+        variable: [{ name: 'a', type: { definition: 'base-type', value: 'BOOL' } }],
       },
     ]
     const leaves = findLeafVariables('Simple', emptyPous, dataTypes)
@@ -398,9 +418,7 @@ describe('getPouVariables', () => {
       name: 'P1',
       pouType: 'program',
       interface: {
-        variables: [
-          { name: 'v1', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-        ],
+        variables: [{ name: 'v1', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' }],
       },
       body: { language: 'st', value: '' },
     }
@@ -414,9 +432,7 @@ describe('getPouVariables', () => {
       name: 'FB1',
       pouType: 'function-block',
       interface: {
-        variables: [
-          { name: 'in1', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
-        ],
+        variables: [{ name: 'in1', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' }],
       },
       body: { language: 'st', value: '' },
     }
@@ -430,9 +446,7 @@ describe('getPouVariables', () => {
       pouType: 'function',
       interface: {
         returnType: 'INT',
-        variables: [
-          { name: 'x', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-        ],
+        variables: [{ name: 'x', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' }],
       },
       body: { language: 'st', value: '' },
     }

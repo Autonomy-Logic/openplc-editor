@@ -1,12 +1,14 @@
-import type { PLCPou } from '@root/middleware/shared/ports/open-plc-types'
+import type { PLCPou, PLCVariable } from '@root/middleware/shared/ports/open-plc-types'
 
 import { getBaseOldEditorXmlStructure } from '../base-xml'
 import { oldEditorParseInterface, oldEditorParsePousToXML } from '../pou-xml'
 
+/** Recursive record type for deeply nested XML structures in test assertions. */
+type XmlNode = Record<string, unknown>
+
 const makeBaseXml = () => getBaseOldEditorXmlStructure()
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const makeStPou = (overrides: Record<string, any> = {}): PLCPou =>
+const makeStPou = (overrides: Record<string, unknown> = {}): PLCPou =>
   ({
     type: 'program',
     data: {
@@ -34,12 +36,48 @@ describe('oldEditorParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'a', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
-          { name: 'b', class: 'output', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
-          { name: 'c', class: 'inOut', type: { definition: 'base-type', value: 'REAL' }, location: '', documentation: '' },
-          { name: 'd', class: 'external', type: { definition: 'base-type', value: 'DINT' }, location: '', documentation: '' },
-          { name: 'e', class: 'local', type: { definition: 'base-type', value: 'LINT' }, location: '', documentation: '' },
-          { name: 'f', class: 'temp', type: { definition: 'base-type', value: 'BYTE' }, location: '', documentation: '' },
+          {
+            name: 'a',
+            class: 'input',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'b',
+            class: 'output',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'c',
+            class: 'inOut',
+            type: { definition: 'base-type', value: 'REAL' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'd',
+            class: 'external',
+            type: { definition: 'base-type', value: 'DINT' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'e',
+            class: 'local',
+            type: { definition: 'base-type', value: 'LINT' },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'f',
+            class: 'temp',
+            type: { definition: 'base-type', value: 'BYTE' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -60,7 +98,13 @@ describe('oldEditorParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'unknown' as any, type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+          {
+            name: 'x',
+            class: 'unknown' as unknown as PLCVariable['class'],
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -76,7 +120,13 @@ describe('oldEditorParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'BOOL' }, location: '%IX0.0', documentation: '' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '%IX0.0',
+            documentation: '',
+          },
         ],
       },
     })
@@ -92,7 +142,14 @@ describe('oldEditorParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', initialValue: '10', documentation: '' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            initialValue: '10',
+            documentation: '',
+          },
         ],
       },
     })
@@ -108,7 +165,13 @@ describe('oldEditorParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: 'A var' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            documentation: 'A var',
+          },
         ],
       },
     })
@@ -124,7 +187,13 @@ describe('oldEditorParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'x', class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+          {
+            name: 'x',
+            class: 'local',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
@@ -142,7 +211,13 @@ describe('oldEditorParseInterface', () => {
           language: 'st',
           returnType: 'INT',
           variables: [
-            { name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'x',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: '' },
           documentation: '',
@@ -160,7 +235,13 @@ describe('oldEditorParseInterface', () => {
           language: 'st',
           returnType: 'STRING',
           variables: [
-            { name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'x',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: '' },
           documentation: '',
@@ -178,7 +259,13 @@ describe('oldEditorParseInterface', () => {
           language: 'st',
           returnType: 'CustomType',
           variables: [
-            { name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'x',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: '' },
           documentation: '',
@@ -194,7 +281,13 @@ describe('oldEditorParseInterface', () => {
           name: 'main',
           language: 'st',
           variables: [
-            { name: 'x', class: 'local', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'x',
+              class: 'local',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: '' },
           documentation: '',
@@ -213,13 +306,29 @@ describe('oldEditorParseInterface', () => {
         body: { language: 'st', value: '' },
         documentation: '',
         variables: [
-          { name: 'arr', class: 'local', type: { definition: 'array', value: '', data: { baseType: { definition: 'base-type', value: 'INT' }, dimensions: [{ dimension: '0..9' }] } }, location: '', documentation: '' },
-          { name: 'der', class: 'local', type: { definition: 'derived', value: 'MyType' }, location: '', documentation: '' },
+          {
+            name: 'arr',
+            class: 'local',
+            type: {
+              definition: 'array',
+              value: '',
+              data: { baseType: { definition: 'base-type', value: 'INT' }, dimensions: [{ dimension: '0..9' }] },
+            },
+            location: '',
+            documentation: '',
+          },
+          {
+            name: 'der',
+            class: 'local',
+            type: { definition: 'derived', value: 'MyType' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     })
     const result = oldEditorParseInterface(pou)
-    expect((result.localVars!.variable![0].type as any).array).toBeDefined()
+    expect((result.localVars!.variable![0].type as XmlNode).array).toBeDefined()
     expect(result.localVars!.variable![1].type).toEqual({ derived: { '@name': 'MyType' } })
   })
 })
@@ -227,27 +336,45 @@ describe('oldEditorParseInterface', () => {
 describe('oldEditorParsePousToXML', () => {
   it('adds an ST POU with documentation', () => {
     const xml = makeBaseXml()
-    const pou = makeStPou({ data: { name: 'main', language: 'st', variables: [], body: { language: 'st', value: 'x := 1;' }, documentation: 'My doc' } } as any)
+    const pou = makeStPou({
+      data: {
+        name: 'main',
+        language: 'st',
+        variables: [],
+        body: { language: 'st', value: 'x := 1;' },
+        documentation: 'My doc',
+      },
+    })
     const result = oldEditorParsePousToXML(xml, [pou])
     expect(result.project.types.pous.pou).toHaveLength(1)
     expect(result.project.types.pous.pou[0]['@name']).toBe('main')
     expect(result.project.types.pous.pou[0]['@pouType']).toBe('program')
     expect(result.project.types.pous.pou[0].body).toHaveProperty('ST')
-    expect((result.project.types.pous.pou[0] as any).documentation['xhtml:p'].$).toBe('My doc')
+    expect(
+      ((result.project.types.pous.pou[0] as XmlNode).documentation as XmlNode)['xhtml:p'],
+    ).toEqual({ $: 'My doc' })
   })
 
   it('documentation uses space when empty string', () => {
     const xml = makeBaseXml()
     const pou = makeStPou()
     const result = oldEditorParsePousToXML(xml, [pou])
-    expect((result.project.types.pous.pou[0] as any).documentation['xhtml:p'].$).toBe(' ')
+    expect(
+      ((result.project.types.pous.pou[0] as XmlNode).documentation as XmlNode)['xhtml:p'],
+    ).toEqual({ $: ' ' })
   })
 
   it('adds an IL POU', () => {
     const xml = makeBaseXml()
     const pou: PLCPou = {
       type: 'program',
-      data: { name: 'ilProg', language: 'il', variables: [], body: { language: 'il', value: 'LD 1' }, documentation: '' },
+      data: {
+        name: 'ilProg',
+        language: 'il',
+        variables: [],
+        body: { language: 'il', value: 'LD 1' },
+        documentation: '',
+      },
     }
     const result = oldEditorParsePousToXML(xml, [pou])
     expect(result.project.types.pous.pou[0].body).toHaveProperty('IL')
@@ -257,7 +384,13 @@ describe('oldEditorParsePousToXML', () => {
     const xml = makeBaseXml()
     const pou: PLCPou = {
       type: 'program',
-      data: { name: 'ldProg', language: 'ld', variables: [], body: { language: 'ld', value: { name: 'ldProg', rungs: [] } }, documentation: '' },
+      data: {
+        name: 'ldProg',
+        language: 'ld',
+        variables: [],
+        body: { language: 'ld', value: { name: 'ldProg', rungs: [] } },
+        documentation: '',
+      },
     }
     const result = oldEditorParsePousToXML(xml, [pou])
     expect(result.project.types.pous.pou[0].body).toHaveProperty('LD')
@@ -271,7 +404,10 @@ describe('oldEditorParsePousToXML', () => {
         name: 'fbdProg',
         language: 'fbd',
         variables: [],
-        body: { language: 'fbd', value: { name: 'fbdProg', rung: { comment: '', selectedNodes: [], nodes: [], edges: [] } } },
+        body: {
+          language: 'fbd',
+          value: { name: 'fbdProg', rung: { comment: '', selectedNodes: [], nodes: [], edges: [] } },
+        },
         documentation: '',
       },
     }
@@ -283,7 +419,13 @@ describe('oldEditorParsePousToXML', () => {
     const xml = makeBaseXml()
     const pou: PLCPou = {
       type: 'function-block',
-      data: { name: 'pyFb', language: 'python' as any, variables: [], body: { language: 'python' as any, value: 'print("hi")' }, documentation: '' },
+      data: {
+        name: 'pyFb',
+        language: 'python',
+        variables: [],
+        body: { language: 'python', value: 'print("hi")' },
+        documentation: '',
+      },
     }
     const result = oldEditorParsePousToXML(xml, [pou])
     expect(result.project.types.pous.pou[0].body).toHaveProperty('ST')
@@ -294,7 +436,13 @@ describe('oldEditorParsePousToXML', () => {
     const xml = makeBaseXml()
     const pou: PLCPou = {
       type: 'function-block',
-      data: { name: 'cppFb', language: 'cpp' as any, variables: [], body: { language: 'cpp' as any, value: 'int x = 0;' }, documentation: '' },
+      data: {
+        name: 'cppFb',
+        language: 'cpp',
+        variables: [],
+        body: { language: 'cpp', value: 'int x = 0;' },
+        documentation: '',
+      },
     }
     const result = oldEditorParsePousToXML(xml, [pou])
     expect(result.project.types.pous.pou[0].body).toHaveProperty('ST')
@@ -314,7 +462,14 @@ describe('oldEditorParsePousToXML', () => {
     const xml = makeBaseXml()
     const pou: PLCPou = {
       type: 'function',
-      data: { name: 'f', language: 'st', returnType: 'INT', variables: [], body: { language: 'st', value: '' }, documentation: '' },
+      data: {
+        name: 'f',
+        language: 'st',
+        returnType: 'INT',
+        variables: [],
+        body: { language: 'st', value: '' },
+        documentation: '',
+      },
     }
     const result = oldEditorParsePousToXML(xml, [pou])
     expect(result.project.types.pous.pou[0]['@pouType']).toBe('function')
@@ -324,7 +479,13 @@ describe('oldEditorParsePousToXML', () => {
     const xml = makeBaseXml()
     const pou: PLCPou = {
       type: 'program',
-      data: { name: 'unknown', language: 'sfc' as any, variables: [], body: { language: 'sfc' as any, value: '' }, documentation: '' },
+      data: {
+        name: 'unknown',
+        language: 'sfc',
+        variables: [],
+        body: { language: 'sfc', value: '' },
+        documentation: '',
+      },
     }
     const result = oldEditorParsePousToXML(xml, [pou])
     expect(result.project.types.pous.pou).toHaveLength(0)

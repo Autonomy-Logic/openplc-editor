@@ -1,6 +1,6 @@
-import { collectDebugVariables, sanitizePou } from '../save-project'
-import type { EditorLike } from '../save-project'
 import type { PLCPou } from '../../../middleware/shared/ports/types'
+import type { EditorLike } from '../save-project'
+import { collectDebugVariables, sanitizePou } from '../save-project'
 
 // ---------------------------------------------------------------------------
 // sanitizePou
@@ -107,7 +107,17 @@ describe('collectDebugVariables', () => {
       {
         name: 'P1',
         pouType: 'program',
-        interface: { variables: [{ name: 'x', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '', debug: false }] },
+        interface: {
+          variables: [
+            {
+              name: 'x',
+              type: { definition: 'base-type', value: 'INT' },
+              location: '',
+              documentation: '',
+              debug: false,
+            },
+          ],
+        },
         body: { language: 'st', value: '' },
       },
     ]
@@ -136,8 +146,20 @@ describe('collectDebugVariables', () => {
         pouType: 'program',
         interface: {
           variables: [
-            { name: 'a', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '', debug: true },
-            { name: 'b', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '', debug: false },
+            {
+              name: 'a',
+              type: { definition: 'base-type', value: 'INT' },
+              location: '',
+              documentation: '',
+              debug: true,
+            },
+            {
+              name: 'b',
+              type: { definition: 'base-type', value: 'INT' },
+              location: '',
+              documentation: '',
+              debug: false,
+            },
           ],
         },
         body: { language: 'st', value: '' },
@@ -155,7 +177,13 @@ describe('collectDebugVariables', () => {
         pouType: 'program',
         interface: {
           variables: [
-            { name: 'v1', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '', debug: true },
+            {
+              name: 'v1',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+              debug: true,
+            },
           ],
         },
         body: { language: 'st', value: '' },
@@ -165,7 +193,13 @@ describe('collectDebugVariables', () => {
         pouType: 'program',
         interface: {
           variables: [
-            { name: 'v2', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '', debug: false },
+            {
+              name: 'v2',
+              type: { definition: 'base-type', value: 'INT' },
+              location: '',
+              documentation: '',
+              debug: false,
+            },
           ],
         },
         body: { language: 'st', value: '' },

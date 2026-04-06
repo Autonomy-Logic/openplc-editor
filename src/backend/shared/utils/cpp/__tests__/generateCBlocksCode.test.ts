@@ -10,12 +10,7 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (
-  name: string,
-  cls: 'input' | 'output',
-  baseType: string,
-  dimension: string,
-): PLCVariable => ({
+const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -38,10 +33,7 @@ describe('generateCBlocksCode', () => {
   })
 
   it('generates struct, extern declarations, defines, code, and undefs for a pou', () => {
-    const variables: PLCVariable[] = [
-      makeScalarVar('speed', 'input', 'INT'),
-      makeScalarVar('result', 'output', 'REAL'),
-    ]
+    const variables: PLCVariable[] = [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')]
     const code = 'void setup() { }\nvoid loop() { }'
 
     const result = generateCBlocksCode([{ name: 'MyBlock', code, variables }])

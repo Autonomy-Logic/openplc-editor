@@ -18,9 +18,7 @@ const makeTcpDevice = (overrides?: Partial<PLCRemoteDevice>): PLCRemoteDevice =>
         offset: '0',
         length: 10,
         errorHandling: 'keep-last-value',
-        ioPoints: [
-          { id: 'p1', name: 'Point1', type: 'WORD', iecLocation: '%MW0' },
-        ],
+        ioPoints: [{ id: 'p1', name: 'Point1', type: 'WORD', iecLocation: '%MW0' }],
       },
     ],
   },
@@ -48,9 +46,7 @@ const makeRtuDevice = (): PLCRemoteDevice => ({
         offset: '100',
         length: 16,
         errorHandling: 'set-to-zero',
-        ioPoints: [
-          { id: 'p1', name: 'Coil1', type: 'BOOL', iecLocation: '%QX0.0' },
-        ],
+        ioPoints: [{ id: 'p1', name: 'Coil1', type: 'BOOL', iecLocation: '%QX0.0' }],
       },
     ],
   },
@@ -66,16 +62,12 @@ describe('generateModbusMasterConfig', () => {
   })
 
   it('returns null when no modbus-tcp devices exist', () => {
-    const devices: PLCRemoteDevice[] = [
-      { name: 'EtherCAT', protocol: 'ethercat' },
-    ]
+    const devices: PLCRemoteDevice[] = [{ name: 'EtherCAT', protocol: 'ethercat' }]
     expect(generateModbusMasterConfig(devices)).toBeNull()
   })
 
   it('returns null when modbus-tcp device has no config', () => {
-    const devices: PLCRemoteDevice[] = [
-      { name: 'NoConfig', protocol: 'modbus-tcp' },
-    ]
+    const devices: PLCRemoteDevice[] = [{ name: 'NoConfig', protocol: 'modbus-tcp' }]
     expect(generateModbusMasterConfig(devices)).toBeNull()
   })
 
@@ -267,10 +259,7 @@ describe('generateModbusMasterConfig', () => {
   })
 
   it('processes multiple devices', () => {
-    const result = generateModbusMasterConfig([
-      makeTcpDevice({ name: 'Dev1' }),
-      makeTcpDevice({ name: 'Dev2' }),
-    ])
+    const result = generateModbusMasterConfig([makeTcpDevice({ name: 'Dev1' }), makeTcpDevice({ name: 'Dev2' })])
 
     const parsed = JSON.parse(result!)
     expect(parsed).toHaveLength(2)
@@ -279,10 +268,7 @@ describe('generateModbusMasterConfig', () => {
   })
 
   it('skips non-modbus devices in mixed array', () => {
-    const devices: PLCRemoteDevice[] = [
-      { name: 'EtherCAT', protocol: 'ethercat' },
-      makeTcpDevice({ name: 'Modbus1' }),
-    ]
+    const devices: PLCRemoteDevice[] = [{ name: 'EtherCAT', protocol: 'ethercat' }, makeTcpDevice({ name: 'Modbus1' })]
 
     const result = generateModbusMasterConfig(devices)
     const parsed = JSON.parse(result!)

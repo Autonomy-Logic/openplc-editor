@@ -3,8 +3,8 @@ if (typeof globalThis.structuredClone !== 'function') {
   globalThis.structuredClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 }
 
+import type { PLCInstance, PLCProjectData, PLCTask } from '../../../../middleware/shared/ports/open-plc-types'
 import { migrateProjectToNameTypeSystem, needsMigration } from '../migrate-project-to-name-type-system'
-import type { PLCProjectData } from '../../../../middleware/shared/ports/open-plc-types'
 
 // ---------------------------------------------------------------------------
 // Helpers — minimal project data factory
@@ -156,12 +156,7 @@ describe('migrateProjectToNameTypeSystem', () => {
 
   it('removes id fields from POU variables and counts them', () => {
     const data = makeProjectData({
-      pous: [
-        makePou('P1', [
-          makeVariable('x', { id: 'id1' }),
-          makeVariable('y', { id: 'id2' }),
-        ]),
-      ],
+      pous: [makePou('P1', [makeVariable('x', { id: 'id1' }), makeVariable('y', { id: 'id2' })])],
     })
 
     const { migratedProject, report } = migrateProjectToNameTypeSystem(data)
@@ -239,7 +234,9 @@ describe('migrateProjectToNameTypeSystem', () => {
     const data = makeProjectData({
       configuration: {
         resource: {
-          tasks: [{ name: 'T1', triggering: 'Cyclic', interval: 't#20ms', priority: 1, id: 'tid1' } as any],
+          tasks: [
+            { name: 'T1', triggering: 'Cyclic', interval: 't#20ms', priority: 1, id: 'tid1' } as unknown as PLCTask,
+          ],
           instances: [],
           globalVariables: [],
         },
@@ -255,7 +252,7 @@ describe('migrateProjectToNameTypeSystem', () => {
       configuration: {
         resource: {
           tasks: [],
-          instances: [{ name: 'I1', task: 'T1', program: 'P1', id: 'iid1' } as any],
+          instances: [{ name: 'I1', task: 'T1', program: 'P1', id: 'iid1' } as unknown as PLCInstance],
           globalVariables: [],
         },
       },
@@ -267,12 +264,7 @@ describe('migrateProjectToNameTypeSystem', () => {
 
   it('detects duplicate local variable names (case-insensitive) and marks report as failed', () => {
     const data = makeProjectData({
-      pous: [
-        makePou('P1', [
-          makeVariable('MyVar'),
-          makeVariable('myvar'),
-        ]),
-      ],
+      pous: [makePou('P1', [makeVariable('MyVar'), makeVariable('myvar')])],
     })
 
     const { report } = migrateProjectToNameTypeSystem(data)
@@ -290,10 +282,7 @@ describe('migrateProjectToNameTypeSystem', () => {
         resource: {
           tasks: [],
           instances: [],
-          globalVariables: [
-            makeVariable('GlobVar'),
-            makeVariable('globvar'),
-          ],
+          globalVariables: [makeVariable('GlobVar'), makeVariable('globvar')],
         },
       },
     })

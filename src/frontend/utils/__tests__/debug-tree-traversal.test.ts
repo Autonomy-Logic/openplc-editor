@@ -397,9 +397,7 @@ describe('traverseVariable', () => {
     })
 
     it('builds an array node with UDT elements', () => {
-      const structType = makeStructDataType('Item', [
-        { name: 'val', type: { definition: 'base-type', value: 'INT' } },
-      ])
+      const structType = makeStructDataType('Item', [{ name: 'val', type: { definition: 'base-type', value: 'INT' } }])
       const variable = makeArrayVariable('items', 'user-data-type', 'Item', '0..0')
       const debugVars = [makeDebugVar('RES0__INSTANCE0.ITEMS.value.table[0].value.VAL', 'INT_ENUM', 100)]
       const ctx = makeContext({ debugVariables: debugVars, dataTypes: [structType] })
@@ -483,7 +481,15 @@ describe('traverseNestedType', () => {
     const debugVars = [makeDebugVar('RES0__INSTANCE0.INST.X', 'INT_ENUM', 0)]
     const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
 
-    const result = traverseNestedType('inst', 'RES0__INSTANCE0.INST', 'Main:inst', 'MyFB', 'derived', ctx, simpleVisitor)
+    const result = traverseNestedType(
+      'inst',
+      'RES0__INSTANCE0.INST',
+      'Main:inst',
+      'MyFB',
+      'derived',
+      ctx,
+      simpleVisitor,
+    )
 
     expect(result.kind).toBe('complex')
     expect(result.children![0].name).toBe('X')
@@ -534,15 +540,7 @@ describe('traverseNestedType', () => {
   it('falls through to leaf for unknown nested typeDefinition', () => {
     const ctx = makeContext()
 
-    const result = traverseNestedType(
-      'x',
-      'RES0__INSTANCE0.X',
-      'Main:x',
-      'SomeType',
-      'derived',
-      ctx,
-      simpleVisitor,
-    )
+    const result = traverseNestedType('x', 'RES0__INSTANCE0.X', 'Main:x', 'SomeType', 'derived', ctx, simpleVisitor)
 
     // 'derived' with no matching FB definition -> leaf
     expect(result.kind).toBe('leaf')

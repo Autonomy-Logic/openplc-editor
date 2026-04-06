@@ -19,12 +19,7 @@ const makeStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => ({
   debug: false,
 })
 
-const makeArrayVar = (
-  name: string,
-  cls: 'input' | 'output',
-  baseType: string,
-  dimension: string,
-): PLCVariable => ({
+const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -222,8 +217,8 @@ describe('generateSTCode', () => {
     })
 
     expect(result).toContain('if first_run = false then')
-    expect(result).toContain("data__->SHM_IN_PTR.value = (uint64_t)shm_in_ptr;")
-    expect(result).toContain("data__->SHM_OUT_PTR.value = (uint64_t)shm_out_ptr;")
+    expect(result).toContain('data__->SHM_IN_PTR.value = (uint64_t)shm_in_ptr;')
+    expect(result).toContain('data__->SHM_OUT_PTR.value = (uint64_t)shm_out_ptr;')
     expect(result).toContain('first_run := true;')
   })
 

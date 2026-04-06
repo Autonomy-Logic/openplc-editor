@@ -3,6 +3,20 @@ import type { PLCDataType } from '@root/middleware/shared/ports/open-plc-types'
 import { getBaseCodeSysXmlStructure } from '../base-xml'
 import { codeSysParseDataTypesToXML } from '../data-type-xml'
 
+/** Recursive record type for deeply nested XML structures in test assertions. */
+type XmlNode = Record<string, unknown>
+
+/** Helper to extract the first dataType entry as an XmlNode for assertions. */
+function firstDataType(result: ReturnType<typeof codeSysParseDataTypesToXML>): XmlNode {
+  return result.project.types.dataTypes.dataType[0] as XmlNode
+}
+
+/** Helper to navigate to baseType.struct.variable on the first data type. */
+function structVars(result: ReturnType<typeof codeSysParseDataTypesToXML>): XmlNode[] {
+  const dt = firstDataType(result)
+  return ((dt.baseType as XmlNode).struct as XmlNode).variable as XmlNode[]
+}
+
 const makeBaseXml = () => getBaseCodeSysXmlStructure()
 
 describe('codeSysParseDataTypesToXML', () => {
@@ -19,11 +33,11 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as Record<string, unknown>
+      const dt = firstDataType(result)
       expect(dt['@name']).toBe('MyArr')
-      const baseType = (dt as any).baseType.array.baseType
-      expect(baseType).toHaveProperty('INT', '')
-      expect((dt as any).initialValue.simpleValue['@value']).toBe('0')
+      const arrayNode = (dt.baseType as XmlNode).array as XmlNode
+      expect(arrayNode.baseType).toHaveProperty('INT', '')
+      expect(((dt.initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('0')
     })
 
     it('adds an array data type with string base type (lowercase key)', () => {
@@ -37,8 +51,9 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
-      expect(dt.baseType.array.baseType).toHaveProperty('string', '')
+      const dt = firstDataType(result)
+      const arrayNode = (dt.baseType as XmlNode).array as XmlNode
+      expect(arrayNode.baseType).toHaveProperty('string', '')
       expect(dt.initialValue).toBeUndefined()
     })
 
@@ -53,8 +68,9 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
-      expect(dt.baseType.array.baseType).toEqual({ derived: { '@name': 'MyStruct' } })
+      const dt = firstDataType(result)
+      const arrayNode = (dt.baseType as XmlNode).array as XmlNode
+      expect(arrayNode.baseType).toEqual({ derived: { '@name': 'MyStruct' } })
     })
 
     it('parses multiple dimensions', () => {
@@ -68,7 +84,8 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const dims = (result.project.types.dataTypes.dataType[0] as any).baseType.array.dimension
+      const dt = firstDataType(result)
+      const dims = ((dt.baseType as XmlNode).array as XmlNode).dimension
       expect(dims).toEqual([
         { '@lower': '0', '@upper': '4' },
         { '@lower': '1', '@upper': '10' },
@@ -114,14 +131,12 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
+      const dt = firstDataType(result)
       expect(dt['@name']).toBe('Color')
-      expect(dt.baseType.enum.values.value).toEqual([
-        { '@name': 'Red' },
-        { '@name': 'Green' },
-        { '@name': 'Blue' },
-      ])
-      expect(dt.initialValue.simpleValue['@value']).toBe('Red')
+      expect(((dt.baseType as XmlNode).enum as XmlNode).values).toEqual({
+        value: [{ '@name': 'Red' }, { '@name': 'Green' }, { '@name': 'Blue' }],
+      })
+      expect(((dt.initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('Red')
     })
 
     it('adds an enum data type without initial value', () => {
@@ -134,7 +149,7 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
+      const dt = firstDataType(result)
       expect(dt.initialValue).toBeUndefined()
     })
   })
@@ -160,9 +175,9 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
+      const dt = firstDataType(result)
       expect(dt['@name']).toBe('Point')
-      const vars = dt.baseType.struct.variable
+      const vars = structVars(result)
       expect(vars[0]).toEqual({
         '@name': 'x',
         type: { REAL: '' },
@@ -190,7 +205,7 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
+      const vars = structVars(result)
       expect(vars[0].type).toEqual({ string: '' })
     })
 
@@ -210,9 +225,9 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
+      const vars = structVars(result)
       expect(vars[0].type).toEqual({ derived: { '@name': 'InnerStruct' } })
-      expect(vars[0].initialValue.simpleValue['@value']).toBe('test')
+      expect(((vars[0].initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('test')
     })
 
     it('handles user-data-type variables without initial value', () => {
@@ -230,7 +245,7 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
+      const vars = structVars(result)
       expect(vars[0].initialValue).toBeUndefined()
     })
 
@@ -257,9 +272,10 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
-      expect(vars[0].type.array.baseType).toEqual({ DINT: '' })
-      expect(vars[0].type.array.dimension).toEqual([{ '@lower': '0', '@upper': '7' }])
+      const vars = structVars(result)
+      const arrType = (vars[0].type as XmlNode).array as XmlNode
+      expect(arrType.baseType).toEqual({ DINT: '' })
+      expect(arrType.dimension).toEqual([{ '@lower': '0', '@upper': '7' }])
     })
 
     it('handles array variables with user-data-type base inside a struct', () => {
@@ -284,8 +300,9 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
-      expect(vars[0].type.array.baseType).toEqual({ derived: { '@name': 'Item' } })
+      const vars = structVars(result)
+      const arrType = (vars[0].type as XmlNode).array as XmlNode
+      expect(arrType.baseType).toEqual({ derived: { '@name': 'Item' } })
       expect(vars[0].initialValue).toBeUndefined()
     })
 
@@ -311,8 +328,9 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
-      expect(vars[0].type.array.baseType).toEqual({ string: '' })
+      const vars = structVars(result)
+      const arrType = (vars[0].type as XmlNode).array as XmlNode
+      expect(arrType.baseType).toEqual({ string: '' })
     })
 
     it('handles derived variables inside a struct', () => {
@@ -331,9 +349,9 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
+      const vars = structVars(result)
       expect(vars[0].type).toEqual({ derived: { '@name': 'OtherType' } })
-      expect(vars[0].initialValue.simpleValue['@value']).toBe('init')
+      expect(((vars[0].initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('init')
     })
 
     it('handles derived variables without initial value', () => {
@@ -351,7 +369,7 @@ describe('codeSysParseDataTypesToXML', () => {
         },
       ]
       const result = codeSysParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
+      const vars = structVars(result)
       expect(vars[0].initialValue).toBeUndefined()
     })
   })

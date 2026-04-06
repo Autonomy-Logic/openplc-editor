@@ -13,7 +13,7 @@ import {
   ProjectSearchTreeVariableLeaf,
 } from './display/tree-view'
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 interface _SearchResult {
   searchID: string
   searchQuery: string

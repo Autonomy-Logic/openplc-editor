@@ -1,3 +1,4 @@
+import type { VariableTypeInfo } from '../variable-types'
 import {
   floatToBuffer,
   getVariableTypeInfo,
@@ -7,7 +8,6 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../variable-types'
-import type { VariableTypeInfo } from '../variable-types'
 
 // ---------------------------------------------------------------------------
 // getVariableTypeInfo

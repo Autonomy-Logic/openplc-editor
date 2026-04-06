@@ -23,7 +23,7 @@ describe('oldEditorInstanceToXml', () => {
         instances: [{ name: 'Inst0', task: 'Task0', program: 'main' }],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const task = result.project.instances.configurations.configuration.resource.task![0]
+      const task = result.project.instances.configurations.configuration.resource.task[0]
       expect(task['@name']).toBe('Task0')
       expect(task['@priority']).toBe('0')
       expect(task['@interval']).toBe('T#20ms')
@@ -37,14 +37,15 @@ describe('oldEditorInstanceToXml', () => {
         tasks: [{ name: 'IntTask', triggering: 'Interrupt', interval: '', priority: 5 }],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const task = result.project.instances.configurations.configuration.resource.task![0]
+      const task = result.project.instances.configurations.configuration.resource.task[0]
       expect(task['@interval']).toBeNull()
       expect(task['@single']).toBe('')
     })
 
     it('initializes task array when undefined', () => {
       const xml = makeBaseXml()
-      ;(xml.project.instances.configurations.configuration.resource as any).task = undefined
+      ;(xml.project.instances.configurations.configuration.resource as unknown as Record<string, unknown>).task =
+        undefined
       const config = makeConfig({
         tasks: [{ name: 'T', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 }],
       })
@@ -68,12 +69,12 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as any
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
       expect(gv['@name']).toBe('gVar')
       expect(gv['@address']).toBe('%MW0')
       expect(gv.type).toEqual({ INT: '' })
-      expect(gv.initialValue.simpleValue['@value']).toBe('42')
-      expect(gv.documentation['xhtml:p'].$).toBe('A global var')
+      expect((gv.initialValue as Record<string, Record<string, string>>).simpleValue['@value']).toBe('42')
+      expect((gv.documentation as Record<string, Record<string, string>>)['xhtml:p'].$).toBe('A global var')
     })
 
     it('sets address to undefined when location is empty', () => {
@@ -84,7 +85,7 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as any
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
       expect(gv['@address']).toBeUndefined()
     })
 
@@ -96,8 +97,11 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as any
-      expect(gv.documentation['xhtml:p'].$).toBe(' ')
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<
+        string,
+        unknown
+      >
+      expect((gv.documentation as Record<string, Record<string, string>>)['xhtml:p'].$).toBe(' ')
     })
 
     it('sets initialValue to null when not provided', () => {
@@ -108,7 +112,7 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as any
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
       expect(gv.initialValue).toBeNull()
     })
 
@@ -125,7 +129,7 @@ describe('oldEditorInstanceToXml', () => {
 
     it('initializes globalVars.variable when globalVars exists but variable is undefined', () => {
       const xml = makeBaseXml()
-      ;(xml.project.instances.configurations.configuration as any).globalVars = {}
+      ;(xml.project.instances.configurations.configuration as unknown as Record<string, unknown>).globalVars = {}
       const config = makeConfig({
         globalVariables: [
           { name: 'x', type: { definition: 'base-type', value: 'DINT' }, location: '', documentation: '' },
@@ -143,7 +147,7 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as any
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
       expect(gv.type).toEqual({ derived: { '@name': 'MyType' } })
     })
 
@@ -164,8 +168,8 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as any
-      expect(gv.type.array).toBeDefined()
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
+      expect((gv.type as Record<string, unknown>).array).toBeDefined()
     })
   })
 

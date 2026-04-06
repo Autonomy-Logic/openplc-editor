@@ -1,5 +1,5 @@
-import { parseProjectFiles } from '../parse-project-files'
 import type { RawProjectFile } from '../../../../middleware/shared/ports/project-port'
+import { parseProjectFiles } from '../parse-project-files'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,17 +58,14 @@ function makeDeviceConfig() {
 
 /** Minimal valid pin mapping JSON. */
 function makePinMapping() {
-  return JSON.stringify([
-    { pin: 'D2', pinType: 'digitalInput', address: '%IX0.0' },
-  ])
+  return JSON.stringify([{ pin: 'D2', pinType: 'digitalInput', address: '%IX0.0' }])
 }
 
 /** Build a minimal valid .st POU file content. */
 function makeStContent(pouName: string, pouType: 'PROGRAM' | 'FUNCTION' | 'FUNCTION_BLOCK', returnType?: string) {
-  const declaration = returnType
-    ? `${pouType} ${pouName} : ${returnType}`
-    : `${pouType} ${pouName}`
-  const endKeyword = pouType === 'PROGRAM' ? 'END_PROGRAM' : pouType === 'FUNCTION' ? 'END_FUNCTION' : 'END_FUNCTION_BLOCK'
+  const declaration = returnType ? `${pouType} ${pouName} : ${returnType}` : `${pouType} ${pouName}`
+  const endKeyword =
+    pouType === 'PROGRAM' ? 'END_PROGRAM' : pouType === 'FUNCTION' ? 'END_FUNCTION' : 'END_FUNCTION_BLOCK'
   return `${declaration}\nVAR\nEND_VAR\n\n${endKeyword}`
 }
 
@@ -117,18 +114,14 @@ describe('parseProjectFiles — POU type detection throws for unknown path', () 
 describe('parseProjectFiles — POU type detection from path', () => {
   it('detects function-block type from path', () => {
     const content = makeStContent('MyFB', 'FUNCTION_BLOCK')
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/function-blocks/MyFB.st', content },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/function-blocks/MyFB.st', content }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous[0].pouType).toBe('function-block')
   })
 
   it('detects function type from path', () => {
     const content = makeStContent('MyFunc', 'FUNCTION', 'INT')
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/functions/MyFunc.st', content },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/functions/MyFunc.st', content }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous[0].pouType).toBe('function')
   })
@@ -152,9 +145,7 @@ describe('parseProjectFiles — unsupported file extension', () => {
     // A file like 'pous/programs/Makefile' has no recognized extension
     // But it does have a '.' so ext will be the last segment after the period
     // If no period at all, ext is undefined and parsePouFile returns null
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/programs/noext', content: 'PROGRAM noext\nEND_PROGRAM' },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/noext', content: 'PROGRAM noext\nEND_PROGRAM' }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(0)
   })
@@ -178,7 +169,7 @@ describe('parseProjectFiles — fallback POU creation', () => {
     expect(result.projectData.pous).toHaveLength(1)
     expect(result.projectData.pous[0].name).toBe('broken')
     // The fallback should extract variablesText
-    expect((result.projectData.pous[0] as any).variablesText).toBeDefined()
+    expect(result.projectData.pous[0].variablesText).toBeDefined()
     consoleSpy.mockRestore()
   })
 
@@ -326,9 +317,7 @@ describe('parseProjectFiles — JSON POU format', () => {
         documentation: 'Some doc',
       },
     })
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/programs/JsonPou.json', content: jsonContent },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/JsonPou.json', content: jsonContent }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(1)
     expect(result.projectData.pous[0].name).toBe('JsonPou')
@@ -342,18 +331,14 @@ describe('parseProjectFiles — JSON POU format', () => {
       interface: { variables: [] },
       body: { language: 'st', value: '' },
     })
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/programs/FlatPou.json', content: jsonContent },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/FlatPou.json', content: jsonContent }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(1)
     expect(result.projectData.pous[0].name).toBe('FlatPou')
   })
 
   it('returns null for malformed JSON POU file', () => {
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/programs/BadJson.json', content: '{not valid json' },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/BadJson.json', content: '{not valid json' }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(0)
   })
@@ -366,9 +351,7 @@ describe('parseProjectFiles — JSON POU format', () => {
 describe('parseProjectFiles — Python and C++ POU parsing', () => {
   it('parses a Python POU', () => {
     const content = 'PROGRAM PyPou\nVAR\n  x : INT;\nEND_VAR\nprint("hello")\nEND_PROGRAM'
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/programs/PyPou.py', content },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/PyPou.py', content }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(1)
     expect(result.projectData.pous[0].body.language).toBe('python')
@@ -376,9 +359,7 @@ describe('parseProjectFiles — Python and C++ POU parsing', () => {
 
   it('parses a C++ POU', () => {
     const content = 'PROGRAM CppPou\nVAR\n  x : INT;\nEND_VAR\nint main() { return 0; }\nEND_PROGRAM'
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/programs/CppPou.cpp', content },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/CppPou.cpp', content }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(1)
     expect(result.projectData.pous[0].body.language).toBe('cpp')
@@ -440,7 +421,15 @@ describe('parseProjectFiles — project.json error paths', () => {
   })
 
   it('uses defaults when project.json has invalid structure', () => {
-    const result = parseProjectFiles('/p', JSON.stringify({ meta: 123 }), makeDeviceConfig(), makePinMapping(), [], [], [])
+    const result = parseProjectFiles(
+      '/p',
+      JSON.stringify({ meta: 123 }),
+      makeDeviceConfig(),
+      makePinMapping(),
+      [],
+      [],
+      [],
+    )
     expect(result.warnings).toBeDefined()
     expect(result.warnings!.some((w) => w.includes('invalid structure'))).toBe(true)
   })
@@ -463,7 +452,15 @@ describe('parseProjectFiles — device config error paths', () => {
   })
 
   it('uses defaults when device config has invalid structure', () => {
-    const result = parseProjectFiles('/p', makeProjectJson(), JSON.stringify({ foo: 'bar' }), makePinMapping(), [], [], [])
+    const result = parseProjectFiles(
+      '/p',
+      makeProjectJson(),
+      JSON.stringify({ foo: 'bar' }),
+      makePinMapping(),
+      [],
+      [],
+      [],
+    )
     expect(result.warnings).toBeDefined()
     expect(result.warnings!.some((w) => w.includes('configuration.json'))).toBe(true)
     expect(result.deviceConfiguration).toBeDefined()
@@ -487,7 +484,15 @@ describe('parseProjectFiles — pin mapping error paths', () => {
   })
 
   it('uses defaults when pin mapping has invalid structure', () => {
-    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), JSON.stringify([{ bad: true }]), [], [], [])
+    const result = parseProjectFiles(
+      '/p',
+      makeProjectJson(),
+      makeDeviceConfig(),
+      JSON.stringify([{ bad: true }]),
+      [],
+      [],
+      [],
+    )
     expect(result.warnings).toBeDefined()
     expect(result.warnings!.some((w) => w.includes('pin-mapping.json'))).toBe(true)
     expect(result.devicePinMapping).toBeDefined()
@@ -515,9 +520,7 @@ describe('parseProjectFiles — server file parsing', () => {
         port: 502,
       },
     })
-    const serverFiles: RawProjectFile[] = [
-      { relativePath: 'devices/servers/TestServer.json', content: serverJson },
-    ]
+    const serverFiles: RawProjectFile[] = [{ relativePath: 'devices/servers/TestServer.json', content: serverJson }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), [], serverFiles, [])
     expect(result.projectData.servers).toHaveLength(1)
     expect(result.projectData.servers![0].name).toBe('TestServer')
@@ -536,9 +539,7 @@ describe('parseProjectFiles — server file parsing', () => {
   })
 
   it('skips server files with malformed JSON', () => {
-    const serverFiles: RawProjectFile[] = [
-      { relativePath: 'devices/servers/Broken.json', content: '{not json' },
-    ]
+    const serverFiles: RawProjectFile[] = [{ relativePath: 'devices/servers/Broken.json', content: '{not json' }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), [], serverFiles, [])
     expect(result.projectData.servers).toHaveLength(0)
   })
@@ -567,9 +568,7 @@ describe('parseProjectFiles — remote device file parsing', () => {
         ioGroups: [],
       },
     })
-    const remoteFiles: RawProjectFile[] = [
-      { relativePath: 'devices/remote/RemoteDev.json', content: deviceJson },
-    ]
+    const remoteFiles: RawProjectFile[] = [{ relativePath: 'devices/remote/RemoteDev.json', content: deviceJson }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), [], [], remoteFiles)
     expect(result.projectData.remoteDevices).toHaveLength(1)
     expect(result.projectData.remoteDevices![0].name).toBe('RemoteDev')
@@ -587,9 +586,7 @@ describe('parseProjectFiles — remote device file parsing', () => {
   })
 
   it('skips remote device files with malformed JSON', () => {
-    const remoteFiles: RawProjectFile[] = [
-      { relativePath: 'devices/remote/Broken.json', content: '{broken' },
-    ]
+    const remoteFiles: RawProjectFile[] = [{ relativePath: 'devices/remote/Broken.json', content: '{broken' }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), [], [], remoteFiles)
     expect(result.projectData.remoteDevices).toHaveLength(0)
   })
@@ -691,9 +688,7 @@ describe('parseProjectFiles — POU name derivation', () => {
       interface: { variables: [] },
       body: { language: 'st', value: '' },
     })
-    const pouFiles: RawProjectFile[] = [
-      { relativePath: 'pous/programs/Derived.json', content: jsonContent },
-    ]
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/Derived.json', content: jsonContent }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(1)
     expect(result.projectData.pous[0].name).toBe('Derived')

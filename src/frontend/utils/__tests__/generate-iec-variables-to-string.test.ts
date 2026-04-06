@@ -70,9 +70,7 @@ describe('generateIecVariablesToString', () => {
   })
 
   it('includes both location and initial value together', () => {
-    const vars: PLCVariable[] = [
-      makeVariable({ name: 'x', class: 'local', location: '%QW0', initialValue: '100' }),
-    ]
+    const vars: PLCVariable[] = [makeVariable({ name: 'x', class: 'local', location: '%QW0', initialValue: '100' })]
     const result = generateIecVariablesToString(vars)
 
     expect(result).toContain('\tx : INT AT %QW0 := 100;')

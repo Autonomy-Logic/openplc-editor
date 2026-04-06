@@ -1,5 +1,5 @@
-import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
 import type { LibraryState } from '../../../middleware/shared/ports/library-types'
+import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../generate-iec-string-to-variables'
 
 describe('parseIecStringToVariables', () => {
@@ -91,7 +91,15 @@ describe('parseIecStringToVariables', () => {
 
   it('returns false from hasLibraryPous when lib has no pous property', () => {
     const libraries: LibraryState['libraries'] = {
-      system: [{ name: 'lib', author: 'a', version: '1', stPath: '', cPath: '' } as unknown as LibraryState['libraries']['system'][0]],
+      system: [
+        {
+          name: 'lib',
+          author: 'a',
+          version: '1',
+          stPath: '',
+          cPath: '',
+        } as unknown as LibraryState['libraries']['system'][0],
+      ],
       user: [],
     }
     const input = 'VAR\n  x : MyBlock;\nEND_VAR'

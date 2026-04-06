@@ -1,5 +1,5 @@
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateStructMember, isArrayVariable } from '../../../../frontend/utils/PLC/array-codegen-helpers'
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
 type CppPouData = {
   name: string

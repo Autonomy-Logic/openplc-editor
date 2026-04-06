@@ -1,5 +1,8 @@
 import { convertTypeToXml } from '../type-xml'
 
+/** Recursive record type for deeply nested XML structures in test assertions. */
+type XmlNode = Record<string, unknown>
+
 describe('convertTypeToXml', () => {
   it('converts a base-type (uppercase)', () => {
     const result = convertTypeToXml({ definition: 'base-type', value: 'INT' })
@@ -81,8 +84,8 @@ describe('convertTypeToXml', () => {
         dimensions: [{ dimension: '0..4' }, { dimension: '1..10' }],
       },
     })
-    const dims = (result as any).array.dimension
-    expect(dims).toEqual([
+    const dims = (result as XmlNode).array as XmlNode
+    expect(dims.dimension).toEqual([
       { '@lower': '0', '@upper': '4' },
       { '@lower': '1', '@upper': '10' },
     ])

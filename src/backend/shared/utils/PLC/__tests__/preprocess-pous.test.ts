@@ -164,10 +164,7 @@ describe('preprocessPous — Python', () => {
   })
 
   it('preserves non-Python POUs in full pipeline mode when mixed with Python', () => {
-    const project = makeProjectData([
-      makeStPou('StProg', 'x := 1;'),
-      makePythonPou('PyProg', 'pass'),
-    ])
+    const project = makeProjectData([makeStPou('StProg', 'x := 1;'), makePythonPou('PyProg', 'pass')])
     const logger = collectLog()
     const { projectData } = preprocessPous(project, false, logger.log)
     // ST POU should pass through the Python non-simulator map unchanged
@@ -177,10 +174,7 @@ describe('preprocessPous — Python', () => {
   })
 
   it('preserves non-Python POUs unchanged in simulator mode when mixed with Python', () => {
-    const project = makeProjectData([
-      makeStPou('StProg', 'x := 1;'),
-      makePythonPou('PyProg', 'pass'),
-    ])
+    const project = makeProjectData([makeStPou('StProg', 'x := 1;'), makePythonPou('PyProg', 'pass')])
     const logger = collectLog()
     const { projectData } = preprocessPous(project, true, logger.log)
 
@@ -269,10 +263,7 @@ describe('preprocessPous — C++', () => {
   })
 
   it('logs each C++ POU found', () => {
-    const project = makeProjectData([
-      makeCppPou('Cpp1', validCppCode),
-      makeCppPou('Cpp2', validCppCode),
-    ])
+    const project = makeProjectData([makeCppPou('Cpp1', validCppCode), makeCppPou('Cpp2', validCppCode)])
     const logger = collectLog()
     preprocessPous(project, false, logger.log)
     expect(logger.messages.filter((m) => m.includes('Found C/C++ POU')).length).toBe(2)
@@ -293,10 +284,7 @@ describe('preprocessPous — C++', () => {
   })
 
   it('preserves non-C++ POUs when processing C++ alongside them', () => {
-    const project = makeProjectData([
-      makeStPou('StProg', 'x := 1;'),
-      makeCppPou('CppProg', validCppCode),
-    ])
+    const project = makeProjectData([makeStPou('StProg', 'x := 1;'), makeCppPou('CppProg', validCppCode)])
     const logger = collectLog()
     const { projectData } = preprocessPous(project, false, logger.log)
     // ST POU should remain unchanged through C++ processing map

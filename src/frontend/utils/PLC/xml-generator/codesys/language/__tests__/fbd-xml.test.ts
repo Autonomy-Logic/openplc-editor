@@ -1,4 +1,5 @@
 import type { FBDRungState } from '@root/frontend/store/slices'
+import type { Node } from '@xyflow/react'
 
 import { fbdToXml } from '../fbd-xml'
 
@@ -53,7 +54,7 @@ describe('fbdToXml (codesys)', () => {
             deletable: true,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -86,14 +87,20 @@ describe('fbdToXml (codesys)', () => {
             inputHandles: [],
             outputHandles: [],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 80, y: 15 }, relPosition: { x: 80, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 80, y: 15 },
+              relPosition: { x: 80, y: 15 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'ov1',
           type: 'output-variable',
@@ -109,17 +116,21 @@ describe('fbdToXml (codesys)', () => {
             inputHandles: [],
             outputHandles: [],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 280, y: 15 }, relPosition: { x: 80, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 280, y: 15 },
+              relPosition: { x: 80, y: 15 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             variant: 'output-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'src1', target: 'ov1', sourceHandle: 'out', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'src1', target: 'ov1', sourceHandle: 'out', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     expect(result.body.FBD.outVariable).toHaveLength(1)
@@ -149,13 +160,19 @@ describe('fbdToXml (codesys)', () => {
             inputHandles: [],
             outputHandles: [],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 0, y: 0 }, relPosition: { x: 0, y: 0 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 0, y: 0 },
+              relPosition: { x: 0, y: 0 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             variant: 'output-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
       edges: [],
     })
@@ -189,7 +206,7 @@ describe('fbdToXml (codesys)', () => {
             deletable: true,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'ov1',
           type: 'output-variable',
@@ -205,13 +222,19 @@ describe('fbdToXml (codesys)', () => {
             inputHandles: [],
             outputHandles: [],
             inputConnector: undefined,
-            outputConnector: { id: 'out-conn', type: 'source', position: 'right', glbPosition: { x: 0, y: 0 }, relPosition: { x: 0, y: 0 } },
+            outputConnector: {
+              id: 'out-conn',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 0, y: 0 },
+              relPosition: { x: 0, y: 0 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             variant: 'output-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
       edges: [
         // Edge from src1 but sourceHandle 'mismatched' doesn't match outputConnector (undefined), so refLocalId='undefined'
@@ -249,7 +272,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
       edges: [],
     })
@@ -288,7 +311,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -318,7 +341,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b2',
           type: 'block',
@@ -339,11 +362,9 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'b1', target: 'b2', sourceHandle: 'OUT', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'b2', sourceHandle: 'OUT', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     const b2 = result.body.FBD.block[1]
@@ -375,7 +396,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b2',
           type: 'block',
@@ -396,11 +417,9 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'b1', target: 'b2', sourceHandle: 'RESULT', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'b2', sourceHandle: 'RESULT', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     const b2 = result.body.FBD.block[1]
@@ -432,7 +451,7 @@ describe('fbdToXml (codesys)', () => {
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b1',
           type: 'block',
@@ -453,11 +472,9 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     const conn = result.body.FBD.block[0].inputVariables.variable[0].connectionPointIn.connection[0]
@@ -487,7 +504,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -518,7 +535,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'ov1',
           type: 'output-variable',
@@ -540,11 +557,9 @@ describe('fbdToXml (codesys)', () => {
             deletable: true,
             variant: 'output-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'b1', target: 'ov1', sourceHandle: 'OUT', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'ov1', sourceHandle: 'OUT', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     const outVar = result.body.FBD.block[0].outputVariables.variable[0]
@@ -574,7 +589,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b2',
           type: 'block',
@@ -595,11 +610,9 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'b1', target: 'b2', sourceHandle: 'OUT', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'b2', sourceHandle: 'OUT', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     // First output handle at index 0: expression should be undefined
@@ -630,7 +643,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'ov1',
           type: 'output-variable',
@@ -652,11 +665,9 @@ describe('fbdToXml (codesys)', () => {
             deletable: true,
             variant: 'output-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'b1', target: 'ov1', sourceHandle: 'ENO', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'ov1', sourceHandle: 'ENO', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     // Second output (index 1) connected to a variable node
@@ -688,7 +699,7 @@ describe('fbdToXml (codesys)', () => {
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'conn1',
           type: 'connector',
@@ -698,7 +709,13 @@ describe('fbdToXml (codesys)', () => {
           data: {
             numericId: '2',
             variable: { name: 'label1' },
-            inputConnector: { id: 'in', type: 'target', position: 'left', glbPosition: { x: 100, y: 15 }, relPosition: { x: 0, y: 15 } },
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 100, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
             outputConnector: undefined,
             handles: [],
             inputHandles: [],
@@ -708,11 +725,9 @@ describe('fbdToXml (codesys)', () => {
             deletable: true,
             variant: 'connector',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'src1', target: 'conn1', sourceHandle: 'out', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'src1', target: 'conn1', sourceHandle: 'out', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     expect(result.body.FBD.connector).toHaveLength(1)
@@ -735,7 +750,13 @@ describe('fbdToXml (codesys)', () => {
             numericId: '5',
             variable: { name: 'label1' },
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 360, y: 15 }, relPosition: { x: 60, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 360, y: 15 },
+              relPosition: { x: 60, y: 15 },
+            },
             handles: [],
             inputHandles: [],
             outputHandles: [],
@@ -744,7 +765,7 @@ describe('fbdToXml (codesys)', () => {
             deletable: true,
             variant: 'continuation',
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -771,7 +792,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -801,7 +822,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -817,7 +838,7 @@ describe('fbdToXml (codesys)', () => {
           type: 'custom-unknown',
           position: { x: 0, y: 0 },
           data: {},
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -848,7 +869,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'conn1',
           type: 'connector',
@@ -858,7 +879,13 @@ describe('fbdToXml (codesys)', () => {
           data: {
             numericId: '11',
             variable: { name: 'L' },
-            inputConnector: { id: 'in', type: 'target', position: 'left', glbPosition: { x: 200, y: 15 }, relPosition: { x: 0, y: 15 } },
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 200, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
             outputConnector: undefined,
             handles: [],
             inputHandles: [],
@@ -868,11 +895,9 @@ describe('fbdToXml (codesys)', () => {
             deletable: true,
             variant: 'connector',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'b1', target: 'conn1', sourceHandle: 'OUT', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'conn1', sourceHandle: 'OUT', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     const connXml = result.body.FBD.connector[0]
@@ -896,14 +921,20 @@ describe('fbdToXml (codesys)', () => {
             inputHandles: [],
             outputHandles: [],
             inputConnector: undefined,
-            outputConnector: { id: 'myOut', type: 'source', position: 'right', glbPosition: { x: 0, y: 0 }, relPosition: { x: 0, y: 0 } },
+            outputConnector: {
+              id: 'myOut',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 0, y: 0 },
+              relPosition: { x: 0, y: 0 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'ov1',
           type: 'output-variable',
@@ -919,13 +950,19 @@ describe('fbdToXml (codesys)', () => {
             inputHandles: [],
             outputHandles: [],
             inputConnector: undefined,
-            outputConnector: { id: 'myOut', type: 'source', position: 'right', glbPosition: { x: 0, y: 0 }, relPosition: { x: 0, y: 0 } },
+            outputConnector: {
+              id: 'myOut',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 0, y: 0 },
+              relPosition: { x: 0, y: 0 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             variant: 'output-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
       edges: [
         // Valid edge with matching output connector
@@ -959,7 +996,7 @@ describe('fbdToXml (codesys)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)

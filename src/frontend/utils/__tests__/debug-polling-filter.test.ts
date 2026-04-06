@@ -44,7 +44,10 @@ function makeState(overrides: {
   debugExpandedNodes?: Map<string, boolean>
   debugGraphList?: string[]
   fbSelectedInstance?: Map<string, string>
-  fbDebugInstances?: Map<string, { fbTypeName: string; programName: string; programInstanceName: string; fbVariableName: string; key: string }[]>
+  fbDebugInstances?: Map<
+    string,
+    { fbTypeName: string; programName: string; programInstanceName: string; fbVariableName: string; key: string }[]
+  >
   editorName?: string
   editorLanguage?: string
   ladderFlows?: unknown[]
@@ -90,7 +93,10 @@ describe('buildActiveIndexSet', () => {
 
   describe('watched variables (debug === true)', () => {
     it('collects watched variables from a program POU', () => {
-      const pou = makePou('Main', 'program', [makeVariable('SPEED', 'local', true), makeVariable('TEMP', 'local', false)])
+      const pou = makePou('Main', 'program', [
+        makeVariable('SPEED', 'local', true),
+        makeVariable('TEMP', 'local', false),
+      ])
       const indexMap = new Map([['Main:SPEED', 10]])
       const state = makeState({ pous: [pou], debugVariableIndexes: indexMap })
       const allLeaves = new Map<number, { compositeKey: string; type: string }>()

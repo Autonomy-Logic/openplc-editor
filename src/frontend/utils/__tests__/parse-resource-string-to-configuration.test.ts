@@ -17,10 +17,7 @@ describe('parseResourceStringToConfiguration', () => {
   })
 
   it('parses a task and its program instance', () => {
-    const input = [
-      'TASK Task0(INTERVAL := T#20ms, PRIORITY := 0);',
-      'PROGRAM Inst0 WITH Task0 : Main;',
-    ].join('\n')
+    const input = ['TASK Task0(INTERVAL := T#20ms, PRIORITY := 0);', 'PROGRAM Inst0 WITH Task0 : Main;'].join('\n')
 
     const { tasks, instances } = parseResourceStringToConfiguration(input)
 
@@ -47,12 +44,7 @@ describe('parseResourceStringToConfiguration', () => {
   })
 
   it('skips blank lines and comment-only lines', () => {
-    const input = [
-      '',
-      '(* This is a comment *)',
-      'TASK Task0(INTERVAL := T#20ms, PRIORITY := 1);',
-      '',
-    ].join('\n')
+    const input = ['', '(* This is a comment *)', 'TASK Task0(INTERVAL := T#20ms, PRIORITY := 1);', ''].join('\n')
 
     const { tasks } = parseResourceStringToConfiguration(input)
     expect(tasks).toHaveLength(1)
@@ -203,10 +195,9 @@ describe('parseResourceStringToConfiguration', () => {
   // ---- Cross-validation ----
 
   it('throws when an instance references an undeclared task', () => {
-    const input = [
-      'TASK Task0(INTERVAL := T#20ms, PRIORITY := 1);',
-      'PROGRAM Inst0 WITH NonExistent : Main;',
-    ].join('\n')
+    const input = ['TASK Task0(INTERVAL := T#20ms, PRIORITY := 1);', 'PROGRAM Inst0 WITH NonExistent : Main;'].join(
+      '\n',
+    )
 
     expect(() => parseResourceStringToConfiguration(input)).toThrow(
       /Task "NonExistent" referenced in PROGRAM "Inst0".*is not declared/,

@@ -1,4 +1,5 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
+import type { Node } from '@xyflow/react'
 
 import { ladderToXml } from '../ladder-xml'
 
@@ -134,7 +135,7 @@ describe('ladderToXml (old-editor)', () => {
 
   it('adds left and right power rails from each rung', () => {
     const rung = makeRung({
-      nodes: [makeLeftRail() as any, makeRightRail() as any],
+      nodes: [makeLeftRail() as unknown as Node, makeRightRail() as unknown as Node],
     })
     const result = ladderToXml([rung])
     expect(result.body.LD.leftPowerRail).toHaveLength(1)
@@ -143,11 +144,11 @@ describe('ladderToXml (old-editor)', () => {
 
   it('adds left and right rails per rung', () => {
     const rung1 = makeRung({
-      nodes: [makeLeftRail() as any, makeRightRail() as any],
+      nodes: [makeLeftRail() as unknown as Node, makeRightRail() as unknown as Node],
     })
     const rung2 = makeRung({
       id: 'rung-1',
-      nodes: [makeLeftRail('lr2', '101') as any, makeRightRail('rr2', '201') as any],
+      nodes: [makeLeftRail('lr2', '101') as unknown as Node, makeRightRail('rr2', '201') as unknown as Node],
     })
     const result = ladderToXml([rung1, rung2])
     // old-editor adds a left rail per rung
@@ -160,7 +161,7 @@ describe('ladderToXml (old-editor)', () => {
     const contact = makeContact('c1', '10')
     const rightRail = makeRightRail()
     const rung = makeRung({
-      nodes: [leftRail as any, contact as any, rightRail as any],
+      nodes: [leftRail as unknown as Node, contact as unknown as Node, rightRail as unknown as Node],
       edges: [
         { id: 'e1', source: 'lr1', target: 'c1', sourceHandle: 'out', targetHandle: 'in' },
         { id: 'e2', source: 'c1', target: 'rr1', sourceHandle: 'out', targetHandle: 'in' },
@@ -173,7 +174,7 @@ describe('ladderToXml (old-editor)', () => {
   it('converts a contact with default variant', () => {
     const contact = makeContact('c1', '10')
     const rung = makeRung({
-      nodes: [makeLeftRail() as any, contact as any],
+      nodes: [makeLeftRail() as unknown as Node, contact as unknown as Node],
       edges: [{ id: 'e1', source: 'lr1', target: 'c1', sourceHandle: 'out', targetHandle: 'in' }],
     })
     const result = ladderToXml([rung])
@@ -188,35 +189,35 @@ describe('ladderToXml (old-editor)', () => {
 
   it('converts a negated contact', () => {
     const contact = makeContact('c1', '10', 'negated')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, contact as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, contact as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.contact[0]['@negated']).toBe(true)
   })
 
   it('converts risingEdge contact', () => {
     const contact = makeContact('c1', '10', 'risingEdge')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, contact as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, contact as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.contact[0]['@edge']).toBe('rising')
   })
 
   it('converts fallingEdge contact', () => {
     const contact = makeContact('c1', '10', 'fallingEdge')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, contact as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, contact as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.contact[0]['@edge']).toBe('falling')
   })
 
   it('contact uses default variable A when name is empty', () => {
     const contact = makeContact('c1', '10', 'default', '')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, contact as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, contact as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.contact[0].variable).toBe('A')
   })
 
   it('converts a default coil', () => {
     const coil = makeCoil('cl1', '20')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, coil as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, coil as unknown as Node] })
     const result = ladderToXml([rung])
     const c = result.body.LD.coil[0]
     expect(c['@localId']).toBe('20')
@@ -228,42 +229,42 @@ describe('ladderToXml (old-editor)', () => {
 
   it('converts negated coil', () => {
     const coil = makeCoil('cl1', '20', 'negated')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, coil as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, coil as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.coil[0]['@negated']).toBe(true)
   })
 
   it('converts risingEdge coil', () => {
     const coil = makeCoil('cl1', '20', 'risingEdge')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, coil as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, coil as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.coil[0]['@edge']).toBe('rising')
   })
 
   it('converts fallingEdge coil', () => {
     const coil = makeCoil('cl1', '20', 'fallingEdge')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, coil as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, coil as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.coil[0]['@edge']).toBe('falling')
   })
 
   it('converts set coil', () => {
     const coil = makeCoil('cl1', '20', 'set')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, coil as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, coil as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.coil[0]['@storage']).toBe('set')
   })
 
   it('converts reset coil', () => {
     const coil = makeCoil('cl1', '20', 'reset')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, coil as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, coil as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.coil[0]['@storage']).toBe('reset')
   })
 
   it('coil uses default variable A when name is empty', () => {
     const coil = makeCoil('cl1', '20', 'default', '')
-    const rung = makeRung({ nodes: [makeLeftRail() as any, coil as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, coil as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.coil[0].variable).toBe('A')
   })
@@ -271,7 +272,7 @@ describe('ladderToXml (old-editor)', () => {
   it('skips variable nodes with empty name', () => {
     const rung = makeRung({
       nodes: [
-        makeLeftRail() as any,
+        makeLeftRail() as unknown as Node,
         {
           id: 'v1',
           type: 'variable',
@@ -304,7 +305,7 @@ describe('ladderToXml (old-editor)', () => {
   it('converts an input variable node', () => {
     const rung = makeRung({
       nodes: [
-        makeLeftRail() as any,
+        makeLeftRail() as unknown as Node,
         {
           id: 'v1',
           type: 'variable',
@@ -363,8 +364,8 @@ describe('ladderToXml (old-editor)', () => {
     }
     const rung = makeRung({
       nodes: [
-        makeLeftRail() as any,
-        blockNode as any,
+        makeLeftRail() as unknown as Node,
+        blockNode as unknown as Node,
         {
           id: 'v1',
           type: 'variable',
@@ -422,7 +423,7 @@ describe('ladderToXml (old-editor)', () => {
       },
     }
     const rung = makeRung({
-      nodes: [makeLeftRail() as any, blockNode as any],
+      nodes: [makeLeftRail() as unknown as Node, blockNode as unknown as Node],
       edges: [{ id: 'e1', source: 'lr1', target: 'b1', sourceHandle: 'out', targetHandle: 'EN' }],
     })
     const result = ladderToXml([rung])
@@ -457,7 +458,7 @@ describe('ladderToXml (old-editor)', () => {
         connectedVariables: [],
       },
     }
-    const rung = makeRung({ nodes: [makeLeftRail() as any, blockNode as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, blockNode as unknown as Node] })
     const result = ladderToXml([rung])
     expect(result.body.LD.block[0]['@instanceName']).toBe('timer1')
   })
@@ -510,11 +511,11 @@ describe('ladderToXml (old-editor)', () => {
       },
     }
     const rung = makeRung({
-      nodes: [makeLeftRail() as any, blockNode as any, varNode as any],
+      nodes: [makeLeftRail() as unknown as Node, blockNode as unknown as Node, varNode as unknown as Node],
     })
     const result = ladderToXml([rung])
     const block = result.body.LD.block[0]
-    const in1 = block.inputVariables.variable.find((v: any) => v['@formalParameter'] === 'IN1')
+    const in1 = block.inputVariables.variable.find((v: Record<string, unknown>) => v['@formalParameter'] === 'IN1')
     expect(in1).toBeDefined()
     expect(in1!.connectionPointIn.connection[0]['@refLocalId']).toBe('51')
     expect(in1!.connectionPointIn.connection[0].position).toHaveLength(2)
@@ -545,7 +546,7 @@ describe('ladderToXml (old-editor)', () => {
         connectedVariables: [],
       },
     }
-    const rung = makeRung({ nodes: [makeLeftRail() as any, blockNode as any] })
+    const rung = makeRung({ nodes: [makeLeftRail() as unknown as Node, blockNode as unknown as Node] })
     const result = ladderToXml([rung])
     const block = result.body.LD.block[0]
     expect(block.inputVariables.variable).toHaveLength(1)
@@ -553,7 +554,7 @@ describe('ladderToXml (old-editor)', () => {
 
   it('skips unknown node types', () => {
     const rung = makeRung({
-      nodes: [makeLeftRail() as any, { id: 'u', type: 'placeholder', position: { x: 0, y: 0 }, data: {} } as any],
+      nodes: [makeLeftRail() as unknown as Node, { id: 'u', type: 'placeholder', position: { x: 0, y: 0 }, data: {} } as unknown as Node],
     })
     const result = ladderToXml([rung])
     expect(result.body.LD.contact).toHaveLength(0)
@@ -563,13 +564,13 @@ describe('ladderToXml (old-editor)', () => {
   it('accumulates offsetY across rungs', () => {
     const rung1 = makeRung({
       reactFlowViewport: [0, 200],
-      nodes: [makeLeftRail() as any],
+      nodes: [makeLeftRail() as unknown as Node],
     })
     const contact2 = makeContact('c2', '15')
     const rung2 = makeRung({
       id: 'rung-1',
       reactFlowViewport: [0, 300],
-      nodes: [makeLeftRail('lr2', '101') as any, contact2 as any],
+      nodes: [makeLeftRail('lr2', '101') as unknown as Node, contact2 as unknown as Node],
     })
     const result = ladderToXml([rung1, rung2])
     const c = result.body.LD.contact[0]
@@ -608,7 +609,7 @@ describe('ladderToXml (old-editor)', () => {
       }
       const coil = makeCoil('cl1', '20')
       const rung = makeRung({
-        nodes: [leftRail as any, c1 as any, c2 as any, pc as any, coil as any],
+        nodes: [leftRail as unknown as Node, c1 as unknown as Node, c2 as unknown as Node, pc as unknown as Node, coil as unknown as Node],
         edges: [
           { id: 'e1', source: 'c1', target: 'pc1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'c2', target: 'pc1', sourceHandle: 'out', targetHandle: 'pIn' },
@@ -649,7 +650,7 @@ describe('ladderToXml (old-editor)', () => {
       }
       const contact2 = { ...makeContact('c2', '11'), position: { x: 250, y: 50 } }
       const rung = makeRung({
-        nodes: [leftRail as any, contact1 as any, po as any, contact2 as any],
+        nodes: [leftRail as unknown as Node, contact1 as unknown as Node, po as unknown as Node, contact2 as unknown as Node],
         edges: [
           { id: 'e1', source: 'c1', target: 'po1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'po1', target: 'c2', sourceHandle: 'out', targetHandle: 'in' },
@@ -689,7 +690,7 @@ describe('ladderToXml (old-editor)', () => {
       }
       const contact2 = { ...makeContact('c2', '11'), position: { x: 250, y: 150 } }
       const rung = makeRung({
-        nodes: [leftRail as any, contact1 as any, po as any, contact2 as any],
+        nodes: [leftRail as unknown as Node, contact1 as unknown as Node, po as unknown as Node, contact2 as unknown as Node],
         edges: [
           { id: 'e1', source: 'c1', target: 'po1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'po1', target: 'c2', sourceHandle: 'pOut', targetHandle: 'in' },
@@ -754,7 +755,7 @@ describe('ladderToXml (old-editor)', () => {
       }
       const c2 = { ...makeContact('c2', '11'), position: { x: 200, y: 50 } }
       const rung = makeRung({
-        nodes: [leftRail as any, c1 as any, po1 as any, po2 as any, c2 as any],
+        nodes: [leftRail as unknown as Node, c1 as unknown as Node, po1 as unknown as Node, po2 as unknown as Node, c2 as unknown as Node],
         edges: [
           { id: 'e1', source: 'c1', target: 'po1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'po1', target: 'po2', sourceHandle: 'out', targetHandle: 'in' },
@@ -822,7 +823,7 @@ describe('ladderToXml (old-editor)', () => {
       }
       const coil = makeCoil('cl1', '20')
       const rung = makeRung({
-        nodes: [leftRail as any, c1 as any, c2 as any, c3 as any, pc1 as any, pc2 as any, coil as any],
+        nodes: [leftRail as unknown as Node, c1 as unknown as Node, c2 as unknown as Node, c3 as unknown as Node, pc1 as unknown as Node, pc2 as unknown as Node, coil as unknown as Node],
         edges: [
           { id: 'e1', source: 'c1', target: 'pc1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'pc2', target: 'pc1', sourceHandle: 'out', targetHandle: 'pIn' },
@@ -861,7 +862,7 @@ describe('ladderToXml (old-editor)', () => {
     }
     const contact = makeContact('c1', '10')
     const rung = makeRung({
-      nodes: [makeLeftRail() as any, varNode as any, contact as any],
+      nodes: [makeLeftRail() as unknown as Node, varNode as unknown as Node, contact as unknown as Node],
       edges: [{ id: 'e1', source: 'v1', target: 'c1', sourceHandle: 'out', targetHandle: 'in' }],
     })
     const result = ladderToXml([rung])

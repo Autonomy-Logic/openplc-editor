@@ -24,7 +24,7 @@ describe('injectPythonCode', () => {
     expect(result).toHaveLength(1)
     expect(result[0]).toContain('block_init()')
     expect(result[0]).toContain('block_loop()')
-    expect(result[0]).toContain("Stopping Python block: block1")
+    expect(result[0]).toContain('Stopping Python block: block1')
   })
 
   it('processes multiple pous independently', () => {
@@ -39,14 +39,9 @@ describe('injectPythonCode', () => {
   })
 
   it('generates format strings from input and output variables', () => {
-    const variables: PLCVariable[] = [
-      makeScalarVar('speed', 'input', 'INT'),
-      makeScalarVar('result', 'output', 'REAL'),
-    ]
+    const variables: PLCVariable[] = [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')]
 
-    const result = injectPythonCode([
-      { name: 'test', code: 'pass', type: 'function-block', variables },
-    ])
+    const result = injectPythonCode([{ name: 'test', code: 'pass', type: 'function-block', variables }])
 
     expect(result).toHaveLength(1)
     // Input format: =h (INT)
@@ -56,9 +51,7 @@ describe('injectPythonCode', () => {
   })
 
   it('injects runtime with empty format when no variables', () => {
-    const result = injectPythonCode([
-      { name: 'test', code: 'pass', type: 'function-block', variables: [] },
-    ])
+    const result = injectPythonCode([{ name: 'test', code: 'pass', type: 'function-block', variables: [] }])
 
     expect(result[0]).toContain("fmt_in = ('=')")
     expect(result[0]).toContain("fmt_out = ('=')")
@@ -84,9 +77,7 @@ describe('injectPythonCode', () => {
       },
     ]
 
-    const result = injectPythonCode([
-      { name: 'test', code: 'pass', type: 'function-block', variables },
-    ])
+    const result = injectPythonCode([{ name: 'test', code: 'pass', type: 'function-block', variables }])
 
     // Input format: =hf (INT + REAL)
     expect(result[0]).toContain("fmt_in = ('=hf')")

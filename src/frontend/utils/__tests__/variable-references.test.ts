@@ -1,12 +1,13 @@
+import type { Node } from '@xyflow/react'
+
+import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { VariableReferenceLocation } from '../variable-references'
 import {
   findAllReferencesToVariable,
-  propagateVariableTypeChange,
   propagateVariableRename,
+  propagateVariableTypeChange,
   validateVariableReference,
 } from '../variable-references'
-import type { VariableReferenceLocation } from '../variable-references'
-import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
-import type { Node } from '@xyflow/react'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,7 +109,14 @@ describe('findAllReferencesToVariable', () => {
         },
       ]
       const pous = [makePou('P1', 'ld', {})]
-      const result = findAllReferencesToVariable('myVar', { definition: 'base-type', value: 'BOOL' }, 'P1', pous, ladderFlows, [])
+      const result = findAllReferencesToVariable(
+        'myVar',
+        { definition: 'base-type', value: 'BOOL' },
+        'P1',
+        pous,
+        ladderFlows,
+        [],
+      )
       expect(result.totalReferences).toBe(2)
       expect(result.references[0].elementType).toBe('contact')
       expect(result.references[1].elementType).toBe('coil')
@@ -135,7 +143,14 @@ describe('findAllReferencesToVariable', () => {
         },
       ]
       const pous = [makePou('P1', 'ld', {})]
-      const result = findAllReferencesToVariable('myVar', { definition: 'base-type', value: 'INT' }, 'P1', pous, ladderFlows, [])
+      const result = findAllReferencesToVariable(
+        'myVar',
+        { definition: 'base-type', value: 'INT' },
+        'P1',
+        pous,
+        ladderFlows,
+        [],
+      )
       expect(result.totalReferences).toBe(2)
       expect(result.references.some((r) => r.elementType === 'block-instance')).toBe(true)
       expect(result.references.some((r) => r.elementType === 'block-connection')).toBe(true)
@@ -149,7 +164,14 @@ describe('findAllReferencesToVariable', () => {
         },
       ]
       const pous = [makePou('P1', 'ld', {})]
-      const result = findAllReferencesToVariable('myVar', { definition: 'base-type', value: 'INT' }, 'P1', pous, ladderFlows, [])
+      const result = findAllReferencesToVariable(
+        'myVar',
+        { definition: 'base-type', value: 'INT' },
+        'P1',
+        pous,
+        ladderFlows,
+        [],
+      )
       expect(result.totalReferences).toBe(1)
       expect(result.references[0].elementType).toBe('variable')
     })
@@ -169,7 +191,14 @@ describe('findAllReferencesToVariable', () => {
         },
       ]
       const pous = [makePou('P1', 'fbd', {})]
-      const result = findAllReferencesToVariable('myVar', { definition: 'base-type', value: 'BOOL' }, 'P1', pous, [], fbdFlows)
+      const result = findAllReferencesToVariable(
+        'myVar',
+        { definition: 'base-type', value: 'BOOL' },
+        'P1',
+        pous,
+        [],
+        fbdFlows,
+      )
       expect(result.totalReferences).toBe(2)
       expect(result.references[0].editorType).toBe('fbd')
     })
@@ -189,7 +218,14 @@ describe('findAllReferencesToVariable', () => {
         },
       ]
       const pous = [makePou('P1', 'fbd', {})]
-      const result = findAllReferencesToVariable('myVar', { definition: 'base-type', value: 'INT' }, 'P1', pous, [], fbdFlows)
+      const result = findAllReferencesToVariable(
+        'myVar',
+        { definition: 'base-type', value: 'INT' },
+        'P1',
+        pous,
+        [],
+        fbdFlows,
+      )
       expect(result.totalReferences).toBe(2)
     })
 
@@ -198,7 +234,14 @@ describe('findAllReferencesToVariable', () => {
       const nodes = types.map((t, i) => makeNode(`n${i}`, t, { variable: { name: 'x' } }))
       const fbdFlows: FBDFlow[] = [{ name: 'P1', rung: { nodes } }]
       const pous = [makePou('P1', 'fbd', {})]
-      const result = findAllReferencesToVariable('x', { definition: 'base-type', value: 'INT' }, 'P1', pous, [], fbdFlows)
+      const result = findAllReferencesToVariable(
+        'x',
+        { definition: 'base-type', value: 'INT' },
+        'P1',
+        pous,
+        [],
+        fbdFlows,
+      )
       expect(result.totalReferences).toBe(4)
     })
   })
@@ -210,7 +253,15 @@ describe('findAllReferencesToVariable', () => {
         makePou('P2', 'st', 'x := 2;', [makeVariable('x', { class: 'external' })]),
         makePou('P3', 'st', 'x := 3;', [makeVariable('y', { class: 'external' })]),
       ]
-      const result = findAllReferencesToVariable('x', { definition: 'base-type', value: 'INT' }, '', pous, [], [], 'global')
+      const result = findAllReferencesToVariable(
+        'x',
+        { definition: 'base-type', value: 'INT' },
+        '',
+        pous,
+        [],
+        [],
+        'global',
+      )
       // P1 has 1 ref, P2 has 1 ref, P3 has no external x
       expect(result.totalReferences).toBe(2)
       expect(result.byPou.get('P1')).toBe(1)
@@ -219,7 +270,15 @@ describe('findAllReferencesToVariable', () => {
 
     it('returns empty when no pous have matching external variable', () => {
       const pous = [makePou('P1', 'st', 'a := 1;', [makeVariable('a', { class: 'local' })])]
-      const result = findAllReferencesToVariable('x', { definition: 'base-type', value: 'INT' }, '', pous, [], [], 'global')
+      const result = findAllReferencesToVariable(
+        'x',
+        { definition: 'base-type', value: 'INT' },
+        '',
+        pous,
+        [],
+        [],
+        'global',
+      )
       expect(result.totalReferences).toBe(0)
     })
 
@@ -229,7 +288,15 @@ describe('findAllReferencesToVariable', () => {
         pouType: 'program',
         body: { language: 'st', value: 'x := 1;' },
       }
-      const result = findAllReferencesToVariable('x', { definition: 'base-type', value: 'INT' }, '', [pou], [], [], 'global')
+      const result = findAllReferencesToVariable(
+        'x',
+        { definition: 'base-type', value: 'INT' },
+        '',
+        [pou],
+        [],
+        [],
+        'global',
+      )
       expect(result.totalReferences).toBe(0)
     })
   })
@@ -246,9 +313,7 @@ describe('propagateVariableTypeChange', () => {
         makeVariable('myGlobal', { class: 'external' }),
         makeVariable('other', { class: 'local' }),
       ]),
-      makePou('P2', 'st', '', [
-        makeVariable('myGlobal', { class: 'external' }),
-      ]),
+      makePou('P2', 'st', '', [makeVariable('myGlobal', { class: 'external' })]),
     ]
     const calls: unknown[] = []
     const projectActions = {
@@ -289,15 +354,24 @@ describe('propagateVariableTypeChange', () => {
 describe('propagateVariableRename', () => {
   describe('global scope — rename external variables', () => {
     it('renames matching external variables in POUs', () => {
-      const pous: PLCPou[] = [
-        makePou('P1', 'st', '', [makeVariable('oldName', { class: 'external' })]),
-      ]
+      const pous: PLCPou[] = [makePou('P1', 'st', '', [makeVariable('oldName', { class: 'external' })])]
       const calls: unknown[] = []
       const projectActions = {
         updateVariable: (p: unknown) => calls.push(p),
         updatePou: () => {},
       }
-      propagateVariableRename('oldName', 'newName', [], [], [], pous, { updateNode: () => {} }, { updateNode: () => {} }, projectActions, 'global')
+      propagateVariableRename(
+        'oldName',
+        'newName',
+        [],
+        [],
+        [],
+        pous,
+        { updateNode: () => {} },
+        { updateNode: () => {} },
+        projectActions,
+        'global',
+      )
       expect(calls).toHaveLength(1)
       expect(calls[0]).toEqual({
         scope: 'local',
@@ -319,7 +393,17 @@ describe('propagateVariableRename', () => {
         updateVariable: () => {},
         updatePou: (p: unknown) => pouCalls.push(p),
       }
-      propagateVariableRename('oldVar', 'newVar', refs, [], [], pous, { updateNode: () => {} }, { updateNode: () => {} }, projectActions)
+      propagateVariableRename(
+        'oldVar',
+        'newVar',
+        refs,
+        [],
+        [],
+        pous,
+        { updateNode: () => {} },
+        { updateNode: () => {} },
+        projectActions,
+      )
       expect(pouCalls).toHaveLength(1)
       expect((pouCalls[0] as { content: { value: string } }).content.value).toBe('newVar := newVar + 1;')
     })
@@ -334,7 +418,17 @@ describe('propagateVariableRename', () => {
           updateVariable: () => {},
           updatePou: (p: unknown) => pouCalls.push(p),
         }
-        propagateVariableRename('x', 'y', refs, [], [], pous, { updateNode: () => {} }, { updateNode: () => {} }, projectActions)
+        propagateVariableRename(
+          'x',
+          'y',
+          refs,
+          [],
+          [],
+          pous,
+          { updateNode: () => {} },
+          { updateNode: () => {} },
+          projectActions,
+        )
         expect(pouCalls.length).toBeGreaterThanOrEqual(1)
       })
     })
@@ -346,7 +440,17 @@ describe('propagateVariableRename', () => {
         updateVariable: () => {},
         updatePou: (p: unknown) => pouCalls.push(p),
       }
-      propagateVariableRename('x', 'y', refs, [], [], [], { updateNode: () => {} }, { updateNode: () => {} }, projectActions)
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        [],
+        [],
+        { updateNode: () => {} },
+        { updateNode: () => {} },
+        projectActions,
+      )
       expect(pouCalls).toHaveLength(0)
     })
 
@@ -358,7 +462,17 @@ describe('propagateVariableRename', () => {
         updateVariable: () => {},
         updatePou: (p: unknown) => pouCalls.push(p),
       }
-      propagateVariableRename('x', 'y', refs, [], [], pous, { updateNode: () => {} }, { updateNode: () => {} }, projectActions)
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        [],
+        pous,
+        { updateNode: () => {} },
+        { updateNode: () => {} },
+        projectActions,
+      )
       expect(pouCalls).toHaveLength(0)
     })
 
@@ -370,7 +484,17 @@ describe('propagateVariableRename', () => {
         updateVariable: () => {},
         updatePou: (p: unknown) => pouCalls.push(p),
       }
-      propagateVariableRename('x', 'y', refs, [], [], pous, { updateNode: () => {} }, { updateNode: () => {} }, projectActions)
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        [],
+        pous,
+        { updateNode: () => {} },
+        { updateNode: () => {} },
+        projectActions,
+      )
       expect(pouCalls).toHaveLength(0)
     })
 
@@ -381,10 +505,22 @@ describe('propagateVariableRename', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const projectActions = {
         updateVariable: () => {},
-        updatePou: () => { throw new Error('regex fail') },
+        updatePou: () => {
+          throw new Error('regex fail')
+        },
       }
       // Should not throw
-      propagateVariableRename('val', 'newVal', refs, [], [], pous, { updateNode: () => {} }, { updateNode: () => {} }, projectActions)
+      propagateVariableRename(
+        'val',
+        'newVal',
+        refs,
+        [],
+        [],
+        pous,
+        { updateNode: () => {} },
+        { updateNode: () => {} },
+        projectActions,
+      )
       consoleErrorSpy.mockRestore()
     })
   })
@@ -413,7 +549,17 @@ describe('propagateVariableRename', () => {
       ]
       const updateCalls: unknown[] = []
       const ladderFlowActions = { updateNode: (p: unknown) => updateCalls.push(p) }
-      propagateVariableRename('oldName', 'newName', refs, ladderFlows, [], [], ladderFlowActions, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'oldName',
+        'newName',
+        refs,
+        ladderFlows,
+        [],
+        [],
+        ladderFlowActions,
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(3)
     })
 
@@ -428,7 +574,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'ladder', nodeId: 'n1', rungId: 'r1', elementType: 'block-instance' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('oldName', 'newName', refs, ladderFlows, [], [], { updateNode: (p: unknown) => updateCalls.push(p) }, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'oldName',
+        'newName',
+        refs,
+        ladderFlows,
+        [],
+        [],
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(1)
     })
 
@@ -442,7 +598,15 @@ describe('propagateVariableRename', () => {
               nodes: [
                 makeNode('n1', 'block', {
                   connectedVariables: [
-                    { handleId: 'h1', variable: { name: 'oldName', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' } },
+                    {
+                      handleId: 'h1',
+                      variable: {
+                        name: 'oldName',
+                        type: { definition: 'base-type', value: 'INT' },
+                        location: '',
+                        documentation: '',
+                      },
+                    },
                   ],
                 }),
               ],
@@ -451,10 +615,27 @@ describe('propagateVariableRename', () => {
         },
       ]
       const refs: VariableReferenceLocation[] = [
-        { pouName: 'P1', editorType: 'ladder', nodeId: 'n1', rungId: 'r1', elementType: 'block-connection', connectionIndex: 0 },
+        {
+          pouName: 'P1',
+          editorType: 'ladder',
+          nodeId: 'n1',
+          rungId: 'r1',
+          elementType: 'block-connection',
+          connectionIndex: 0,
+        },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('oldName', 'newName', refs, ladderFlows, [], [], { updateNode: (p: unknown) => updateCalls.push(p) }, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'oldName',
+        'newName',
+        refs,
+        ladderFlows,
+        [],
+        [],
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(1)
     })
 
@@ -463,7 +644,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'Missing', editorType: 'ladder', nodeId: 'n1', rungId: 'r1', elementType: 'contact' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, [], [], [], { updateNode: (p: unknown) => updateCalls.push(p) }, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        [],
+        [],
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
@@ -473,7 +664,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'ladder', nodeId: 'n1', rungId: 'r1', elementType: 'contact' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, ladderFlows, [], [], { updateNode: (p: unknown) => updateCalls.push(p) }, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        ladderFlows,
+        [],
+        [],
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
@@ -483,7 +684,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'ladder', nodeId: 'n1', rungId: 'r1', elementType: 'contact' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, ladderFlows, [], [], { updateNode: (p: unknown) => updateCalls.push(p) }, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        ladderFlows,
+        [],
+        [],
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
@@ -493,7 +704,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'ladder', nodeId: 'n1', rungId: 'r1', elementType: 'contact' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, ladderFlows, [], [], { updateNode: (p: unknown) => updateCalls.push(p) }, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        ladderFlows,
+        [],
+        [],
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
@@ -503,19 +724,49 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'ladder', nodeId: 'n1', rungId: 'r1', elementType: 'block-instance' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, ladderFlows, [], [], { updateNode: (p: unknown) => updateCalls.push(p) }, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        ladderFlows,
+        [],
+        [],
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
     it('skips block-connection rename when connectedVariables is missing or index has no variable', () => {
       const ladderFlows: LadderFlow[] = [
-        { name: 'P1', rungs: [{ id: 'r1', nodes: [makeNode('n1', 'block', { connectedVariables: [{ handleId: 'h1' }] })] }] },
+        {
+          name: 'P1',
+          rungs: [{ id: 'r1', nodes: [makeNode('n1', 'block', { connectedVariables: [{ handleId: 'h1' }] })] }],
+        },
       ]
       const refs: VariableReferenceLocation[] = [
-        { pouName: 'P1', editorType: 'ladder', nodeId: 'n1', rungId: 'r1', elementType: 'block-connection', connectionIndex: 0 },
+        {
+          pouName: 'P1',
+          editorType: 'ladder',
+          nodeId: 'n1',
+          rungId: 'r1',
+          elementType: 'block-connection',
+          connectionIndex: 0,
+        },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, ladderFlows, [], [], { updateNode: (p: unknown) => updateCalls.push(p) }, { updateNode: () => {} }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        ladderFlows,
+        [],
+        [],
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateNode: () => {} },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
   })
@@ -538,7 +789,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'fbd', nodeId: 'n2', elementType: 'variable' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('oldName', 'newName', refs, [], fbdFlows, [], { updateNode: () => {} }, { updateNode: (p: unknown) => updateCalls.push(p) }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'oldName',
+        'newName',
+        refs,
+        [],
+        fbdFlows,
+        [],
+        { updateNode: () => {} },
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(2)
     })
 
@@ -553,7 +814,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'fbd', nodeId: 'n1', elementType: 'block-instance' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('oldName', 'newName', refs, [], fbdFlows, [], { updateNode: () => {} }, { updateNode: (p: unknown) => updateCalls.push(p) }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'oldName',
+        'newName',
+        refs,
+        [],
+        fbdFlows,
+        [],
+        { updateNode: () => {} },
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(1)
     })
 
@@ -565,7 +836,15 @@ describe('propagateVariableRename', () => {
             nodes: [
               makeNode('n1', 'block', {
                 connectedVariables: [
-                  { handleId: 'h1', variable: { name: 'oldName', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' } },
+                  {
+                    handleId: 'h1',
+                    variable: {
+                      name: 'oldName',
+                      type: { definition: 'base-type', value: 'INT' },
+                      location: '',
+                      documentation: '',
+                    },
+                  },
                 ],
               }),
             ],
@@ -576,7 +855,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'fbd', nodeId: 'n1', elementType: 'block-connection', connectionIndex: 0 },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('oldName', 'newName', refs, [], fbdFlows, [], { updateNode: () => {} }, { updateNode: (p: unknown) => updateCalls.push(p) }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'oldName',
+        'newName',
+        refs,
+        [],
+        fbdFlows,
+        [],
+        { updateNode: () => {} },
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(1)
     })
 
@@ -585,7 +874,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'Missing', editorType: 'fbd', nodeId: 'n1', elementType: 'contact' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, [], [], [], { updateNode: () => {} }, { updateNode: (p: unknown) => updateCalls.push(p) }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        [],
+        [],
+        { updateNode: () => {} },
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
@@ -595,7 +894,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'fbd', nodeId: 'n1', elementType: 'contact' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, [], fbdFlows, [], { updateNode: () => {} }, { updateNode: (p: unknown) => updateCalls.push(p) }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        fbdFlows,
+        [],
+        { updateNode: () => {} },
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
@@ -605,7 +914,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'fbd', nodeId: 'n1', elementType: 'coil' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, [], fbdFlows, [], { updateNode: () => {} }, { updateNode: (p: unknown) => updateCalls.push(p) }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        fbdFlows,
+        [],
+        { updateNode: () => {} },
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
@@ -615,7 +934,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'fbd', nodeId: 'n1', elementType: 'block-instance' },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, [], fbdFlows, [], { updateNode: () => {} }, { updateNode: (p: unknown) => updateCalls.push(p) }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        fbdFlows,
+        [],
+        { updateNode: () => {} },
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
 
@@ -627,7 +956,17 @@ describe('propagateVariableRename', () => {
         { pouName: 'P1', editorType: 'fbd', nodeId: 'n1', elementType: 'block-connection', connectionIndex: 0 },
       ]
       const updateCalls: unknown[] = []
-      propagateVariableRename('x', 'y', refs, [], fbdFlows, [], { updateNode: () => {} }, { updateNode: (p: unknown) => updateCalls.push(p) }, { updateVariable: () => {}, updatePou: () => {} })
+      propagateVariableRename(
+        'x',
+        'y',
+        refs,
+        [],
+        fbdFlows,
+        [],
+        { updateNode: () => {} },
+        { updateNode: (p: unknown) => updateCalls.push(p) },
+        { updateVariable: () => {}, updatePou: () => {} },
+      )
       expect(updateCalls).toHaveLength(0)
     })
   })

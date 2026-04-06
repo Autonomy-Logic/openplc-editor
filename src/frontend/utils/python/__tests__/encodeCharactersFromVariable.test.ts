@@ -131,11 +131,7 @@ describe('encodeCharactersFromVariable', () => {
   })
 
   it('encodes mixed scalar and array variables', () => {
-    const vars = [
-      makeScalarVar('a', 'INT'),
-      makeArrayVar('b', 'REAL', '0..2'),
-      makeScalarVar('c', 'BOOL'),
-    ]
+    const vars = [makeScalarVar('a', 'INT'), makeArrayVar('b', 'REAL', '0..2'), makeScalarVar('c', 'BOOL')]
     expect(encodeCharactersFromVariable(vars)).toBe('=h3fB')
   })
 })

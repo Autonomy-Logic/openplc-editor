@@ -23,7 +23,7 @@ describe('codeSysInstanceToXml', () => {
         instances: [{ name: 'Inst0', task: 'Task0', program: 'main' }],
       })
       const result = codeSysInstanceToXml(xml, config)
-      const task = result.project.instances.configurations.configuration.resource.task![0]
+      const task = result.project.instances.configurations.configuration.resource.task[0]
       expect(task['@name']).toBe('Task0')
       expect(task['@priority']).toBe('0')
       expect(task['@interval']).toBe('T#20ms')
@@ -38,7 +38,7 @@ describe('codeSysInstanceToXml', () => {
         instances: [],
       })
       const result = codeSysInstanceToXml(xml, config)
-      const task = result.project.instances.configurations.configuration.resource.task![0]
+      const task = result.project.instances.configurations.configuration.resource.task[0]
       expect(task['@interval']).toBeNull()
       expect(task['@single']).toBe('')
       expect(task.pouInstance).toEqual([])
@@ -46,7 +46,8 @@ describe('codeSysInstanceToXml', () => {
 
     it('initializes task array when undefined', () => {
       const xml = makeBaseXml()
-      ;(xml.project.instances.configurations.configuration.resource as any).task = undefined
+      ;(xml.project.instances.configurations.configuration.resource as unknown as Record<string, unknown>).task =
+        undefined
       const config = makeConfig({
         tasks: [{ name: 'T1', triggering: 'Cyclic', interval: 'T#10ms', priority: 1 }],
       })
@@ -68,7 +69,7 @@ describe('codeSysInstanceToXml', () => {
         ],
       })
       const result = codeSysInstanceToXml(xml, config)
-      const tasks = result.project.instances.configurations.configuration.resource.task!
+      const tasks = result.project.instances.configurations.configuration.resource.task
       expect(tasks[0].pouInstance).toHaveLength(2)
       expect(tasks[1].pouInstance).toHaveLength(1)
     })
@@ -92,9 +93,10 @@ describe('codeSysInstanceToXml', () => {
       const gv = result.project.instances.configurations.configuration.globalVars!.variable![0]
       expect(gv['@name']).toBe('gVar')
       expect(gv['@address']).toBe('%MW0')
-      expect((gv as any).type).toEqual({ INT: '' })
-      expect((gv as any).initialValue.simpleValue['@value']).toBe('42')
-      expect((gv as any).documentation['xhtml:p'].$).toBe('A global var')
+      const gvRecord = gv as unknown as Record<string, unknown>
+      expect(gvRecord.type).toEqual({ INT: '' })
+      expect((gvRecord.initialValue as Record<string, Record<string, string>>).simpleValue['@value']).toBe('42')
+      expect((gvRecord.documentation as Record<string, Record<string, string>>)['xhtml:p'].$).toBe('A global var')
     })
 
     it('sets documentation to space when empty string', () => {
@@ -110,8 +112,11 @@ describe('codeSysInstanceToXml', () => {
         ],
       })
       const result = codeSysInstanceToXml(xml, config)
-      const gv = (result.project.instances.configurations.configuration.globalVars!.variable![0] as any)
-      expect(gv.documentation['xhtml:p'].$).toBe(' ')
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<
+        string,
+        unknown
+      >
+      expect((gv.documentation as Record<string, Record<string, string>>)['xhtml:p'].$).toBe(' ')
     })
 
     it('sets initialValue to null when not provided', () => {
@@ -127,7 +132,10 @@ describe('codeSysInstanceToXml', () => {
         ],
       })
       const result = codeSysInstanceToXml(xml, config)
-      const gv = (result.project.instances.configurations.configuration.globalVars!.variable![0] as any)
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<
+        string,
+        unknown
+      >
       expect(gv.initialValue).toBeNull()
     })
 
@@ -149,7 +157,7 @@ describe('codeSysInstanceToXml', () => {
 
     it('initializes globalVars.variable when globalVars exists but variable is undefined', () => {
       const xml = makeBaseXml()
-      ;(xml.project.instances.configurations.configuration as any).globalVars = {}
+      ;(xml.project.instances.configurations.configuration as unknown as Record<string, unknown>).globalVars = {}
       const config = makeConfig({
         globalVariables: [
           {

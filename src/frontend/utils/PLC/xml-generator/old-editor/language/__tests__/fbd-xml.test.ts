@@ -1,4 +1,5 @@
 import type { FBDRungState } from '@root/frontend/store/slices'
+import type { Node } from '@xyflow/react'
 
 import { fbdToXml } from '../fbd-xml'
 
@@ -48,13 +49,19 @@ describe('fbdToXml (old-editor)', () => {
             inputHandles: [],
             outputHandles: [],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 90, y: 35 }, relPosition: { x: 80, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 90, y: 35 },
+              relPosition: { x: 80, y: 15 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -82,14 +89,20 @@ describe('fbdToXml (old-editor)', () => {
             inputHandles: [],
             outputHandles: [makeHandle('out', 80, 15)],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 80, y: 15 }, relPosition: { x: 80, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 80, y: 15 },
+              relPosition: { x: 80, y: 15 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'ov1',
           type: 'output-variable',
@@ -104,18 +117,22 @@ describe('fbdToXml (old-editor)', () => {
             handles: [],
             inputHandles: [makeHandle('in', 200, 15)],
             outputHandles: [],
-            inputConnector: { id: 'in', type: 'target', position: 'left', glbPosition: { x: 200, y: 15 }, relPosition: { x: 0, y: 15 } },
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 200, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
             outputConnector: undefined,
             draggable: true,
             selectable: true,
             deletable: true,
             variant: 'output-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'src1', target: 'ov1', sourceHandle: 'out', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'src1', target: 'ov1', sourceHandle: 'out', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     expect(result.body.FBD.outVariable).toHaveLength(1)
@@ -146,18 +163,22 @@ describe('fbdToXml (old-editor)', () => {
             handles: [],
             inputHandles: [makeHandle('in', 200, 15)],
             outputHandles: [],
-            inputConnector: { id: 'in', type: 'target', position: 'left', glbPosition: { x: 200, y: 15 }, relPosition: { x: 0, y: 15 } },
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 200, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
             outputConnector: undefined,
             draggable: true,
             selectable: true,
             deletable: true,
             variant: 'output-variable',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'nonexistent', target: 'ov1', sourceHandle: 'out', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'nonexistent', target: 'ov1', sourceHandle: 'out', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     expect(result.body.FBD.outVariable[0].connectionPointIn.connection).toHaveLength(0)
@@ -180,14 +201,20 @@ describe('fbdToXml (old-editor)', () => {
             inputHandles: [],
             outputHandles: [makeHandle('out', 80, 15)],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 80, y: 15 }, relPosition: { x: 80, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 80, y: 15 },
+              relPosition: { x: 80, y: 15 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b1',
           type: 'block',
@@ -208,11 +235,9 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     expect(result.body.FBD.block).toHaveLength(1)
@@ -249,7 +274,7 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b2',
           type: 'block',
@@ -270,11 +295,9 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'b1', target: 'b2', sourceHandle: 'OUT', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'b2', sourceHandle: 'OUT', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     const conn = result.body.FBD.block[1].inputVariables.variable[0].connectionPointIn.connection[0]
@@ -298,14 +321,20 @@ describe('fbdToXml (old-editor)', () => {
             inputHandles: [],
             outputHandles: [makeHandle('out', 80, 15)],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 80, y: 15 }, relPosition: { x: 80, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 80, y: 15 },
+              relPosition: { x: 80, y: 15 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b1',
           type: 'block',
@@ -318,7 +347,15 @@ describe('fbdToXml (old-editor)', () => {
             variant: { name: 'ADD', type: 'function' },
             variable: { name: '' },
             handles: [],
-            inputHandles: [{ id: 'IN1', type: 'target', position: 'left', glbPosition: { x: 200, y: 125 }, relPosition: { x: 0, y: 25 } }],
+            inputHandles: [
+              {
+                id: 'IN1',
+                type: 'target',
+                position: 'left',
+                glbPosition: { x: 200, y: 125 },
+                relPosition: { x: 0, y: 25 },
+              },
+            ],
             outputHandles: [],
             inputConnector: undefined,
             outputConnector: undefined,
@@ -326,11 +363,9 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     const positions = result.body.FBD.block[0].inputVariables.variable[0].connectionPointIn.connection[0].position
@@ -355,14 +390,20 @@ describe('fbdToXml (old-editor)', () => {
             inputHandles: [],
             outputHandles: [makeHandle('out', 80, 15)],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 80, y: 15 }, relPosition: { x: 80, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 80, y: 15 },
+              relPosition: { x: 80, y: 15 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b1',
           type: 'block',
@@ -375,7 +416,15 @@ describe('fbdToXml (old-editor)', () => {
             variant: { name: 'ADD', type: 'function' },
             variable: { name: '' },
             handles: [],
-            inputHandles: [{ id: 'IN1', type: 'target', position: 'left', glbPosition: { x: 200, y: 15 }, relPosition: { x: 0, y: 15 } }],
+            inputHandles: [
+              {
+                id: 'IN1',
+                type: 'target',
+                position: 'left',
+                glbPosition: { x: 200, y: 15 },
+                relPosition: { x: 0, y: 15 },
+              },
+            ],
             outputHandles: [],
             inputConnector: undefined,
             outputConnector: undefined,
@@ -383,11 +432,9 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     const positions = result.body.FBD.block[0].inputVariables.variable[0].connectionPointIn.connection[0].position
@@ -420,7 +467,7 @@ describe('fbdToXml (old-editor)', () => {
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'b1',
           type: 'block',
@@ -441,11 +488,9 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'nonexistent', targetHandle: 'IN1' },
-      ],
+      edges: [{ id: 'e1', source: 'iv1', target: 'b1', sourceHandle: 'nonexistent', targetHandle: 'IN1' }],
     })
     const result = fbdToXml(rung)
     // The connection is filtered out because getEdgePaths returns undefined (no matching outputHandle)
@@ -475,7 +520,7 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -499,14 +544,20 @@ describe('fbdToXml (old-editor)', () => {
             inputHandles: [],
             outputHandles: [makeHandle('out', 80, 15)],
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 80, y: 15 }, relPosition: { x: 80, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 80, y: 15 },
+              relPosition: { x: 80, y: 15 },
+            },
             draggable: true,
             selectable: true,
             deletable: true,
             negated: false,
             variant: 'input-variable',
           },
-        } as any,
+        } as unknown as Node,
         {
           id: 'conn1',
           type: 'connector',
@@ -516,7 +567,13 @@ describe('fbdToXml (old-editor)', () => {
           data: {
             numericId: '2',
             variable: { name: 'label1' },
-            inputConnector: { id: 'in', type: 'target', position: 'left', glbPosition: { x: 100, y: 15 }, relPosition: { x: 0, y: 15 } },
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 100, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
             outputConnector: undefined,
             handles: [],
             inputHandles: [makeHandle('in', 100, 15)],
@@ -526,11 +583,9 @@ describe('fbdToXml (old-editor)', () => {
             deletable: true,
             variant: 'connector',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'src1', target: 'conn1', sourceHandle: 'out', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'src1', target: 'conn1', sourceHandle: 'out', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     expect(result.body.FBD.connector).toHaveLength(1)
@@ -550,7 +605,13 @@ describe('fbdToXml (old-editor)', () => {
           data: {
             numericId: '2',
             variable: { name: 'label1' },
-            inputConnector: { id: 'in', type: 'target', position: 'left', glbPosition: { x: 100, y: 15 }, relPosition: { x: 0, y: 15 } },
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 100, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
             outputConnector: undefined,
             handles: [],
             inputHandles: [makeHandle('in', 100, 15)],
@@ -560,11 +621,9 @@ describe('fbdToXml (old-editor)', () => {
             deletable: true,
             variant: 'connector',
           },
-        } as any,
+        } as unknown as Node,
       ],
-      edges: [
-        { id: 'e1', source: 'nonexistent', target: 'conn1', sourceHandle: 'out', targetHandle: 'in' },
-      ],
+      edges: [{ id: 'e1', source: 'nonexistent', target: 'conn1', sourceHandle: 'out', targetHandle: 'in' }],
     })
     const result = fbdToXml(rung)
     expect(result.body.FBD.connector[0].connectionPointIn.connection).toHaveLength(0)
@@ -583,7 +642,13 @@ describe('fbdToXml (old-editor)', () => {
             numericId: '5',
             variable: { name: 'label1' },
             inputConnector: undefined,
-            outputConnector: { id: 'out', type: 'source', position: 'right', glbPosition: { x: 360, y: 15 }, relPosition: { x: 60, y: 15 } },
+            outputConnector: {
+              id: 'out',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 360, y: 15 },
+              relPosition: { x: 60, y: 15 },
+            },
             handles: [],
             inputHandles: [],
             outputHandles: [],
@@ -592,7 +657,7 @@ describe('fbdToXml (old-editor)', () => {
             deletable: true,
             variant: 'continuation',
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -618,7 +683,7 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -644,7 +709,7 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -668,7 +733,7 @@ describe('fbdToXml (old-editor)', () => {
             selectable: true,
             deletable: true,
           },
-        } as any,
+        } as unknown as Node,
       ],
     })
     const result = fbdToXml(rung)
@@ -678,9 +743,7 @@ describe('fbdToXml (old-editor)', () => {
 
   it('skips unknown node types', () => {
     const rung = makeRung({
-      nodes: [
-        { id: 'u1', type: 'unknown-type' as any, position: { x: 0, y: 0 }, data: {} } as any,
-      ],
+      nodes: [{ id: 'u1', type: 'unknown-type', position: { x: 0, y: 0 }, data: {} } as unknown as Node],
     })
     const result = fbdToXml(rung)
     expect(result.body.FBD.block).toHaveLength(0)

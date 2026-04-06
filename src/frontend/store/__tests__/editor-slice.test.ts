@@ -3,6 +3,16 @@ import { createStore } from 'zustand/vanilla'
 import { createEditorSlice } from '../slices/editor/slice'
 import type { EditorModel, EditorSlice } from '../slices/editor/types'
 
+type TextualEditor = Extract<EditorModel, { type: 'plc-textual' }>
+type GraphicalEditor = Extract<EditorModel, { type: 'plc-graphical' }>
+type ResourceEditor = Extract<EditorModel, { type: 'plc-resource' }>
+type DatatypeEditor = Extract<EditorModel, { type: 'plc-datatype' }>
+
+/** Helper: cast editor to a typed variant and access a nested property bag via Record */
+function editorAs<T extends EditorModel>(editor: EditorModel): T {
+  return editor as unknown as T
+}
+
 const makeStore = () => createStore<EditorSlice>()(createEditorSlice)
 
 function makeTextual(name: string): EditorModel {
@@ -96,10 +106,14 @@ describe('editor slice', () => {
       a.updateModelVariables({ display: 'code', code: 'VAR x: INT; END_VAR' })
       // code without value (prev code → existingCode defined, preserves)
       a.updateModelVariables({ display: 'code' })
-      expect((store.getState().editor as any).variable.code).toBe('VAR x: INT; END_VAR')
+      expect((editorAs<ResourceEditor>(store.getState().editor).variable as { code?: string }).code).toBe(
+        'VAR x: INT; END_VAR',
+      )
       // table from code (prev code → ternary right sides for defaults)
       a.updateModelVariables({ display: 'table' })
-      expect((store.getState().editor as any).variable.selectedRow).toBe('-1')
+      expect(
+        (editorAs<ResourceEditor>(store.getState().editor).variable as { selectedRow: string }).selectedRow,
+      ).toBe('-1')
     })
 
     it('textual: table ↔ code cycle', () => {
@@ -112,9 +126,11 @@ describe('editor slice', () => {
       a.updateModelVariables({ display: 'table' })
       a.updateModelVariables({ display: 'code', code: 'c' })
       a.updateModelVariables({ display: 'code' })
-      expect((store.getState().editor as any).variable.code).toBe('c')
+      expect((editorAs<TextualEditor>(store.getState().editor).variable as { code?: string }).code).toBe('c')
       a.updateModelVariables({ display: 'table' })
-      expect((store.getState().editor as any).variable.classFilter).toBe('All')
+      expect(
+        (editorAs<TextualEditor>(store.getState().editor).variable as { classFilter: string }).classFilter,
+      ).toBe('All')
     })
 
     it('graphical enters the || plc-graphical branch', () => {
@@ -123,7 +139,9 @@ describe('editor slice', () => {
       a.addModel(g)
       a.setEditor(g)
       a.updateModelVariables({ display: 'table', selectedRow: 1 })
-      expect((store.getState().editor as any).variable.selectedRow).toBe('1')
+      expect(
+        (editorAs<GraphicalEditor>(store.getState().editor).variable as { selectedRow: string }).selectedRow,
+      ).toBe('1')
     })
 
     it('no-op for non-matching editor type', () => {
@@ -139,7 +157,9 @@ describe('editor slice', () => {
       a.addModel(res)
       a.setEditor(res)
       a.updateModelVariablesForName('Res', { display: 'table', selectedRow: 1, description: 'u' })
-      expect((store.getState().editor as any).variable.description).toBe('u')
+      expect(
+        (editorAs<ResourceEditor>(store.getState().editor).variable as { description: string }).description,
+      ).toBe('u')
     })
 
     it('resource in array: table ↔ code cycle', () => {
@@ -152,10 +172,13 @@ describe('editor slice', () => {
       a.updateModelVariablesForName('Res', { display: 'table' })
       a.updateModelVariablesForName('Res', { display: 'code', code: 'c' })
       a.updateModelVariablesForName('Res', { display: 'code' })
-      const target = store.getState().editors.find((e) => e.meta.name === 'Res')
-      expect((target as any).variable.code).toBe('c')
+      const target = store.getState().editors.find((e) => e.meta.name === 'Res')!
+      expect((editorAs<ResourceEditor>(target).variable as { code?: string }).code).toBe('c')
       a.updateModelVariablesForName('Res', { display: 'table' })
-      expect((store.getState().editors.find((e) => e.meta.name === 'Res') as any).variable.selectedRow).toBe('-1')
+      const resEditor = store.getState().editors.find((e) => e.meta.name === 'Res')!
+      expect(
+        (editorAs<ResourceEditor>(resEditor).variable as { selectedRow: string }).selectedRow,
+      ).toBe('-1')
     })
 
     it('textual in array: table ↔ code cycle', () => {
@@ -169,7 +192,10 @@ describe('editor slice', () => {
       a.updateModelVariablesForName('P2', { display: 'code', code: 'c' })
       a.updateModelVariablesForName('P2', { display: 'code' })
       a.updateModelVariablesForName('P2', { display: 'table' })
-      expect((store.getState().editors.find((e) => e.meta.name === 'P2') as any).variable.classFilter).toBe('All')
+      const p2Editor = store.getState().editors.find((e) => e.meta.name === 'P2')!
+      expect(
+        (editorAs<TextualEditor>(p2Editor).variable as { classFilter: string }).classFilter,
+      ).toBe('All')
     })
 
     it('graphical in array enters || plc-graphical branch', () => {
@@ -178,7 +204,10 @@ describe('editor slice', () => {
       a.addModel(makeTextual('M'))
       a.setEditor(makeTextual('M'))
       a.updateModelVariablesForName('G', { display: 'table', selectedRow: 1 })
-      expect((store.getState().editors.find((e) => e.meta.name === 'G') as any).variable.selectedRow).toBe('1')
+      const gEditor = store.getState().editors.find((e) => e.meta.name === 'G')!
+      expect(
+        (editorAs<GraphicalEditor>(gEditor).variable as { selectedRow: string }).selectedRow,
+      ).toBe('1')
     })
 
     it('no-op when name not found', () => {
@@ -192,7 +221,8 @@ describe('editor slice', () => {
       a.addModel(makeTextual('M'))
       a.setEditor(makeTextual('M'))
       a.updateModelVariablesForName('DT', { display: 'table', selectedRow: 1 })
-      expect((store.getState().editors.find((e) => e.meta.name === 'DT') as any).structure.selectedRow).toBe('-1')
+      const dtEditor = store.getState().editors.find((e) => e.meta.name === 'DT')!
+      expect(editorAs<DatatypeEditor>(dtEditor).structure.selectedRow).toBe('-1')
     })
   })
 
@@ -204,11 +234,11 @@ describe('editor slice', () => {
       a.setEditor(res)
 
       a.updateModelTasks({ display: 'table', selectedRow: 2 })
-      expect((store.getState().editor as any).task).toEqual({ display: 'table', selectedRow: '2' })
+      expect(editorAs<ResourceEditor>(store.getState().editor).task).toEqual({ display: 'table', selectedRow: '2' })
       a.updateModelTasks({ display: 'table' })
-      expect((store.getState().editor as any).task).toEqual({ display: 'table', selectedRow: '-1' })
+      expect(editorAs<ResourceEditor>(store.getState().editor).task).toEqual({ display: 'table', selectedRow: '-1' })
       a.updateModelTasks({ display: 'code' })
-      expect((store.getState().editor as any).task).toEqual({ display: 'code' })
+      expect(editorAs<ResourceEditor>(store.getState().editor).task).toEqual({ display: 'code' })
     })
 
     it('no-op for non-resource', () => {
@@ -228,11 +258,14 @@ describe('editor slice', () => {
       a.setEditor(res)
 
       a.updateModelInstances({ display: 'table', selectedRow: 4 })
-      expect((store.getState().editor as any).instance).toEqual({ display: 'table', selectedRow: '4' })
+      expect(editorAs<ResourceEditor>(store.getState().editor).instance).toEqual({ display: 'table', selectedRow: '4' })
       a.updateModelInstances({ display: 'table' })
-      expect((store.getState().editor as any).instance).toEqual({ display: 'table', selectedRow: '-1' })
+      expect(editorAs<ResourceEditor>(store.getState().editor).instance).toEqual({
+        display: 'table',
+        selectedRow: '-1',
+      })
       a.updateModelInstances({ display: 'code' })
-      expect((store.getState().editor as any).instance).toEqual({ display: 'code' })
+      expect(editorAs<ResourceEditor>(store.getState().editor).instance).toEqual({ display: 'code' })
     })
 
     it('no-op for non-resource', () => {
@@ -252,10 +285,16 @@ describe('editor slice', () => {
       a.setEditor(dt)
 
       a.updateModelStructure({ selectedRow: 3, description: 'desc' })
-      expect((store.getState().editor as any).structure).toEqual({ selectedRow: '3', description: 'desc' })
+      expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({
+        selectedRow: '3',
+        description: 'desc',
+      })
       // undefined selectedRow → keeps; empty description → keeps (falsy)
       a.updateModelStructure({ description: '' })
-      expect((store.getState().editor as any).structure).toEqual({ selectedRow: '3', description: 'desc' })
+      expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({
+        selectedRow: '3',
+        description: 'desc',
+      })
     })
 
     it('no-op for non-datatype', () => {
@@ -274,10 +313,13 @@ describe('editor slice', () => {
       a.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
       a.updateModelLadder({ openRung: { rungId: 'r2', open: true } })
       a.updateModelLadder({ openRung: { rungId: 'r1', open: false } })
-      expect((store.getState().editor as any).graphical.openedRungs).toEqual([
-        { rungId: 'r1', open: false },
-        { rungId: 'r2', open: true },
-      ])
+      expect(editorAs<GraphicalEditor>(store.getState().editor).graphical).toEqual({
+        language: 'ld',
+        openedRungs: [
+          { rungId: 'r1', open: false },
+          { rungId: 'r2', open: true },
+        ],
+      })
     })
 
     it('no-op when openRung undefined', () => {
@@ -286,7 +328,9 @@ describe('editor slice', () => {
       a.addModel(ld)
       a.setEditor(ld)
       a.updateModelLadder({})
-      expect((store.getState().editor as any).graphical.openedRungs).toEqual([])
+      expect(
+        (editorAs<GraphicalEditor>(store.getState().editor).graphical as { openedRungs: unknown[] }).openedRungs,
+      ).toEqual([])
     })
 
     it('no-op for non-ld and non-graphical', () => {
@@ -338,7 +382,10 @@ describe('editor slice', () => {
         canEditorZoom: false,
         canEditorPan: false,
       })
-      const g = (store.getState().editor as any).graphical
+      const g = editorAs<GraphicalEditor>(store.getState().editor).graphical as Extract<
+        GraphicalEditor['graphical'],
+        { language: 'fbd' }
+      >
       expect(g.hoveringElement).toEqual({ elementId: 'e1', hovering: true })
       expect(g.canEditorZoom).toBe(false)
       expect(g.canEditorPan).toBe(false)
@@ -350,9 +397,13 @@ describe('editor slice', () => {
       a.addModel(fbd)
       a.setEditor(fbd)
       a.updateModelFBD({})
-      expect((store.getState().editor as any).graphical.hoveringElement).toEqual({ elementId: null, hovering: false })
-      expect((store.getState().editor as any).graphical.canEditorZoom).toBe(true)
-      expect((store.getState().editor as any).graphical.canEditorPan).toBe(true)
+      const fbdGraphical = editorAs<GraphicalEditor>(store.getState().editor).graphical as Extract<
+        GraphicalEditor['graphical'],
+        { language: 'fbd' }
+      >
+      expect(fbdGraphical.hoveringElement).toEqual({ elementId: null, hovering: false })
+      expect(fbdGraphical.canEditorZoom).toBe(true)
+      expect(fbdGraphical.canEditorPan).toBe(true)
     })
 
     it('no-op for non-fbd and non-graphical', () => {

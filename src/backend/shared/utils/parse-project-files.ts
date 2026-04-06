@@ -8,6 +8,13 @@
  * The backend only reads raw files from disk; all parsing happens here.
  */
 
+import {
+  detectLanguageFromExtension,
+  findLastEndVarIndex,
+  parseGraphicalPouFromString,
+  parseHybridPouFromString,
+  parseTextualPouFromString,
+} from '../../../frontend/utils/PLC/pou-text-parser'
 import type { RawProjectFile } from '../../../middleware/shared/ports/project-port'
 import type {
   DeviceConfiguration,
@@ -23,13 +30,6 @@ import type {
 import { deviceConfigurationSchema, devicePinSchema } from '../../../types/PLC/devices'
 import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../../../types/PLC/open-plc'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
-import {
-  detectLanguageFromExtension,
-  findLastEndVarIndex,
-  parseGraphicalPouFromString,
-  parseHybridPouFromString,
-  parseTextualPouFromString,
-} from '../../../frontend/utils/PLC/pou-text-parser'
 
 // ---------------------------------------------------------------------------
 // Types

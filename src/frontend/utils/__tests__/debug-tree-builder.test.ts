@@ -62,12 +62,7 @@ function makeDebugVar(name: string, type: string, index: number): DebugVariableE
   return { name, type, index }
 }
 
-function makePou(
-  name: string,
-  pouType: PLCPou['pouType'],
-  vars: PLCVariable[] = [],
-  language = 'st',
-): PLCPou {
+function makePou(name: string, pouType: PLCPou['pouType'], vars: PLCVariable[] = [], language = 'st'): PLCPou {
   return {
     name,
     pouType,
@@ -250,9 +245,7 @@ describe('buildDebugTree', () => {
     })
 
     it('resolves UDT that is actually an FB (user-data-type matching FB name)', () => {
-      const customFb = makePou('MyFBType', 'function-block', [
-        makeBaseVariable('Q', 'BOOL', 'output'),
-      ])
+      const customFb = makePou('MyFBType', 'function-block', [makeBaseVariable('Q', 'BOOL', 'output')])
       const variable = makeUdtVariable('myInst', 'MyFBType')
       const debugVars = [makeDebugVar('RES0__INSTANCE0.MYINST.Q', 'BOOL_ENUM', 60)]
       const projectData = { dataTypes: [], pous: [customFb] }

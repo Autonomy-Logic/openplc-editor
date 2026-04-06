@@ -3,6 +3,20 @@ import type { PLCDataType } from '@root/middleware/shared/ports/open-plc-types'
 import { getBaseOldEditorXmlStructure } from '../base-xml'
 import { oldEditorParseDataTypesToXML } from '../data-type-xml'
 
+/** Recursive record type for deeply nested XML structures in test assertions. */
+type XmlNode = Record<string, unknown>
+
+/** Helper to extract the first dataType entry as an XmlNode for assertions. */
+function firstDataType(result: ReturnType<typeof oldEditorParseDataTypesToXML>): XmlNode {
+  return result.project.types.dataTypes.dataType[0] as XmlNode
+}
+
+/** Helper to navigate to baseType.struct.variable on the first data type. */
+function structVars(result: ReturnType<typeof oldEditorParseDataTypesToXML>): XmlNode[] {
+  const dt = firstDataType(result)
+  return ((dt.baseType as XmlNode).struct as XmlNode).variable as XmlNode[]
+}
+
 const makeBaseXml = () => getBaseOldEditorXmlStructure()
 
 describe('oldEditorParseDataTypesToXML', () => {
@@ -19,10 +33,12 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
+      const dt = firstDataType(result)
       expect(dt['@name']).toBe('MyArr')
-      expect(dt.baseType.array.baseType).toEqual({ INT: '' })
-      expect(dt.initialValue.simpleValue['@value']).toBe('0')
+      expect((dt.baseType as XmlNode).array as XmlNode).toEqual(
+        expect.objectContaining({ baseType: { INT: '' } }),
+      )
+      expect(((dt.initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('0')
     })
 
     it('adds an array data type with string base type (lowercase key)', () => {
@@ -36,8 +52,9 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
-      expect(dt.baseType.array.baseType).toEqual({ string: '' })
+      const dt = firstDataType(result)
+      const arrayNode = (dt.baseType as XmlNode).array as XmlNode
+      expect(arrayNode.baseType).toEqual({ string: '' })
       expect(dt.initialValue).toBeUndefined()
     })
 
@@ -52,8 +69,9 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
-      expect(dt.baseType.array.baseType).toEqual({ derived: { '@name': 'MyStruct' } })
+      const dt = firstDataType(result)
+      const arrayNode = (dt.baseType as XmlNode).array as XmlNode
+      expect(arrayNode.baseType).toEqual({ derived: { '@name': 'MyStruct' } })
     })
 
     it('parses multiple dimensions', () => {
@@ -67,7 +85,8 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const dims = (result.project.types.dataTypes.dataType[0] as any).baseType.array.dimension
+      const dt = firstDataType(result)
+      const dims = ((dt.baseType as XmlNode).array as XmlNode).dimension
       expect(dims).toEqual([
         { '@lower': '0', '@upper': '4' },
         { '@lower': '1', '@upper': '10' },
@@ -113,9 +132,11 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
-      expect(dt.baseType.enum.values.value).toEqual([{ '@name': 'Red' }, { '@name': 'Green' }])
-      expect(dt.initialValue.simpleValue['@value']).toBe('Red')
+      const dt = firstDataType(result)
+      expect(((dt.baseType as XmlNode).enum as XmlNode).values).toEqual({
+        value: [{ '@name': 'Red' }, { '@name': 'Green' }],
+      })
+      expect(((dt.initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('Red')
     })
 
     it('adds an enum without initial value', () => {
@@ -128,7 +149,7 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const dt = result.project.types.dataTypes.dataType[0] as any
+      const dt = firstDataType(result)
       expect(dt.initialValue).toBeUndefined()
     })
   })
@@ -141,13 +162,17 @@ describe('oldEditorParseDataTypesToXML', () => {
           name: 'Point',
           derivation: 'structure',
           variable: [
-            { name: 'x', type: { definition: 'base-type', value: 'REAL' }, initialValue: { simpleValue: { value: '0.0' } } },
+            {
+              name: 'x',
+              type: { definition: 'base-type', value: 'REAL' },
+              initialValue: { simpleValue: { value: '0.0' } },
+            },
             { name: 'y', type: { definition: 'base-type', value: 'INT' } },
           ],
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
+      const vars = structVars(result)
       expect(vars[0]).toEqual({ '@name': 'x', type: { REAL: '' }, initialValue: { simpleValue: { '@value': '0.0' } } })
       expect(vars[1]).toEqual({ '@name': 'y', type: { INT: '' }, initialValue: undefined })
     })
@@ -162,7 +187,7 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const vars = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable
+      const vars = structVars(result)
       expect(vars[0].type).toEqual({ string: '' })
     })
 
@@ -173,14 +198,18 @@ describe('oldEditorParseDataTypesToXML', () => {
           name: 'Container',
           derivation: 'structure',
           variable: [
-            { name: 'inner', type: { definition: 'user-data-type', value: 'Inner' }, initialValue: { simpleValue: { value: 'val' } } },
+            {
+              name: 'inner',
+              type: { definition: 'user-data-type', value: 'Inner' },
+              initialValue: { simpleValue: { value: 'val' } },
+            },
           ],
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const v = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable[0]
+      const v = structVars(result)[0]
       expect(v.type).toEqual({ derived: { '@name': 'Inner' } })
-      expect(v.initialValue.simpleValue['@value']).toBe('val')
+      expect(((v.initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('val')
     })
 
     it('handles user-data-type variables without initial value', () => {
@@ -193,7 +222,7 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      expect((result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable[0].initialValue).toBeUndefined()
+      expect(structVars(result)[0].initialValue).toBeUndefined()
     })
 
     it('handles array variables inside a struct', () => {
@@ -216,9 +245,10 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const v = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable[0]
-      expect(v.type.array.baseType).toEqual({ DINT: '' })
-      expect(v.initialValue.simpleValue['@value']).toBe('{0}')
+      const v = structVars(result)[0]
+      const arrType = (v.type as XmlNode).array as XmlNode
+      expect(arrType.baseType).toEqual({ DINT: '' })
+      expect(((v.initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('{0}')
     })
 
     it('handles array with user-data-type base inside a struct', () => {
@@ -233,15 +263,19 @@ describe('oldEditorParseDataTypesToXML', () => {
               type: {
                 definition: 'array',
                 value: '',
-                data: { baseType: { definition: 'user-data-type', value: 'Item' }, dimensions: [{ dimension: '0..2' }] },
+                data: {
+                  baseType: { definition: 'user-data-type', value: 'Item' },
+                  dimensions: [{ dimension: '0..2' }],
+                },
               },
             },
           ],
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const v = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable[0]
-      expect(v.type.array.baseType).toEqual({ derived: { '@name': 'Item' } })
+      const v = structVars(result)[0]
+      const arrType = (v.type as XmlNode).array as XmlNode
+      expect(arrType.baseType).toEqual({ derived: { '@name': 'Item' } })
       expect(v.initialValue).toBeUndefined()
     })
 
@@ -264,8 +298,9 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const v = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable[0]
-      expect(v.type.array.baseType).toEqual({ string: '' })
+      const v = structVars(result)[0]
+      const arrType = (v.type as XmlNode).array as XmlNode
+      expect(arrType.baseType).toEqual({ string: '' })
     })
 
     it('handles derived variables', () => {
@@ -275,14 +310,18 @@ describe('oldEditorParseDataTypesToXML', () => {
           name: 'WithDerived',
           derivation: 'structure',
           variable: [
-            { name: 'ref', type: { definition: 'derived', value: 'Other' }, initialValue: { simpleValue: { value: 'init' } } },
+            {
+              name: 'ref',
+              type: { definition: 'derived', value: 'Other' },
+              initialValue: { simpleValue: { value: 'init' } },
+            },
           ],
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      const v = (result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable[0]
+      const v = structVars(result)[0]
       expect(v.type).toEqual({ derived: { '@name': 'Other' } })
-      expect(v.initialValue.simpleValue['@value']).toBe('init')
+      expect(((v.initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('init')
     })
 
     it('handles derived variables without initial value', () => {
@@ -295,7 +334,7 @@ describe('oldEditorParseDataTypesToXML', () => {
         },
       ]
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
-      expect((result.project.types.dataTypes.dataType[0] as any).baseType.struct.variable[0].initialValue).toBeUndefined()
+      expect(structVars(result)[0].initialValue).toBeUndefined()
     })
   })
 
