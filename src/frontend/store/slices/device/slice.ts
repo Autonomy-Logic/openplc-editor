@@ -494,6 +494,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    setVendorScreenData: (persistenceKey, data): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (!deviceDefinitions.configuration.vendorScreenData) {
+            deviceDefinitions.configuration.vendorScreenData = {}
+          }
+          deviceDefinitions.configuration.vendorScreenData[persistenceKey] = data
+        }),
+      )
+    },
   },
 })
 
@@ -506,6 +516,7 @@ function mergeDeviceConfigWithDefaults(
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
     compileOnly: provided.compileOnly ?? defaults.compileOnly,
+    vendorScreenData: provided.vendorScreenData ?? defaults.vendorScreenData,
     communicationConfiguration: {
       modbusRTU: {
         ...defaults.communicationConfiguration.modbusRTU,

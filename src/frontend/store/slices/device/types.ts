@@ -137,6 +137,7 @@ export type DeviceActions = {
   setIncludeTimingStatsInPolling: (include: boolean) => void
   setTemporaryDhcpIp: (ipAddress?: string) => void
   clearRuntimeConnection: () => void
+  setVendorScreenData: (persistenceKey: string, data: unknown) => void
 }
 
 // ---------------------------------------------------------------------------

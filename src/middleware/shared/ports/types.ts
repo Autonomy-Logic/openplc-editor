@@ -612,6 +612,7 @@ export interface DeviceConfiguration {
   communicationPort: string
   runtimeIpAddress?: string
   compileOnly: boolean
+  vendorScreenData?: Record<string, unknown>
   communicationConfiguration: {
     modbusRTU: ModbusRTUConfig
     modbusTCP: ModbusTCPConfig

@@ -107,6 +107,16 @@ const CreateServerEditor = (
   meta: { name, protocol },
 })
 
+const CreateVendorScreenEditor = (name: string, screenName: string): EditorModel => ({
+  type: 'plc-vendor-screen',
+  meta: { name, screenName },
+})
+
+const CreatePackageManagerEditor = (name = 'Package Manager'): EditorModel => ({
+  type: 'plc-package-manager',
+  meta: { name },
+})
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -126,6 +136,10 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateRemoteDeviceEditor(name, elementType.protocol)
     case 'server':
       return CreateServerEditor(name, elementType.protocol)
+    case 'vendor-screen':
+      return CreateVendorScreenEditor(name, elementType.screenName)
+    case 'package-manager':
+      return CreatePackageManagerEditor(name)
   }
 }
 
@@ -133,9 +147,11 @@ export {
   CreateDeviceEditor,
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
+  CreatePackageManagerEditor,
   CreatePLCGraphicalObject,
   CreatePLCTextualObject,
   CreateRemoteDeviceEditor,
   CreateResourceEditor,
   CreateServerEditor,
+  CreateVendorScreenEditor,
 }

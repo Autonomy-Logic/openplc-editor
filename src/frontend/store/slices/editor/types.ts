@@ -150,6 +150,19 @@ export type EditorModel = EditorModelBase &
           protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet'
         }
       }
+    | {
+        type: 'plc-vendor-screen'
+        meta: {
+          name: string
+          screenName: string
+        }
+      }
+    | {
+        type: 'plc-package-manager'
+        meta: {
+          name: string
+        }
+      }
   )
 
 // ---------------------------------------------------------------------------
