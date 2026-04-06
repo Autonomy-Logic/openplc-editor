@@ -30,6 +30,7 @@ import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
+import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import type { ArduinoCoreControl, HalsFile } from './types'
 import { FormatMacAddress } from './utils/formatters'
@@ -183,7 +184,28 @@ class CompilerModule {
 
   async #getBoardRuntime(board: string) {
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
-    return halsFileContent[board]['compiler']
+    if (halsFileContent[board]) {
+      return halsFileContent[board]['compiler']
+    }
+
+    // Fallback: check installed VPP packages for the board
+    try {
+      const packageManager = new PackageManagerModule()
+      const installed = packageManager.listInstalled()
+      for (const pkg of installed) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+        for (const device of manifest.devices) {
+          if (device.name === board) {
+            return device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
+          }
+        }
+      }
+    } catch {
+      // ignore package manager errors
+    }
+
+    throw new Error(`Board "${board}" not found in hals.json or installed VPP packages`)
   }
 
   #executeXml2st(args: string[]) {

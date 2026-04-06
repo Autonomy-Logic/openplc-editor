@@ -60,6 +60,42 @@ const availableBoardsSchema = z.map(
   }),
 )
 
+// VPP module definition — describes an I/O module in a vendor backplane system
+type VppModuleDefinition = {
+  id: string
+  name: string
+  image?: string
+  io: {
+    digitalInputs: number
+    digitalOutputs: number
+    analogInputs: number
+    analogOutputs: number
+  }
+  parameters?: Array<{
+    id: string
+    name: string
+    type: string
+    options?: string[]
+    default?: unknown
+    min?: number
+    max?: number
+  }>
+  addressMapping?: unknown
+}
+
+// VPP metadata attached to boards that come from installed VPP packages
+type VppMetadata = {
+  packageId: string
+  deviceId: string
+  packagePath: string
+  screens: Record<string, unknown>
+  moduleSystem: {
+    enabled: boolean
+    maxSlots: number
+    modules: VppModuleDefinition[]
+  } | null
+}
+
 // !! We're not able to infer the type of the Map directly from the schema, so we define it manually.
 // !! This is a workaround to ensure type safety when using the schema.
 type AvailableBoards = Map<
@@ -68,17 +104,7 @@ type AvailableBoards = Map<
     compiler: string
     core: string
     preview: string
-    specs: {
-      CPU: string
-      RAM: string
-      Flash: string
-      DigitalPins: string
-      AnalogPins: string
-      PWMPins: string
-      WiFi: string
-      Bluetooth: string
-      Ethernet: string
-    }
+    specs: Record<string, string>
     // Optional properties
     coreVersion?: string
     pins: {
@@ -87,8 +113,9 @@ type AvailableBoards = Map<
       defaultDin?: string[]
       defaultDout?: string[]
     }
+    vpp?: VppMetadata
   }
 >
 
 export { availableBoardsSchema, BoardInfoSchema, HalsFileSchema, SerialPortSchema }
-export type { AvailableBoards, BoardInfo, HalsFile, SerialPort }
+export type { AvailableBoards, BoardInfo, HalsFile, SerialPort, VppMetadata, VppModuleDefinition }

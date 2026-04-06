@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -6,6 +7,7 @@ import { promisify } from 'node:util'
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
+import { PackageManagerModule } from '../package-manager'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
 // interface MethodsResult<T> {
@@ -182,13 +184,85 @@ class HardwareModule {
         })
       })
     }
+    // Merge boards from installed VPP packages
+    const mutableBoards: AvailableBoards = new Map(availableBoards)
+    await this.#mergeVppBoards(mutableBoards)
+
     // Sort boards alphabetically by name
-    const sortedBoards: AvailableBoards = new Map([...availableBoards.entries()].sort(([a], [b]) => a.localeCompare(b)))
+    const sortedBoards: AvailableBoards = new Map([...mutableBoards.entries()].sort(([a], [b]) => a.localeCompare(b)))
     return sortedBoards
   }
 
-  async getBoardImagePreview(image: string) {
-    const imagePath = join(this.sourcesDirectoryPath, 'boards', 'previews', image)
+  async #mergeVppBoards(boards: AvailableBoards): Promise<void> {
+    try {
+      const packageManager = new PackageManagerModule()
+      const installed = packageManager.listInstalled()
+      for (const pkg of installed) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+
+        for (const device of manifest.devices) {
+          // Read all screen definitions
+          const screens: Record<string, unknown> = {}
+          if (device.screens) {
+            for (const [screenName, screenFile] of Object.entries(device.screens)) {
+              const screenPath = join(pkg.path, screenFile)
+              if (existsSync(screenPath)) {
+                try {
+                  screens[screenName] = await HardwareModule.readJSONFile(screenPath)
+                } catch {
+                  /* ignore invalid screen */
+                }
+              }
+            }
+          }
+
+          // Map target type to compiler
+          const compiler = device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
+
+          boards.set(device.name, {
+            compiler,
+            core: device.target.core ?? '',
+            preview: device.preview,
+            specs: device.specs ?? {},
+            pins: {
+              defaultDin: device.defaults?.pins?.defaultDin,
+              defaultDout: device.defaults?.pins?.defaultDout,
+              defaultAin: device.defaults?.pins?.defaultAin,
+              defaultAout: device.defaults?.pins?.defaultAout,
+            },
+            vpp: {
+              packageId: manifest.package.id,
+              deviceId: device.id,
+              packagePath: pkg.path,
+              screens,
+              moduleSystem: device.moduleSystem
+                ? {
+                    enabled: device.moduleSystem.enabled,
+                    maxSlots: device.moduleSystem.maxSlots,
+                    modules: device.moduleSystem.modules.map((m) => ({
+                      id: m.id,
+                      name: m.name,
+                      image: m.image,
+                      io: m.io,
+                      parameters: m.parameters,
+                      addressMapping: m.addressMapping,
+                    })),
+                  }
+                : null,
+            },
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load VPP packages:', err)
+    }
+  }
+
+  async getBoardImagePreview(image: string, packagePath?: string) {
+    const imagePath = packagePath
+      ? join(packagePath, image)
+      : join(this.sourcesDirectoryPath, 'boards', 'previews', image)
 
     const imageBuffer = await readFile(imagePath)
 
