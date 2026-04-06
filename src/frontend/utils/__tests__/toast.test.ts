@@ -1,5 +1,5 @@
 import type { State, ToasterToast } from '../toast'
-import { dispatch, getMemoryState, listeners, reducer,toast } from '../toast'
+import { dispatch, getMemoryState, listeners, reducer, toast } from '../toast'
 
 // ---------------------------------------------------------------------------
 // Reset state before each test to ensure isolation

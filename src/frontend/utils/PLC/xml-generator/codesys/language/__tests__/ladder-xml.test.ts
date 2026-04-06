@@ -427,7 +427,10 @@ describe('ladderToXml (codesys)', () => {
 
   it('skips unknown node types', () => {
     const rung = makeRung({
-      nodes: [makeLeftRail() as unknown as Node, { id: 'u1', type: 'placeholder', position: { x: 0, y: 0 }, data: {} } as unknown as Node],
+      nodes: [
+        makeLeftRail() as unknown as Node,
+        { id: 'u1', type: 'placeholder', position: { x: 0, y: 0 }, data: {} } as unknown as Node,
+      ],
     })
     const result = ladderToXml([rung])
     expect(result.body.LD.contact).toHaveLength(0)
@@ -443,7 +446,10 @@ describe('ladderToXml (codesys)', () => {
     const rung2 = makeRung({
       id: 'rung-1',
       reactFlowViewport: [0, 300],
-      nodes: [{ ...makeLeftRail('lr2', '101'), position: { x: 0, y: 0 } } as unknown as Node, contact2 as unknown as Node],
+      nodes: [
+        { ...makeLeftRail('lr2', '101'), position: { x: 0, y: 0 } } as unknown as Node,
+        contact2 as unknown as Node,
+      ],
     })
     const result = ladderToXml([rung1, rung2])
     // The contact in rung2 should have position.y offset by 200 (rung1's viewport[1])
@@ -878,7 +884,13 @@ describe('ladderToXml (codesys)', () => {
       }
       const coil = makeCoil('cl1', '20')
       const rung = makeRung({
-        nodes: [leftRail as unknown as Node, contact1 as unknown as Node, contact2 as unknown as Node, parallelClose as unknown as Node, coil as unknown as Node],
+        nodes: [
+          leftRail as unknown as Node,
+          contact1 as unknown as Node,
+          contact2 as unknown as Node,
+          parallelClose as unknown as Node,
+          coil as unknown as Node,
+        ],
         edges: [
           { id: 'e1', source: 'c1', target: 'pc1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'c2', target: 'pc1', sourceHandle: 'out', targetHandle: 'pIn' },
@@ -921,7 +933,12 @@ describe('ladderToXml (codesys)', () => {
       }
       const contact2 = { ...makeContact('c2', '11'), position: { x: 250, y: 50 } }
       const rung = makeRung({
-        nodes: [leftRail as unknown as Node, contact1 as unknown as Node, parallelOpen as unknown as Node, contact2 as unknown as Node],
+        nodes: [
+          leftRail as unknown as Node,
+          contact1 as unknown as Node,
+          parallelOpen as unknown as Node,
+          contact2 as unknown as Node,
+        ],
         edges: [
           { id: 'e1', source: 'c1', target: 'po1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'po1', target: 'c2', sourceHandle: 'out', targetHandle: 'in' },
@@ -963,7 +980,12 @@ describe('ladderToXml (codesys)', () => {
       }
       const contact2 = { ...makeContact('c2', '11'), position: { x: 250, y: 150 } }
       const rung = makeRung({
-        nodes: [leftRail as unknown as Node, contact1 as unknown as Node, parallelOpen as unknown as Node, contact2 as unknown as Node],
+        nodes: [
+          leftRail as unknown as Node,
+          contact1 as unknown as Node,
+          parallelOpen as unknown as Node,
+          contact2 as unknown as Node,
+        ],
         edges: [
           { id: 'e1', source: 'c1', target: 'po1', sourceHandle: 'out', targetHandle: 'in' },
           // Not connected serially - connected via parallel output
@@ -1030,7 +1052,13 @@ describe('ladderToXml (codesys)', () => {
       }
       const contact2 = { ...makeContact('c2', '11'), position: { x: 200, y: 50 } }
       const rung = makeRung({
-        nodes: [leftRail as unknown as Node, contact1 as unknown as Node, parallelOpen1 as unknown as Node, parallelOpen2 as unknown as Node, contact2 as unknown as Node],
+        nodes: [
+          leftRail as unknown as Node,
+          contact1 as unknown as Node,
+          parallelOpen1 as unknown as Node,
+          parallelOpen2 as unknown as Node,
+          contact2 as unknown as Node,
+        ],
         edges: [
           { id: 'e1', source: 'c1', target: 'po1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'po1', target: 'po2', sourceHandle: 'out', targetHandle: 'in' },
@@ -1098,7 +1126,15 @@ describe('ladderToXml (codesys)', () => {
       }
       const coil = makeCoil('cl1', '20')
       const rung = makeRung({
-        nodes: [leftRail as unknown as Node, c1 as unknown as Node, c2 as unknown as Node, c3 as unknown as Node, pc1 as unknown as Node, pc2 as unknown as Node, coil as unknown as Node],
+        nodes: [
+          leftRail as unknown as Node,
+          c1 as unknown as Node,
+          c2 as unknown as Node,
+          c3 as unknown as Node,
+          pc1 as unknown as Node,
+          pc2 as unknown as Node,
+          coil as unknown as Node,
+        ],
         edges: [
           { id: 'e1', source: 'c1', target: 'pc1', sourceHandle: 'out', targetHandle: 'in' },
           { id: 'e2', source: 'pc2', target: 'pc1', sourceHandle: 'out', targetHandle: 'pIn' },

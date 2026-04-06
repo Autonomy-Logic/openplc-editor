@@ -35,9 +35,7 @@ describe('oldEditorParseDataTypesToXML', () => {
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
       const dt = firstDataType(result)
       expect(dt['@name']).toBe('MyArr')
-      expect((dt.baseType as XmlNode).array as XmlNode).toEqual(
-        expect.objectContaining({ baseType: { INT: '' } }),
-      )
+      expect((dt.baseType as XmlNode).array as XmlNode).toEqual(expect.objectContaining({ baseType: { INT: '' } }))
       expect(((dt.initialValue as XmlNode).simpleValue as XmlNode)['@value']).toBe('0')
     })
 

@@ -69,7 +69,10 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<
+        string,
+        unknown
+      >
       expect(gv['@name']).toBe('gVar')
       expect(gv['@address']).toBe('%MW0')
       expect(gv.type).toEqual({ INT: '' })
@@ -85,7 +88,10 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<
+        string,
+        unknown
+      >
       expect(gv['@address']).toBeUndefined()
     })
 
@@ -112,7 +118,10 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<
+        string,
+        unknown
+      >
       expect(gv.initialValue).toBeNull()
     })
 
@@ -147,7 +156,10 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<
+        string,
+        unknown
+      >
       expect(gv.type).toEqual({ derived: { '@name': 'MyType' } })
     })
 
@@ -168,7 +180,10 @@ describe('oldEditorInstanceToXml', () => {
         ],
       })
       const result = oldEditorInstanceToXml(xml, config)
-      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<string, unknown>
+      const gv = result.project.instances.configurations.configuration.globalVars!.variable![0] as unknown as Record<
+        string,
+        unknown
+      >
       expect((gv.type as Record<string, unknown>).array).toBeDefined()
     })
   })

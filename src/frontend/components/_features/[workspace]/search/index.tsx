@@ -13,7 +13,6 @@ import {
   ProjectSearchTreeVariableLeaf,
 } from './display/tree-view'
 
- 
 interface _SearchResult {
   searchID: string
   searchQuery: string

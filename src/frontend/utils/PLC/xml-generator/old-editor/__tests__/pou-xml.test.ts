@@ -350,18 +350,14 @@ describe('oldEditorParsePousToXML', () => {
     expect(result.project.types.pous.pou[0]['@name']).toBe('main')
     expect(result.project.types.pous.pou[0]['@pouType']).toBe('program')
     expect(result.project.types.pous.pou[0].body).toHaveProperty('ST')
-    expect(
-      ((result.project.types.pous.pou[0] as XmlNode).documentation as XmlNode)['xhtml:p'],
-    ).toEqual({ $: 'My doc' })
+    expect(((result.project.types.pous.pou[0] as XmlNode).documentation as XmlNode)['xhtml:p']).toEqual({ $: 'My doc' })
   })
 
   it('documentation uses space when empty string', () => {
     const xml = makeBaseXml()
     const pou = makeStPou()
     const result = oldEditorParsePousToXML(xml, [pou])
-    expect(
-      ((result.project.types.pous.pou[0] as XmlNode).documentation as XmlNode)['xhtml:p'],
-    ).toEqual({ $: ' ' })
+    expect(((result.project.types.pous.pou[0] as XmlNode).documentation as XmlNode)['xhtml:p']).toEqual({ $: ' ' })
   })
 
   it('adds an IL POU', () => {
