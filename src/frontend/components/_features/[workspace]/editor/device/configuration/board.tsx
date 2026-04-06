@@ -121,11 +121,11 @@ const Board = memo(function () {
   useEffect(() => {
     const fetchPreviewImage = async () => {
       const boardInfos = availableBoards.get(deviceBoard)
-      const imagePath = await device.getPreviewImage(boardInfos?.preview || 'generic.png')
+      const imagePath = await device.getPreviewImage(boardInfos?.preview || 'generic.png', boardInfos?.vpp?.packagePath)
       setPreviewImage(imagePath)
     }
     void fetchPreviewImage()
-  }, [deviceBoard, device])
+  }, [deviceBoard, device, availableBoards])
 
   const refreshCommunicationPorts = useCallback(
     async (e: React.MouseEvent) => {

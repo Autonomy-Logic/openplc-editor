@@ -256,6 +256,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'devOrchestrators'
     | 'server'
     | 'remoteDevice'
+    | 'vendorScreen'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
 }
@@ -277,6 +278,7 @@ const LeafSources = {
   devOrchestrators: { LeafIcon: OrchestratorIcon },
   server: { LeafIcon: ServerIcon },
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
+  vendorScreen: { LeafIcon: ConfigIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
   const {
