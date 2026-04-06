@@ -3,11 +3,7 @@ import { ComponentPropsWithoutRef } from 'react'
 import { useProject } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../store'
-import type { FBDFlowType } from '../../../store/slices/fbd'
-import type { LadderFlowType } from '../../../store/slices/ladder'
-import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
-import { parseGraphicalPouFromString, parseTextualPouFromString } from '../../../utils/PLC/pou-text-parser'
-import { executeSaveFile } from '../../../services/save-actions'
+import { executeSaveFile, reloadPouFromDisk } from '../../../services/save-actions'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 export type SaveChangesFileModalData = {
@@ -21,13 +17,9 @@ export type SaveChangesFileModalProps = ComponentPropsWithoutRef<typeof Modal> &
 
 const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalProps) => {
   const {
-    project,
     modalActions: { closeModal, onOpenChange },
-    projectActions: { applyPouSnapshot, updatePouDocumentation },
     sharedWorkspaceActions: { forceCloseFile },
     fileActions: { updateFile },
-    ladderFlowActions: { addLadderFlow },
-    fbdFlowActions: { addFBDFlow },
   } = useOpenPLCStore()
 
   const projectPort = useProject()
@@ -45,44 +37,7 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
   const handleDontSave = async () => {
     closeModal()
 
-    // Reload the POU from disk to discard in-memory changes
-    const pou = project.data.pous.find((p) => p.name === fileName)
-    if (pou) {
-      try {
-        const language = pou.body.language
-        const ext = getExtensionFromLanguage(language)
-        const folder = getFolderFromPouType(pou.pouType)
-        const fullPath = `${project.meta.path}/pous/${folder}/${fileName}${ext}`
-
-        const result = await projectPort.readFileContent(fullPath)
-        if (result.success && result.content) {
-          const isGraphical = language === 'ld' || language === 'fbd'
-
-          const parsed = isGraphical
-            ? parseGraphicalPouFromString(result.content, language, pou.pouType)
-            : parseTextualPouFromString(result.content, language, pou.pouType)
-
-          // Restore the full POU from disk: variables, body, and documentation.
-          // applyPouSnapshot restores variables + body, then we restore documentation separately.
-          applyPouSnapshot(fileName, parsed.interface?.variables ?? [], parsed.body)
-          if (parsed.documentation !== undefined) {
-            updatePouDocumentation(fileName, parsed.documentation)
-          }
-
-          // For graphical POUs, also restore the flow state (nodes, edges, positions).
-          // The parsed body.value is the full flow type (same as what addLadderFlow/addFBDFlow
-          // receive during project open).
-          if (language === 'ld' && parsed.body.value) {
-            addLadderFlow(parsed.body.value as LadderFlowType)
-          } else if (language === 'fbd' && parsed.body.value) {
-            addFBDFlow(parsed.body.value as FBDFlowType)
-          }
-        }
-      } catch {
-        // If reload fails, just close without restoring — same as web fallback
-      }
-    }
-
+    await reloadPouFromDisk(fileName, projectPort)
     updateFile({ name: fileName, saved: true })
     forceCloseFile(fileName)
   }

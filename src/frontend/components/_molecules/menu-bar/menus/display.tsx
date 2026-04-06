@@ -35,6 +35,7 @@ export const DisplayMenu = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light'
     setTheme(newTheme)
     localStorage.setItem('theme', newTheme)
+    window.bridge.winHandleUpdateTheme(newTheme)
   }
 
   const switchPerspective = () => {

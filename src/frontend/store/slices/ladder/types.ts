@@ -139,6 +139,7 @@ type LadderFlowActions = {
   }) => void
 
   setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
+  clearSelections: ({ editorName }: { editorName: string }) => void
 
   applyLadderFlowSnapshot: ({ editorName, snapshot }: { editorName: string; snapshot: LadderFlowType | null }) => void
 }

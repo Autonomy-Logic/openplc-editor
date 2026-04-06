@@ -1461,8 +1461,8 @@ class MainProcessBridge implements MainIpcModule {
 
   // ===================== EVENT HANDLERS =====================
   mainIpcEventHandlers = {
-    handleUpdateTheme: () => {
-      const newTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
+    handleUpdateTheme: (_event: unknown, theme?: 'light' | 'dark') => {
+      const newTheme = theme ?? (nativeTheme.shouldUseDarkColors ? 'light' : 'dark')
       nativeTheme.themeSource = newTheme
       const appStore = this.store as unknown as { set: (key: string, value: string) => void }
       appStore.set('theme', newTheme)

@@ -49,7 +49,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
       setSystemConfigs({
         OS: sysInfo.OS,
         arch: sysInfo.architecture,
-        shouldUseDarkMode: sysInfo.prefersDarkMode,
         isWindowMaximized: sysInfo.isWindowMaximized,
       })
       const recent = await projectPort.getRecentProjects()

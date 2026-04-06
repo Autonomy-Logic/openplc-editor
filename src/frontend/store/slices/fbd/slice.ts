@@ -311,6 +311,18 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
       )
     },
 
+    /** Clear all node selections without triggering flow.updated (used after save). */
+    clearSelections({ editorName }) {
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          const flow = fbdFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          flow.rung.nodes = flow.rung.nodes.map((node) => ({ ...node, selected: false }))
+        }),
+      )
+    },
+
     /**
      * Control the undo and redo actions
      */
