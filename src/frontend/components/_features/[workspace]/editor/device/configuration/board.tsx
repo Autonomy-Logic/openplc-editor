@@ -157,6 +157,25 @@ const Board = memo(function () {
 
   const handleSetDeviceBoard = useCallback(
     (board: string) => {
+      if (board === '__install_additional_boards__') {
+        const { tabsActions, editorActions } = useOpenPLCStore.getState()
+        const tab = {
+          name: 'Package Manager',
+          path: '/package-manager',
+          elementType: { type: 'package-manager' as const },
+        }
+        tabsActions.updateTabs(tab)
+        const existing = editorActions.getEditorFromEditors(tab.name)
+        if (!existing) {
+          const model = { type: 'plc-package-manager' as const, meta: { name: 'Package Manager' } }
+          editorActions.addModel(model)
+          editorActions.setEditor(model)
+        } else {
+          editorActions.setEditor(existing)
+        }
+        return
+      }
+
       const normalizedBoard = board.split('[')[0].trim()
 
       if (connectionStatus === 'connected' && normalizedBoard !== deviceBoard) {
@@ -378,6 +397,19 @@ const Board = memo(function () {
                     </SelectItem>
                   )
                 })}
+                {capabilities.hasPackageManager && (
+                  <>
+                    <div className='my-1 h-px bg-neutral-200 dark:bg-neutral-700' />
+                    <SelectItem
+                      value='__install_additional_boards__'
+                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                    >
+                      <span className='font-caption text-cp-sm font-medium text-brand dark:text-brand-light'>
+                        Install additional boards...
+                      </span>
+                    </SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>

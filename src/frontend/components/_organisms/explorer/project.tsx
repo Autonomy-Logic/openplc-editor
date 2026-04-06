@@ -284,7 +284,7 @@ const Project = () => {
               key={`vendor-${screenName}`}
               leafLang='vendorScreen'
               leafType='vendor-screen'
-              label={screenName.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}
+              label={screenName}
               onClick={() =>
                 handleCreateTab({
                   name: screenName,

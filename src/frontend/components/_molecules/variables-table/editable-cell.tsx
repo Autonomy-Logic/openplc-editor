@@ -3,12 +3,12 @@ import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { pinSelectors, remoteDeviceSelectors } from '../../../hooks/use-store-selectors'
+import { pinSelectors, remoteDeviceSelectors, vendorIoSelectors } from '../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../store'
 import { ProjectResponse } from '../../../store/slices/project'
 import { cn } from '../../../utils/cn'
 import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
-import { buildRemoteDeviceOptionGroups } from '../../../utils/remote-device-options'
+import { buildRemoteDeviceOptionGroups, buildVendorIoOptionGroups } from '../../../utils/remote-device-options'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
@@ -439,6 +439,7 @@ const EditableLocationCell = ({
   } = useOpenPLCStore()
   const existingPins = pinSelectors.usePins()
   const remoteIOPoints = remoteDeviceSelectors.useRemoteDeviceIOPoints()
+  const vendorIoEntries = vendorIoSelectors.useVendorIoEntries()
 
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -518,6 +519,7 @@ const EditableLocationCell = ({
       }))
 
     const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)
+    const vendorGroups = buildVendorIoOptionGroups(id, vendorIoEntries)
 
     return [
       { label: 'Analog Inputs', options: ainPins },
@@ -525,8 +527,9 @@ const EditableLocationCell = ({
       { label: 'Digital Inputs', options: dinPins },
       { label: 'Digital Outputs', options: doutPins },
       ...remoteGroups,
+      ...vendorGroups,
     ]
-  }, [id, variable, existingPins, remoteIOPoints])
+  }, [id, variable, existingPins, remoteIOPoints, vendorIoEntries])
 
   return selected ? (
     <GenericComboboxCell

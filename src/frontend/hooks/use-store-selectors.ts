@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import type { IoMappingEntry, VendorIoMapping } from '../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../store'
 
 type RemoteDeviceIOPoint = {
@@ -117,6 +118,29 @@ const remoteDeviceSelectors = {
   },
 }
 
+// ===================== Vendor IO selectors. =====================
+const vendorIoSelectors = {
+  useVendorIoEntries: (): IoMappingEntry[] => {
+    const vendorScreenData = useOpenPLCStore((state) => state.deviceDefinitions.configuration.vendorScreenData)
+
+    return useMemo(() => {
+      if (!vendorScreenData) return []
+
+      // Look through all vendorScreenData keys for io-mapping entries
+      for (const [, value] of Object.entries(vendorScreenData)) {
+        const mapping = value as VendorIoMapping | undefined
+        if (mapping?.entries && Array.isArray(mapping.entries) && mapping.entries.length > 0) {
+          // Check if it looks like an IO mapping (has iecAddress field)
+          if ('iecAddress' in mapping.entries[0]) {
+            return mapping.entries
+          }
+        }
+      }
+      return []
+    }, [vendorScreenData])
+  },
+}
+
 export {
   boardSelectors,
   communicationSelectors,
@@ -127,6 +151,7 @@ export {
   rtuSelectors,
   staticHostSelectors,
   tcpSelectors,
+  vendorIoSelectors,
 }
 
 export type { RemoteDeviceIOPoint }
