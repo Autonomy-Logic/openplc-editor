@@ -398,14 +398,17 @@ const Board = memo(function () {
                   )
                 })}
                 {capabilities.hasPackageManager && (
-                  <SelectItem
-                    value='__install_additional_boards__'
-                    className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                  >
-                    <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-brand'>
-                      Install additional boards...
-                    </span>
-                  </SelectItem>
+                  <>
+                    <div className='my-1 border-t border-neutral-200 dark:border-neutral-700' />
+                    <SelectItem
+                      value='__install_additional_boards__'
+                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                    >
+                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-brand'>
+                        + Install additional boards...
+                      </span>
+                    </SelectItem>
+                  </>
                 )}
               </SelectContent>
             </Select>
