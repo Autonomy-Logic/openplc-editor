@@ -26,12 +26,14 @@ export function createEditorPackageAdapter(): PackagePort {
       return window.bridge.listInstalledPackages()
     },
 
-    uninstall(packageId: string): Promise<Result> {
-      return window.bridge.uninstallPackage(packageId)
+    async uninstall(packageId: string): Promise<Result> {
+      const result = await window.bridge.uninstallPackage(packageId)
+      if (result.success) return { success: true } as Result
+      return { success: false, error: result.error ?? 'Uninstall failed' }
     },
 
-    getManifest(packageId: string): Promise<PackageManifest | null> {
-      return window.bridge.getPackageManifest(packageId)
+    async getManifest(packageId: string): Promise<PackageManifest | null> {
+      return (await window.bridge.getPackageManifest(packageId)) as PackageManifest | null
     },
 
     onOpenManager(callback: () => void): Unsubscribe {

@@ -229,8 +229,35 @@ const rendererProcessBridge = {
   refreshCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-communication-ports'),
 
+  // ===================== PACKAGE MANAGER METHODS =====================
+  importPackageFromFile: (): Promise<{
+    success: boolean
+    canceled?: boolean
+    packageId?: string
+    packageName?: string
+    devices?: string[]
+    error?: string
+  }> => ipcRenderer.invoke('packages:import-from-file'),
+  listInstalledPackages: (): Promise<
+    Array<{ packageId: string; version: string; installedAt: string; path: string; devices: string[] }>
+  > => ipcRenderer.invoke('packages:list-installed'),
+  uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('packages:uninstall', packageId),
+  getPackageManifest: (packageId: string): Promise<unknown> => ipcRenderer.invoke('packages:get-manifest', packageId),
+  onOpenPackageManager: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('packages:open-manager', listener)
+    return () => ipcRenderer.removeListener('packages:open-manager', listener)
+  },
+  onBoardsUpdated: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('packages:boards-updated', listener)
+    return () => ipcRenderer.removeListener('packages:boards-updated', listener)
+  },
+
   // ===================== UTILITY METHODS =====================
-  getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
+  getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
+    ipcRenderer.invoke('util:get-preview-image', image, packagePath),
   log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
   readDebugFile: (
     projectPath: string,

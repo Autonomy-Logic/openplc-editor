@@ -5,7 +5,7 @@ import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { PLCProjectData } from '@root/types/PLC/open-plc'
 import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
-import { app, nativeTheme, shell } from 'electron'
+import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingHttpHeaders, IncomingMessage } from 'http'
 import https from 'https'
@@ -15,6 +15,7 @@ import { platform } from 'process'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
+import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import { getProjectPath } from '../../../backend/editor/utils'
 import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
@@ -48,6 +49,8 @@ class MainProcessBridge implements MainIpcModule {
   private fileWatchers: Map<string, { lastMtime: number }> = new Map()
   // avr8js ATmega2560 emulator instance for the built-in simulator
   private simulatorModule = new SimulatorModule()
+  // VPP package manager for board package operations
+  private packageManagerModule = new PackageManagerModule()
 
   constructor({
     ipcMain,
@@ -525,6 +528,12 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('hardware:refresh-communication-ports', this.handleHardwareRefreshCommunicationPorts)
     this.registerHandle('hardware:refresh-available-boards', this.handleHardwareRefreshAvailableBoards)
 
+    // ===================== PACKAGE MANAGER =====================
+    this.registerHandle('packages:import-from-file', this.handlePackagesImportFromFile)
+    this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
+    this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
+    this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
+
     // ===================== UTILITIES =====================
     this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
@@ -816,9 +825,37 @@ class MainProcessBridge implements MainIpcModule {
   handleHardwareRefreshCommunicationPorts = async () => this.hardwareModule.getAvailableSerialPorts()
   handleHardwareRefreshAvailableBoards = async () => this.hardwareModule.getAvailableBoards()
 
+  // Package manager handlers
+  handlePackagesImportFromFile = async () => {
+    if (!this.mainWindow) return { success: false, error: 'No main window' }
+    const result = await dialog.showOpenDialog(this.mainWindow, {
+      title: 'Import Board Package',
+      filters: [{ name: 'VPP Package', extensions: ['vpp'] }],
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true }
+    }
+    const importResult = await this.packageManagerModule.importFromFile(result.filePaths[0])
+    if (importResult.success) {
+      this.mainWindow.webContents.send('packages:boards-updated')
+    }
+    return importResult
+  }
+  handlePackagesListInstalled = async () => this.packageManagerModule.listInstalled()
+  handlePackagesUninstall = async (_event: IpcMainInvokeEvent, packageId: string) => {
+    const result = this.packageManagerModule.uninstall(packageId)
+    if (result.success) {
+      this.mainWindow?.webContents.send('packages:boards-updated')
+    }
+    return result
+  }
+  handlePackagesGetManifest = async (_event: IpcMainInvokeEvent, packageId: string) =>
+    this.packageManagerModule.getInstalledPackageManifest(packageId)
+
   // Utility handlers
-  handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string) =>
-    this.hardwareModule.getBoardImagePreview(image)
+  handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
+    this.hardwareModule.getBoardImagePreview(image, packagePath)
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
   }
