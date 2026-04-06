@@ -111,7 +111,7 @@ const rendererProcessBridge = {
 
   // ===================== THEME =====================
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
-  winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
+  winHandleUpdateTheme: (theme?: 'light' | 'dark') => ipcRenderer.send('system:update-theme', theme),
 
   // ===================== COMPILER/BUILD METHODS =====================
   // !! Deprecated: This method is an outdated implementation and should be substituted.

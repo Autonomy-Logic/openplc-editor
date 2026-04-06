@@ -305,7 +305,10 @@ const AcceleratorHandler = () => {
    * Theme update from main process
    */
   useEffect(() => {
-    const unsub = themePort.onThemeChanged(() => {
+    const unsub = themePort.onThemeChanged((newTheme) => {
+      document.documentElement.classList.remove('dark', 'light')
+      document.documentElement.classList.add(newTheme)
+      localStorage.setItem('theme', newTheme)
       switchAppTheme()
     })
     return unsub
