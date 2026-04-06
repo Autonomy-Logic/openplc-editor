@@ -55,7 +55,8 @@ export interface DevicePort {
   /**
    * Get a board preview image for display in the UI.
    * Editor: loads image from local resources/ directory, returns base64 or file path.
+   *         For VPP boards, loads from the package directory when packagePath is provided.
    * Web: returns URL to bundled image asset.
    */
-  getPreviewImage(imageName: string): Promise<string>
+  getPreviewImage(imageName: string, packagePath?: string): Promise<string>
 }

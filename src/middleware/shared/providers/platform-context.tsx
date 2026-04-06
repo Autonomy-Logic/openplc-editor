@@ -101,3 +101,7 @@ export function useCapabilities() {
 export function useAI() {
   return usePlatform().ai
 }
+
+export function usePackages() {
+  return usePlatform().packages
+}

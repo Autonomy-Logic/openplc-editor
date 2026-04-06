@@ -438,6 +438,134 @@ export interface BoardInfo {
     defaultDin?: string[]
     defaultDout?: string[]
   }
+  vpp?: VppMetadata
+}
+
+// ---------------------------------------------------------------------------
+// VPP (Vendor Plugin Package)
+// ---------------------------------------------------------------------------
+
+export interface VppModuleDefinition {
+  id: string
+  name: string
+  image?: string
+  io: {
+    digitalInputs: number
+    digitalOutputs: number
+    analogInputs: number
+    analogOutputs: number
+  }
+  parameters?: Array<{
+    id: string
+    name: string
+    type: string
+    options?: string[]
+    default?: unknown
+    min?: number
+    max?: number
+  }>
+  addressMapping?: unknown
+}
+
+export interface VppMetadata {
+  packageId: string
+  deviceId: string
+  packagePath: string
+  screens: Record<string, unknown>
+  moduleSystem: {
+    enabled: boolean
+    maxSlots: number
+    modules: VppModuleDefinition[]
+  } | null
+}
+
+export interface PackageManifest {
+  formatVersion: string
+  package: {
+    id: string
+    name: string
+    version: string
+    vendor: {
+      name: string
+      url?: string
+      logo: string
+    }
+    description: string
+    license?: string
+    minEditorVersion?: string
+  }
+  devices: Array<{
+    id: string
+    name: string
+    category?: string
+    preview: string
+    target: {
+      type: string
+      platform?: string
+      core?: string
+    }
+    specs?: Record<string, string>
+    hal: {
+      type: string
+      pluginType?: string
+      pluginEntry?: string
+      configTemplate?: string
+      requirements?: string
+      source?: string
+    }
+    defaults?: {
+      runtimeIpAddress?: string
+      communicationPreferences?: {
+        enabledRTU?: boolean
+        enabledTCP?: boolean
+      }
+      pins?: {
+        defaultDin?: string[]
+        defaultDout?: string[]
+        defaultAin?: string[]
+        defaultAout?: string[]
+      }
+    }
+    screens?: Record<string, string>
+    moduleSystem?: {
+      enabled: boolean
+      maxSlots: number
+      discoverySupported?: boolean
+      modules: VppModuleDefinition[]
+    }
+  }>
+}
+
+export interface InstalledPackage {
+  packageId: string
+  version: string
+  installedAt: string
+  path: string
+  devices: string[]
+}
+
+export interface ImportResult {
+  success: boolean
+  canceled?: boolean
+  packageId?: string
+  packageName?: string
+  devices?: string[]
+  error?: string
+}
+
+export interface IoMappingEntry {
+  slot: number
+  moduleId: string
+  moduleName: string
+  channelName: string
+  channelType: string
+  dataType: string
+  iecAddress: string
+  alias: string
+}
+
+export interface VendorIoMapping {
+  entries: IoMappingEntry[]
 }
 
 export interface CommunicationPort {

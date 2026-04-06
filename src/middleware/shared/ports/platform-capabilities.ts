@@ -84,6 +84,11 @@ export interface PlatformCapabilities {
    */
   hasDirectProgramUpload: boolean
 
+  // --- Packages ---
+
+  /** True if the app supports installing/managing VPP board packages. */
+  hasPackageManager: boolean
+
   // --- Environment ---
 
   /** True when running in a development build (Vite DEV / webpack development mode). */
@@ -113,6 +118,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: false,
   hasProxiedRuntimeConnection: false,
   hasDirectProgramUpload: false,
+  hasPackageManager: true,
   isDevMode: false,
 }
 
@@ -135,5 +141,6 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: true,
   hasProxiedRuntimeConnection: true,
   hasDirectProgramUpload: true,
+  hasPackageManager: false,
   isDevMode: false,
 }
