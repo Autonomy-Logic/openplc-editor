@@ -10,7 +10,7 @@ import { useAI, useCapabilities, useProject } from '../../../../../../middleware
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
-import { executeSaveActiveFile, executeSaveProject } from '../../../../../utils/save-actions'
+import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
 import { AIConsentModal } from './ai-consent-modal'

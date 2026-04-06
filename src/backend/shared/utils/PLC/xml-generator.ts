@@ -8,13 +8,13 @@ import {
   codeSysParseDataTypesToXML,
   codeSysParsePousToXML,
   getBaseCodeSysXmlStructure,
-} from './xml-generator/codesys'
+} from '../../../../frontend/utils/PLC/xml-generator/codesys'
 import {
   getBaseOldEditorXmlStructure,
   oldEditorInstanceToXml,
   oldEditorParseDataTypesToXML,
   oldEditorParsePousToXML,
-} from './xml-generator/old-editor'
+} from '../../../../frontend/utils/PLC/xml-generator/old-editor'
 
 const XmlGenerator = (
   projectToGenerateXML: PLCProjectData,

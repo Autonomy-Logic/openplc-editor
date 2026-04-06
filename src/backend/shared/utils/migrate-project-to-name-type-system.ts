@@ -1,6 +1,6 @@
 import { PLCProjectData, PLCVariable } from '@root/middleware/shared/ports/open-plc-types'
 
-import { getErrorMessage } from './get-error-message'
+import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 
 /**
  * Migration report detailing the changes made during migration

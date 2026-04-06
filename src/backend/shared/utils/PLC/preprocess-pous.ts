@@ -1,11 +1,11 @@
-import type { PLCPou, PLCProjectData, PLCVariable } from '../../../middleware/shared/ports/types'
-import { addCppLocalVariables } from '../cpp/addCppLocalVariables'
-import { generateSTCode as generateCppSTCode } from '../cpp/generateSTCode'
-import { validateCppCode } from '../cpp/validateCppCode'
-import { addPythonLocalVariables } from '../python/addPythonLocalVariables'
-import { generateSTCode } from '../python/generateSTCode'
-import { injectPythonCode } from '../python/injectPythonCode'
-import { wrapUnsupportedComments } from './wrap-unsupported-comments'
+import type { PLCPou, PLCProjectData, PLCVariable } from '../../../../middleware/shared/ports/types'
+import { addCppLocalVariables } from '../../../../frontend/utils/cpp/addCppLocalVariables'
+import { generateSTCode as generateCppSTCode } from '../../../../frontend/utils/cpp/generateSTCode'
+import { validateCppCode } from '../../../../frontend/utils/cpp/validateCppCode'
+import { addPythonLocalVariables } from '../../../../frontend/utils/python/addPythonLocalVariables'
+import { generateSTCode } from '../../../../frontend/utils/python/generateSTCode'
+import { injectPythonCode } from '../../../../frontend/utils/python/injectPythonCode'
+import { wrapUnsupportedComments } from '../../../../frontend/utils/PLC/wrap-unsupported-comments'
 
 type CppPouData = {
   name: string

@@ -16,6 +16,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 // ---------------------------------------------------------------------------
 
 type LayerName =
+  | 'assets'
   | 'utils'
   | 'data'
   | 'ports'
@@ -36,13 +37,17 @@ interface LayerRule {
 }
 
 const LAYER_RULES: Record<LayerName, LayerRule> = {
+  assets: {
+    name: 'Assets (frontend/assets/, frontend/locales/, assets/)',
+    allowedDeps: ['utils', 'data'],
+  },
   utils: {
     name: 'Domain (frontend/utils/)',
-    allowedDeps: ['utils', 'ports', 'data'],
+    allowedDeps: ['utils', 'ports', 'data', 'assets'],
   },
   data: {
     name: 'Data (frontend/data/)',
-    allowedDeps: ['ports', 'utils', 'data'],
+    allowedDeps: ['ports', 'utils', 'data', 'assets'],
   },
   ports: {
     name: 'Application — Ports (middleware/shared/ports/)',
@@ -54,7 +59,7 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
   },
   adapters: {
     name: 'Adapters (middleware/adapters/)',
-    allowedDeps: ['ports', 'provider', 'utils', 'backend-shared'],
+    allowedDeps: ['ports', 'provider', 'utils', 'backend-shared', 'store', 'assets'],
   },
   'backend-shared': {
     name: 'Backend Shared (backend/shared/)',
@@ -62,19 +67,19 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
   },
   store: {
     name: 'Store (frontend/store/)',
-    allowedDeps: ['ports', 'provider', 'store', 'utils'],
+    allowedDeps: ['ports', 'provider', 'store', 'utils', 'assets'],
   },
   services: {
     name: 'Services (frontend/services/)',
-    allowedDeps: ['ports', 'provider', 'store', 'services', 'utils'],
+    allowedDeps: ['ports', 'provider', 'store', 'services', 'utils', 'assets'],
   },
   hooks: {
     name: 'Hooks (frontend/hooks/)',
-    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'utils'],
+    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'utils', 'assets'],
   },
   components: {
     name: 'Components (frontend/components/)',
-    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'components', 'data', 'utils'],
+    allowedDeps: ['ports', 'provider', 'store', 'hooks', 'services', 'components', 'data', 'utils', 'assets'],
   },
   architecture: {
     name: 'Architecture (__architecture__/)',
@@ -107,6 +112,11 @@ function getLayer(filePath: string): LayerName | null {
   const rel = relative(SRC_ROOT, filePath).replace(/\\/g, '/')
 
   if (rel.startsWith('__architecture__/')) return 'architecture'
+
+  // Static resources (icons, locales, board definitions, firmware metadata)
+  if (rel.startsWith('frontend/assets/')) return 'assets'
+  if (rel.startsWith('frontend/locales/')) return 'assets'
+  if (rel.startsWith('assets/')) return 'assets'
 
   // Middleware layers
   if (rel.startsWith('middleware/shared/ports/')) return 'ports'
@@ -160,7 +170,39 @@ function extractImports(source: string): { path: string; line: number }[] {
   return results
 }
 
-/** Resolve a relative import path to an absolute file path (best-effort) */
+/**
+ * Try to locate the actual file for a resolved path, mimicking TypeScript
+ * module resolution: try the path itself, then with .ts/.tsx extensions,
+ * then as a directory with index.ts/.tsx.
+ */
+function tryResolveFile(base: string): string | null {
+  const extensions = ['.ts', '.tsx']
+
+  // Exact file exists (e.g., .json, .svg imports)
+  const baseStat = statSync(base, { throwIfNoEntry: false })
+  if (baseStat?.isFile()) return base
+
+  // Try appending extensions: ./foo → ./foo.ts, ./foo.tsx
+  for (const ext of extensions) {
+    const withExt = base + ext
+    const stat = statSync(withExt, { throwIfNoEntry: false })
+    if (stat?.isFile()) return withExt
+  }
+
+  // Try as directory with index: ./foo → ./foo/index.ts
+  if (baseStat?.isDirectory()) {
+    for (const ext of extensions) {
+      const indexFile = join(base, `index${ext}`)
+      const stat = statSync(indexFile, { throwIfNoEntry: false })
+      if (stat?.isFile()) return indexFile
+    }
+  }
+
+  // Could not resolve to an actual file — return the original path so the
+  // caller can still determine the target layer (or flag it as unmapped).
+  return base
+}
+
 function resolveImport(importPath: string, fromFile: string): string | null {
   // Only check relative imports (within src/)
   if (!importPath.startsWith('.')) return null
@@ -171,7 +213,7 @@ function resolveImport(importPath: string, fromFile: string): string | null {
   // Check if it resolves to something inside src/
   if (!resolved.startsWith(SRC_ROOT)) return null
 
-  return resolved
+  return tryResolveFile(resolved)
 }
 
 // ---------------------------------------------------------------------------
@@ -230,7 +272,19 @@ function validate(): Violation[] {
       if (!resolved) continue // External or non-src import — skip
 
       const toLayer = getLayer(resolved)
-      if (!toLayer) continue // Can't determine target layer — skip
+      const relTarget = relative(SRC_ROOT, resolved).replace(/\\/g, '/')
+
+      if (!toLayer) {
+        violations.push({
+          file: relFile,
+          line: imp.line,
+          importPath: imp.path,
+          fromLayer,
+          toLayer: null as unknown as LayerName,
+          message: `${LAYER_RULES[fromLayer].name} imports from unmapped directory: ${relTarget}`,
+        })
+        continue
+      }
 
       const rule: LayerRule = LAYER_RULES[fromLayer]
       if (!rule.allowedDeps.includes(toLayer) && fromLayer !== toLayer && !exceptions.includes(toLayer)) {

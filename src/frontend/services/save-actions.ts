@@ -9,10 +9,10 @@
 
 import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
 import { openPLCStoreBase } from '../store'
-import { getExtensionFromLanguage, getFolderFromPouType } from './PLC/pou-file-extensions'
-import { serializePouToText } from './PLC/pou-text-serializer'
-import { collectDebugVariables, sanitizePou } from './save-project'
-import { toast } from './toast'
+import { getExtensionFromLanguage, getFolderFromPouType } from '../utils/PLC/pou-file-extensions'
+import { serializePouToText } from '../utils/PLC/pou-text-serializer'
+import { collectDebugVariables, sanitizePou } from '../utils/save-project'
+import { toast } from '../utils/toast'
 
 /** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
 const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')

@@ -1,4 +1,4 @@
-import type { ModbusIOGroup, PLCRemoteDevice } from '../../../middleware/shared/ports/types'
+import type { ModbusIOGroup, PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
 
 interface ModbusMasterIOPoint {
   fc: number

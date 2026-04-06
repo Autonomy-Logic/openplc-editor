@@ -5,7 +5,7 @@ import { useCapabilities, useProject } from '../../../../../middleware/shared/pr
 import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { useOpenPLCStore } from '../../../../store'
-import { executeSaveActiveFile, executeSaveProject } from '../../../../utils/save-actions'
+import { executeSaveActiveFile, executeSaveProject } from '../../../../services/save-actions'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {

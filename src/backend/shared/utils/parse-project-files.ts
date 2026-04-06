@@ -8,7 +8,7 @@
  * The backend only reads raw files from disk; all parsing happens here.
  */
 
-import type { RawProjectFile } from '../../middleware/shared/ports/project-port'
+import type { RawProjectFile } from '../../../middleware/shared/ports/project-port'
 import type {
   DeviceConfiguration,
   DevicePin,
@@ -19,9 +19,9 @@ import type {
   PLCServer,
   PLCTask,
   PLCVariable,
-} from '../../middleware/shared/ports/types'
-import { deviceConfigurationSchema, devicePinSchema } from '../../types/PLC/devices'
-import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../../types/PLC/open-plc'
+} from '../../../middleware/shared/ports/types'
+import { deviceConfigurationSchema, devicePinSchema } from '../../../types/PLC/devices'
+import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../../../types/PLC/open-plc'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
 import {
   detectLanguageFromExtension,
@@ -29,7 +29,7 @@ import {
   parseGraphicalPouFromString,
   parseHybridPouFromString,
   parseTextualPouFromString,
-} from './PLC/pou-text-parser'
+} from '../../../frontend/utils/PLC/pou-text-parser'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -462,8 +462,8 @@ export function parseProjectFiles(
       dataTypes: (data.dataTypes as PLCDataType[]) ?? [],
       pous,
       configurations: configuration,
-      servers: servers.length > 0 ? servers : (data.servers as PLCServer[]) ?? [],
-      remoteDevices: remoteDevices.length > 0 ? remoteDevices : (data.remoteDevices as PLCRemoteDevice[]) ?? [],
+      servers: servers.length > 0 ? servers : ((data.servers as PLCServer[]) ?? []),
+      remoteDevices: remoteDevices.length > 0 ? remoteDevices : ((data.remoteDevices as PLCRemoteDevice[]) ?? []),
       debugVariables: data.debugVariables as ParsedProjectData['projectData']['debugVariables'],
     },
     deviceConfiguration,

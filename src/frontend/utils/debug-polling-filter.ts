@@ -17,7 +17,31 @@
  */
 
 import type { FbInstanceInfo, PLCPou } from '../../middleware/shared/ports/types'
-import type { RootState } from '../store'
+
+/**
+ * Minimal state shape required by the debug polling filter.
+ * Defined locally to avoid coupling the utils layer to the store layer.
+ */
+export interface DebugPollingState {
+  project: { data: { pous: PLCPou[] } }
+  workspace: {
+    debugVariableIndexes: Map<string, number>
+    debugForcedVariables: Map<string, unknown>
+    debugExpandedNodes: Map<string, boolean>
+    debugGraphList: string[]
+    fbSelectedInstance: Map<string, string>
+    fbDebugInstances: Map<string, FbInstanceInfo[]>
+  }
+  editor: { meta: { name: string; [key: string]: unknown } }
+  ladderFlows: Array<{
+    name: string
+    rungs: Array<{ nodes: Array<{ type?: string; data: unknown }> }>
+  }>
+  fbdFlows: Array<{
+    name: string
+    rung: { nodes: Array<{ type?: string; data: unknown }> }
+  }>
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,7 +67,7 @@ export type VisibleVarsCache = {
  * @returns activeIndexes (sorted) and updated cache
  */
 export function buildActiveIndexSet(
-  state: RootState,
+  state: DebugPollingState,
   allLeaves: Map<number, { compositeKey: string; type: string }>,
   cachedResult: VisibleVarsCache,
 ): { activeIndexes: number[]; cacheResult: VisibleVarsCache } {
@@ -233,7 +257,7 @@ function shouldPollNestedVariable(
  * or referenced in source text (ST/IL). This result is cached.
  */
 function computeVisibleVariableKeys(
-  state: RootState,
+  state: DebugPollingState,
   currentPou: PLCPou,
   allLeaves: Map<number, { compositeKey: string; type: string }>,
 ): Set<string> {
@@ -277,7 +301,7 @@ function computeVisibleVariableKeys(
  * Collect composite keys for variables visible on a Ladder Diagram.
  */
 function collectLdVisibleKeys(
-  state: RootState,
+  state: DebugPollingState,
   makeKey: (name: string) => string | null,
   addLeavesWithPrefix: (prefix: string) => void,
   keys: Set<string>,
@@ -313,7 +337,7 @@ function collectLdVisibleKeys(
  * Collect composite keys for variables visible on a Function Block Diagram.
  */
 function collectFbdVisibleKeys(
-  state: RootState,
+  state: DebugPollingState,
   makeKey: (name: string) => string | null,
   addLeavesWithPrefix: (prefix: string) => void,
   keys: Set<string>,

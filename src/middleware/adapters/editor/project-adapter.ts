@@ -10,7 +10,7 @@
  *   - Editor uses `configuration` (singular), port uses `configurations` (plural)
  */
 
-import { parseProjectFiles } from '../../../frontend/utils/parse-project-files'
+import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import type {
   CreatePouParams,
   CreateProjectParams,
