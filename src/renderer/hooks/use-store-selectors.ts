@@ -92,18 +92,37 @@ const remoteDeviceSelectors = {
       const ioPoints: RemoteDeviceIOPoint[] = []
 
       for (const device of remoteDevices) {
-        if (!device.modbusTcpConfig?.ioGroups) continue
-        for (const ioGroup of device.modbusTcpConfig.ioGroups) {
-          for (const point of ioGroup.ioPoints) {
-            ioPoints.push({
-              deviceName: device.name,
-              ioGroupName: ioGroup.name,
-              ioPointId: point.id,
-              ioPointName: point.name,
-              ioPointType: point.type,
-              iecLocation: point.iecLocation,
-              alias: point.alias,
-            })
+        // Modbus IO points
+        if (device.modbusTcpConfig?.ioGroups) {
+          for (const ioGroup of device.modbusTcpConfig.ioGroups) {
+            for (const point of ioGroup.ioPoints) {
+              ioPoints.push({
+                deviceName: device.name,
+                ioGroupName: ioGroup.name,
+                ioPointId: point.id,
+                ioPointName: point.name,
+                ioPointType: point.type,
+                iecLocation: point.iecLocation,
+                alias: point.alias,
+              })
+            }
+          }
+        }
+        // EtherCAT channel mappings
+        if (device.ethercatConfig?.devices) {
+          for (const dev of device.ethercatConfig.devices) {
+            for (const mapping of dev.channelMappings) {
+              if (!mapping.alias) continue
+              ioPoints.push({
+                deviceName: device.name,
+                ioGroupName: dev.name,
+                ioPointId: mapping.channelId,
+                ioPointName: mapping.channelId,
+                ioPointType: 'ethercat',
+                iecLocation: mapping.iecLocation,
+                alias: mapping.alias,
+              })
+            }
           }
         }
       }
