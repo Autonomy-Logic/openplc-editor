@@ -30,9 +30,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     const getUserSystemProps = async () => {
       try {
         const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
-        const recent = await window.bridge.retrieveRecent()
-
-        setRecent(recent)
         setSystemConfigs({
           OS,
           arch: architecture,
@@ -44,6 +41,13 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
         }
       } catch (error) {
         console.error('Failed to read system info during app layout initialization:', error)
+      }
+
+      try {
+        const recent = await window.bridge.retrieveRecent()
+        setRecent(recent)
+      } catch (error) {
+        console.error('Failed to read recent projects during app layout initialization:', error)
       }
     }
     void getUserSystemProps()
