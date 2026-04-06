@@ -8,14 +8,73 @@
  */
 
 import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
+import type { PLCPou } from '../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../store'
+import type { LadderFlowType } from '../store/slices/ladder'
+import { parseIecStringToVariables } from './generate-iec-string-to-variables'
+import { generateIecVariablesToString } from './generate-iec-variables-to-string'
+import { syncNodesWithVariables, syncNodesWithVariablesFBD } from './graphical/sync-nodes-with-variables'
 import { getExtensionFromLanguage, getFolderFromPouType } from './PLC/pou-file-extensions'
+import { parseGraphicalPouFromString, parseTextualPouFromString } from './PLC/pou-text-parser'
 import { serializePouToText } from './PLC/pou-text-serializer'
 import { collectDebugVariables, sanitizePou } from './save-project'
 import { toast } from './toast'
 
 /** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
 const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')
+
+/**
+ * Strip transient UI state (selected, selectedNodes) from graphical POU body
+ * before serializing to disk. This prevents nodes from loading as selected
+ * on the next open, which would cause a spurious dirty mark on first click.
+ */
+function stripGraphicalSelections(pou: { body: { language: string; value: unknown } }) {
+  const lang = pou.body.language
+  if (lang !== 'ld' && lang !== 'fbd') return pou
+
+  const body = pou.body.value as Record<string, unknown>
+  if (!body) return pou
+
+  if (lang === 'ld' && Array.isArray(body.rungs)) {
+    return {
+      ...pou,
+      body: {
+        ...pou.body,
+        value: {
+          ...body,
+          rungs: (body.rungs as Array<Record<string, unknown>>).map((rung) => ({
+            ...rung,
+            selectedNodes: [],
+            nodes: Array.isArray(rung.nodes)
+              ? (rung.nodes as Array<Record<string, unknown>>).map((n) => ({ ...n, selected: false }))
+              : rung.nodes,
+          })),
+        },
+      },
+    }
+  }
+
+  if (lang === 'fbd' && body.rung) {
+    const rung = body.rung as Record<string, unknown>
+    return {
+      ...pou,
+      body: {
+        ...pou.body,
+        value: {
+          ...body,
+          rung: {
+            ...rung,
+            nodes: Array.isArray(rung.nodes)
+              ? (rung.nodes as Array<Record<string, unknown>>).map((n) => ({ ...n, selected: false }))
+              : rung.nodes,
+          },
+        },
+      },
+    }
+  }
+
+  return pou
+}
 
 /**
  * Save the entire project (all files, device config, debug variables).
@@ -43,7 +102,7 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
     // Serialize all POUs using the same functions as single-file save
     const pouFiles: RawProjectFile[] = project.data.pous.map((pou) => {
       const editorModel = state.editorActions.getEditorFromEditors(pou.name)
-      const sanitized = sanitizePou(pou, editorModel ?? undefined)
+      const sanitized = stripGraphicalSelections(sanitizePou(pou, editorModel ?? undefined))
       const folder = getFolderFromPouType(pou.pouType)
       const ext = getExtensionFromLanguage(pou.body.language)
       return { relativePath: `pous/${folder}/${pou.name}${ext}`, content: serializePouToText(sanitized) }
@@ -97,6 +156,17 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
       setEditingState('saved')
       setAllToSaved()
       markAllSaved()
+
+      // Reset graphical flow state: clear selections and updated flags
+      for (const flow of state.ladderFlows) {
+        state.ladderFlowActions.clearSelections({ editorName: flow.name })
+        state.ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+      }
+      for (const flow of state.fbdFlows) {
+        state.fbdFlowActions.clearSelections({ editorName: flow.name })
+        state.fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+      }
+
       toast({
         title: 'Changes saved!',
         description: 'The project was saved successfully!',
@@ -163,7 +233,7 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       if (!pou) return fail(`POU "${fileName}" not found.`)
 
       const editorModel = state.editorActions.getEditorFromEditors(fileName)
-      const sanitized = sanitizePou(pou, editorModel ?? undefined)
+      const sanitized = stripGraphicalSelections(sanitizePou(pou, editorModel ?? undefined))
       const textContent = serializePouToText(sanitized)
       const folder = getFolderFromPouType(pou.pouType)
       const ext = getExtensionFromLanguage(pou.body.language)
@@ -222,6 +292,19 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
     updateFile({ name: fileName, saved: true, isNew: false })
     markSaved(fileName)
 
+    // Reset graphical flow state: clear selections (prevents spurious dirty on reopen
+    // when a deselection click triggers updateNode) and reset updated flags.
+    const ladderFlow = state.ladderFlows.find((f) => f.name === fileName)
+    if (ladderFlow) {
+      state.ladderFlowActions.clearSelections({ editorName: fileName })
+      state.ladderFlowActions.setFlowUpdated({ editorName: fileName, updated: false })
+    }
+    const fbdFlow = state.fbdFlows.find((f) => f.name === fileName)
+    if (fbdFlow) {
+      state.fbdFlowActions.clearSelections({ editorName: fileName })
+      state.fbdFlowActions.setFlowUpdated({ editorName: fileName, updated: false })
+    }
+
     // If all files are now saved, update workspace editing state
     if (checkIfAllFilesAreSaved()) {
       setEditingState('saved')
@@ -249,4 +332,85 @@ export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{
     return { success: false }
   }
   return executeSaveFile(name, projectPort)
+}
+
+/**
+ * Reload a single POU from disk, discarding in-memory changes.
+ *
+ * Performs the same full cycle as handleOpenProjectResponse does for each POU
+ * during project open: parse file, restore body + variables, reclassify
+ * variables with full project context, restore graphical flow, and sync
+ * nodes with reclassified variables. This ensures the POU is in the exact
+ * same state as if the project were freshly opened.
+ */
+export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
+  const state = openPLCStoreBase.getState()
+  const pou = state.project.data.pous.find((p) => p.name === pouName)
+  if (!pou) return { success: false }
+
+  try {
+    const language = pou.body.language
+    const ext = getExtensionFromLanguage(language)
+    const folder = getFolderFromPouType(pou.pouType)
+    const fullPath = joinPath(state.project.meta.path, 'pous', folder, `${pouName}${ext}`)
+
+    const result = await projectPort.readFileContent(fullPath)
+    if (!result.success || !result.content) return { success: false }
+
+    // Parse the file from disk (same parsers used during project load)
+    const isGraphical = language === 'ld' || language === 'fbd'
+    const parsed: PLCPou = isGraphical
+      ? parseGraphicalPouFromString(result.content, language, pou.pouType)
+      : parseTextualPouFromString(result.content, language, pou.pouType)
+
+    // Restore body, variables, and documentation
+    state.projectActions.applyPouSnapshot(pouName, parsed.interface?.variables ?? [], parsed.body)
+    if (parsed.documentation !== undefined) {
+      state.projectActions.updatePouDocumentation(pouName, parsed.documentation)
+    }
+
+    // Restore graphical flow state
+    if (language === 'ld' && parsed.body.value) {
+      state.ladderFlowActions.addLadderFlow(parsed.body.value as LadderFlowType)
+    } else if (language === 'fbd' && parsed.body.value) {
+      state.fbdFlowActions.addFBDFlow(
+        parsed.body.value as unknown as Parameters<typeof state.fbdFlowActions.addFBDFlow>[0],
+      )
+    }
+
+    // Reclassify variables with full project context (same as handleOpenProjectResponse)
+    const freshState = openPLCStoreBase.getState()
+    const freshPou = freshState.project.data.pous.find((p) => p.name === pouName)
+    if (freshPou) {
+      const vars = freshPou.interface?.variables ?? []
+      const iecString = generateIecVariablesToString(vars)
+      const reparsedVars = parseIecStringToVariables(
+        iecString,
+        freshState.project.data.pous,
+        freshState.project.data.dataTypes,
+        freshState.libraries,
+      )
+      freshState.projectActions.setPouVariables({ pouName, variables: reparsedVars })
+
+      // Sync graphical nodes with reclassified variables
+      if (language === 'ld') {
+        const pouFlows = openPLCStoreBase.getState().ladderFlows.filter((f) => f.name === pouName)
+        if (pouFlows.length > 0) {
+          syncNodesWithVariables(reparsedVars, pouFlows, openPLCStoreBase.getState().ladderFlowActions.updateNode)
+        }
+        // Reset flow updated flag (syncNodesWithVariables triggers updateNode which sets updated=true)
+        openPLCStoreBase.getState().ladderFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
+      } else if (language === 'fbd') {
+        const pouFlows = openPLCStoreBase.getState().fbdFlows.filter((f) => f.name === pouName)
+        if (pouFlows.length > 0) {
+          syncNodesWithVariablesFBD(reparsedVars, pouFlows, openPLCStoreBase.getState().fbdFlowActions.updateNode)
+        }
+        openPLCStoreBase.getState().fbdFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
+      }
+    }
+
+    return { success: true }
+  } catch {
+    return { success: false }
+  }
 }

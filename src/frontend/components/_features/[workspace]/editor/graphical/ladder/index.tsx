@@ -88,7 +88,7 @@ export default function LadderEditor() {
   }, [searchNodePosition])
 
   /**
-   * Update the flow state to project JSON
+   * Update the flow state to project JSON.
    */
   useEffect(() => {
     if (!flowUpdated) return
@@ -106,8 +106,6 @@ export default function LadderEditor() {
 
     ladderFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
 
-    // During debug the editor is read-only — any flow update is from internal state
-    // management (e.g. node styling for debug indicators), not a user edit.
     if (!isDebuggerVisible) {
       handleFileAndWorkspaceSavedState(editor.meta.name)
     }

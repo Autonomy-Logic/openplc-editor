@@ -464,6 +464,21 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
       )
     },
 
+    /** Clear all node selections without triggering flow.updated (used after save). */
+    clearSelections({ editorName }) {
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          for (const rung of flow.rungs) {
+            rung.selectedNodes = []
+            rung.nodes = rung.nodes.map((node) => ({ ...node, selected: false }))
+          }
+        }),
+      )
+    },
+
     /**
      * Control the undo and redo actions
      */

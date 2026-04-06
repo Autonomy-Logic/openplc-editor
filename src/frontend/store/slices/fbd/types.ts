@@ -83,6 +83,7 @@ type FBDFlowActions = {
   removeEdges: ({ edges, editorName }: { edges: Edge[]; editorName: string }) => void
 
   setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
+  clearSelections: ({ editorName }: { editorName: string }) => void
   applyFBDFlowSnapshot: ({ editorName, snapshot }: { editorName: string; snapshot: FBDFlowType | null }) => void
 }
 
