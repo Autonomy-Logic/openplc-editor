@@ -66,10 +66,6 @@ export const parseIntegerValue = (value: string, typeInfo: VariableTypeInfo): bi
       return null
     }
 
-    if (!typeInfo.signed && parsedValue < BigInt(0)) {
-      return null
-    }
-
     return parsedValue
   } catch {
     return null
@@ -94,26 +90,22 @@ export const integerToBuffer = (value: bigint, byteSize: number, signed: boolean
 }
 
 export const parseFloatValue = (value: string, byteSize: number): number | null => {
-  try {
-    const trimmedValue = value.trim()
-    const parsedValue = parseFloat(trimmedValue)
+  const trimmedValue = value.trim()
+  const parsedValue = parseFloat(trimmedValue)
 
-    if (isNaN(parsedValue) || !isFinite(parsedValue)) {
-      return null
-    }
-
-    if (byteSize === 4) {
-      const maxFloat32 = 3.4028235e38
-      const minFloat32 = -3.4028235e38
-      if (parsedValue > maxFloat32 || parsedValue < minFloat32) {
-        return null
-      }
-    }
-
-    return parsedValue
-  } catch {
+  if (isNaN(parsedValue) || !isFinite(parsedValue)) {
     return null
   }
+
+  if (byteSize === 4) {
+    const maxFloat32 = 3.4028235e38
+    const minFloat32 = -3.4028235e38
+    if (parsedValue > maxFloat32 || parsedValue < minFloat32) {
+      return null
+    }
+  }
+
+  return parsedValue
 }
 
 export const floatToBuffer = (value: number, byteSize: number): Uint8Array => {
@@ -130,22 +122,18 @@ export const floatToBuffer = (value: number, byteSize: number): Uint8Array => {
 }
 
 export const parseStringValue = (value: string): string | null => {
-  try {
-    if (value.length > 126) {
-      return null
-    }
-
-    for (let i = 0; i < value.length; i++) {
-      const charCode = value.charCodeAt(i)
-      if (charCode > 127) {
-        return null
-      }
-    }
-
-    return value
-  } catch {
+  if (value.length > 126) {
     return null
   }
+
+  for (let i = 0; i < value.length; i++) {
+    const charCode = value.charCodeAt(i)
+    if (charCode > 127) {
+      return null
+    }
+  }
+
+  return value
 }
 
 export const stringToBuffer = (value: string): Uint8Array => {

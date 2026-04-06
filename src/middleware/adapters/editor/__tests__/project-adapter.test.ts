@@ -76,11 +76,52 @@ const mockRecentProjects = [
   { name: 'Project 1', path: '/path/to/project1', lastOpenedAt: '2026-03-10', createdAt: '2026-03-01' },
 ]
 
+const mockRawProjectFiles = {
+  success: true,
+  data: {
+    projectPath: '/home/user/projects/my-project',
+    projectJson: JSON.stringify({
+      meta: { name: 'my-project', type: 'plc-project', author: '', version: '1.0' },
+      data: {
+        dataTypes: [],
+        pous: [],
+        configuration: { resource: { tasks: [], instances: [], globalVariables: [] } },
+      },
+    }),
+    deviceConfig: JSON.stringify({
+      deviceBoard: 'Arduino Uno',
+      communicationPort: '/dev/ttyUSB0',
+      compileOnly: false,
+      communicationConfiguration: {
+        modbusRTU: { rtuInterface: '', rtuBaudRate: '115200', rtuSlaveId: null, rtuRS485ENPin: null },
+        modbusTCP: {
+          tcpInterface: 'eth0',
+          tcpMacAddress: null,
+          tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
+        },
+        communicationPreferences: { enabledRTU: false, enabledTCP: false, enabledDHCP: true },
+      },
+    }),
+    pinMapping: JSON.stringify([{ pin: '2', pinType: 'digitalInput', address: '%IX0.0' }]),
+    pouFiles: [
+      {
+        relativePath: 'pous/programs/main.st',
+        content: 'PROGRAM main\nVAR\n  x : BOOL;\nEND_VAR\n\nx := TRUE;\nEND_PROGRAM',
+      },
+      {
+        relativePath: 'pous/functions/add_ints.st',
+        content: 'FUNCTION add_ints : INT\nVAR\nEND_VAR\n\nadd_ints := a + b;\nEND_FUNCTION',
+      },
+    ],
+    serverFiles: [],
+    remoteDeviceFiles: [],
+  },
+}
+
 beforeEach(() => {
   window.bridge = {
     createProject: jest.fn().mockResolvedValue(mockIpcProjectResponse),
-    openProject: jest.fn().mockResolvedValue(mockIpcProjectResponse),
-    openProjectByPath: jest.fn().mockResolvedValue(mockIpcProjectResponse),
+    readProjectFiles: jest.fn().mockResolvedValue(mockRawProjectFiles),
     writeProjectFiles: jest.fn().mockResolvedValue(mockSaveResponse),
     saveFile: jest.fn().mockResolvedValue({ success: true }),
     createPouFile: jest.fn().mockResolvedValue(mockPouResponse),
@@ -187,16 +228,28 @@ describe('createEditorProjectAdapter', () => {
   })
 
   describe('openProject', () => {
-    it('delegates to window.bridge.openProject', async () => {
+    it('uses pathPicker then readProjectFiles and parses result', async () => {
       const result = await adapter.openProject()
 
-      expect(window.bridge.openProject).toHaveBeenCalledTimes(1)
+      expect(window.bridge.pathPicker).toHaveBeenCalledTimes(1)
+      expect(window.bridge.readProjectFiles).toHaveBeenCalledWith('/picked/path')
       expect(result.success).toBe(true)
       expect(result.data?.meta.name).toBe('my-project')
     })
 
-    it('returns error on failure', async () => {
-      ;(window.bridge.openProject as jest.Mock).mockResolvedValue(mockErrorResponse)
+    it('returns error when pathPicker fails', async () => {
+      ;(window.bridge.pathPicker as jest.Mock).mockResolvedValue({ success: false })
+
+      const result = await adapter.openProject()
+
+      expect(result.success).toBe(false)
+    })
+
+    it('returns error when readProjectFiles fails', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue({
+        success: false,
+        error: { title: 'Error', description: 'Could not read files' },
+      })
 
       const result = await adapter.openProject()
 
@@ -205,11 +258,12 @@ describe('createEditorProjectAdapter', () => {
   })
 
   describe('openProjectByPath', () => {
-    it('delegates to window.bridge.openProjectByPath with the path', async () => {
+    it('delegates to readProjectFiles and parses result', async () => {
       const result = await adapter.openProjectByPath('/path/to/project')
 
-      expect(window.bridge.openProjectByPath).toHaveBeenCalledWith('/path/to/project')
+      expect(window.bridge.readProjectFiles).toHaveBeenCalledWith('/path/to/project')
       expect(result.success).toBe(true)
+      expect(result.data?.meta.name).toBe('my-project')
     })
   })
 

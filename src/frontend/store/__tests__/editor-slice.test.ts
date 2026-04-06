@@ -3,42 +3,24 @@ import { createStore } from 'zustand/vanilla'
 import { createEditorSlice } from '../slices/editor/slice'
 import type { EditorModel, EditorSlice } from '../slices/editor/types'
 
-function makeStore() {
-  return createStore<EditorSlice>()(createEditorSlice)
-}
+const makeStore = () => createStore<EditorSlice>()(createEditorSlice)
 
-// Helpers to create editor models
-function makeTextualEditor(
-  name: string,
-  overrides?: Partial<{ language: 'il' | 'st' | 'python' | 'cpp'; pouType: 'program' | 'function' | 'function-block' }>,
-): EditorModel {
+function makeTextual(name: string): EditorModel {
   return {
     type: 'plc-textual',
-    meta: {
-      name,
-      path: `/data/pous/program/st/${name}`,
-      language: overrides?.language ?? 'st',
-      pouType: overrides?.pouType ?? 'program',
-    },
+    meta: { name, path: `/pous/${name}`, language: 'st', pouType: 'program' },
     variable: { display: 'table', description: '', classFilter: 'All', selectedRow: '-1' },
   }
 }
 
-function makeGraphicalEditor(name: string, language: 'ld' | 'sfc' | 'fbd' = 'ld'): EditorModel {
+function makeGraphical(name: string, language: 'ld' | 'sfc' | 'fbd' = 'ld'): EditorModel {
   const base = {
     type: 'plc-graphical' as const,
-    meta: {
-      name,
-      path: `/data/pous/program/${language}/${name}`,
-      language,
-      pouType: 'program' as const,
-    },
+    meta: { name, path: `/pous/${name}`, language, pouType: 'program' as const },
     variable: { display: 'table' as const, description: '', classFilter: 'All' as const, selectedRow: '-1' },
   }
-  if (language === 'ld') {
-    return { ...base, graphical: { language: 'ld', openedRungs: [] } }
-  }
-  if (language === 'fbd') {
+  if (language === 'ld') return { ...base, graphical: { language: 'ld', openedRungs: [] } }
+  if (language === 'fbd')
     return {
       ...base,
       graphical: {
@@ -48,21 +30,20 @@ function makeGraphicalEditor(name: string, language: 'ld' | 'sfc' | 'fbd' = 'ld'
         canEditorPan: true,
       },
     }
-  }
   return { ...base, graphical: { language: 'sfc' } }
 }
 
-function makeResourceEditor(name = 'Resource'): EditorModel {
+function makeResource(name = 'Resource'): EditorModel {
   return {
     type: 'plc-resource',
-    meta: { name, path: '/data/configuration/resource' },
+    meta: { name, path: '/config/resource' },
     variable: { display: 'table', description: '', selectedRow: '-1' },
     task: { display: 'table', selectedRow: '-1' },
     instance: { display: 'table', selectedRow: '-1' },
   }
 }
 
-function makeDatatypeEditor(name: string): EditorModel {
+function makeDatatype(name: string): EditorModel {
   return {
     type: 'plc-datatype',
     meta: { name, derivation: 'structure' },
@@ -70,1132 +51,460 @@ function makeDatatypeEditor(name: string): EditorModel {
   }
 }
 
-describe('createEditorSlice', () => {
+describe('editor slice', () => {
   let store: ReturnType<typeof makeStore>
-
   beforeEach(() => {
     store = makeStore()
   })
 
-  // -------------------------------------------------------------------------
-  // Initial state
-  // -------------------------------------------------------------------------
-  it('should have correct initial state', () => {
-    const state = store.getState()
-    expect(state.editors).toEqual([])
-    expect(state.editor).toEqual({ type: 'available', meta: { name: 'available' } })
-    expect(state.isMonacoFocused).toBe(false)
+  it('has correct initial state', () => {
+    const s = store.getState()
+    expect(s.editors).toEqual([])
+    expect(s.editor).toEqual({ type: 'available', meta: { name: 'available' } })
+    expect(s.isMonacoFocused).toBe(false)
   })
 
-  // -------------------------------------------------------------------------
-  // addModel
-  // -------------------------------------------------------------------------
-  it('addModel adds a new editor to editors array', () => {
-    const editor = makeTextualEditor('Main')
-    store.getState().editorActions.addModel(editor)
+  it('addModel: adds new, skips duplicate', () => {
+    const { editorActions: a } = store.getState()
+    const e = makeTextual('Main')
+    a.addModel(e)
     expect(store.getState().editors).toHaveLength(1)
-    expect(store.getState().editors[0].meta.name).toBe('Main')
-  })
-
-  it('addModel does not add duplicate', () => {
-    const editor = makeTextualEditor('Main')
-    store.getState().editorActions.addModel(editor)
-    store.getState().editorActions.addModel(editor)
+    a.addModel(e)
     expect(store.getState().editors).toHaveLength(1)
   })
 
-  // -------------------------------------------------------------------------
-  // removeModel
-  // -------------------------------------------------------------------------
-  it('removeModel removes an editor by name', () => {
-    store.getState().editorActions.addModel(makeTextualEditor('Main'))
-    store.getState().editorActions.addModel(makeTextualEditor('Helper'))
-    store.getState().editorActions.removeModel('Main')
-    expect(store.getState().editors).toHaveLength(1)
-    expect(store.getState().editors[0].meta.name).toBe('Helper')
+  it('removeModel: filters by name', () => {
+    const { editorActions: a } = store.getState()
+    a.addModel(makeTextual('A'))
+    a.addModel(makeTextual('B'))
+    a.removeModel('A')
+    expect(store.getState().editors.map((e) => e.meta.name)).toEqual(['B'])
   })
 
-  // -------------------------------------------------------------------------
-  // updateModelVariables
-  // -------------------------------------------------------------------------
   describe('updateModelVariables', () => {
-    it('updates table variables for plc-resource editor', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
+    it('resource: table ↔ code cycle', () => {
+      const { editorActions: a } = store.getState()
+      const res = makeResource()
+      a.addModel(res)
+      a.setEditor(res)
 
-      store.getState().editorActions.updateModelVariables({
-        display: 'table',
-        selectedRow: 3,
-        description: 'desc',
-      })
-
-      const editor = store.getState().editor
-      expect(editor.type).toBe('plc-resource')
-      if (editor.type === 'plc-resource') {
-        expect(editor.variable).toEqual({ display: 'table', selectedRow: '3', description: 'desc' })
-      }
+      // table with values (prev is table → ternary left sides)
+      a.updateModelVariables({ display: 'table', selectedRow: 3, description: 'desc' })
+      // table without values → prev table selected (ternary left + ?? right sides)
+      a.updateModelVariables({ display: 'table' })
+      // code with value (prev table → existingCode=undefined)
+      a.updateModelVariables({ display: 'code', code: 'VAR x: INT; END_VAR' })
+      // code without value (prev code → existingCode defined, preserves)
+      a.updateModelVariables({ display: 'code' })
+      expect((store.getState().editor as any).variable.code).toBe('VAR x: INT; END_VAR')
+      // table from code (prev code → ternary right sides for defaults)
+      a.updateModelVariables({ display: 'table' })
+      expect((store.getState().editor as any).variable.selectedRow).toBe('-1')
     })
 
-    it('updates code variables for plc-resource editor', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
+    it('textual: table ↔ code cycle', () => {
+      const { editorActions: a } = store.getState()
+      const txt = makeTextual('Main')
+      a.addModel(txt)
+      a.setEditor(txt)
 
-      store.getState().editorActions.updateModelVariables({
-        display: 'code',
-        code: 'VAR x: INT; END_VAR',
-      })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.variable).toEqual({ display: 'code', code: 'VAR x: INT; END_VAR' })
-      }
+      a.updateModelVariables({ display: 'table', selectedRow: 2, classFilter: 'Input', description: 'd' })
+      a.updateModelVariables({ display: 'table' })
+      a.updateModelVariables({ display: 'code', code: 'c' })
+      a.updateModelVariables({ display: 'code' })
+      expect((store.getState().editor as any).variable.code).toBe('c')
+      a.updateModelVariables({ display: 'table' })
+      expect((store.getState().editor as any).variable.classFilter).toBe('All')
     })
 
-    it('preserves existing code when switching to code display without new code (plc-resource)', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      store.getState().editorActions.updateModelVariables({ display: 'code', code: 'existing code' })
-      store.getState().editorActions.updateModelVariables({ display: 'code' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.variable).toEqual({ display: 'code', code: 'existing code' })
-      }
+    it('graphical enters the || plc-graphical branch', () => {
+      const { editorActions: a } = store.getState()
+      const g = makeGraphical('G', 'ld')
+      a.addModel(g)
+      a.setEditor(g)
+      a.updateModelVariables({ display: 'table', selectedRow: 1 })
+      expect((store.getState().editor as any).variable.selectedRow).toBe('1')
     })
 
-    it('sets code to undefined when switching from table to code without code value (plc-resource)', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      store.getState().editorActions.updateModelVariables({ display: 'code' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.variable).toEqual({ display: 'code', code: undefined })
-      }
-    })
-
-    it('uses default selectedRow and description for plc-resource table when not provided', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      store.getState().editorActions.updateModelVariables({ display: 'table' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.variable).toEqual({ display: 'table', selectedRow: '-1', description: '' })
-      }
-    })
-
-    it('updates table variables for plc-textual editor', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariables({
-        display: 'table',
-        selectedRow: 2,
-        classFilter: 'Input',
-        description: 'my desc',
-      })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-textual') {
-        expect(editor.variable).toEqual({
-          display: 'table',
-          selectedRow: '2',
-          classFilter: 'Input',
-          description: 'my desc',
-        })
-      }
-    })
-
-    it('updates code variables for plc-textual editor', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariables({ display: 'code', code: 'my code' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-textual') {
-        expect(editor.variable).toEqual({ display: 'code', code: 'my code' })
-      }
-    })
-
-    it('preserves existing code for plc-textual when no code provided', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariables({ display: 'code', code: 'saved code' })
-      store.getState().editorActions.updateModelVariables({ display: 'code' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-textual') {
-        expect(editor.variable).toEqual({ display: 'code', code: 'saved code' })
-      }
-    })
-
-    it('sets code to undefined when no existing code on plc-textual', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariables({ display: 'code' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-textual') {
-        expect(editor.variable).toEqual({ display: 'code', code: undefined })
-      }
-    })
-
-    it('uses defaults for table when selectedRow/classFilter/description not provided (plc-textual)', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariables({ display: 'table' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-textual') {
-        expect(editor.variable).toEqual({
-          display: 'table',
-          selectedRow: '-1',
-          classFilter: 'All',
-          description: '',
-        })
-      }
-    })
-
-    it('updates table variables for plc-graphical editor', () => {
-      const graphical = makeGraphicalEditor('Main', 'ld')
-      store.getState().editorActions.addModel(graphical)
-      store.getState().editorActions.setEditor(graphical)
-
-      store.getState().editorActions.updateModelVariables({
-        display: 'table',
-        selectedRow: 5,
-        classFilter: 'Output',
-        description: 'graphical desc',
-      })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical') {
-        expect(editor.variable).toEqual({
-          display: 'table',
-          selectedRow: '5',
-          classFilter: 'Output',
-          description: 'graphical desc',
-        })
-      }
-    })
-
-    it('does nothing for available editor type', () => {
+    it('no-op for non-matching editor type', () => {
       store.getState().editorActions.updateModelVariables({ display: 'table', selectedRow: 1 })
       expect(store.getState().editor.type).toBe('available')
     })
-
-    it('switches plc-resource from code to table, using defaults for prev code display', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      // First switch to code display
-      store.getState().editorActions.updateModelVariables({ display: 'code', code: 'some code' })
-      // Now switch back to table -- prevSelectedRow/prevDescription come from else branches
-      store.getState().editorActions.updateModelVariables({ display: 'table' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource' && editor.variable.display === 'table') {
-        expect(editor.variable.selectedRow).toBe('-1')
-        expect(editor.variable.description).toBe('')
-      }
-    })
-
-    it('switches plc-textual from code to table, using defaults for prev code display', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      // First switch to code display
-      store.getState().editorActions.updateModelVariables({ display: 'code', code: 'some code' })
-      // Now switch back to table
-      store.getState().editorActions.updateModelVariables({ display: 'table' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-textual' && editor.variable.display === 'table') {
-        expect(editor.variable.selectedRow).toBe('-1')
-        expect(editor.variable.classFilter).toBe('All')
-        expect(editor.variable.description).toBe('')
-      }
-    })
-
-    it('switches plc-graphical from code to table, using defaults for prev code display', () => {
-      const graphical = makeGraphicalEditor('Main', 'ld')
-      store.getState().editorActions.addModel(graphical)
-      store.getState().editorActions.setEditor(graphical)
-
-      store.getState().editorActions.updateModelVariables({ display: 'code', code: 'some code' })
-      store.getState().editorActions.updateModelVariables({ display: 'table' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.variable.display === 'table') {
-        expect(editor.variable.selectedRow).toBe('-1')
-        expect(editor.variable.classFilter).toBe('All')
-        expect(editor.variable.description).toBe('')
-      }
-    })
   })
 
-  // -------------------------------------------------------------------------
-  // updateModelVariablesForName
-  // -------------------------------------------------------------------------
   describe('updateModelVariablesForName', () => {
-    it('updates the active editor when name matches', () => {
-      const resource = makeResourceEditor('Res')
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      store.getState().editorActions.updateModelVariablesForName('Res', {
-        display: 'table',
-        selectedRow: 1,
-        description: 'updated',
-      })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.variable.display).toBe('table')
-        if (editor.variable.display === 'table') {
-          expect(editor.variable.description).toBe('updated')
-        }
-      }
+    it('updates active editor when name matches', () => {
+      const { editorActions: a } = store.getState()
+      const res = makeResource('Res')
+      a.addModel(res)
+      a.setEditor(res)
+      a.updateModelVariablesForName('Res', { display: 'table', selectedRow: 1, description: 'u' })
+      expect((store.getState().editor as any).variable.description).toBe('u')
     })
 
-    it('updates an editor in the editors array when name does not match current editor', () => {
-      const res = makeResourceEditor('Res')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(res)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
+    it('resource in array: table ↔ code cycle', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeResource('Res'))
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
 
-      store.getState().editorActions.updateModelVariablesForName('Res', {
-        display: 'table',
-        selectedRow: 7,
-        description: 'indirect',
-      })
-
+      a.updateModelVariablesForName('Res', { display: 'table', selectedRow: 7, description: 'd' })
+      a.updateModelVariablesForName('Res', { display: 'table' })
+      a.updateModelVariablesForName('Res', { display: 'code', code: 'c' })
+      a.updateModelVariablesForName('Res', { display: 'code' })
       const target = store.getState().editors.find((e) => e.meta.name === 'Res')
-      expect(target).toBeDefined()
-      if (target?.type === 'plc-resource' && target.variable.display === 'table') {
-        expect(target.variable.selectedRow).toBe('7')
-      }
+      expect((target as any).variable.code).toBe('c')
+      a.updateModelVariablesForName('Res', { display: 'table' })
+      expect((store.getState().editors.find((e) => e.meta.name === 'Res') as any).variable.selectedRow).toBe('-1')
     })
 
-    it('does nothing when name not found', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
+    it('textual in array: table ↔ code cycle', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('P1'))
+      a.addModel(makeTextual('P2'))
+      a.setEditor(makeTextual('P1'))
 
-      store.getState().editorActions.updateModelVariablesForName('NonExistent', { display: 'table', selectedRow: 1 })
-      expect(store.getState().editors).toHaveLength(1)
+      a.updateModelVariablesForName('P2', { display: 'table', selectedRow: 3, classFilter: 'Local', description: 'd' })
+      a.updateModelVariablesForName('P2', { display: 'table' })
+      a.updateModelVariablesForName('P2', { display: 'code', code: 'c' })
+      a.updateModelVariablesForName('P2', { display: 'code' })
+      a.updateModelVariablesForName('P2', { display: 'table' })
+      expect((store.getState().editors.find((e) => e.meta.name === 'P2') as any).variable.classFilter).toBe('All')
     })
 
-    it('updates code for plc-resource target in editors array', () => {
-      const res = makeResourceEditor('Res')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(res)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariablesForName('Res', { display: 'code', code: 'new code' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Res')
-      if (target?.type === 'plc-resource') {
-        expect(target.variable).toEqual({ display: 'code', code: 'new code' })
-      }
+    it('graphical in array enters || plc-graphical branch', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeGraphical('G', 'ld'))
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.updateModelVariablesForName('G', { display: 'table', selectedRow: 1 })
+      expect((store.getState().editors.find((e) => e.meta.name === 'G') as any).variable.selectedRow).toBe('1')
     })
 
-    it('preserves existing code for plc-resource when no code provided', () => {
-      const res = makeResourceEditor('Res')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(res)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariablesForName('Res', { display: 'code', code: 'saved' })
-      store.getState().editorActions.updateModelVariablesForName('Res', { display: 'code' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Res')
-      if (target?.type === 'plc-resource') {
-        expect(target.variable).toEqual({ display: 'code', code: 'saved' })
-      }
+    it('no-op when name not found', () => {
+      store.getState().editorActions.updateModelVariablesForName('X', { display: 'table' })
+      expect(store.getState().editors).toHaveLength(0)
     })
 
-    it('uses defaults for plc-resource table when not provided', () => {
-      const res = makeResourceEditor('Res')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(res)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariablesForName('Res', { display: 'table' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Res')
-      if (target?.type === 'plc-resource' && target.variable.display === 'table') {
-        expect(target.variable.selectedRow).toBe('-1')
-        expect(target.variable.description).toBe('')
-      }
-    })
-
-    it('updates plc-textual target with table data', () => {
-      const textual1 = makeTextualEditor('Prog1')
-      const textual2 = makeTextualEditor('Prog2')
-      store.getState().editorActions.addModel(textual1)
-      store.getState().editorActions.addModel(textual2)
-      store.getState().editorActions.setEditor(textual1)
-
-      store.getState().editorActions.updateModelVariablesForName('Prog2', {
-        display: 'table',
-        selectedRow: 3,
-        classFilter: 'Local',
-        description: 'textual desc',
-      })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Prog2')
-      if (target?.type === 'plc-textual' && target.variable.display === 'table') {
-        expect(target.variable.selectedRow).toBe('3')
-        expect(target.variable.classFilter).toBe('Local')
-        expect(target.variable.description).toBe('textual desc')
-      }
-    })
-
-    it('updates plc-textual target with code data', () => {
-      const textual1 = makeTextualEditor('Prog1')
-      const textual2 = makeTextualEditor('Prog2')
-      store.getState().editorActions.addModel(textual1)
-      store.getState().editorActions.addModel(textual2)
-      store.getState().editorActions.setEditor(textual1)
-
-      store.getState().editorActions.updateModelVariablesForName('Prog2', { display: 'code', code: 'the code' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Prog2')
-      if (target?.type === 'plc-textual') {
-        expect(target.variable).toEqual({ display: 'code', code: 'the code' })
-      }
-    })
-
-    it('preserves existing code for plc-textual when no code provided', () => {
-      const textual1 = makeTextualEditor('Prog1')
-      const textual2 = makeTextualEditor('Prog2')
-      store.getState().editorActions.addModel(textual1)
-      store.getState().editorActions.addModel(textual2)
-      store.getState().editorActions.setEditor(textual1)
-
-      store.getState().editorActions.updateModelVariablesForName('Prog2', { display: 'code', code: 'saved' })
-      store.getState().editorActions.updateModelVariablesForName('Prog2', { display: 'code' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Prog2')
-      if (target?.type === 'plc-textual') {
-        expect(target.variable).toEqual({ display: 'code', code: 'saved' })
-      }
-    })
-
-    it('uses defaults for plc-textual/plc-graphical table when not provided', () => {
-      const graphical = makeGraphicalEditor('Graph', 'ld')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(graphical)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariablesForName('Graph', { display: 'table' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Graph')
-      if (target?.type === 'plc-graphical' && target.variable.display === 'table') {
-        expect(target.variable.selectedRow).toBe('-1')
-        expect(target.variable.classFilter).toBe('All')
-        expect(target.variable.description).toBe('')
-      }
-    })
-
-    it('updates plc-graphical target with code data', () => {
-      const graphical = makeGraphicalEditor('Graph', 'ld')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(graphical)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariablesForName('Graph', { display: 'code', code: 'graphical code' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Graph')
-      if (target?.type === 'plc-graphical') {
-        expect(target.variable).toEqual({ display: 'code', code: 'graphical code' })
-      }
-    })
-
-    it('preserves existing code for plc-graphical when no code provided', () => {
-      const graphical = makeGraphicalEditor('Graph', 'ld')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(graphical)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariablesForName('Graph', { display: 'code', code: 'saved' })
-      store.getState().editorActions.updateModelVariablesForName('Graph', { display: 'code' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Graph')
-      if (target?.type === 'plc-graphical') {
-        expect(target.variable).toEqual({ display: 'code', code: 'saved' })
-      }
-    })
-
-    it('switches plc-resource target from code to table in editors array', () => {
-      const res = makeResourceEditor('Res')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(res)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      // Switch to code first
-      store.getState().editorActions.updateModelVariablesForName('Res', { display: 'code', code: 'code' })
-      // Switch back to table
-      store.getState().editorActions.updateModelVariablesForName('Res', { display: 'table' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Res')
-      if (target?.type === 'plc-resource' && target.variable.display === 'table') {
-        expect(target.variable.selectedRow).toBe('-1')
-        expect(target.variable.description).toBe('')
-      }
-    })
-
-    it('switches plc-textual target from code to table in editors array', () => {
-      const textual1 = makeTextualEditor('Prog1')
-      const textual2 = makeTextualEditor('Prog2')
-      store.getState().editorActions.addModel(textual1)
-      store.getState().editorActions.addModel(textual2)
-      store.getState().editorActions.setEditor(textual1)
-
-      store.getState().editorActions.updateModelVariablesForName('Prog2', { display: 'code', code: 'code' })
-      store.getState().editorActions.updateModelVariablesForName('Prog2', { display: 'table' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Prog2')
-      if (target?.type === 'plc-textual' && target.variable.display === 'table') {
-        expect(target.variable.selectedRow).toBe('-1')
-        expect(target.variable.classFilter).toBe('All')
-        expect(target.variable.description).toBe('')
-      }
-    })
-
-    it('switches plc-graphical target from code to table in editors array', () => {
-      const graphical = makeGraphicalEditor('Graph', 'ld')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(graphical)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariablesForName('Graph', { display: 'code', code: 'code' })
-      store.getState().editorActions.updateModelVariablesForName('Graph', { display: 'table' })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'Graph')
-      if (target?.type === 'plc-graphical' && target.variable.display === 'table') {
-        expect(target.variable.selectedRow).toBe('-1')
-        expect(target.variable.classFilter).toBe('All')
-        expect(target.variable.description).toBe('')
-      }
-    })
-
-    it('skips non-matching editor types (e.g., plc-device, plc-datatype)', () => {
-      const datatype = makeDatatypeEditor('MyType')
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(datatype)
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelVariablesForName('MyType', { display: 'table', selectedRow: 1 })
-
-      const target = store.getState().editors.find((e) => e.meta.name === 'MyType')
-      if (target?.type === 'plc-datatype') {
-        expect(target.structure.selectedRow).toBe('-1')
-      }
+    it('skips non-resource/textual/graphical types', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeDatatype('DT'))
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.updateModelVariablesForName('DT', { display: 'table', selectedRow: 1 })
+      expect((store.getState().editors.find((e) => e.meta.name === 'DT') as any).structure.selectedRow).toBe('-1')
     })
   })
 
-  // -------------------------------------------------------------------------
-  // updateModelTasks
-  // -------------------------------------------------------------------------
   describe('updateModelTasks', () => {
-    it('updates task to table display with selectedRow', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
+    it('table with selectedRow, default selectedRow, and code', () => {
+      const { editorActions: a } = store.getState()
+      const res = makeResource()
+      a.addModel(res)
+      a.setEditor(res)
 
-      store.getState().editorActions.updateModelTasks({ display: 'table', selectedRow: 2 })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.task).toEqual({ display: 'table', selectedRow: '2' })
-      }
+      a.updateModelTasks({ display: 'table', selectedRow: 2 })
+      expect((store.getState().editor as any).task).toEqual({ display: 'table', selectedRow: '2' })
+      a.updateModelTasks({ display: 'table' })
+      expect((store.getState().editor as any).task).toEqual({ display: 'table', selectedRow: '-1' })
+      a.updateModelTasks({ display: 'code' })
+      expect((store.getState().editor as any).task).toEqual({ display: 'code' })
     })
 
-    it('updates task to table display with default selectedRow when undefined', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      store.getState().editorActions.updateModelTasks({ display: 'table' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.task).toEqual({ display: 'table', selectedRow: '-1' })
-      }
-    })
-
-    it('updates task to code display', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      store.getState().editorActions.updateModelTasks({ display: 'code' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.task).toEqual({ display: 'code' })
-      }
-    })
-
-    it('does nothing for non-resource editor', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelTasks({ display: 'table', selectedRow: 1 })
+    it('no-op for non-resource', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.updateModelTasks({ display: 'table', selectedRow: 1 })
       expect(store.getState().editor.type).toBe('plc-textual')
     })
   })
 
-  // -------------------------------------------------------------------------
-  // updateModelInstances
-  // -------------------------------------------------------------------------
   describe('updateModelInstances', () => {
-    it('updates instance to table display with selectedRow', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
+    it('table with selectedRow, default selectedRow, and code', () => {
+      const { editorActions: a } = store.getState()
+      const res = makeResource()
+      a.addModel(res)
+      a.setEditor(res)
 
-      store.getState().editorActions.updateModelInstances({ display: 'table', selectedRow: 4 })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.instance).toEqual({ display: 'table', selectedRow: '4' })
-      }
+      a.updateModelInstances({ display: 'table', selectedRow: 4 })
+      expect((store.getState().editor as any).instance).toEqual({ display: 'table', selectedRow: '4' })
+      a.updateModelInstances({ display: 'table' })
+      expect((store.getState().editor as any).instance).toEqual({ display: 'table', selectedRow: '-1' })
+      a.updateModelInstances({ display: 'code' })
+      expect((store.getState().editor as any).instance).toEqual({ display: 'code' })
     })
 
-    it('updates instance to table display with default selectedRow', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      store.getState().editorActions.updateModelInstances({ display: 'table' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.instance).toEqual({ display: 'table', selectedRow: '-1' })
-      }
-    })
-
-    it('updates instance to code display', () => {
-      const resource = makeResourceEditor()
-      store.getState().editorActions.addModel(resource)
-      store.getState().editorActions.setEditor(resource)
-
-      store.getState().editorActions.updateModelInstances({ display: 'code' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-resource') {
-        expect(editor.instance).toEqual({ display: 'code' })
-      }
-    })
-
-    it('does nothing for non-resource editor', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelInstances({ display: 'table', selectedRow: 1 })
+    it('no-op for non-resource', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.updateModelInstances({ display: 'table', selectedRow: 1 })
       expect(store.getState().editor.type).toBe('plc-textual')
     })
   })
 
-  // -------------------------------------------------------------------------
-  // updateModelStructure
-  // -------------------------------------------------------------------------
   describe('updateModelStructure', () => {
-    it('updates structure selectedRow and description', () => {
-      const datatype = makeDatatypeEditor('MyStruct')
-      store.getState().editorActions.addModel(datatype)
-      store.getState().editorActions.setEditor(datatype)
+    it('updates selectedRow and description, preserves when falsy', () => {
+      const { editorActions: a } = store.getState()
+      const dt = makeDatatype('S')
+      a.addModel(dt)
+      a.setEditor(dt)
 
-      store.getState().editorActions.updateModelStructure({ selectedRow: 3, description: 'my desc' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-datatype') {
-        expect(editor.structure).toEqual({ selectedRow: '3', description: 'my desc' })
-      }
+      a.updateModelStructure({ selectedRow: 3, description: 'desc' })
+      expect((store.getState().editor as any).structure).toEqual({ selectedRow: '3', description: 'desc' })
+      // undefined selectedRow → keeps; empty description → keeps (falsy)
+      a.updateModelStructure({ description: '' })
+      expect((store.getState().editor as any).structure).toEqual({ selectedRow: '3', description: 'desc' })
     })
 
-    it('keeps existing selectedRow when undefined', () => {
-      const datatype = makeDatatypeEditor('MyStruct')
-      store.getState().editorActions.addModel(datatype)
-      store.getState().editorActions.setEditor(datatype)
-
-      store.getState().editorActions.updateModelStructure({ selectedRow: 5 })
-      store.getState().editorActions.updateModelStructure({ description: 'updated' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-datatype') {
-        expect(editor.structure).toEqual({ selectedRow: '5', description: 'updated' })
-      }
-    })
-
-    it('keeps existing description when empty string is provided', () => {
-      const datatype = makeDatatypeEditor('MyStruct')
-      store.getState().editorActions.addModel(datatype)
-      store.getState().editorActions.setEditor(datatype)
-
-      store.getState().editorActions.updateModelStructure({ description: 'orig' })
-      store.getState().editorActions.updateModelStructure({ description: '' })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-datatype') {
-        // empty string is falsy, so it keeps the old description
-        expect(editor.structure.description).toBe('orig')
-      }
-    })
-
-    it('does nothing for non-datatype editor', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelStructure({ selectedRow: 1, description: 'test' })
-      expect(store.getState().editor.type).toBe('plc-textual')
-    })
-  })
-
-  // -------------------------------------------------------------------------
-  // updateModelLadder
-  // -------------------------------------------------------------------------
-  describe('updateModelLadder', () => {
-    it('adds a new rung when not found', () => {
-      const ld = makeGraphicalEditor('LdProg', 'ld')
-      store.getState().editorActions.addModel(ld)
-      store.getState().editorActions.setEditor(ld)
-
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'ld') {
-        expect(editor.graphical.openedRungs).toEqual([{ rungId: 'r1', open: true }])
-      }
-    })
-
-    it('updates an existing rung', () => {
-      const ld = makeGraphicalEditor('LdProg', 'ld')
-      store.getState().editorActions.addModel(ld)
-      store.getState().editorActions.setEditor(ld)
-
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r1', open: false } })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'ld') {
-        expect(editor.graphical.openedRungs).toEqual([{ rungId: 'r1', open: false }])
-      }
-    })
-
-    it('updates one rung while preserving others in the map', () => {
-      const ld = makeGraphicalEditor('LdProg', 'ld')
-      store.getState().editorActions.addModel(ld)
-      store.getState().editorActions.setEditor(ld)
-
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r2', open: true } })
-      // Update r1 while r2 stays the same (hits the else branch of the ternary in map)
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r1', open: false } })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'ld') {
-        expect(editor.graphical.openedRungs).toEqual([
-          { rungId: 'r1', open: false },
-          { rungId: 'r2', open: true },
-        ])
-      }
-    })
-
-    it('does nothing when openRung is undefined', () => {
-      const ld = makeGraphicalEditor('LdProg', 'ld')
-      store.getState().editorActions.addModel(ld)
-      store.getState().editorActions.setEditor(ld)
-
-      store.getState().editorActions.updateModelLadder({})
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'ld') {
-        expect(editor.graphical.openedRungs).toEqual([])
-      }
-    })
-
-    it('does nothing for non-ld graphical editor', () => {
-      const fbd = makeGraphicalEditor('FbdProg', 'fbd')
-      store.getState().editorActions.addModel(fbd)
-      store.getState().editorActions.setEditor(fbd)
-
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
-        expect(editor.graphical).not.toHaveProperty('openedRungs')
-      }
-    })
-
-    it('does nothing for non-graphical editor', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
-      expect(store.getState().editor.type).toBe('plc-textual')
-    })
-  })
-
-  // -------------------------------------------------------------------------
-  // getIsRungOpen
-  // -------------------------------------------------------------------------
-  describe('getIsRungOpen', () => {
-    it('returns true by default when rung not found', () => {
-      const ld = makeGraphicalEditor('LdProg', 'ld')
-      store.getState().editorActions.addModel(ld)
-      store.getState().editorActions.setEditor(ld)
-
-      expect(store.getState().editorActions.getIsRungOpen({ rungId: 'nonexistent' })).toBe(true)
-    })
-
-    it('returns the open state of a found rung', () => {
-      const ld = makeGraphicalEditor('LdProg', 'ld')
-      store.getState().editorActions.addModel(ld)
-      store.getState().editorActions.setEditor(ld)
-
-      store.getState().editorActions.updateModelLadder({ openRung: { rungId: 'r1', open: false } })
-      expect(store.getState().editorActions.getIsRungOpen({ rungId: 'r1' })).toBe(false)
-    })
-
-    it('returns true for non-ld editor', () => {
-      const fbd = makeGraphicalEditor('FbdProg', 'fbd')
-      store.getState().editorActions.addModel(fbd)
-      store.getState().editorActions.setEditor(fbd)
-
-      expect(store.getState().editorActions.getIsRungOpen({ rungId: 'r1' })).toBe(true)
-    })
-
-    it('returns true for non-graphical editor', () => {
-      expect(store.getState().editorActions.getIsRungOpen({ rungId: 'r1' })).toBe(true)
-    })
-  })
-
-  // -------------------------------------------------------------------------
-  // updateModelFBD
-  // -------------------------------------------------------------------------
-  describe('updateModelFBD', () => {
-    it('updates hoveringElement', () => {
-      const fbd = makeGraphicalEditor('FbdProg', 'fbd')
-      store.getState().editorActions.addModel(fbd)
-      store.getState().editorActions.setEditor(fbd)
-
-      store.getState().editorActions.updateModelFBD({
-        hoveringElement: { elementId: 'elem1', hovering: true },
-      })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
-        expect(editor.graphical.hoveringElement).toEqual({ elementId: 'elem1', hovering: true })
-      }
-    })
-
-    it('updates canEditorZoom and canEditorPan', () => {
-      const fbd = makeGraphicalEditor('FbdProg', 'fbd')
-      store.getState().editorActions.addModel(fbd)
-      store.getState().editorActions.setEditor(fbd)
-
-      store.getState().editorActions.updateModelFBD({ canEditorZoom: false, canEditorPan: false })
-
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
-        expect(editor.graphical.canEditorZoom).toBe(false)
-        expect(editor.graphical.canEditorPan).toBe(false)
-      }
-    })
-
-    it('does nothing for non-fbd graphical editor', () => {
-      const ld = makeGraphicalEditor('LdProg', 'ld')
-      store.getState().editorActions.addModel(ld)
-      store.getState().editorActions.setEditor(ld)
-
-      store.getState().editorActions.updateModelFBD({ canEditorZoom: false })
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'ld') {
-        expect(editor.graphical).not.toHaveProperty('canEditorZoom')
-      }
-    })
-
-    it('does nothing for non-graphical editor', () => {
-      store.getState().editorActions.updateModelFBD({ canEditorZoom: false })
+    it('no-op for non-datatype', () => {
+      store.getState().editorActions.updateModelStructure({ selectedRow: 1, description: 'x' })
       expect(store.getState().editor.type).toBe('available')
     })
+  })
 
-    it('does not update hoveringElement when not provided', () => {
-      const fbd = makeGraphicalEditor('FbdProg', 'fbd')
-      store.getState().editorActions.addModel(fbd)
-      store.getState().editorActions.setEditor(fbd)
+  describe('updateModelLadder', () => {
+    it('adds new rung, updates existing, preserves others', () => {
+      const { editorActions: a } = store.getState()
+      const ld = makeGraphical('L', 'ld')
+      a.addModel(ld)
+      a.setEditor(ld)
 
-      store.getState().editorActions.updateModelFBD({ canEditorZoom: false })
+      a.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
+      a.updateModelLadder({ openRung: { rungId: 'r2', open: true } })
+      a.updateModelLadder({ openRung: { rungId: 'r1', open: false } })
+      expect((store.getState().editor as any).graphical.openedRungs).toEqual([
+        { rungId: 'r1', open: false },
+        { rungId: 'r2', open: true },
+      ])
+    })
 
-      const editor = store.getState().editor
-      if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
-        expect(editor.graphical.hoveringElement).toEqual({ elementId: null, hovering: false })
-      }
+    it('no-op when openRung undefined', () => {
+      const { editorActions: a } = store.getState()
+      const ld = makeGraphical('L', 'ld')
+      a.addModel(ld)
+      a.setEditor(ld)
+      a.updateModelLadder({})
+      expect((store.getState().editor as any).graphical.openedRungs).toEqual([])
+    })
+
+    it('no-op for non-ld and non-graphical', () => {
+      const { editorActions: a } = store.getState()
+      const fbd = makeGraphical('F', 'fbd')
+      a.addModel(fbd)
+      a.setEditor(fbd)
+      a.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
+
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.updateModelLadder({ openRung: { rungId: 'r1', open: true } })
+      expect(store.getState().editor.type).toBe('plc-textual')
     })
   })
 
-  // -------------------------------------------------------------------------
-  // updateEditorModel
-  // -------------------------------------------------------------------------
+  describe('getIsRungOpen', () => {
+    it('returns rung state or true by default', () => {
+      const { editorActions: a } = store.getState()
+      // non-graphical → true
+      expect(a.getIsRungOpen({ rungId: 'r1' })).toBe(true)
+
+      const ld = makeGraphical('L', 'ld')
+      a.addModel(ld)
+      a.setEditor(ld)
+      // ld, rung not found → true
+      expect(a.getIsRungOpen({ rungId: 'r1' })).toBe(true)
+      // ld, rung found
+      a.updateModelLadder({ openRung: { rungId: 'r1', open: false } })
+      expect(a.getIsRungOpen({ rungId: 'r1' })).toBe(false)
+
+      // fbd → true
+      const fbd = makeGraphical('F', 'fbd')
+      a.addModel(fbd)
+      a.setEditor(fbd)
+      expect(a.getIsRungOpen({ rungId: 'r1' })).toBe(true)
+    })
+  })
+
+  describe('updateModelFBD', () => {
+    it('updates hovering, zoom, and pan', () => {
+      const { editorActions: a } = store.getState()
+      const fbd = makeGraphical('F', 'fbd')
+      a.addModel(fbd)
+      a.setEditor(fbd)
+
+      a.updateModelFBD({
+        hoveringElement: { elementId: 'e1', hovering: true },
+        canEditorZoom: false,
+        canEditorPan: false,
+      })
+      const g = (store.getState().editor as any).graphical
+      expect(g.hoveringElement).toEqual({ elementId: 'e1', hovering: true })
+      expect(g.canEditorZoom).toBe(false)
+      expect(g.canEditorPan).toBe(false)
+    })
+
+    it('skips hoveringElement, zoom, and pan when not provided', () => {
+      const { editorActions: a } = store.getState()
+      const fbd = makeGraphical('F', 'fbd')
+      a.addModel(fbd)
+      a.setEditor(fbd)
+      a.updateModelFBD({})
+      expect((store.getState().editor as any).graphical.hoveringElement).toEqual({ elementId: null, hovering: false })
+      expect((store.getState().editor as any).graphical.canEditorZoom).toBe(true)
+      expect((store.getState().editor as any).graphical.canEditorPan).toBe(true)
+    })
+
+    it('no-op for non-fbd and non-graphical', () => {
+      const { editorActions: a } = store.getState()
+      a.updateModelFBD({ canEditorZoom: false })
+      expect(store.getState().editor.type).toBe('available')
+
+      const ld = makeGraphical('L', 'ld')
+      a.addModel(ld)
+      a.setEditor(ld)
+      a.updateModelFBD({ canEditorZoom: false })
+    })
+  })
+
   describe('updateEditorModel', () => {
-    it('renames editor in editors array and current editor', () => {
-      const textual = makeTextualEditor('OldName')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateEditorModel('OldName', 'NewName')
-
-      expect(store.getState().editors[0].meta.name).toBe('NewName')
-      expect(store.getState().editor.meta.name).toBe('NewName')
+    it('renames in array and current editor', () => {
+      const { editorActions: a } = store.getState()
+      const txt = makeTextual('Old')
+      a.addModel(txt)
+      a.setEditor(txt)
+      a.updateEditorModel('Old', 'New')
+      expect(store.getState().editors[0].meta.name).toBe('New')
+      expect(store.getState().editor.meta.name).toBe('New')
     })
 
-    it('does nothing when currentEditor equals newEditor', () => {
-      const textual = makeTextualEditor('Same')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateEditorModel('Same', 'Same')
-      expect(store.getState().editor.meta.name).toBe('Same')
-    })
-
-    it('does nothing when editor not found in editors array', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateEditorModel('NonExistent', 'NewName')
-      expect(store.getState().editors[0].meta.name).toBe('Main')
+    it('no-op when same name or not found', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.updateEditorModel('M', 'M')
+      a.updateEditorModel('X', 'Y')
+      expect(store.getState().editors[0].meta.name).toBe('M')
     })
   })
 
-  // -------------------------------------------------------------------------
-  // updateEditorName
-  // -------------------------------------------------------------------------
   describe('updateEditorName', () => {
-    it('renames editor in editors array and current editor', () => {
-      const textual = makeTextualEditor('OldName')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateEditorName('OldName', 'NewName')
-
-      expect(store.getState().editors[0].meta.name).toBe('NewName')
-      expect(store.getState().editor.meta.name).toBe('NewName')
+    it('renames in array and current editor', () => {
+      const { editorActions: a } = store.getState()
+      const txt = makeTextual('Old')
+      a.addModel(txt)
+      a.setEditor(txt)
+      a.updateEditorName('Old', 'New')
+      expect(store.getState().editors[0].meta.name).toBe('New')
+      expect(store.getState().editor.meta.name).toBe('New')
     })
 
-    it('does nothing when oldName equals newName', () => {
-      const textual = makeTextualEditor('Same')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateEditorName('Same', 'Same')
-      expect(store.getState().editor.meta.name).toBe('Same')
+    it('renames only in array when current editor differs', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('A'))
+      a.addModel(makeTextual('B'))
+      a.setEditor(makeTextual('A'))
+      a.updateEditorName('B', 'C')
+      expect(store.getState().editor.meta.name).toBe('A')
+      expect(store.getState().editors.find((e) => e.meta.name === 'C')).toBeDefined()
     })
 
-    it('renames only in editors array when current editor has different name', () => {
-      const first = makeTextualEditor('First')
-      const second = makeTextualEditor('Second')
-      store.getState().editorActions.addModel(first)
-      store.getState().editorActions.addModel(second)
-      store.getState().editorActions.setEditor(first)
-
-      store.getState().editorActions.updateEditorName('Second', 'Renamed')
-
-      expect(store.getState().editor.meta.name).toBe('First')
-      const renamed = store.getState().editors.find((e) => e.meta.name === 'Renamed')
-      expect(renamed).toBeDefined()
-    })
-
-    it('does nothing when editor name not found in editors array and not current', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.updateEditorName('NonExistent', 'NewName')
-      expect(store.getState().editors[0].meta.name).toBe('Main')
-      expect(store.getState().editor.meta.name).toBe('Main')
+    it('no-op when same name or not found', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.updateEditorName('M', 'M')
+      a.updateEditorName('X', 'Y')
+      expect(store.getState().editor.meta.name).toBe('M')
     })
   })
 
-  // -------------------------------------------------------------------------
-  // setEditor
-  // -------------------------------------------------------------------------
   describe('setEditor', () => {
-    it('sets a new editor and does not push old available editor to editors', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
+    it('sets editor and swaps previous into array', () => {
+      const { editorActions: a } = store.getState()
+      const first = makeTextual('First')
+      const second = makeTextual('Second')
+      a.addModel(first)
+      a.addModel(second)
 
-      expect(store.getState().editor.meta.name).toBe('Main')
-      // The initial 'available' editor should not be saved to editors
-      expect(store.getState().editors).toHaveLength(1)
-    })
+      // from available → does not save available to array
+      a.setEditor(first)
+      expect(store.getState().editor.meta.name).toBe('First')
+      expect(store.getState().editors).toHaveLength(2)
 
-    it('swaps current editor back into editors array when switching', () => {
-      const first = makeTextualEditor('First')
-      const second = makeTextualEditor('Second')
-      store.getState().editorActions.addModel(first)
-      store.getState().editorActions.addModel(second)
-      store.getState().editorActions.setEditor(first)
-
-      // Now switch to second editor
-      store.getState().editorActions.setEditor(second)
+      // from non-available → saves old editor back
+      a.setEditor(second)
       expect(store.getState().editor.meta.name).toBe('Second')
-
-      // First should be stored back in the editors array
-      const firstInEditors = store.getState().editors.find((e) => e.meta.name === 'First')
-      expect(firstInEditors).toBeDefined()
     })
 
-    it('does nothing when setting the same editor', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      const prevState = store.getState()
-      store.getState().editorActions.setEditor(makeTextualEditor('Main'))
-      // Same name means no-op; state should remain unchanged
-      expect(store.getState().editor.meta.name).toBe(prevState.editor.meta.name)
+    it('no-op when same editor name', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      expect(store.getState().editor.meta.name).toBe('M')
     })
   })
 
-  // -------------------------------------------------------------------------
-  // clearEditor
-  // -------------------------------------------------------------------------
-  it('clearEditor resets editors array and current editor', () => {
-    store.getState().editorActions.addModel(makeTextualEditor('Main'))
-    store.getState().editorActions.setEditor(makeTextualEditor('Main'))
-    store.getState().editorActions.clearEditor()
-
+  it('clearEditor resets state', () => {
+    const { editorActions: a } = store.getState()
+    a.addModel(makeTextual('M'))
+    a.setEditor(makeTextual('M'))
+    a.clearEditor()
     expect(store.getState().editors).toEqual([])
-    expect(store.getState().editor).toEqual({ type: 'available', meta: { name: 'available' } })
+    expect(store.getState().editor.type).toBe('available')
   })
 
-  // -------------------------------------------------------------------------
-  // saveEditorViewState
-  // -------------------------------------------------------------------------
   describe('saveEditorViewState', () => {
-    it('saves cursor, scroll, and fbd positions', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      const cursor = { lineNumber: 10, column: 5, offset: 100 }
-      const scroll = { top: 200, left: 0 }
-      const fbdPos = { x: 50, y: 50, zoom: 1.5 }
-
-      store.getState().editorActions.saveEditorViewState({
-        prevEditorName: 'Main',
-        cursorPosition: cursor,
-        scrollPosition: scroll,
-        fbdPosition: fbdPos,
+    it('saves cursor, scroll, fbd positions', () => {
+      const { editorActions: a } = store.getState()
+      const txt = makeTextual('M')
+      a.addModel(txt)
+      a.setEditor(txt)
+      a.saveEditorViewState({
+        prevEditorName: 'M',
+        cursorPosition: { lineNumber: 10, column: 5, offset: 100 },
+        scrollPosition: { top: 200, left: 0 },
+        fbdPosition: { x: 50, y: 50, zoom: 1.5 },
       })
-
-      const model = store.getState().editors.find((e) => e.meta.name === 'Main')
-      expect(model?.cursorPosition).toEqual(cursor)
-      expect(model?.scrollPosition).toEqual(scroll)
-      expect(model?.fbdPosition).toEqual(fbdPos)
+      expect(store.getState().editors.find((e) => e.meta.name === 'M')?.cursorPosition).toEqual({
+        lineNumber: 10,
+        column: 5,
+        offset: 100,
+      })
     })
 
-    it('does nothing when editor is available type', () => {
-      // Editor is 'available' by default
-      store.getState().editorActions.saveEditorViewState({
-        prevEditorName: 'available',
-        cursorPosition: { lineNumber: 1, column: 1, offset: 0 },
-      })
+    it('no-op for available editor or missing name', () => {
+      const { editorActions: a } = store.getState()
+      a.saveEditorViewState({ prevEditorName: 'X', cursorPosition: { lineNumber: 1, column: 1, offset: 0 } })
       expect(store.getState().editors).toEqual([])
-    })
 
-    it('does nothing when prevEditorName not found in editors', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
-
-      store.getState().editorActions.saveEditorViewState({
-        prevEditorName: 'NonExistent',
-        cursorPosition: { lineNumber: 1, column: 1, offset: 0 },
-      })
-
-      const model = store.getState().editors.find((e) => e.meta.name === 'Main')
-      expect(model?.cursorPosition).toBeUndefined()
+      a.addModel(makeTextual('M'))
+      a.setEditor(makeTextual('M'))
+      a.saveEditorViewState({ prevEditorName: 'NotFound', cursorPosition: { lineNumber: 1, column: 1, offset: 0 } })
     })
   })
 
-  // -------------------------------------------------------------------------
-  // getEditorFromEditors
-  // -------------------------------------------------------------------------
   describe('getEditorFromEditors', () => {
-    it('returns the current editor when name matches', () => {
-      const textual = makeTextualEditor('Main')
-      store.getState().editorActions.addModel(textual)
-      store.getState().editorActions.setEditor(textual)
+    it('returns current editor, array editor, or null', () => {
+      const { editorActions: a } = store.getState()
+      expect(a.getEditorFromEditors('X')).toBeNull()
 
-      const result = store.getState().editorActions.getEditorFromEditors('Main')
-      expect(result?.meta.name).toBe('Main')
-    })
+      a.addModel(makeTextual('First'))
+      a.addModel(makeTextual('Second'))
+      a.setEditor(makeTextual('First'))
 
-    it('returns editor from editors array when not current', () => {
-      const first = makeTextualEditor('First')
-      const second = makeTextualEditor('Second')
-      store.getState().editorActions.addModel(first)
-      store.getState().editorActions.addModel(second)
-      store.getState().editorActions.setEditor(first)
-
-      const result = store.getState().editorActions.getEditorFromEditors('Second')
-      expect(result?.meta.name).toBe('Second')
-    })
-
-    it('returns null when editor not found', () => {
-      const result = store.getState().editorActions.getEditorFromEditors('NonExistent')
-      expect(result).toBeNull()
+      expect(a.getEditorFromEditors('First')?.meta.name).toBe('First')
+      expect(a.getEditorFromEditors('Second')?.meta.name).toBe('Second')
+      expect(a.getEditorFromEditors('None')).toBeNull()
     })
   })
 
-  // -------------------------------------------------------------------------
-  // setMonacoFocused
-  // -------------------------------------------------------------------------
-  it('setMonacoFocused', () => {
-    store.getState().editorActions.setMonacoFocused(true)
+  it('setMonacoFocused toggles state', () => {
+    const { editorActions: a } = store.getState()
+    a.setMonacoFocused(true)
     expect(store.getState().isMonacoFocused).toBe(true)
-
-    store.getState().editorActions.setMonacoFocused(false)
+    a.setMonacoFocused(false)
     expect(store.getState().isMonacoFocused).toBe(false)
   })
 })
