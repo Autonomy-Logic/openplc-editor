@@ -5,11 +5,11 @@ import {
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
 import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
+import { PLCProject } from '@root/types/PLC/open-plc'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
-import { PLCProject } from '@root/types/PLC/open-plc'
 import { fileOrDirectoryExists } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
@@ -26,7 +26,7 @@ class ProjectService {
   async getProjectName(projectPath: string): Promise<string> {
     try {
       const projectFile = await promises.readFile(projectPath, 'utf-8')
-      return ((JSON.parse(projectFile) as PLCProject).meta.name as string) || 'Unknown project'
+      return ((JSON.parse(projectFile) as PLCProject).meta.name) || 'Unknown project'
     } catch {
       console.error('Error reading project file', projectPath)
       return 'Unknown project'
