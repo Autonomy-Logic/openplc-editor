@@ -25,4 +25,4 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: npx tsc --noEmit -p tsconfig.build.json
