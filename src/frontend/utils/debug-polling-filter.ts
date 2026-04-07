@@ -227,6 +227,7 @@ function shouldPollNestedVariable(
   if (debugGraphList.includes(compositeKey)) return true
 
   const parts = varName.split('.')
+  /* istanbul ignore next -- defensive: caller already checks varName.includes('.') */
   if (parts.length <= 1) return true
 
   // Find the deepest watched ancestor
@@ -426,6 +427,7 @@ function collectStIlVisibleKeys(
         // For derived-type variables (FB instances), also poll sub-variables
         if (v.type.definition === 'derived') {
           const prefix = makeKey(`${v.name}.`)
+          /* istanbul ignore next -- defensive: makeKey consistency within same call */
           if (prefix) addLeavesWithPrefix(prefix)
         }
       }

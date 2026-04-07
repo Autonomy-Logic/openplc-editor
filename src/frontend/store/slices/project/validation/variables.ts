@@ -222,6 +222,7 @@ const createVariableValidation = (
     if (variableLocation === '') return response
 
     const variableFound = variables.find((variable) => variable.location === variableLocation)
+    /* istanbul ignore next -- defensive: find() uses same predicate as checkIfLocationExists above */
     if (!variableFound) return response
 
     switch (variable.type.value.toUpperCase()) {

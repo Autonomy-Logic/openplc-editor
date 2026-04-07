@@ -83,6 +83,7 @@ const convertIOGroupToIOPoint = (ioGroup: ModbusIOGroup): ModbusMasterIOPoint =>
  * for the runtime configuration. Supports both TCP and RTU transports.
  */
 const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMasterDevice | null => {
+  /* istanbul ignore next -- defensive: callers pre-filter to modbus-tcp with config */
   if (device.protocol !== 'modbus-tcp' || !device.modbusTcpConfig) {
     return null
   }

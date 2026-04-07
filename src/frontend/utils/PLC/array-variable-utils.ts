@@ -29,6 +29,7 @@ export const parseArrayAccess = (name: string): ParsedArrayAccess | null => {
     indices.push(parseInt(trimmed, 10))
   }
 
+  /* istanbul ignore next -- unreachable: split(',') always yields >= 1 part that either returns null or pushes */
   if (indices.length === 0) return null
 
   return { baseName, indices }

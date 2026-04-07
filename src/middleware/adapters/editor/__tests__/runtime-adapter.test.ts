@@ -380,3 +380,34 @@ describe('IP address getter', () => {
     expect(window.bridge.runtimeGetUsersInfo).toHaveBeenCalledWith('10.0.0.2')
   })
 })
+
+// ---------------------------------------------------------------------------
+// isReadyForDebug
+// ---------------------------------------------------------------------------
+
+describe('isReadyForDebug', () => {
+  it('returns false when no IP and no token', () => {
+    mockIpAddress = ''
+    expect(adapter.isReadyForDebug!()).toBe(false)
+  })
+
+  it('returns false when IP is set but no JWT token', () => {
+    mockIpAddress = '192.168.1.100'
+    expect(adapter.isReadyForDebug!()).toBe(false)
+  })
+
+  it('returns true when both IP and JWT token are set', async () => {
+    mockIpAddress = '192.168.1.100'
+    await adapter.login({ username: 'admin', password: 'secret' })
+
+    expect(adapter.isReadyForDebug!()).toBe(true)
+  })
+
+  it('returns false after credentials are cleared', async () => {
+    mockIpAddress = '192.168.1.100'
+    await adapter.login({ username: 'admin', password: 'secret' })
+    await adapter.clearCredentials()
+
+    expect(adapter.isReadyForDebug!()).toBe(false)
+  })
+})

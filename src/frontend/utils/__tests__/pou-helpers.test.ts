@@ -358,6 +358,46 @@ describe('findLeafVariables', () => {
     expect(leaves).toEqual([{ relativePath: 's.v', typeName: 'INT' }])
   })
 
+  it('recursively expands nested structure fields within FBs (lines 178-179)', () => {
+    const dataTypes: PLCDataType[] = [
+      {
+        name: 'InnerStruct',
+        derivation: 'structure',
+        variable: [{ name: 'val', type: { definition: 'base-type', value: 'REAL' } }],
+      },
+    ]
+    const pous: PLCPou[] = [
+      {
+        name: 'NestedFB',
+        pouType: 'function-block',
+        interface: {
+          variables: [
+            {
+              name: 'inner',
+              class: 'local',
+              type: { definition: 'user-data-type', value: 'InnerStruct' },
+              location: '',
+              documentation: '',
+            },
+            {
+              name: 'out',
+              class: 'output',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
+          ],
+        },
+        body: { language: 'st', value: '' },
+      },
+    ]
+    const leaves = findLeafVariables('NestedFB', pous, dataTypes, 'fb')
+    expect(leaves).toEqual([
+      { relativePath: 'fb.inner.val', typeName: 'REAL' },
+      { relativePath: 'fb.out', typeName: 'BOOL' },
+    ])
+  })
+
   it('skips array-typed fields in FBs', () => {
     const pous: PLCPou[] = [
       {
@@ -393,6 +433,16 @@ describe('findLeafVariables', () => {
     ]
     const leaves = findLeafVariables('ArrayFB', pous, emptyDataTypes, 'fb')
     expect(leaves).toEqual([{ relativePath: 'fb.flag', typeName: 'BOOL' }])
+  })
+
+  it('expands a standard library FB with empty pathPrefix (line 168 falsy arm)', () => {
+    // SR is a standard FB. Calling without pathPrefix exercises the fbVar.name branch.
+    const leaves = findLeafVariables('SR', emptyPous, emptyDataTypes)
+    expect(leaves.length).toBeGreaterThan(0)
+    // Without pathPrefix, paths should NOT have a leading dot
+    leaves.forEach((leaf) => {
+      expect(leaf.relativePath).not.toMatch(/^\./)
+    })
   })
 
   it('uses empty pathPrefix by default', () => {

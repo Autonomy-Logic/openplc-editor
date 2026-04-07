@@ -103,6 +103,17 @@ describe('stop', () => {
     expect(result).toEqual({ success: true })
     expect(adapter.isRunning()).toBe(false)
   })
+
+  it('fires stop callbacks even on bridge error', async () => {
+    const cb = jest.fn()
+    adapter.onStopped(cb)
+    ;(window.bridge.simulatorStop as jest.Mock).mockRejectedValue(new Error('IPC error'))
+
+    await adapter.loadFirmware('/path/to/firmware.hex')
+    await adapter.stop()
+
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -192,6 +203,15 @@ describe('onStopped', () => {
     expect(cb1).toHaveBeenCalledTimes(1)
     expect(cb2).not.toHaveBeenCalled()
   })
+
+  it('tolerates double-unsubscribe without error', () => {
+    const cb = jest.fn()
+    const unsub = adapter.onStopped(cb)
+
+    unsub()
+    // Second call: indexOf returns -1, the idx >= 0 branch is false
+    expect(() => unsub()).not.toThrow()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -211,5 +231,169 @@ describe('connectDebugger', () => {
 describe('disconnectDebugger', () => {
   it('is a no-op (does not throw)', () => {
     expect(() => adapter.disconnectDebugger()).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getDebugMd5Hash
+// ---------------------------------------------------------------------------
+
+describe('getDebugMd5Hash', () => {
+  it('throws when no project context is provided', async () => {
+    // The default adapter is created without getProjectContext
+    await expect(adapter.getDebugMd5Hash()).rejects.toThrow('Project context not available for MD5 hash')
+  })
+
+  it('returns the MD5 hash from the bridge', async () => {
+    window.bridge = {
+      ...window.bridge,
+      debuggerReadProgramStMd5: jest.fn().mockResolvedValue({ success: true, md5: 'abc123' }),
+    } as unknown as typeof window.bridge
+
+    const adapterWithContext = createEditorSimulatorAdapter(() => ({
+      projectPath: '/project',
+      boardTarget: 'Arduino Mega',
+    }))
+
+    const result = await adapterWithContext.getDebugMd5Hash()
+
+    expect(window.bridge.debuggerReadProgramStMd5).toHaveBeenCalledWith('/project', 'Arduino Mega')
+    expect(result).toBe('abc123')
+  })
+
+  it('throws when bridge returns failure', async () => {
+    window.bridge = {
+      ...window.bridge,
+      debuggerReadProgramStMd5: jest
+        .fn()
+        .mockResolvedValue({ success: false, error: 'File not found' }),
+    } as unknown as typeof window.bridge
+
+    const adapterWithContext = createEditorSimulatorAdapter(() => ({
+      projectPath: '/project',
+      boardTarget: 'Arduino Mega',
+    }))
+
+    await expect(adapterWithContext.getDebugMd5Hash()).rejects.toThrow('File not found')
+  })
+
+  it('throws generic error when bridge returns failure without error message', async () => {
+    window.bridge = {
+      ...window.bridge,
+      debuggerReadProgramStMd5: jest.fn().mockResolvedValue({ success: false }),
+    } as unknown as typeof window.bridge
+
+    const adapterWithContext = createEditorSimulatorAdapter(() => ({
+      projectPath: '/project',
+      boardTarget: 'Arduino Mega',
+    }))
+
+    await expect(adapterWithContext.getDebugMd5Hash()).rejects.toThrow('Failed to read MD5 hash')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getDebugVariablesList
+// ---------------------------------------------------------------------------
+
+describe('getDebugVariablesList', () => {
+  beforeEach(() => {
+    window.bridge = {
+      ...window.bridge,
+      debuggerGetVariablesList: jest.fn(),
+    } as unknown as typeof window.bridge
+  })
+
+  it('returns converted hex string from number array data', async () => {
+    ;(window.bridge.debuggerGetVariablesList as jest.Mock).mockResolvedValue({
+      success: true,
+      tick: 42,
+      lastIndex: 3,
+      data: [0, 255, 16], // -> "00ff10"
+    })
+
+    const result = await adapter.getDebugVariablesList([0, 1, 2])
+
+    expect(window.bridge.debuggerGetVariablesList).toHaveBeenCalledWith([0, 1, 2])
+    expect(result).toEqual({
+      success: true,
+      tick: 42,
+      lastIndex: 3,
+      data: '00ff10',
+    })
+  })
+
+  it('returns error when bridge reports failure', async () => {
+    ;(window.bridge.debuggerGetVariablesList as jest.Mock).mockResolvedValue({
+      success: false,
+      error: 'Not connected',
+    })
+
+    const result = await adapter.getDebugVariablesList([0])
+
+    expect(result).toEqual({ success: false, error: 'Not connected' })
+  })
+
+  it('handles undefined data on success', async () => {
+    ;(window.bridge.debuggerGetVariablesList as jest.Mock).mockResolvedValue({
+      success: true,
+      tick: 1,
+      lastIndex: 0,
+    })
+
+    const result = await adapter.getDebugVariablesList([])
+
+    expect(result).toEqual({
+      success: true,
+      tick: 1,
+      lastIndex: 0,
+      data: undefined,
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// setDebugVariable
+// ---------------------------------------------------------------------------
+
+describe('setDebugVariable', () => {
+  beforeEach(() => {
+    window.bridge = {
+      ...window.bridge,
+      debuggerSetVariable: jest.fn().mockResolvedValue({ success: true }),
+    } as unknown as typeof window.bridge
+  })
+
+  it('converts hex string to Uint8Array when force is true with value', async () => {
+    const result = await adapter.setDebugVariable(5, true, '00ff10')
+
+    expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(
+      5,
+      true,
+      new Uint8Array([0, 255, 16]),
+    )
+    expect(result).toEqual({ success: true })
+  })
+
+  it('strips whitespace from hex string before conversion', async () => {
+    await adapter.setDebugVariable(5, true, '00 ff 10')
+
+    expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(
+      5,
+      true,
+      new Uint8Array([0, 255, 16]),
+    )
+  })
+
+  it('passes undefined for value when force is false', async () => {
+    await adapter.setDebugVariable(3, false)
+
+    expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(3, false, undefined)
+  })
+
+  it('passes undefined for value when force is true but no hex provided', async () => {
+    await adapter.setDebugVariable(3, true)
+
+    expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(3, true, undefined)
   })
 })

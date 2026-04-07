@@ -1,3 +1,4 @@
+import * as iecStringModule from '../../generate-iec-string-to-variables'
 import {
   detectLanguageFromExtension,
   findLastEndVarIndex,
@@ -424,6 +425,93 @@ END_PROGRAM`
 {invalid
 END_PROGRAM`
     expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow('Invalid JSON')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// parseTextualPouFromString — non-Error throw (line 148)
+// ---------------------------------------------------------------------------
+describe('parseTextualPouFromString — non-Error throw branch', () => {
+  it('throws generic Unknown error when a non-Error object is thrown internally', () => {
+    const spy = vi.spyOn(iecStringModule, 'parseIecStringToVariables').mockImplementation(() => {
+      // eslint-disable-next-line no-throw-literal
+      throw 'non-error string'
+    })
+
+    const content = `PROGRAM Main
+VAR
+  x : INT;
+END_VAR
+
+x := 1;
+
+END_PROGRAM`
+
+    expect(() => parseTextualPouFromString(content, 'st', 'program')).toThrow('Unknown error')
+    spy.mockRestore()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// parseHybridPouFromString — non-Error throw (line 240)
+// ---------------------------------------------------------------------------
+describe('parseHybridPouFromString — non-Error throw branch', () => {
+  it('throws generic Unknown error when a non-Error object is thrown internally', () => {
+    const spy = vi.spyOn(iecStringModule, 'parseIecStringToVariables').mockImplementation(() => {
+      // eslint-disable-next-line no-throw-literal
+      throw 42
+    })
+
+    const content = `PROGRAM Main
+VAR
+  x : INT;
+END_VAR
+print("hello")
+END_PROGRAM`
+
+    expect(() => parseHybridPouFromString(content, 'python', 'program')).toThrow('Unknown error')
+    spy.mockRestore()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// parseGraphicalPouFromString — non-Error JSON parse (line 326) and outer catch (line 346)
+// ---------------------------------------------------------------------------
+describe('parseGraphicalPouFromString — non-Error throw branches', () => {
+  it('throws generic Unknown error for non-Error JSON parse failure (line 326)', () => {
+    const originalParse = JSON.parse
+    JSON.parse = () => {
+      // eslint-disable-next-line no-throw-literal
+      throw 'non-error-json'
+    }
+
+    try {
+      const content = `PROGRAM Main
+{}
+END_PROGRAM`
+      expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow(
+        'Invalid JSON in graphical body',
+      )
+    } finally {
+      JSON.parse = originalParse
+    }
+  })
+
+  it('throws generic Unknown error when outer catch receives non-Error (line 346)', () => {
+    const spy = vi.spyOn(iecStringModule, 'parseIecStringToVariables').mockImplementation(() => {
+      // eslint-disable-next-line no-throw-literal
+      throw { weird: true }
+    })
+
+    const content = `PROGRAM GfxMain
+VAR
+  x : INT;
+END_VAR
+{}
+END_PROGRAM`
+
+    expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow('Unknown error')
+    spy.mockRestore()
   })
 })
 

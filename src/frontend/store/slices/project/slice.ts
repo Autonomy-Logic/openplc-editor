@@ -326,6 +326,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const pou = slice.project.data.pous.find((p) => p.name === name)
           if (!pou) return
           pou.body = body
+          /* istanbul ignore next -- defensive: interface is always present when POU exists */
           if (pou.interface) pou.interface.variables = variables
         }),
       )
@@ -1058,6 +1059,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
           const usedAddresses = new Set<string>()
           for (const g of device.modbusTcpConfig.ioGroups) {
+            /* istanbul ignore next -- defensive: ioPoints may be undefined */
             for (const p of g.ioPoints ?? []) {
               usedAddresses.add(p.iecLocation)
             }

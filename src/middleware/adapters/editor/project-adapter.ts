@@ -297,3 +297,5 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
   }
 }
+
+export { mapIpcPouToPortPou, mapPortPouToIpcPou }
