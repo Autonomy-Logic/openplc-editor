@@ -18,10 +18,6 @@
     "<rootDir>/src/**/?(*.)+(spec|test).(ts|tsx)",
     "<rootDir>/src/**/__tests__/**/*.(ts|tsx)"
   ],
-  "testPathIgnorePatterns": [
-    "/node_modules/",
-    "src/backend/shared/utils/__tests__/parse-project-files\\.test\\.ts"
-  ],
   "transform": {
     "\\.(ts|tsx)$": [
       "ts-jest",
