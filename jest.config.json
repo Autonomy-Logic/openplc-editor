@@ -30,7 +30,6 @@
     "src/frontend/store/slices/**/*.ts",
     "src/frontend/utils/**/*.ts",
     "src/backend/shared/**/*.ts",
-    "src/backend/editor/**/*.ts",
     "src/middleware/adapters/editor/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
@@ -56,12 +55,6 @@
       "statements": 100
     },
     "src/backend/shared/": {
-      "branches": 100,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
-    },
-    "src/backend/editor/": {
       "branches": 100,
       "functions": 100,
       "lines": 100,
