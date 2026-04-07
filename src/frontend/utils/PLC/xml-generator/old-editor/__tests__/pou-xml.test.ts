@@ -492,4 +492,131 @@ describe('oldEditorParsePousToXML', () => {
     const result = oldEditorParsePousToXML(xml, [])
     expect(result).toBe(xml)
   })
+
+  it('maps function-block pouType to functionBlock for IL language', () => {
+    const xml = makeBaseXml()
+    const pou: PLCPou = {
+      type: 'function-block',
+      data: {
+        name: 'ilFb',
+        language: 'il',
+        variables: [],
+        body: { language: 'il', value: 'LD 0' },
+        documentation: 'il doc',
+      },
+    }
+    const result = oldEditorParsePousToXML(xml, [pou])
+    expect(result.project.types.pous.pou[0]['@pouType']).toBe('functionBlock')
+    expect(result.project.types.pous.pou[0].body).toHaveProperty('IL')
+  })
+
+  it('maps function-block pouType to functionBlock for LD language', () => {
+    const xml = makeBaseXml()
+    const pou: PLCPou = {
+      type: 'function-block',
+      data: {
+        name: 'ldFb',
+        language: 'ld',
+        variables: [],
+        body: { language: 'ld', value: { name: 'ldFb', rungs: [] } },
+        documentation: '',
+      },
+    }
+    const result = oldEditorParsePousToXML(xml, [pou])
+    expect(result.project.types.pous.pou[0]['@pouType']).toBe('functionBlock')
+    expect(result.project.types.pous.pou[0].body).toHaveProperty('LD')
+  })
+
+  it('maps function-block pouType to functionBlock for FBD language', () => {
+    const xml = makeBaseXml()
+    const pou: PLCPou = {
+      type: 'function-block',
+      data: {
+        name: 'fbdFb',
+        language: 'fbd',
+        variables: [],
+        body: {
+          language: 'fbd',
+          value: { name: 'fbdFb', rung: { comment: '', selectedNodes: [], nodes: [], edges: [] } },
+        },
+        documentation: '',
+      },
+    }
+    const result = oldEditorParsePousToXML(xml, [pou])
+    expect(result.project.types.pous.pou[0]['@pouType']).toBe('functionBlock')
+    expect(result.project.types.pous.pou[0].body).toHaveProperty('FBD')
+  })
+
+  it('maps function pouType to function for LD language', () => {
+    const xml = makeBaseXml()
+    const pou: PLCPou = {
+      type: 'function',
+      data: {
+        name: 'ldFunc',
+        language: 'ld',
+        returnType: 'BOOL',
+        variables: [],
+        body: { language: 'ld', value: { name: 'ldFunc', rungs: [] } },
+        documentation: 'ld doc',
+      },
+    }
+    const result = oldEditorParsePousToXML(xml, [pou])
+    expect(result.project.types.pous.pou[0]['@pouType']).toBe('function')
+  })
+
+  it('maps function pouType to function for FBD language', () => {
+    const xml = makeBaseXml()
+    const pou: PLCPou = {
+      type: 'function',
+      data: {
+        name: 'fbdFunc',
+        language: 'fbd',
+        returnType: 'INT',
+        variables: [],
+        body: {
+          language: 'fbd',
+          value: { name: 'fbdFunc', rung: { comment: '', selectedNodes: [], nodes: [], edges: [] } },
+        },
+        documentation: '',
+      },
+    }
+    const result = oldEditorParsePousToXML(xml, [pou])
+    expect(result.project.types.pous.pou[0]['@pouType']).toBe('function')
+  })
+
+  it('maps function pouType to function for python language', () => {
+    const xml = makeBaseXml()
+    const pou: PLCPou = {
+      type: 'function',
+      data: {
+        name: 'pyFunc',
+        language: 'python',
+        returnType: 'REAL',
+        variables: [],
+        body: { language: 'python', value: 'x = 1' },
+        documentation: 'py doc',
+      },
+    }
+    const result = oldEditorParsePousToXML(xml, [pou])
+    expect(result.project.types.pous.pou[0]['@pouType']).toBe('function')
+    expect(result.project.types.pous.pou[0].body).toHaveProperty('ST')
+  })
+
+  it('maps function pouType to function for cpp language', () => {
+    const xml = makeBaseXml()
+    const pou: PLCPou = {
+      type: 'function',
+      data: {
+        name: 'cppFunc',
+        language: 'cpp',
+        returnType: 'DINT',
+        variables: [],
+        body: { language: 'cpp', value: 'int x;' },
+        documentation: '',
+      },
+    }
+    const result = oldEditorParsePousToXML(xml, [pou])
+    expect(result.project.types.pous.pou[0]['@pouType']).toBe('function')
+    expect(result.project.types.pous.pou[0].body).toHaveProperty('ST')
+  })
 })

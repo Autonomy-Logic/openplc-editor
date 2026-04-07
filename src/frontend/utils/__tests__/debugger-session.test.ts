@@ -300,6 +300,27 @@ describe('buildVariableIndexMap', () => {
     expect(indexMap.get('Main:X')).toBe(0)
   })
 
+  it('skips fallback entry when the debug variable name already exists in the map', () => {
+    // Scenario: composite key matches the debug variable name exactly.
+    // We name the pou's variable so that the composite key equals the debug var's name.
+    const pou = makePou('Main', 'program', [makeBaseVariable('X', 'INT')])
+    const instances = [makeInstance('INSTANCE0', 'Main')]
+    // The first debug var sets composite key 'Main:X' -> 0
+    // The second debug var has name 'Main:X' which already exists -> should be skipped
+    const parsed: ParsedDebugData = {
+      variables: [
+        makeDebugVar('RES0__INSTANCE0.X', 'INT_ENUM', 0),
+        makeDebugVar('Main:X', 'INT_ENUM', 99),
+      ],
+      totalCount: 2,
+    }
+
+    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
+
+    // 'Main:X' was set to 0 by the composite key, so the fallback with value 99 is skipped
+    expect(indexMap.get('Main:X')).toBe(0)
+  })
+
   it('handles POUs with no interface', () => {
     const pou: PLCPou = {
       name: 'Empty',

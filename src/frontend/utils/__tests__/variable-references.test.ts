@@ -973,6 +973,346 @@ describe('propagateVariableRename', () => {
 })
 
 // ---------------------------------------------------------------------------
+// findAllReferencesToVariable — uncovered false branches
+// ---------------------------------------------------------------------------
+
+describe('findAllReferencesToVariable — uncovered false branches', () => {
+  it('skips ladder block nodes whose variable name does not match', () => {
+    const ladderFlows: LadderFlow[] = [
+      {
+        name: 'P1',
+        rungs: [
+          {
+            id: 'r1',
+            nodes: [
+              makeNode('n1', 'block', {
+                variable: { name: 'otherVar' },
+                connectedVariables: [{ handleId: 'h1', variable: { name: 'alsoOther' } }],
+              }),
+            ],
+          },
+        ],
+      },
+    ]
+    const pous = [makePou('P1', 'ld', {})]
+    const result = findAllReferencesToVariable(
+      'myVar',
+      { definition: 'base-type', value: 'INT' },
+      'P1',
+      pous,
+      ladderFlows,
+      [],
+    )
+    expect(result.totalReferences).toBe(0)
+  })
+
+  it('skips ladder variable nodes whose variable name does not match', () => {
+    const ladderFlows: LadderFlow[] = [
+      {
+        name: 'P1',
+        rungs: [{ id: 'r1', nodes: [makeNode('n1', 'variable', { variable: { name: 'other' } })] }],
+      },
+    ]
+    const pous = [makePou('P1', 'ld', {})]
+    const result = findAllReferencesToVariable(
+      'myVar',
+      { definition: 'base-type', value: 'INT' },
+      'P1',
+      pous,
+      ladderFlows,
+      [],
+    )
+    expect(result.totalReferences).toBe(0)
+  })
+
+  it('skips FBD contact/coil nodes whose variable name does not match', () => {
+    const fbdFlows: FBDFlow[] = [
+      {
+        name: 'P1',
+        rung: {
+          nodes: [
+            makeNode('n1', 'contact', { variable: { name: 'other' } }),
+            makeNode('n2', 'coil', { variable: { name: 'other' } }),
+          ],
+        },
+      },
+    ]
+    const pous = [makePou('P1', 'fbd', {})]
+    const result = findAllReferencesToVariable(
+      'myVar',
+      { definition: 'base-type', value: 'BOOL' },
+      'P1',
+      pous,
+      [],
+      fbdFlows,
+    )
+    expect(result.totalReferences).toBe(0)
+  })
+
+  it('skips FBD block nodes whose variable/connection names do not match', () => {
+    const fbdFlows: FBDFlow[] = [
+      {
+        name: 'P1',
+        rung: {
+          nodes: [
+            makeNode('n1', 'block', {
+              variable: { name: 'other' },
+              connectedVariables: [{ handleId: 'h1', variable: { name: 'alsoOther' } }],
+            }),
+          ],
+        },
+      },
+    ]
+    const pous = [makePou('P1', 'fbd', {})]
+    const result = findAllReferencesToVariable(
+      'myVar',
+      { definition: 'base-type', value: 'INT' },
+      'P1',
+      pous,
+      [],
+      fbdFlows,
+    )
+    expect(result.totalReferences).toBe(0)
+  })
+
+  it('skips FBD variable/input-variable/output-variable/inout-variable nodes whose name does not match', () => {
+    const types = ['variable', 'input-variable', 'output-variable', 'inout-variable']
+    const nodes = types.map((t, i) => makeNode(`n${i}`, t, { variable: { name: 'other' } }))
+    const fbdFlows: FBDFlow[] = [{ name: 'P1', rung: { nodes } }]
+    const pous = [makePou('P1', 'fbd', {})]
+    const result = findAllReferencesToVariable(
+      'myVar',
+      { definition: 'base-type', value: 'INT' },
+      'P1',
+      pous,
+      [],
+      fbdFlows,
+    )
+    expect(result.totalReferences).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// propagateVariableTypeChange — uncovered false branches
+// ---------------------------------------------------------------------------
+
+describe('propagateVariableTypeChange — uncovered false branches', () => {
+  it('skips external variables whose name does not match', () => {
+    const pous: PLCPou[] = [
+      makePou('P1', 'st', '', [
+        makeVariable('notMatching', { class: 'external' }),
+        makeVariable('alsoNotMatching', { class: 'external' }),
+      ]),
+    ]
+    const calls: unknown[] = []
+    const projectActions = { updateVariable: (p: unknown) => calls.push(p) }
+    propagateVariableTypeChange('target', { definition: 'base-type', value: 'REAL' }, pous, projectActions)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('handles POUs with no interface (variables fallback to empty)', () => {
+    const pou: PLCPou = {
+      name: 'Empty',
+      pouType: 'program',
+      body: { language: 'st', value: '' },
+    }
+    const calls: unknown[] = []
+    const projectActions = { updateVariable: (p: unknown) => calls.push(p) }
+    propagateVariableTypeChange('x', { definition: 'base-type', value: 'REAL' }, [pou], projectActions)
+    expect(calls).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// propagateVariableRename — uncovered false branches
+// ---------------------------------------------------------------------------
+
+describe('propagateVariableRename — uncovered false branches', () => {
+  it('skips external variables in global scope whose name does not match', () => {
+    const pous: PLCPou[] = [makePou('P1', 'st', '', [makeVariable('notMatching', { class: 'external' })])]
+    const calls: unknown[] = []
+    const projectActions = {
+      updateVariable: (p: unknown) => calls.push(p),
+      updatePou: () => {},
+    }
+    propagateVariableRename(
+      'oldName',
+      'newName',
+      [],
+      [],
+      [],
+      pous,
+      { updateNode: () => {} },
+      { updateNode: () => {} },
+      projectActions,
+      'global',
+    )
+    expect(calls).toHaveLength(0)
+  })
+
+  it('handles POUs with no interface in global rename (variables fallback to empty)', () => {
+    const pou: PLCPou = {
+      name: 'Empty',
+      pouType: 'program',
+      body: { language: 'st', value: '' },
+    }
+    const calls: unknown[] = []
+    const projectActions = {
+      updateVariable: (p: unknown) => calls.push(p),
+      updatePou: () => {},
+    }
+    propagateVariableRename(
+      'oldName',
+      'newName',
+      [],
+      [],
+      [],
+      [pou],
+      { updateNode: () => {} },
+      { updateNode: () => {} },
+      projectActions,
+      'global',
+    )
+    expect(calls).toHaveLength(0)
+  })
+
+  it('skips ladder block-connection ref when connectionIndex is undefined', () => {
+    const ladderFlows: LadderFlow[] = [
+      {
+        name: 'P1',
+        rungs: [
+          {
+            id: 'r1',
+            nodes: [
+              makeNode('n1', 'block', {
+                connectedVariables: [
+                  {
+                    handleId: 'h1',
+                    variable: {
+                      name: 'oldName',
+                      type: { definition: 'base-type', value: 'INT' },
+                      location: '',
+                      documentation: '',
+                    },
+                  },
+                ],
+              }),
+            ],
+          },
+        ],
+      },
+    ]
+    const refs: VariableReferenceLocation[] = [
+      {
+        pouName: 'P1',
+        editorType: 'ladder',
+        nodeId: 'n1',
+        rungId: 'r1',
+        elementType: 'block-connection',
+        // connectionIndex is undefined
+      },
+    ]
+    const updateCalls: unknown[] = []
+    propagateVariableRename(
+      'oldName',
+      'newName',
+      refs,
+      ladderFlows,
+      [],
+      [],
+      { updateNode: (p: unknown) => updateCalls.push(p) },
+      { updateNode: () => {} },
+      { updateVariable: () => {}, updatePou: () => {} },
+    )
+    expect(updateCalls).toHaveLength(0)
+  })
+
+  it('skips graphical ref when editorType is neither ladder nor fbd', () => {
+    const refs: VariableReferenceLocation[] = [
+      // editorType 'ladder' but no nodeId - should not match ladder branch
+      { pouName: 'P1', editorType: 'ladder', rungId: 'r1', elementType: 'contact' },
+    ]
+    const updateCalls: unknown[] = []
+    propagateVariableRename(
+      'x',
+      'y',
+      refs,
+      [],
+      [],
+      [],
+      { updateNode: (p: unknown) => updateCalls.push(p) },
+      { updateNode: (p: unknown) => updateCalls.push(p) },
+      { updateVariable: () => {}, updatePou: () => {} },
+    )
+    expect(updateCalls).toHaveLength(0)
+  })
+
+  it('skips FBD ref when nodeId is missing', () => {
+    const refs: VariableReferenceLocation[] = [{ pouName: 'P1', editorType: 'fbd', elementType: 'contact' }]
+    const updateCalls: unknown[] = []
+    propagateVariableRename(
+      'x',
+      'y',
+      refs,
+      [],
+      [],
+      [],
+      { updateNode: () => {} },
+      { updateNode: (p: unknown) => updateCalls.push(p) },
+      { updateVariable: () => {}, updatePou: () => {} },
+    )
+    expect(updateCalls).toHaveLength(0)
+  })
+
+  it('skips FBD block-connection ref when connectionIndex is undefined', () => {
+    const fbdFlows: FBDFlow[] = [
+      {
+        name: 'P1',
+        rung: {
+          nodes: [
+            makeNode('n1', 'block', {
+              connectedVariables: [
+                {
+                  handleId: 'h1',
+                  variable: {
+                    name: 'oldName',
+                    type: { definition: 'base-type', value: 'INT' },
+                    location: '',
+                    documentation: '',
+                  },
+                },
+              ],
+            }),
+          ],
+        },
+      },
+    ]
+    const refs: VariableReferenceLocation[] = [
+      {
+        pouName: 'P1',
+        editorType: 'fbd',
+        nodeId: 'n1',
+        elementType: 'block-connection',
+        // connectionIndex is undefined
+      },
+    ]
+    const updateCalls: unknown[] = []
+    propagateVariableRename(
+      'oldName',
+      'newName',
+      refs,
+      [],
+      fbdFlows,
+      [],
+      { updateNode: () => {} },
+      { updateNode: (p: unknown) => updateCalls.push(p) },
+      { updateVariable: () => {}, updatePou: () => {} },
+    )
+    expect(updateCalls).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // validateVariableReference
 // ---------------------------------------------------------------------------
 

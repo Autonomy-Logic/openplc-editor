@@ -901,4 +901,89 @@ describe('ladderToXml (old-editor)', () => {
     const result = ladderToXml([rung])
     expect(result.body.LD.contact[0].connectionPointIn.connection).toEqual([])
   })
+
+  it('findConnections filters out edges where source node is not found', () => {
+    const contact = makeContact('c1', '10')
+    const rung = makeRung({
+      nodes: [makeLeftRail() as unknown as Node, contact as unknown as Node],
+      edges: [{ id: 'e1', source: 'nonexistent', target: 'c1', sourceHandle: 'out', targetHandle: 'in' }],
+    })
+    const result = ladderToXml([rung])
+    expect(result.body.LD.contact[0].connectionPointIn.connection).toEqual([])
+  })
+
+  it('findNodeBasedOnParallelOpen chains through a close parallel', () => {
+    const leftRail = makeLeftRail()
+    const c1 = { ...makeContact('c1', '10'), position: { x: 50, y: 50 } }
+    const c2 = { ...makeContact('c2', '11'), position: { x: 50, y: 150 } }
+    const pc = {
+      id: 'pc1',
+      type: 'parallel',
+      position: { x: 180, y: 50 },
+      width: 20,
+      height: 100,
+      data: {
+        numericId: '70',
+        type: 'close',
+        variable: { name: '' },
+        executionOrder: 0,
+        handles: [],
+        inputHandles: [],
+        outputHandles: [],
+        inputConnector: makeHandle('in', 180, 75),
+        outputConnector: makeHandle('out', 200, 75),
+        parallelInputConnector: makeHandle('pIn', 180, 150),
+        parallelOutputConnector: undefined,
+        parallelOpenReference: undefined,
+        parallelCloseReference: undefined,
+        draggable: false,
+        selectable: false,
+        deletable: false,
+      },
+    }
+    const po = {
+      id: 'po1',
+      type: 'parallel',
+      position: { x: 220, y: 50 },
+      width: 20,
+      height: 100,
+      data: {
+        numericId: '71',
+        type: 'open',
+        variable: { name: '' },
+        executionOrder: 0,
+        handles: [],
+        inputHandles: [],
+        outputHandles: [],
+        inputConnector: makeHandle('in', 220, 75),
+        outputConnector: makeHandle('out', 240, 75),
+        parallelInputConnector: makeHandle('pIn', 220, 150),
+        parallelOutputConnector: makeHandle('pOut', 240, 150),
+        parallelOpenReference: undefined,
+        parallelCloseReference: undefined,
+        draggable: false,
+        selectable: false,
+        deletable: false,
+      },
+    }
+    const c3 = { ...makeContact('c3', '12'), position: { x: 260, y: 50 } }
+    const rung = makeRung({
+      nodes: [
+        leftRail as unknown as Node,
+        c1 as unknown as Node,
+        c2 as unknown as Node,
+        pc as unknown as Node,
+        po as unknown as Node,
+        c3 as unknown as Node,
+      ],
+      edges: [
+        { id: 'e1', source: 'c1', target: 'pc1', sourceHandle: 'out', targetHandle: 'in' },
+        { id: 'e2', source: 'c2', target: 'pc1', sourceHandle: 'out', targetHandle: 'pIn' },
+        { id: 'e3', source: 'pc1', target: 'po1', sourceHandle: 'out', targetHandle: 'in' },
+        { id: 'e4', source: 'po1', target: 'c3', sourceHandle: 'out', targetHandle: 'in' },
+      ],
+    })
+    const result = ladderToXml([rung])
+    expect(result.body.LD.contact.length).toBeGreaterThanOrEqual(1)
+  })
 })

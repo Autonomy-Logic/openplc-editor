@@ -748,4 +748,285 @@ describe('fbdToXml (old-editor)', () => {
     const result = fbdToXml(rung)
     expect(result.body.FBD.block).toHaveLength(0)
   })
+
+  it('block input filters out edges where source node is not found', () => {
+    const rung = makeRung({
+      nodes: [
+        {
+          id: 'b1',
+          type: 'block',
+          position: { x: 200, y: 0 },
+          width: 100,
+          height: 50,
+          data: {
+            numericId: '2',
+            executionOrder: 0,
+            variant: { name: 'ADD', type: 'function' },
+            variable: { name: '' },
+            handles: [],
+            inputHandles: [makeHandle('IN1', 200, 25)],
+            outputHandles: [],
+            inputConnector: undefined,
+            outputConnector: undefined,
+            draggable: true,
+            selectable: true,
+            deletable: true,
+          },
+        } as unknown as Node,
+      ],
+      edges: [{ id: 'e1', source: 'nonexistent', target: 'b1', sourceHandle: 'out', targetHandle: 'IN1' }],
+    })
+    const result = fbdToXml(rung)
+    expect(result.body.FBD.block[0].inputVariables.variable).toHaveLength(0)
+  })
+
+  it('output-variable with path where source is a block includes formalParameter', () => {
+    const rung = makeRung({
+      nodes: [
+        {
+          id: 'b1',
+          type: 'block',
+          position: { x: 0, y: 0 },
+          width: 100,
+          height: 50,
+          data: {
+            numericId: '10',
+            executionOrder: 0,
+            variant: { name: 'ADD', type: 'function' },
+            variable: { name: '' },
+            handles: [],
+            inputHandles: [],
+            outputHandles: [makeHandle('OUT', 100, 25)],
+            inputConnector: undefined,
+            outputConnector: {
+              id: 'OUT',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 100, y: 25 },
+              relPosition: { x: 100, y: 25 },
+            },
+            draggable: true,
+            selectable: true,
+            deletable: true,
+          },
+        } as unknown as Node,
+        {
+          id: 'ov1',
+          type: 'output-variable',
+          position: { x: 200, y: 0 },
+          width: 80,
+          height: 30,
+          data: {
+            numericId: '11',
+            executionOrder: 1,
+            negated: false,
+            variable: { name: 'result' },
+            handles: [],
+            inputHandles: [makeHandle('in', 200, 15)],
+            outputHandles: [],
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 200, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
+            outputConnector: undefined,
+            draggable: true,
+            selectable: true,
+            deletable: true,
+            variant: 'output-variable',
+          },
+        } as unknown as Node,
+      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'ov1', sourceHandle: 'OUT', targetHandle: 'in' }],
+    })
+    const result = fbdToXml(rung)
+    const ov = result.body.FBD.outVariable[0]
+    expect(ov.connectionPointIn.connection[0]['@formalParameter']).toBe('OUT')
+    expect(ov.connectionPointIn.connection[0].position.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('output-variable filters out connections where path is undefined', () => {
+    const rung = makeRung({
+      nodes: [
+        {
+          id: 'iv1',
+          type: 'input-variable',
+          position: { x: 0, y: 0 },
+          width: 80,
+          height: 30,
+          data: {
+            numericId: '1',
+            executionOrder: 0,
+            variable: { name: 'x' },
+            handles: [],
+            inputHandles: [],
+            outputHandles: [], // No handles so getEdgePaths returns undefined
+            inputConnector: undefined,
+            outputConnector: undefined,
+            draggable: true,
+            selectable: true,
+            deletable: true,
+            negated: false,
+            variant: 'input-variable',
+          },
+        } as unknown as Node,
+        {
+          id: 'ov1',
+          type: 'output-variable',
+          position: { x: 200, y: 0 },
+          width: 80,
+          height: 30,
+          data: {
+            numericId: '2',
+            executionOrder: 1,
+            negated: false,
+            variable: { name: 'out' },
+            handles: [],
+            inputHandles: [makeHandle('in', 200, 15)],
+            outputHandles: [],
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 200, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
+            outputConnector: undefined,
+            draggable: true,
+            selectable: true,
+            deletable: true,
+            variant: 'output-variable',
+          },
+        } as unknown as Node,
+      ],
+      edges: [{ id: 'e1', source: 'iv1', target: 'ov1', sourceHandle: 'nonexistent', targetHandle: 'in' }],
+    })
+    const result = fbdToXml(rung)
+    // Path is undefined because source handle doesn't match any outputHandle
+    expect(result.body.FBD.outVariable[0].connectionPointIn.connection).toHaveLength(0)
+  })
+
+  it('connector with block source includes formalParameter', () => {
+    const rung = makeRung({
+      nodes: [
+        {
+          id: 'b1',
+          type: 'block',
+          position: { x: 0, y: 0 },
+          width: 100,
+          height: 50,
+          data: {
+            numericId: '10',
+            executionOrder: 0,
+            variant: { name: 'ADD', type: 'function' },
+            variable: { name: '' },
+            handles: [],
+            inputHandles: [],
+            outputHandles: [makeHandle('OUT', 100, 25)],
+            inputConnector: undefined,
+            outputConnector: {
+              id: 'OUT',
+              type: 'source',
+              position: 'right',
+              glbPosition: { x: 100, y: 25 },
+              relPosition: { x: 100, y: 25 },
+            },
+            draggable: true,
+            selectable: true,
+            deletable: true,
+          },
+        } as unknown as Node,
+        {
+          id: 'conn1',
+          type: 'connector',
+          position: { x: 200, y: 0 },
+          width: 60,
+          height: 30,
+          data: {
+            numericId: '11',
+            variable: { name: 'L' },
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 200, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
+            outputConnector: undefined,
+            handles: [],
+            inputHandles: [makeHandle('in', 200, 15)],
+            outputHandles: [],
+            draggable: true,
+            selectable: true,
+            deletable: true,
+            variant: 'connector',
+          },
+        } as unknown as Node,
+      ],
+      edges: [{ id: 'e1', source: 'b1', target: 'conn1', sourceHandle: 'OUT', targetHandle: 'in' }],
+    })
+    const result = fbdToXml(rung)
+    const conn = result.body.FBD.connector[0]
+    expect(conn.connectionPointIn.connection[0]['@formalParameter']).toBe('OUT')
+  })
+
+  it('connector filters out connections where path is undefined', () => {
+    const rung = makeRung({
+      nodes: [
+        {
+          id: 'iv1',
+          type: 'input-variable',
+          position: { x: 0, y: 0 },
+          width: 80,
+          height: 30,
+          data: {
+            numericId: '1',
+            executionOrder: 0,
+            variable: { name: 'x' },
+            handles: [],
+            inputHandles: [],
+            outputHandles: [], // No outputHandles so path returns undefined
+            inputConnector: undefined,
+            outputConnector: undefined,
+            draggable: true,
+            selectable: true,
+            deletable: true,
+            negated: false,
+            variant: 'input-variable',
+          },
+        } as unknown as Node,
+        {
+          id: 'conn1',
+          type: 'connector',
+          position: { x: 100, y: 0 },
+          width: 60,
+          height: 30,
+          data: {
+            numericId: '2',
+            variable: { name: 'label1' },
+            inputConnector: {
+              id: 'in',
+              type: 'target',
+              position: 'left',
+              glbPosition: { x: 100, y: 15 },
+              relPosition: { x: 0, y: 15 },
+            },
+            outputConnector: undefined,
+            handles: [],
+            inputHandles: [makeHandle('in', 100, 15)],
+            outputHandles: [],
+            draggable: true,
+            selectable: true,
+            deletable: true,
+            variant: 'connector',
+          },
+        } as unknown as Node,
+      ],
+      edges: [{ id: 'e1', source: 'iv1', target: 'conn1', sourceHandle: 'nonexistent', targetHandle: 'in' }],
+    })
+    const result = fbdToXml(rung)
+    expect(result.body.FBD.connector[0].connectionPointIn.connection).toHaveLength(0)
+  })
 })

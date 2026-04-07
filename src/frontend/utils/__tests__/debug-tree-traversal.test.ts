@@ -271,6 +271,26 @@ describe('traverseVariable', () => {
       expect(result.children![0].kind).toBe('array')
       expect(result.children![0].children).toHaveLength(2)
     })
+
+    it('skips FB child with array definition but no data', () => {
+      const outerFb = makePou('FBWithBadArray', 'function-block', [
+        {
+          name: 'badArr',
+          class: 'local' as PLCVariable['class'],
+          type: { definition: 'array' as const, value: 'ARRAY' },
+          location: '',
+          documentation: '',
+        },
+      ])
+      const variable = makeDerivedVariable('inst', 'FBWithBadArray')
+      const ctx = makeContext({ projectPous: [outerFb] })
+
+      const result = traverseVariable(variable, ctx, simpleVisitor)
+
+      // badArr has array definition but no data, so it is skipped by the FB child loop
+      expect(result.kind).toBe('complex')
+      expect(result.children).toHaveLength(0)
+    })
   })
 
   describe('user-data-type variables', () => {
@@ -375,6 +395,23 @@ describe('traverseVariable', () => {
       expect(result.kind).toBe('complex')
       expect(result.children![0].kind).toBe('array')
     })
+
+    it('skips struct field with array definition but no data', () => {
+      const outerStruct = makeStructDataType('StructWithBadArray', [
+        {
+          name: 'badArr',
+          type: { definition: 'array' as const, value: 'ARRAY' },
+        },
+      ])
+      const variable = makeUdtVariable('s', 'StructWithBadArray')
+      const ctx = makeContext({ dataTypes: [outerStruct] })
+
+      const result = traverseVariable(variable, ctx, simpleVisitor)
+
+      // badArr has array definition but no data, so it is skipped in struct traversal
+      expect(result.kind).toBe('complex')
+      expect(result.children).toHaveLength(0)
+    })
   })
 
   describe('array variables', () => {
@@ -409,6 +446,31 @@ describe('traverseVariable', () => {
       expect(result.children![0].kind).toBe('complex')
     })
 
+    it('skips array elements when base type is neither base-type nor user-data-type', () => {
+      // An array with a derived base type falls through both if branches in the loop
+      const variable: PLCVariable = {
+        name: 'oddArr',
+        class: 'local',
+        type: {
+          definition: 'array',
+          value: 'ARRAY [0..0] OF SomeFB',
+          data: {
+            baseType: { definition: 'derived' as 'base-type' | 'user-data-type', value: 'SomeFB' },
+            dimensions: [{ dimension: '0..0' }],
+          },
+        },
+        location: '',
+        documentation: '',
+      }
+      const ctx = makeContext()
+
+      const result = traverseVariable(variable, ctx, simpleVisitor)
+
+      // Array is created, but element is skipped (no children because neither branch matched)
+      expect(result.kind).toBe('array')
+      expect(result.children).toHaveLength(0)
+    })
+
     it('returns leaf for array with no dimensions', () => {
       const variable: PLCVariable = {
         name: 'emptyArr',
@@ -430,6 +492,21 @@ describe('traverseVariable', () => {
 
       expect(result.kind).toBe('leaf')
       expect(result.typeName).toBe('ARRAY')
+    })
+
+    it('builds an array node with UDT elements that resolve to FB', () => {
+      const customFb = makePou('InnerFB', 'function-block', [makeBaseVariable('Q', 'BOOL', 'output')])
+      const variable = makeArrayVariable('fbArr', 'user-data-type', 'InnerFB', '0..0')
+      const debugVars = [makeDebugVar('RES0__INSTANCE0.FBARR.value.table[0].Q', 'BOOL_ENUM', 110)]
+      const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
+
+      const result = traverseVariable(variable, ctx, simpleVisitor)
+
+      expect(result.kind).toBe('array')
+      expect(result.children).toHaveLength(1)
+      // UDT element resolved as FB -> complex node
+      expect(result.children![0].kind).toBe('complex')
+      expect(result.children![0].children![0].name).toBe('Q')
     })
 
     it('returns leaf for array with invalid dimension format', () => {

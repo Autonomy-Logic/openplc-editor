@@ -604,6 +604,26 @@ describe('createFBDFlowSlice', () => {
   })
 
   // -------------------------------------------------------------------------
+  // clearSelections
+  // -------------------------------------------------------------------------
+  it('clearSelections resets all node selections in a flow', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    const node = makeNode({ id: 'n1', data: { draggable: true }, selected: true })
+    store.getState().fbdFlowActions.setNodes({ editorName: 'editor-1', nodes: [node] })
+    store.getState().fbdFlowActions.setSelectedNodes({ editorName: 'editor-1', nodes: [node] })
+
+    store.getState().fbdFlowActions.clearSelections({ editorName: 'editor-1' })
+
+    const flow = store.getState().fbdFlows[0]
+    expect(flow.rung.nodes.every((n) => !n.selected)).toBe(true)
+  })
+
+  it('clearSelections does nothing for nonexistent editor', () => {
+    store.getState().fbdFlowActions.clearSelections({ editorName: 'nonexistent' })
+    expect(store.getState().fbdFlows).toEqual([])
+  })
+
+  // -------------------------------------------------------------------------
   // Defensive guard coverage — unreachable under TypeScript but present as runtime safety
   // -------------------------------------------------------------------------
   it('addSelectedNode initializes selectedNodes when undefined', () => {

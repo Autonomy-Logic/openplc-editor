@@ -1312,4 +1312,181 @@ describe('ladderToXml (codesys)', () => {
     // connection is from leftRail, which uses OUT => should use empty string
     expect(result.body.LD.contact).toHaveLength(1)
   })
+
+  it('findConnections filters out edges where source node is not found', () => {
+    const contact = makeContact('c1', '10')
+    const rung = makeRung({
+      nodes: [makeLeftRail() as unknown as Node, contact as unknown as Node],
+      edges: [{ id: 'e1', source: 'nonexistent', target: 'c1', sourceHandle: 'out', targetHandle: 'in' }],
+    })
+    const result = ladderToXml([rung])
+    expect(result.body.LD.contact[0].connectionPointIn.connection).toEqual([])
+  })
+
+  it('coil connected directly to left rail uses leftRailId', () => {
+    const leftRail = makeLeftRail('lr1', '100')
+    const coil = makeCoil('cl1', '20')
+    const rung = makeRung({
+      nodes: [leftRail as unknown as Node, coil as unknown as Node],
+      edges: [{ id: 'e1', source: 'lr1', target: 'cl1', sourceHandle: 'out', targetHandle: 'in' }],
+    })
+    const result = ladderToXml([rung])
+    const c = result.body.LD.coil[0]
+    expect(c.connectionPointIn.connection[0]['@refLocalId']).toBe('100')
+  })
+
+  it('block connected directly to left rail uses leftRailId', () => {
+    const leftRail = makeLeftRail('lr1', '100')
+    const blockNode = {
+      id: 'b1',
+      type: 'block',
+      position: { x: 200, y: 50 },
+      width: 120,
+      height: 60,
+      data: {
+        numericId: '50',
+        variant: { name: 'ADD', type: 'function' },
+        variable: { name: '' },
+        executionOrder: 0,
+        handles: [],
+        inputHandles: [makeHandle('EN', 200, 50)],
+        outputHandles: [makeHandle('OUT', 320, 70)],
+        inputConnector: makeHandle('EN', 200, 50),
+        outputConnector: makeHandle('OUT', 320, 70),
+        draggable: true,
+        selectable: true,
+        deletable: true,
+        executionControl: false,
+        lockExecutionControl: false,
+        connectedVariables: [],
+      },
+    }
+    const rung = makeRung({
+      nodes: [leftRail as unknown as Node, blockNode as unknown as Node],
+      edges: [{ id: 'e1', source: 'lr1', target: 'b1', sourceHandle: 'out', targetHandle: 'EN' }],
+    })
+    const result = ladderToXml([rung])
+    const b = result.body.LD.block[0]
+    expect(b.inputVariables.variable[0].connectionPointIn.connection[0]['@refLocalId']).toBe('100')
+  })
+
+  it('block connected to non-rail node does not replace refLocalId', () => {
+    const leftRail = makeLeftRail('lr1', '100')
+    const contact = makeContact('c1', '10')
+    const blockNode = {
+      id: 'b1',
+      type: 'block',
+      position: { x: 300, y: 50 },
+      width: 120,
+      height: 60,
+      data: {
+        numericId: '50',
+        variant: { name: 'ADD', type: 'function' },
+        variable: { name: '' },
+        executionOrder: 0,
+        handles: [],
+        inputHandles: [makeHandle('EN', 300, 50)],
+        outputHandles: [makeHandle('OUT', 420, 70)],
+        inputConnector: makeHandle('EN', 300, 50),
+        outputConnector: makeHandle('OUT', 420, 70),
+        draggable: true,
+        selectable: true,
+        deletable: true,
+        executionControl: false,
+        lockExecutionControl: false,
+        connectedVariables: [],
+      },
+    }
+    const rung = makeRung({
+      nodes: [leftRail as unknown as Node, contact as unknown as Node, blockNode as unknown as Node],
+      edges: [
+        { id: 'e1', source: 'lr1', target: 'c1', sourceHandle: 'out', targetHandle: 'in' },
+        { id: 'e2', source: 'c1', target: 'b1', sourceHandle: 'out', targetHandle: 'EN' },
+      ],
+    })
+    const result = ladderToXml([rung])
+    const b = result.body.LD.block[0]
+    // Block is connected to a contact, not directly to the rail
+    // So the railConnection find returns false, and refLocalId should be the contact's numericId
+    expect(b.inputVariables.variable[0].connectionPointIn.connection[0]['@refLocalId']).toBe('10')
+  })
+
+  it('findNodeBasedOnParallelOpen chains through a close parallel to findNodesBasedOnParallelClose', () => {
+    const leftRail = makeLeftRail()
+    const c1 = { ...makeContact('c1', '10'), position: { x: 50, y: 50 } }
+    const c2 = { ...makeContact('c2', '11'), position: { x: 50, y: 150 } }
+    // close parallel merges c1 and c2
+    const pc = {
+      id: 'pc1',
+      type: 'parallel',
+      position: { x: 180, y: 50 },
+      width: 20,
+      height: 100,
+      data: {
+        numericId: '70',
+        type: 'close',
+        variable: { name: '' },
+        executionOrder: 0,
+        handles: [],
+        inputHandles: [],
+        outputHandles: [],
+        inputConnector: makeHandle('in', 180, 75),
+        outputConnector: makeHandle('out', 200, 75),
+        parallelInputConnector: makeHandle('pIn', 180, 150),
+        parallelOutputConnector: undefined,
+        parallelOpenReference: undefined,
+        parallelCloseReference: undefined,
+        draggable: false,
+        selectable: false,
+        deletable: false,
+      },
+    }
+    // open parallel is fed by the close parallel
+    const po = {
+      id: 'po1',
+      type: 'parallel',
+      position: { x: 220, y: 50 },
+      width: 20,
+      height: 100,
+      data: {
+        numericId: '71',
+        type: 'open',
+        variable: { name: '' },
+        executionOrder: 0,
+        handles: [],
+        inputHandles: [],
+        outputHandles: [],
+        inputConnector: makeHandle('in', 220, 75),
+        outputConnector: makeHandle('out', 240, 75),
+        parallelInputConnector: makeHandle('pIn', 220, 150),
+        parallelOutputConnector: makeHandle('pOut', 240, 150),
+        parallelOpenReference: undefined,
+        parallelCloseReference: undefined,
+        draggable: false,
+        selectable: false,
+        deletable: false,
+      },
+    }
+    const c3 = { ...makeContact('c3', '12'), position: { x: 260, y: 50 } }
+    const rung = makeRung({
+      nodes: [
+        leftRail as unknown as Node,
+        c1 as unknown as Node,
+        c2 as unknown as Node,
+        pc as unknown as Node,
+        po as unknown as Node,
+        c3 as unknown as Node,
+      ],
+      edges: [
+        { id: 'e1', source: 'c1', target: 'pc1', sourceHandle: 'out', targetHandle: 'in' },
+        { id: 'e2', source: 'c2', target: 'pc1', sourceHandle: 'out', targetHandle: 'pIn' },
+        { id: 'e3', source: 'pc1', target: 'po1', sourceHandle: 'out', targetHandle: 'in' },
+        { id: 'e4', source: 'po1', target: 'c3', sourceHandle: 'out', targetHandle: 'in' },
+      ],
+    })
+    const result = ladderToXml([rung])
+    // c3 is connected via open parallel whose source is a close parallel
+    // This exercises findNodeBasedOnParallelOpen -> findNodesBasedOnParallelClose chain
+    expect(result.body.LD.contact.length).toBeGreaterThanOrEqual(1)
+  })
 })

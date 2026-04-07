@@ -68,6 +68,7 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
   const inputVariables: BlockFbdXML['inputVariables']['variable'] = node.data.inputHandles
     .flatMap((handle) => {
       const edges = rung.edges.filter((edge) => edge.target === node.id && edge.targetHandle === handle.id)
+      /* istanbul ignore next -- defensive: Array.filter always returns an array */
       if (!edges) return undefined
 
       return edges.map((edge) => {

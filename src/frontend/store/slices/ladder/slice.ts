@@ -94,6 +94,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           }
 
           const flow = ladderFlows.find((flow) => flow.name === editorName)
+          /* istanbul ignore next -- unreachable: flow was just pushed above */
           if (!flow) return
 
           const { powerRail } = defaultCustomNodesStyles

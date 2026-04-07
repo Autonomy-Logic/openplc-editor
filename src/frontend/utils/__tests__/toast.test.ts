@@ -186,6 +186,19 @@ describe('toast', () => {
     }
   })
 
+  it('onOpenChange does nothing when open=true', () => {
+    toast({ title: 'OnOpenChange true test' })
+    const state = getMemoryState()
+    const t = state.toasts[0]
+    expect(t.onOpenChange).toBeDefined()
+    t.onOpenChange!(true)
+    const afterState = getMemoryState()
+    const updated = afterState.toasts.find((x) => x.id === t.id)
+    // Toast should still be open (dismiss was not called)
+    expect(updated).toBeTruthy()
+    expect(updated!.open).toBe(true)
+  })
+
   it('generates unique ids across calls', () => {
     const a = toast({ title: 'A' })
     // Reset to make room for another toast (limit=1)
