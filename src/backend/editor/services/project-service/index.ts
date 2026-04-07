@@ -9,7 +9,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
-import { PLCProject } from '../../../types/PLC/open-plc'
+import { PLCProject } from '@root/types/PLC/open-plc'
 import { fileOrDirectoryExists } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
