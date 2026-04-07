@@ -13,7 +13,7 @@ export type MainIpcModule = {
   store: TStoreType
   setupMainIpcListener: () => void
   mainIpcEventHandlers: {
-    handleUpdateTheme: () => void
+    handleUpdateTheme: (_event: unknown, theme?: 'light' | 'dark') => void
     createPou: () => void
   }
 }

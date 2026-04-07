@@ -1,15 +1,15 @@
+import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
 import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
-import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
 
-import { PLCProject } from '../../../types/PLC/open-plc'
+import type { PLCProject } from '../../../../middleware/shared/ports/types'
 import { fileOrDirectoryExists } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
