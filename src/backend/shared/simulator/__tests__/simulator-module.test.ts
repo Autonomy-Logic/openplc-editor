@@ -272,7 +272,6 @@ describe('SimulatorModule', () => {
       mockCpuInstance.cycles = 0
       // No nextClockEvent
       ;(mockCpuInstance as any).nextClockEvent = null
-
       ;(avrInstruction as jest.Mock).mockImplementation(() => {
         mockCpuInstance.pc++
         mockCpuInstance.cycles += 2_000_000
@@ -296,7 +295,6 @@ describe('SimulatorModule', () => {
       mockCpuInstance.pc = 0
       mockCpuInstance.cycles = 100
       ;(mockCpuInstance as any).nextClockEvent = { cycles: 50 } // already past
-
       ;(avrInstruction as jest.Mock).mockImplementation(() => {
         mockCpuInstance.pc++
         mockCpuInstance.cycles += 2_000_000

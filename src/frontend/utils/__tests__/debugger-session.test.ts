@@ -308,10 +308,7 @@ describe('buildVariableIndexMap', () => {
     // The first debug var sets composite key 'Main:X' -> 0
     // The second debug var has name 'Main:X' which already exists -> should be skipped
     const parsed: ParsedDebugData = {
-      variables: [
-        makeDebugVar('RES0__INSTANCE0.X', 'INT_ENUM', 0),
-        makeDebugVar('Main:X', 'INT_ENUM', 99),
-      ],
+      variables: [makeDebugVar('RES0__INSTANCE0.X', 'INT_ENUM', 0), makeDebugVar('Main:X', 'INT_ENUM', 99)],
       totalCount: 2,
     }
 

@@ -78,7 +78,9 @@ describe('resolveVariableIndex', () => {
 
   it('resolves program variable via instance (FB-style match)', () => {
     const node = makeNode({ pouName: 'MAIN', variablePath: 'COUNTER' })
-    expect(resolveVariableIndex(node, [dv('RES0__INSTANCE0.COUNTER', 'INT_ENUM', 10)], [inst('INSTANCE0', 'MAIN')])).toBe(10)
+    expect(
+      resolveVariableIndex(node, [dv('RES0__INSTANCE0.COUNTER', 'INT_ENUM', 10)], [inst('INSTANCE0', 'MAIN')]),
+    ).toBe(10)
   })
 
   it('resolves program variable via struct-style fallback', () => {
@@ -96,9 +98,9 @@ describe('resolveVariableIndex', () => {
 
   it('throws when variable path not found after fallback', () => {
     const node = makeNode({ pouName: 'MAIN', variablePath: 'MISSING' })
-    expect(() => resolveVariableIndex(node, [dv('RES0__INSTANCE0.OTHER', 'INT_ENUM', 0)], [inst('INSTANCE0', 'MAIN')])).toThrow(
-      'Cannot resolve OPC-UA variable index',
-    )
+    expect(() =>
+      resolveVariableIndex(node, [dv('RES0__INSTANCE0.OTHER', 'INT_ENUM', 0)], [inst('INSTANCE0', 'MAIN')]),
+    ).toThrow('Cannot resolve OPC-UA variable index')
   })
 })
 
@@ -109,7 +111,11 @@ describe('resolveVariableIndex', () => {
 describe('resolveStructureIndices', () => {
   it('falls back to resolveVariableIndex when no fields (lines 225-226)', () => {
     const node = makeNode({ nodeType: 'structure', variablePath: 'MY_FB', variableType: 'FB_T' })
-    const result = resolveStructureIndices(node, [dv('RES0__INSTANCE0.MY_FB', 'INT_ENUM', 7)], [inst('INSTANCE0', 'MAIN')])
+    const result = resolveStructureIndices(
+      node,
+      [dv('RES0__INSTANCE0.MY_FB', 'INT_ENUM', 7)],
+      [inst('INSTANCE0', 'MAIN')],
+    )
     expect(result).toHaveLength(1)
     expect(result[0]).toMatchObject({ name: 'MY_FB', datatype: 'FB_T', index: 7 })
   })
@@ -241,11 +247,7 @@ describe('resolveStructureIndices', () => {
       variablePath: 'S',
       fields: [makeField({ fieldPath: 'B', datatype: 'REAL', initialValue: 0 })],
     })
-    const result = resolveStructureIndices(
-      node,
-      [dv('RES0__INSTANCE0.S.B', '', 60)],
-      [inst('INSTANCE0', 'MAIN')],
-    )
+    const result = resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.B', '', 60)], [inst('INSTANCE0', 'MAIN')])
     expect(result[0].datatype).toBe('REAL')
   })
 
@@ -255,11 +257,7 @@ describe('resolveStructureIndices', () => {
       variablePath: 'S',
       fields: [makeField({ fieldPath: 'C', initialValue: 0 })],
     })
-    const result = resolveStructureIndices(
-      node,
-      [dv('RES0__INSTANCE0.S.C', '', 61)],
-      [inst('INSTANCE0', 'MAIN')],
-    )
+    const result = resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.C', '', 61)], [inst('INSTANCE0', 'MAIN')])
     expect(result[0].datatype).toBe('UNKNOWN')
   })
 })
@@ -275,7 +273,8 @@ describe('debugTypeToIecType (indirect)', () => {
       variablePath: 'S',
       fields: [makeField({ fieldPath: 'F', initialValue: 0 })],
     })
-    return resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.F', debugType, 0)], [inst('INSTANCE0', 'MAIN')])[0].datatype
+    return resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.F', debugType, 0)], [inst('INSTANCE0', 'MAIN')])[0]
+      .datatype
   }
 
   it('strips _ENUM suffix', () => {
@@ -313,7 +312,11 @@ describe('resolveArrayIndex', () => {
   it('resolves a program array (line 281)', () => {
     const node = makeNode({ nodeType: 'array', variablePath: 'SPEEDS', arrayLength: 3 })
     expect(
-      resolveArrayIndex(node, [dv('RES0__INSTANCE0.SPEEDS.value.table[0]', 'INT_ENUM', 200)], [inst('INSTANCE0', 'MAIN')]),
+      resolveArrayIndex(
+        node,
+        [dv('RES0__INSTANCE0.SPEEDS.value.table[0]', 'INT_ENUM', 200)],
+        [inst('INSTANCE0', 'MAIN')],
+      ),
     ).toBe(200)
   })
 

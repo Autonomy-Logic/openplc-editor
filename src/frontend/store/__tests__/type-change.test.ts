@@ -1,10 +1,7 @@
 import type { Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import {
-  validateNodeVariableCompatibility,
-  validateTypeChange,
-} from '../slices/project/validation/type-change'
+import { validateNodeVariableCompatibility, validateTypeChange } from '../slices/project/validation/type-change'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -89,9 +86,7 @@ describe('validateTypeChange', () => {
 
   describe('ladder flows', () => {
     it('detects affected contact nodes', () => {
-      const flows = [
-        makeLadderFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('x') })]),
-      ]
+      const flows = [makeLadderFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('x') })])]
       const result = validateTypeChange(
         'x',
         { definition: 'base-type', value: 'BOOL' },
@@ -105,9 +100,7 @@ describe('validateTypeChange', () => {
     })
 
     it('detects affected coil nodes', () => {
-      const flows = [
-        makeLadderFlow('P1', [makeNode('n1', 'coil', { variable: makeVariable('x') })]),
-      ]
+      const flows = [makeLadderFlow('P1', [makeNode('n1', 'coil', { variable: makeVariable('x') })])]
       const result = validateTypeChange(
         'x',
         { definition: 'base-type', value: 'BOOL' },
@@ -139,9 +132,7 @@ describe('validateTypeChange', () => {
     })
 
     it('returns empty expectedType for block without variant', () => {
-      const flows = [
-        makeLadderFlow('P1', [makeNode('n1', 'block', { variable: makeVariable('x') })]),
-      ]
+      const flows = [makeLadderFlow('P1', [makeNode('n1', 'block', { variable: makeVariable('x') })])]
       const result = validateTypeChange(
         'x',
         { definition: 'base-type', value: 'INT' },
@@ -155,9 +146,7 @@ describe('validateTypeChange', () => {
     })
 
     it('skips nodes that do not match the variable name', () => {
-      const flows = [
-        makeLadderFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('other') })]),
-      ]
+      const flows = [makeLadderFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('other') })])]
       const result = validateTypeChange(
         'x',
         { definition: 'base-type', value: 'INT' },
@@ -199,9 +188,7 @@ describe('validateTypeChange', () => {
 
   describe('FBD flows', () => {
     it('detects affected FBD nodes', () => {
-      const flows = [
-        makeFBDFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('x') })]),
-      ]
+      const flows = [makeFBDFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('x') })])]
       const result = validateTypeChange(
         'x',
         { definition: 'base-type', value: 'BOOL' },
@@ -226,9 +213,7 @@ describe('validateTypeChange', () => {
     })
 
     it('skips FBD nodes where variable name does not match', () => {
-      const flows = [
-        makeFBDFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('other') })]),
-      ]
+      const flows = [makeFBDFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('other') })])]
       const result = validateTypeChange(
         'x',
         { definition: 'base-type', value: 'INT' },
@@ -321,13 +306,9 @@ describe('validateTypeChange', () => {
     })
 
     it('skips FBD flows whose name is not in the global pouNamesToCheck list', () => {
-      const pous = [
-        { name: 'P1', interface: { variables: [makeVariable('g', { class: 'external' })] } },
-      ]
+      const pous = [{ name: 'P1', interface: { variables: [makeVariable('g', { class: 'external' })] } }]
       // FBD flow P2 is NOT in the global scope list (only P1 has external 'g')
-      const fbdFlows = [
-        makeFBDFlow('P2', [makeNode('n1', 'contact', { variable: makeVariable('g') })]),
-      ]
+      const fbdFlows = [makeFBDFlow('P2', [makeNode('n1', 'contact', { variable: makeVariable('g') })])]
       const result = validateTypeChange(
         'g',
         { definition: 'base-type', value: 'BOOL' },
@@ -343,9 +324,7 @@ describe('validateTypeChange', () => {
 
   describe('warnings', () => {
     it('adds incompatibility warning when nodes become incompatible', () => {
-      const flows = [
-        makeLadderFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('x') })]),
-      ]
+      const flows = [makeLadderFlow('P1', [makeNode('n1', 'contact', { variable: makeVariable('x') })])]
       // contact expects BOOL; changing to STRING will be incompatible
       const result = validateTypeChange(
         'x',

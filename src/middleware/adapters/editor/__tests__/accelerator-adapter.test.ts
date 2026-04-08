@@ -65,11 +65,7 @@ beforeEach(() => {
 })
 
 // Helper: exercises the standard pattern shared by most accelerator methods
-function testAccelerator(
-  methodName: keyof AcceleratorPort,
-  handlerKey: string,
-  bridgeMethodName: string,
-) {
+function testAccelerator(methodName: keyof AcceleratorPort, handlerKey: string, bridgeMethodName: string) {
   describe(methodName, () => {
     it('registers a bridge listener and fires the callback', () => {
       const cb = jest.fn()

@@ -497,22 +497,14 @@ describe('updateVariableValidation', () => {
   // -- Type change validation --
   it('clears location when type changes and current location is invalid for new type', () => {
     const varWithLocation = makeVariable('Test', 'INT', '%QW0')
-    const result = updateVariableValidation(
-      [],
-      { type: { definition: 'base-type', value: 'BOOL' } },
-      varWithLocation,
-    )
+    const result = updateVariableValidation([], { type: { definition: 'base-type', value: 'BOOL' } }, varWithLocation)
     expect(result.ok).toBe(true)
     expect(result.data).toEqual({ location: '' })
   })
 
   it('does not clear location when type changes but location is still valid', () => {
     const varWithLocation = makeVariable('Test', 'INT', '%QW0')
-    const result = updateVariableValidation(
-      [],
-      { type: { definition: 'base-type', value: 'WORD' } },
-      varWithLocation,
-    )
+    const result = updateVariableValidation([], { type: { definition: 'base-type', value: 'WORD' } }, varWithLocation)
     expect(result.ok).toBe(true)
     // location is valid for WORD, so no data override
     expect(result.data).toBeUndefined()
@@ -520,11 +512,7 @@ describe('updateVariableValidation', () => {
 
   it('clears location, initialValue, and class when type changes to derived', () => {
     const varWithLocation = makeVariable('Test', 'INT', '%QW0')
-    const result = updateVariableValidation(
-      [],
-      { type: { definition: 'derived', value: 'MyFB' } },
-      varWithLocation,
-    )
+    const result = updateVariableValidation([], { type: { definition: 'derived', value: 'MyFB' } }, varWithLocation)
     expect(result.ok).toBe(true)
     expect(result.data).toEqual({ location: '', initialValue: '', class: 'local' })
   })
@@ -565,11 +553,7 @@ describe('updateVariableValidation', () => {
     // where location passes AND type is derived is practically not reachable
     // through valid use, but we can test with a valid type name:
     const varWithValidLocation = makeVariable('Test', 'INT', '%QW0')
-    const result = updateVariableValidation(
-      [],
-      { type: { definition: 'derived', value: 'INT' } },
-      varWithValidLocation,
-    )
+    const result = updateVariableValidation([], { type: { definition: 'derived', value: 'INT' } }, varWithValidLocation)
     expect(result.ok).toBe(true)
     // variableLocationValidation('%QW0', 'INT') returns true -> line 353 skipped
     // definition is 'derived' -> line 356 executes with response.data = undefined -> uses {}

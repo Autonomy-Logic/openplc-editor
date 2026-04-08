@@ -264,9 +264,7 @@ describe('getDebugMd5Hash', () => {
   it('throws when bridge returns failure', async () => {
     window.bridge = {
       ...window.bridge,
-      debuggerReadProgramStMd5: jest
-        .fn()
-        .mockResolvedValue({ success: false, error: 'File not found' }),
+      debuggerReadProgramStMd5: jest.fn().mockResolvedValue({ success: false, error: 'File not found' }),
     } as unknown as typeof window.bridge
 
     const adapterWithContext = createEditorSimulatorAdapter(() => ({
@@ -367,22 +365,14 @@ describe('setDebugVariable', () => {
   it('converts hex string to Uint8Array when force is true with value', async () => {
     const result = await adapter.setDebugVariable(5, true, '00ff10')
 
-    expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(
-      5,
-      true,
-      new Uint8Array([0, 255, 16]),
-    )
+    expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(5, true, new Uint8Array([0, 255, 16]))
     expect(result).toEqual({ success: true })
   })
 
   it('strips whitespace from hex string before conversion', async () => {
     await adapter.setDebugVariable(5, true, '00 ff 10')
 
-    expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(
-      5,
-      true,
-      new Uint8Array([0, 255, 16]),
-    )
+    expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(5, true, new Uint8Array([0, 255, 16]))
   })
 
   it('passes undefined for value when force is false', async () => {

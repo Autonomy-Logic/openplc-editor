@@ -489,9 +489,7 @@ describe('parseGraphicalPouFromString — non-Error throw branches', () => {
       const content = `PROGRAM Main
 {}
 END_PROGRAM`
-      expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow(
-        'Invalid JSON in graphical body',
-      )
+      expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow('Invalid JSON in graphical body')
     } finally {
       JSON.parse = originalParse
     }

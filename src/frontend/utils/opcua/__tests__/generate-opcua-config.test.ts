@@ -175,7 +175,14 @@ describe('generateOpcUaConfig', () => {
     const cfg = baseServerConfig()
     cfg.securityProfiles = [
       { id: 'sp1', name: 'A', enabled: true, securityPolicy: 'None', securityMode: 'None', authMethods: ['Anonymous'] },
-      { id: 'sp2', name: 'B', enabled: false, securityPolicy: 'Basic256', securityMode: 'Sign', authMethods: ['Username'] },
+      {
+        id: 'sp2',
+        name: 'B',
+        enabled: false,
+        securityPolicy: 'Basic256',
+        securityMode: 'Sign',
+        authMethods: ['Username'],
+      },
     ]
     const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], debugContent([]), [])!)
     expect(result[0].config.server.security_profiles).toHaveLength(1)
@@ -192,7 +199,10 @@ describe('generateOpcUaConfig', () => {
       serverCertificateStrategy: 'custom',
       serverCertificateCustom: 'CERT',
       serverPrivateKeyCustom: 'KEY',
-      trustedClientCertificates: [{ id: 'c1', pem: 'PEM1' }, { id: 'c2', pem: 'PEM2' }],
+      trustedClientCertificates: [
+        { id: 'c1', pem: 'PEM1' },
+        { id: 'c2', pem: 'PEM2' },
+      ],
     }
     const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], debugContent([]), [])!)
     const sec = result[0].config.security
@@ -446,7 +456,14 @@ describe('validateOpcUaConfig', () => {
   it('reports error when no security profiles enabled', () => {
     const cfg = baseServerConfig()
     cfg.securityProfiles = [
-      { id: 'sp1', name: 'A', enabled: false, securityPolicy: 'None', securityMode: 'None', authMethods: ['Anonymous'] },
+      {
+        id: 'sp1',
+        name: 'A',
+        enabled: false,
+        securityPolicy: 'None',
+        securityMode: 'None',
+        authMethods: ['Anonymous'],
+      },
     ]
     const result = validateOpcUaConfig(cfg, debugContent([]), [])
     expect(result.valid).toBe(false)
@@ -469,7 +486,9 @@ describe('validateOpcUaConfig', () => {
     cfg.securityProfiles = [
       { id: 'sp1', name: 'A', enabled: true, securityPolicy: 'None', securityMode: 'None', authMethods: ['Username'] },
     ]
-    cfg.users = [{ id: 'u1', type: 'password', username: 'a', passwordHash: 'h', certificateId: null, role: 'engineer' }]
+    cfg.users = [
+      { id: 'u1', type: 'password', username: 'a', passwordHash: 'h', certificateId: null, role: 'engineer' },
+    ]
     const result = validateOpcUaConfig(cfg, debugContent([]), [])
     expect(result.errors).not.toContain('Username authentication is enabled but no users are configured')
   })
@@ -551,9 +570,7 @@ describe('validateOpcUaConfig', () => {
 
   it('validates simple array node successfully (covers line 493 break)', () => {
     const cfg = baseServerConfig()
-    cfg.addressSpace.nodes = [
-      makeNode({ nodeType: 'array', variablePath: 'A', arrayLength: 3, elementType: 'INT' }),
-    ]
+    cfg.addressSpace.nodes = [makeNode({ nodeType: 'array', variablePath: 'A', arrayLength: 3, elementType: 'INT' })]
     const dc = debugContent([{ path: 'RES0__INSTANCE0.A.value.table[0]', type: 'INT_ENUM' }])
     const result = validateOpcUaConfig(cfg, dc, instances)
     expect(result.valid).toBe(true)

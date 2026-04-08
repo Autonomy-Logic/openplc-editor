@@ -931,8 +931,14 @@ describe('createLadderFlowSlice', () => {
       data: {
         ...defaultBlockData,
         connectedVariables: {
-          'handle-in': { variable: { name: 'X', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' }, type: 'input' },
-          'handle-out': { variable: { name: 'Y', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' }, type: 'output' },
+          'handle-in': {
+            variable: { name: 'X', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+            type: 'input',
+          },
+          'handle-out': {
+            variable: { name: 'Y', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            type: 'output',
+          },
         },
       },
     })

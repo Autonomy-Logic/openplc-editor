@@ -350,7 +350,9 @@ describe('ModbusRtuClient', () => {
     it('returns error on ERROR_OUT_OF_BOUNDS', async () => {
       await connectClient()
 
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_LIST, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_BOUNDS])))
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_GET_LIST, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_BOUNDS])),
+      )
 
       const result = await client.getVariablesList([999])
       expect(result.success).toBe(false)
@@ -360,7 +362,9 @@ describe('ModbusRtuClient', () => {
     it('returns error on ERROR_OUT_OF_MEMORY', async () => {
       await connectClient()
 
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_LIST, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_MEMORY])))
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_GET_LIST, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_MEMORY])),
+      )
 
       const result = await client.getVariablesList([0])
       expect(result.success).toBe(false)
@@ -380,7 +384,9 @@ describe('ModbusRtuClient', () => {
     it('returns error on too short response (incomplete success)', async () => {
       await connectClient()
 
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_LIST, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])))
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_GET_LIST, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])),
+      )
 
       const result = await client.getVariablesList([0])
       expect(result.success).toBe(false)
@@ -466,7 +472,9 @@ describe('ModbusRtuClient', () => {
     it('returns error on ERROR_OUT_OF_BOUNDS', async () => {
       await connectClient()
 
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_SET, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_BOUNDS])))
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_SET, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_BOUNDS])),
+      )
 
       const result = await client.setVariable(999, true, new Uint8Array([0x01]))
       expect(result.success).toBe(false)
@@ -476,7 +484,9 @@ describe('ModbusRtuClient', () => {
     it('returns error on ERROR_OUT_OF_MEMORY', async () => {
       await connectClient()
 
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_SET, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_MEMORY])))
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_SET, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_MEMORY])),
+      )
 
       const result = await client.setVariable(0, true, new Uint8Array([0x01]))
       expect(result.success).toBe(false)
@@ -724,7 +734,11 @@ describe('ModbusRtuClient', () => {
     it('assembles multi-chunk response', async () => {
       await connectClient()
 
-      const responseFrame = buildResponse(1, ModbusFunctionCode.DEBUG_SET, new Uint8Array([ModbusDebugResponse.SUCCESS]))
+      const responseFrame = buildResponse(
+        1,
+        ModbusFunctionCode.DEBUG_SET,
+        new Uint8Array([ModbusDebugResponse.SUCCESS]),
+      )
 
       port._interceptWrite = () => {
         const mid = Math.floor(responseFrame.length / 2)

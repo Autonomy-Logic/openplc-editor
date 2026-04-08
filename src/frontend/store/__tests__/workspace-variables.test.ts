@@ -159,11 +159,7 @@ describe('createGlobalVariableValidation', () => {
   })
 
   it('fills gap when there are non-consecutive suffixes', () => {
-    const variables = [
-      makeGlobalVariable('GVar'),
-      makeGlobalVariable('GVar_1'),
-      makeGlobalVariable('GVar_5'),
-    ]
+    const variables = [makeGlobalVariable('GVar'), makeGlobalVariable('GVar_1'), makeGlobalVariable('GVar_5')]
     const result = createGlobalVariableValidation(variables, 'GVar')
     // gap-filling: finds break between _1 and _5, so number resets to 1+1=2
     expect(result).toBe('GVar_2')

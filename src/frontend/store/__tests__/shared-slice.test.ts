@@ -1358,9 +1358,15 @@ describe('createSharedSlice', () => {
             ] as ReturnType<typeof store.getState>['project']['data']['pous'],
             configurations: {
               resource: {
-                tasks: [] as ReturnType<typeof store.getState>['project']['data']['configurations']['resource']['tasks'],
-                instances: [] as ReturnType<typeof store.getState>['project']['data']['configurations']['resource']['instances'],
-                globalVariables: [] as ReturnType<typeof store.getState>['project']['data']['configurations']['resource']['globalVariables'],
+                tasks: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['tasks'],
+                instances: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['instances'],
+                globalVariables: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['globalVariables'],
               },
             },
             debugVariables: undefined as ReturnType<typeof store.getState>['project']['data']['debugVariables'],
