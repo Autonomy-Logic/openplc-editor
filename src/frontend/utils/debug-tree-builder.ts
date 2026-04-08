@@ -25,6 +25,7 @@ const DEBUG_TREE_LOGGING = false
 /**
  * Logs debug tree information to console (dev-only).
  */
+/* istanbul ignore next -- dev-only: guarded by DEBUG_TREE_LOGGING constant */
 function logDebugTree(node: DebugTreeNode, indent = 0): void {
   if (!DEBUG_TREE_LOGGING) return
 
@@ -149,6 +150,7 @@ export function buildDebugTree(
         debugIndex: debugVar?.index,
       }
 
+      /* istanbul ignore next -- dev-only: guarded by DEBUG_TREE_LOGGING constant */
       if (DEBUG_TREE_LOGGING) {
         console.groupCollapsed(`Debug Tree for ${variable.name} (external)`)
         logDebugTree(node)
@@ -176,6 +178,7 @@ export function buildDebugTree(
   const visitor = new DebugTreeNodeVisitor()
   const node = traverseVariable(variable, context, visitor)
 
+  /* istanbul ignore next -- dev-only: guarded by DEBUG_TREE_LOGGING constant */
   if (DEBUG_TREE_LOGGING) {
     console.groupCollapsed(`Debug Tree for ${variable.name}`)
     logDebugTree(node)

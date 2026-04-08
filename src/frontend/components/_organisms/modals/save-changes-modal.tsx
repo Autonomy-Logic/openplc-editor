@@ -2,8 +2,8 @@ import { ComponentPropsWithoutRef } from 'react'
 
 import { useCapabilities, useProject, useWindow } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
+import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
-import { executeSaveProject } from '../../../utils/save-actions'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 /**

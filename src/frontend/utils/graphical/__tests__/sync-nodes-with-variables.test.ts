@@ -233,6 +233,46 @@ describe('syncNodesWithVariables', () => {
     )
   })
 
+  it('clears wrongVariable when types now match (line 77)', () => {
+    const updateNode = vi.fn()
+    const variable = makeVariable('myVar', 'BOOL', 'base-type', '2')
+    const node = makeNode(
+      'n1',
+      'contact',
+      {
+        name: 'myVar',
+        id: '1',
+        type: { definition: 'base-type', value: 'BOOL' } as PLCVariable['type'],
+      },
+      { wrongVariable: true },
+    )
+
+    const ladderFlows = [
+      {
+        name: 'editor1',
+        rungs: [{ id: 'r1', nodes: [node], edges: [] }],
+      },
+    ] as unknown as Parameters<typeof syncNodesWithVariables>[1]
+
+    syncNodesWithVariables([variable], ladderFlows, updateNode)
+
+    // Types match (BOOL === BOOL for contact), but wrongVariable was true,
+    // so it should be cleared.
+    expect(updateNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        editorName: 'editor1',
+        rungId: 'r1',
+        nodeId: 'n1',
+        node: expect.objectContaining({
+          data: expect.objectContaining({
+            variable,
+            wrongVariable: false,
+          }),
+        }),
+      }),
+    )
+  })
+
   it('marks a block node with matching variant as wrongVariable when type mismatches', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'INT')
@@ -405,6 +445,46 @@ describe('syncNodesWithVariablesFBD', () => {
           data: expect.objectContaining({
             variable: { ...variable, id: 'broken-n1' },
             wrongVariable: true,
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('clears wrongVariable on FBD node when types now match (line 136)', () => {
+    const updateNode = vi.fn()
+    const variable = makeVariable('myVar', 'BOOL', 'base-type', '2')
+    const node: Node = {
+      id: 'n1',
+      type: 'block',
+      position: { x: 0, y: 0 },
+      data: {
+        variable: {
+          name: 'myVar',
+          id: '1',
+          type: { definition: 'base-type', value: 'BOOL' },
+        },
+        variant: { name: 'BOOL' },
+        wrongVariable: true,
+      },
+    }
+
+    const fbdFlows = [{ name: 'fbd1', rung: { nodes: [node], edges: [] } }] as unknown as Parameters<
+      typeof syncNodesWithVariablesFBD
+    >[1]
+
+    syncNodesWithVariablesFBD([variable], fbdFlows, updateNode)
+
+    // Types match (BOOL === BOOL for block with variant name BOOL),
+    // but wrongVariable was true, so it should be cleared.
+    expect(updateNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        editorName: 'fbd1',
+        nodeId: 'n1',
+        node: expect.objectContaining({
+          data: expect.objectContaining({
+            variable,
+            wrongVariable: false,
           }),
         }),
       }),

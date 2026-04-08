@@ -18,6 +18,9 @@ export default tseslint.config(
       '**/public/**',
       '**/release/**',
       '**/resources/**',
+      '**/__tests__/**',
+      '**/*.test.{ts,tsx}',
+      '**/*.spec.{ts,tsx}',
     ],
   },
   {

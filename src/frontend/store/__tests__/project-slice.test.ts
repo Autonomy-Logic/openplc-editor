@@ -2451,5 +2451,116 @@ describe('createProjectSlice', () => {
       const result = store.getState().projectActions.deleteIOGroup('EtherCAT', 'g1')
       expect(result.ok).toBe(true)
     })
+
+    it('clearPendingDeletions resets the array', () => {
+      // Create and delete a POU to generate pending deletions
+      store.getState().projectActions.createPou({
+        type: 'program',
+        data: { name: 'TmpPou', language: 'st', body: makeBody(), variables: [], documentation: '' },
+      })
+      store.getState().projectActions.deletePou('TmpPou')
+      expect(store.getState().pendingDeletions.length).toBeGreaterThan(0)
+
+      store.getState().projectActions.clearPendingDeletions()
+      expect(store.getState().pendingDeletions).toEqual([])
+    })
+
+    it('createVariable fails for illegal variable name', () => {
+      seedPou(store, makePou('Main'))
+      // Names starting with digits are illegal identifiers
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: {
+          ...makeVariable('123invalid'),
+        },
+      })
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Illegal Variable Name')
+    })
+
+    it('updateVariable fails when validation rejects duplicate name', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('alpha'), makeVariable('beta')]))
+      // Try to rename 'beta' to 'alpha' (already exists)
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        rowId: 1,
+        data: { name: 'alpha' },
+      })
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Variable already exists')
+    })
+
+    it('deleteVariable for global scope using variableName', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gVar1', 'global') })
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gVar2', 'global') })
+      const result = store.getState().projectActions.deleteVariable({
+        scope: 'global',
+        variableName: 'gVar1',
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables).toHaveLength(1)
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].name).toBe('gVar2')
+    })
+
+    it('deleteVariable for global scope blocked by external references', () => {
+      // Create a global variable
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('SharedVar', 'global') })
+      // Create a POU with an external variable referencing SharedVar
+      seedPou(store, {
+        ...makePou('Consumer', 'program'),
+        interface: {
+          variables: [
+            {
+              name: 'SharedVar',
+              class: 'external',
+              type: { definition: 'base-type', value: 'INT' },
+              location: '',
+              documentation: '',
+            },
+          ],
+        },
+      })
+      const result = store.getState().projectActions.deleteVariable({
+        scope: 'global',
+        variableName: 'SharedVar',
+      })
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Cannot Delete Global Variable')
+      expect(result.message).toContain('Consumer')
+    })
+
+    it('updateOpcUaServerConfig with top-level updates (cycleTimeMs)', () => {
+      seedServer(store, makeOpcUaServer('OPC'))
+      const result = store.getState().projectActions.updateOpcUaServerConfig('OPC', {
+        cycleTimeMs: 200,
+      } as Record<string, unknown>)
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.servers![0].opcuaServerConfig!.cycleTimeMs).toBe(200)
+    })
+
+    it('updateVariable with class change propagates validation data', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('x')]))
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        rowId: 0,
+        data: { class: 'input' },
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.pous[0].interface?.variables[0].class).toBe('input')
+    })
+
+    it('deleteVariable for global scope when variableName not found skips external check', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('exists', 'global') })
+      const result = store.getState().projectActions.deleteVariable({
+        scope: 'global',
+        variableName: 'doesNotExist',
+      })
+      expect(result.ok).toBe(true)
+      // The existing variable should still be there
+      expect(store.getState().project.data.configurations.resource.globalVariables).toHaveLength(1)
+    })
   })
 })

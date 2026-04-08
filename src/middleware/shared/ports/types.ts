@@ -185,14 +185,14 @@ export interface ModbusIOGroup {
 
 export interface ModbusRemoteTcpConfig {
   transport?: 'tcp' | 'rtu'
-  host: string
-  port: number
+  host?: string
+  port?: number
   serialPort?: string
   baudRate?: number
   parity?: 'N' | 'E' | 'O'
   stopBits?: number
   dataBits?: number
-  slaveId: number
+  slaveId?: number
   timeout: number
   ioGroups: ModbusIOGroup[]
 }

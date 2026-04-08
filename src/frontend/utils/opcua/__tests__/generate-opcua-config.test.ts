@@ -1,61 +1,59 @@
-import type { OpcUaServerConfig, PLCServer } from '@root/middleware/shared/ports/open-plc-types'
+import type {
+  OpcUaFieldConfig,
+  OpcUaNodeConfig,
+  OpcUaPermissions,
+  OpcUaServerConfig,
+  PLCServer,
+} from '@root/middleware/shared/ports/open-plc-types'
 
 import { generateOpcUaConfig, parseDebugFile, validateOpcUaConfig } from '../generate-opcua-config'
-import { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from '../resolve-indices'
+import { OpcUaConfigError } from '../resolve-indices'
+import * as resolveIndices from '../resolve-indices'
 import type { PLCInstanceInfo } from '../types'
 
-// Sample debug.c content for testing
-// Uses INSTANCE0 as the instance name (matching the sampleInstances below)
-const sampleDebugContent = `
-#define VAR_COUNT 18
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-debug_vars_t debug_vars[] = {
-  { &(RES0__INSTANCE0.MOTOR_SPEED), INT_ENUM },
-  { &(RES0__INSTANCE0.TEMPERATURE), REAL_ENUM },
-  { &(RES0__INSTANCE0.IS_RUNNING), BOOL_ENUM },
-  { &(RES0__INSTANCE0.SENSOR.value.TEMP), REAL_ENUM },
-  { &(RES0__INSTANCE0.SENSOR.value.PRESSURE), REAL_ENUM },
-  { &(RES0__INSTANCE0.TEMPS.value.table[0]), REAL_ENUM },
-  { &(RES0__INSTANCE0.TEMPS.value.table[1]), REAL_ENUM },
-  { &(RES0__INSTANCE0.TEMPS.value.table[2]), REAL_ENUM },
-  { &(CONFIG0__GLOBAL_VAR), INT_ENUM },
-  { &(CONFIG0__SYSTEM_STATE), BOOL_ENUM },
-  { &(RES0__INSTANCE0.TIMER0.ET), TIME_ENUM },
-  { &(RES0__INSTANCE0.TIMER0.Q), BOOL_ENUM },
-  { &(RES0__INSTANCE0.NESTED_STRUCT.value.INNER.value.VALUE1), INT_ENUM },
-  { &(RES0__INSTANCE0.NESTED_STRUCT.value.INNER.value.VALUE2), REAL_ENUM },
-  { &(RES0__INSTANCE0.FB_ARRAY.value.table[0].ET), TIME_ENUM },
-  { &(RES0__INSTANCE0.FB_ARRAY.value.table[0].Q), BOOL_ENUM },
-  { &(RES0__INSTANCE0.FB_ARRAY.value.table[1].ET), TIME_ENUM },
-  { &(RES0__INSTANCE0.FB_ARRAY.value.table[1].Q), BOOL_ENUM },
-};
-`
+const perm: OpcUaPermissions = { viewer: 'r', operator: 'rw', engineer: 'rw' }
 
-// Sample instances array representing the Resources configuration
-const sampleInstances: PLCInstanceInfo[] = [
-  {
-    name: 'INSTANCE0',
-    task: 'Task0',
-    program: 'main',
-  },
-]
+const makeNode = (overrides: Partial<OpcUaNodeConfig> = {}): OpcUaNodeConfig => ({
+  id: 'n1',
+  pouName: 'MAIN',
+  variablePath: 'MY_VAR',
+  variableType: 'INT',
+  nodeId: 'ns=1;s=MY_VAR',
+  browseName: 'MY_VAR',
+  displayName: 'My Variable',
+  description: 'desc',
+  initialValue: 0,
+  permissions: perm,
+  nodeType: 'variable',
+  ...overrides,
+})
 
-// Sample OPC-UA server configuration
-const createSampleConfig = (): OpcUaServerConfig => ({
+const makeField = (overrides: Partial<OpcUaFieldConfig> = {}): OpcUaFieldConfig => ({
+  fieldPath: 'FIELD1',
+  displayName: 'Field 1',
+  initialValue: 0,
+  permissions: perm,
+  ...overrides,
+})
+
+const baseServerConfig = (): OpcUaServerConfig => ({
   server: {
     enabled: true,
-    name: 'Test OPC-UA Server',
-    applicationUri: 'urn:test:opcua:server',
-    productUri: 'urn:test:runtime',
+    name: 'TestServer',
+    applicationUri: 'urn:test:server',
+    productUri: 'urn:test:product',
     bindAddress: '0.0.0.0',
     port: 4840,
-    endpointPath: '/test/opcua',
+    endpointPath: '/openplc',
   },
-  cycleTimeMs: 100,
   securityProfiles: [
     {
-      id: 'profile-1',
-      name: 'insecure',
+      id: 'sp1',
+      name: 'None-None',
       enabled: true,
       securityPolicy: 'None',
       securityMode: 'None',
@@ -68,481 +66,544 @@ const createSampleConfig = (): OpcUaServerConfig => ({
     serverPrivateKeyCustom: null,
     trustedClientCertificates: [],
   },
-  users: [
-    {
-      id: 'user-1',
-      type: 'password',
-      username: 'admin',
-      passwordHash: '$2b$12$test',
-      certificateId: null,
-      role: 'engineer',
-    },
-  ],
-  addressSpace: {
-    namespaceUri: 'urn:test:opcua:namespace',
-    nodes: [],
-  },
+  users: [],
+  cycleTimeMs: 100,
+  addressSpace: { namespaceUri: 'urn:test:ns', nodes: [] },
 })
+
+const makePLCServer = (config: OpcUaServerConfig): PLCServer => ({
+  name: 'opcua_server',
+  protocol: 'opcua' as const,
+  opcuaServerConfig: config,
+})
+
+const debugContent = (entries: Array<{ path: string; type: string }>): string => {
+  const vars = entries.map((e) => `{ &(${e.path}), ${e.type} }`).join(',\n  ')
+  return `debug_vars[] = {\n  ${vars}\n};`
+}
+
+const instances: PLCInstanceInfo[] = [{ name: 'INSTANCE0', task: 'TASK0', program: 'MAIN' }]
+
+// ---------------------------------------------------------------------------
+// parseDebugFile
+// ---------------------------------------------------------------------------
 
 describe('parseDebugFile', () => {
-  it('should parse debug variables from debug.c content', () => {
-    const variables = parseDebugFile(sampleDebugContent)
-
-    expect(variables).toHaveLength(18)
-    expect(variables[0]).toEqual({
-      name: 'RES0__INSTANCE0.MOTOR_SPEED',
-      type: 'INT_ENUM',
-      index: 0,
-    })
-    expect(variables[8]).toEqual({
-      name: 'CONFIG0__GLOBAL_VAR',
-      type: 'INT_ENUM',
-      index: 8,
-    })
+  it('parses valid debug.c entries', () => {
+    const content = debugContent([
+      { path: 'RES0__INSTANCE0.X', type: 'INT_ENUM' },
+      { path: 'CONFIG0__G', type: 'BOOL_ENUM' },
+    ])
+    const result = parseDebugFile(content)
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ name: 'RES0__INSTANCE0.X', type: 'INT_ENUM', index: 0 })
+    expect(result[1]).toEqual({ name: 'CONFIG0__G', type: 'BOOL_ENUM', index: 1 })
   })
 
-  it('should return empty array for invalid content', () => {
-    const variables = parseDebugFile('no debug vars here')
-    expect(variables).toHaveLength(0)
+  it('returns empty array when debug_vars not found', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation()
+    expect(parseDebugFile('// nothing')).toEqual([])
+    expect(warnSpy).toHaveBeenCalledWith('Could not find debug_vars[] array in debug.c')
+    warnSpy.mockRestore()
   })
 
-  it('should handle empty content', () => {
-    const variables = parseDebugFile('')
-    expect(variables).toHaveLength(0)
-  })
-})
-
-describe('resolveVariableIndex', () => {
-  const debugVariables = parseDebugFile(sampleDebugContent)
-
-  it('should resolve simple program variable', () => {
-    const node = {
-      id: 'test-1',
-      pouName: 'main',
-      variablePath: 'MOTOR_SPEED',
-      variableType: 'INT',
-      nodeId: 'PLC.Main.MotorSpeed',
-      browseName: 'MotorSpeed',
-      displayName: 'Motor Speed',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'variable' as const,
-    }
-
-    const index = resolveVariableIndex(node, debugVariables, sampleInstances)
-    expect(index).toBe(0)
+  it('returns empty array when debug_vars block has no entries', () => {
+    expect(parseDebugFile('debug_vars[] = {\n};')).toEqual([])
   })
 
-  it('should resolve global variable', () => {
-    const node = {
-      id: 'test-2',
-      pouName: 'GVL',
-      variablePath: 'GLOBAL_VAR',
-      variableType: 'INT',
-      nodeId: 'PLC.GVL.GlobalVar',
-      browseName: 'GlobalVar',
-      displayName: 'Global Variable',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'variable' as const,
-    }
-
-    const index = resolveVariableIndex(node, debugVariables, sampleInstances)
-    expect(index).toBe(8)
-  })
-
-  it('should throw error for non-existent variable', () => {
-    const node = {
-      id: 'test-3',
-      pouName: 'main',
-      variablePath: 'NON_EXISTENT',
-      variableType: 'INT',
-      nodeId: 'PLC.Main.NonExistent',
-      browseName: 'NonExistent',
-      displayName: 'Non Existent',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'variable' as const,
-    }
-
-    expect(() => resolveVariableIndex(node, debugVariables, sampleInstances)).toThrow(OpcUaConfigError)
-  })
-
-  it('should throw error when program has no instance in Resources', () => {
-    const node = {
-      id: 'test-4',
-      pouName: 'unknown_program',
-      variablePath: 'SOME_VAR',
-      variableType: 'INT',
-      nodeId: 'PLC.Unknown.SomeVar',
-      browseName: 'SomeVar',
-      displayName: 'Some Var',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'variable' as const,
-    }
-
-    expect(() => resolveVariableIndex(node, debugVariables, sampleInstances)).toThrow(OpcUaConfigError)
+  it('handles whitespace variations around &(...)', () => {
+    const content = 'debug_vars[] = {\n  {  &( RES0__I.V )  ,  REAL_ENUM  }\n};'
+    const result = parseDebugFile(content)
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('RES0__I.V')
   })
 })
 
-describe('resolveArrayIndex', () => {
-  const debugVariables = parseDebugFile(sampleDebugContent)
-
-  it('should resolve array starting index', () => {
-    const node = {
-      id: 'test-4',
-      pouName: 'main',
-      variablePath: 'TEMPS',
-      variableType: 'ARRAY[0..2] OF REAL',
-      nodeId: 'PLC.Main.Temps',
-      browseName: 'Temps',
-      displayName: 'Temperatures',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'array' as const,
-      arrayLength: 3,
-      elementType: 'REAL',
-    }
-
-    const index = resolveArrayIndex(node, debugVariables, sampleInstances)
-    expect(index).toBe(5) // First element [0] is at index 5
-  })
-})
-
-describe('resolveStructureIndices', () => {
-  const debugVariables = parseDebugFile(sampleDebugContent)
-
-  it('should resolve structure field indices', () => {
-    const node = {
-      id: 'test-5',
-      pouName: 'main',
-      variablePath: 'SENSOR',
-      variableType: 'SensorData',
-      nodeId: 'PLC.Main.Sensor',
-      browseName: 'Sensor',
-      displayName: 'Sensor Data',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'structure' as const,
-      fields: [
-        {
-          fieldPath: 'TEMP',
-          displayName: 'Temperature',
-          datatype: 'REAL',
-          initialValue: 0.0,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-        {
-          fieldPath: 'PRESSURE',
-          displayName: 'Pressure',
-          datatype: 'REAL',
-          initialValue: 0.0,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-      ],
-    }
-
-    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
-    expect(resolvedFields).toHaveLength(2)
-    expect(resolvedFields[0].index).toBe(3) // SENSOR.value.TEMP
-    expect(resolvedFields[0].datatype).toBe('REAL') // Converted from REAL_ENUM
-    expect(resolvedFields[1].index).toBe(4) // SENSOR.value.PRESSURE
-    expect(resolvedFields[1].datatype).toBe('REAL') // Converted from REAL_ENUM
-  })
-
-  it('should convert debug.c type enums to IEC types', () => {
-    // This test verifies that types like "INT_ENUM", "BOOL_ENUM" are converted to "INT", "BOOL"
-    const node = {
-      id: 'test-fb-types',
-      pouName: 'main',
-      variablePath: 'TIMER0',
-      variableType: 'TON',
-      nodeId: 'PLC.Main.Timer0',
-      browseName: 'Timer0',
-      displayName: 'Timer 0',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'structure' as const,
-      fields: [
-        {
-          fieldPath: 'ET',
-          displayName: 'Elapsed Time',
-          datatype: 'TIME',
-          initialValue: 0,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-        {
-          fieldPath: 'Q',
-          displayName: 'Output',
-          datatype: 'BOOL',
-          initialValue: false,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-      ],
-    }
-
-    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
-    // TIME_ENUM should be converted to TIME
-    expect(resolvedFields[0].datatype).toBe('TIME')
-    // BOOL_ENUM should be converted to BOOL
-    expect(resolvedFields[1].datatype).toBe('BOOL')
-  })
-
-  it('should resolve function block with expanded leaf fields', () => {
-    // FB instance with its leaf variables expanded (like TON with ET and Q)
-    const node = {
-      id: 'test-fb-1',
-      pouName: 'main',
-      variablePath: 'TIMER0',
-      variableType: 'TON',
-      nodeId: 'PLC.Main.Timer0',
-      browseName: 'Timer0',
-      displayName: 'Timer 0',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'structure' as const, // FBs use 'structure' nodeType
-      fields: [
-        {
-          fieldPath: 'ET',
-          displayName: 'Elapsed Time',
-          datatype: 'TIME',
-          initialValue: 0,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-        {
-          fieldPath: 'Q',
-          displayName: 'Output',
-          datatype: 'BOOL',
-          initialValue: false,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-      ],
-    }
-
-    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
-    expect(resolvedFields).toHaveLength(2)
-    expect(resolvedFields[0].index).toBe(10) // TIMER0.ET (FB-style path, no .value.)
-    expect(resolvedFields[1].index).toBe(11) // TIMER0.Q
-  })
-
-  it('should resolve nested structure with deep field paths', () => {
-    // Nested structure: NESTED_STRUCT.INNER.VALUE1, NESTED_STRUCT.INNER.VALUE2
-    const node = {
-      id: 'test-nested-1',
-      pouName: 'main',
-      variablePath: 'NESTED_STRUCT',
-      variableType: 'OuterStruct',
-      nodeId: 'PLC.Main.NestedStruct',
-      browseName: 'NestedStruct',
-      displayName: 'Nested Structure',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'structure' as const,
-      fields: [
-        {
-          fieldPath: 'INNER.VALUE1',
-          displayName: 'Inner Value 1',
-          datatype: 'INT',
-          initialValue: 0,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-        {
-          fieldPath: 'INNER.VALUE2',
-          displayName: 'Inner Value 2',
-          datatype: 'REAL',
-          initialValue: 0.0,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-      ],
-    }
-
-    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
-    expect(resolvedFields).toHaveLength(2)
-    expect(resolvedFields[0].index).toBe(12) // NESTED_STRUCT.value.INNER.value.VALUE1
-    expect(resolvedFields[1].index).toBe(13) // NESTED_STRUCT.value.INNER.value.VALUE2
-  })
-
-  it('should resolve array of FBs with expanded leaf fields', () => {
-    // Array of FBs: FB_ARRAY[0].ET, FB_ARRAY[0].Q, FB_ARRAY[1].ET, FB_ARRAY[1].Q
-    const node = {
-      id: 'test-fb-array-1',
-      pouName: 'main',
-      variablePath: 'FB_ARRAY',
-      variableType: 'ARRAY[0..1] OF TON',
-      nodeId: 'PLC.Main.FbArray',
-      browseName: 'FbArray',
-      displayName: 'FB Array',
-      description: '',
-      initialValue: 0,
-      permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-      nodeType: 'array' as const,
-      arrayLength: 2,
-      elementType: 'TON',
-      fields: [
-        {
-          fieldPath: '[0].ET',
-          displayName: '[0] Elapsed Time',
-          datatype: 'TIME',
-          initialValue: 0,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-        {
-          fieldPath: '[0].Q',
-          displayName: '[0] Output',
-          datatype: 'BOOL',
-          initialValue: false,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-        {
-          fieldPath: '[1].ET',
-          displayName: '[1] Elapsed Time',
-          datatype: 'TIME',
-          initialValue: 0,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-        {
-          fieldPath: '[1].Q',
-          displayName: '[1] Output',
-          datatype: 'BOOL',
-          initialValue: false,
-          permissions: { viewer: 'r' as const, operator: 'r' as const, engineer: 'rw' as const },
-        },
-      ],
-    }
-
-    // Arrays with fields are treated like structures for resolution
-    const resolvedFields = resolveStructureIndices(node, debugVariables, sampleInstances)
-    expect(resolvedFields).toHaveLength(4)
-    expect(resolvedFields[0].index).toBe(14) // FB_ARRAY[0].ET
-    expect(resolvedFields[1].index).toBe(15) // FB_ARRAY[0].Q
-    expect(resolvedFields[2].index).toBe(16) // FB_ARRAY[1].ET
-    expect(resolvedFields[3].index).toBe(17) // FB_ARRAY[1].Q
-  })
-})
+// ---------------------------------------------------------------------------
+// generateOpcUaConfig - early exits
+// ---------------------------------------------------------------------------
 
 describe('generateOpcUaConfig', () => {
-  it('should return null when no servers configured', () => {
-    const result = generateOpcUaConfig(undefined, sampleDebugContent, sampleInstances)
-    expect(result).toBeNull()
+  it('returns null when servers is undefined', () => {
+    expect(generateOpcUaConfig(undefined, '', [])).toBeNull()
   })
 
-  it('should return null when no OPC-UA server configured', () => {
-    const servers: PLCServer[] = [
-      {
-        name: 'modbus-server',
-        protocol: 'modbus-tcp',
-      },
-    ]
-    const result = generateOpcUaConfig(servers, sampleDebugContent, sampleInstances)
-    expect(result).toBeNull()
+  it('returns null when servers is empty', () => {
+    expect(generateOpcUaConfig([], '', [])).toBeNull()
   })
 
-  it('should return null when OPC-UA server is disabled', () => {
-    const config = createSampleConfig()
-    config.server.enabled = false
-
-    const servers: PLCServer[] = [
-      {
-        name: 'opcua-server',
-        protocol: 'opcua',
-        opcuaServerConfig: config,
-      },
-    ]
-
-    const result = generateOpcUaConfig(servers, sampleDebugContent, sampleInstances)
-    expect(result).toBeNull()
+  it('returns null when no opcua server is enabled', () => {
+    const cfg = baseServerConfig()
+    cfg.server.enabled = false
+    expect(generateOpcUaConfig([makePLCServer(cfg)], '', [])).toBeNull()
   })
 
-  it('should generate valid JSON for enabled OPC-UA server', () => {
-    const config = createSampleConfig()
-    config.addressSpace.nodes = [
+  it('returns null when server has no opcuaServerConfig', () => {
+    const srv: PLCServer[] = [{ name: 'test', protocol: 'opcua' as const }]
+    expect(generateOpcUaConfig(srv, '', [])).toBeNull()
+  })
+
+  // ---------------------------------------------------------------------------
+  // Debug empty but nodes present (line 426)
+  // ---------------------------------------------------------------------------
+
+  it('throws when debug is empty but address space has nodes (line 426)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode()]
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation()
+    expect(() => generateOpcUaConfig([makePLCServer(cfg)], '// no vars', instances)).toThrow(
+      'Cannot resolve OPC-UA variable indices',
+    )
+    warnSpy.mockRestore()
+  })
+
+  // ---------------------------------------------------------------------------
+  // Server config mapping
+  // ---------------------------------------------------------------------------
+
+  it('maps server settings to snake_case runtime format', () => {
+    const cfg = baseServerConfig()
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], debugContent([]), [])!)
+    const s = result[0].config.server
+    expect(s.name).toBe('TestServer')
+    expect(s.application_uri).toBe('urn:test:server')
+    expect(s.product_uri).toBe('urn:test:product')
+    expect(s.endpoint_url).toBe('opc.tcp://0.0.0.0:4840/openplc')
+  })
+
+  it('filters disabled security profiles', () => {
+    const cfg = baseServerConfig()
+    cfg.securityProfiles = [
+      { id: 'sp1', name: 'A', enabled: true, securityPolicy: 'None', securityMode: 'None', authMethods: ['Anonymous'] },
       {
-        id: 'node-1',
-        pouName: 'main',
-        variablePath: 'MOTOR_SPEED',
-        variableType: 'INT',
-        nodeId: 'PLC.Main.MotorSpeed',
-        browseName: 'MotorSpeed',
-        displayName: 'Motor Speed',
-        description: 'Motor speed in RPM',
-        initialValue: 0,
-        permissions: { viewer: 'r', operator: 'rw', engineer: 'rw' },
-        nodeType: 'variable',
+        id: 'sp2',
+        name: 'B',
+        enabled: false,
+        securityPolicy: 'Basic256',
+        securityMode: 'Sign',
+        authMethods: ['Username'],
       },
     ]
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], debugContent([]), [])!)
+    expect(result[0].config.server.security_profiles).toHaveLength(1)
+    expect(result[0].config.server.security_profiles[0].name).toBe('A')
+  })
 
-    const servers: PLCServer[] = [
-      {
-        name: 'opcua-server',
-        protocol: 'opcua',
-        opcuaServerConfig: config,
-      },
+  // ---------------------------------------------------------------------------
+  // Security config with trusted certificates (line 159)
+  // ---------------------------------------------------------------------------
+
+  it('maps security config with trusted certificates (line 159)', () => {
+    const cfg = baseServerConfig()
+    cfg.security = {
+      serverCertificateStrategy: 'custom',
+      serverCertificateCustom: 'CERT',
+      serverPrivateKeyCustom: 'KEY',
+      trustedClientCertificates: [
+        { id: 'c1', pem: 'PEM1' },
+        { id: 'c2', pem: 'PEM2' },
+      ],
+    }
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], debugContent([]), [])!)
+    const sec = result[0].config.security
+    expect(sec.server_certificate_strategy).toBe('custom')
+    expect(sec.server_certificate_custom).toBe('CERT')
+    expect(sec.server_private_key_custom).toBe('KEY')
+    expect(sec.trusted_client_certificates).toEqual([
+      { id: 'c1', pem: 'PEM1' },
+      { id: 'c2', pem: 'PEM2' },
+    ])
+  })
+
+  // ---------------------------------------------------------------------------
+  // Users config mapping
+  // ---------------------------------------------------------------------------
+
+  it('maps users config', () => {
+    const cfg = baseServerConfig()
+    cfg.users = [
+      { id: 'u1', type: 'password', username: 'admin', passwordHash: 'h', certificateId: null, role: 'engineer' },
+      { id: 'u2', type: 'certificate', username: null, passwordHash: null, certificateId: 'c1', role: 'viewer' },
     ]
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], debugContent([]), [])!)
+    expect(result[0].config.users).toEqual([
+      { type: 'password', username: 'admin', password_hash: 'h', certificate_id: null, role: 'engineer' },
+      { type: 'certificate', username: null, password_hash: null, certificate_id: 'c1', role: 'viewer' },
+    ])
+  })
 
-    const result = generateOpcUaConfig(servers, sampleDebugContent, sampleInstances)
-    expect(result).not.toBeNull()
+  // ---------------------------------------------------------------------------
+  // cycle_time_ms and namespace_uri
+  // ---------------------------------------------------------------------------
 
-    const parsed = JSON.parse(result!)
-    expect(parsed).toBeInstanceOf(Array)
-    expect(parsed).toHaveLength(1)
-    expect(parsed[0].name).toBe('opcua_server')
-    expect(parsed[0].protocol).toBe('OPC-UA')
-    expect(parsed[0].config.server.endpoint_url).toBe('opc.tcp://0.0.0.0:4840/test/opcua')
-    expect(parsed[0].config.address_space.variables).toHaveLength(1)
-    expect(parsed[0].config.address_space.variables[0].index).toBe(0)
+  it('maps cycle_time_ms and namespace_uri', () => {
+    const cfg = baseServerConfig()
+    cfg.cycleTimeMs = 250
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], debugContent([]), [])!)
+    expect(result[0].config.cycle_time_ms).toBe(250)
+    expect(result[0].config.address_space.namespace_uri).toBe('urn:test:ns')
+  })
+
+  // ---------------------------------------------------------------------------
+  // Address space: variable node (lines 311-312 switch)
+  // ---------------------------------------------------------------------------
+
+  it('resolves a variable node in address space', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ variablePath: 'COUNTER' })]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.COUNTER', type: 'INT_ENUM' }])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    const vars = result[0].config.address_space.variables
+    expect(vars).toHaveLength(1)
+    expect(vars[0]).toMatchObject({ node_id: 'ns=1;s=MY_VAR', browse_name: 'MY_VAR', index: 0, datatype: 'INT' })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Address space: structure node (lines 316, 246-248, 221-234)
+  // ---------------------------------------------------------------------------
+
+  it('resolves a structure node with flat leaf fields (lines 246-248, 221-234)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'structure',
+        variablePath: 'SENSOR',
+        fields: [
+          makeField({ fieldPath: 'X', datatype: 'INT', initialValue: 0 }),
+          makeField({ fieldPath: 'Y', datatype: 'REAL', initialValue: 1.5 }),
+        ],
+      }),
+    ]
+    const dc = debugContent([
+      { path: 'RES0__INSTANCE0.SENSOR.X', type: 'INT_ENUM' },
+      { path: 'RES0__INSTANCE0.SENSOR.Y', type: 'REAL_ENUM' },
+    ])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    const structs = result[0].config.address_space.structures
+    expect(structs).toHaveLength(1)
+    expect(structs[0].fields).toHaveLength(2)
+    expect(structs[0].fields[0]).toMatchObject({ name: 'X', datatype: 'INT', index: 0 })
+    expect(structs[0].fields[1]).toMatchObject({ name: 'Y', datatype: 'REAL', index: 1 })
+    expect(structs[0].fields[0].permissions).toEqual({ viewer: 'r', operator: 'rw', engineer: 'rw' })
+  })
+
+  it('resolves a structure with nested fields (convertResolvedFieldToRuntime recursive)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'structure',
+        variablePath: 'FB',
+        fields: [
+          makeField({
+            fieldPath: 'INNER',
+            datatype: 'TON',
+            initialValue: '',
+            fields: [makeField({ fieldPath: 'LEAF', datatype: 'BOOL', initialValue: false })],
+          }),
+        ],
+      }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.FB.INNER.LEAF', type: 'BOOL_ENUM' }])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    const s = result[0].config.address_space.structures[0]
+    expect(s.fields[0].name).toBe('INNER')
+    expect(s.fields[0].index).toBeNull()
+    expect(s.fields[0].fields).toHaveLength(1)
+    expect(s.fields[0].fields[0]).toMatchObject({ name: 'LEAF', index: 0, datatype: 'BOOL' })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Address space: array node - simple (lines 274-283, 318-326)
+  // ---------------------------------------------------------------------------
+
+  it('resolves a simple array node (lines 274-283)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'array',
+        variablePath: 'ARR',
+        variableType: 'ARRAY[1..10] OF INT',
+        arrayLength: 10,
+        elementType: 'INT',
+      }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.ARR.value.table[0]', type: 'INT_ENUM' }])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    const arrays = result[0].config.address_space.arrays
+    expect(arrays).toHaveLength(1)
+    expect(arrays[0]).toMatchObject({ datatype: 'INT', length: 10, index: 0 })
+  })
+
+  // ---------------------------------------------------------------------------
+  // extractArrayElementType (lines 262-263)
+  // ---------------------------------------------------------------------------
+
+  it('extracts element type from variableType when elementType not set (line 262-263)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'array',
+        variablePath: 'A2',
+        variableType: 'ARRAY[0..4] OF REAL',
+        arrayLength: 5,
+        // no elementType
+      }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.A2.value.table[0]', type: 'REAL_ENUM' }])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    expect(result[0].config.address_space.arrays[0].datatype).toBe('REAL')
+  })
+
+  it('returns original variableType when no OF pattern found', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'array',
+        variablePath: 'A3',
+        variableType: 'CUSTOM_ARRAY',
+        arrayLength: 3,
+      }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.A3.value.table[0]', type: 'INT_ENUM' }])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    expect(result[0].config.address_space.arrays[0].datatype).toBe('CUSTOM_ARRAY')
+  })
+
+  it('uses UNKNOWN when no elementType and variableType is empty', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'array',
+        variablePath: 'A4',
+        variableType: '',
+        arrayLength: 1,
+      }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.A4.value.table[0]', type: 'INT_ENUM' }])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    expect(result[0].config.address_space.arrays[0].datatype).toBe('UNKNOWN')
+  })
+
+  it('defaults arrayLength to 1 when not set', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({ nodeType: 'array', variablePath: 'A5', variableType: 'ARRAY[1..1] OF BOOL', elementType: 'BOOL' }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.A5.value.table[0]', type: 'BOOL_ENUM' }])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    expect(result[0].config.address_space.arrays[0].length).toBe(1)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Address space: array with fields treated as structure (lines 321-322)
+  // ---------------------------------------------------------------------------
+
+  it('treats array with fields as structure (lines 321-322)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'array',
+        variablePath: 'FBA',
+        fields: [makeField({ fieldPath: 'EF', datatype: 'INT', initialValue: 0 })],
+      }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.FBA.EF', type: 'INT_ENUM' }])
+    const result = JSON.parse(generateOpcUaConfig([makePLCServer(cfg)], dc, instances)!)
+    expect(result[0].config.address_space.structures).toHaveLength(1)
+    expect(result[0].config.address_space.arrays).toHaveLength(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Error collection and aggregation (lines 329-333, 340-341)
+  // ---------------------------------------------------------------------------
+
+  it('collects multiple OpcUaConfigErrors and throws combined (lines 340-341)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({ id: 'n1', variablePath: 'MISS1', nodeType: 'variable' }),
+      makeNode({ id: 'n2', variablePath: 'MISS2', nodeType: 'variable' }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.OTHER', type: 'INT_ENUM' }])
+    expect(() => generateOpcUaConfig([makePLCServer(cfg)], dc, instances)).toThrow(
+      'Failed to resolve 2 OPC-UA variable(s)',
+    )
+  })
+
+  it('re-throws non-OpcUaConfigError from address space building (line 333)', () => {
+    const spy = jest.spyOn(resolveIndices, 'resolveVariableIndex').mockImplementation(() => {
+      throw new TypeError('unexpected crash')
+    })
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ variablePath: 'X', nodeType: 'variable' })]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.X', type: 'INT_ENUM' }])
+    expect(() => generateOpcUaConfig([makePLCServer(cfg)], dc, instances)).toThrow(TypeError)
+    spy.mockRestore()
   })
 })
 
-describe('validateOpcUaConfig', () => {
-  it('should return valid when config is correct', () => {
-    const config = createSampleConfig()
-    config.addressSpace.nodes = [
-      {
-        id: 'node-1',
-        pouName: 'main',
-        variablePath: 'MOTOR_SPEED',
-        variableType: 'INT',
-        nodeId: 'PLC.Main.MotorSpeed',
-        browseName: 'MotorSpeed',
-        displayName: 'Motor Speed',
-        description: '',
-        initialValue: 0,
-        permissions: { viewer: 'r', operator: 'r', engineer: 'rw' },
-        nodeType: 'variable',
-      },
-    ]
+// ---------------------------------------------------------------------------
+// validateOpcUaConfig (lines 484-499)
+// ---------------------------------------------------------------------------
 
-    const result = validateOpcUaConfig(config, sampleDebugContent, sampleInstances)
-    expect(result.valid).toBe(true)
-    expect(result.errors).toHaveLength(0)
+describe('validateOpcUaConfig', () => {
+  it('returns valid when config is correct', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ variablePath: 'X' })]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.X', type: 'INT_ENUM' }])
+    expect(validateOpcUaConfig(cfg, dc, instances)).toEqual({ valid: true, errors: [] })
   })
 
-  it('should return errors when no security profiles enabled', () => {
-    const config = createSampleConfig()
-    config.securityProfiles[0].enabled = false
-
-    const result = validateOpcUaConfig(config, sampleDebugContent, sampleInstances)
+  it('reports error when no security profiles enabled', () => {
+    const cfg = baseServerConfig()
+    cfg.securityProfiles = [
+      {
+        id: 'sp1',
+        name: 'A',
+        enabled: false,
+        securityPolicy: 'None',
+        securityMode: 'None',
+        authMethods: ['Anonymous'],
+      },
+    ]
+    const result = validateOpcUaConfig(cfg, debugContent([]), [])
     expect(result.valid).toBe(false)
     expect(result.errors).toContain('At least one security profile must be enabled')
   })
 
-  it('should return errors when username auth enabled without users', () => {
-    const config = createSampleConfig()
-    config.securityProfiles[0].authMethods = ['Username']
-    config.users = []
-
-    const result = validateOpcUaConfig(config, sampleDebugContent, sampleInstances)
+  it('reports error when username auth enabled but no users configured', () => {
+    const cfg = baseServerConfig()
+    cfg.securityProfiles = [
+      { id: 'sp1', name: 'A', enabled: true, securityPolicy: 'None', securityMode: 'None', authMethods: ['Username'] },
+    ]
+    cfg.users = []
+    const result = validateOpcUaConfig(cfg, debugContent([]), [])
     expect(result.valid).toBe(false)
     expect(result.errors).toContain('Username authentication is enabled but no users are configured')
+  })
+
+  it('no username-auth error when users are configured', () => {
+    const cfg = baseServerConfig()
+    cfg.securityProfiles = [
+      { id: 'sp1', name: 'A', enabled: true, securityPolicy: 'None', securityMode: 'None', authMethods: ['Username'] },
+    ]
+    cfg.users = [
+      { id: 'u1', type: 'password', username: 'a', passwordHash: 'h', certificateId: null, role: 'engineer' },
+    ]
+    const result = validateOpcUaConfig(cfg, debugContent([]), [])
+    expect(result.errors).not.toContain('Username authentication is enabled but no users are configured')
+  })
+
+  // ---------------------------------------------------------------------------
+  // Validate variable resolution (line 484)
+  // ---------------------------------------------------------------------------
+
+  it('validates variable node resolution errors (line 484)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ variablePath: 'MISSING', nodeType: 'variable' })]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.OTHER', type: 'INT_ENUM' }])
+    const result = validateOpcUaConfig(cfg, dc, instances)
+    expect(result.valid).toBe(false)
+    expect(result.errors.length).toBeGreaterThan(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Validate structure node (line 487)
+  // ---------------------------------------------------------------------------
+
+  it('validates structure node resolution errors (line 487)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({ nodeType: 'structure', variablePath: 'S', fields: [makeField({ fieldPath: 'MF' })] }),
+    ]
+    const result = validateOpcUaConfig(cfg, debugContent([]), instances)
+    expect(result.valid).toBe(false)
+    expect(result.errors.length).toBeGreaterThan(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Validate simple array node (line 494)
+  // ---------------------------------------------------------------------------
+
+  it('validates simple array node resolution errors (line 494)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ nodeType: 'array', variablePath: 'MA', arrayLength: 5 })]
+    const result = validateOpcUaConfig(cfg, debugContent([]), instances)
+    expect(result.valid).toBe(false)
+    expect(result.errors.length).toBeGreaterThan(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Validate array with fields (line 492)
+  // ---------------------------------------------------------------------------
+
+  it('validates array with fields as structure (line 492)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'array',
+        variablePath: 'FBA',
+        fields: [makeField({ fieldPath: 'MEF' })],
+      }),
+    ]
+    const result = validateOpcUaConfig(cfg, debugContent([]), instances)
+    expect(result.valid).toBe(false)
+    expect(result.errors.length).toBeGreaterThan(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Validate successful resolution for structure/array (covers break on 485, 493)
+  // ---------------------------------------------------------------------------
+
+  it('validates structure node successfully (covers line 485 break)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'structure',
+        variablePath: 'S',
+        fields: [makeField({ fieldPath: 'F', datatype: 'INT', initialValue: 0 })],
+      }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.S.F', type: 'INT_ENUM' }])
+    const result = validateOpcUaConfig(cfg, dc, instances)
+    expect(result.valid).toBe(true)
+  })
+
+  it('validates simple array node successfully (covers line 493 break)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ nodeType: 'array', variablePath: 'A', arrayLength: 3, elementType: 'INT' })]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.A.value.table[0]', type: 'INT_ENUM' }])
+    const result = validateOpcUaConfig(cfg, dc, instances)
+    expect(result.valid).toBe(true)
+  })
+
+  it('validates array with fields successfully (covers line 493 break)', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'array',
+        variablePath: 'FA',
+        fields: [makeField({ fieldPath: 'E', datatype: 'INT', initialValue: 0 })],
+      }),
+    ]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.FA.E', type: 'INT_ENUM' }])
+    const result = validateOpcUaConfig(cfg, dc, instances)
+    expect(result.valid).toBe(true)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Validate catches non-OpcUaConfigError via getErrorMessage (line 499)
+  // ---------------------------------------------------------------------------
+
+  it('catches non-OpcUaConfigError via getErrorMessage (line 499)', () => {
+    const spy = jest.spyOn(resolveIndices, 'resolveVariableIndex').mockImplementation(() => {
+      throw new TypeError('unexpected')
+    })
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ variablePath: 'X', nodeType: 'variable' })]
+    const dc = debugContent([{ path: 'RES0__INSTANCE0.X', type: 'INT_ENUM' }])
+    const result = validateOpcUaConfig(cfg, dc, instances)
+    expect(result.valid).toBe(false)
+    expect(result.errors).toContain('unexpected')
+    spy.mockRestore()
   })
 })

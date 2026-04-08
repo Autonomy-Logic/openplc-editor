@@ -351,6 +351,15 @@ describe('onDisconnected', () => {
     expect(cb2).not.toHaveBeenCalled()
     expect(cb3).toHaveBeenCalledTimes(1)
   })
+
+  it('tolerates double-unsubscribe without error', () => {
+    const cb = jest.fn()
+    const unsub = adapter.onDisconnected(cb)
+
+    unsub()
+    // Second call: indexOf returns -1, the idx >= 0 branch is false
+    expect(() => unsub()).not.toThrow()
+  })
 })
 
 // ---------------------------------------------------------------------------

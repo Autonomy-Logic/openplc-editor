@@ -9,17 +9,20 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
-import { type CppPouData as CppPouDataCode, generateCBlocksCode } from '@root/frontend/utils/cpp/generateCBlocksCode'
+import {
+  type CppPouData as CppPouDataCode,
+  generateCBlocksCode,
+} from '@root/backend/shared/utils/cpp/generateCBlocksCode'
 import {
   type CppPouData as CppPouDataHeader,
   generateCBlocksHeader,
-} from '@root/frontend/utils/cpp/generateCBlocksHeader'
+} from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
+import { generateModbusMasterConfig } from '@root/backend/shared/utils/modbus/generate-modbus-master-config'
+import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
+import { parsePlcStatus } from '@root/backend/shared/utils/plc-status'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import { generateModbusMasterConfig } from '@root/frontend/utils/modbus/generate-modbus-master-config'
 import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
-import { XmlGenerator } from '@root/frontend/utils/PLC/xml-generator'
-import { parsePlcStatus } from '@root/frontend/utils/plc-status'
 import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
 import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import type { PLCProjectData } from '@root/types/PLC/open-plc'

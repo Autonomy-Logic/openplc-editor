@@ -539,6 +539,16 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setPlcLogs('logs')
     store.getState().workspaceActions.setPlcLogsLastId(5)
 
+    store.getState().workspaceActions.setProjectLoading(true, 'Loading project...')
+
+    expect(store.getState().workspace.isProjectLoading).toBe(true)
+    expect(store.getState().workspace.projectLoadingMessage).toBe('Loading project...')
+
+    store.getState().workspaceActions.setProjectLoading(false)
+
+    expect(store.getState().workspace.isProjectLoading).toBe(false)
+    expect(store.getState().workspace.projectLoadingMessage).toBe('')
+
     store.getState().workspaceActions.clearWorkspace()
 
     const { workspace } = store.getState()

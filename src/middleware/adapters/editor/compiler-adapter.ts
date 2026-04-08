@@ -11,7 +11,7 @@
  *   - Port uses `configurations` (plural), IPC uses `configuration` (singular)
  */
 
-import { preprocessPous } from '../../../frontend/utils/PLC/preprocess-pous'
+import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type {
   CompileProgramArgs,
   CompilerPort,

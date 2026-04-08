@@ -8,9 +8,9 @@ import {
   useTheme,
   useWindow,
 } from '../../../middleware/shared/providers'
+import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
 import { useOpenPLCStore } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
-import { executeSaveActiveFile, executeSaveProject } from '../../utils/save-actions'
 import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {

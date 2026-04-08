@@ -1,8 +1,8 @@
-import { getDefaultSchemaValues } from '@root/frontend/utils/default-zod-schema-values'
+import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
 import {
   migrateProjectToNameTypeSystem,
   needsMigration,
-} from '@root/frontend/utils/migrate-project-to-name-type-system'
+} from '@root/backend/shared/utils/migrate-project-to-name-type-system'
 import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
 import {
   detectLanguageFromExtension,

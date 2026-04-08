@@ -590,7 +590,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) => {
-    const result = await this.projectService.saveFile(filePath, content)
+    const result = await this.projectService.saveFile(filePath, content as string)
     if (result.success) {
       // Update lastMtime for the saved file's watcher to suppress self-trigger
       const watcherData = this.fileWatchers.get(filePath)

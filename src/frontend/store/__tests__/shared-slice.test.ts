@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla'
 
+import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { createConsoleSlice } from '../slices/console/slice'
 import { createDeviceSlice } from '../slices/device/slice'
 import { createEditorSlice } from '../slices/editor/slice'
@@ -1298,6 +1299,776 @@ describe('createSharedSlice', () => {
         expect(store.getState().project.data.pous).toHaveLength(0)
         expect(store.getState().logs).toHaveLength(0)
         expect(store.getState().editor.type).toBe('available')
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // closeFile
+    // -----------------------------------------------------------------------
+    describe('closeFile', () => {
+      it('shows save-changes modal when file has unsaved changes', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'UnsavedPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'UnsavedPou', saved: false })
+
+        const result = store.getState().sharedWorkspaceActions.closeFile('UnsavedPou')
+        expect(result).toEqual({ success: false })
+
+        const modalState = store.getState().modalActions.getModalState('save-changes-file')
+        expect(modalState.open).toBe(true)
+        expect(modalState.data).toEqual({ fileName: 'UnsavedPou' })
+      })
+
+      it('closes file directly when file is saved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'SavedPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'SavedPou', saved: true })
+
+        const result = store.getState().sharedWorkspaceActions.closeFile('SavedPou')
+        expect(result).toEqual({ success: true })
+        expect(store.getState().tabs.find((t) => t.name === 'SavedPou')).toBeUndefined()
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // handleOpenProjectResponse
+    // -----------------------------------------------------------------------
+    describe('handleOpenProjectResponse', () => {
+      function makeMinimalProjectResponse() {
+        return {
+          meta: { name: 'TestProject', type: 'plc-project' as const, path: '/test/path' },
+          projectData: {
+            dataTypes: [] as ReturnType<typeof store.getState>['project']['data']['dataTypes'],
+            pous: [
+              {
+                name: 'main',
+                pouType: 'program' as const,
+                interface: {
+                  variables: [
+                    {
+                      name: 'x',
+                      class: 'local' as const,
+                      type: { definition: 'base-type' as const, value: 'INT' },
+                      location: '',
+                      documentation: '',
+                    },
+                  ],
+                },
+                body: { language: 'st' as const, value: '' as unknown },
+                documentation: '',
+              },
+            ] as ReturnType<typeof store.getState>['project']['data']['pous'],
+            configurations: {
+              resource: {
+                tasks: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['tasks'],
+                instances: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['instances'],
+                globalVariables: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['globalVariables'],
+              },
+            },
+            debugVariables: undefined as ReturnType<typeof store.getState>['project']['data']['debugVariables'],
+            servers: undefined as ReturnType<typeof store.getState>['project']['data']['servers'],
+            remoteDevices: undefined as ReturnType<typeof store.getState>['project']['data']['remoteDevices'],
+          },
+        }
+      }
+
+      it('opens a minimal project with an ST main POU', () => {
+        const data = makeMinimalProjectResponse()
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const state = store.getState()
+        expect(state.project.meta.name).toBe('TestProject')
+        expect(state.project.meta.path).toBe('/test/path')
+        expect(state.project.data.pous).toHaveLength(1)
+        expect(state.project.data.pous[0].name).toBe('main')
+
+        // Main POU should be opened in a tab
+        expect(state.tabs).toHaveLength(1)
+        expect(state.tabs[0].name).toBe('main')
+        expect(state.selectedTab).toBe('main')
+        expect(state.editor.meta.name).toBe('main')
+
+        // Files should be registered
+        expect(state.files['main']).toBeDefined()
+        expect(state.files['main'].saved).toBe(true)
+        expect(state.files['Resource']).toBeDefined()
+        expect(state.files['Configuration']).toBeDefined()
+      })
+
+      it('logs warnings to console when present', () => {
+        const data = {
+          ...makeMinimalProjectResponse(),
+          warnings: ['Warning 1', 'Warning 2'],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const logs = store.getState().logs
+        expect(logs).toHaveLength(2)
+        expect(logs[0].level).toBe('warning')
+        expect(logs[0].message).toBe('Warning 1')
+        expect(logs[1].message).toBe('Warning 2')
+      })
+
+      it('adds ladder flows for LD POUs', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.pous.push({
+          name: 'LdProg',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: {
+            language: 'ld',
+            value: { name: 'LdProg', rungs: [] },
+          },
+          documentation: '',
+        })
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const ladderFlows = store.getState().ladderFlows
+        expect(ladderFlows.some((f) => f.name === 'LdProg')).toBe(true)
+      })
+
+      it('adds FBD flows for FBD POUs', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.pous.push({
+          name: 'FbdProg',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: {
+            language: 'fbd',
+            value: { name: 'FbdProg', rung: { comment: '', edges: [], nodes: [] } },
+          },
+          documentation: '',
+        })
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const fbdFlows = store.getState().fbdFlows
+        expect(fbdFlows.some((f) => f.name === 'FbdProg')).toBe(true)
+      })
+
+      it('registers non-program POUs in the library', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.pous.push({
+          name: 'MyFunc',
+          pouType: 'function',
+          interface: { variables: [] },
+          body: { language: 'st', value: '' },
+          documentation: '',
+        })
+        data.projectData.pous.push({
+          name: 'MyFB',
+          pouType: 'function-block',
+          interface: { variables: [] },
+          body: { language: 'st', value: '' },
+          documentation: '',
+        })
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const userLibs = store.getState().libraries.user
+        expect(userLibs.some((l) => l.name === 'MyFunc')).toBe(true)
+        expect(userLibs.some((l) => l.name === 'MyFB')).toBe(true)
+        // Programs should NOT be in the library
+        expect(userLibs.some((l) => l.name === 'main')).toBe(false)
+      })
+
+      it('sets device definitions when provided', () => {
+        const deviceConfig = {
+          deviceBoard: 'test-board',
+          communicationPort: '',
+          compileOnly: false,
+          communicationConfiguration: {
+            modbusRTU: {
+              rtuInterface: '',
+              rtuBaudRate: '',
+              rtuSlaveId: null,
+              rtuRS485ENPin: null,
+            },
+            modbusTCP: {
+              tcpInterface: '',
+              tcpMacAddress: null,
+              tcpStaticHostConfiguration: {
+                ipAddress: '',
+                dns: '',
+                gateway: '',
+                subnet: '',
+              },
+            },
+            communicationPreferences: {
+              enabledRTU: false,
+              enabledTCP: false,
+              enabledDHCP: false,
+            },
+          },
+        }
+        const data = {
+          ...makeMinimalProjectResponse(),
+          deviceConfiguration: deviceConfig,
+          devicePinMapping: [{ pin: 'D0', pinType: 'digitalInput' as const, address: '%IX0.0' }],
+        }
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('test-board')
+      })
+
+      it('registers data types as files', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.dataTypes = [
+          { name: 'MyArray', derivation: 'array', baseType: { definition: 'base-type', value: 'INT' }, dimensions: [] },
+        ]
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        expect(store.getState().files['MyArray']).toBeDefined()
+        expect(store.getState().files['MyArray'].type).toBe('data-type')
+      })
+
+      it('registers servers as files', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.servers = [{ name: 'Server1', protocol: 'modbus-tcp' }]
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        expect(store.getState().files['Server1']).toBeDefined()
+        expect(store.getState().files['Server1'].type).toBe('server')
+      })
+
+      it('registers remote devices as files', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.remoteDevices = [{ name: 'Device1', protocol: 'modbus-tcp' }]
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        expect(store.getState().files['Device1']).toBeDefined()
+        expect(store.getState().files['Device1'].type).toBe('remote-device')
+      })
+
+      it('does not open a tab when there is no main program POU', () => {
+        const data = makeMinimalProjectResponse()
+        // Replace the main POU with a function
+        data.projectData.pous = [
+          {
+            name: 'Helper',
+            pouType: 'function',
+            interface: { variables: [] },
+            body: { language: 'st', value: '' },
+            documentation: '',
+          },
+        ]
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        // No tab should be opened
+        expect(store.getState().tabs).toHaveLength(0)
+      })
+
+      it('restores debug flags for global variables', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.configurations.resource.globalVariables = [
+          {
+            name: 'GV1',
+            class: 'global',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            documentation: '',
+          },
+        ]
+        data.projectData.debugVariables = {
+          global: ['GV1'],
+        }
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const globalVars = store.getState().project.data.configurations.resource.globalVariables
+        expect(globalVars[0].debug).toBe(true)
+      })
+
+      it('restores debug flags for POU variables', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.debugVariables = {
+          pous: {
+            main: ['x'],
+          },
+        }
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const pou = store.getState().project.data.pous.find((p) => p.name === 'main')
+        const xVar = pou?.interface?.variables.find((v) => v.name === 'x')
+        expect(xVar?.debug).toBe(true)
+      })
+
+      it('skips debug flags for non-existent global variables', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.debugVariables = {
+          global: ['NonExistent'],
+        }
+
+        // Should not throw
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const globalVars = store.getState().project.data.configurations.resource.globalVariables
+        expect(globalVars).toHaveLength(0)
+      })
+
+      it('skips debug flags for non-existent POU', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.debugVariables = {
+          pous: {
+            NonExistentPou: ['x'],
+          },
+        }
+
+        // Should not throw
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+      })
+
+      it('skips debug flags for non-existent POU variable', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.debugVariables = {
+          pous: {
+            main: ['nonExistentVar'],
+          },
+        }
+
+        // Should not throw
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+      })
+
+      it('handles project with no debugVariables', () => {
+        const data = makeMinimalProjectResponse()
+        // No debugVariables field at all
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        // Should succeed without errors
+        expect(store.getState().project.data.pous).toHaveLength(1)
+      })
+
+      it('handles empty debugVariables.global array', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.debugVariables = { global: [] }
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+        expect(store.getState().project.data.pous).toHaveLength(1)
+      })
+
+      it('pre-creates editor model for POU with variablesText and no variables', () => {
+        const data = makeMinimalProjectResponse()
+        // Add a POU with variablesText but empty variables
+        const pouWithText = {
+          name: 'UnparseablePou',
+          pouType: 'program' as const,
+          interface: { variables: [] as PLCVariable[] },
+          body: { language: 'st' as const, value: '' },
+          documentation: '',
+          variablesText: 'VAR\n  unparseable_stuff;\nEND_VAR',
+        }
+        data.projectData.pous.push(pouWithText)
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        // Check that the editor model was created for UnparseablePou
+        const editor = store.getState().editorActions.getEditorFromEditors('UnparseablePou')
+        expect(editor).toBeDefined()
+        if (editor && 'variable' in editor) {
+          expect(editor.variable).toEqual({
+            display: 'code',
+            code: 'VAR\n  unparseable_stuff;\nEND_VAR',
+          })
+        }
+      })
+
+      it('does not create code-mode model for POU with variables (non-empty)', () => {
+        const data = makeMinimalProjectResponse()
+        // main has variables, so no variablesText processing should occur
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const editorModel = store.getState().editorActions.getEditorFromEditors('main')
+        expect(editorModel).toBeDefined()
+        // Should be in table mode (not code mode)
+        if (editorModel && 'variable' in editorModel) {
+          expect(editorModel.variable.display).toBe('table')
+        }
+      })
+
+      it('resets graphical flow updated flags at the end', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.pous.push({
+          name: 'LdPou',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: {
+            language: 'ld',
+            value: { name: 'LdPou', rungs: [] },
+          },
+          documentation: '',
+        })
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        // After open, all flows should have updated = false
+        const ldFlows = store.getState().ladderFlows.filter((f) => f.name === 'LdPou')
+        ldFlows.forEach((flow) => {
+          expect(flow.updated).toBe(false)
+        })
+      })
+    })
+  })
+
+  // =========================================================================
+  // serverActions.create
+  // =========================================================================
+  describe('serverActions (create)', () => {
+    it('creates a server and updates all slices', () => {
+      const result = store.getState().serverActions.create({ name: 'MyServer', protocol: 'modbus-tcp' })
+      expect(result).toEqual({ ok: true })
+
+      const state = store.getState()
+      expect(state.project.data.servers).toHaveLength(1)
+      expect(state.project.data.servers![0].name).toBe('MyServer')
+      expect(state.editor.meta.name).toBe('MyServer')
+      expect(state.files['MyServer']).toBeDefined()
+      expect(state.files['MyServer'].type).toBe('server')
+      expect(state.tabs).toHaveLength(1)
+      expect(state.selectedTab).toBe('MyServer')
+    })
+
+    it('returns error when server name already exists', () => {
+      store.getState().serverActions.create({ name: 'Dup', protocol: 'modbus-tcp' })
+      const result = store.getState().serverActions.create({ name: 'Dup', protocol: 's7comm' })
+      expect(result.ok).toBe(false)
+      expect(result.message).toBe('Server already exists')
+    })
+  })
+
+  // =========================================================================
+  // remoteDeviceActions.create
+  // =========================================================================
+  describe('remoteDeviceActions (create)', () => {
+    it('creates a remote device and updates all slices', () => {
+      const result = store.getState().remoteDeviceActions.create({ name: 'MyDevice', protocol: 'modbus-tcp' })
+      expect(result).toEqual({ ok: true })
+
+      const state = store.getState()
+      expect(state.project.data.remoteDevices).toHaveLength(1)
+      expect(state.project.data.remoteDevices![0].name).toBe('MyDevice')
+      expect(state.editor.meta.name).toBe('MyDevice')
+      expect(state.files['MyDevice']).toBeDefined()
+      expect(state.files['MyDevice'].type).toBe('remote-device')
+      expect(state.tabs).toHaveLength(1)
+      expect(state.selectedTab).toBe('MyDevice')
+    })
+
+    it('returns error when remote device name already exists', () => {
+      store.getState().remoteDeviceActions.create({ name: 'Dup', protocol: 'modbus-tcp' })
+      const result = store.getState().remoteDeviceActions.create({ name: 'Dup', protocol: 'ethernet-ip' })
+      expect(result.ok).toBe(false)
+      expect(result.message).toBe('Remote device already exists')
+    })
+  })
+
+  // =========================================================================
+  // snapshotActions (additional coverage)
+  // =========================================================================
+  describe('snapshotActions (additional)', () => {
+    // -----------------------------------------------------------------------
+    // markSaved / markAllSaved
+    // -----------------------------------------------------------------------
+    describe('markSaved', () => {
+      it('sets savedAtDepth to current past length', () => {
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'v2' })
+
+        store.getState().snapshotActions.markSaved('P1')
+
+        const history = store.getState().undoRedo['P1']
+        expect(history.savedAtDepth).toBe(2) // past length = 2
+      })
+
+      it('does nothing for non-existent POU history', () => {
+        store.getState().snapshotActions.markSaved('NonExistent')
+        expect(store.getState().undoRedo['NonExistent']).toBeUndefined()
+      })
+    })
+
+    describe('markAllSaved', () => {
+      it('sets savedAtDepth for all POU histories', () => {
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.pushToHistory('P2', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.pushToHistory('P2', { variables: [], body: 'v2' })
+
+        store.getState().snapshotActions.markAllSaved()
+
+        expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
+        expect(store.getState().undoRedo['P2'].savedAtDepth).toBe(2)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // pushToHistory savedAtDepth branches
+    // -----------------------------------------------------------------------
+    describe('pushToHistory savedAtDepth', () => {
+      it('nullifies savedAtDepth when saved state was in the future (discarded)', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
+
+        // Push 3 snapshots
+        store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v2' })
+        store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v3' })
+
+        // Mark saved at depth 3
+        store.getState().snapshotActions.markSaved('Main')
+        expect(store.getState().undoRedo['Main'].savedAtDepth).toBe(3)
+
+        // Undo twice to move past length to 1
+        store.getState().snapshotActions.undo('Main')
+        store.getState().snapshotActions.undo('Main')
+        expect(store.getState().undoRedo['Main'].past).toHaveLength(1)
+
+        // Push a new snapshot - savedAtDepth (3) > past.length (1), so it should be nullified
+        store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'new' })
+        expect(store.getState().undoRedo['Main'].savedAtDepth).toBeNull()
+      })
+
+      it('adjusts savedAtDepth when history exceeds max size', () => {
+        // Push MAX_HISTORY_SIZE + 5 entries with savedAtDepth set early
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'initial' })
+        store.getState().snapshotActions.markSaved('P1')
+        expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
+
+        // Push 54 more (total 55 > 50 max)
+        for (let i = 0; i < 54; i++) {
+          store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: `v${i}` })
+        }
+
+        // savedAtDepth was 1, after 5 shifts it should become 1 - 5 = -4 -> null
+        expect(store.getState().undoRedo['P1'].savedAtDepth).toBeNull()
+      })
+
+      it('adjusts savedAtDepth without going negative when saved state is recent', () => {
+        // Fill history to 48 entries
+        for (let i = 0; i < 48; i++) {
+          store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: `v${i}` })
+        }
+        store.getState().snapshotActions.markSaved('P1')
+        expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(48)
+
+        // Push 3 more -> total 51, only the 51st causes a shift
+        // savedAtDepth = 48 - 1 = 47
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'a' })
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'b' })
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'c' })
+
+        expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(47)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // undo/redo with ladder and FBD flows
+    // -----------------------------------------------------------------------
+    describe('undo with ladder flow', () => {
+      it('restores ladder flow snapshot on undo', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'LdPou', language: 'ld' })
+
+        const ladderSnapshot = {
+          variables: [],
+          body: { name: 'LdPou', rungs: [] },
+          ladderFlow: { name: 'LdPou', rungs: [], updated: false },
+        }
+        store.getState().snapshotActions.pushToHistory('LdPou', ladderSnapshot)
+        store.getState().snapshotActions.undo('LdPou')
+
+        // The snapshot was applied; verify history was modified
+        const history = store.getState().undoRedo['LdPou']
+        expect(history.past).toHaveLength(0)
+        expect(history.future).toHaveLength(1)
+      })
+
+      it('saves current ladder flow to future when undoing with flow in store', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'LdPou', language: 'ld' })
+        // Add a ladder flow so it exists in the store during undo
+        store.getState().ladderFlowActions.addLadderFlow({ name: 'LdPou', rungs: [] } as never)
+
+        const ladderSnapshot = {
+          variables: [],
+          body: { name: 'LdPou', rungs: [] },
+          ladderFlow: { name: 'LdPou', rungs: [], updated: false },
+        }
+        store.getState().snapshotActions.pushToHistory('LdPou', ladderSnapshot)
+        store.getState().snapshotActions.undo('LdPou')
+
+        const history = store.getState().undoRedo['LdPou']
+        expect(history.past).toHaveLength(0)
+        expect(history.future).toHaveLength(1)
+        // The future snapshot should contain the saved ladder flow
+        expect(history.future[0].ladderFlow).toBeDefined()
+      })
+    })
+
+    describe('undo with FBD flow', () => {
+      it('restores FBD flow snapshot on undo', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdPou', language: 'fbd' })
+
+        const fbdSnapshot = {
+          variables: [],
+          body: { name: 'FbdPou', rung: { comment: '', edges: [], nodes: [] } },
+          fbdFlow: { name: 'FbdPou', rung: { comment: '', edges: [], nodes: [] }, updated: false },
+        }
+        store.getState().snapshotActions.pushToHistory('FbdPou', fbdSnapshot)
+        store.getState().snapshotActions.undo('FbdPou')
+
+        const history = store.getState().undoRedo['FbdPou']
+        expect(history.past).toHaveLength(0)
+        expect(history.future).toHaveLength(1)
+      })
+
+      it('saves current FBD flow to future when undoing with flow in store', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdPou', language: 'fbd' })
+        // Add an FBD flow so it exists in the store during undo
+        store.getState().fbdFlowActions.addFBDFlow({
+          name: 'FbdPou',
+          rung: { comment: '', edges: [], nodes: [], selectedNodes: [] },
+          updated: false,
+        } as never)
+
+        const fbdSnapshot = {
+          variables: [],
+          body: { name: 'FbdPou', rung: { comment: '', edges: [], nodes: [] } },
+          fbdFlow: { name: 'FbdPou', rung: { comment: '', edges: [], nodes: [] }, updated: false },
+        }
+        store.getState().snapshotActions.pushToHistory('FbdPou', fbdSnapshot)
+        store.getState().snapshotActions.undo('FbdPou')
+
+        const history = store.getState().undoRedo['FbdPou']
+        expect(history.past).toHaveLength(0)
+        expect(history.future).toHaveLength(1)
+        // The future snapshot should contain the saved FBD flow
+        expect(history.future[0].fbdFlow).toBeDefined()
+      })
+    })
+
+    describe('redo with ladder flow', () => {
+      it('applies ladder flow from future snapshot on redo', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'LdPou', language: 'ld' })
+        // Also add a ladder flow so it exists in the store
+        store.getState().ladderFlowActions.addLadderFlow({ name: 'LdPou', rungs: [] } as never)
+
+        // Manually inject a future entry that has a ladderFlow
+        store.setState({
+          undoRedo: {
+            LdPou: {
+              past: [],
+              future: [
+                {
+                  variables: [],
+                  body: { name: 'LdPou', rungs: [] },
+                  ladderFlow: { name: 'LdPou', rungs: [], updated: false },
+                },
+              ],
+              savedAtDepth: null,
+            },
+          },
+        })
+
+        store.getState().snapshotActions.redo('LdPou')
+
+        const history = store.getState().undoRedo['LdPou']
+        expect(history.future).toHaveLength(0)
+        expect(history.past).toHaveLength(1)
+      })
+    })
+
+    describe('redo with FBD flow', () => {
+      it('applies FBD flow from future snapshot on redo', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdPou', language: 'fbd' })
+        // Also add an FBD flow so it exists in the store
+        store.getState().fbdFlowActions.addFBDFlow({
+          name: 'FbdPou',
+          rung: { comment: '', edges: [], nodes: [], selectedNodes: [] },
+          updated: false,
+        } as never)
+
+        // Manually inject a future entry that has an fbdFlow
+        store.setState({
+          undoRedo: {
+            FbdPou: {
+              past: [],
+              future: [
+                {
+                  variables: [],
+                  body: { name: 'FbdPou', rung: { comment: '', edges: [], nodes: [] } },
+                  fbdFlow: {
+                    name: 'FbdPou',
+                    rung: { comment: '', edges: [], nodes: [], selectedNodes: [] },
+                    updated: false,
+                  },
+                },
+              ],
+              savedAtDepth: null,
+            },
+          },
+        })
+
+        store.getState().snapshotActions.redo('FbdPou')
+
+        const history = store.getState().undoRedo['FbdPou']
+        expect(history.future).toHaveLength(0)
+        expect(history.past).toHaveLength(1)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // undo/redo savedAtDepth checks
+    // -----------------------------------------------------------------------
+    describe('undo savedAtDepth', () => {
+      it('marks file as saved when undo returns to saved depth', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'Main', saved: true })
+
+        // Push one snapshot and mark saved
+        store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.markSaved('Main')
+        // savedAtDepth = 1, past.length = 1
+
+        // Push another snapshot - now past.length = 2
+        store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v2' })
+        store.getState().fileActions.updateFile({ name: 'Main', saved: false })
+
+        // Undo once: past.length goes from 2 to 1, which equals savedAtDepth (1)
+        store.getState().snapshotActions.undo('Main')
+
+        // File should be marked as saved
+        expect(store.getState().fileActions.getSavedState({ name: 'Main' })).toBe(true)
+      })
+    })
+
+    describe('redo savedAtDepth', () => {
+      it('marks file as saved when redo returns to saved depth', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'Main', saved: true })
+
+        // Push two snapshots
+        store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v2' })
+
+        // Mark saved at depth 2
+        store.getState().snapshotActions.markSaved('Main')
+
+        // Undo once: past.length = 1, saved not at depth
+        store.getState().snapshotActions.undo('Main')
+        store.getState().fileActions.updateFile({ name: 'Main', saved: false })
+
+        // Redo: past.length goes back to 2, which equals savedAtDepth (2)
+        store.getState().snapshotActions.redo('Main')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'Main' })).toBe(true)
       })
     })
   })

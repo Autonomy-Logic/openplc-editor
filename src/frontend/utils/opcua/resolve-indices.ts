@@ -17,13 +17,13 @@ import type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'
  * but the OPC-UA runtime expects "INT", "BOOL", "REAL".
  */
 const debugTypeToIecType = (debugType: string): string => {
+  // Remove _P_ENUM or _O_ENUM suffix for pointer/output types (check before _ENUM)
+  if (debugType.endsWith('_P_ENUM') || debugType.endsWith('_O_ENUM')) {
+    return debugType.slice(0, -7)
+  }
   // Remove _ENUM suffix if present
   if (debugType.endsWith('_ENUM')) {
     return debugType.slice(0, -5)
-  }
-  // Remove _P_ENUM or _O_ENUM suffix for pointer/output types
-  if (debugType.endsWith('_P_ENUM') || debugType.endsWith('_O_ENUM')) {
-    return debugType.slice(0, -7)
   }
   return debugType
 }

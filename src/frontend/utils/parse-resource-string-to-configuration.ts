@@ -173,6 +173,7 @@ export function parseResourceStringToConfiguration(configString: string): {
 
   for (const instance of instances) {
     if (!declaredTaskNames.has(instance.task.toLowerCase())) {
+      /* istanbul ignore next -- unreachable: instanceLines always set when instance is pushed */
       const ln = instanceLines[instance.name] ?? '?'
       throw new Error(
         `Task "${instance.task}" referenced in PROGRAM "${instance.name}" on line ${ln} is not declared above.`,

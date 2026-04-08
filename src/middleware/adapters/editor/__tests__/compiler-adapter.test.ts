@@ -1,6 +1,12 @@
 import type { CompilerPort } from '../../../shared/ports/compiler-port'
 import type { CompileProgressEvent, PLCProjectData } from '../../../shared/ports/types'
-import { createEditorCompilerAdapter, inferStage, portPouToIpcPou, toIpcProjectData } from '../compiler-adapter'
+import {
+  createEditorCompilerAdapter,
+  decodeMessage,
+  inferStage,
+  portPouToIpcPou,
+  toIpcProjectData,
+} from '../compiler-adapter'
 
 const mockProjectData: PLCProjectData = {
   dataTypes: [],
@@ -125,6 +131,16 @@ describe('toIpcProjectData', () => {
     expect(result.pous[0].type).toBe('program')
     expect(result.pous[0].data.name).toBe('main')
     expect(result.configuration).toBe(mockProjectData.configurations)
+  })
+
+  it('includes originalCppPous when present', () => {
+    const dataWithCpp = {
+      ...mockProjectData,
+      originalCppPous: [{ name: 'cpp_pou', code: 'void setup(){}', variables: [] }],
+    }
+    const result = toIpcProjectData(dataWithCpp)
+
+    expect(result.originalCppPous).toEqual([{ name: 'cpp_pou', code: 'void setup(){}', variables: [] }])
   })
 })
 
@@ -387,6 +403,49 @@ describe('createEditorCompilerAdapter', () => {
       const result = await promise
       expect(result).toEqual({ success: false, error: 'Final error' })
     })
+
+    it('defaults logLevel to info when not provided', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileForDebug(
+        {
+          projectData: mockProjectData,
+          boardTarget: 'Arduino Mega',
+          projectPath: '/path',
+        },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      debugCallback!({ message: 'some info' })
+      debugCallback!({ closePort: true })
+
+      await promise
+      // When logLevel is not provided, ?? 'info' kicks in
+      expect(progressEvents[0].level).toBe('info')
+    })
+
+    it('ignores callback data with no message and no closePort', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileForDebug(
+        {
+          projectData: mockProjectData,
+          boardTarget: 'Arduino Mega',
+          projectPath: '/path',
+        },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      // Send data that has neither closePort nor message — both if-branches are false
+      debugCallback!({ someOtherField: 'irrelevant' })
+      debugCallback!({ closePort: true })
+
+      const result = await promise
+      expect(result).toEqual({ success: true })
+      // Only the 'done' event should be recorded, not the irrelevant one
+      expect(progressEvents).toHaveLength(1)
+      expect(progressEvents[0].stage).toBe('done')
+    })
   })
 
   describe('exportProjectXml', () => {
@@ -422,5 +481,206 @@ describe('createEditorCompilerAdapter', () => {
 
       expect(result).toEqual({ success: false, error: 'Export failed: disk full' })
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// decodeMessage — Uint8Array and Buffer object branches (lines 79, 82-85)
+// ---------------------------------------------------------------------------
+
+describe('decodeMessage', () => {
+  // jsdom does not provide TextDecoder by default; polyfill it so decodeMessage can work.
+  const origTextDecoder = globalThis.TextDecoder
+
+  beforeAll(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { TextDecoder: TD } = require('util')
+    globalThis.TextDecoder = TD
+  })
+
+  afterAll(() => {
+    globalThis.TextDecoder = origTextDecoder
+  })
+
+  it('decodes a Uint8Array to string', () => {
+    // Create a Uint8Array using jsdom's global constructor so instanceof check passes.
+    // "Hi" = [72, 105]
+    const bytes = new Uint8Array([72, 105])
+    expect(decodeMessage(bytes)).toBe('Hi')
+  })
+
+  it('decodes an ArrayBuffer to string', () => {
+    // Create an ArrayBuffer using jsdom's global constructor.
+    const bytes = new Uint8Array([72, 105])
+    expect(decodeMessage(bytes.buffer)).toBe('Hi')
+  })
+
+  it('decodes an Electron serialized Buffer object { type: "Buffer", data: number[] }', () => {
+    const fakeBuffer = { type: 'Buffer', data: [72, 101, 108, 108, 111] } // "Hello"
+    expect(decodeMessage(fakeBuffer)).toBe('Hello')
+  })
+
+  it('falls through to String() for object with type but not Buffer', () => {
+    const obj = { type: 'SomethingElse', data: [1, 2, 3] }
+    expect(decodeMessage(obj)).toBe(String(obj))
+  })
+
+  it('falls through to String() for object with type=Buffer but non-array data', () => {
+    const obj = { type: 'Buffer', data: 'not-an-array' }
+    expect(decodeMessage(obj)).toBe(String(obj))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// compileProgram — preprocessPous validation failure (lines 118, 123)
+// ---------------------------------------------------------------------------
+
+describe('compileProgram with invalid C++ POU', () => {
+  it('returns validation error when C++ code has no setup/loop', async () => {
+    const cppProjectData: PLCProjectData = {
+      dataTypes: [],
+      pous: [
+        {
+          name: 'bad_cpp',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: { language: 'cpp', value: '// no setup or loop function' },
+        },
+      ],
+      configurations: {
+        resource: { tasks: [], instances: [], globalVariables: [] },
+      },
+    }
+
+    const adapter = createEditorCompilerAdapter()
+    const progressEvents: CompileProgressEvent[] = []
+
+    const result = await adapter.compileProgram(
+      {
+        projectData: cppProjectData,
+        boardTarget: 'Arduino Mega',
+        projectPath: '/path',
+      },
+      (event) => progressEvents.push(event),
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('POU validation failed')
+  })
+
+  it('forwards preprocessor log messages to onProgress', async () => {
+    const cppProjectData: PLCProjectData = {
+      dataTypes: [],
+      pous: [
+        {
+          name: 'bad_cpp',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: { language: 'cpp', value: '// missing setup and loop' },
+        },
+      ],
+      configurations: {
+        resource: { tasks: [], instances: [], globalVariables: [] },
+      },
+    }
+
+    const adapter = createEditorCompilerAdapter()
+    const progressEvents: CompileProgressEvent[] = []
+
+    await adapter.compileProgram(
+      {
+        projectData: cppProjectData,
+        boardTarget: 'Arduino Mega',
+        projectPath: '/path',
+      },
+      (event) => progressEvents.push(event),
+    )
+
+    // preprocessPous logs info/error messages that go through the onProgress callback
+    expect(progressEvents.length).toBeGreaterThan(0)
+    expect(progressEvents.some((e) => e.stage === 'st')).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// compileForDebug — preprocessPous validation failure (lines 198, 203)
+// ---------------------------------------------------------------------------
+
+describe('compileForDebug with invalid C++ POU', () => {
+  let debugCallback: ((data: Record<string, unknown>) => void) | null
+
+  beforeEach(() => {
+    debugCallback = null
+    window.bridge.runDebugCompilation = jest
+      .fn()
+      .mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
+        debugCallback = cb
+      })
+  })
+
+  it('returns validation error when C++ code is invalid', async () => {
+    const cppProjectData: PLCProjectData = {
+      dataTypes: [],
+      pous: [
+        {
+          name: 'bad_debug_cpp',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: { language: 'cpp', value: '// no setup or loop' },
+        },
+      ],
+      configurations: {
+        resource: { tasks: [], instances: [], globalVariables: [] },
+      },
+    }
+
+    const adapter = createEditorCompilerAdapter()
+    const progressEvents: CompileProgressEvent[] = []
+
+    const result = await adapter.compileForDebug(
+      {
+        projectData: cppProjectData,
+        boardTarget: 'Arduino Mega',
+        projectPath: '/path',
+      },
+      (event) => progressEvents.push(event),
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('POU validation failed.')
+    // The bridge should NOT have been called because validation failed early
+    expect(window.bridge.runDebugCompilation).not.toHaveBeenCalled()
+    void debugCallback // suppress unused warning
+  })
+
+  it('forwards preprocessor log messages to onProgress for debug', async () => {
+    const cppProjectData: PLCProjectData = {
+      dataTypes: [],
+      pous: [
+        {
+          name: 'cpp_debug',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: { language: 'cpp', value: '// missing setup/loop' },
+        },
+      ],
+      configurations: {
+        resource: { tasks: [], instances: [], globalVariables: [] },
+      },
+    }
+
+    const adapter = createEditorCompilerAdapter()
+    const progressEvents: CompileProgressEvent[] = []
+
+    await adapter.compileForDebug(
+      {
+        projectData: cppProjectData,
+        boardTarget: 'Arduino Mega',
+        projectPath: '/path',
+      },
+      (event) => progressEvents.push(event),
+    )
+
+    expect(progressEvents.length).toBeGreaterThan(0)
   })
 })

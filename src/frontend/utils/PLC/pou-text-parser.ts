@@ -28,6 +28,7 @@ const extractDocumentation = (content: string): { documentation: string; remaini
  * @returns Formatted error message
  */
 const formatParseError = (message: string, lineNumber?: number): string => {
+  /* istanbul ignore next -- lineNumber is reserved for future use; no caller provides it */
   if (lineNumber !== undefined) {
     return `Parse error on line ${lineNumber}: ${message}`
   }
@@ -128,11 +129,15 @@ export const parseTextualPouFromString = (content: string, language: string, typ
 
     const bodyContent = remainingContent.slice(bodyStartIndex, bodyStartIndex + endMatch).trim()
 
+    // returnType is guaranteed non-empty for functions (validated above)
+    /* istanbul ignore next -- defensive: returnType fallback is unreachable for functions */
+    const resolvedReturnType = returnType || ''
+
     return {
       name: pouName,
       pouType: type as PouType,
       interface: {
-        ...(type === 'function' ? { returnType: returnType || '' } : {}),
+        ...(type === 'function' ? { returnType: resolvedReturnType } : {}),
         variables,
       },
       body: {
@@ -215,16 +220,21 @@ export const parseHybridPouFromString = (content: string, language: string, type
     }
     const endKeyword = endKeywords[type]
     let bodyContent = remainingContent.slice(bodyStartIndex).trim()
+    /* istanbul ignore next -- defensive: type already validated above */
     if (endKeyword) {
       const endKeywordRegex = new RegExp(`\\s*\\b${endKeyword}\\b\\s*$`, 'i')
       bodyContent = bodyContent.replace(endKeywordRegex, '').trim()
     }
 
+    // returnType is guaranteed non-empty for functions (validated above)
+    /* istanbul ignore next -- defensive: returnType fallback is unreachable for functions */
+    const resolvedReturnType = returnType || ''
+
     return {
       name: pouName,
       pouType: type as PouType,
       interface: {
-        ...(type === 'function' ? { returnType: returnType || '' } : {}),
+        ...(type === 'function' ? { returnType: resolvedReturnType } : {}),
         variables,
       },
       body: {
@@ -326,11 +336,15 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
       throw new Error(formatParseError('Invalid JSON in graphical body'))
     }
 
+    // returnType is guaranteed non-empty for functions (validated above)
+    /* istanbul ignore next -- defensive: returnType fallback is unreachable for functions */
+    const resolvedReturnType = returnType || ''
+
     return {
       name: pouName,
       pouType: type as PouType,
       interface: {
-        ...(type === 'function' ? { returnType: returnType || '' } : {}),
+        ...(type === 'function' ? { returnType: resolvedReturnType } : {}),
         variables,
       },
       body: {

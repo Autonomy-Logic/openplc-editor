@@ -183,6 +183,19 @@ describe('createLadderFlowSlice', () => {
     expect(ladderFlows[0].rungs[0].nodes.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('startLadderRung uses reactFlowViewport when it is larger than defaultBounds', () => {
+    // Array comparison in JS is string-based: [9000,200] > [800,200] => "9000,200" > "800,200" => true
+    store.getState().ladderFlowActions.startLadderRung({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      defaultBounds: [800, 200],
+      reactFlowViewport: [9000, 200],
+    })
+
+    const rung = store.getState().ladderFlows[0].rungs[0]
+    expect(rung.reactFlowViewport).toEqual([9000, 200])
+  })
+
   it('startLadderRung appends rung to existing flow', () => {
     store.getState().ladderFlowActions.startLadderRung({
       editorName: 'editor-1',
@@ -905,6 +918,142 @@ describe('createLadderFlowSlice', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     store.getState().ladderFlowActions.setRungs({ editorName: 'editor-1', rungs: 'not-an-array' as any })
     expect(store.getState().ladderFlows[0].rungs).toHaveLength(1)
+  })
+
+  // -------------------------------------------------------------------------
+  // Legacy connectedVariables migration
+  // -------------------------------------------------------------------------
+  it('addLadderFlow migrates legacy object connectedVariables to array', () => {
+    // Legacy format: connectedVariables is an object keyed by handle ID
+    const legacyNode = makeNode({
+      id: 'block-1',
+      type: 'block',
+      data: {
+        ...defaultBlockData,
+        connectedVariables: {
+          'handle-in': {
+            variable: { name: 'X', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+            type: 'input',
+          },
+          'handle-out': {
+            variable: { name: 'Y', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            type: 'output',
+          },
+        },
+      },
+    })
+    // A block node that already has array connectedVariables — should pass through unchanged
+    const modernBlockNode = makeNode({
+      id: 'block-2',
+      type: 'block',
+      data: {
+        ...defaultBlockData,
+        connectedVariables: [{ handleId: 'h1', variable: undefined, type: 'input' }],
+      },
+    })
+    const nonBlockNode = makeNode({
+      id: 'contact-1',
+      type: 'contact',
+      data: { variable: { name: 'Z' } },
+    })
+
+    store.getState().ladderFlowActions.addLadderFlow({
+      name: 'editor-1',
+      updated: false,
+      rungs: [
+        makeRung({
+          nodes: [legacyNode, modernBlockNode, nonBlockNode],
+        }),
+      ],
+    })
+
+    const flow = store.getState().ladderFlows[0]
+    // Migration should have set updated = true
+    expect(flow.updated).toBe(true)
+    const blockNode = flow.rungs[0].nodes.find((n) => n.id === 'block-1')!
+    const cv = (blockNode.data as { connectedVariables: unknown[] }).connectedVariables
+    // Converted to array format
+    expect(Array.isArray(cv)).toBe(true)
+    expect(cv).toHaveLength(2)
+    expect((cv[0] as { handleId: string }).handleId).toBe('handle-in')
+    expect((cv[1] as { handleId: string }).handleId).toBe('handle-out')
+  })
+
+  it('addLadderFlow migrates block with already-array connectedVariables (no migration)', () => {
+    // Modern format: connectedVariables is already an array
+    const modernNode = makeNode({
+      id: 'block-1',
+      type: 'block',
+      data: {
+        ...defaultBlockData,
+        connectedVariables: [{ handleId: 'h1', variable: undefined, type: 'input' }],
+      },
+    })
+
+    store.getState().ladderFlowActions.addLadderFlow({
+      name: 'editor-1',
+      updated: false,
+      rungs: [makeRung({ nodes: [modernNode] })],
+    })
+
+    const flow = store.getState().ladderFlows[0]
+    // No migration needed — updated stays false
+    expect(flow.updated).toBe(false)
+  })
+
+  it('addLadderFlow handles block with object connectedVariables missing type (defaults to input)', () => {
+    const legacyNode = makeNode({
+      id: 'block-1',
+      type: 'block',
+      data: {
+        ...defaultBlockData,
+        connectedVariables: {
+          'handle-a': { variable: undefined },
+        },
+      },
+    })
+
+    store.getState().ladderFlowActions.addLadderFlow({
+      name: 'editor-1',
+      updated: false,
+      rungs: [makeRung({ nodes: [legacyNode] })],
+    })
+
+    const flow = store.getState().ladderFlows[0]
+    expect(flow.updated).toBe(true)
+    const blockNode = flow.rungs[0].nodes.find((n) => n.id === 'block-1')!
+    const cv = (blockNode.data as { connectedVariables: Array<{ type: string }> }).connectedVariables
+    // type should default to 'input'
+    expect(cv[0].type).toBe('input')
+  })
+
+  // -------------------------------------------------------------------------
+  // clearSelections
+  // -------------------------------------------------------------------------
+  it('clearSelections resets all node selections in a flow', () => {
+    seedFlowWithRung(store)
+    const node = makeNode({ id: 'n1', data: { draggable: true }, selected: true })
+    store.getState().ladderFlowActions.setNodes({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      nodes: [node],
+    })
+    store.getState().ladderFlowActions.setSelectedNodes({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      nodes: [node],
+    })
+
+    store.getState().ladderFlowActions.clearSelections({ editorName: 'editor-1' })
+
+    const flow = store.getState().ladderFlows[0]
+    expect(flow.rungs[0].selectedNodes).toEqual([])
+    expect(flow.rungs[0].nodes.every((n) => !n.selected)).toBe(true)
+  })
+
+  it('clearSelections does nothing for nonexistent editor', () => {
+    store.getState().ladderFlowActions.clearSelections({ editorName: 'nonexistent' })
+    expect(store.getState().ladderFlows).toEqual([])
   })
 
   it('setSelectedNodes initializes selectedNodes when undefined', () => {

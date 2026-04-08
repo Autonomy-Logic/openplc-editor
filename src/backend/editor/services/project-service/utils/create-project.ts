@@ -1,4 +1,4 @@
-import { getDefaultSchemaValues } from '@root/frontend/utils/default-zod-schema-values'
+import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
 import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import {

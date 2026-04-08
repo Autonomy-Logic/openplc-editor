@@ -351,7 +351,10 @@ const VariablesEditor = () => {
     const newVarData = {
       ...variable,
       class: defaultClass,
-      type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'DINT' } : variable.type,
+      type:
+        variable.type.definition === 'derived'
+          ? { definition: 'base-type' as const, value: 'DINT' as const }
+          : variable.type,
       documentation: '',
     }
 
