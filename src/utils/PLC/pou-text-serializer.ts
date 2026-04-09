@@ -41,7 +41,7 @@ export const serializeTextualPouToString = (pou: PLCPou): string => {
 
   const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
   const variablesString = useVariablesText
-    ? data.variablesText ?? ''
+    ? (data.variablesText ?? '')
     : generateIecVariablesToString(variables as VariablePLC[])
   result += variablesString + '\n\n'
 
@@ -78,7 +78,7 @@ export const serializeHybridPouToString = (pou: PLCPou): string => {
 
   const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
   const variablesString = useVariablesText
-    ? data.variablesText ?? ''
+    ? (data.variablesText ?? '')
     : generateIecVariablesToString(variables as VariablePLC[])
   result += variablesString + '\n'
 
@@ -115,7 +115,7 @@ export const serializeGraphicalPouToString = (pou: PLCPou): string => {
 
   const useVariablesText = Object.prototype.hasOwnProperty.call(data, 'variablesText')
   const variablesString = useVariablesText
-    ? data.variablesText ?? ''
+    ? (data.variablesText ?? '')
     : generateIecVariablesToString(variables as VariablePLC[])
   result += variablesString + '\n\n'
 

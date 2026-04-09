@@ -131,7 +131,7 @@ const TreeNode = ({
               : node.isComplex
                 ? ''
                 : getValue
-                  ? getValue(node.compositeKey) ?? '-'
+                  ? (getValue(node.compositeKey) ?? '-')
                   : '-'}
           </p>
         </div>

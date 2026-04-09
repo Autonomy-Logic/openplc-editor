@@ -6,8 +6,9 @@ import type { Edge, Node } from '@xyflow/react'
 import { isNodeOfType } from './nodes'
 
 type ConnectionOptions = {
-  sourceHandle?: string
-  targetHandle?: string
+  /** Connector ids may be typed as `null` in node data; XYFlow edge handles use `undefined` for absence. */
+  sourceHandle?: string | null
+  targetHandle?: string | null
 }
 
 export const checkIfConnectedInParallel = (
@@ -24,8 +25,8 @@ export const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: 
     id: `e_${sourceNodeId}_${targetNodeId}__${options?.sourceHandle}_${options?.targetHandle}`,
     source: sourceNodeId,
     target: targetNodeId,
-    sourceHandle: options?.sourceHandle,
-    targetHandle: options?.targetHandle,
+    sourceHandle: options?.sourceHandle ?? undefined,
+    targetHandle: options?.targetHandle ?? undefined,
   }
 }
 
@@ -72,7 +73,7 @@ export const connectNodes = (
     // If source node is a parallel and the operation type is serial, lets check if we need to update the source handle
     let newSourceHandle = sourceEdge.sourceHandle ?? undefined
     if (type === 'serial' && isNodeOfType(sourceNode, 'parallel')) {
-      newSourceHandle = (sourceNode as ParallelNode).data.outputConnector?.id
+      newSourceHandle = (sourceNode as ParallelNode).data.outputConnector?.id ?? undefined
     }
 
     // Update the target of the source edge

@@ -30,5 +30,13 @@
     "tanstack",
     "titlebar",
     "toastify"
+  ],
+  "i18n-ally.localesPaths": [
+    "src/locales",
+    "src/utils/PLC/xml-generator/codesys/language",
+    "src/utils/PLC/xml-generator/old-editor/language",
+    "src/types/PLC/xml-data/codesys/pous/languages",
+    "src/types/PLC/xml-data/old-editor/pous/languages",
+    "src/renderer/components/_features/[workspace]/editor/monaco/configs/languages"
   ]
 }

@@ -1160,7 +1160,7 @@ class CompilerModule {
           await addFilesToZip(fullPath, zipFolder, zipPath)
         } else {
           const fileContent = await fs.readFile(fullPath)
-          zipFolder.file(zipPath, fileContent)
+          zipFolder.file(zipPath, new Uint8Array(fileContent))
         }
       }
     }
