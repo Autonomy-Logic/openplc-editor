@@ -9,6 +9,7 @@ import { variableXMLSchema } from './variable/variable-diagram'
 const baseXmlSchema = z.object({
   project: z.object({
     '@xmlns': z.string().default('http://www.plcopen.org/xml/tc6_0200'),
+    '@xmlns:xhtml': z.string().default('http://www.w3.org/1999/xhtml'),
 
     fileHeader: z.object({
       '@companyName': z.string().default('Unknown'),

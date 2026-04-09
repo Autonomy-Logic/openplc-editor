@@ -5,6 +5,7 @@ import formatDate from '../../../formatDate'
 const getBaseCodeSysXmlStructure = (): BaseXml => ({
   project: {
     '@xmlns': 'http://www.plcopen.org/xml/tc6_0200',
+    '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
     fileHeader: {
       '@companyName': 'Unknown',
       '@productName': 'Unnamed',
