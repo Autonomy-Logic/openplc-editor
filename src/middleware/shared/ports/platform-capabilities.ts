@@ -84,6 +84,15 @@ export interface PlatformCapabilities {
    */
   hasDirectProgramUpload: boolean
 
+  // --- Packages ---
+
+  /** True if the app supports installing/managing VPP board packages. */
+
+  // --- EtherCAT ---
+
+  /** True if the app supports EtherCAT device configuration and ESI repository. */
+  hasEthercat: boolean
+
   // --- Environment ---
 
   /** True when running in a development build (Vite DEV / webpack development mode). */
@@ -113,6 +122,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: false,
   hasProxiedRuntimeConnection: false,
   hasDirectProgramUpload: false,
+  hasEthercat: true,
   isDevMode: false,
 }
 
@@ -135,5 +145,6 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: true,
   hasProxiedRuntimeConnection: true,
   hasDirectProgramUpload: true,
+  hasEthercat: false,
   isDevMode: false,
 }

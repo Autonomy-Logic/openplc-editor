@@ -13,10 +13,12 @@
  *   </PlatformProvider>
  */
 
+import { openPLCStoreBase } from '../frontend/store'
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
+import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
@@ -52,5 +54,6 @@ export const editorPorts: PlatformPorts = {
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
+  esi: createEditorEsiAdapter(() => openPLCStoreBase.getState().project.meta.path),
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

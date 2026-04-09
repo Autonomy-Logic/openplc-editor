@@ -1,4 +1,16 @@
-import type { PLCProjectData } from '@root/middleware/shared/ports/types'
+import type { PLCProjectData } from \'@root/middleware/shared/ports/types\'
+import type {
+  EtherCATRuntimeStatusResponse,
+  EtherCATScanRequest,
+  EtherCATScanResponse,
+  EtherCATServiceStatusResponse,
+  EtherCATTestRequest,
+  EtherCATTestResponse,
+  EtherCATValidateRequest,
+  EtherCATValidateResponse,
+  NetworkInterface,
+} from '@root/types/ethercat'
+import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
@@ -354,6 +366,120 @@ const rendererProcessBridge = {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)
   },
+
+  // ===================== ETHERCAT DISCOVERY METHODS =====================
+  etherCATGetInterfaces: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> =>
+    ipcRenderer.invoke('ethercat:get-interfaces', ipAddress, jwtToken),
+
+  etherCATGetStatus: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:get-status', ipAddress, jwtToken),
+
+  etherCATScan: (
+    ipAddress: string,
+    jwtToken: string,
+    scanRequest: EtherCATScanRequest,
+  ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:scan', ipAddress, jwtToken, scanRequest),
+
+  etherCATTest: (
+    ipAddress: string,
+    jwtToken: string,
+    testRequest: EtherCATTestRequest,
+  ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:test', ipAddress, jwtToken, testRequest),
+
+  etherCATValidate: (
+    ipAddress: string,
+    jwtToken: string,
+    validateRequest: EtherCATValidateRequest,
+  ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:validate', ipAddress, jwtToken, validateRequest),
+
+  etherCATGetRuntimeStatus: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> =>
+    ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress, jwtToken),
+
+  // ===================== ESI REPOSITORY METHODS =====================
+  esiLoadRepositoryIndex: (
+    projectPath: string,
+  ): Promise<{
+    success: boolean
+    data?: { version: number; items: Array<Record<string, unknown>> }
+    error?: string
+  }> => ipcRenderer.invoke('esi:load-repository-index', projectPath),
+
+  esiSaveRepositoryIndex: (
+    projectPath: string,
+    items: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:save-repository-index', projectPath, items),
+
+  esiSaveXmlFile: (
+    projectPath: string,
+    itemId: string,
+    xmlContent: string,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:save-xml-file', projectPath, itemId, xmlContent),
+
+  esiLoadXmlFile: (
+    projectPath: string,
+    itemId: string,
+  ): Promise<{ success: boolean; content?: string; error?: string }> =>
+    ipcRenderer.invoke('esi:load-xml-file', projectPath, itemId),
+
+  esiDeleteXmlFile: (projectPath: string, itemId: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:delete-xml-file', projectPath, itemId),
+
+  esiSaveRepositoryItem: (
+    projectPath: string,
+    item: ESIRepositoryItem,
+    xmlContent: string,
+    existingItems: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:save-repository-item', projectPath, item, xmlContent, existingItems),
+
+  esiDeleteRepositoryItem: (
+    projectPath: string,
+    itemId: string,
+    existingItems: ESIRepositoryItem[],
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:delete-repository-item', projectPath, itemId, existingItems),
+
+  // ===================== ESI OPTIMIZED (v2) METHODS =====================
+  esiParseAndSaveFile: (
+    projectPath: string,
+    filename: string,
+    content: string,
+  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> =>
+    ipcRenderer.invoke('esi:parse-and-save-file', projectPath, filename, content),
+
+  esiClearRepository: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:clear-repository', projectPath),
+
+  esiLoadDeviceFull: (
+    projectPath: string,
+    itemId: string,
+    deviceIndex: number,
+  ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> =>
+    ipcRenderer.invoke('esi:load-device-full', projectPath, itemId, deviceIndex),
+
+  esiLoadRepositoryLight: (
+    projectPath: string,
+  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; needsMigration?: boolean; error?: string }> =>
+    ipcRenderer.invoke('esi:load-repository-light', projectPath),
+
+  esiMigrateRepository: (
+    projectPath: string,
+  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> =>
+    ipcRenderer.invoke('esi:migrate-repository', projectPath),
 
   // ===================== SIMULATOR METHODS =====================
   simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
