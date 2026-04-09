@@ -1,15 +1,37 @@
+import { PLCConfiguration, PLCPou } from '@root/types/PLC/open-plc'
+
 import { codeSysInstanceToXml } from './codesys/instances-xml'
 import { getBaseCodeSysXmlStructure } from './codesys/base-xml'
 import { codeSysParseInterface } from './codesys/pou-xml'
+import { getBaseOldEditorXmlStructure } from './old-editor/base-xml'
 import { oldEditorInstanceToXml } from './old-editor/instances-xml'
 import { oldEditorParseInterface } from './old-editor/pou-xml'
 
+type RuntimeVariableInitialValue = boolean | number | string | null
+
+type TestPou = Omit<PLCPou, 'data'> & {
+  data: Omit<PLCPou['data'], 'variables'> & {
+    variables: Array<Omit<PLCPou['data']['variables'][number], 'initialValue'> & { initialValue: RuntimeVariableInitialValue }>
+  }
+}
+
+type TestConfiguration = Omit<PLCConfiguration, 'resource'> & {
+  resource: Omit<PLCConfiguration['resource'], 'globalVariables'> & {
+    globalVariables: Array<
+      Omit<PLCConfiguration['resource']['globalVariables'][number], 'initialValue'> & {
+        initialValue: RuntimeVariableInitialValue
+      }
+    >
+  }
+}
+
 describe('XML generator initial values', () => {
-  const buildPou = (initialValue: boolean | number) =>
-    ({
+  const buildPou = (initialValue: boolean | number): PLCPou => {
+    const pou = {
       type: 'program',
       data: {
         name: 'Main',
+        language: 'st',
         variables: [
           {
             name: 'flag',
@@ -20,11 +42,16 @@ describe('XML generator initial values', () => {
             documentation: '',
           },
         ],
+        body: { language: 'st', value: '' },
+        documentation: '',
       },
-    }) as any
+    } satisfies TestPou
 
-  const buildConfiguration = (initialValue: boolean | number) =>
-    ({
+    return pou as unknown as PLCPou
+  }
+
+  const buildConfiguration = (initialValue: boolean | number): PLCConfiguration => {
+    const configuration = {
       resource: {
         tasks: [],
         instances: [],
@@ -38,22 +65,14 @@ describe('XML generator initial values', () => {
           },
         ],
       },
-    }) as any
+    } satisfies TestConfiguration
 
-  const buildCodeSysXml = () =>
-    ({
-      project: {
-        instances: {
-          configurations: {
-            configuration: {
-              resource: {},
-            },
-          },
-        },
-      },
-    }) as any
+    return configuration as unknown as PLCConfiguration
+  }
 
-  const buildOldEditorXml = buildCodeSysXml
+  const buildCodeSysXml = () => getBaseCodeSysXmlStructure()
+
+  const buildOldEditorXml = () => getBaseOldEditorXmlStructure()
 
   it.each([
     ['codesys interface', codeSysParseInterface],
@@ -67,11 +86,17 @@ describe('XML generator initial values', () => {
     })
   })
 
-  it.each([
-    ['codesys globals', codeSysInstanceToXml, buildCodeSysXml],
-    ['old editor globals', oldEditorInstanceToXml, buildOldEditorXml],
-  ])('keeps numeric zero initial values for %s', (_label, toXml, buildXml) => {
-    const xml = toXml(buildXml(), buildConfiguration(0))
+  it('keeps numeric zero initial values for codesys globals', () => {
+    const xml = codeSysInstanceToXml(buildCodeSysXml(), buildConfiguration(0))
+    expect(xml.project.instances.configurations.configuration.globalVars?.variable?.[0]?.initialValue).toEqual({
+      simpleValue: {
+        '@value': '0',
+      },
+    })
+  })
+
+  it('keeps numeric zero initial values for old editor globals', () => {
+    const xml = oldEditorInstanceToXml(buildOldEditorXml(), buildConfiguration(0))
     expect(xml.project.instances.configurations.configuration.globalVars?.variable?.[0]?.initialValue).toEqual({
       simpleValue: {
         '@value': '0',
@@ -81,10 +106,11 @@ describe('XML generator initial values', () => {
 
   it('declares the xhtml namespace in codesys exports when variable documentation is present', () => {
     const xml = getBaseCodeSysXmlStructure()
-    const withDocumentation = codeSysParseInterface({
+    const pouWithDocumentation = {
       type: 'program',
       data: {
         name: 'Main',
+        language: 'st',
         variables: [
           {
             name: 'flag',
@@ -95,8 +121,11 @@ describe('XML generator initial values', () => {
             documentation: 'commento reset',
           },
         ],
+        body: { language: 'st', value: '' },
+        documentation: '',
       },
-    } as any)
+    } satisfies PLCPou
+    const withDocumentation = codeSysParseInterface(pouWithDocumentation)
 
     expect(xml.project['@xmlns:xhtml']).toBe('http://www.w3.org/1999/xhtml')
     expect(withDocumentation.localVars?.variable?.[0]?.documentation).toEqual({
