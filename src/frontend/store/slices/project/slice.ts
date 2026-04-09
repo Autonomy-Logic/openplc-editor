@@ -1,3 +1,4 @@
+import type { EthercatConfig } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -1064,6 +1065,16 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               usedAddresses.add(p.iecLocation)
             }
           }
+          // Include EtherCAT channel mappings from all remote devices
+          for (const rd of slice.project.data.remoteDevices ?? []) {
+            if (rd.ethercatConfig?.devices) {
+              for (const dev of rd.ethercatConfig.devices) {
+                for (const mapping of dev.channelMappings) {
+                  usedAddresses.add(mapping.iecLocation)
+                }
+              }
+            }
+          }
 
           const ioPoints = generateIOPoints(group.functionCode, group.length, group.name, usedAddresses)
           device.modbusTcpConfig.ioGroups.push({ ...group, ioPoints })
@@ -1104,6 +1115,28 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
       return ok()
+    },
+    updateEthercatConfig: (deviceName: string, ethercatConfig: EthercatConfig | Record<string, unknown>) => {
+      let response = ok()
+      setState(
+        produce((slice: ProjectSlice) => {
+          if (!slice.project.data.remoteDevices) {
+            response = { ok: false, message: 'No remote devices found' }
+            return
+          }
+          const device = slice.project.data.remoteDevices.find((d) => d.name === deviceName)
+          if (!device) {
+            response = { ok: false, message: 'Remote device not found' }
+            return
+          }
+          if (device.protocol !== 'ethercat') {
+            response = { ok: false, message: 'Device is not an EtherCAT device' }
+            return
+          }
+          device.ethercatConfig = ethercatConfig as typeof device.ethercatConfig
+        }),
+      )
+      return response
     },
   },
 })
