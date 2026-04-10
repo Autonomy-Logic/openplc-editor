@@ -344,7 +344,7 @@ export function parseProjectFiles(
 
   const meta = {
     name: project.meta?.name ?? '',
-    type: project.meta?.type === 'plc-library' ? 'plc-library' : 'plc-project',
+    type: (project.meta?.type === 'plc-library' ? 'plc-library' : 'plc-project') as 'plc-project' | 'plc-library',
     path: projectPath,
   }
 
