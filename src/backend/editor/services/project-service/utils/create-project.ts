@@ -7,8 +7,8 @@ import {
   projectDefaultDirectories,
   projectDefaultFilesMapSchema,
 } from '@root/types/IPC/project-service'
-import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
+import { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
+import { PLCPou, PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { writeFileSync } from 'fs'
 
 import { createDirectory, fileOrDirectoryExists, ipcPouToFlat } from '../../../utils'

@@ -27,8 +27,8 @@ import type {
   PLCTask,
   PLCVariable,
 } from '../../../middleware/shared/ports/types'
-import { deviceConfigurationSchema, devicePinSchema } from '../../../types/PLC/devices'
-import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../../../types/PLC/open-plc'
+import { deviceConfigurationSchema, devicePinSchema } from '../types/PLC/devices'
+import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../types/PLC/open-plc'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
 
 // ---------------------------------------------------------------------------

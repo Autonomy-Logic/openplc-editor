@@ -13,7 +13,7 @@ import {
 import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import { projectDefaultFilesMapSchema, projectPouDirectories } from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
-import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import {
   PLCPou,
   PLCPouSchema,
@@ -22,7 +22,7 @@ import {
   PLCRemoteDeviceSchema,
   PLCServer,
   PLCServerSchema,
-} from '@root/types/PLC/open-plc'
+} from '@root/backend/shared/types/PLC/open-plc'
 import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, extname, join, sep } from 'path'
 import { ZodTypeAny } from 'zod'

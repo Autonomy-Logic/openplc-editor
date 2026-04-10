@@ -1,7 +1,7 @@
 import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
-import { PLCPou } from '@root/types/PLC/open-plc'
+import { PLCPou } from '@root/backend/shared/types/PLC/open-plc'
 import { promises } from 'fs'
 import { basename, dirname, join } from 'path'
 
