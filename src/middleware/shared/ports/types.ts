@@ -387,6 +387,24 @@ export interface PLCRemoteDevice {
   name: string
   protocol: RemoteDeviceProtocol
   modbusTcpConfig?: ModbusRemoteTcpConfig
+  ethercatConfig?: {
+    masterConfig?: {
+      networkInterface: string
+      cycleTimeUs: number
+      watchdogTimeoutCycles?: number
+    }
+    devices: Array<{
+      id: string
+      name: string
+      channelMappings: Array<{
+        channelId: string
+        iecLocation: string
+        userEdited: boolean
+        alias?: string
+      }>
+      [key: string]: unknown
+    }>
+  }
 }
 
 // ---------------------------------------------------------------------------
