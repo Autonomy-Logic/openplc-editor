@@ -1,10 +1,7 @@
 import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import { z } from 'zod'
 
-import {
-  zodLadderFlowSchema,
-  zodRungLadderStateSchema,
-} from '../../../../middleware/shared/ports/flow-schemas'
+import { zodLadderFlowSchema, zodRungLadderStateSchema } from '../../../../middleware/shared/ports/flow-schemas'
 
 type ZodLadderRungType = z.infer<typeof zodRungLadderStateSchema>
 type ZodLadderFlowType = z.infer<typeof zodLadderFlowSchema>
