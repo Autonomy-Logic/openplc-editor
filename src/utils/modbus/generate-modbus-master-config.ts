@@ -10,7 +10,7 @@ interface ModbusMasterIOPoint {
 
 // Base device config with common fields
 interface ModbusMasterDeviceConfigBase {
-  type: 'SLAVE'
+  type: 'MASTER'
   transport: 'tcp' | 'rtu'
   timeout_ms: number
   slave_id: number
@@ -100,20 +100,13 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
   const transport = modbusTcpConfig.transport || 'tcp'
 
   if (transport === 'rtu') {
-    // RTU configuration
-    if (!modbusTcpConfig.serialPort) {
-      // RTU requires a serial port
-      console.warn(`Modbus RTU device "${device.name}" is missing a serial port configuration and will be skipped.`)
-      return null
-    }
-
     return {
       name: device.name,
       protocol: 'MODBUS',
       config: {
-        type: 'SLAVE',
+        type: 'MASTER',
         transport: 'rtu',
-        serial_port: modbusTcpConfig.serialPort,
+        serial_port: modbusTcpConfig.serialPort ?? '/dev/ttyUSB0',
         baud_rate: modbusTcpConfig.baudRate ?? 9600,
         parity: modbusTcpConfig.parity ?? 'N',
         stop_bits: modbusTcpConfig.stopBits ?? 1,
@@ -129,7 +122,7 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
       name: device.name,
       protocol: 'MODBUS',
       config: {
-        type: 'SLAVE',
+        type: 'MASTER',
         transport: 'tcp',
         host: modbusTcpConfig.host ?? '127.0.0.1',
         port: modbusTcpConfig.port ?? 502,

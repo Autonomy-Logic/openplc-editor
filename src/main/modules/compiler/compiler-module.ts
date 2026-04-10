@@ -1215,7 +1215,7 @@ class CompilerModule {
       await writeFile(configFilePath, modbusMasterConfig, 'utf-8')
       handleOutputData('Generated conf/modbus_master.json', 'info')
     } else {
-      handleOutputData('No Modbus TCP remote devices configured, skipping modbus_master.json generation', 'info')
+      handleOutputData('No Modbus remote devices configured, skipping modbus_master.json generation', 'info')
     }
   }
 
