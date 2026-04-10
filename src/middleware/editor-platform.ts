@@ -13,7 +13,6 @@
  *   </PlatformProvider>
  */
 
-import { openPLCStoreBase } from '../frontend/store'
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
@@ -34,9 +33,14 @@ import type { PlatformPorts } from './shared/providers/types'
  * Set by the store/UI when the user configures or connects to a device.
  */
 let _runtimeIpAddress = ''
+let _projectPath = ''
 
 export function setRuntimeIpAddress(ip: string): void {
   _runtimeIpAddress = ip
+}
+
+export function setProjectPath(path: string): void {
+  _projectPath = path
 }
 
 /**
@@ -54,6 +58,6 @@ export const editorPorts: PlatformPorts = {
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
-  esi: createEditorEsiAdapter(() => openPLCStoreBase.getState().project.meta.path),
+  esi: createEditorEsiAdapter(() => _projectPath),
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }
