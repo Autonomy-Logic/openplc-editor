@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
 import {
   type CppPouData as CppPouDataCode,
   generateCBlocksCode,
@@ -33,6 +34,7 @@ import JSZip from 'jszip'
 import { CreateXMLFile } from '../utils'
 import type { ArduinoCoreControl, HalsFile } from './types'
 import { FormatMacAddress } from './utils/formatters'
+import { copyPluginSource, generateVppPluginConfig, resolveVppDevice } from './utils/vpp-plugin-export'
 
 interface MethodsResult<T> {
   success: boolean
@@ -183,7 +185,27 @@ class CompilerModule {
 
   async #getBoardRuntime(board: string) {
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
-    return halsFileContent[board]['compiler']
+    if (halsFileContent[board]) {
+      return halsFileContent[board]['compiler']
+    }
+
+    // Fallback: check installed VPP packages for the board
+    try {
+      const installed = packageManager.listInstalled()
+      for (const pkg of installed) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+        for (const device of manifest.devices) {
+          if (device.name === board) {
+            return device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
+          }
+        }
+      }
+    } catch {
+      // ignore package manager errors
+    }
+
+    throw new Error(`Board "${board}" not found in hals.json or installed VPP packages`)
   }
 
   #executeXml2st(args: string[]) {
@@ -1328,6 +1350,65 @@ class CompilerModule {
     }
   }
 
+  async handleGenerateEthercatConfig(
+    sourceTargetFolderPath: string,
+    projectData: PLCProjectData,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const ethercatConfig = generateEthercatConfig(projectData.remoteDevices)
+
+    if (ethercatConfig) {
+      const confFolderPath = join(sourceTargetFolderPath, 'conf')
+      await mkdir(confFolderPath, { recursive: true })
+      const configFilePath = join(confFolderPath, 'ethercat.json')
+      await writeFile(configFilePath, ethercatConfig, 'utf-8')
+      handleOutputData('Generated conf/ethercat.json', 'info')
+    } else {
+      handleOutputData('No EtherCAT devices configured, skipping ethercat.json generation', 'info')
+    }
+  }
+
+  /**
+   * Export VPP plugin source code and configuration for runtime-v4 VPP boards.
+   * Copies the plugin source directory into the build folder and generates
+   * the plugin config JSON from the project's vendor screen data.
+   * Skips silently if the board is not a VPP board.
+   */
+  async handleVppPluginExport(
+    sourceTargetFolderPath: string,
+    projectPath: string,
+    boardTarget: string,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const vppInfo = resolveVppDevice(boardTarget)
+    if (!vppInfo) return // Not a VPP board
+
+    const { device, packagePath } = vppInfo
+
+    if (device.hal.type !== 'runtime-v4-plugin' || !device.hal.pluginEntry) return
+
+    handleOutputData('Exporting VPP plugin source code...', 'info')
+
+    // Copy plugin source files and compute checksum
+    const checksum = await copyPluginSource(packagePath, device.hal.pluginEntry, sourceTargetFolderPath)
+    handleOutputData(`VPP plugin source exported (checksum: ${checksum.substring(0, 12)}...)`, 'info')
+
+    // Read device configuration to get vendor screen data
+    const devicesConfigPath = join(projectPath, 'devices', 'configuration.json')
+    const deviceConfig =
+      await CompilerModule.readJSONFile<import('@root/types/PLC/devices').DeviceConfiguration>(devicesConfigPath)
+
+    // Generate plugin config from vendor screen data
+    const moduleDefinitions = device.moduleSystem?.modules ?? []
+    const pluginConfig = generateVppPluginConfig(deviceConfig, moduleDefinitions)
+
+    // Write plugin config to conf directory
+    const confDir = join(sourceTargetFolderPath, 'conf')
+    await mkdir(confDir, { recursive: true })
+    await writeFile(join(confDir, 'synergy.json'), JSON.stringify(pluginConfig, null, 2), 'utf-8')
+    handleOutputData('Generated conf/synergy.json from backplane configuration', 'info')
+  }
+
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1429,7 +1510,9 @@ class CompilerModule {
     })
 
     // --- Check for unsupported features on non-v4 targets ---
-    const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
+    // VPP boards with runtime-v4 target type use openplc-compiler and are also v4-capable
+    const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
+    const isRuntimeV4 = boardRuntime === 'openplc-compiler' && !isRuntimeV3
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
 
@@ -1714,8 +1797,6 @@ class CompilerModule {
       }
 
       try {
-        const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
-
         let fileBuffer: Buffer
         let filename: string
         let contentType: string
@@ -1761,6 +1842,21 @@ class CompilerModule {
           await this.handleGenerateOpcUaConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
+
+          // Generate EtherCAT config for Runtime v4
+          await this.handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+
+          // Export VPP plugin source and config if this is a VPP board
+          await this.handleVppPluginExport(
+            sourceTargetFolderPath,
+            normalizedProjectPath,
+            boardTarget,
+            (data, logLevel) => {
+              _mainProcessPort.postMessage({ logLevel, message: data })
+            },
+          )
 
           _mainProcessPort.postMessage({
             logLevel: 'info',
