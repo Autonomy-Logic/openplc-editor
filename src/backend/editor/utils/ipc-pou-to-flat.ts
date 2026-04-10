@@ -1,5 +1,5 @@
-import type { PLCPou as FlatPou } from '@root/middleware/shared/ports/types'
 import type { PLCPou as IpcPou } from '@root/backend/shared/types/PLC/open-plc'
+import type { PLCPou as FlatPou } from '@root/middleware/shared/ports/types'
 
 /**
  * Convert the editor backend's nested IPC POU format to the flat port POU

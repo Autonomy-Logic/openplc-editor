@@ -1,3 +1,4 @@
+import { PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
 import {
   CreateProjectFileProps,
@@ -5,7 +6,6 @@ import {
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
 import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
-import { PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
