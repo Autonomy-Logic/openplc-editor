@@ -15,7 +15,7 @@ const columns = [
     size: 150,
     minSize: 100,
     maxSize: 150,
-    cell: EditableNameCell,
+    cell: (props) => EditableNameCell({ ...props, editable: !props.row.original.isSystemTask }),
   }),
   columnHelper.accessor('triggering', {
     header: 'Triggering',
@@ -23,7 +23,7 @@ const columns = [
     size: 468,
     minSize: 150,
     maxSize: 468,
-    cell: SelectableTriggerCell,
+    cell: (props) => SelectableTriggerCell({ ...props, editable: !props.row.original.isSystemTask }),
   }),
   columnHelper.accessor('interval', {
     header: 'Interval',
@@ -31,7 +31,7 @@ const columns = [
     minSize: 150,
     maxSize: 468,
     enableResizing: true,
-    cell: SelectableIntervalCell,
+    cell: (props) => SelectableIntervalCell({ ...props, editable: !props.row.original.isSystemTask }),
   }),
   columnHelper.accessor('priority', {
     header: 'Priority',
@@ -39,7 +39,7 @@ const columns = [
     size: 468,
     minSize: 150,
     maxSize: 468,
-    cell: EditablePriorityCell,
+    cell: (props) => EditablePriorityCell({ ...props, editable: !props.row.original.isSystemTask }),
   }),
 ]
 

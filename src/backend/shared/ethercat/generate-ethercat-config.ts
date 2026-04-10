@@ -6,6 +6,8 @@ import type {
 } from '@root/types/ethercat/esi-types'
 import type { PLCRemoteDevice } from '@root/types/PLC/open-plc'
 
+import { ethercatTaskName } from './ethercat-task-helpers'
+
 // Runtime JSON interfaces (snake_case for plugin consumption)
 
 interface RuntimePdoEntry {
@@ -92,6 +94,8 @@ interface RuntimeMaster {
   interface: string
   cycle_time_us: number
   watchdog_timeout_cycles: number
+  task_name?: string
+  task_cycle_time_us?: number
 }
 
 interface RuntimeDiagnostics {
@@ -282,7 +286,8 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
   }
 
   const ethercatRemoteDevices = remoteDevices.filter(
-    (device) => device.protocol === 'ethercat' && device.ethercatConfig,
+    (device) =>
+      device.protocol === 'ethercat' && device.ethercatConfig && (device.ethercatConfig.masterConfig?.enabled ?? true),
   )
 
   if (ethercatRemoteDevices.length === 0) {
@@ -298,15 +303,22 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
 
     if (slaves.length === 0) continue
 
+    const cycleTimeUs = remoteDevice.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000
+    const taskName = ethercatTaskName(remoteDevice.name)
+
+    const master: RuntimeMaster = {
+      interface: remoteDevice.ethercatConfig?.masterConfig?.networkInterface || 'eth0',
+      cycle_time_us: cycleTimeUs,
+      watchdog_timeout_cycles: remoteDevice.ethercatConfig?.masterConfig?.watchdogTimeoutCycles ?? 3,
+      task_name: taskName,
+      task_cycle_time_us: cycleTimeUs,
+    }
+
     rootEntries.push({
       name: remoteDevice.name || 'ethercat_master',
       protocol: 'ETHERCAT',
       config: {
-        master: {
-          interface: remoteDevice.ethercatConfig?.masterConfig?.networkInterface || 'eth0',
-          cycle_time_us: remoteDevice.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000,
-          watchdog_timeout_cycles: remoteDevice.ethercatConfig?.masterConfig?.watchdogTimeoutCycles ?? 3,
-        },
+        master,
         slaves,
         diagnostics: {
           log_connections: true,

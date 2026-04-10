@@ -57,6 +57,8 @@ export interface PLCTask {
   triggering: 'Cyclic' | 'Interrupt'
   interval: string
   priority: number
+  isSystemTask?: boolean
+  associatedDevice?: string
 }
 
 export interface PLCInstance {

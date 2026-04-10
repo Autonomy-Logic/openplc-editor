@@ -166,6 +166,8 @@ const PLCTaskSchema = z.object({
   triggering: z.enum(['Cyclic', 'Interrupt']),
   interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
   priority: z.number(), // TODO: implement this validation. This must be a positive integer from 0 to 100
+  isSystemTask: z.boolean().optional(),
+  associatedDevice: z.string().optional(),
 })
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
@@ -721,6 +723,7 @@ const ConfiguredEtherCATDeviceSchema = z.object({
 })
 
 const EtherCATMasterConfigSchema = z.object({
+  enabled: z.boolean().optional(),
   networkInterface: z.string(),
   cycleTimeUs: z.number().int().min(100).max(100000),
   watchdogTimeoutCycles: z.number().int().min(1).max(100).optional(),

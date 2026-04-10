@@ -27,6 +27,31 @@ const GlobalSettingsTab = ({
 }: GlobalSettingsTabProps) => {
   return (
     <div className='flex flex-col gap-6 overflow-auto pb-4'>
+      {/* Enable Plugin */}
+      <div className='rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
+        <h3 className='mb-3 text-xs font-semibold uppercase text-neutral-500 dark:text-neutral-400'>Enable Plugin</h3>
+        <div className='flex items-center gap-4'>
+          <label className='relative inline-flex cursor-pointer items-center'>
+            <input
+              type='checkbox'
+              checked={masterConfig.enabled ?? true}
+              onChange={(e) => onUpdateMasterConfig({ enabled: e.target.checked })}
+              className='peer sr-only'
+            />
+            <div
+              className={cn(
+                'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
+                'peer-checked:bg-brand peer-checked:after:translate-x-full',
+                'dark:bg-neutral-700 dark:peer-checked:bg-brand',
+              )}
+            />
+          </label>
+          <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+            {masterConfig.enabled ?? true ? 'Plugin will start when PLC runs' : 'Plugin is disabled'}
+          </span>
+        </div>
+      </div>
+
       {/* Network Interface */}
       <div className='rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
         <h3 className='mb-3 text-xs font-semibold uppercase text-neutral-500 dark:text-neutral-400'>
