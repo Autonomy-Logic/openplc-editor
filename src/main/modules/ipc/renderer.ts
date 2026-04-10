@@ -1,4 +1,4 @@
-import type { PLCProjectData } from \'@root/middleware/shared/ports/types\'
+import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,

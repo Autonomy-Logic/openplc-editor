@@ -34,7 +34,6 @@ import JSZip from 'jszip'
 import { CreateXMLFile } from '../utils'
 import type { ArduinoCoreControl, HalsFile } from './types'
 import { FormatMacAddress } from './utils/formatters'
-import { copyPluginSource, generateVppPluginConfig, resolveVppDevice } from './utils/vpp-plugin-export'
 
 interface MethodsResult<T> {
   success: boolean
@@ -1368,47 +1367,6 @@ class CompilerModule {
     }
   }
 
-  /**
-   * Export VPP plugin source code and configuration for runtime-v4 VPP boards.
-   * Copies the plugin source directory into the build folder and generates
-   * the plugin config JSON from the project's vendor screen data.
-   * Skips silently if the board is not a VPP board.
-   */
-  async handleVppPluginExport(
-    sourceTargetFolderPath: string,
-    projectPath: string,
-    boardTarget: string,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    const vppInfo = resolveVppDevice(boardTarget)
-    if (!vppInfo) return // Not a VPP board
-
-    const { device, packagePath } = vppInfo
-
-    if (device.hal.type !== 'runtime-v4-plugin' || !device.hal.pluginEntry) return
-
-    handleOutputData('Exporting VPP plugin source code...', 'info')
-
-    // Copy plugin source files and compute checksum
-    const checksum = await copyPluginSource(packagePath, device.hal.pluginEntry, sourceTargetFolderPath)
-    handleOutputData(`VPP plugin source exported (checksum: ${checksum.substring(0, 12)}...)`, 'info')
-
-    // Read device configuration to get vendor screen data
-    const devicesConfigPath = join(projectPath, 'devices', 'configuration.json')
-    const deviceConfig =
-      await CompilerModule.readJSONFile<import('@root/types/PLC/devices').DeviceConfiguration>(devicesConfigPath)
-
-    // Generate plugin config from vendor screen data
-    const moduleDefinitions = device.moduleSystem?.modules ?? []
-    const pluginConfig = generateVppPluginConfig(deviceConfig, moduleDefinitions)
-
-    // Write plugin config to conf directory
-    const confDir = join(sourceTargetFolderPath, 'conf')
-    await mkdir(confDir, { recursive: true })
-    await writeFile(join(confDir, 'synergy.json'), JSON.stringify(pluginConfig, null, 2), 'utf-8')
-    handleOutputData('Generated conf/synergy.json from backplane configuration', 'info')
-  }
-
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1847,16 +1805,6 @@ class CompilerModule {
           await this.handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
-
-          // Export VPP plugin source and config if this is a VPP board
-          await this.handleVppPluginExport(
-            sourceTargetFolderPath,
-            normalizedProjectPath,
-            boardTarget,
-            (data, logLevel) => {
-              _mainProcessPort.postMessage({ logLevel, message: data })
-            },
-          )
 
           _mainProcessPort.postMessage({
             logLevel: 'info',
