@@ -292,9 +292,11 @@ export interface EtherCATCycleMetrics {
 }
 
 /**
- * Response from GET /api/discovery/ethercat/runtime-status
+ * Per-master status snapshot (used in multi-master responses)
  */
-export interface EtherCATRuntimeStatusResponse {
+export interface EtherCATMasterStatus {
+  /** Master name from configuration */
+  name: string
   /** Current plugin state */
   plugin_state: EtherCATPluginState
   /** Number of configured slaves */
@@ -305,6 +307,28 @@ export interface EtherCATRuntimeStatusResponse {
   slaves: EtherCATSlaveStatus[]
   /** Cycle performance metrics */
   metrics: EtherCATCycleMetrics
+}
+
+/**
+ * Response from GET /api/discovery/ethercat/runtime-status
+ *
+ * The runtime returns a "masters" array for multi-master setups.
+ * For backward compatibility with single-master, flat fields are
+ * also included at root level when there is exactly one master.
+ */
+export interface EtherCATRuntimeStatusResponse {
+  /** Per-master status array (always present in multi-master runtime) */
+  masters?: EtherCATMasterStatus[]
+  /** Current plugin state (backward compat: only when single master) */
+  plugin_state?: EtherCATPluginState
+  /** Number of configured slaves (backward compat) */
+  slave_count?: number
+  /** Expected working counter value (backward compat) */
+  expected_wkc?: number
+  /** Per-slave status array (backward compat) */
+  slaves?: EtherCATSlaveStatus[]
+  /** Cycle performance metrics (backward compat) */
+  metrics?: EtherCATCycleMetrics
 }
 
 /**

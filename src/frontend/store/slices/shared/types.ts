@@ -105,6 +105,11 @@ export type RemoteDeviceActions = {
   rename: (oldName: string, newName: string) => SharedResponse
 }
 
+export type EtherCATDeviceActions = {
+  delete: (busName: string, deviceId: string) => SharedResponse
+  rename: (busName: string, deviceId: string, newName: string) => SharedResponse
+}
+
 export type SnapshotActions = {
   pushToHistory: (pouName: string, snapshot: PouHistorySnapshot) => void
   markSaved: (pouName: string) => void
@@ -149,6 +154,7 @@ export type SharedSlice = {
   datatypeActions: DatatypeActions
   serverActions: ServerActions
   remoteDeviceActions: RemoteDeviceActions
+  ethercatDeviceActions: EtherCATDeviceActions
   snapshotActions: SnapshotActions
   sharedWorkspaceActions: SharedWorkspaceActions
 }

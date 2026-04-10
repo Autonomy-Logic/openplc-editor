@@ -220,7 +220,7 @@ function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): R
  * Builds a runtime slave from a configured device.
  */
 function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSlave {
-  const position = device.position ?? index
+  const position = device.position ?? index + 1
   const channels = device.channelInfo ? buildChannels(device.channelInfo, device.channelMappings) : []
   const rxPdos = device.rxPdos ? convertPdos(device.rxPdos) : []
   const txPdos = device.txPdos ? convertPdos(device.txPdos) : []

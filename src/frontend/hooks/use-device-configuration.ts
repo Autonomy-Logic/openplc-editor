@@ -1,6 +1,3 @@
-import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
-import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
-import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'
 import type {
   ConfiguredEtherCATDevice,
   EnrichDeviceData,
@@ -9,9 +6,11 @@ import type {
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
 } from '@root/types/ethercat/esi-types'
+import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
+import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
+import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'
+import { useEsi } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-import { useEsi } from '../../middleware/shared/providers/platform-context'
 
 type UseDeviceConfigurationParams = {
   device: ConfiguredEtherCATDevice
@@ -57,7 +56,7 @@ export function useDeviceConfiguration({
   onEnrichDeviceRef.current = onEnrichDevice
 
   useEffect(() => {
-    if (!enabled || fullDeviceLoadedRef.current) return
+    if (!enabled || !device || fullDeviceLoadedRef.current) return
 
     const loadFullDevice = async () => {
       setIsLoadingChannels(true)
@@ -92,7 +91,7 @@ export function useDeviceConfiguration({
             })
           }
         } else {
-          setChannelLoadError('error' in result ? result.error : 'Failed to load device data')
+          setChannelLoadError(!result.success ? (result.error ?? 'Failed') : 'Failed to load device data')
         }
       } catch (error) {
         setChannelLoadError(String(error))
@@ -102,24 +101,26 @@ export function useDeviceConfiguration({
     }
 
     void loadFullDevice()
-  }, [enabled, esiPort, projectPath, device.esiDeviceRef.repositoryItemId, device.esiDeviceRef.deviceIndex])
+  }, [enabled, projectPath, device?.esiDeviceRef?.repositoryItemId, device?.esiDeviceRef?.deviceIndex])
 
   const handleAliasChange = useCallback(
     (channelId: string, alias: string) => {
+      if (!device) return
       const updated = device.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
       onUpdateChannelMappingsRef.current(updated)
     },
-    [device.channelMappings],
+    [device?.channelMappings],
   )
 
   const updateConfig = useCallback(
     <K extends keyof EtherCATSlaveConfig>(section: K, updates: Partial<EtherCATSlaveConfig[K]>) => {
+      if (!device) return
       onUpdateDeviceRef.current({
         ...device.config,
         [section]: { ...device.config[section], ...updates },
       })
     },
-    [device.config],
+    [device?.config],
   )
 
   return {

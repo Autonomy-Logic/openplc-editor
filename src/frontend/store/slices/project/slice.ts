@@ -206,7 +206,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 name: ethercatTaskName(device.name),
                 triggering: 'Cyclic' as const,
                 interval: cycleTimeUsToIecInterval(cycleTimeUs),
-                priority: 0,
+                priority: 1,
                 isSystemTask: true,
                 associatedDevice: device.name,
               })
@@ -1049,7 +1049,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               name: ethercatTaskName(device.name),
               triggering: 'Cyclic' as const,
               interval: cycleTimeUsToIecInterval(cycleTimeUs),
-              priority: 0,
+              priority: 1,
               isSystemTask: true,
               associatedDevice: device.name,
             })

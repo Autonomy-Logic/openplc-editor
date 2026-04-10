@@ -11,7 +11,7 @@ import type { FileSliceDataObject } from '../file'
 import type { HistorySnapshot } from '../history'
 import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
-import { CreateEditorObjectFromTab, CreateRemoteDeviceEditor, CreateServerEditor } from '../tabs/utils'
+import { CreateEditorObjectFromTab, CreateEtherCATDeviceEditor, CreateRemoteDeviceEditor, CreateServerEditor } from '../tabs/utils'
 import type { SharedRootState, SharedSlice } from './types'
 import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
 
@@ -272,6 +272,61 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) =>
       renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateRemoteDeviceName(o, n)),
+  },
+
+  ethercatDeviceActions: {
+    delete: (busName, deviceId) => {
+      const state = getState()
+      const remoteDevice = state.project.data.remoteDevices?.find((d) => d.name === busName)
+      if (!remoteDevice) return { ok: false, message: 'Bus not found' }
+
+      const device = remoteDevice.ethercatConfig?.devices?.find((d) => d.id === deviceId)
+      if (!device) return { ok: false, message: 'EtherCAT device not found' }
+
+      const deviceName = device.name
+      state.projectActions.updateEthercatConfig(busName, {
+        masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
+          networkInterface: 'eth0',
+          cycleTimeUs: 1000,
+          watchdogTimeoutCycles: 3,
+        },
+        devices: (remoteDevice.ethercatConfig?.devices ?? []).filter((d) => d.id !== deviceId),
+      })
+      state.editorActions.removeModel(deviceName)
+      state.tabsActions.removeTab(deviceName)
+
+      const currentEditor = state.editor
+      if (currentEditor.type !== 'available' && currentEditor.meta.name === deviceName) {
+        state.editorActions.clearEditor()
+      }
+
+      return { ok: true }
+    },
+
+    rename: (busName, deviceId, newName) => {
+      const state = getState()
+      const remoteDevice = state.project.data.remoteDevices?.find((d) => d.name === busName)
+      if (!remoteDevice) return { ok: false, message: 'Bus not found' }
+
+      const devices = remoteDevice.ethercatConfig?.devices ?? []
+      const device = devices.find((d) => d.id === deviceId)
+      if (!device) return { ok: false, message: 'EtherCAT device not found' }
+
+      const oldName = device.name
+      const updatedDevices = devices.map((d) => (d.id === deviceId ? { ...d, name: newName } : d))
+      state.projectActions.updateEthercatConfig(busName, {
+        masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
+          networkInterface: 'eth0',
+          cycleTimeUs: 1000,
+          watchdogTimeoutCycles: 3,
+        },
+        devices: updatedDevices,
+      })
+      state.editorActions.updateEditorName(oldName, newName)
+      state.tabsActions.updateTabName(oldName, newName)
+
+      return { ok: true }
+    },
   },
 
   sharedWorkspaceActions: {

@@ -1,11 +1,12 @@
-import { cn } from '@root/frontend/utils/cn'
 import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import type {
   EtherCATCycleMetrics,
+  EtherCATMasterStatus,
   EtherCATPluginState,
   EtherCATRuntimeStatusResponse,
   EtherCATSlaveStatus,
 } from '@root/types/ethercat'
+import { cn } from '@root/frontend/utils/cn'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const POLL_INTERVAL_MS = 2000
@@ -76,6 +77,41 @@ interface RuntimeStatusPanelProps {
   ipAddress: string | null
   jwtToken: string | null
   isConnected: boolean
+  /** Master name to filter from multi-master response. If omitted, uses first master or flat fields. */
+  masterName?: string
+}
+
+/**
+ * Resolve the status for a specific master from the runtime response.
+ * Tries the multi-master "masters" array first, then falls back to flat fields.
+ */
+function resolveMasterStatus(
+  response: EtherCATRuntimeStatusResponse,
+  masterName?: string,
+): EtherCATMasterStatus | null {
+  // Try multi-master array first
+  if (response.masters && response.masters.length > 0) {
+    if (masterName) {
+      const match = response.masters.find((m) => m.name === masterName)
+      if (match) return match
+    }
+    // Fallback: first master in array
+    return response.masters[0]
+  }
+
+  // Fallback: flat fields (single-master backward compat)
+  if (response.plugin_state && response.slaves && response.metrics) {
+    return {
+      name: masterName ?? 'default',
+      plugin_state: response.plugin_state,
+      slave_count: response.slave_count ?? 0,
+      expected_wkc: response.expected_wkc ?? 0,
+      slaves: response.slaves,
+      metrics: response.metrics,
+    }
+  }
+
+  return null
 }
 
 function extractErrorMessage(rawError: string): string {
@@ -105,7 +141,7 @@ function isPluginNotActiveError(message: string): boolean {
   )
 }
 
-function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected }: RuntimeStatusPanelProps) {
+function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected, masterName }: RuntimeStatusPanelProps) {
   const runtime = useRuntime()
   const [status, setStatus] = useState<EtherCATRuntimeStatusResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -206,7 +242,9 @@ function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected }: RuntimeStatusP
     )
   }
 
-  if (!status) {
+  const masterStatus = status ? resolveMasterStatus(status, masterName) : null
+
+  if (!status || !masterStatus) {
     return (
       <div className='flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900'>
         <span className='text-xs text-neutral-500 dark:text-neutral-400'>
@@ -216,9 +254,9 @@ function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected }: RuntimeStatusP
     )
   }
 
-  const pluginState = status.plugin_state
+  const pluginState = masterStatus.plugin_state
   const stateColor = stateColorMap[pluginState] ?? 'gray'
-  const metrics: EtherCATCycleMetrics = status.metrics
+  const metrics: EtherCATCycleMetrics = masterStatus.metrics
 
   return (
     <div className='flex flex-col gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900'>
@@ -228,7 +266,8 @@ function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected }: RuntimeStatusP
           <StatusDot color={stateColor} />
           <span className={cn('text-sm font-semibold', colorTextClasses[stateColor])}>{pluginState}</span>
           <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-            ({status.slave_count} slave{status.slave_count !== 1 ? 's' : ''}, WKC={status.expected_wkc})
+            ({masterStatus.slave_count} slave{masterStatus.slave_count !== 1 ? 's' : ''}, WKC=
+            {masterStatus.expected_wkc})
           </span>
         </div>
         <button
@@ -258,7 +297,7 @@ function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected }: RuntimeStatusP
       )}
 
       {/* Slave table */}
-      {status.slaves.length > 0 && (
+      {masterStatus.slaves.length > 0 && (
         <div className='overflow-x-auto'>
           <table className='w-full text-xs'>
             <thead>
@@ -271,7 +310,7 @@ function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected }: RuntimeStatusP
               </tr>
             </thead>
             <tbody>
-              {status.slaves.map((slave) => (
+              {masterStatus.slaves.map((slave) => (
                 <tr
                   key={slave.position}
                   className={cn(

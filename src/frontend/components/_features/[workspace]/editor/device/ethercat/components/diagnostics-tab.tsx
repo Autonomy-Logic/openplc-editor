@@ -1,7 +1,7 @@
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
-import { cn } from '@root/frontend/utils/cn'
 import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
 import type { ScannedDeviceMatch } from '@root/types/ethercat/esi-types'
+import { cn } from '@root/frontend/utils/cn'
 
 import { DiscoveredDeviceTable } from './discovered-device-table'
 import { InterfaceSelector } from './interface-selector'
@@ -11,6 +11,8 @@ type DiagnosticsTabProps = {
   isConnectedToRuntime: boolean
   ipAddress: string | null
   jwtToken: string | null
+  /** Master name to filter status from multi-master response */
+  masterName?: string
   // Service status
   serviceAvailable: boolean | null
   serviceMessage: string
@@ -20,7 +22,6 @@ type DiagnosticsTabProps = {
   onSelectInterface: (value: string) => void
   isLoadingInterfaces: boolean
   interfaceError: string | null
-  onRefreshInterfaces: () => void
   // Scan
   isScanning: boolean
   scanError: string | null
@@ -42,6 +43,7 @@ const DiagnosticsTab = ({
   isConnectedToRuntime,
   ipAddress,
   jwtToken,
+  masterName,
   serviceAvailable,
   serviceMessage,
   interfaces,
@@ -49,7 +51,6 @@ const DiagnosticsTab = ({
   onSelectInterface,
   isLoadingInterfaces,
   interfaceError,
-  onRefreshInterfaces,
   isScanning,
   scanError,
   scanTimeMs,
@@ -66,7 +67,12 @@ const DiagnosticsTab = ({
     <div className='flex flex-1 flex-col gap-4 overflow-hidden'>
       {/* Runtime Status */}
       {isConnectedToRuntime && ipAddress && jwtToken && (
-        <RuntimeStatusPanel ipAddress={ipAddress} jwtToken={jwtToken} isConnected={isConnectedToRuntime} />
+        <RuntimeStatusPanel
+          ipAddress={ipAddress}
+          jwtToken={jwtToken}
+          isConnected={isConnectedToRuntime}
+          masterName={masterName}
+        />
       )}
 
       {/* Not connected state */}
@@ -104,7 +110,6 @@ const DiagnosticsTab = ({
               onSelectInterface={onSelectInterface}
               isLoading={isLoadingInterfaces}
               error={interfaceError}
-              onRefresh={onRefreshInterfaces}
             />
 
             <button

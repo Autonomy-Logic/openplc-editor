@@ -188,18 +188,8 @@ class CompilerModule {
       return halsFileContent[board]['compiler']
     }
 
-    // Fallback: check installed VPP packages for the board
+    // Board not found in hals.json
     try {
-      const installed = packageManager.listInstalled()
-      for (const pkg of installed) {
-        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
-        if (!manifest) continue
-        for (const device of manifest.devices) {
-          if (device.name === board) {
-            return device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
-          }
-        }
-      }
     } catch {
       // ignore package manager errors
     }
