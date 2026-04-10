@@ -66,10 +66,9 @@ type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>
 export {
   baudRateOptions,
   BYTE_MAC_ADDRESS_REGEX,
-  DeviceConfiguration,
   deviceConfigurationSchema,
   interfaceOptions,
   MAC_ADDRESS_REGEX,
-  StaticHostConfiguration,
   staticHostConfigurationSchema,
 }
+export type { DeviceConfiguration, StaticHostConfiguration }
