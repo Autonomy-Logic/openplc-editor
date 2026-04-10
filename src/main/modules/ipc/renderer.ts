@@ -1,7 +1,6 @@
-import type { PLCProjectData } from '@root/middleware/shared/ports/types'
+import type { PLCProjectData, RuntimeLogEntry } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
-import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void

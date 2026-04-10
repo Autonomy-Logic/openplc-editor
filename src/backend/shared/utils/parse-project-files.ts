@@ -27,8 +27,8 @@ import type {
   PLCTask,
   PLCVariable,
 } from '../../../middleware/shared/ports/types'
-import { deviceConfigurationSchema, devicePinSchema } from '../../../types/PLC/devices'
-import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../../../types/PLC/open-plc'
+import { deviceConfigurationSchema, devicePinSchema } from '../types/PLC/devices'
+import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../types/PLC/open-plc'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
 
 // ---------------------------------------------------------------------------
@@ -342,9 +342,10 @@ export function parseProjectFiles(
     project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
   }
 
+  const metaType: 'plc-project' | 'plc-library' = project.meta?.type === 'plc-library' ? 'plc-library' : 'plc-project'
   const meta = {
     name: project.meta?.name ?? '',
-    type: (project.meta?.type ?? 'plc-project') as 'plc-project' | 'plc-library',
+    type: metaType,
     path: projectPath,
   }
 

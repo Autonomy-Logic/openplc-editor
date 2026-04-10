@@ -9,6 +9,8 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
+import type { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
   type CppPouData as CppPouDataCode,
   generateCBlocksCode,
@@ -24,8 +26,6 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
 import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
-import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import type { PLCProjectData } from '@root/types/PLC/open-plc'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'

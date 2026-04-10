@@ -23,4 +23,5 @@ const devicePinSchema = z.object({
 })
 type DevicePin = z.infer<typeof devicePinSchema>
 
-export { DevicePin, devicePinSchema, PinTypes, pinTypes }
+export { devicePinSchema, pinTypes }
+export type { DevicePin, PinTypes }

@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
-import { zodFBDFlowSchema } from '../../frontend/store/slices/fbd/types'
-import { zodLadderFlowSchema } from '../../frontend/store/slices/ladder/types'
+import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
 
 const baseTypeSchema = z.enum([
   'bool',
@@ -669,7 +668,7 @@ type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
 const PLCProjectMetaSchema = z.object({
   name: z.string(),
-  type: z.enum(['plc-project', 'plc-library']),
+  type: z.enum(['plc-project', 'plc-library', 'PLC']),
 })
 type PLCProjectMeta = z.infer<typeof PLCProjectMetaSchema>
 

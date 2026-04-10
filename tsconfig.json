@@ -19,6 +19,7 @@
       "@root/*": ["./src/*"]
     }
   },
+  "include": ["src"],
   "exclude": [
     "test",
     "release/build",
