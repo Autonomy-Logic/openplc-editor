@@ -11,11 +11,11 @@ import type {
 } from '@root/types/ethercat/esi-types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { EsiPort } from '../../middleware/shared/ports/esi-port'
+import { useEsi } from '../../middleware/shared/providers/platform-context'
 
 type UseDeviceConfigurationParams = {
   device: ConfiguredEtherCATDevice
-  esiPort: EsiPort
+  projectPath: string
   externalAddresses: Set<string>
   onUpdateDevice: (config: EtherCATSlaveConfig) => void
   onUpdateChannelMappings: (mappings: EtherCATChannelMapping[]) => void
@@ -34,13 +34,14 @@ type UseDeviceConfigurationResult = {
 
 export function useDeviceConfiguration({
   device,
-  esiPort,
+  projectPath,
   externalAddresses,
   onUpdateDevice,
   onUpdateChannelMappings,
   onEnrichDevice,
   enabled = true,
 }: UseDeviceConfigurationParams): UseDeviceConfigurationResult {
+  const esiPort = useEsi()
   const [channels, setChannels] = useState<ESIChannel[]>([])
   const [coeObjects, setCoeObjects] = useState<ESICoEObject[] | undefined>(undefined)
   const [isLoadingChannels, setIsLoadingChannels] = useState(false)
@@ -63,7 +64,7 @@ export function useDeviceConfiguration({
       setChannelLoadError(null)
 
       try {
-        const result = await esiPort.loadDeviceFull(
+        const result = await esiPort!.loadDeviceFull(
           device.esiDeviceRef.repositoryItemId,
           device.esiDeviceRef.deviceIndex,
         )
@@ -101,7 +102,7 @@ export function useDeviceConfiguration({
     }
 
     void loadFullDevice()
-  }, [enabled, esiPort, device.esiDeviceRef.repositoryItemId, device.esiDeviceRef.deviceIndex])
+  }, [enabled, esiPort, projectPath, device.esiDeviceRef.repositoryItemId, device.esiDeviceRef.deviceIndex])
 
   const handleAliasChange = useCallback(
     (channelId: string, alias: string) => {

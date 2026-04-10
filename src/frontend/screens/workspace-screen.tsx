@@ -7,6 +7,7 @@ import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
+import { EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
@@ -334,7 +335,12 @@ const WorkspaceScreen = () => {
                     <>
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-device' && <DeviceEditor />}
-                      {editor['type'] === 'plc-remote-device' && <RemoteDeviceEditor />}
+                      {editor['type'] === 'plc-remote-device' && editor.meta.protocol === 'ethercat' && (
+                        <EtherCATEditor />
+                      )}
+                      {editor['type'] === 'plc-remote-device' && editor.meta.protocol !== 'ethercat' && (
+                        <RemoteDeviceEditor />
+                      )}
                       {editor['type'] === 'plc-server' && editor.meta.protocol === 'modbus-tcp' && (
                         <ModbusServerEditor />
                       )}
