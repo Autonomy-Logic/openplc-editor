@@ -1,5 +1,11 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import { collectUsedIecAddresses } from '@root/backend/shared/ethercat/collect-used-iec-addresses'
+import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-config-defaults'
+import { getBestMatchQuality, matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
+import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
+import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { cn } from '@root/frontend/utils/cn'
 import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
 import type {
@@ -9,12 +15,6 @@ import type {
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
 } from '@root/types/ethercat/esi-types'
-import type { EtherCATMasterConfig } from '@root/types/PLC/open-plc'
-import { cn } from '@root/frontend/utils/cn'
-import { collectUsedIecAddresses } from '@root/backend/shared/ethercat/collect-used-iec-addresses'
-import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-config-defaults'
-import { getBestMatchQuality, matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
-import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 

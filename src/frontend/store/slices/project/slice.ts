@@ -1,5 +1,5 @@
 import { cycleTimeUsToIecInterval, ethercatTaskName } from '@root/backend/shared/ethercat/ethercat-task-helpers'
-import type { EthercatConfig } from '@root/types/PLC/open-plc'
+import type { EthercatConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 

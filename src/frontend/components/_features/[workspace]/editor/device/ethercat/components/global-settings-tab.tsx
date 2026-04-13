@@ -1,9 +1,9 @@
+import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { InputWithRef } from '@root/frontend/components/_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { cn } from '@root/frontend/utils/cn'
 import type { NetworkInterface } from '@root/types/ethercat'
-import type { EtherCATMasterConfig } from '@root/types/PLC/open-plc'
 
 type GlobalSettingsTabProps = {
   masterConfig: EtherCATMasterConfig

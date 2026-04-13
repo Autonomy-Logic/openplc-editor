@@ -1,5 +1,5 @@
+import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { InputWithRef } from '@root/frontend/components/_atoms/input'
-import type { EtherCATMasterConfig } from '@root/types/PLC/open-plc'
 import { cn } from '@root/frontend/utils/cn'
 
 type AdvancedTabProps = {

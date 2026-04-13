@@ -1,3 +1,4 @@
+import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -13,7 +14,6 @@ import type {
 import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
-import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void

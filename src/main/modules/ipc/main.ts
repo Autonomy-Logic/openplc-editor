@@ -1,7 +1,9 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
+import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
+import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -16,8 +18,6 @@ import type {
 import type { ESIRepositoryItem } from '@root/types/ethercat/esi-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
-import { PLCProjectData } from '@root/types/PLC/open-plc'
-import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'

@@ -1,10 +1,10 @@
+import type { PLCRemoteDevice } from '@root/backend/shared/types/PLC/open-plc'
 import type {
   ConfiguredEtherCATDevice,
   PersistedChannelInfo,
   PersistedPdo,
   SDOConfigurationEntry,
 } from '@root/types/ethercat/esi-types'
-import type { PLCRemoteDevice } from '@root/types/PLC/open-plc'
 
 import { ethercatTaskName } from './ethercat-task-helpers'
 
