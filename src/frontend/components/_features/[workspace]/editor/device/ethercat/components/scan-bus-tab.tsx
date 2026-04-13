@@ -132,24 +132,23 @@ const ScanBusTab = ({
           </div>
         )}
 
-        {/* Add selected button */}
-        {selectedScannedDevices.size > 0 && (
-          <div className='mb-4 flex justify-end'>
-            <button
-              onClick={onAddSelectedFromScan}
-              className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
-            >
-              Add Selected ({selectedScannedDevices.size})
-            </button>
-          </div>
-        )}
-
         {/* Side-by-side: Scanned Devices (left) + Configured Devices (right) */}
         <div className='flex min-h-0 flex-1 gap-4'>
           {/* Scanned Devices — left */}
           <div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
-            <div className='mb-2 flex h-[28px] items-center'>
+            <div className='mb-2 flex h-[28px] items-center justify-between'>
               <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>Scanned Devices</h3>
+              <button
+                onClick={onAddSelectedFromScan}
+                disabled={selectedScannedDevices.size === 0}
+                className={cn(
+                  'flex h-7 items-center rounded-md bg-brand px-3 text-xs font-medium text-white transition-colors',
+                  'hover:bg-brand-medium-dark',
+                  'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand',
+                )}
+              >
+                Add Selected{selectedScannedDevices.size > 0 ? ` (${selectedScannedDevices.size})` : ''}
+              </button>
             </div>
             <DiscoveredDeviceTable
               deviceMatches={deviceMatches}
