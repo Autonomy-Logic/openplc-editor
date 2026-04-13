@@ -100,13 +100,20 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
   const transport = modbusTcpConfig.transport || 'tcp'
 
   if (transport === 'rtu') {
+    const serialPort = modbusTcpConfig.serialPort?.trim()
+
+    if (!serialPort) {
+      console.warn(`Modbus RTU device "${device.name}" is missing a serial port configuration and will be skipped.`)
+      return null
+    }
+
     return {
       name: device.name,
       protocol: 'MODBUS',
       config: {
         type: 'MASTER',
         transport: 'rtu',
-        serial_port: modbusTcpConfig.serialPort ?? '/dev/ttyUSB0',
+        serial_port: serialPort,
         baud_rate: modbusTcpConfig.baudRate ?? 9600,
         parity: modbusTcpConfig.parity ?? 'N',
         stop_bits: modbusTcpConfig.stopBits ?? 1,
