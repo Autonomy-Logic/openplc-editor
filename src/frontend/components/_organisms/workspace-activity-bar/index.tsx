@@ -1,3 +1,5 @@
+import { useCallback } from 'react'
+
 import { useOpenPLCStore } from '../../../store'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { ExitButton } from '../../_molecules/workspace-activity-bar/default/exit'
@@ -15,10 +17,8 @@ type ActivityBarProps = {
 }
 
 export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) => {
-  const {
-    editor,
-    sharedWorkspaceActions: { closeProject },
-  } = useOpenPLCStore()
+  const editor = useOpenPLCStore(useCallback((s) => s.editor, []))
+  const { closeProject } = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
 
   const isFBDEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'fbd'
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'

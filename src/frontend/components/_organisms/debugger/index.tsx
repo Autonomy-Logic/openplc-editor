@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { PauseIcon } from '../../../assets/icons/interface/Pause'
 import { PlayIcon } from '../../../assets/icons/interface/Play'
+import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../hooks/use-debug-value'
 import { useOpenPLCStore } from '../../../store'
 import { Button } from '../../_atoms/buttons/default'
 import { LineChart } from '../../_molecules/charts/line-chart'
@@ -26,9 +27,10 @@ const Debugger = ({ graphList }: DebuggerData) => {
   const sessionStartRef = useRef<number>(Date.now())
   const [elapsedMs, setElapsedMs] = useState(0)
 
-  const {
-    workspace: { debugVariableValues, debugTick, debugDataStale },
-  } = useOpenPLCStore()
+  const debugTick = useOpenPLCStore(useCallback((s) => s.workspace.debugTick, []))
+  const debugDataStale = useOpenPLCStore(useCallback((s) => s.workspace.debugDataStale, []))
+  const debugBoolValues = useDebugBoolValuesMap()
+  const debugNonBoolValues = useDebugNonBoolValuesMap()
 
   // Track elapsed time with a 1-second interval
   useEffect(() => {
@@ -61,7 +63,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
   }, [graphList])
 
   useEffect(() => {
-    if (isPaused) return
+    if (isPaused || graphList.length === 0) return
     const now = Date.now()
     // Set start time on first data
     if (startTimeRef.current === null) {
@@ -69,7 +71,9 @@ const Debugger = ({ graphList }: DebuggerData) => {
     }
     const set = historiesRef.current
     for (const [, entry] of set) {
-      const raw = entry.compositeKey ? debugVariableValues.get(entry.compositeKey) : undefined
+      const raw = entry.compositeKey
+        ? (debugBoolValues.get(entry.compositeKey) ?? debugNonBoolValues.get(entry.compositeKey))
+        : undefined
       if (raw === undefined) continue
       let y: number | null = null
       const rawStr = String(raw).toUpperCase()
@@ -96,7 +100,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
       }
     }
     setRenderTrigger((prev) => prev + 1)
-  }, [debugVariableValues, isPaused])
+  }, [debugBoolValues, debugNonBoolValues, isPaused, graphList])
 
   const renderSeries = useMemo(() => {
     const now = Date.now()

@@ -1,4 +1,4 @@
-import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
+import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
 import { useProject, useSystem } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
@@ -25,13 +25,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const system = useSystem()
   const projectPort = useProject()
   const [showComponent, setShowComponent] = useState(true)
-  const {
-    modals,
-    workspace: {
-      systemConfigs: { OS },
-    },
-    workspaceActions: { setSystemConfigs, setRecent },
-  } = useOpenPLCStore()
+  const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
+  const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
+  const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
 
   // Theme initialization - applies dark class before DisplayMenu mounts
   useEffect(() => {

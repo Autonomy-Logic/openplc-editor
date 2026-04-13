@@ -1,6 +1,7 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
+import { shallow } from 'zustand/shallow'
 
 import { useCapabilities, useChatPanel, useDebugger, useDevice } from '../../middleware/shared/providers'
 import { ExitIcon } from '../assets/icons/interface/Exit'
@@ -28,7 +29,14 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent } from '../components/_templates/[workspace]/main-content'
 import { WorkspaceSideContent } from '../components/_templates/[workspace]/side-content'
+import {
+  useDebugBoolValuesMap,
+  useDebugForcedVariablesMap,
+  useDebugNonBoolValuesMap,
+  useIsDebuggerVisible,
+} from '../hooks/use-debug-value'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
+import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
 
@@ -38,36 +46,66 @@ const WorkspaceScreen = () => {
   const debuggerPort = useDebugger()
   const device = useDevice()
 
+  // STABLE: action references (never change)
+  const { toggleCollapse, clearPlcLogs, toggleDebugExpandedNode, setDebugGraphList } = useOpenPLCStore(
+    useCallback((s) => s.workspaceActions, []),
+  )
+  const { setAvailableOptions } = useOpenPLCStore(useCallback((s) => s.deviceActions, []))
+
+  // RARE: UI state (changes on user interaction, not during debug polling)
+  const tabs = useOpenPLCStore(useCallback((s) => s.tabs, []))
+  const editor = useOpenPLCStore(useCallback((s) => s.editor, []))
+  const searchResults = useOpenPLCStore(useCallback((s) => s.searchResults, []))
+  const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+
+  // RARE: workspace UI + debug session state (grouped with shallow)
   const {
-    tabs,
-    workspace: {
-      isCollapsed,
-      isPlcLogsVisible,
-      plcLogs,
-      isDebuggerVisible,
-      debugVariableValues,
-      debugVariableTree,
-      debugVariableIndexes,
-      debugForcedVariables,
-      debugExpandedNodes,
-      fbSelectedInstance,
-      fbDebugInstances,
-    },
-    editor,
-    workspaceActions: {
-      toggleCollapse,
-      clearPlcLogs,
-      setDebugForcedVariables,
-      toggleDebugExpandedNode,
-      setDebugGraphList,
-    },
-    deviceActions: { setAvailableOptions },
-    searchResults,
-    ai: { isChatOpen, isEnabled: isAIEnabled, hasConsented: hasAIConsented },
-    project: {
-      data: { pous },
-    },
-  } = useOpenPLCStore()
+    isCollapsed,
+    isPlcLogsVisible,
+    plcLogs,
+    debugVariableTree,
+    debugVariableIndexes,
+    debugExpandedNodes,
+    fbSelectedInstance,
+    fbDebugInstances,
+  } = useOpenPLCStore(
+    useCallback(
+      (s) => ({
+        isCollapsed: s.workspace.isCollapsed,
+        isPlcLogsVisible: s.workspace.isPlcLogsVisible,
+        plcLogs: s.workspace.plcLogs,
+        debugVariableTree: s.workspace.debugVariableTree,
+        debugVariableIndexes: s.workspace.debugVariableIndexes,
+        debugExpandedNodes: s.workspace.debugExpandedNodes,
+        fbSelectedInstance: s.workspace.fbSelectedInstance,
+        fbDebugInstances: s.workspace.fbDebugInstances,
+      }),
+      [],
+    ),
+    shallow,
+  )
+
+  // RARE: AI state (grouped with shallow)
+  const {
+    isChatOpen,
+    isEnabled: isAIEnabled,
+    hasConsented: hasAIConsented,
+  } = useOpenPLCStore(
+    useCallback(
+      (s) => ({
+        isChatOpen: s.ai.isChatOpen,
+        isEnabled: s.ai.isEnabled,
+        hasConsented: s.ai.hasConsented,
+      }),
+      [],
+    ),
+    shallow,
+  )
+
+  const isDebuggerVisible = useIsDebuggerVisible()
+  const debugBoolValues = useDebugBoolValuesMap()
+  const debugNonBoolValues = useDebugNonBoolValuesMap()
+  const debugForcedVariables = useDebugForcedVariablesMap()
 
   // Start global runtime polling for status and logs
   useRuntimePolling()
@@ -112,7 +150,7 @@ const WorkspaceScreen = () => {
               displayName = v.name
             }
 
-            const variableValue = debugVariableValues.get(compositeKey)
+            const variableValue = debugBoolValues.get(compositeKey) ?? debugNonBoolValues.get(compositeKey)
             const displayValue = variableValue !== undefined ? variableValue : '-'
 
             return {
@@ -124,7 +162,7 @@ const WorkspaceScreen = () => {
             }
           })
       }),
-    [pous, debugVariableValues, fbSelectedInstance, fbDebugInstances],
+    [pous, debugBoolValues, debugNonBoolValues, fbSelectedInstance, fbDebugInstances],
   )
 
   // Deduplicate names with POU prefix when conflicts exist
@@ -169,25 +207,13 @@ const WorkspaceScreen = () => {
       if (!debuggerPort.isConnected()) return
 
       if (value === undefined && valueBuffer === undefined) {
-        // Release force
-        const result = await debuggerPort.setVariable(variableIndex, false)
-        if (result.success) {
-          const newForced = new Map(debugForcedVariables)
-          newForced.delete(compositeKey)
-          setDebugForcedVariables(newForced)
-        }
+        await releaseDebugVariable(debuggerPort, compositeKey, variableIndex)
       } else {
-        // Set force
         const buffer = valueBuffer ?? new Uint8Array([value ? 1 : 0])
-        const result = await debuggerPort.setVariable(variableIndex, true, buffer)
-        if (result.success) {
-          const newForced = new Map(debugForcedVariables)
-          newForced.set(compositeKey, value ?? true)
-          setDebugForcedVariables(newForced)
-        }
+        await forceDebugVariable(debuggerPort, compositeKey, variableIndex, buffer, value ?? true)
       }
     },
-    [debugVariableIndexes, debugForcedVariables, setDebugForcedVariables, debuggerPort],
+    [debugVariableIndexes, debuggerPort],
   )
 
   const [graphList, _setGraphList] = useState<string[]>([])
@@ -480,7 +506,8 @@ const WorkspaceScreen = () => {
                               variableTree={filteredDebugVariableTree}
                               graphList={graphList}
                               setGraphList={setGraphList}
-                              debugVariableValues={debugVariableValues}
+                              debugBoolValues={debugBoolValues}
+                              debugNonBoolValues={debugNonBoolValues}
                               debugVariableIndexes={debugVariableIndexes}
                               debugForcedVariables={debugForcedVariables}
                               debugExpandedNodes={debugExpandedNodes}

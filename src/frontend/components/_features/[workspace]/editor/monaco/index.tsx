@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
+import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
@@ -139,7 +140,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     workspace: {
       systemConfigs: { shouldUseDarkMode },
       isDebuggerVisible,
-      debugVariableValues,
       fbSelectedInstance,
       fbDebugInstances,
     },
@@ -162,6 +162,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { pushToHistory },
   } = useOpenPLCStore()
+  const debugBoolValues = useDebugBoolValuesMap()
+  const debugNonBoolValues = useDebugNonBoolValuesMap()
 
   // Create a unique Monaco path for editor (prevents model caching across projects)
   const uniqueMonacoPath = capabilities.hasLocalFilesystem && projectPath ? `${projectPath}${path}` : path
@@ -333,9 +335,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const debugVarKeySet = useMemo(() => {
     const keys: string[] = []
-    for (const key of debugVariableValues.keys()) keys.push(key)
+    for (const key of debugBoolValues.keys()) keys.push(key)
+    for (const key of debugNonBoolValues.keys()) keys.push(key)
     return keys.sort().join('\0')
-  }, [debugVariableValues])
+  }, [debugBoolValues, debugNonBoolValues])
 
   const debugVarPositions = useMemo(() => {
     if (!isDebuggerVisible || !editorRef.current || !monacoRef.current || (language !== 'st' && language !== 'il'))
@@ -354,7 +357,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       : `${name}:`
 
     const varNames: string[] = []
-    for (const key of debugVariableValues.keys()) {
+    for (const key of debugBoolValues.keys()) {
+      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
+    }
+    for (const key of debugNonBoolValues.keys()) {
       if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
     }
     if (varNames.length === 0) return null
@@ -399,7 +405,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       range: new monaco.Range(line, startCol, line, endCol),
       options: {
         after: {
-          content: ` = ${debugVariableValues.get(prefix + expr) ?? '?'} `,
+          content: ` = ${debugBoolValues.get(prefix + expr) ?? debugNonBoolValues.get(prefix + expr) ?? '?'} `,
           inlineClassName: 'debug-inline-value',
         },
       },
@@ -407,7 +413,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const collection = editorRef.current.createDecorationsCollection(decorations)
     return () => collection.clear()
-  }, [debugVarPositions, debugVariableValues])
+  }, [debugVarPositions, debugBoolValues, debugNonBoolValues])
 
   // -----------------------------------------------------------------------
   // Completion callbacks

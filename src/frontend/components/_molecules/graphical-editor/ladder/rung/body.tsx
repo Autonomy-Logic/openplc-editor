@@ -5,6 +5,7 @@ import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, 
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
+import { useDebugBoolValuesMap, useIsDebuggerVisible } from '../../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
@@ -80,8 +81,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     modalActions: { openModal },
     searchQuery,
     searchActions: { setSearchNodePosition },
-    workspace: { isDebuggerVisible, debugVariableValues },
   } = useOpenPLCStore()
+  const isDebuggerVisible = useIsDebuggerVisible()
+  const debugVariableValues = useDebugBoolValuesMap()
 
   const { captureAndPush } = usePouSnapshot()
   const { pous } = project.data
