@@ -1201,14 +1201,19 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
           device.ethercatConfig = ethercatConfig as typeof device.ethercatConfig
 
-          // Sync cycle time to the associated system task interval
-          const cycleTimeUs = (ethercatConfig as EthercatConfig).masterConfig?.cycleTimeUs
-          if (cycleTimeUs !== undefined) {
+          // Sync master config fields to the associated system task
+          const masterCfg = (ethercatConfig as EthercatConfig).masterConfig
+          if (masterCfg) {
             const systemTask = slice.project.data.configurations.resource.tasks.find(
               (t) => t.isSystemTask && t.associatedDevice === deviceName,
             )
             if (systemTask) {
-              systemTask.interval = cycleTimeUsToIecInterval(cycleTimeUs)
+              if (masterCfg.cycleTimeUs !== undefined) {
+                systemTask.interval = cycleTimeUsToIecInterval(masterCfg.cycleTimeUs)
+              }
+              if (masterCfg.taskPriority !== undefined) {
+                systemTask.priority = masterCfg.taskPriority
+              }
             }
           }
         }),

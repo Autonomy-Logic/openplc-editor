@@ -164,11 +164,12 @@ const TaskEditor = () => {
     }
 
     const taskNames = filteredTasks.map((t) => t.name)
+    const { isSystemTask: _, associatedDevice: __, ...baseTask } = task
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       createTask({
         data: {
-          ...task,
+          ...baseTask,
           name: getNextName(task.name, taskNames),
         },
       })
@@ -180,7 +181,7 @@ const TaskEditor = () => {
       return
     }
 
-    createTask({ data: { ...task, name: getNextName(task.name, taskNames) }, rowToInsert: selectedRow + 1 })
+    createTask({ data: { ...baseTask, name: getNextName(task.name, taskNames) }, rowToInsert: selectedRow + 1 })
     updateModelTasks({
       display: 'table',
       selectedRow: selectedRow + 1,

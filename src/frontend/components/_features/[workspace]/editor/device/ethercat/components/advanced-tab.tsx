@@ -63,6 +63,29 @@ const AdvancedTab = ({ masterConfig, onUpdateMasterConfig }: AdvancedTabProps) =
         </div>
       </div>
 
+      {/* Task Priority */}
+      <div className='rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
+        <h3 className='mb-3 text-xs font-semibold uppercase text-neutral-500 dark:text-neutral-400'>Task Priority</h3>
+        <div className='flex flex-col gap-1'>
+          <InputWithRef
+            type='number'
+            value={masterConfig.taskPriority ?? 1}
+            onChange={(e) => onUpdateMasterConfig({ taskPriority: Number(e.target.value) })}
+            onBlur={(e) => {
+              const val = Number(e.target.value)
+              if (!val || val < 1) onUpdateMasterConfig({ taskPriority: 1 })
+              else if (val > 31) onUpdateMasterConfig({ taskPriority: 31 })
+            }}
+            min={1}
+            max={31}
+            className={cn(inputClassName, 'max-w-[200px]')}
+          />
+          <span className='text-[10px] text-neutral-500 dark:text-neutral-500'>
+            Priority of the EtherCAT cyclic task (1 - 31)
+          </span>
+        </div>
+      </div>
+
       {/* Watchdog Timeout */}
       <div className='rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
         <h3 className='mb-3 text-xs font-semibold uppercase text-neutral-500 dark:text-neutral-400'>

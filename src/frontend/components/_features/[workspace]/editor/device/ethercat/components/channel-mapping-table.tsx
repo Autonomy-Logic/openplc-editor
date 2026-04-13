@@ -113,14 +113,14 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
       {/* Filters */}
       <div className='flex flex-wrap items-center gap-3'>
         {/* Direction Filter */}
-        <div className='flex rounded-md border border-neutral-300 dark:border-neutral-700'>
+        <div className='flex gap-2'>
           <button
             onClick={() => setFilterDirection('all')}
             className={cn(
-              'px-3 py-1 text-xs font-medium transition-colors',
+              'h-7 rounded-md px-3 text-xs font-medium transition-colors',
               filterDirection === 'all'
-                ? 'bg-brand text-white'
-                : 'bg-white text-neutral-700 hover:bg-neutral-100 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800',
+                ? 'bg-blue-500 text-white'
+                : 'bg-neutral-100 text-brand-light dark:bg-neutral-900 dark:text-neutral-700',
             )}
           >
             All ({channels.length})
@@ -128,10 +128,10 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
           <button
             onClick={() => setFilterDirection('input')}
             className={cn(
-              'border-l border-neutral-300 px-3 py-1 text-xs font-medium transition-colors dark:border-neutral-700',
+              'h-7 rounded-md px-3 text-xs font-medium transition-colors',
               filterDirection === 'input'
-                ? 'bg-green-500 text-white'
-                : 'bg-white text-neutral-700 hover:bg-neutral-100 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800',
+                ? 'bg-blue-500 text-white'
+                : 'bg-neutral-100 text-brand-light dark:bg-neutral-900 dark:text-neutral-700',
             )}
           >
             Inputs ({inputCount})
@@ -139,10 +139,10 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
           <button
             onClick={() => setFilterDirection('output')}
             className={cn(
-              'border-l border-neutral-300 px-3 py-1 text-xs font-medium transition-colors dark:border-neutral-700',
+              'h-7 rounded-md px-3 text-xs font-medium transition-colors',
               filterDirection === 'output'
                 ? 'bg-blue-500 text-white'
-                : 'bg-white text-neutral-700 hover:bg-neutral-100 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800',
+                : 'bg-neutral-100 text-brand-light dark:bg-neutral-900 dark:text-neutral-700',
             )}
           >
             Outputs ({outputCount})
@@ -197,17 +197,8 @@ const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappi
                     <td className='px-2 py-1.5 text-sm font-medium text-neutral-950 dark:text-neutral-100'>
                       {channelIndexMap.get(channel.id) ?? ''}
                     </td>
-                    <td className='px-2 py-1.5'>
-                      <span
-                        className={cn(
-                          'inline-block rounded px-1.5 py-0.5 text-xs font-medium',
-                          channel.direction === 'input'
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                        )}
-                      >
-                        {channel.direction === 'input' ? 'IN' : 'OUT'}
-                      </span>
+                    <td className='px-2 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      {channel.direction === 'input' ? 'Input' : 'Output'}
                     </td>
                     <td className='px-2 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                       {channel.iecType}
