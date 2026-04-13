@@ -1,19 +1,9 @@
 import { Connection, Edge, Node } from '@xyflow/react'
 import { z } from 'zod'
 
-import { edgeSchema, nodeSchema } from '../react-flow'
+import { zodFBDFlowSchema, zodFBDRungStateSchema } from '../../../../middleware/shared/ports/flow-schemas'
 
-const zodFBDRungStateSchema = z.object({
-  comment: z.string().default(''),
-  nodes: z.array(nodeSchema),
-  edges: z.array(edgeSchema),
-})
 type ZodFBDRungType = z.infer<typeof zodFBDRungStateSchema>
-
-const zodFBDFlowSchema = z.object({
-  name: z.string(),
-  rung: zodFBDRungStateSchema,
-})
 type ZodFBDFlowType = z.infer<typeof zodFBDFlowSchema>
 
 const zodFBDFlowStateSchema = z.object({

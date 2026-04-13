@@ -19,6 +19,7 @@ type LayerName =
   | 'assets'
   | 'utils'
   | 'data'
+  | 'types'
   | 'ports'
   | 'provider'
   | 'adapters'
@@ -49,6 +50,10 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
     name: 'Data (frontend/data/)',
     allowedDeps: ['ports', 'utils', 'data', 'assets'],
   },
+  types: {
+    name: 'Types (types/)',
+    allowedDeps: ['store', 'utils'],
+  },
   ports: {
     name: 'Application — Ports (middleware/shared/ports/)',
     allowedDeps: ['utils', 'ports'],
@@ -63,7 +68,7 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
   },
   'backend-shared': {
     name: 'Backend Shared (backend/shared/)',
-    allowedDeps: ['ports', 'utils'],
+    allowedDeps: ['ports', 'utils', 'types'],
   },
   store: {
     name: 'Store (frontend/store/)',
@@ -133,6 +138,9 @@ function getLayer(filePath: string): LayerName | null {
   if (rel.startsWith('frontend/components/')) return 'components'
   if (rel.startsWith('frontend/data/')) return 'data'
   if (rel.startsWith('frontend/utils/')) return 'utils'
+
+  // Shared type definitions (Zod schemas, PLC type contracts)
+  if (rel.startsWith('types/')) return 'types'
 
   return null
 }
