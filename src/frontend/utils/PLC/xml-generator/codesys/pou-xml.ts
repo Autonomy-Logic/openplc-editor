@@ -1,4 +1,4 @@
-// import { PLCVariable } from '@root/types/PLC'
+// import { PLCVariable } from '@root/backend/shared/types/PLC/open-plc'
 import { FBDRungState, RungLadderState } from '@root/frontend/store/slices'
 import { baseTypes } from '@root/frontend/utils/plc-constants/types'
 import { PLCPou } from '@root/middleware/shared/ports/open-plc-types'

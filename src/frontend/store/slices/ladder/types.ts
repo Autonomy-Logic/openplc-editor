@@ -1,25 +1,9 @@
 import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import { z } from 'zod'
 
-import { edgeSchema, nodeSchema } from '../react-flow'
+import { zodLadderFlowSchema, zodRungLadderStateSchema } from '../../../../middleware/shared/ports/flow-schemas'
 
-/**
- * Types used to save at the json
- */
-const zodRungLadderStateSchema = z.object({
-  id: z.string(),
-  comment: z.string().default(''),
-  defaultBounds: z.array(z.number()),
-  reactFlowViewport: z.array(z.number()),
-  nodes: z.array(nodeSchema),
-  edges: z.array(edgeSchema),
-})
 type ZodLadderRungType = z.infer<typeof zodRungLadderStateSchema>
-
-const zodLadderFlowSchema = z.object({
-  name: z.string(),
-  rungs: z.array(zodRungLadderStateSchema).default([]),
-})
 type ZodLadderFlowType = z.infer<typeof zodLadderFlowSchema>
 
 const zodLadderFlowStateSchema = z.object({
