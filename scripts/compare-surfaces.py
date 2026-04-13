@@ -124,11 +124,11 @@ def main() -> int:
                 reason = diff["reason"]
                 filepath = diff["file"]
                 if reason == "only_in_web":
-                    msg = f"File exists only in web repo: src/{filepath}"
+                    msg = f"[{surface}] File exists only in web repo: src/{filepath}"
                 elif reason == "only_in_editor":
-                    msg = f"File exists only in editor repo: src/{filepath}"
+                    msg = f"[{surface}] File exists only in editor repo: src/{filepath}"
                 else:
-                    msg = f"File differs between repos: src/{filepath}"
+                    msg = f"[{surface}] File differs between repos: src/{filepath}"
                 print(f"::error file=src/{filepath}::{msg}", file=sys.stderr)
 
     return 0 if overall_match else 1
