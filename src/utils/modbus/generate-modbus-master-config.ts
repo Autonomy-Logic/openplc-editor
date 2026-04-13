@@ -43,6 +43,7 @@ interface ModbusMasterDevice {
 }
 
 type ModbusMasterConfig = ModbusMasterDevice[]
+type ModbusMasterWarningHandler = (message: string) => void
 
 /**
  * Formats an offset value as a hexadecimal string.
@@ -82,7 +83,10 @@ const convertIOGroupToIOPoint = (ioGroup: ModbusIOGroup): ModbusMasterIOPoint =>
  * Converts a PLCRemoteDevice with Modbus configuration to a ModbusMasterDevice
  * for the runtime configuration. Supports both TCP and RTU transports.
  */
-const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMasterDevice | null => {
+const convertRemoteDeviceToModbusMaster = (
+  device: PLCRemoteDevice,
+  onWarning?: ModbusMasterWarningHandler,
+): ModbusMasterDevice | null => {
   if (device.protocol !== 'modbus-tcp' || !device.modbusTcpConfig) {
     return null
   }
@@ -103,7 +107,7 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
     const serialPort = modbusTcpConfig.serialPort?.trim()
 
     if (!serialPort) {
-      console.warn(`Modbus RTU device "${device.name}" is missing a serial port configuration and will be skipped.`)
+      onWarning?.(`Modbus RTU device "${device.name}" is missing a serial port configuration and will be skipped.`)
       return null
     }
 
@@ -148,7 +152,10 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
  * @param remoteDevices - Array of PLCRemoteDevice from the project data
  * @returns The Modbus Master configuration as a JSON string, or null if no devices are configured
  */
-export const generateModbusMasterConfig = (remoteDevices: PLCRemoteDevice[] | undefined): string | null => {
+export const generateModbusMasterConfig = (
+  remoteDevices: PLCRemoteDevice[] | undefined,
+  onWarning?: ModbusMasterWarningHandler,
+): string | null => {
   if (!remoteDevices || remoteDevices.length === 0) {
     return null
   }
@@ -160,7 +167,7 @@ export const generateModbusMasterConfig = (remoteDevices: PLCRemoteDevice[] | un
   }
 
   const config: ModbusMasterConfig = modbusTcpDevices
-    .map(convertRemoteDeviceToModbusMaster)
+    .map((device) => convertRemoteDeviceToModbusMaster(device, onWarning))
     .filter((device): device is ModbusMasterDevice => device !== null)
 
   if (config.length === 0) {
@@ -170,4 +177,10 @@ export const generateModbusMasterConfig = (remoteDevices: PLCRemoteDevice[] | un
   return JSON.stringify(config, null, 2)
 }
 
-export type { ModbusMasterConfig, ModbusMasterDevice, ModbusMasterDeviceConfig, ModbusMasterIOPoint }
+export type {
+  ModbusMasterConfig,
+  ModbusMasterDevice,
+  ModbusMasterDeviceConfig,
+  ModbusMasterIOPoint,
+  ModbusMasterWarningHandler,
+}

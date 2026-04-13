@@ -1206,7 +1206,9 @@ class CompilerModule {
     projectData: ProjectState['data'],
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
-    const modbusMasterConfig = generateModbusMasterConfig(projectData.remoteDevices)
+    const modbusMasterConfig = generateModbusMasterConfig(projectData.remoteDevices, (message) => {
+      handleOutputData(message, 'warning')
+    })
 
     if (modbusMasterConfig) {
       const confFolderPath = join(sourceTargetFolderPath, 'conf')
