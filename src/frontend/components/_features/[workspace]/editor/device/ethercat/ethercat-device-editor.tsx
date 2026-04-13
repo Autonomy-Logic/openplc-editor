@@ -238,9 +238,6 @@ const EtherCATDeviceEditor = () => {
       {/* Header */}
       <div className='mb-4 shrink-0'>
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>{device.name}</h2>
-        <p className='text-sm text-neutral-600 dark:text-neutral-400'>
-          {esiDevice?.name || 'Unknown device'} — Position {device.position ?? '-'} — Bus: {busName}
-        </p>
       </div>
 
       {/* Tabs */}
