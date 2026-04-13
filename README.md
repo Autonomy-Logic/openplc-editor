@@ -35,7 +35,7 @@ npm install
 - Run the development script
 
 ```bash
-npm run start:dev
+npm run dev
 ```
 
 ## Releasing a New Version

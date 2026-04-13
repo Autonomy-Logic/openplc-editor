@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm install
 
 # Development mode (hot reload for both main and renderer)
-npm run start:dev
+npm run dev
 
 # Build for production
 npm run build

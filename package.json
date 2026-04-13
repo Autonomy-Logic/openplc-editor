@@ -6,27 +6,28 @@
   "author": {
     "name": "Autonomy Logic"
   },
-  "main": "./configs/dll/main.bundle.dev.js",
+  "main": "./configs/dll/main.js",
   "scripts": {
     "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
     "build:dll": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.dev.dll.ts",
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.prod.ts",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
     "lint": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx}",
-    "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --debug --fix",
+    "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --fix",
     "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
     "postinstall": "ts-node scripts/download-binaries.ts && ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "setup:binaries": "ts-node scripts/download-binaries.ts",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "prestart": "rimraf configs/dll/tsconfig.tsbuildinfo && ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",
-    "start:dev": "ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
-    "start:main": "concurrently -k \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./configs/webpack/webpack.config.main.dev.ts\" \"electronmon .\"",
-    "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
+    "prestart": "ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",
+    "start:dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
-    "test:unit": "jest --watch --no-coverage",
+    "dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer\" \"cross-env PORT=1313 electronmon .\"",
+    "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
+    "test": "jest --collectCoverage",
+    "test:watch": "jest --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
-    "test": "jest --collectCoverage --",
+    "validate:arch": "npx tsx src/__architecture__/validate.ts",
     "prepare": "husky"
   },
   "browserslist": [],
@@ -52,10 +53,12 @@
     "@radix-ui/react-toast": "^1.2.14",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tailwindcss/forms": "^0.5.6",
+    "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-table": "^8.10.7",
     "@xyflow/react": "^12.0.1",
     "auto-zustand-selectors-hook": "^2.0.0",
     "avr8js": "0.20.0",
+    "axios": "^1.13.6",
     "clsx": "^2.0.0",
     "cva": "npm:class-variance-authority@^0.7.0",
     "dompurify": "^3.2.4",
@@ -64,7 +67,6 @@
     "electron-store": "^8.1.0",
     "electron-updater": "^6.1.4",
     "embla-carousel-react": "^8.0.0-rc17",
-    "fast-xml-parser": "^5.3.4",
     "i18next": "^23.5.1",
     "immer": "^10.1.1",
     "lodash": "^4.17.21",
@@ -80,6 +82,7 @@
     "react-hook-form": "^7.47.0",
     "react-i18next": "^13.3.0",
     "react-icons": "^4.11.0",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.0.3",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^2.1.0",
@@ -128,7 +131,8 @@
     "electronmon": "^2.0.2",
     "eslint": "^9.20.1",
     "eslint-config-prettier": "^10.0.1",
-    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.26",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-webpack-plugin": "^4.2.0",
     "file-loader": "^6.2.0",
@@ -142,7 +146,7 @@
     "mini-css-extract-plugin": "^2.7.6",
     "postcss": "^8.4.31",
     "postcss-loader": "^7.3.3",
-    "prettier": "^3.2.5",
+    "prettier": "3.4.2",
     "prettier-plugin-tailwindcss": "^0.5.14",
     "react-refresh": "^0.14.0",
     "react-test-renderer": "^18.2.0",
@@ -152,7 +156,7 @@
     "serialport": "^12.0.0",
     "style-loader": "^3.3.3",
     "tailwind-scrollbar": "^3.1.0",
-    "tailwindcss": "^3.3.3",
+    "tailwindcss": "^3.4.19",
     "terser-webpack-plugin": "^5.3.9",
     "ts-jest": "^29.4.0",
     "ts-loader": "^9.4.4",
@@ -181,9 +185,9 @@
     "logLevel": "quiet"
   },
   "lint-staged": {
-    "./src/**/*": [
-      "npm run lint:fix",
-      "npm run format"
+    "./src/**/*.{ts,tsx}": [
+      "cross-env NODE_ENV=development eslint --fix",
+      "prettier --write"
     ]
   }
 }
