@@ -1,6 +1,7 @@
 export { createDefaultSlaveConfig, DEFAULT_SLAVE_CONFIG } from './device-config-defaults'
 export { cycleTimeUsToIecInterval, ethercatTaskName } from './ethercat-task-helpers'
 export { countMatchedDevices, getBestMatchQuality, matchDevicesToRepository } from './device-matcher'
+export { collectUsedIecAddresses } from './collect-used-iec-addresses'
 export { buildChannelInfo, deriveSlaveType, persistPdos } from './enrich-device-data'
 export { esiTypeToIecType, pdoToChannels } from './esi-parser'
 export { parseESIDeviceFull, parseESILight } from './esi-parser-main'

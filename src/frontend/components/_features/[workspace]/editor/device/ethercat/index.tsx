@@ -11,6 +11,7 @@ import type {
 } from '@root/types/ethercat/esi-types'
 import type { EtherCATMasterConfig } from '@root/types/PLC/open-plc'
 import { cn } from '@root/frontend/utils/cn'
+import { collectUsedIecAddresses } from '@root/backend/shared/ethercat/collect-used-iec-addresses'
 import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-config-defaults'
 import { getBestMatchQuality, matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
@@ -372,6 +373,7 @@ const EtherCATEditor = () => {
   const handleAddSelectedFromScan = useCallback(async () => {
     const newDevices: ConfiguredEtherCATDevice[] = []
     const existingPositions = new Set(configuredDevices.map((d) => d.position))
+    const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices)
 
     for (const position of selectedScannedDevices) {
       // Skip devices already configured at this position
@@ -384,13 +386,16 @@ const EtherCATEditor = () => {
       const repoItem = repository.find((r) => r.id === bestMatch.repositoryItemId)
       if (!repoItem) continue
 
-      let enriched = {}
+      let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
       const result = await esi!.loadDeviceFull(
         bestMatch.repositoryItemId,
         bestMatch.deviceIndex,
       )
       if (result.success && result.device) {
-        enriched = enrichDeviceData(result.device)
+        enriched = enrichDeviceData(result.device, usedAddresses)
+        // Reserve the freshly assigned addresses so the next device in the
+        // batch doesn't collide with them.
+        for (const m of enriched.channelMappings ?? []) usedAddresses.add(m.iecLocation)
       }
 
       newDevices.push({
@@ -415,7 +420,15 @@ const EtherCATEditor = () => {
       syncDevicesToStore([...configuredDevices, ...newDevices])
       setSelectedScannedDevices(new Set())
     }
-  }, [selectedScannedDevices, deviceMatches, repository, configuredDevices, syncDevicesToStore, projectPath])
+  }, [
+    selectedScannedDevices,
+    deviceMatches,
+    repository,
+    configuredDevices,
+    syncDevicesToStore,
+    projectPath,
+    project.data.remoteDevices,
+  ])
 
   const handleRetryRepository = useCallback(() => {
     setRepositoryError(null)
@@ -425,10 +438,11 @@ const EtherCATEditor = () => {
 
   const handleAddDeviceFromBrowser = useCallback(
     async (ref: ESIDeviceRef, device: ESIDeviceSummary, repoItem: ESIRepositoryItemLight) => {
-      let enriched = {}
+      let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
       const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
       if (result.success && result.device) {
-        enriched = enrichDeviceData(result.device)
+        const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices)
+        enriched = enrichDeviceData(result.device, usedAddresses)
       }
 
       const nextPosition =
@@ -450,7 +464,7 @@ const EtherCATEditor = () => {
 
       syncDevicesToStore([...configuredDevices, newDevice])
     },
-    [configuredDevices, syncDevicesToStore, projectPath],
+    [configuredDevices, syncDevicesToStore, projectPath, project.data.remoteDevices],
   )
 
   const handleRemoveDevice = useCallback(

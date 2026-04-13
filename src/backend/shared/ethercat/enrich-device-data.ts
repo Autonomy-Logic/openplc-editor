@@ -8,13 +8,14 @@
 import type {
   ESIDevice,
   ESIPdo,
+  EtherCATChannelMapping,
   PersistedChannelInfo,
   PersistedPdo,
   PersistedPdoEntry,
   SDOConfigurationEntry,
 } from '@root/types/ethercat/esi-types'
 
-import { esiTypeToIecType, pdoToChannels } from './esi-parser'
+import { esiTypeToIecType, generateDefaultChannelMappings, pdoToChannels } from './esi-parser'
 import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
 
 /**
@@ -95,13 +96,23 @@ export function deriveSlaveType(device: ESIDevice): string {
 /**
  * Enrich device data by extracting all persistable info from a full ESIDevice.
  * Returns fields to spread into ConfiguredEtherCATDevice.
+ *
+ * `usedAddresses` is the set of IEC addresses already taken by other devices
+ * in the project; the generated `channelMappings` will avoid them. Pass an
+ * up-to-date set when adding a device so its outputs/inputs receive valid,
+ * non-conflicting IEC locations from the start (otherwise the runtime can't
+ * bind them and the slave appears inert until the editor page is opened).
  */
-export function enrichDeviceData(device: ESIDevice): {
+export function enrichDeviceData(
+  device: ESIDevice,
+  usedAddresses?: Set<string>,
+): {
   channelInfo: PersistedChannelInfo[]
   rxPdos: PersistedPdo[]
   txPdos: PersistedPdo[]
   slaveType: string
   sdoConfigurations?: SDOConfigurationEntry[]
+  channelMappings: EtherCATChannelMapping[]
 } {
   return {
     channelInfo: buildChannelInfo(device),
@@ -109,5 +120,6 @@ export function enrichDeviceData(device: ESIDevice): {
     txPdos: persistPdos(device.txPdo),
     slaveType: deriveSlaveType(device),
     sdoConfigurations: device.coeObjects?.length ? extractDefaultSdoConfigurations(device.coeObjects) : undefined,
+    channelMappings: generateDefaultChannelMappings(pdoToChannels(device), usedAddresses),
   }
 }

@@ -1,4 +1,5 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import { collectUsedIecAddresses } from '@root/backend/shared/ethercat'
 import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configuration'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
@@ -83,28 +84,10 @@ const EtherCATDeviceEditor = () => {
   }, [remoteDevice])
 
   // Collect all IEC addresses used across all remote devices
-  const usedAddresses = useMemo(() => {
-    const addresses = new Set<string>()
-    const allRemoteDevices = project.data.remoteDevices || []
-
-    for (const rd of allRemoteDevices) {
-      if (rd.modbusTcpConfig?.ioGroups) {
-        for (const group of rd.modbusTcpConfig.ioGroups) {
-          for (const point of group.ioPoints ?? []) {
-            addresses.add(point.iecLocation)
-          }
-        }
-      }
-      if (rd.ethercatConfig?.devices) {
-        for (const dev of rd.ethercatConfig.devices) {
-          for (const mapping of dev.channelMappings) {
-            addresses.add(mapping.iecLocation)
-          }
-        }
-      }
-    }
-    return addresses
-  }, [project.data.remoteDevices])
+  const usedAddresses = useMemo(
+    () => collectUsedIecAddresses(project.data.remoteDevices),
+    [project.data.remoteDevices],
+  )
 
   // Exclude the current device's own addresses from the "external" set
   const externalAddresses = useMemo(() => {
