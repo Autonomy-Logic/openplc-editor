@@ -1,19 +1,19 @@
 import './configs'
 
-import { Editor as PrimitiveEditor } from '@monaco-editor/react'
+import { DiffEditor, Editor as PrimitiveEditor } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
+import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
-import { AIConsentModal } from './ai-consent-modal'
 import { AIStatusIndicator } from './ai-status-indicator'
 import {
   arduinoApiCompletion,
@@ -139,7 +139,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     workspace: {
       systemConfigs: { shouldUseDarkMode },
       isDebuggerVisible,
-      debugVariableValues,
       fbSelectedInstance,
       fbDebugInstances,
     },
@@ -162,6 +161,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { pushToHistory },
   } = useOpenPLCStore()
+  const debugBoolValues = useDebugBoolValuesMap()
+  const debugNonBoolValues = useDebugNonBoolValuesMap()
 
   // Create a unique Monaco path for editor (prevents model caching across projects)
   const uniqueMonacoPath = capabilities.hasLocalFilesystem && projectPath ? `${projectPath}${path}` : path
@@ -175,10 +176,24 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   })
   const watchedFilePathRef = useRef<string | null>(null)
 
+  // AI diff review state — when active, swaps the editor to a DiffEditor
+  const [diffReview, setDiffReview] = useState<{
+    active: boolean
+    proposedBody: string
+    variableSummary: string
+  }>({ active: false, proposedBody: '', variableSummary: '' })
+
   const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
 
   const pou = pous.find((p) => p.name === name)
   const pouVariables = pou?.interface?.variables ?? []
+
+  // Restore custom theme after DiffEditor unmounts
+  useEffect(() => {
+    if (diffReview.active) return
+    const m = monacoRef.current
+    if (m) requestAnimationFrame(() => applyThemeNow(m, shouldUseDarkMode))
+  }, [diffReview.active, shouldUseDarkMode])
 
   // Sync local text when POU identity changes
   useEffect(() => {
@@ -333,9 +348,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const debugVarKeySet = useMemo(() => {
     const keys: string[] = []
-    for (const key of debugVariableValues.keys()) keys.push(key)
+    for (const key of debugBoolValues.keys()) keys.push(key)
+    for (const key of debugNonBoolValues.keys()) keys.push(key)
     return keys.sort().join('\0')
-  }, [debugVariableValues])
+  }, [debugBoolValues, debugNonBoolValues])
 
   const debugVarPositions = useMemo(() => {
     if (!isDebuggerVisible || !editorRef.current || !monacoRef.current || (language !== 'st' && language !== 'il'))
@@ -354,7 +370,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       : `${name}:`
 
     const varNames: string[] = []
-    for (const key of debugVariableValues.keys()) {
+    for (const key of debugBoolValues.keys()) {
+      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
+    }
+    for (const key of debugNonBoolValues.keys()) {
       if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
     }
     if (varNames.length === 0) return null
@@ -399,7 +418,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       range: new monaco.Range(line, startCol, line, endCol),
       options: {
         after: {
-          content: ` = ${debugVariableValues.get(prefix + expr) ?? '?'} `,
+          content: ` = ${debugBoolValues.get(prefix + expr) ?? debugNonBoolValues.get(prefix + expr) ?? '?'} `,
           inlineClassName: 'debug-inline-value',
         },
       },
@@ -407,7 +426,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const collection = editorRef.current.createDecorationsCollection(decorations)
     return () => collection.clear()
-  }, [debugVarPositions, debugVariableValues])
+  }, [debugVarPositions, debugBoolValues, debugNonBoolValues])
 
   // -----------------------------------------------------------------------
   // Completion callbacks
@@ -728,18 +747,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   // -----------------------------------------------------------------------
 
   const aiState = useOpenPLCStore().ai
-  const { modalActions } = useOpenPLCStore()
 
   useEffect(() => {
     if (!capabilities.hasAIAssistant) return
     if (!aiState.isEnabled) return
-
-    const consentValue = localStorage.getItem('ai-consent-v1')
-    if (consentValue === 'declined') return
-    if (!aiState.hasConsented) {
-      modalActions.openModal('ai-consent')
-      return
-    }
+    if (!aiState.hasConsented) return
 
     if (!aiPort?.registerInlineCompletions) return
 
@@ -750,7 +762,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     })
 
     return () => registration.dispose()
-  }, [name, language, aiState.isEnabled, aiState.hasConsented, modalActions, capabilities.hasAIAssistant, aiPort])
+  }, [name, language, aiState.isEnabled, aiState.hasConsented, capabilities.hasAIAssistant, aiPort])
 
   // -----------------------------------------------------------------------
   // Theme management
@@ -945,11 +957,40 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       window.addEventListener('ai-insert-at-cursor', handleInsertAtCursor)
     }
 
+    // Listen for AI chat "review code" events — opens the inline diff review
+    const handleCodeReview = (e: Event) => {
+      const {
+        pouName: targetPou,
+        proposedBody,
+        variableSummary,
+      } = (e as CustomEvent<{ pouName: string; proposedBody: string; variableSummary: string }>).detail
+      if (targetPou !== name) return
+      setDiffReview({ active: true, proposedBody, variableSummary })
+    }
+    window.addEventListener('ai-review-code', handleCodeReview)
+
+    // Listen for AI chat "apply code" — applies after the user accepted the diff
+    const handleCodeApplied = (e: Event) => {
+      const { pouName: targetPou, body } = (e as CustomEvent<{ pouName: string; body: string }>).detail
+      if (targetPou !== name) return
+      const model = editorInstance.getModel()
+      if (model) {
+        isSyncingModelRef.current = true
+        const fullRange = model.getFullModelRange()
+        editorInstance.executeEdits('ai-code-apply', [{ range: fullRange, text: body }])
+        isSyncingModelRef.current = false
+        editorInstance.focus()
+      }
+    }
+    window.addEventListener('ai-code-applied', handleCodeApplied)
+
     editorInstance.onDidDispose(() => {
       window.removeEventListener('keyup', handleKeyUp)
       if (handleInsertAtCursor) {
         window.removeEventListener('ai-insert-at-cursor', handleInsertAtCursor)
       }
+      window.removeEventListener('ai-review-code', handleCodeReview)
+      window.removeEventListener('ai-code-applied', handleCodeApplied)
     })
 
     editorInstance.focus()
@@ -1266,32 +1307,93 @@ void loop()
   }, [])
 
   // -----------------------------------------------------------------------
+  // AI diff review handlers
+  // -----------------------------------------------------------------------
+
+  const handleDiffAccept = useCallback(() => {
+    if (!diffReview.active) return
+    setDiffReview({ active: false, proposedBody: '', variableSummary: '' })
+    window.dispatchEvent(
+      new CustomEvent('ai-review-accepted', { detail: { pouName: name, body: diffReview.proposedBody } }),
+    )
+  }, [diffReview, name])
+
+  const handleDiffReject = useCallback(() => {
+    setDiffReview({ active: false, proposedBody: '', variableSummary: '' })
+  }, [])
+
+  const diffThemeName = shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'
+
+  // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
 
   return (
     <>
       <div id='editor drop handler' className='oplc-monaco-wrapper relative h-full w-full' onDrop={handleDrop}>
-        {capabilities.hasAIAssistant && <AIStatusIndicator />}
-        <PrimitiveEditor
-          key={capabilities.hasLocalFilesystem ? undefined : path}
-          options={monacoEditorUserOptions}
-          height='100%'
-          width='100%'
-          path={uniqueMonacoPath}
-          language={language}
-          defaultValue={''}
-          value={localText}
-          beforeMount={handleEditorBeforeMount}
-          onMount={handleEditorDidMount}
-          onChange={handleWriteInPou}
-          theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
-          // Disabled: view state (cursor/scroll) is managed manually via Zustand store.
-          // Monaco's built-in saveViewState causes "Canceled" errors from WordHighlighter
-          // when restoring state on language switches (e.g., ST to Python).
-          saveViewState={false}
-          keepCurrentModel={true}
-        />
+        {diffReview.active ? (
+          <>
+            {/* Diff review label bar */}
+            <div className='flex items-center gap-2 px-2 py-1'>
+              {diffReview.variableSummary && (
+                <span className='text-[10px] font-medium text-green-600 dark:text-green-400'>
+                  {diffReview.variableSummary}
+                </span>
+              )}
+              <span className='text-[10px] text-neutral-400 dark:text-neutral-500'>AI suggestion</span>
+              <div className='ml-auto flex items-center gap-1'>
+                <button
+                  onClick={handleDiffReject}
+                  className='rounded px-2 py-0.5 text-[10px] font-medium text-neutral-500 transition-colors hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={handleDiffAccept}
+                  className='rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-brand-dark'
+                >
+                  Accept
+                </button>
+              </div>
+            </div>
+            <DiffEditor
+              original={localText}
+              modified={diffReview.proposedBody}
+              language={language}
+              theme={diffThemeName}
+              beforeMount={(m) => ensureOpenplcThemes(m)}
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                fontSize: 13,
+                scrollBeyondLastLine: false,
+                domReadOnly: true,
+                renderSideBySide: true,
+                originalEditable: false,
+              }}
+            />
+          </>
+        ) : (
+          <>
+            {capabilities.hasAIAssistant && <AIStatusIndicator />}
+            <PrimitiveEditor
+              key={capabilities.hasLocalFilesystem ? undefined : path}
+              options={monacoEditorUserOptions}
+              height='100%'
+              width='100%'
+              path={uniqueMonacoPath}
+              language={language}
+              defaultValue={''}
+              value={localText}
+              beforeMount={handleEditorBeforeMount}
+              onMount={handleEditorDidMount}
+              onChange={handleWriteInPou}
+              theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
+              saveViewState={false}
+              keepCurrentModel={true}
+            />
+          </>
+        )}
       </div>
       <Modal open={isOpen} onOpenChange={setIsOpen}>
         <ModalContent className='flex h-56 w-96 select-none flex-col justify-between gap-2 rounded-lg p-8'>
@@ -1325,7 +1427,6 @@ void loop()
           </div>
         </ModalContent>
       </Modal>
-      {capabilities.hasAIAssistant && <AIConsentModal />}
     </>
   )
 }

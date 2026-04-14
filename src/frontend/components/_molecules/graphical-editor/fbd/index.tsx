@@ -16,6 +16,11 @@ import { debounce, isEqual } from 'lodash'
 import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
+import {
+  useDebugBoolValuesMap,
+  useDebugForcedVariablesMap,
+  useIsDebuggerVisible,
+} from '../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
@@ -49,8 +54,10 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     projectActions: { deleteVariable },
     modals,
     modalActions: { closeModal, openModal },
-    workspace: { isDebuggerVisible, debugVariableValues, debugForcedVariables },
   } = useOpenPLCStore()
+  const isDebuggerVisible = useIsDebuggerVisible()
+  const debugVariableValues = useDebugBoolValuesMap()
+  const debugForcedVariables = useDebugForcedVariablesMap()
   const { captureAndPush } = usePouSnapshot()
 
   const { pous } = project.data

@@ -1,4 +1,6 @@
 import { BrowserWindow, dialog } from 'electron'
+import { promises } from 'fs'
+import { join } from 'path'
 
 import { isEmptyDir } from './is-empty-dir'
 
@@ -37,4 +39,39 @@ const getProjectPath = async (serviceManager: GetProjectPathProps) => {
   }
 }
 
-export { getProjectPath }
+const getOpenProjectPath = async (serviceManager: GetProjectPathProps) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(serviceManager, {
+    title: 'Select a PLC project to open',
+    properties: ['openDirectory'],
+  })
+  if (canceled) {
+    return {
+      success: false,
+      error: {
+        title: 'Operation canceled',
+        description: 'Operation canceled by the user.',
+      },
+    }
+  }
+
+  const [filePath] = filePaths
+
+  try {
+    await promises.access(join(filePath, 'project.json'))
+  } catch {
+    return {
+      success: false,
+      error: {
+        title: 'Invalid project',
+        description: 'The selected directory is not a valid OpenPLC project. No project.json file found.',
+      },
+    }
+  }
+
+  return {
+    success: true,
+    path: filePath,
+  }
+}
+
+export { getOpenProjectPath, getProjectPath }

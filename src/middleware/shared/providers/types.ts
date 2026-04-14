@@ -15,6 +15,7 @@ import type { RuntimePort } from '../ports/runtime-port'
 import type { SimulatorPort } from '../ports/simulator-port'
 import type { SystemPort } from '../ports/system-port'
 import type { ThemePort } from '../ports/theme-port'
+import type { VersionControlPort } from '../ports/version-control-port'
 import type { WindowPort } from '../ports/window-port'
 
 export interface PlatformPorts {
@@ -29,6 +30,7 @@ export interface PlatformPorts {
   window: WindowPort
   accelerator: AcceleratorPort
   theme: ThemePort
+  versionControl: VersionControlPort
   capabilities: PlatformCapabilities
   ai?: AIPort
 }
