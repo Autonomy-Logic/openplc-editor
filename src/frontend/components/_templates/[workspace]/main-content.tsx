@@ -1,11 +1,11 @@
 import { ComponentPropsWithoutRef, useCallback } from 'react'
 
-import { openPLCStoreBase } from '../../../store'
+import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
 
 type IWorkspaceMainContentProps = ComponentPropsWithoutRef<'div'>
 const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
-  const OS = openPLCStoreBase(useCallback((s) => s.workspace.systemConfigs.OS, []))
+  const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
   const { children, ...res } = props
 
   return (

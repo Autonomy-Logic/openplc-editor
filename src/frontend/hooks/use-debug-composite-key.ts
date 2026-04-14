@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 
-import { openPLCStoreBase } from '../store'
+import { useOpenPLCStore } from '../store'
 
 /**
  * Hook that returns a memoized function to build composite keys for debug variable lookups.
@@ -12,12 +12,12 @@ import { openPLCStoreBase } from '../store'
  * unrelated project or workspace mutation.
  */
 export const useDebugCompositeKey = () => {
-  const editorName = openPLCStoreBase(useCallback((s) => s.editor.meta.name, []))
-  const pouType = openPLCStoreBase(
+  const editorName = useOpenPLCStore(useCallback((s) => s.editor.meta.name, []))
+  const pouType = useOpenPLCStore(
     useCallback((s) => s.project.data.pous.find((p) => p.name === s.editor.meta.name)?.pouType, []),
   )
-  const fbSelectedInstance = openPLCStoreBase(useCallback((s) => s.workspace.fbSelectedInstance, []))
-  const fbDebugInstances = openPLCStoreBase(useCallback((s) => s.workspace.fbDebugInstances, []))
+  const fbSelectedInstance = useOpenPLCStore(useCallback((s) => s.workspace.fbSelectedInstance, []))
+  const fbDebugInstances = useOpenPLCStore(useCallback((s) => s.workspace.fbDebugInstances, []))
 
   const fbInstanceContext = useMemo(() => {
     if (pouType !== 'function-block') return null

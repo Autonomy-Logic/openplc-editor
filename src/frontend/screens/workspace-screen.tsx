@@ -39,7 +39,7 @@ import {
 } from '../hooks/use-debug-value'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
-import { openPLCStoreBase } from '../store'
+import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
 import { toast } from '../utils/toast'
 
@@ -51,17 +51,17 @@ const WorkspaceScreen = () => {
   const project = useProject()
 
   // STABLE: action references (never change)
-  const { toggleCollapse, clearPlcLogs, toggleDebugExpandedNode, setDebugGraphList } = openPLCStoreBase(
+  const { toggleCollapse, clearPlcLogs, toggleDebugExpandedNode, setDebugGraphList } = useOpenPLCStore(
     useCallback((s) => s.workspaceActions, []),
   )
-  const { setAvailableOptions } = openPLCStoreBase(useCallback((s) => s.deviceActions, []))
+  const { setAvailableOptions } = useOpenPLCStore(useCallback((s) => s.deviceActions, []))
 
   // RARE: UI state (changes on user interaction, not during debug polling)
-  const tabs = openPLCStoreBase(useCallback((s) => s.tabs, []))
-  const editor = openPLCStoreBase(useCallback((s) => s.editor, []))
-  const searchResults = openPLCStoreBase(useCallback((s) => s.searchResults, []))
-  const pous = openPLCStoreBase(useCallback((s) => s.project.data.pous, []))
-  const projectPath = openPLCStoreBase(useCallback((s) => s.project.meta.path, []))
+  const tabs = useOpenPLCStore(useCallback((s) => s.tabs, []))
+  const editor = useOpenPLCStore(useCallback((s) => s.editor, []))
+  const searchResults = useOpenPLCStore(useCallback((s) => s.searchResults, []))
+  const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+  const projectPath = useOpenPLCStore(useCallback((s) => s.project.meta.path, []))
 
   // RARE: workspace UI + debug session state (grouped with shallow)
   const {
@@ -73,7 +73,7 @@ const WorkspaceScreen = () => {
     debugExpandedNodes,
     fbSelectedInstance,
     fbDebugInstances,
-  } = openPLCStoreBase(
+  } = useOpenPLCStore(
     useShallow((s) => ({
       isCollapsed: s.workspace.isCollapsed,
       isPlcLogsVisible: s.workspace.isPlcLogsVisible,
@@ -91,7 +91,7 @@ const WorkspaceScreen = () => {
     isChatOpen,
     isEnabled: isAIEnabled,
     hasConsented: hasAIConsented,
-  } = openPLCStoreBase(
+  } = useOpenPLCStore(
     useShallow((s) => ({
       isChatOpen: s.ai.isChatOpen,
       isEnabled: s.ai.isEnabled,
@@ -100,14 +100,14 @@ const WorkspaceScreen = () => {
   )
 
   // Version control state
-  const { activePanel, pendingChangesCount } = openPLCStoreBase(
+  const { activePanel, pendingChangesCount } = useOpenPLCStore(
     useShallow((s) => ({
       activePanel: s.versionControl.activePanel,
       pendingChangesCount: s.versionControl.pendingChangesCount,
     })),
   )
-  const { setActivePanel } = openPLCStoreBase(useCallback((s) => s.versionControlActions, []))
-  const sharedWorkspaceActions = openPLCStoreBase(useCallback((s) => s.sharedWorkspaceActions, []))
+  const { setActivePanel } = useOpenPLCStore(useCallback((s) => s.versionControlActions, []))
+  const sharedWorkspaceActions = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
 
   const isDebuggerVisible = useIsDebuggerVisible()
   const debugBoolValues = useDebugBoolValuesMap()
