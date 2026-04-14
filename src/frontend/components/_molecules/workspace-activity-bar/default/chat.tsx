@@ -4,11 +4,20 @@ import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
 export const ChatButton = () => {
   const { isChatOpen, isEnabled, hasConsented } = useOpenPLCStore.useAi()
   const { toggleChat } = useOpenPLCStore.useAiActions()
+  const { openModal } = useOpenPLCStore.useModalActions()
 
-  if (!isEnabled || !hasConsented) return null
+  if (!isEnabled) return null
+
+  const handleClick = () => {
+    if (!hasConsented) {
+      openModal('ai-consent')
+      return
+    }
+    toggleChat()
+  }
 
   return (
-    <ActivityBarButton aria-label='AI Chat' onClick={toggleChat} data-active={isChatOpen ? 'true' : undefined}>
+    <ActivityBarButton aria-label='AI Chat' onClick={handleClick} data-active={isChatOpen ? 'true' : undefined}>
       <svg width='20' height='20' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
         <rect x='4' y='4' width='17' height='17' rx='3.5' stroke='#B4D0FE' strokeWidth='1.8' />
         <text

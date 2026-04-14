@@ -1,7 +1,7 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
-import { shallow } from 'zustand/shallow'
+import { useShallow } from 'zustand/react/shallow'
 
 import { useCapabilities, useChatPanel, useDebugger, useDevice, useProject } from '../../middleware/shared/providers'
 import { ExitIcon } from '../assets/icons/interface/Exit'
@@ -74,20 +74,16 @@ const WorkspaceScreen = () => {
     fbSelectedInstance,
     fbDebugInstances,
   } = openPLCStoreBase(
-    useCallback(
-      (s) => ({
-        isCollapsed: s.workspace.isCollapsed,
-        isPlcLogsVisible: s.workspace.isPlcLogsVisible,
-        plcLogs: s.workspace.plcLogs,
-        debugVariableTree: s.workspace.debugVariableTree,
-        debugVariableIndexes: s.workspace.debugVariableIndexes,
-        debugExpandedNodes: s.workspace.debugExpandedNodes,
-        fbSelectedInstance: s.workspace.fbSelectedInstance,
-        fbDebugInstances: s.workspace.fbDebugInstances,
-      }),
-      [],
-    ),
-    shallow,
+    useShallow((s) => ({
+      isCollapsed: s.workspace.isCollapsed,
+      isPlcLogsVisible: s.workspace.isPlcLogsVisible,
+      plcLogs: s.workspace.plcLogs,
+      debugVariableTree: s.workspace.debugVariableTree,
+      debugVariableIndexes: s.workspace.debugVariableIndexes,
+      debugExpandedNodes: s.workspace.debugExpandedNodes,
+      fbSelectedInstance: s.workspace.fbSelectedInstance,
+      fbDebugInstances: s.workspace.fbDebugInstances,
+    })),
   )
 
   // RARE: AI state (grouped with shallow)
@@ -96,27 +92,19 @@ const WorkspaceScreen = () => {
     isEnabled: isAIEnabled,
     hasConsented: hasAIConsented,
   } = openPLCStoreBase(
-    useCallback(
-      (s) => ({
-        isChatOpen: s.ai.isChatOpen,
-        isEnabled: s.ai.isEnabled,
-        hasConsented: s.ai.hasConsented,
-      }),
-      [],
-    ),
-    shallow,
+    useShallow((s) => ({
+      isChatOpen: s.ai.isChatOpen,
+      isEnabled: s.ai.isEnabled,
+      hasConsented: s.ai.hasConsented,
+    })),
   )
 
   // Version control state
   const { activePanel, pendingChangesCount } = openPLCStoreBase(
-    useCallback(
-      (s) => ({
-        activePanel: s.versionControl.activePanel,
-        pendingChangesCount: s.versionControl.pendingChangesCount,
-      }),
-      [],
-    ),
-    shallow,
+    useShallow((s) => ({
+      activePanel: s.versionControl.activePanel,
+      pendingChangesCount: s.versionControl.pendingChangesCount,
+    })),
   )
   const { setActivePanel } = openPLCStoreBase(useCallback((s) => s.versionControlActions, []))
   const sharedWorkspaceActions = openPLCStoreBase(useCallback((s) => s.sharedWorkspaceActions, []))

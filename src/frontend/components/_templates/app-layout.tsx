@@ -11,6 +11,7 @@ import { RuntimeCreateUserModal, RuntimeLoginModal } from '../_organisms/modals'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
 import { QuitApplicationModal } from '../_organisms/modals/quit-application-modal'
+import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
 import { RuntimeConnectionLostModal } from '../_organisms/modals/runtime-connection-lost-modal'
 import type { SaveChangesFileModalData } from '../_organisms/modals/save-changes-file-modal'
 import { SaveChangesFileModal } from '../_organisms/modals/save-changes-file-modal'
@@ -116,6 +117,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
+          {modals?.['ai-consent']?.open === true && <AIConsentModal />}
           <AcceleratorHandler />
         </main>
       </div>

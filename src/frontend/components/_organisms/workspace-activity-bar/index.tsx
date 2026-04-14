@@ -39,7 +39,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
   }
   return (
     <>
-      <div className='my-5 flex h-fit w-full flex-col items-center gap-10'>
+      <div className='sidebar-scroll my-5 flex min-h-0 w-full flex-1 flex-col items-center gap-5 overflow-y-auto'>
         {explorer && (
           <TooltipSidebarWrapperButton tooltipContent='Explorer'>
             <button
@@ -77,22 +77,28 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
             </button>
           </TooltipSidebarWrapperButton>
         )}
-        {(explorer || sourceControl) && <DividerActivityBar />}
-        <DefaultWorkspaceActivityBar {...defaultActivityBar} />
+        <DividerActivityBar />
+        <div className='flex w-full flex-col items-center gap-5'>
+          <DefaultWorkspaceActivityBar {...defaultActivityBar} />
+        </div>
         {isFBDEditor && (
           <>
             <DividerActivityBar />
-            <FBDToolbox />
+            <div className='flex w-full flex-col items-center gap-5'>
+              <FBDToolbox />
+            </div>
           </>
         )}
         {isLadderEditor && (
           <>
             <DividerActivityBar />
-            <LadderToolbox />
+            <div className='flex w-full flex-col items-center gap-5'>
+              <LadderToolbox />
+            </div>
           </>
         )}
       </div>
-      <div className='flex h-7 w-full flex-col gap-6'>
+      <div className='flex h-7 w-full shrink-0 flex-col gap-6 pb-10'>
         <TooltipSidebarWrapperButton tooltipContent='Exit'>
           <ExitButton onClick={handleExitApplication} />
         </TooltipSidebarWrapperButton>

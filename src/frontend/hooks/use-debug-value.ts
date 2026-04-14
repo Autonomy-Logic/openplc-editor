@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { shallow } from 'zustand/shallow'
+import { useShallow } from 'zustand/react/shallow'
 
 import { openPLCStoreBase } from '../store'
 
@@ -67,16 +67,12 @@ export function useDebugVariableIndex(compositeKey: string): number | undefined 
  */
 export function useDebugValue(compositeKey: string): DebugVariableState {
   return openPLCStoreBase(
-    useCallback(
-      (s) => ({
-        value: s.workspace.debugBoolValues.get(compositeKey) ?? s.workspace.debugNonBoolValues.get(compositeKey),
-        isForced: s.workspace.debugForcedVariables.has(compositeKey),
-        forcedValue: s.workspace.debugForcedVariables.get(compositeKey),
-        debugIndex: s.workspace.debugVariableIndexes.get(compositeKey),
-      }),
-      [compositeKey],
-    ),
-    shallow,
+    useShallow((s) => ({
+      value: s.workspace.debugBoolValues.get(compositeKey) ?? s.workspace.debugNonBoolValues.get(compositeKey),
+      isForced: s.workspace.debugForcedVariables.has(compositeKey),
+      forcedValue: s.workspace.debugForcedVariables.get(compositeKey),
+      debugIndex: s.workspace.debugVariableIndexes.get(compositeKey),
+    })),
   )
 }
 
