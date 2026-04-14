@@ -142,3 +142,12 @@ All Arduino boards need `-std=gnu++17` added to CXX compilation flags. This is s
 - ESP32: GCC 8+ (ESP-IDF toolchain)
 - STM32: ARM GCC 10+ (STM32duino)
 - RP2040: ARM GCC 10+ (Arduino Mbed OS)
+
+### 5. Dependency Management
+
+STruC++ is managed through the same `binary-versions.json` + `scripts/download-binaries.ts`
+mechanism used for xml2st and matiec. The STruC++ release produces an npm tarball (`.tgz`)
+that is downloaded from GitHub Releases and installed via `npm install`. This provides both
+the TypeScript compiler (in `node_modules`) and the C++ runtime headers (extracted to
+`resources/strucpp/`). No local copies, no `file:` dependencies, no manual syncing. Version
+changes are a one-line edit to `binary-versions.json`. See Phase 1 for full details.

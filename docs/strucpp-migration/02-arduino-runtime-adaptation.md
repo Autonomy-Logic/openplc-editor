@@ -11,40 +11,46 @@ implementation remain unchanged -- only the glue layer between them and the PLC 
 - Phase 1 complete (STruC++ compiler wrapper producing C++ code and metadata)
 - STruC++ runtime headers available for bundling
 
-## Step 2.1: Bundle STruC++ Runtime Headers
+## Step 2.1: STruC++ Runtime Headers (from downloaded release)
 
-**New directory**: `resources/sources/StrucppRuntime/`
-
-Copy these header-only C++17 files from `strucpp/src/runtime/include/`:
+The C++ runtime headers are **NOT** stored in this repository. They are downloaded alongside
+the STruC++ compiler by `scripts/download-binaries.ts` (see Phase 1 dependency strategy)
+and placed at:
 
 ```
-iec_var.hpp         -- IECVar<T> template (forcing, raw_ptr)
-iec_types.hpp       -- IEC type aliases (IEC_INT, IEC_BOOL, etc.)
-iec_located.hpp     -- LocatedVar struct, LocatedArea/LocatedSize enums
-iec_traits.hpp      -- Type trait helpers
-iec_array.hpp       -- Array1D, Array2D, Array3D templates
-iec_string.hpp      -- IECString<N> (stack-allocated, fixed-size)
-iec_enum.hpp        -- Enum type support
-iec_struct.hpp      -- Struct base helpers
-iec_std_lib.hpp     -- IEC standard functions (ABS, MIN, MAX, etc.)
-iec_time.hpp        -- TIME type operations
-iec_date.hpp        -- DATE type operations
-iec_tod.hpp         -- TIME_OF_DAY operations
-iec_dt.hpp          -- DATE_AND_TIME operations
-iec_char.hpp        -- CHAR/WCHAR types
-iec_wstring.hpp     -- WSTRING type
-iec_memory.hpp      -- Memory operation helpers
-iec_retain.hpp      -- Retain variable support
-iec_pointer.hpp     -- POINTER TO support
-iec_ptr.hpp         -- REF_TO support
-iec_subrange.hpp    -- Subrange type support
+resources/strucpp/runtime/include/
+  iec_var.hpp         -- IECVar<T> template (forcing, raw_ptr)
+  iec_types.hpp       -- IEC type aliases (IEC_INT, IEC_BOOL, etc.)
+  iec_located.hpp     -- LocatedVar struct, LocatedArea/LocatedSize enums
+  iec_traits.hpp      -- Type trait helpers
+  iec_array.hpp       -- Array1D, Array2D, Array3D templates
+  iec_string.hpp      -- IECString<N> (stack-allocated, fixed-size)
+  iec_enum.hpp        -- Enum type support
+  iec_struct.hpp      -- Struct base helpers
+  iec_std_lib.hpp     -- IEC standard functions (ABS, MIN, MAX, etc.)
+  iec_time.hpp        -- TIME type operations
+  iec_date.hpp        -- DATE type operations
+  iec_tod.hpp         -- TIME_OF_DAY operations
+  iec_dt.hpp          -- DATE_AND_TIME operations
+  iec_char.hpp        -- CHAR/WCHAR types
+  iec_wstring.hpp     -- WSTRING type
+  iec_memory.hpp      -- Memory operation helpers
+  iec_retain.hpp      -- Retain variable support
+  iec_pointer.hpp     -- POINTER TO support
+  iec_ptr.hpp         -- REF_TO support
+  iec_subrange.hpp    -- Subrange type support
 ```
+
+This directory is `.gitignore`'d and populated automatically during setup. The headers are
+**strictly version-coupled** with the STruC++ compiler -- both come from the same release
+artifact (the `.tgz` tarball). Upgrading the version in `binary-versions.json` automatically
+refreshes both the TypeScript compiler in `node_modules` and the C++ headers here.
 
 These are all **header-only** with no platform-specific code. They compile on any C++17
 toolchain including Arduino AVR GCC 7.3+.
 
-**Maintenance**: When STruC++ updates its runtime headers, this directory must be synced.
-Consider a build script or git submodule for automation.
+This follows the same pattern as MatIEC's `resources/sources/MatIEC/lib/` directory, which
+is also downloaded from the matiec release and `.gitignore`'d.
 
 ## Step 2.2: Create New Arduino Sketch
 
@@ -500,7 +506,9 @@ The glue generator uses this to validate located variable addresses don't exceed
 
 | File | Action |
 |------|--------|
-| `resources/sources/StrucppRuntime/*.hpp` | **New** -- STruC++ runtime headers |
 | `resources/sources/StrucppBaremetal/StrucppBaremetal.ino` | **New** -- Arduino sketch |
 | `src/backend/shared/utils/PLC/generate-arduino-glue.ts` | **New** -- Glue code generator |
 | `resources/sources/boards/hals.json` | Modified -- add cxx_flags, compiler_backend |
+
+Note: Runtime headers are NOT stored in this repo. They come from `resources/strucpp/runtime/include/`
+which is downloaded by `scripts/download-binaries.ts` (see Phase 1).

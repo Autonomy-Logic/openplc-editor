@@ -337,9 +337,13 @@ lib/            (MatIEC headers)
 generated.cpp, generated.hpp
 v4_compat.cpp
 c_blocks.h, c_blocks_code.cpp
-iec_var.hpp, iec_types.hpp, iec_located.hpp   (STruC++ runtime headers)
+iec_var.hpp, iec_types.hpp, iec_located.hpp   (copied from resources/strucpp/runtime/include/)
 ... (other STruC++ runtime headers)
 ```
+
+The headers are copied from `resources/strucpp/runtime/include/` (downloaded by
+`scripts/download-binaries.ts`, NOT stored in the repo). They are strictly version-coupled
+with the STruC++ compiler that produced the generated code.
 
 The `handleUploadToRuntime` method is updated to package the correct files based on
 `compiler_backend`.

@@ -148,10 +148,16 @@ private async compileArduinoWithSTruCpp(
 
 ```typescript
 private copyStrucppStaticFiles(compilationPath: string): void {
-  const strucppRuntimeDir = path.join(this.resourcesPath, 'sources', 'StrucppRuntime')
+  // Runtime headers -- downloaded by scripts/download-binaries.ts, NOT stored in repo
+  const strucppRuntimeDir = path.join(this.resourcesPath, 'strucpp', 'runtime', 'include')
   const strucppBaremetalDir = path.join(this.resourcesPath, 'sources', 'StrucppBaremetal')
 
-  // Copy runtime headers
+  // Copy C++ runtime headers to build directory
+  if (!fs.existsSync(strucppRuntimeDir)) {
+    throw new Error(
+      'STruC++ runtime headers not found. Run "npm run setup:binaries" to download them.',
+    )
+  }
   const headers = fs.readdirSync(strucppRuntimeDir)
   for (const file of headers) {
     fs.copyFileSync(
@@ -160,7 +166,7 @@ private copyStrucppStaticFiles(compilationPath: string): void {
     )
   }
 
-  // Copy StrucppBaremetal.ino
+  // Copy StrucppBaremetal.ino (this IS stored in the repo)
   fs.copyFileSync(
     path.join(strucppBaremetalDir, 'StrucppBaremetal.ino'),
     path.join(compilationPath, 'StrucppBaremetal.ino'),
@@ -390,8 +396,8 @@ build/{boardTarget}/src/
 build/{boardTarget}/src/
   plc.xml
   program.st
-  iec_var.hpp             <- STruC++ runtime headers
-  iec_types.hpp
+  iec_var.hpp             <- Copied from resources/strucpp/runtime/include/ (downloaded)
+  iec_types.hpp           <- (NOT stored in repo -- comes from STruC++ release)
   iec_located.hpp
   ... (other runtime headers)
   generated.hpp           <- STruC++ output
