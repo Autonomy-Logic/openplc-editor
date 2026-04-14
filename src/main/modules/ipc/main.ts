@@ -598,8 +598,10 @@ class MainProcessBridge implements MainIpcModule {
         return res
       }
       logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
     } catch (error) {
       logger.error('Error getting project path: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
     }
   }
   handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) => {

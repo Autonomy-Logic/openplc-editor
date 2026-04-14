@@ -541,6 +541,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
       setShowDiscardModal(false)
       const msg = error instanceof Error ? error.message : 'Failed to discard changes'
       setErrorMessage(msg)
+    } finally {
       setIsDiscarding(false)
     }
   }
