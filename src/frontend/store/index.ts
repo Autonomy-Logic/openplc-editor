@@ -1,4 +1,3 @@
-// TODO: remove this test comment
 import { createSelectorHooks } from 'auto-zustand-selectors-hook'
 import { enableMapSet } from 'immer'
 import { create } from 'zustand'
