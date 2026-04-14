@@ -94,10 +94,10 @@ function parseFullPou(code: string): AIParsedCode {
       const varSection = code.slice(varAbsStart, lastEndVar)
       try {
         variables = parseIecStringToVariables(varSection)
+        bodyStartIndex = lastEndVar
       } catch {
-        // If variable parsing fails, treat the whole thing as body
+        // If variable parsing fails, keep bodyStartIndex unchanged so the VAR text is included in body
       }
-      bodyStartIndex = lastEndVar
     }
   }
 

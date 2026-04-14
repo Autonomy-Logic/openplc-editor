@@ -138,18 +138,17 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard)
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
-    try {
-      const pouWasCreated = create(data)
-      if (!pouWasCreated.ok) throw new TypeError()
-      toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
-      closeContainer((prev) => !prev)
-      setIsOpen(false)
-    } catch (_error) {
+    const pouWasCreated = create(data)
+    if (!pouWasCreated.ok) {
       pouSetError('name', {
         type: 'already-exists',
       })
       toast({ title: 'Invalid Pou', description: "You can't create a Pou with this name.", variant: 'fail' })
+      return
     }
+    toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
+    closeContainer((prev) => !prev)
+    setIsOpen(false)
   }
 
   const handleCancelCreateElement = () => {

@@ -154,8 +154,8 @@
 }
 
 .sidebar-scroll {
-  overflow-y: overlay;
-  scrollbar-gutter: auto;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   direction: rtl;
 }
 

@@ -254,6 +254,12 @@ const WorkspaceScreen = () => {
             description: `Now on branch: ${branchName}`,
             variant: 'default',
           })
+        } else {
+          toast({
+            title: 'Failed to reload project',
+            description: 'The branch was switched but the project could not be reloaded.',
+            variant: 'fail',
+          })
         }
       } catch (error) {
         console.error('[WorkspaceScreen] Failed to switch branch:', error)
@@ -309,7 +315,7 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const action = isCollapsed ? 'collapse' : 'expand'
-    ;[explorerPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
+    ;[explorerPanelRef, workspacePanelRef, consolePanelRef, sourceControlPanelRef].forEach((ref) => {
       if (ref.current && typeof ref.current[action] === 'function') {
         ref.current[action]()
       }

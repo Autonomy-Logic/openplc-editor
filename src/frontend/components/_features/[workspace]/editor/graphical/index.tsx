@@ -22,10 +22,12 @@ const GraphicalEditor = ({ language, readOnly }: GraphicalEditorProps) => {
 
   return (
     <div className='relative h-full w-full overflow-y-auto'>
-      <EditorComponent />
       {readOnly && (
         <div className='absolute inset-0 z-10 cursor-not-allowed' title='Read-only: viewing historical commit' />
       )}
+      <div className={readOnly ? 'pointer-events-none' : undefined}>
+        <EditorComponent />
+      </div>
     </div>
   )
 }

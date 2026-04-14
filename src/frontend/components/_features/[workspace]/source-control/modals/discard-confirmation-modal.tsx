@@ -36,7 +36,7 @@ export function DiscardConfirmationModal({
 
   return (
     <div className='fixed inset-0 z-50 flex items-center justify-center'>
-      <div className='absolute inset-0 bg-black/40' onClick={onCancel} />
+      <div className='absolute inset-0 bg-black/40' onClick={isLoading ? undefined : onCancel} />
       <div className='relative w-80 rounded-lg border border-neutral-200 bg-white p-5 shadow-xl dark:border-neutral-700 dark:bg-neutral-900'>
         <h3 className='mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100'>{title}</h3>
         <p className='mb-4 text-xs text-neutral-600 dark:text-neutral-400'>{description}</p>
