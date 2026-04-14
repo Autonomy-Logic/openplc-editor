@@ -1,12 +1,17 @@
 import { exec, spawn } from 'node:child_process'
+import crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+
+// strucpp is loaded lazily because it uses ESM features (import.meta) that are
+// incompatible with Jest's CJS transform. The actual import happens in handleCompileSTtoCpp().
+type StrucppCompile = typeof import('strucpp')['compile']
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
@@ -58,7 +63,8 @@ class CompilerModule {
 
   xml2stBinaryPath: string
 
-  iec2cBinaryPath: string
+  strucppRuntimeDir: string
+  strucppLibsDir: string
 
   // ############################################################################
   // =========================== Static properties ==============================
@@ -106,7 +112,8 @@ class CompilerModule {
 
     this.xml2stBinaryPath = this.#constructXml2stBinaryPath()
 
-    this.iec2cBinaryPath = this.#constructIec2cBinaryPath()
+    this.strucppRuntimeDir = this.#constructStrucppRuntimeDir()
+    this.strucppLibsDir = this.#constructStrucppLibsDir()
   }
 
   // ############################################################################
@@ -177,8 +184,23 @@ class CompilerModule {
     return join(this.binaryDirectoryPath, 'xml2st', CompilerModule.HOST_PLATFORM === 'darwin' ? 'xml2st' : '')
   }
 
-  #constructIec2cBinaryPath(): string {
-    return join(this.binaryDirectoryPath, 'iec2c')
+  #constructStrucppRuntimeDir(): string {
+    return join(
+      CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
+      CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
+      'strucpp',
+      'runtime',
+      'include',
+    )
+  }
+
+  #constructStrucppLibsDir(): string {
+    return join(
+      CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
+      CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
+      'strucpp',
+      'libs',
+    )
   }
 
   async #getBoardRuntime(board: string) {
@@ -254,26 +276,15 @@ class CompilerModule {
     return { success: true, data: VersionString }
   }
 
-  async checkIec2cAvailability(): Promise<MethodsResult<string>> {
-    let binaryPath = this.iec2cBinaryPath
-    const executeCommand = promisify(exec)
-
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
+  checkStrucppAvailability(): MethodsResult<string> {
+    try {
+      // Lazy import — strucpp uses ESM features incompatible with Jest's CJS transform
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getVersion } = require('strucpp') as { getVersion: () => string }
+      return { success: true, data: getVersion() }
+    } catch {
+      throw new Error('STruC++ not available. Run "npm run setup:binaries" to install it.')
     }
-    // INFO: We use the version command to check if the iec2c is available.
-    // INFO: If the command is not available, it will throw an error.
-    const { stdout, stderr } = await executeCommand(`"${binaryPath}" -v`)
-    if (stderr) {
-      throw new Error(`IEC2C not available: ${stderr}`)
-    }
-
-    const firstLine = stdout.split('\n')[0] // Get the first line of the output
-    const lineAsArray = firstLine.split(' ') // Split the line by spaces
-    const version = lineAsArray[lineAsArray.length - 1] // The version is the last element in the array
-
-    return { success: true, data: version }
   }
 
   async getArduinoInstalledCores() {
@@ -334,42 +345,56 @@ class CompilerModule {
   // INFO: This method is a placeholder for copying static files.
   async copyStaticFiles(compilationPath: string, boardTarget: string): Promise<MethodsResult<string>> {
     let result: MethodsResult<string> = { success: false }
-    let filesToCopy: Promise<void>[] = []
-
-    const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
-    const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'Baremetal')
-    const staticMatIECLibraryFilesPath = join(this.sourceDirectoryPath, 'MatIEC', 'lib')
-
     const sourceTargetFolderPath = join(compilationPath, 'src')
 
+    const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
+    const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'StrucppBaremetal')
+
+    let filesToCopy: Promise<void>[]
+
     if (boardTarget !== 'openplc-compiler') {
+      // Arduino targets: copy Arduino support files, STruC++ headers, and sketch
       filesToCopy = [
         cp(staticArduinoFilesPath, sourceTargetFolderPath, { recursive: true }),
-        cp(staticMatIECLibraryFilesPath, join(sourceTargetFolderPath, 'lib'), { recursive: true }),
+        this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
         cp(staticBaremetalFilesPath, join(compilationPath, 'examples', 'Baremetal'), { recursive: true }),
       ]
     } else {
-      // INFO: If the board target is OpenPLC, we copy the MatIEC library files and C/C++ block templates.
+      // OpenPLC Runtime targets: copy STruC++ headers and C/C++ block templates
       const cBlocksHeaderPath = join(this.sourceDirectoryPath, 'arduino', 'c_blocks.h')
-      const cBlocksCodePath = join(this.sourceDirectoryPath, 'Baremetal', 'c_blocks_code.cpp')
+      const cBlocksCodePath = join(this.sourceDirectoryPath, 'StrucppBaremetal', 'c_blocks_code.cpp')
       filesToCopy = [
-        cp(staticMatIECLibraryFilesPath, join(sourceTargetFolderPath, 'lib'), { recursive: true }),
+        this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
         cp(cBlocksHeaderPath, join(sourceTargetFolderPath, 'c_blocks.h')),
         cp(cBlocksCodePath, join(sourceTargetFolderPath, 'c_blocks_code.cpp')),
       ]
     }
 
     try {
-      // Implement the logic to copy static build files.
-      const results = await Promise.all(filesToCopy)
-      if (results.every((res) => res === undefined)) {
-        result = { success: true, data: 'Static build files available' }
-      }
+      await Promise.all(filesToCopy)
+      result = { success: true, data: 'Static build files available' }
     } catch (error) {
       throw new Error(`Error copying static files: ${error as string}`)
     }
 
     return result
+  }
+
+  /**
+   * Copy STruC++ C++ runtime headers to the target directory.
+   * These headers are downloaded by scripts/download-binaries.ts from the STruC++ release.
+   */
+  private async copyStrucppRuntimeHeaders(targetDir: string): Promise<void> {
+    const runtimeDir = this.strucppRuntimeDir
+    try {
+      await fs.access(runtimeDir)
+    } catch {
+      throw new Error(
+        `STruC++ runtime headers not found at ${runtimeDir}. Run "npm run setup:binaries" to download them.`,
+      )
+    }
+    const files = await readdir(runtimeDir)
+    await Promise.all(files.map((file) => cp(join(runtimeDir, file), join(targetDir, file))))
   }
 
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
@@ -422,111 +447,60 @@ class CompilerModule {
     })
   }
 
-  async handleTranspileSTtoC(
-    generatedSTFilePath: string,
+  async handleCompileSTtoCpp(
+    sourceTargetFolderPath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
-  ) {
-    // As the iec2c binary generates the C files in the same directory as the binary location,
-    // we need to set the target directory for the output files accordingly with the generated ST file path.
-    const targetDirectoryForOutput = join(generatedSTFilePath.replace('program.st', ''))
+  ): Promise<{ md5Hash: string }> {
+    const stFilePath = join(sourceTargetFolderPath, 'program.st')
+    const stSource = await readFile(stFilePath, { encoding: 'utf8' })
 
-    let binaryPath = this.iec2cBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
+    handleOutputData('Compiling Structured Text to C++ with STruC++...', 'info')
+
+    // Lazy import to avoid ESM/CJS issues at module load time (Jest compatibility)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { compile: strucppCompile } = require('strucpp') as { compile: StrucppCompile }
+
+    const libsDir = this.strucppLibsDir
+    let libraryPaths: string[] = []
+    try {
+      await fs.access(libsDir)
+      libraryPaths = [libsDir]
+    } catch {
+      // No libs directory available, compile without libraries
     }
 
-    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['-f', '-p', '-i', '-l', generatedSTFilePath], {
-        cwd: targetDirectoryForOutput,
-      })
-
-      let stderrData = ''
-
-      // INFO: We use the iec2c command to transpile the ST file to C.
-      executeCommand.stdout?.on('data', (data: Buffer) => {
-        handleOutputData(data)
-      })
-      executeCommand.stderr?.on('data', (data: Buffer) => {
-        stderrData += data.toString()
-      })
-
-      executeCommand.on('close', (code) => {
-        if (code === 0) {
-          handleOutputData(`C files generated at: ${targetDirectoryForOutput}`, 'info')
-          resolve({
-            success: true,
-          })
-        } else {
-          reject(new Error(`iec2c process exited with code ${code}\n${stderrData}`))
-        }
-      })
+    const result = strucppCompile(stSource, {
+      headerFileName: 'generated.hpp',
+      debug: true,
+      lineMapping: true,
+      libraryPaths,
     })
+
+    if (!result.success) {
+      const msgs = result.errors.map((e) => `Line ${e.line}: ${e.message}`).join('\n')
+      throw new Error(`STruC++ compilation failed:\n${msgs}`)
+    }
+
+    for (const warn of result.warnings) {
+      handleOutputData(`Warning at line ${warn.line}: ${warn.message}`, 'info')
+    }
+
+    await writeFile(join(sourceTargetFolderPath, 'generated.cpp'), result.cppCode, { encoding: 'utf8' })
+    await writeFile(join(sourceTargetFolderPath, 'generated.hpp'), result.headerCode, { encoding: 'utf8' })
+
+    handleOutputData(`C++ files generated at: ${sourceTargetFolderPath}`, 'info')
+
+    // Compute MD5 hash directly from the ST source
+    const md5Hash = crypto.createHash('md5').update(stSource).digest('hex')
+    handleOutputData(`Program MD5: ${md5Hash}`, 'info')
+
+    return { md5Hash }
   }
 
-  async handleGenerateDebugFiles(
-    sourceTargetFolderPath: string,
-    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
-  ) {
-    const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st') // Assuming the XML file is named 'program.st'
-    const generatedVARIABLESFilePath = join(sourceTargetFolderPath, 'VARIABLES.csv') // Assuming the VARIABLES file is named 'VARIABLES.csv'
-
-    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = this.#executeXml2st(['--generate-debug', generatedSTFilePath, generatedVARIABLESFilePath])
-
-      let stderrData = ''
-
-      // INFO: We use the xml2st command to generate debug files.
-      executeCommand.stdout?.on('data', (data: Buffer) => {
-        handleOutputData(data)
-      })
-      executeCommand.stderr?.on('data', (data: Buffer) => {
-        stderrData += data.toString()
-      })
-
-      executeCommand.on('close', (code) => {
-        if (code === 0) {
-          handleOutputData(`Debug files generated at: ${sourceTargetFolderPath}`, 'info')
-          resolve({
-            success: true,
-          })
-        } else {
-          reject(new Error(`xml2st process exited with code ${code}\n${stderrData}`))
-        }
-      })
-    })
-  }
-
-  async handleGenerateGlueVars(
-    sourceTargetFolderPath: string,
-    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
-  ) {
-    const generatedLocatedVariablesFilePath = join(sourceTargetFolderPath, 'LOCATED_VARIABLES.h')
-
-    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = this.#executeXml2st(['--generate-gluevars', generatedLocatedVariablesFilePath])
-
-      let stderrData = ''
-
-      executeCommand.stdout?.on('data', (data: Buffer) => {
-        handleOutputData(data)
-      })
-      executeCommand.stderr?.on('data', (data: Buffer) => {
-        stderrData += data.toString()
-      })
-
-      executeCommand.on('close', (code) => {
-        if (code === 0) {
-          handleOutputData(`Glue vars generated at: ${sourceTargetFolderPath}`, 'info')
-          resolve({
-            success: true,
-          })
-        } else {
-          reject(new Error(`xml2st process exited with code ${code}\n${stderrData}`))
-        }
-      })
-    })
-  }
+  // Debug file generation and glue variable generation are no longer needed.
+  // STruC++ generates located variable descriptors (locatedVars[]) in the C++ output,
+  // and the Arduino sketch walks them dynamically for I/O binding.
+  // The debugger will be redesigned in Phase 4.
 
   // TODO: This method is used to update the index of the Arduino core.
   // We should validate if this is necessary and if it works correctly.
@@ -890,34 +864,9 @@ class CompilerModule {
     }
   }
 
-  async handlePatchGeneratedFiles(compilationPath: string, handleOutputData: HandleOutputDataCallback) {
-    const pousCFilePath = join(compilationPath, 'src', 'POUS.c')
-    const res0FilePath = join(compilationPath, 'src', 'Res0.c')
-    const config0FilePath = join(compilationPath, 'src', 'Config0.c')
-
-    const pousCContent = await readFile(pousCFilePath, { encoding: 'utf8' })
-    const patchedPousCContent = `#include "POUS.h"\n#include "Config0.h"\n\n${pousCContent}`
-    await writeFile(pousCFilePath, patchedPousCContent, { encoding: 'utf8' })
-
-    const res0FileContent = await readFile(res0FilePath, { encoding: 'utf8' })
-
-    const patchedRes0FileContent = res0FileContent.replaceAll('#include "POUS.c"', '#include "POUS.h"\n')
-
-    await writeFile(res0FilePath, patchedRes0FileContent, { encoding: 'utf8' })
-    handleOutputData('Required files patched', 'info')
-
-    // Unity build: Rename .c files to .inc so Arduino build system doesn't compile them separately.
-    // These files are #included by glueVars.c as a single compilation unit to avoid
-    // duplicate static function definitions that cause binary size bloat.
-    const pousIncFilePath = join(compilationPath, 'src', 'POUS.inc')
-    const res0IncFilePath = join(compilationPath, 'src', 'Res0.inc')
-    const config0IncFilePath = join(compilationPath, 'src', 'Config0.inc')
-
-    await fs.rename(pousCFilePath, pousIncFilePath)
-    await fs.rename(res0FilePath, res0IncFilePath)
-    await fs.rename(config0FilePath, config0IncFilePath)
-    handleOutputData('Files renamed to .inc for unity build', 'info')
-  }
+  // handlePatchGeneratedFiles is no longer needed.
+  // STruC++ generates clean C++ files (generated.cpp + generated.hpp) that don't require
+  // patching or unity build renaming.
 
   async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
     let result: MethodsResult<string> = { success: false }
@@ -1451,12 +1400,12 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Checking tools availability...' })
 
     try {
-      const [arduinoCliCheckResult, iec2cCheckResult] = await Promise.all([
+      const [arduinoCliCheckResult, strucppCheckResult] = await Promise.all([
         this.checkArduinoCliAvailability(),
-        this.checkIec2cAvailability(),
+        Promise.resolve(this.checkStrucppAvailability()),
       ])
       _mainProcessPort.postMessage({
-        message: `Arduino CLI available at version ${arduinoCliCheckResult.data}\nIEC2C available at version ${iec2cCheckResult.data}`,
+        message: `Arduino CLI available at version ${arduinoCliCheckResult.data}\nSTruC++ available at version ${strucppCheckResult.data}`,
       })
     } catch (_error) {
       _mainProcessPort.postMessage({
@@ -1531,76 +1480,12 @@ class CompilerModule {
       return
     }
 
-    // Step 4: Generate C code from ST
-    const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st') // Assuming the ST file is named 'program.st'
+    // Step 4: Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      await this.handleTranspileSTtoC(generatedSTFilePath, (data, logLevel) => {
+      const { md5Hash } = await this.handleCompileSTtoCpp(sourceTargetFolderPath, (data, logLevel) => {
         _mainProcessPort.postMessage({ logLevel, message: data })
       })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    // Step 5: Generate debug files
-    try {
-      await this.handleGenerateDebugFiles(sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    try {
-      const fs = await import('fs/promises')
-      const programStPath = join(sourceTargetFolderPath, 'program.st')
-      const programStContent = await fs.readFile(programStPath, 'utf-8')
-      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
-      const match = programStContent.match(md5Pattern)
-
-      if (match && match[1]) {
-        buildMD5Hash = match[1]
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: `Extracted MD5 hash from program.st: ${buildMD5Hash}`,
-        })
-      } else {
-        _mainProcessPort.postMessage({
-          logLevel: 'warn',
-          message: 'Could not extract MD5 from program.st, continuing without MD5',
-        })
-        buildMD5Hash = null
-      }
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error extracting MD5 from program.st: ${error as string}`,
-      })
-      buildMD5Hash = null
-    }
-
-    // Step 6: Generate glue vars
-    try {
-      await this.handleGenerateGlueVars(sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      buildMD5Hash = md5Hash
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
@@ -1986,25 +1871,7 @@ class CompilerModule {
       return
     }
 
-    // Step 7: Handle patch files
-    try {
-      await this.handlePatchGeneratedFiles(compilationPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    // Step 8: Handle core installation
+    // Step 5: Handle core installation
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling core installation...' })
     try {
       await this.handleCoreInstallation(boardCore, (data, logLevel) => {
@@ -2175,9 +2042,9 @@ class CompilerModule {
     })
 
     try {
-      const iec2cCheckResult = await this.checkIec2cAvailability()
+      const strucppCheckResult = this.checkStrucppAvailability()
       _mainProcessPort.postMessage({
-        message: `IEC2C available at version ${iec2cCheckResult.data}`,
+        message: `STruC++ available at version ${strucppCheckResult.data}`,
       })
     } catch (_error) {
       _mainProcessPort.postMessage({
@@ -2244,43 +2111,9 @@ class CompilerModule {
       return
     }
 
-    const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st')
+    // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      await this.handleTranspileSTtoC(generatedSTFilePath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping debug compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    try {
-      await this.handleGenerateDebugFiles(sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping debug compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    try {
-      await this.handleGenerateGlueVars(sourceTargetFolderPath, (data, logLevel) => {
+      await this.handleCompileSTtoCpp(sourceTargetFolderPath, (data, logLevel) => {
         _mainProcessPort.postMessage({ logLevel, message: data })
       })
     } catch (error) {

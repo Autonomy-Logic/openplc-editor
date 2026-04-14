@@ -92,9 +92,9 @@ function decodeMessage(raw: unknown): string {
 function inferStage(message: string): CompileProgressEvent['stage'] {
   const lower = message.toLowerCase()
   if (lower.includes('xml') || lower.includes('generating xml')) return 'xml'
+  // C++ check before ST — STruC++ messages like "Compiling ST to C++" contain both keywords
+  if (lower.includes('struc++') || lower.includes('c++') || lower.includes('c code')) return 'c'
   if (lower.includes('structured text') || lower.includes('.st') || lower.includes('transpil')) return 'st'
-  if (lower.includes('iec2c') || lower.includes('generating c') || lower.includes('c code')) return 'c'
-  if (lower.includes('glue')) return 'glue'
   if (lower.includes('arduino') || lower.includes('compiling') || lower.includes('uploading')) return 'arduino'
   return 'st'
 }

@@ -42,7 +42,8 @@ describe('CompilerModule', () => {
     expect(typeof compilerModule.arduinoCliConfigurationFilePath).toBe('string')
     expect(Array.isArray(compilerModule.arduinoCliBaseParameters)).toBe(true)
     expect(typeof compilerModule.xml2stBinaryPath).toBe('string')
-    expect(typeof compilerModule.iec2cBinaryPath).toBe('string')
+    expect(typeof compilerModule.strucppRuntimeDir).toBe('string')
+    expect(typeof compilerModule.strucppLibsDir).toBe('string')
   })
 
   it('getHostHardwareInfo should return a string containing hardware info', () => {

@@ -156,14 +156,10 @@ describe('inferStage', () => {
     expect(inferStage('Transpiling program')).toBe('st')
   })
 
-  it('detects C stage', () => {
-    expect(inferStage('Running iec2c compiler')).toBe('c')
+  it('detects C/C++ stage', () => {
+    expect(inferStage('Compiling Structured Text to C++ with STruC++')).toBe('c')
     expect(inferStage('Generating C code')).toBe('c')
-    expect(inferStage('Generating c code output')).toBe('c')
-  })
-
-  it('detects glue stage', () => {
-    expect(inferStage('Generating glue variables')).toBe('glue')
+    expect(inferStage('C++ files generated at: /tmp/build')).toBe('c')
   })
 
   it('detects arduino stage', () => {

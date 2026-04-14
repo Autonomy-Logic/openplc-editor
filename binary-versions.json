@@ -3,10 +3,6 @@
     "version": "v4.0.3",
     "repository": "Autonomy-Logic/xml2st"
   },
-  "matiec": {
-    "version": "v4.0.11",
-    "repository": "Autonomy-Logic/matiec"
-  },
   "strucpp": {
     "version": "v0.2.4",
     "repository": "Autonomy-Logic/STruCpp"
