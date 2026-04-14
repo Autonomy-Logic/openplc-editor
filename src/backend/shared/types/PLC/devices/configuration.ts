@@ -16,7 +16,7 @@ const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A
 const BYTE_MAC_ADDRESS_REGEX = /^(?:0x[0-9a-f]{2}\s*,\s*){5}0x[0-9a-f]{2}$/i
 
 const deviceConfigurationSchema = z.object({
-  deviceBoard: z.string().default('Simulator'),
+  deviceBoard: z.string().default('OpenPLC Simulator'),
   communicationPort: z.string().default(''),
   runtimeIpAddress: z.string().optional(),
   compileOnly: z.boolean().default(false),
