@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { shallow } from 'zustand/shallow'
 
-import { useOpenPLCStore } from '../store'
+import { openPLCStoreBase } from '../store'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,7 +20,7 @@ export interface DebugVariableState {
 
 /** Subscribe only to the global debugger-visible flag. */
 export function useIsDebuggerVisible(): boolean {
-  return useOpenPLCStore(useCallback((s) => s.workspace.isDebuggerVisible, []))
+  return openPLCStoreBase(useCallback((s) => s.workspace.isDebuggerVisible, []))
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ export function useIsDebuggerVisible(): boolean {
  * returned string means unchanged keys skip re-render even when a Map reference changes.
  */
 export function useDebugVariableValue(compositeKey: string): string | undefined {
-  return useOpenPLCStore(
+  return openPLCStoreBase(
     useCallback(
       (s) => s.workspace.debugBoolValues.get(compositeKey) ?? s.workspace.debugNonBoolValues.get(compositeKey),
       [compositeKey],
@@ -43,17 +43,17 @@ export function useDebugVariableValue(compositeKey: string): string | undefined 
 
 /** Whether a variable is currently forced. */
 export function useIsVariableForced(compositeKey: string): boolean {
-  return useOpenPLCStore(useCallback((s) => s.workspace.debugForcedVariables.has(compositeKey), [compositeKey]))
+  return openPLCStoreBase(useCallback((s) => s.workspace.debugForcedVariables.has(compositeKey), [compositeKey]))
 }
 
 /** The forced boolean value (true = forced high, false = forced low). */
 export function useForcedValue(compositeKey: string): boolean | undefined {
-  return useOpenPLCStore(useCallback((s) => s.workspace.debugForcedVariables.get(compositeKey), [compositeKey]))
+  return openPLCStoreBase(useCallback((s) => s.workspace.debugForcedVariables.get(compositeKey), [compositeKey]))
 }
 
 /** The protocol index for force/release transport. */
 export function useDebugVariableIndex(compositeKey: string): number | undefined {
-  return useOpenPLCStore(useCallback((s) => s.workspace.debugVariableIndexes.get(compositeKey), [compositeKey]))
+  return openPLCStoreBase(useCallback((s) => s.workspace.debugVariableIndexes.get(compositeKey), [compositeKey]))
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ export function useDebugVariableIndex(compositeKey: string): number | undefined 
  * four values actually changes — not on every polling cycle.
  */
 export function useDebugValue(compositeKey: string): DebugVariableState {
-  return useOpenPLCStore(
+  return openPLCStoreBase(
     useCallback(
       (s) => ({
         value: s.workspace.debugBoolValues.get(compositeKey) ?? s.workspace.debugNonBoolValues.get(compositeKey),
@@ -86,15 +86,15 @@ export function useDebugValue(compositeKey: string): DebugVariableState {
 
 /** BOOL values Map — for canvas containers that only need BOOL for edge coloring. */
 export function useDebugBoolValuesMap(): Map<string, string> {
-  return useOpenPLCStore(useCallback((s) => s.workspace.debugBoolValues, []))
+  return openPLCStoreBase(useCallback((s) => s.workspace.debugBoolValues, []))
 }
 
 /** Non-BOOL values Map — for display panels that need non-BOOL values (charts, monaco, sidebar). */
 export function useDebugNonBoolValuesMap(): Map<string, string> {
-  return useOpenPLCStore(useCallback((s) => s.workspace.debugNonBoolValues, []))
+  return openPLCStoreBase(useCallback((s) => s.workspace.debugNonBoolValues, []))
 }
 
 /** Full forced Map — use only in container components that need to iterate all keys. */
 export function useDebugForcedVariablesMap(): Map<string, boolean> {
-  return useOpenPLCStore(useCallback((s) => s.workspace.debugForcedVariables, []))
+  return openPLCStoreBase(useCallback((s) => s.workspace.debugForcedVariables, []))
 }

@@ -1,7 +1,7 @@
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
 import { useProject, useSystem } from '../../../middleware/shared/providers'
-import { useOpenPLCStore } from '../../store'
+import { openPLCStoreBase } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
 import { cn } from '../../utils/cn'
 import { ResolutionWarning } from '../_atoms/resolution-warning-message'
@@ -25,9 +25,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const system = useSystem()
   const projectPort = useProject()
   const [showComponent, setShowComponent] = useState(true)
-  const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
-  const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
-  const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
+  const modals = openPLCStoreBase(useCallback((s) => s.modals, []))
+  const OS = openPLCStoreBase(useCallback((s) => s.workspace.systemConfigs.OS, []))
+  const { setSystemConfigs, setRecent } = openPLCStoreBase(useCallback((s) => s.workspaceActions, []))
 
   // Theme initialization - applies dark class before DisplayMenu mounts
   useEffect(() => {

@@ -71,17 +71,17 @@ export interface UseDebugPollingOptions {
 
 export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void {
   const debuggerPort = useDebugger()
-  const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
+  const isDebuggerVisible = openPLCStoreBase((state) => state.workspace.isDebuggerVisible)
   const { workspaceActions, consoleActions } = useOpenPLCStore()
 
   // Targeted selectors for active-index cache invalidation.
   // These only change on user interaction (not every poll cycle).
-  const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
-  const editorName = useOpenPLCStore(useCallback((s) => s.editor.meta.name, []))
-  const debugForcedVariables = useOpenPLCStore(useCallback((s) => s.workspace.debugForcedVariables, []))
-  const debugExpandedNodes = useOpenPLCStore(useCallback((s) => s.workspace.debugExpandedNodes, []))
-  const debugGraphList = useOpenPLCStore(useCallback((s) => s.workspace.debugGraphList, []))
-  const fbSelectedInstance = useOpenPLCStore(useCallback((s) => s.workspace.fbSelectedInstance, []))
+  const pous = openPLCStoreBase(useCallback((s) => s.project.data.pous, []))
+  const editorName = openPLCStoreBase(useCallback((s) => s.editor.meta.name, []))
+  const debugForcedVariables = openPLCStoreBase(useCallback((s) => s.workspace.debugForcedVariables, []))
+  const debugExpandedNodes = openPLCStoreBase(useCallback((s) => s.workspace.debugExpandedNodes, []))
+  const debugGraphList = openPLCStoreBase(useCallback((s) => s.workspace.debugGraphList, []))
+  const fbSelectedInstance = openPLCStoreBase(useCallback((s) => s.workspace.fbSelectedInstance, []))
 
   const pollingIntervalRef = useRef<number | null>(null)
   const staleCheckRef = useRef<number | null>(null)

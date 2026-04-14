@@ -5,7 +5,7 @@ import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { PauseIcon } from '../../../assets/icons/interface/Pause'
 import { PlayIcon } from '../../../assets/icons/interface/Play'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../hooks/use-debug-value'
-import { useOpenPLCStore } from '../../../store'
+import { openPLCStoreBase } from '../../../store'
 import { Button } from '../../_atoms/buttons/default'
 import { LineChart } from '../../_molecules/charts/line-chart'
 
@@ -27,8 +27,8 @@ const Debugger = ({ graphList }: DebuggerData) => {
   const sessionStartRef = useRef<number>(Date.now())
   const [elapsedMs, setElapsedMs] = useState(0)
 
-  const debugTick = useOpenPLCStore(useCallback((s) => s.workspace.debugTick, []))
-  const debugDataStale = useOpenPLCStore(useCallback((s) => s.workspace.debugDataStale, []))
+  const debugTick = openPLCStoreBase(useCallback((s) => s.workspace.debugTick, []))
+  const debugDataStale = openPLCStoreBase(useCallback((s) => s.workspace.debugDataStale, []))
   const debugBoolValues = useDebugBoolValuesMap()
   const debugNonBoolValues = useDebugNonBoolValuesMap()
 
