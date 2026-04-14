@@ -291,31 +291,14 @@ transport layer since it treats the PDU as opaque bytes.
 ### Protocol Detection: v1 vs v2
 
 The `has_strucpp_debug()` check is sufficient because:
-- MatIEC .so files: don't export `strucpp_get_program_count` -> v1
-- STruC++ .so files: always export it -> v2
-
-There's no ambiguity. The editor and runtime must agree on the protocol version. The editor
-detects it from `debug-map.json` (v2) vs `debug.c` (v1). The runtime detects it from
-symbol availability. Both detection methods are deterministic and consistent.
+Since MatIEC is fully removed, there is no v1/v2 protocol detection needed. All .so files
+are STruC++ and export the hierarchical debug symbols.
 
 ### Removing the Flat-Index Table
 
-After Phase 7 is deployed, the `flat_var_table[]` in `v4_compat.cpp` becomes dead code for
-runtime targets (it's still used by the Arduino path in Phase 5's backward-compatible debug
-layer). It can be conditionally compiled:
-
-```cpp
-#ifndef OPENPLC_RUNTIME_V4_NATIVE_DEBUG
-// Flat index table for backward compatibility
-static const FlatVarEntry flat_var_table[] = { ... };
-extern "C" uint16_t get_var_count(void) { ... }
-// ...
-#endif
-```
-
-The old flat-index symbols (`get_var_count`, `get_var_addr`, etc.) should still be exported
-for backward compatibility with older runtimes, but they can also use the hierarchical
-internal implementation to avoid maintaining two code paths.
+After Phase 7 is deployed, the `flat_var_table[]` in `v4_compat.cpp` can be removed entirely
+since the runtime natively uses the hierarchical symbols. The old flat-index functions
+(`get_var_count`, `get_var_addr`, etc.) are deleted.
 
 ### Buffer Size Limits
 
@@ -345,9 +328,7 @@ per batch for RTU, 200+ for TCP/WebSocket).
    - Verify only requested elements are transmitted
    - Verify no memory overflow in debug handler
 
-4. **MatIEC fallback**: Upload a MatIEC-compiled program
-   - Verify v1 debug handler is used
-   - Verify all existing debug functionality works
+4. **No legacy remnants**: Verify no flat-index debug functions remain in the .so
 
 5. **Mixed editor/runtime versions**: Old editor + new runtime, new editor + old runtime
    - Verify graceful fallback to the common protocol version

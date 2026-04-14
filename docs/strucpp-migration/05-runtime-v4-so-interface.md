@@ -250,7 +250,7 @@ extern "C" char plc_program_md5[] = "/* generated MD5 hash */";
 ### Key Design: Flat-to-Hierarchical Index Table
 
 The runtime's `debug_handler.c` uses flat indices (`get_var_addr(idx)`). The `flat_var_table[]`
-provides backward compatibility:
+provides this flat interface on top of the hierarchical STruC++ structures:
 
 - One entry per variable (NOT per array element) -- the scalability fix
 - Flat index = sequential numbering across all program variables
@@ -300,27 +300,16 @@ if [ -f "core/generated/generated.cpp" ]; then
         "$BUILD_DIR/c_blocks_code.o" \
         -lpthread
 
-else
-    echo "Compiling MatIEC generated code..."
-    # ... existing MatIEC compilation (unchanged)
-fi
 ```
 
-## Step 6.3: Update Editor Upload Path
+The MatIEC fallback branch is removed. All programs compile as C++17.
+
+## Step 5.3: Update Editor Upload Path
 
 **File to modify**: `src/backend/editor/compiler/compiler-module.ts`
 
-When compiling for Runtime v4 with STruC++, the uploaded zip contains different files:
+The uploaded zip contains STruC++ files only:
 
-### Old zip contents (MatIEC):
-```
-Config0.c, Config0.h, Res0.c, POUS.c, POUS.h
-debug.c, glueVars.c, LOCATED_VARIABLES.h
-c_blocks.h, c_blocks_code.cpp
-lib/            (MatIEC headers)
-```
-
-### New zip contents (STruC++):
 ```
 generated.cpp, generated.hpp
 v4_compat.cpp
@@ -332,9 +321,6 @@ iec_var.hpp, iec_types.hpp, iec_located.hpp   (copied from resources/strucpp/run
 The headers are copied from `resources/strucpp/runtime/include/` (downloaded by
 `scripts/download-binaries.ts`, NOT stored in the repo). They are strictly version-coupled
 with the STruC++ compiler that produced the generated code.
-
-The `handleUploadToRuntime` method is updated to package the correct files based on
-`compiler_backend`.
 
 ## Step 6.4: Configuration File Generation
 
@@ -358,18 +344,7 @@ The C-linkage shim provides a clean adapter pattern:
 Runtime (C) --dlsym--> C-linkage symbols --calls--> STruC++ C++ classes
 ```
 
-This allows the runtime to work with both MatIEC (C) and STruC++ (C++) programs without
-any conditional compilation or runtime detection in the C code.
-
-### Debug Variable Count Reduction
-
-With MatIEC: `get_var_count()` returns the expanded count (30,000+ for large projects).
-With STruC++: `get_var_count()` returns the un-expanded count (maybe 500 for the same project).
-
-The runtime's `debug_handler.c` uses `get_var_count()` to validate index bounds. Since the
-new count is smaller, all existing bounds checks remain valid.
-
-The editor knows the correct count from `debug-map.json` and only requests valid indices.
+This allows the runtime to load STruC++ C++ programs without rewriting its core C code.
 
 ### Thread Safety of Static Configuration
 
@@ -395,8 +370,7 @@ calls `config_init__` from the PLC cycle thread, which is single-threaded at tha
    - Write to a Modbus register
    - Verify the PLC program reads the correct value
 
-5. **Backward compatibility**: Upload a MatIEC-compiled program
-   - Verify runtime still loads and runs it correctly
+5. **No MatIEC remnants**: Verify compile.sh has no MatIEC fallback path
 
 ## Files Created/Modified
 

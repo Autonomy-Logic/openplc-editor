@@ -118,11 +118,12 @@ Phase 1 (STruC++ dependency infrastructure)
 
 ## Key Architectural Decisions
 
-### 1. Dual Pipeline Coexistence
+### 1. Full Replacement (No MatIEC Coexistence)
 
-Both MatIEC and STruC++ pipelines coexist in the compiler module. A `"compiler_backend"` field
-in `hals.json` per board determines which pipeline is used. This allows gradual migration --
-boards can be switched one at a time.
+This branch is a clean break from MatIEC. The existing iec2c pipeline is fully removed and
+replaced by STruC++. There is no `"compiler_backend"` routing, no dual pipeline, no backward
+compatibility with MatIEC-generated code. All boards compile through STruC++ exclusively.
+MatIEC-specific code (`config_init__`, `config_run__`, `glueVars`, `debug.c`, etc.) is deleted.
 
 ### 2. Static Arduino Runtime (No Glue Code Generator)
 

@@ -169,9 +169,6 @@ void load_plc_program(PluginManager* pm) {
 
             pthread_create(&plc_task_threads[i], NULL, plc_task_thread, args);
         }
-    } else {
-        // LEGACY: Single-thread model (MatIEC or single-task STruC++)
-        pthread_create(&plc_thread, NULL, plc_cycle_thread, pm);
     }
 }
 ```
@@ -374,14 +371,10 @@ Only the highest-priority task (task 0) updates the `plc_heartbeat` atomic varia
 watchdog monitors this to detect PLC stalls. If any task thread crashes, the crash handler
 sets `plc_state = PLC_STATE_ERROR`, causing all task threads to exit their loops.
 
-### Backward Compatibility
+### Single-Task Optimization
 
-The `has_strucpp_per_task()` check ensures:
-- MatIEC .so files (no `strucpp_get_task_count` symbol): use single-thread model
-- STruC++ single-task .so files: use single-thread model (1 task, no benefit from threading)
-- STruC++ multi-task .so files: use per-task threading
-
-The single-thread model remains the default and is fully preserved.
+For single-task projects (only one task in the configuration), the runtime spawns one thread.
+This is functionally identical to the old single-thread model but uses the same code path.
 
 ## Testing Strategy
 
@@ -407,14 +400,11 @@ The single-thread model remains the default and is fully preserved.
 5. **Single-task fallback**: Upload a single-task program
    - Verify single-thread model is used (no per-task threads)
 
-6. **MatIEC fallback**: Upload a MatIEC-compiled program
-   - Verify single-thread model is used
-
 ## Files Created/Modified
 
 | File | Action |
 |------|--------|
-| `src/backend/shared/utils/PLC/generate-v4-compat.ts` | Modified -- add per-task symbols |
+| `v4_compat.cpp` | Modified -- add per-task symbols |
 | `openplc-runtime/core/src/plc_app/plc_state_manager.c` | Modified -- per-task thread spawning |
 | `openplc-runtime/core/src/plc_app/plc_state_manager.h` | Modified -- new data structures |
 | `openplc-runtime/core/src/plc_app/image_tables.c` | Modified -- resolve new symbols |

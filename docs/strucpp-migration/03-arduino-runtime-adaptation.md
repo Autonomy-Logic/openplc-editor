@@ -220,17 +220,17 @@ void plcCycleTask() {
 | Modbus | Unchanged | Unchanged |
 | HAL | Unchanged | Unchanged |
 
-## Step 3.2: Adapt openplc.h
+## Step 3.2: Clean Up openplc.h
 
 The current `openplc.h` declares MatIEC-specific functions (`config_init__`, `config_run__`,
-`glueVars`, `updateTime`). For STruC++, these are no longer needed -- the sketch handles
-everything directly. The sketch needs a version of `openplc.h` that only has:
+`glueVars`, `updateTime`, `common_ticktime__`). These are all removed since the sketch handles
+everything directly through STruC++ runtime types.
+
+What remains in `openplc.h`:
 - IEC type definitions (`IEC_BOOL`, `IEC_INT`, etc.)
 - Buffer pointer declarations (`bool_input`, `int_output`, etc.)
 - Buffer size macros (`MAX_DIGITAL_INPUT`, etc.)
 - HAL function declarations (`hardwareInit`, `updateInputBuffers`, `updateOutputBuffers`)
-
-The MatIEC-specific declarations should be guarded or removed in the STruC++ variant.
 
 ## Design Notes
 
@@ -251,13 +251,12 @@ Rewriting all HAL files for STruC++ types would be a massive effort with no bene
 sketch's `bindLocatedVars()` populates these same buffer pointers from STruC++ `LocatedVar`
 descriptors. The HAL files see no difference.
 
-### Memory Layout: IECVar vs MatIEC __IEC_type_p
+### Memory Layout: IECVar<T>
 
-| MatIEC | STruC++ |
-|--------|---------|
-| `__IEC_INT_p { int16_t value; int16_t fvalue; uint8_t flags; }` = 5 bytes | `IECVar<int16_t> { int16_t value_; bool forced_; int16_t forced_value_; }` = 5 bytes |
+Each variable is wrapped in `IECVar<T>`:
+`IECVar<int16_t> { int16_t value_; bool forced_; int16_t forced_value_; }` = 5 bytes.
 
-Memory overhead is essentially the same.
+This is comparable to the old MatIEC `__IEC_INT_p` (5 bytes). No significant memory overhead.
 
 ### Dynamic Memory in discoverTasks()
 
@@ -295,6 +294,6 @@ instance (pointer + divisor).
 | File | Action |
 |------|--------|
 | `resources/sources/StrucppBaremetal/StrucppBaremetal.ino` | **New** -- static Arduino sketch |
-| `resources/sources/arduino/openplc.h` | Modified -- guard or remove MatIEC-specific declarations |
+| `resources/sources/arduino/openplc.h` | Modified -- remove MatIEC-specific declarations |
 
 Note: Runtime headers come from `resources/strucpp/runtime/include/` (downloaded in Phase 1).

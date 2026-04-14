@@ -17,8 +17,9 @@ how the runtime actually operates with STruC++ generated code.
    favor of a simpler static runtime approach. The debugger will likely benefit from similar
    simplification once we see the full picture.
 
-3. **MatIEC debugger still works**: For boards using `compiler_backend: "matiec"`, the existing
-   debug.c / VARIABLES.csv / Modbus protocol v1 debugger continues to function unchanged.
+3. **Clean slate**: Since MatIEC is fully removed, the debugger can be designed from scratch
+   without backward compatibility constraints. No need to support the old debug.c format or
+   flat-index protocol.
 
 ## Known Requirements
 

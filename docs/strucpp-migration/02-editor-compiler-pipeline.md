@@ -2,15 +2,14 @@
 
 ## Goal
 
-Wire STruC++ `compile()` into `compiler-module.ts` so that when a board uses the STruC++
-backend, the editor reads `program.st`, compiles it to C++, and writes `generated.cpp` +
-`generated.hpp` to the build directory. This validates that the code generation pipeline
-works end-to-end.
+Replace the iec2c (MatIEC) compilation step in `compiler-module.ts` with STruC++ `compile()`.
+The editor reads `program.st`, compiles it to C++, and writes `generated.cpp` + `generated.hpp`
+to the build directory. The existing MatIEC pipeline is removed entirely -- no coexistence,
+no routing, no backward compatibility.
 
 At this stage, the `arduino-cli` compilation step will fail because the Arduino runtime
 (sketch, adapted `openplc.h`) is not yet ready for STruC++ output. That's expected -- the
-goal is to verify C++ code generation, not a compilable firmware. Phase 3 addresses the
-runtime.
+goal is to verify C++ code generation. Phase 3 addresses the runtime.
 
 ## Prerequisites
 
@@ -20,86 +19,67 @@ runtime.
 
 **`src/backend/editor/compiler/compiler-module.ts`** (~2,348 lines)
 
-This is the main compilation orchestrator. The STruC++ pipeline adds new methods alongside
-the existing MatIEC ones; both coexist.
+The existing MatIEC pipeline steps (iec2c invocation, xml2st debug/glue generation) are
+replaced by STruC++ calls. Dead MatIEC code is removed.
 
-## Step 2.1: Pipeline Routing
+## Step 2.1: Remove MatIEC Pipeline
 
-Add a `"compiler_backend"` field to `hals.json` board entries. The entry point
-`compileProgram()` checks this field to route to the appropriate pipeline:
-
-```typescript
-async compileProgram(args, _mainProcessPort, mainProcessBridge) {
-  const boardTarget = args[1] as string
-  const boardEntry = this.halsContent[boardTarget]
-
-  if (boardEntry?.compiler_backend === 'strucpp') {
-    return this.compileArduinoWithSTruCpp(args, _mainProcessPort, mainProcessBridge)
-  }
-  // ... existing MatIEC pipeline (unchanged)
-}
-```
-
-**File to modify**: `resources/sources/boards/hals.json`
-
-Add `"compiler_backend": "strucpp"` to boards being migrated. Boards without this field (or
-with `"matiec"`) continue using the existing pipeline.
+Delete or replace the following methods/steps in `compiler-module.ts`:
+- `handleTranspileSTtoC()` (iec2c binary invocation) -- replaced by `handleCompileSTtoCpp()`
+- `handleGenerateDebugFiles()` (xml2st --generate-debug) -- removed (debugger is Phase 4)
+- `handleGenerateGlueVars()` (xml2st --generate-gluevars) -- removed (sketch handles I/O binding)
+- `handlePatchGeneratedFiles()` (renames .c to .inc for unity build) -- removed (not needed for C++)
+- MD5 extraction from program.st comments -- replaced by direct hash of program.st content
+- References to `iec2c` binary path resolution -- removed
+- MatIEC lib/ directory copying -- replaced by STruC++ runtime header copying
 
 ## Step 2.2: New STruC++ Compilation Pipeline
 
-### Method: `compileArduinoWithSTruCpp()`
+The `compileProgram()` method is refactored to use STruC++ directly:
 
 ```typescript
-private async compileArduinoWithSTruCpp(args, _mainProcessPort, mainProcessBridge) {
-  const projectData = args[0] as PLCProjectData
-  const boardTarget = args[1] as string
-  const projectPath = args[2] as string
-  const compileOnly = args[3] as boolean
+// The pipeline steps:
+try {
+  // === STEP 1: Create directories (unchanged) ===
+  this.createBasicDirectories(projectPath, boardTarget)
 
-  const compilationPath = path.join(projectPath, 'build', boardTarget, 'src')
+  // === STEP 2: Generate XML from JSON (unchanged) ===
+  await this.handleGenerateXMLfromJSON(projectData, compilationPath)
 
-  try {
-    // === STEP 1: Create directories (unchanged) ===
-    this.createBasicDirectories(projectPath, boardTarget)
+  // === STEP 3: xml2st --generate-st (unchanged) ===
+  await this.handleTranspileXMLtoST(compilationPath)
+  // Result: program.st in compilationPath
 
-    // === STEP 2: Generate XML from JSON (unchanged) ===
-    await this.handleGenerateXMLfromJSON(projectData, compilationPath)
+  // === STEP 4: Copy STruC++ runtime headers to build dir ===
+  this.copyStrucppRuntimeHeaders(compilationPath)
 
-    // === STEP 3: xml2st --generate-st (unchanged) ===
-    await this.handleTranspileXMLtoST(compilationPath)
-    // Result: program.st in compilationPath
+  // === STEP 5: Compile ST to C++ with STruC++ (replaces iec2c) ===
+  this.handleCompileSTtoCpp(compilationPath)
 
-    // === STEP 4: Copy STruC++ runtime headers to build dir (NEW) ===
-    this.copyStrucppRuntimeHeaders(compilationPath)
+  // === STEP 6: Copy Arduino sketch + static files ===
+  this.copyStrucppSketchFiles(compilationPath)
 
-    // === STEP 5: Compile ST to C++ with STruC++ (NEW - replaces iec2c) ===
-    this.handleCompileSTtoCpp(compilationPath)
+  // === STEP 7: Generate C++ blocks header/code (unchanged) ===
+  await this.handleGenerateCBlocksHeader(projectData, compilationPath)
+  await this.handleGenerateCBlocksCode(projectData, compilationPath)
 
-    // === STEP 6: Copy Arduino sketch + static files (NEW) ===
-    this.copyStrucppSketchFiles(compilationPath)
+  // === STEP 8: Copy HAL file (unchanged) ===
+  await this.handleGenerateArduinoCppFile(boardTarget, compilationPath)
 
-    // === STEP 7: Generate C++ blocks header/code (unchanged) ===
-    await this.handleGenerateCBlocksHeader(projectData, compilationPath)
-    await this.handleGenerateCBlocksCode(projectData, compilationPath)
+  // === STEP 9: Generate defines.h (unchanged in structure) ===
+  await this.handleGenerateDefinitionsFile(projectData, boardTarget, compilationPath)
 
-    // === STEP 8: Copy HAL file (unchanged) ===
-    await this.handleGenerateArduinoCppFile(boardTarget, compilationPath)
+  // === STEP 10: Arduino compilation (with -std=gnu++17) ===
+  await this.handleCoreInstallation(boardTarget)
+  await this.handleLibraryInstallation(boardTarget, compilationPath)
+  await this.handleCompileArduinoProgram(boardTarget, compilationPath, compileOnly)
 
-    // === STEP 9: Generate defines.h (unchanged in structure) ===
-    await this.handleGenerateDefinitionsFile(projectData, boardTarget, compilationPath)
-
-    // === STEP 10: Arduino compilation (adds -std=gnu++17) ===
-    await this.handleCoreInstallation(boardTarget)
-    await this.handleLibraryInstallation(boardTarget, compilationPath)
-    await this.handleCompileArduinoProgram(boardTarget, compilationPath, compileOnly)
-
-    // === STEP 11: Upload (unchanged) ===
-    if (!compileOnly) {
-      await this.handleUploadProgram(boardTarget, compilationPath)
-    }
-  } catch (error) {
-    // error handling...
+  // === STEP 11: Upload (unchanged) ===
+  if (!compileOnly) {
+    await this.handleUploadProgram(boardTarget, compilationPath)
   }
+} catch (error) {
+  // error handling...
 }
 ```
 
@@ -128,7 +108,6 @@ Copies the static Arduino sketch and OpenPLC support files to the build director
 ```typescript
 private copyStrucppSketchFiles(compilationPath: string): void {
   const sketchDir = path.join(this.resourcesPath, 'sources', 'StrucppBaremetal')
-  // Copy all files from the StrucppBaremetal directory
   for (const file of fs.readdirSync(sketchDir)) {
     fs.copyFileSync(path.join(sketchDir, file), path.join(compilationPath, file))
   }
@@ -165,51 +144,34 @@ private handleCompileSTtoCpp(compilationPath: string): void {
 
 ### C++17 Compilation Flag
 
-The `handleCompileArduinoProgram` method must ensure `-std=gnu++17` is in the CXX flags
-when `compiler_backend === 'strucpp'`. This can be done by:
-- Adding `"-std=gnu++17"` to `cxx_flags` in hals.json for each board, or
-- Injecting it programmatically in the STruC++ pipeline path
+All boards now require `-std=gnu++17`. This is added to `cxx_flags` in `hals.json` for
+every board entry.
 
 ## Step 2.4: hals.json Changes
 
 **File to modify**: `resources/sources/boards/hals.json`
 
-For boards being migrated, add:
-```json
-{
-  "compiler_backend": "strucpp",
-  "cxx_flags": ["-std=gnu++17", "-MMD", "-c"]
-}
-```
+- Add `"cxx_flags": ["-std=gnu++17", "-MMD", "-c"]` to all board entries
+- Remove any MatIEC-specific fields if present
 
-**C++17 support by platform**:
+No `"compiler_backend"` field is needed -- all boards use STruC++ exclusively.
 
-| Platform | GCC Version | C++17 Support |
-|----------|-------------|---------------|
-| Arduino AVR | 7.3+ | Yes (bundled with Arduino IDE 2.x) |
-| ESP32 | 8.4+ (ESP-IDF) | Yes |
-| STM32 | 10+ (STM32duino) | Yes |
-| RP2040 | 10+ (Arduino Mbed) | Yes |
-| SAMD | 7.2+ | Yes |
+## Step 2.5: Clean Up MatIEC References
 
-## Step 2.5: Build Directory Structure
+Remove or update these across the codebase:
+- Binary path resolution for `iec2c` in `compiler-module.ts`
+- `matiec` entry from `binary-versions.json` (no longer downloaded)
+- MatIEC download logic from `scripts/download-binaries.ts`
+- `resources/sources/MatIEC/` directory references
+- Any `#executeIec2cBinaryPath` or similar methods
+- References to `POUS.c`, `Res0.c`, `Config0.c`, `LOCATED_VARIABLES.h`, `glueVars.c`, `debug.c`
 
-### Old (MatIEC):
-```
-build/{boardTarget}/src/
-  plc.xml, program.st
-  lib/                    <- MatIEC runtime headers
-  POUS.c, POUS.h          <- MatIEC output
-  Res0.c, Config0.c, Config0.h
-  LOCATED_VARIABLES.h
-  glueVars.c, debug.c     <- xml2st output
-  VARIABLES.csv
-  c_blocks.h, c_blocks_code.cpp
-  arduino.cpp, defines.h
-  Baremetal.ino
-```
+Note: `matiec` and `iec2c` references in the `binary-versions.json` and download script
+should be removed since they are no longer used. The xml2st binary is still needed for
+XML-to-ST conversion.
 
-### New (STruC++):
+## Step 2.6: Build Directory Structure
+
 ```
 build/{boardTarget}/src/
   plc.xml, program.st
@@ -227,20 +189,19 @@ build/{boardTarget}/src/
 
 1. **Code generation**: Compile a simple ST project through the pipeline
    - Verify `generated.cpp` and `generated.hpp` are produced in the build directory
-   - Verify the generated code contains expected classes (`Configuration_Config0`, program classes)
+   - Verify the generated code contains expected classes (`Configuration_Config0`, programs)
    - The `arduino-cli` step is expected to fail until Phase 3 provides the sketch
 
-2. **Pipeline routing**: Verify MatIEC boards are unaffected
-   - Board without `compiler_backend` field → old pipeline produces `POUS.c`, `Config0.c`, etc.
-   - Board with `compiler_backend: "strucpp"` → new pipeline produces `generated.cpp`, `generated.hpp`
+2. **Error handling**: Invalid ST code → STruC++ errors propagated to the UI console
 
-3. **Error handling**: Invalid ST code → STruC++ errors propagated to the UI console
-
-4. **Regression**: All existing compiler tests pass for MatIEC boards
+3. **No MatIEC remnants**: Verify no references to iec2c, POUS.c, glueVars.c remain in the
+   compilation path
 
 ## Files Created/Modified
 
 | File | Action |
 |------|--------|
-| `src/backend/editor/compiler/compiler-module.ts` | Modified -- add STruC++ pipeline methods |
-| `resources/sources/boards/hals.json` | Modified -- add `compiler_backend` and `cxx_flags` |
+| `src/backend/editor/compiler/compiler-module.ts` | Modified -- replace MatIEC pipeline with STruC++ |
+| `resources/sources/boards/hals.json` | Modified -- add `cxx_flags` to all boards |
+| `binary-versions.json` | Modified -- remove matiec entry |
+| `scripts/download-binaries.ts` | Modified -- remove matiec download logic |
