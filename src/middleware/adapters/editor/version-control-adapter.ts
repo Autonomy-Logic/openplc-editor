@@ -7,7 +7,7 @@
  * so these methods should never be reached at runtime.
  */
 
-import type { VersionControlPort, GraphicalDiffResult } from '../../shared/ports/version-control-port'
+import type { GraphicalDiffResult, VersionControlPort } from '../../shared/ports/version-control-port'
 
 export function createEditorVersionControlAdapter(): VersionControlPort {
   const unsupported = (method: string): never => {
