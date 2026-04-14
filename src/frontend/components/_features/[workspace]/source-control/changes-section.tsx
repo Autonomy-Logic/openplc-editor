@@ -7,9 +7,9 @@ import { useProject, useVersionControl } from '../../../../../middleware/shared/
 import { useOpenPLCStore } from '../../../../store'
 import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
+import { cn } from '../../../../utils/cn'
 import { serializePouToText } from '../../../../utils/PLC/pou-text-serializer'
 import { sanitizePou } from '../../../../utils/save-project'
-import { cn } from '../../../../utils/cn'
 import { toast } from '../../../../utils/toast'
 import { DiscardConfirmationModal } from './modals/discard-confirmation-modal'
 
@@ -625,7 +625,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
                 onToggleFolder={toggleFolderFiles}
                 expandedFolders={expandedFolders}
                 onExpandToggle={toggleExpand}
-              onFileClick={handleFileClick}
+                onFileClick={handleFileClick}
               />
             ))}
           </div>

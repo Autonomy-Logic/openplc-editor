@@ -100,11 +100,7 @@ export interface VersionControlPort {
   ): Promise<{ files: CommitFile[]; parentFiles: CommitFile[]; commit: CommitInfo }>
 
   /** Restore the project to a previous commit state. */
-  restoreCommit(
-    projectId: string,
-    hash: string,
-    branch?: string,
-  ): Promise<{ message: string; restoredCommit: Commit }>
+  restoreCommit(projectId: string, hash: string, branch?: string): Promise<{ message: string; restoredCommit: Commit }>
 
   /** Get pending (uncommitted) changes. */
   getChanges(projectId: string, branch?: string): Promise<{ changes: PendingChange[]; hasChanges: boolean }>

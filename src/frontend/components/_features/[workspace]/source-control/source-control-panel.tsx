@@ -54,9 +54,7 @@ const SourceControlPanel = ({ collapse, defaultSize = 16, projectId }: SourceCon
             )}
           >
             Changes
-            {pendingChangesCount > 0 && (
-              <span className='ml-1 inline-block h-1.5 w-1.5 rounded-full bg-blue-500' />
-            )}
+            {pendingChangesCount > 0 && <span className='ml-1 inline-block h-1.5 w-1.5 rounded-full bg-blue-500' />}
           </button>
           <button
             onClick={() => setActiveView('history')}
