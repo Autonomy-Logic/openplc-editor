@@ -663,9 +663,10 @@ const WorkspaceScreen = () => {
           </ResizablePanelGroup>
         </WorkspaceMainContent>
       </div>
-      {hasVersionControl && projectPath && (
+      {/* TODO: Re-enable branch status bar once branch switching is fully implemented */}
+      {/* {hasVersionControl && projectPath && (
         <BranchStatusBar projectId={projectPath} onBranchSwitch={handleBranchSwitch} />
-      )}
+      )} */}
     </div>
   )
 }

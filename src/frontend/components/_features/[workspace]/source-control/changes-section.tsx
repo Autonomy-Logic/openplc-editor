@@ -250,7 +250,7 @@ function ChangesTreeItem({
       <File className='h-3 w-3 shrink-0 text-neutral-400' />
       <button
         onClick={() => onFileClick(node.path)}
-        className='truncate text-xs text-neutral-700 hover:underline dark:text-neutral-300'
+        className='min-w-0 flex-1 truncate text-left text-xs text-neutral-700 hover:underline dark:text-neutral-300'
       >
         {node.name}
       </button>
