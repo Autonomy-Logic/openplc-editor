@@ -17,6 +17,7 @@ import type { ModalSlice } from '../modal'
 import type { ProjectSlice } from '../project'
 import type { SearchSlice } from '../search'
 import type { TabsSlice } from '../tabs'
+import type { VersionControlSlice } from '../version-control'
 import type { WorkspaceSlice } from '../workspace'
 
 // ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ export type SharedRootState = ProjectSlice &
   FBDFlowSlice &
   LadderFlowSlice &
   HistorySlice &
+  VersionControlSlice &
   SharedSlice
 
 // ---------------------------------------------------------------------------

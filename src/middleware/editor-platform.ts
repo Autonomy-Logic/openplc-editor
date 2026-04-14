@@ -23,6 +23,7 @@ import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
 import { createEditorSystemAdapter } from './adapters/editor/system-adapter'
 import { createEditorThemeAdapter } from './adapters/editor/theme-adapter'
+import { createEditorVersionControlAdapter } from './adapters/editor/version-control-adapter'
 import { createEditorWindowAdapter } from './adapters/editor/window-adapter'
 import { EDITOR_CAPABILITIES } from './shared/ports/platform-capabilities'
 import type { PlatformPorts } from './shared/providers/types'
@@ -52,5 +53,6 @@ export const editorPorts: PlatformPorts = {
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
+  versionControl: createEditorVersionControlAdapter(),
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

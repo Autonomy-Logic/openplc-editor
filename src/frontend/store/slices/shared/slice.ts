@@ -355,6 +355,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().historyActions.clearHistory()
       getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
+      getState().versionControlActions.clearVersionControlState()
     },
 
     handleOpenProjectResponse: (data) => {

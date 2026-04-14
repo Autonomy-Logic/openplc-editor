@@ -8,9 +8,10 @@ type GraphicalEditorProps = ComponentPropsWithoutRef<'div'> & {
   name: string
   language: 'ld' | 'sfc' | 'fbd'
   path: string
+  readOnly?: boolean
 }
 
-const GraphicalEditor = ({ language }: GraphicalEditorProps) => {
+const GraphicalEditor = ({ language, readOnly }: GraphicalEditorProps) => {
   const editorComponents = {
     sfc: SfcEditor,
     fbd: FbdEditor,
@@ -20,10 +21,11 @@ const GraphicalEditor = ({ language }: GraphicalEditorProps) => {
   const EditorComponent = editorComponents[language]
 
   return (
-    <div className='h-full w-full overflow-y-auto'>
-      {/* <div className='h-[1800px]'> */}
+    <div className='relative h-full w-full overflow-y-auto'>
       <EditorComponent />
-      {/* </div> */}
+      {readOnly && (
+        <div className='absolute inset-0 z-10 cursor-not-allowed' title='Read-only: viewing historical commit' />
+      )}
     </div>
   )
 }
