@@ -51,17 +51,21 @@ STruC++ solves both problems:
 ## Revised Pipeline
 
 ```
-                    UNCHANGED                          REPLACED
-                   +----------+                  +------------------+
-project.json ----> |  xml2st  | ----> program.st | STruC++ compile()| ----> generated.cpp
-(via XML gen)      |--generate|                  |                  |       generated.hpp
-                   |   -st    |                  | + glue/debug gen |       generated_glue.hpp
-                   +----------+                  +------------------+       debug-map.json
-                                                         |
-                                                         v
-                                                  arduino-cli / g++
-                                                  (now compiles C++17)
+                    UNCHANGED                    REPLACED
+                   +----------+            +------------------+
+project.json ----> |  xml2st  | --> prog.st| STruC++ compile()| --> generated.cpp
+(via XML gen)      |--generate|            |                  |     generated.hpp
+                   |   -st    |            +------------------+
+                   +----------+                    |
+                                                   v
+                                            arduino-cli / g++
+                                            (now compiles C++17)
 ```
+
+No glue code generator is needed. The Arduino runtime is **static C++ code** that navigates
+STruC++ generated structures dynamically: it walks `locatedVars[]` to bind I/O, walks the
+`Configuration` class to discover tasks and programs, and computes `common_ticktime__` from
+task intervals -- all at runtime, same code for every project.
 
 ## Phase Structure
 
@@ -71,8 +75,8 @@ The migration is organized into 8 phases across two parts:
 
 | Phase | Title | Description |
 |-------|-------|-------------|
-| 1 | [STruC++ Compiler Integration](01-strucpp-compiler-integration.md) | Add STruC++ as dependency, create compile wrapper |
-| 2 | [Arduino Runtime Adaptation](02-arduino-runtime-adaptation.md) | New sketch, glue code, runtime headers |
+| 1 | [STruC++ Compiler Integration](01-strucpp-compiler-integration.md) | Dependency infrastructure: version tracking, download, setup |
+| 2 | [Arduino Runtime Adaptation](02-arduino-runtime-adaptation.md) | Static Arduino sketch navigating STruC++ structures |
 | 3 | [Debugger Variable Access](03-debugger-variable-access.md) | Hierarchical debug system, protocol update |
 | 4 | [Editor Compiler Module](04-editor-compiler-module.md) | Wire new pipeline into compiler-module.ts |
 | 5 | [Editor Frontend Debugger](05-editor-frontend-debugger.md) | Update UI for debug-map.json and hierarchical refs |

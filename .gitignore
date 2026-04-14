@@ -61,6 +61,7 @@ resources/bin/**/iec2iec.exe
 resources/bin/.binary-metadata.json
 resources/bin/**/.binary-metadata.json
 resources/sources/MatIEC/lib/
+resources/strucpp/
 
 # Playwright
 /test-results/
