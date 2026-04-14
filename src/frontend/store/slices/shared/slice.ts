@@ -82,6 +82,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       state.libraryActions.addLibrary(name, type === 'program' ? 'function' : type)
 
+      // Mark project as unsaved
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+
       return { ok: true }
     },
 
@@ -167,6 +170,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.tabsActions.setSelectedTab(name)
       state.editorActions.setEditor(editorModel)
 
+      // Mark project as unsaved
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+
       return { ok: true }
     },
 
@@ -230,6 +236,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.tabsActions.setSelectedTab(name)
       state.editorActions.setEditor(editorModel)
 
+      // Mark project as unsaved
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+
       return { ok: true }
     },
 
@@ -260,6 +269,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.tabsActions.updateTabs({ name, elementType: { type: 'remote-device', protocol } })
       state.tabsActions.setSelectedTab(name)
       state.editorActions.setEditor(editorModel)
+
+      // Mark project as unsaved
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
 
       return { ok: true }
     },
@@ -355,6 +367,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().historyActions.clearHistory()
       getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
+      getState().versionControlActions.clearVersionControlState()
     },
 
     handleOpenProjectResponse: (data) => {

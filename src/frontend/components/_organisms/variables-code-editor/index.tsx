@@ -54,6 +54,8 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode }: Variable
           wordWrap: 'on',
           fontSize: 14,
           tabSize: 2,
+          inlineSuggest: { enabled: false },
+          quickSuggestions: false,
         }}
         theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
       />

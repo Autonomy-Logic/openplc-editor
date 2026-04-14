@@ -168,8 +168,8 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
 
     async openProject(): Promise<ProjectResponse> {
-      // Use file picker to get directory path
-      const pickResult = await window.bridge.pathPicker()
+      // Use open-project file picker (validates project.json exists, no empty-dir check)
+      const pickResult = await window.bridge.openPathPicker()
       if (!pickResult.success || !pickResult.path) {
         return { success: false, error: pickResult.error ?? { title: 'Cancelled', description: 'No project selected' } }
       }

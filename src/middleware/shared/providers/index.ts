@@ -13,6 +13,7 @@ export {
   useSimulator,
   useSystem,
   useTheme,
+  useVersionControl,
   useWindow,
 } from './platform-context'
 export type { PlatformPorts } from './types'

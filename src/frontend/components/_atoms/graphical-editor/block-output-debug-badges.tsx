@@ -1,5 +1,5 @@
 import { useDebugCompositeKey } from '../../../hooks/use-debug-composite-key'
-import { useOpenPLCStore } from '../../../store'
+import { useIsDebuggerVisible } from '../../../hooks/use-debug-value'
 import { DebugValueBadge } from './debug-value-badge'
 
 type BlockOutputDebugBadgesProps = {
@@ -34,9 +34,7 @@ const BlockOutputDebugBadges = ({
   blockWidth,
   connectedOutputNames,
 }: BlockOutputDebugBadgesProps) => {
-  const {
-    workspace: { isDebuggerVisible },
-  } = useOpenPLCStore()
+  const isDebuggerVisible = useIsDebuggerVisible()
   const getCompositeKey = useDebugCompositeKey()
 
   if (!isDebuggerVisible || blockType === 'generic') {

@@ -74,6 +74,15 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
   const { workspaceActions, consoleActions } = useOpenPLCStore()
 
+  // Targeted selectors for active-index cache invalidation.
+  // These only change on user interaction (not every poll cycle).
+  const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+  const editorName = useOpenPLCStore(useCallback((s) => s.editor.meta.name, []))
+  const debugForcedVariables = useOpenPLCStore(useCallback((s) => s.workspace.debugForcedVariables, []))
+  const debugExpandedNodes = useOpenPLCStore(useCallback((s) => s.workspace.debugExpandedNodes, []))
+  const debugGraphList = useOpenPLCStore(useCallback((s) => s.workspace.debugGraphList, []))
+  const fbSelectedInstance = useOpenPLCStore(useCallback((s) => s.workspace.fbSelectedInstance, []))
+
   const pollingIntervalRef = useRef<number | null>(null)
   const staleCheckRef = useRef<number | null>(null)
   const lastResponseTimestampRef = useRef<number>(0)
@@ -86,6 +95,9 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   // Full leaf index→metadata map — computed once when debugger starts.
   const allLeavesRef = useRef<Map<number, { compositeKey: string; type: string }> | null>(null)
 
+  // Cached active indexes — rebuilt only when invalidation triggers change.
+  const activeIndexesRef = useRef<number[] | null>(null)
+
   // Cache for diagram/source-visible variable scan results.
   // Keyed by {pouName, language, fbContextKey}. Invalidated on POU/FB switch.
   const visibleVarsCacheRef = useRef<{
@@ -94,6 +106,12 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     fbContextKey: string
     keys: Set<string>
   } | null>(null)
+
+  // Invalidate active index cache when any input changes
+  useEffect(() => {
+    activeIndexesRef.current = null
+    visibleVarsCacheRef.current = null
+  }, [pous, editorName, debugForcedVariables, debugExpandedNodes, debugGraphList, fbSelectedInstance])
 
   /** Build the full leaf metadata map from all debug trees (once per session). */
   const getAllLeaves = useCallback(() => {
@@ -122,15 +140,17 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     const allLeaves = getAllLeaves()
     if (allLeaves.size === 0) return
 
-    // Build the filtered set of indexes to poll this tick
-    const state = openPLCStoreBase.getState()
-    const { activeIndexes, cacheResult } = buildActiveIndexSet(state, allLeaves, visibleVarsCacheRef.current)
-
-    // Update the diagram/source cache if it changed
-    if (cacheResult !== visibleVarsCacheRef.current) {
-      visibleVarsCacheRef.current = cacheResult
+    // Use cached active indexes — only rebuild when invalidation triggers change
+    if (!activeIndexesRef.current) {
+      const state = openPLCStoreBase.getState()
+      const { activeIndexes, cacheResult } = buildActiveIndexSet(state, allLeaves, visibleVarsCacheRef.current)
+      if (cacheResult !== visibleVarsCacheRef.current) {
+        visibleVarsCacheRef.current = cacheResult
+      }
+      activeIndexesRef.current = activeIndexes
     }
 
+    const activeIndexes = activeIndexesRef.current
     if (activeIndexes.length === 0) return
 
     let currentBatchSize = batchSizeRef.current
@@ -166,14 +186,18 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
     // Update stale data tracking
     lastResponseTimestampRef.current = Date.now()
-    workspaceActions.setDebugDataStale(false)
+    if (openPLCStoreBase.getState().workspace.debugDataStale) {
+      workspaceActions.setDebugDataStale(false)
+    }
 
     // Parse response buffer → variable values
     let itemsProcessed = 0
 
     if (result.data && result.data.length > 0) {
       const responseBuffer = new Uint8Array(result.data)
-      const newValues = new Map<string, string>()
+      const { debugBoolValues: currentBool, debugNonBoolValues: currentNonBool } = openPLCStoreBase.getState().workspace
+      const changedBool = new Map<string, string>()
+      const changedNonBool = new Map<string, string>()
       let bufferOffset = 0
 
       for (const index of batch) {
@@ -183,12 +207,17 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         const typeSize = getTypeSizeByName(meta.type)
         if (bufferOffset + typeSize > responseBuffer.length) break
 
+        const isBool = meta.type === 'BOOL'
+
         try {
           const { value, bytesRead } = parseValueByTypeName(responseBuffer, bufferOffset, meta.type)
-          newValues.set(meta.compositeKey, value)
+          const current = isBool ? currentBool : currentNonBool
+          if (current.get(meta.compositeKey) !== value) {
+            ;(isBool ? changedBool : changedNonBool).set(meta.compositeKey, value)
+          }
           bufferOffset += bytesRead
         } catch {
-          newValues.set(meta.compositeKey, 'ERR')
+          ;(isBool ? changedBool : changedNonBool).set(meta.compositeKey, 'ERR')
           bufferOffset += typeSize
         }
 
@@ -198,8 +227,9 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         if (result.lastIndex !== undefined && index >= result.lastIndex) break
       }
 
-      // Merge new values into the store
-      workspaceActions.setDebugVariableValues(newValues)
+      // Only write to store when values actually changed
+      if (changedBool.size > 0) workspaceActions.setDebugBoolValues(changedBool)
+      if (changedNonBool.size > 0) workspaceActions.setDebugNonBoolValues(changedNonBool)
     }
 
     // Advance offset for next poll cycle (wraps around)
@@ -226,6 +256,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       batchSizeRef.current = isSimulatorBoard ? RTU_BATCH_SIZE : DEFAULT_BATCH_SIZE
       batchOffsetRef.current = 0
       lastResponseTimestampRef.current = 0
+      activeIndexesRef.current = null
       visibleVarsCacheRef.current = null
 
       const pollIntervalMs = isSimulatorBoard ? SIMULATOR_POLL_INTERVAL_MS : DEFAULT_POLL_INTERVAL_MS
