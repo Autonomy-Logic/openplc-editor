@@ -16,7 +16,7 @@ import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { logger } from '../../../backend/editor/services'
-import { getProjectPath } from '../../../backend/editor/utils'
+import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/utils'
 import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
@@ -475,6 +475,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:create', this.handleProjectCreate)
     this.registerHandle('project:open', this.handleProjectOpen)
     this.registerHandle('project:path-picker', this.handleProjectPathPicker)
+    this.registerHandle('project:open-path-picker', this.handleOpenProjectPathPicker)
     this.registerHandle('project:write-files', this.handleWriteProjectFiles)
     this.registerHandle('project:save-file', this.handleFileSave)
     this.registerHandle('project:open-by-path', this.handleProjectOpenByPath)
@@ -582,6 +583,18 @@ class MainProcessBridge implements MainIpcModule {
     try {
       if (windowManager) {
         const res = await getProjectPath(windowManager)
+        return res
+      }
+      logger.error('Window object not defined')
+    } catch (error) {
+      logger.error('Error getting project path: ' + getErrorMessage(error))
+    }
+  }
+  handleOpenProjectPathPicker = async (_event: IpcMainInvokeEvent) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getOpenProjectPath(windowManager)
         return res
       }
       logger.error('Window object not defined')
