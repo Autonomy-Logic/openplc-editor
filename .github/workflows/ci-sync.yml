@@ -19,12 +19,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check for cross-repo token
+        id: token-check
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set. Skipping sync check (expected on fork PRs)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+
       - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
         uses: actions/checkout@v4
         with:
           path: editor
 
       - name: Checkout web repo (target branch)
+        if: steps.token-check.outputs.skip == 'false'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -35,7 +49,7 @@ jobs:
         id: checkout-web-target
 
       - name: Checkout web repo (main fallback)
-        if: steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -44,11 +58,12 @@ jobs:
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Warn about branch fallback
-        if: steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
         run: |
           echo "::warning::Web repo does not have branch '${{ github.event.pull_request.base.ref }}'. Fell back to 'main'."
 
       - name: Compare surfaces against target branch
+        if: steps.token-check.outputs.skip == 'false'
         id: compare-target
         run: |
           set +e
@@ -76,7 +91,7 @@ jobs:
           fi
 
       - name: Find matching web PRs
-        if: steps.compare-target.outputs.match == 'False'
+        if: steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False'
         id: find-prs
         env:
           GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
@@ -103,7 +118,7 @@ jobs:
           fi
 
       - name: Check web PRs for sync
-        if: steps.compare-target.outputs.match == 'False' && steps.find-prs.outputs.pr_count != '0'
+        if: steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False' && steps.find-prs.outputs.pr_count != '0'
         id: check-prs
         run: |
           PR_JSON=$(cat /tmp/web-prs.json)
@@ -149,7 +164,7 @@ jobs:
           done
 
       - name: Report result
-        if: always()
+        if: always() && steps.token-check.outputs.skip == 'false'
         run: |
           MATCH="${{ steps.compare-target.outputs.match }}"
           MATCHED_PR="${{ steps.check-prs.outputs.matched_pr }}"
