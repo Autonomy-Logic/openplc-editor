@@ -1,19 +1,19 @@
-# Phase 2: Arduino Runtime C++ Adaptation
+# Phase 3: Arduino Runtime Adaptation
 
 ## Goal
 
-Create a static Arduino sketch that works with STruC++ generated C++ code. The sketch
-navigates STruC++ runtime structures dynamically -- it walks `locatedVars[]` for I/O binding,
-walks the `Configuration` class for task discovery and scheduling, and computes
+Create a static Arduino sketch that works with the STruC++ generated C++ files produced by
+Phase 2. The sketch navigates STruC++ runtime structures dynamically -- it walks `locatedVars[]`
+for I/O binding, walks the `Configuration` class for task discovery and scheduling, and computes
 `common_ticktime__` from task intervals. The same sketch code works for every project.
 
-No glue code generator is needed. No per-project code generation beyond what STruC++ already
-produces (`generated.cpp` + `generated.hpp`).
+After this phase, the full pipeline works end-to-end: `program.st` → `compile()` →
+`generated.cpp` + `generated.hpp` → `arduino-cli` → firmware binary.
 
 ## Prerequisites
 
 - Phase 1 complete (STruC++ dependency infrastructure)
-- STruC++ runtime headers available at `resources/strucpp/runtime/include/`
+- Phase 2 complete (compiler pipeline generates `generated.cpp` + `generated.hpp`)
 
 ## Key STruC++ Runtime Types
 
@@ -71,16 +71,7 @@ struct LocatedVar {
 The generated code always names the configuration class `Configuration_Config0` (OpenPLC
 always uses `Config0` as the configuration name -- this is not user-configurable).
 
-## Step 2.1: STruC++ Runtime Headers
-
-The C++ runtime headers are **NOT** stored in this repository. They are downloaded alongside
-the STruC++ compiler by `scripts/download-binaries.ts` (see Phase 1) and placed at
-`resources/strucpp/runtime/include/`. This directory is `.gitignore`'d.
-
-At compile time, the compiler module copies these headers to the build directory alongside
-the generated `.cpp`/`.hpp` files.
-
-## Step 2.2: Create New Arduino Sketch
+## Step 3.1: Create New Arduino Sketch
 
 **New file**: `resources/sources/StrucppBaremetal/StrucppBaremetal.ino`
 
@@ -229,7 +220,7 @@ void plcCycleTask() {
 | Modbus | Unchanged | Unchanged |
 | HAL | Unchanged | Unchanged |
 
-### What Changes in openplc.h
+## Step 3.2: Adapt openplc.h
 
 The current `openplc.h` declares MatIEC-specific functions (`config_init__`, `config_run__`,
 `glueVars`, `updateTime`). For STruC++, these are no longer needed -- the sketch handles
@@ -240,36 +231,6 @@ everything directly. The sketch needs a version of `openplc.h` that only has:
 - HAL function declarations (`hardwareInit`, `updateInputBuffers`, `updateOutputBuffers`)
 
 The MatIEC-specific declarations should be guarded or removed in the STruC++ variant.
-
-## Step 2.3: C++17 Compilation Flag
-
-**File to modify**: `resources/sources/boards/hals.json`
-
-Add `-std=gnu++17` to CXX flags and `"compiler_backend": "strucpp"` field per board:
-
-```json
-{
-  "Arduino Uno": {
-    "compiler": "arduino-cli",
-    "core": "arduino:avr",
-    "platform": "arduino:avr:uno",
-    "source": "uno_leonardo_nano_micro_zero.cpp",
-    "cxx_flags": ["-std=gnu++17", "-MMD", "-c"],
-    "compiler_backend": "strucpp",
-    ...
-  }
-}
-```
-
-**C++17 support by platform**:
-
-| Platform | GCC Version | C++17 Support |
-|----------|-------------|---------------|
-| Arduino AVR | 7.3+ | Yes (bundled with Arduino IDE 2.x) |
-| ESP32 | 8.4+ (ESP-IDF) | Yes |
-| STM32 | 10+ (STM32duino) | Yes |
-| RP2040 | 10+ (Arduino Mbed) | Yes |
-| SAMD | 7.2+ | Yes |
 
 ## Design Notes
 
@@ -312,16 +273,21 @@ instance (pointer + divisor).
 
 ## Testing Strategy
 
-1. **Minimal project test**: Single program, one digital output (%QX0.0)
-   - Verify `bool_output[0][0]` is bound to the variable's `raw_ptr()`
-   - Compile with arduino-cli for Simulator target
+1. **End-to-end compile**: Simple ST project through the full pipeline
+   - Phase 2 generates `generated.cpp` and `generated.hpp`
+   - This phase's sketch + adapted `openplc.h` make `arduino-cli` succeed
+   - Verify firmware binary is produced
 
-2. **Multi-task test**: Two tasks at T#20ms and T#40ms
+2. **Simulator test**: Run on the ATmega2560 simulator
+   - Verify scan cycle runs
+   - Verify located variables are bound to I/O buffers
+
+3. **Multi-task test**: Two tasks at T#20ms and T#40ms
    - Verify GCD computation: `common_ticktime__ = 20000000`
    - Verify divisors: `[1, 2]`
    - Verify task1 runs every cycle, task2 every other cycle
 
-3. **HAL compatibility test**: Compile with each major HAL file
+4. **HAL compatibility test**: Compile with each major HAL file
    - Verify no compilation errors with STruC++ C++17 code
 
 ## Files Created/Modified
@@ -329,7 +295,6 @@ instance (pointer + divisor).
 | File | Action |
 |------|--------|
 | `resources/sources/StrucppBaremetal/StrucppBaremetal.ino` | **New** -- static Arduino sketch |
-| `resources/sources/boards/hals.json` | Modified -- add cxx_flags, compiler_backend |
+| `resources/sources/arduino/openplc.h` | Modified -- guard or remove MatIEC-specific declarations |
 
-Note: Runtime headers come from `resources/strucpp/runtime/include/` (downloaded, Phase 1).
-No glue code generator. No per-project code generation.
+Note: Runtime headers come from `resources/strucpp/runtime/include/` (downloaded in Phase 1).

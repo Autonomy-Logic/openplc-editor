@@ -32,7 +32,7 @@ STruC++ solves both problems:
 | XML generation from project JSON | Unchanged |
 | `arduino-cli` compilation/upload | Unchanged (now compiles C++ instead of C) |
 | HAL files (`resources/sources/hal/*.cpp`) | Unchanged (same buffer pointer interface) |
-| Modbus slave communication | Unchanged (debug handler functions updated) |
+| Modbus slave communication | Unchanged (debug handler functions updated later) |
 | Frontend project data handling | Unchanged |
 | POU preprocessing (Python/C++ wrappers) | Unchanged |
 
@@ -41,11 +41,10 @@ STruC++ solves both problems:
 | Old Component | New Component |
 |---------------|---------------|
 | `iec2c` binary (ST to C) | STruC++ `compile()` (ST to C++17) |
-| `xml2st --generate-debug` (debug.c) | New debug-map.json from STruC++ metadata |
-| `xml2st --generate-gluevars` (glueVars.c) | New `generated_glue.hpp` from LocatedVar descriptors |
+| `xml2st --generate-debug` (debug.c) | Deferred -- redesigned in Phase 4 |
+| `xml2st --generate-gluevars` (glueVars.c) | Not needed -- sketch walks `locatedVars[]` dynamically |
 | MatIEC lib/ headers | STruC++ runtime headers (header-only C++17) |
 | `Baremetal.ino` (C integration) | `StrucppBaremetal.ino` (C++ integration) |
-| Flat debug_vars[] array | Hierarchical (program_idx, var_idx) addressing |
 | Single `config_run__(tick)` | Per-program `run()` with GCD task scheduler |
 
 ## Revised Pipeline
@@ -69,48 +68,53 @@ task intervals -- all at runtime, same code for every project.
 
 ## Phase Structure
 
-The migration is organized into 8 phases across two parts:
+Implementation follows this order -- code generation first, then the runtime that consumes it.
 
 ### Part A: Arduino Target (Primary Focus)
 
 | Phase | Title | Description |
 |-------|-------|-------------|
 | 1 | [STruC++ Compiler Integration](01-strucpp-compiler-integration.md) | Dependency infrastructure: version tracking, download, setup |
-| 2 | [Arduino Runtime Adaptation](02-arduino-runtime-adaptation.md) | Static Arduino sketch navigating STruC++ structures |
-| 3 | [Debugger Variable Access](03-debugger-variable-access.md) | Hierarchical debug system, protocol update |
-| 4 | [Editor Compiler Module](04-editor-compiler-module.md) | Wire new pipeline into compiler-module.ts |
-| 5 | [Editor Frontend Debugger](05-editor-frontend-debugger.md) | Update UI for debug-map.json and hierarchical refs |
+| 2 | [Editor Compiler Pipeline](02-editor-compiler-pipeline.md) | Wire `compile()` into compiler-module.ts, generate C++ from ST |
+| 3 | [Arduino Runtime Adaptation](03-arduino-runtime-adaptation.md) | Static sketch that navigates STruC++ structures dynamically |
+| 4 | [Debugger](04-debugger.md) | Deferred -- redesign when runtime is stable |
 
 ### Part B: OpenPLC Runtime v4 (Secondary)
 
 | Phase | Title | Description |
 |-------|-------|-------------|
-| 6 | [Runtime .so Interface](06-runtime-v4-so-interface.md) | C-linkage compatibility shims for existing runtime |
-| 7 | [Thread-Per-Task Model](07-runtime-v4-thread-per-task.md) | Per-task pthreads instead of round-robin |
-| 8 | [Runtime Debug Handler](08-runtime-v4-debug-handler.md) | Native hierarchical debug in runtime |
+| 5 | [Runtime .so Interface](05-runtime-v4-so-interface.md) | C-linkage compatibility shims for existing runtime |
+| 6 | [Thread-Per-Task Model](06-runtime-v4-thread-per-task.md) | Per-task pthreads instead of round-robin |
+| 7 | [Runtime Debug Handler](07-runtime-v4-debug-handler.md) | Native hierarchical debug in runtime |
+
+### Rationale for Phase Order
+
+**Phase 2 before Phase 3**: We wire the compilation pipeline first so that STruC++ generates
+`generated.cpp` and `generated.hpp` from `program.st`. The arduino-cli compilation will fail
+at this point (the Arduino sketch isn't ready), but we can validate that the C++ code generation
+works correctly. This gives us concrete output to design the Arduino runtime against.
+
+**Phase 4 deferred**: The debugger is complex and benefits from being designed after the
+runtime is working. By the time we reach Phase 4, we'll have a better understanding of what
+the runtime actually needs and can design a cleaner debugger approach.
 
 ## Dependency Graph
 
 ```
-Phase 1 (STruC++ compiler wrapper)
+Phase 1 (STruC++ dependency infrastructure)
   |
-  +---> Phase 2 (Arduino glue generation + new sketch)
+  +---> Phase 2 (Editor compiler pipeline -- generates C++)
   |       |
-  |       +---> Phase 3 (Debug arrays + protocol)
+  |       +---> Phase 3 (Arduino runtime -- compiles and runs C++)
   |               |
-  |               +---> Phase 4 (Compiler module wiring)
-  |                       |
-  |                       +---> Phase 5 (Frontend debugger)
+  |               +---> Phase 4 (Debugger -- deferred)
   |
-  +---> Phase 6 (v4_compat.cpp)
+  +---> Phase 5 (Runtime v4 .so interface)
           |
-          +---> Phase 7 (Thread-per-task)
+          +---> Phase 6 (Thread-per-task)
                   |
-                  +---> Phase 8 (Runtime debug handler)
+                  +---> Phase 7 (Runtime v4 debug handler)
 ```
-
-The Arduino path (Phases 1-5) and Runtime v4 path (Phases 6-8) share only Phase 1.
-After Phase 1 is complete, both paths can proceed independently.
 
 ## Key Architectural Decisions
 
@@ -120,24 +124,24 @@ Both MatIEC and STruC++ pipelines coexist in the compiler module. A `"compiler_b
 in `hals.json` per board determines which pipeline is used. This allows gradual migration --
 boards can be switched one at a time.
 
-### 2. IECVar<T> and Forced Input Handling
+### 2. Static Arduino Runtime (No Glue Code Generator)
+
+The Arduino sketch is fully static C++ code. It navigates STruC++ runtime structures at
+`setup()` time using the same generic algorithm for every project:
+- `Configuration_Config0` (always this name -- hardcoded by OpenPLC)
+- `ConfigurationInstance::get_resources()` → `ResourceInstance::tasks` → `TaskInstance`
+- `locatedVars[]` array for I/O binding
+- `ProgramBase::run()` for execution
+
+No TypeScript code generator produces per-project C++ glue code.
+
+### 3. IECVar<T> and Forced Input Handling
 
 STruC++ wraps all variables in `IECVar<T>` which has built-in forcing:
 - `get()`: returns forced_value_ when forced, value_ otherwise
 - `set(v)`: ignored when forced (prevents program from overwriting forced value)
 - `force(v)`: sets both forced_value_ and value_ (so raw_ptr() readers see it too)
 - `raw_ptr()`: returns &value_ for I/O driver binding
-
-For **input** variables, the HAL writes hardware values directly via `raw_ptr()`, overwriting
-`value_`. Since `get()` returns `forced_value_` when forced, PLC logic is correct. But the debug
-system needs a `strucpp_restore_forced_inputs()` call after HAL reads to ensure `value_` reflects
-the forced state for any readers using `raw_ptr()`.
-
-### 3. No Array Expansion in Debug
-
-The fundamental scalability fix: arrays get ONE entry in the variable descriptor table, not one
-per element. The debugger accesses individual array elements on-demand via offset calculations,
-and the frontend lazily loads array elements when the user expands them in the variable tree.
 
 ### 4. C++17 Requirement
 

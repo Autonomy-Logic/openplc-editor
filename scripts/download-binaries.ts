@@ -370,7 +370,7 @@ async function downloadStrucpp(tool: ToolEntry): Promise<void> {
 
     // Install into node_modules via npm so `import { compile } from 'strucpp'` works
     console.log(`  Installing strucpp ${tool.version} into node_modules...`)
-    execSync(`npm install "${tgzPath}" --save-exact`, {
+    execSync(`npm install "${tgzPath}" --no-save`, {
       cwd: ROOT_DIR,
       stdio: 'pipe',
     })

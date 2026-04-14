@@ -1,19 +1,19 @@
-# Phase 8: Runtime v4 Native Hierarchical Debug
+# Phase 7: Runtime v4 Native Hierarchical Debug
 
 ## Goal
 
 Update the Runtime v4's `debug_handler.c` to natively use hierarchical `(program_idx, var_idx)`
 addressing when communicating with the editor, eliminating the flat-index lookup table from
-Phase 6. This is the final cleanup phase -- it can be done after Phase 6 is stable.
+Phase 5. This is the final cleanup phase -- it can be done after Phase 5 is stable.
 
 ## Prerequisites
 
-- Phase 6 (v4_compat.cpp with working C-linkage debug interface)
-- Phase 5 (editor frontend supporting protocol v2)
+- Phase 5 (v4_compat.cpp with working C-linkage debug interface)
+- Phase 4 (debugger design -- at least the protocol portion)
 
-## Current State After Phase 6
+## Current State After Phase 5
 
-Phase 6 provides backward-compatible debug access through `flat_var_table[]`:
+Phase 5 provides backward-compatible debug access through `flat_var_table[]`:
 
 ```
 Editor (v2 protocol) <--> Editor adapter (converts v2 -> v1) <--> Runtime debug_handler (v1)
@@ -23,7 +23,7 @@ Editor (v2 protocol) <--> Editor adapter (converts v2 -> v1) <--> Runtime debug_
                                                                   STruC++ IECVar variables
 ```
 
-This works but has an unnecessary translation layer. Phase 8 removes it:
+This works but has an unnecessary translation layer. Phase 7 removes it:
 
 ```
 Editor (v2 protocol) <--> Runtime debug_handler (v2) <--> STruC++ IECVar variables
@@ -300,8 +300,8 @@ symbol availability. Both detection methods are deterministic and consistent.
 
 ### Removing the Flat-Index Table
 
-After Phase 8 is deployed, the `flat_var_table[]` in `v4_compat.cpp` becomes dead code for
-runtime targets (it's still used by the Arduino path in Phase 6's backward-compatible debug
+After Phase 7 is deployed, the `flat_var_table[]` in `v4_compat.cpp` becomes dead code for
+runtime targets (it's still used by the Arduino path in Phase 5's backward-compatible debug
 layer). It can be conditionally compiled:
 
 ```cpp
@@ -331,7 +331,7 @@ per batch for RTU, 200+ for TCP/WebSocket).
 
 ## Testing Strategy
 
-1. **v2 protocol end-to-end**: Editor (Phase 5) connects to Runtime v4 (Phase 8)
+1. **v2 protocol end-to-end**: Editor (Phase 4) connects to Runtime v4 (Phase 7)
    - Read scalar variables, verify correct values
    - Read array elements, verify correct values
    - Force a variable, verify persistence

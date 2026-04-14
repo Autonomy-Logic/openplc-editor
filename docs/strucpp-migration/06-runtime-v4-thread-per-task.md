@@ -1,4 +1,4 @@
-# Phase 7: Thread-Per-Task Model for Runtime v4
+# Phase 6: Thread-Per-Task Model for Runtime v4
 
 ## Goal
 
@@ -8,7 +8,7 @@ task's declared priority. This is only for Runtime v4 (Linux); Arduino retains r
 
 ## Prerequisites
 
-- Phase 6 (v4_compat.cpp with C-linkage interface)
+- Phase 5 (v4_compat.cpp with C-linkage interface)
 - Runtime v4 codebase at `~/Documents/Code/openplc-runtime`
 
 ## Current Architecture
@@ -56,9 +56,9 @@ Thread 1 (Task "slow", T#100ms, Priority 5):
     sleep_until(next_100ms)
 ```
 
-## Step 7.1: New .so Symbols
+## Step 6.1: New .so Symbols
 
-**File to modify**: `src/backend/shared/utils/PLC/generate-v4-compat.ts` (from Phase 6)
+**File to modify**: `v4_compat.cpp` (from Phase 5)
 
 Add new optional symbols to `v4_compat.cpp`:
 
