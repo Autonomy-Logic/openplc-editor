@@ -9,7 +9,7 @@ core C code (initially).
 
 ## Prerequisites
 
-- Phase 1 (STruC++ compiler wrapper)
+- Phase 1 (STruC++ dependency infrastructure)
 - Runtime v4 codebase at `~/Documents/Code/openplc-runtime`
 
 ## Current Runtime Symbol Interface
@@ -46,31 +46,19 @@ void (*ext_set_endianness)(uint8_t);
 char *ext_plc_program_md5;
 ```
 
-## Step 6.1: Create v4 Compatibility Code Generator
+## Step 6.1: v4 Compatibility Shim
 
-**New file**: `src/backend/shared/utils/PLC/generate-v4-compat.ts`
+A `v4_compat.cpp` file wraps STruC++ generated code with the C-linkage symbols the runtime
+expects. Following the same philosophy as the Arduino sketch, this should be as static as
+possible, navigating STruC++ structures dynamically rather than requiring per-project code
+generation. However, since the runtime resolves symbols via `dlsym()` with a fixed C ABI,
+a thin shim with `extern "C"` functions is needed.
 
-This module generates `v4_compat.cpp` -- a C++ file that wraps STruC++ generated code with
-the C-linkage symbols the runtime expects.
+Since `Configuration_Config0` is always the configuration name (hardcoded by OpenPLC),
+the shim can be mostly static -- the same approach as the Arduino sketch. It walks
+`ConfigurationInstance::get_resources()` dynamically for task/program discovery.
 
-### Public API
-
-```typescript
-export interface V4CompatInput {
-  /** Configuration class name from STruC++ (e.g., "Config0") */
-  configurationName: string
-  /** Task intervals for GCD scheduler */
-  taskIntervals: TaskInterval[]
-  /** Variable descriptors for debug interface */
-  variableDescriptors: ProgramVarDescriptor[]
-  /** MD5 hash of program.st */
-  md5Hash: string
-}
-
-export function generateV4Compat(input: V4CompatInput): string
-```
-
-### Generated v4_compat.cpp Structure
+### v4_compat.cpp Structure
 
 ```cpp
 // v4_compat.cpp
@@ -414,6 +402,6 @@ calls `config_init__` from the PLC cycle thread, which is single-threaded at tha
 
 | File | Action |
 |------|--------|
-| `src/backend/shared/utils/PLC/generate-v4-compat.ts` | **New** -- v4 compatibility generator |
+| `resources/sources/StrucppRuntime/v4_compat.cpp` | **New** -- static C-linkage shim |
 | `openplc-runtime/scripts/compile.sh` | Modified -- C++17 compilation support |
 | `src/backend/editor/compiler/compiler-module.ts` | Modified -- v4 upload path |

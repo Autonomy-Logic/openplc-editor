@@ -2,269 +2,118 @@
 
 ## Goal
 
-Create the Arduino-side C++ runtime files that bridge STruC++ generated code with the existing
-HAL (Hardware Abstraction Layer) and Modbus infrastructure. The HAL files and Modbus slave
-implementation remain unchanged -- only the glue layer between them and the PLC program changes.
+Create a static Arduino sketch that works with STruC++ generated C++ code. The sketch
+navigates STruC++ runtime structures dynamically -- it walks `locatedVars[]` for I/O binding,
+walks the `Configuration` class for task discovery and scheduling, and computes
+`common_ticktime__` from task intervals. The same sketch code works for every project.
+
+No glue code generator is needed. No per-project code generation beyond what STruC++ already
+produces (`generated.cpp` + `generated.hpp`).
 
 ## Prerequisites
 
-- Phase 1 complete (STruC++ compiler wrapper producing C++ code and metadata)
-- STruC++ runtime headers available for bundling
+- Phase 1 complete (STruC++ dependency infrastructure)
+- STruC++ runtime headers available at `resources/strucpp/runtime/include/`
 
-## Step 2.1: STruC++ Runtime Headers (from downloaded release)
+## Key STruC++ Runtime Types
+
+The Arduino sketch uses these types from `iec_std_lib.hpp` (all in `namespace strucpp`):
+
+**`ProgramBase`** -- base class for all program instances:
+```cpp
+struct ProgramBase {
+    virtual void run() = 0;
+};
+```
+
+**`TaskInstance`** -- describes a task's scheduling and programs:
+```cpp
+struct TaskInstance {
+    const char* name;
+    int64_t interval_ns;        // Execution interval in nanoseconds
+    int32_t priority;           // Higher = more important
+    ProgramBase** programs;     // Array of program instances
+    size_t program_count;
+};
+```
+
+**`ResourceInstance`** -- describes a resource and its tasks:
+```cpp
+struct ResourceInstance {
+    const char* name;
+    const char* processor;
+    TaskInstance* tasks;
+    size_t task_count;
+};
+```
+
+**`ConfigurationInstance`** -- base class for configuration (generated code inherits from this):
+```cpp
+struct ConfigurationInstance {
+    virtual const char* get_name() const = 0;
+    virtual ResourceInstance* get_resources() = 0;
+    virtual size_t get_resource_count() const = 0;
+};
+```
+
+**`LocatedVar`** (from `iec_located.hpp`) -- describes a located variable's I/O binding:
+```cpp
+struct LocatedVar {
+    LocatedArea area;       // Input, Output, or Memory
+    LocatedSize size;       // Bit, Byte, Word, DWord, or LWord
+    uint16_t byte_index;
+    uint8_t bit_index;
+    uint8_t _reserved[3];
+    void* pointer;          // Points to IECVar<T>::value_ via raw_ptr()
+};
+```
+
+The generated code always names the configuration class `Configuration_Config0` (OpenPLC
+always uses `Config0` as the configuration name -- this is not user-configurable).
+
+## Step 2.1: STruC++ Runtime Headers
 
 The C++ runtime headers are **NOT** stored in this repository. They are downloaded alongside
-the STruC++ compiler by `scripts/download-binaries.ts` (see Phase 1 dependency strategy)
-and placed at:
+the STruC++ compiler by `scripts/download-binaries.ts` (see Phase 1) and placed at
+`resources/strucpp/runtime/include/`. This directory is `.gitignore`'d.
 
-```
-resources/strucpp/runtime/include/
-  iec_var.hpp         -- IECVar<T> template (forcing, raw_ptr)
-  iec_types.hpp       -- IEC type aliases (IEC_INT, IEC_BOOL, etc.)
-  iec_located.hpp     -- LocatedVar struct, LocatedArea/LocatedSize enums
-  iec_traits.hpp      -- Type trait helpers
-  iec_array.hpp       -- Array1D, Array2D, Array3D templates
-  iec_string.hpp      -- IECString<N> (stack-allocated, fixed-size)
-  iec_enum.hpp        -- Enum type support
-  iec_struct.hpp      -- Struct base helpers
-  iec_std_lib.hpp     -- IEC standard functions (ABS, MIN, MAX, etc.)
-  iec_time.hpp        -- TIME type operations
-  iec_date.hpp        -- DATE type operations
-  iec_tod.hpp         -- TIME_OF_DAY operations
-  iec_dt.hpp          -- DATE_AND_TIME operations
-  iec_char.hpp        -- CHAR/WCHAR types
-  iec_wstring.hpp     -- WSTRING type
-  iec_memory.hpp      -- Memory operation helpers
-  iec_retain.hpp      -- Retain variable support
-  iec_pointer.hpp     -- POINTER TO support
-  iec_ptr.hpp         -- REF_TO support
-  iec_subrange.hpp    -- Subrange type support
-```
-
-This directory is `.gitignore`'d and populated automatically during setup. The headers are
-**strictly version-coupled** with the STruC++ compiler -- both come from the same release
-artifact (the `.tgz` tarball). Upgrading the version in `binary-versions.json` automatically
-refreshes both the TypeScript compiler in `node_modules` and the C++ headers here.
-
-These are all **header-only** with no platform-specific code. They compile on any C++17
-toolchain including Arduino AVR GCC 7.3+.
-
-This follows the same pattern as MatIEC's `resources/sources/MatIEC/lib/` directory, which
-is also downloaded from the matiec release and `.gitignore`'d.
+At compile time, the compiler module copies these headers to the build directory alongside
+the generated `.cpp`/`.hpp` files.
 
 ## Step 2.2: Create New Arduino Sketch
 
 **New file**: `resources/sources/StrucppBaremetal/StrucppBaremetal.ino`
 
-This sketch mirrors the structure of the existing `Baremetal.ino` (351 lines) but is adapted
-for STruC++ generated C++ code. The key differences are:
+This is a **static** sketch -- the same code for every project. It dynamically discovers
+the project structure from STruC++ runtime types at `setup()` time.
 
-1. Includes `generated.hpp` and `generated_glue.hpp` instead of MatIEC C headers
-2. Calls STruC++ init/run functions instead of `config_init__()` / `config_run__(tick)`
-3. Adds `strucpp_restore_forced_inputs()` after HAL input reads
-4. Uses GCD-based multi-task scheduler
+### Sketch Architecture
 
-### Complete Sketch Structure
+```
+setup():
+  1. Configuration_Config0 constructed (static global)
+  2. Walk locatedVars[] → bind to openplc.h buffer pointers
+  3. Walk config.get_resources() → discover tasks, programs, intervals
+  4. Compute GCD of all task intervals → common_ticktime__
+  5. Compute per-task divisors for round-robin scheduling
+  6. Init hardware (HAL) + Modbus (unchanged from current)
 
-```cpp
-// StrucppBaremetal.ino
-
-// --- STruC++ generated files (per-project) ---
-#include "generated.hpp"         // Program classes, Configuration, LocatedVar[]
-#include "generated_glue.hpp"    // I/O binding, scheduler, debug arrays, MD5
-
-// --- OpenPLC static files (unchanged from current runtime) ---
-#include "openplc.h"             // I/O buffer declarations
-#include "debug.h"               // Debug function declarations (updated for v2)
-#include "ModbusSlave.h"         // Modbus communication
-
-// --- Timing ---
-extern unsigned long long common_ticktime__;  // Defined in generated_glue.hpp
-static unsigned long scan_cycle;
-static unsigned long last_run;
-static uint32_t __tick = 0;
-static bool first_cycle = true;
-
-// =============================================================================
-// SETUP
-// =============================================================================
-void setup() {
-    // 1. Initialize STruC++ Configuration (creates program instances)
-    strucpp_config_init();
-
-    // 2. Bind located variables to I/O buffer pointers
-    strucpp_bind_located_vars();
-
-    // 3. Initialize hardware (HAL -- unchanged)
-    hardwareInit();
-
-    // 4. Configure Modbus (unchanged from current Baremetal.ino)
-    #ifdef MODBUS_ENABLED
-        #if defined(MBSERIAL_IFACE)
-            mbconfig_serial_iface();
-        #elif defined(MBTCP_IFACE)
-            mbconfig_ethernet_iface();
-        #endif
-        init_mbregs();
-        mapEmptyBuffers();
-    #endif
-
-    // 5. Set scan cycle from GCD of task intervals
-    setupCycleDelay(common_ticktime__);
-}
-
-// =============================================================================
-// MAP EMPTY BUFFERS (for Modbus -- identical to current Baremetal.ino)
-// =============================================================================
-void mapEmptyBuffers() {
-    // Exact same implementation as current Baremetal.ino lines 135-191
-    // Maps unmapped I/O to Modbus registers
-    // No changes needed -- uses same openplc.h buffer pointers
-}
-
-// =============================================================================
-// MODBUS TASK (identical to current Baremetal.ino)
-// =============================================================================
-void modbusTask() {
-    // Exact same implementation as current Baremetal.ino lines 193-289
-    // Syncs OpenPLC buffers <-> Modbus registers
-    // No changes needed
-}
-
-// =============================================================================
-// PLC CYCLE TASK
-// =============================================================================
-void plcCycleTask() {
-    // 1. Read hardware inputs into buffers (HAL -- unchanged)
-    updateInputBuffers();
-
-    // 2. Restore forced values for input variables
-    //    (HAL writes directly to raw_ptr(), overwriting forced values)
-    strucpp_restore_forced_inputs();
-
-    // 3. Execute PLC logic via GCD-based multi-task scheduler
-    strucpp_config_run(__tick++);
-
-    // 4. Write buffers to hardware outputs (HAL -- unchanged)
-    updateOutputBuffers();
-
-    // 5. Update time (same logic as current)
-    updateTime();
-}
-
-// =============================================================================
-// SCHEDULER (same structure as current, calls new task function)
-// =============================================================================
-void scheduler() {
-    plcCycleTask();
-
-    #ifdef USE_ARDUINO_SKETCH
-        sketch_loop();
-    #endif
-
-    #ifdef MODBUS_ENABLED
-        modbusTask();
-    #endif
-
-    if (first_cycle) {
-        first_cycle = false;
-        scan_cycle = (unsigned long)(common_ticktime__ / 1000);
-        last_run = micros();
-    }
-}
-
-// =============================================================================
-// MAIN LOOP (identical timing logic to current Baremetal.ino)
-// =============================================================================
-void loop() {
-    unsigned long now = micros();
-    if ((now - last_run) >= scan_cycle) {
-        last_run = now;
-        scheduler();
-    }
-
-    #ifdef MODBUS_ENABLED
-        // Run extra Modbus cycles between PLC scans if time permits
-        if ((micros() - last_run) < (scan_cycle - 10000)) {
-            modbusTask();
-        }
-    #endif
-
-    #ifdef SIMULATOR_MODE
-        asm("sleep");
-    #endif
-}
+loop():
+  1. Wait for scan cycle timer
+  2. updateInputBuffers()           (HAL -- unchanged)
+  3. For each task: if tick % divisor == 0, call program->run()
+  4. updateOutputBuffers()          (HAL -- unchanged)
+  5. updateTime()
+  6. modbusTask() if time permits   (unchanged)
 ```
 
-### Key Differences from Current Baremetal.ino
+### Key Functions in the Sketch
 
-| Aspect | Current (Baremetal.ino) | New (StrucppBaremetal.ino) |
-|--------|------------------------|--------------------------|
-| Includes | `extern "C" { #include "openplc.h" }` | `#include "generated.hpp"` + `"generated_glue.hpp"` |
-| Init | `config_init__()` + `glueVars()` | `strucpp_config_init()` + `strucpp_bind_located_vars()` |
-| PLC run | `config_run__(__tick++)` | `strucpp_config_run(__tick++)` |
-| Forced vars | Not handled at HAL level | `strucpp_restore_forced_inputs()` after `updateInputBuffers()` |
-| Time | `updateTime()` from glueVars.c | `updateTime()` from generated_glue.hpp |
-| Modbus | Unchanged | Unchanged |
-| HAL | Unchanged | Unchanged |
-
-## Step 2.3: Arduino Glue Code Generator
-
-**New file**: `src/backend/shared/utils/PLC/generate-arduino-glue.ts`
-
-This TypeScript module generates `generated_glue.hpp` -- a per-project C++ header that contains
-all the "glue" between STruC++ generated code and the Arduino runtime.
-
-### Public API
-
-```typescript
-export interface ArduinoGlueInput {
-  /** Configuration class name from STruC++ output (e.g., "Config0") */
-  configurationName: string
-  /** Task scheduling metadata from STruCppResult */
-  taskIntervals: TaskInterval[]
-  /** Variable descriptors per program from STruCppResult */
-  variableDescriptors: ProgramVarDescriptor[]
-  /** MD5 hash of the program.st source */
-  md5Hash: string
-  /** Board memory class (determines buffer sizes) */
-  boardMemoryClass: 'avr-small' | 'avr-large' | 'arm' | 'esp32'
-}
-
-/**
- * Generates the content of generated_glue.hpp.
- * This is a pure function -- no file I/O, fully shared between Electron and web.
- */
-export function generateArduinoGlue(input: ArduinoGlueInput): string
-```
-
-### Generated File Structure
-
-The output `generated_glue.hpp` contains these sections:
-
-#### Section 1: Configuration Singleton
+#### I/O Binding (replaces `glueVars()`)
 
 ```cpp
-#pragma once
-#include "generated.hpp"
-#include "openplc.h"
-
-using namespace strucpp;
-
-// --- Global Configuration instance ---
-static Configuration_Config0 g_config;
-
-void strucpp_config_init() {
-    // Configuration constructor initializes all program instances
-    // Located variable pointers are set in program constructors
-}
-```
-
-#### Section 2: I/O Buffer Binding
-
-```cpp
-// --- Bind LocatedVar descriptors to OpenPLC I/O buffers ---
-void strucpp_bind_located_vars() {
+void bindLocatedVars() {
+    using namespace strucpp;
     for (uint32_t i = 0; i < locatedVarsCount; ++i) {
         LocatedVar& lv = locatedVars[i];
         if (!lv.pointer) continue;
@@ -275,10 +124,6 @@ void strucpp_bind_located_vars() {
             case LocatedSize::Bit:
                 bool_input[lv.byte_index][lv.bit_index] = (IEC_BOOL*)lv.pointer;
                 break;
-            case LocatedSize::Byte:
-                // byte_input is only available on non-Arduino targets
-                // For Arduino, bytes are typically accessed via word-sized buffers
-                break;
             case LocatedSize::Word:
                 int_input[lv.byte_index] = (IEC_UINT*)lv.pointer;
                 break;
@@ -288,139 +133,119 @@ void strucpp_bind_located_vars() {
             case LocatedSize::LWord:
                 lint_input[lv.byte_index] = (IEC_ULINT*)lv.pointer;
                 break;
+            default: break;
             }
             break;
-
         case LocatedArea::Output:
-            switch (lv.size) {
-            case LocatedSize::Bit:
-                bool_output[lv.byte_index][lv.bit_index] = (IEC_BOOL*)lv.pointer;
-                break;
-            case LocatedSize::Word:
-                int_output[lv.byte_index] = (IEC_UINT*)lv.pointer;
-                break;
-            case LocatedSize::DWord:
-                dint_output[lv.byte_index] = (IEC_UDINT*)lv.pointer;
-                break;
-            case LocatedSize::LWord:
-                lint_output[lv.byte_index] = (IEC_ULINT*)lv.pointer;
-                break;
-            }
+            // symmetric to Input with bool_output, int_output, etc.
             break;
-
         case LocatedArea::Memory:
-            switch (lv.size) {
-            case LocatedSize::Word:
-                int_memory[lv.byte_index] = (IEC_UINT*)lv.pointer;
-                break;
-            case LocatedSize::DWord:
-                dint_memory[lv.byte_index] = (IEC_UDINT*)lv.pointer;
-                break;
-            case LocatedSize::LWord:
-                lint_memory[lv.byte_index] = (IEC_ULINT*)lv.pointer;
-                break;
-            }
+            // int_memory, dint_memory, lint_memory
             break;
         }
     }
 }
 ```
 
-This function replaces the old `glueVars()` generated by xml2st. Instead of hardcoded
-pointer assignments, it iterates the LocatedVar descriptor array that STruC++ generates.
-
-**How it works**: STruC++ generates a `locatedVars[]` array where each entry describes a
-located variable's area (I/Q/M), size (X/B/W/D/L), byte index, and bit index. The program
-constructor sets `locatedVars[i].pointer = variable.raw_ptr()`. This function then connects
-those pointers to the OpenPLC buffer arrays.
-
-#### Section 3: GCD-Based Task Scheduler
+#### Task Discovery and GCD Computation
 
 ```cpp
-// --- Multi-task round-robin scheduler ---
-// Base tick = GCD of all task intervals
-// Each task runs when: tick % divisor == 0
+// Storage for discovered task scheduling info
+static strucpp::ProgramBase** all_programs = nullptr;
+static uint32_t* task_divisors = nullptr;
+static size_t total_programs = 0;
+unsigned long long common_ticktime__ = 20000000ULL; // default 20ms
 
-unsigned long long common_ticktime__ = 20000000ULL; // GCD in nanoseconds
+uint64_t gcd(uint64_t a, uint64_t b) {
+    while (b) { uint64_t t = b; b = a % b; a = t; }
+    return a;
+}
 
-static ProgramBase* task_programs[] = {
-    &g_config.instance0,
-    &g_config.instance1,
-    // ... one per program instance
-};
+void discoverTasks(strucpp::ConfigurationInstance& config) {
+    // First pass: count total programs and compute GCD
+    uint64_t gcd_ns = 0;
+    size_t prog_count = 0;
 
-static const uint32_t task_divisors[] = {
-    1,  // instance0: 20ms / 20ms = every tick
-    2,  // instance1: 40ms / 20ms = every 2nd tick
-    // ...
-};
+    auto* resources = config.get_resources();
+    for (size_t r = 0; r < config.get_resource_count(); ++r) {
+        for (size_t t = 0; t < resources[r].task_count; ++t) {
+            auto& task = resources[r].tasks[t];
+            prog_count += task.program_count;
+            uint64_t interval = task.interval_ns > 0 ? task.interval_ns : 20000000ULL;
+            gcd_ns = (gcd_ns == 0) ? interval : gcd(gcd_ns, interval);
+        }
+    }
 
-static const size_t TASK_COUNT = 2; // number of tasks
+    if (gcd_ns == 0) gcd_ns = 20000000ULL;
+    common_ticktime__ = gcd_ns;
 
-void strucpp_config_run(unsigned long tick) {
-    for (size_t i = 0; i < TASK_COUNT; ++i) {
-        if (task_divisors[i] == 0 || (tick % task_divisors[i]) == 0) {
-            task_programs[i]->run();
+    // Second pass: build flat program array with divisors
+    all_programs = new strucpp::ProgramBase*[prog_count];
+    task_divisors = new uint32_t[prog_count];
+    total_programs = prog_count;
+
+    size_t idx = 0;
+    for (size_t r = 0; r < config.get_resource_count(); ++r) {
+        for (size_t t = 0; t < resources[r].task_count; ++t) {
+            auto& task = resources[r].tasks[t];
+            uint64_t interval = task.interval_ns > 0 ? task.interval_ns : gcd_ns;
+            uint32_t divisor = (uint32_t)(interval / gcd_ns);
+            for (size_t p = 0; p < task.program_count; ++p) {
+                all_programs[idx] = task.programs[p];
+                task_divisors[idx] = divisor;
+                idx++;
+            }
         }
     }
 }
 ```
 
-**GCD computation example**: For tasks at T#20ms and T#50ms, GCD = 10ms.
-Divisors: [2, 5]. Task0 runs at ticks 0,2,4,6,... Task1 at 0,5,10,...
-
-For a single-task project, this simplifies to calling `run()` every tick.
-
-#### Section 4: Forced Input Restoration
+#### PLC Cycle Execution
 
 ```cpp
-// --- Restore forced input values after HAL reads ---
-// HAL writes directly to IECVar::value_ via raw_ptr(), overwriting forced values.
-// This function restores value_ from forced_value_ for forced input variables.
-
-void strucpp_restore_forced_inputs() {
-    // Generated per-project for each located INPUT variable:
-    if (g_config.instance0.sensor.is_forced())
-        *(bool*)locatedVars[1].pointer = g_config.instance0.sensor.get_forced_value();
-    // ... repeat for each located input variable
+void plcCycleTask() {
+    updateInputBuffers();
+    // Run each program according to its task divisor
+    for (size_t i = 0; i < total_programs; ++i) {
+        if (task_divisors[i] == 0 || (__tick % task_divisors[i]) == 0) {
+            all_programs[i]->run();
+        }
+    }
+    __tick++;
+    updateOutputBuffers();
+    updateTime();
 }
 ```
 
-**Why this is needed**: When a variable is forced (for debugging), `IECVar::force(v)` sets
-both `forced_value_` and `value_` to `v`. The PLC program reads via `get()` which returns
-`forced_value_`. But the HAL's `updateInputBuffers()` writes hardware readings directly to
-`value_` via `raw_ptr()`. After HAL reads, `value_` contains the hardware reading (not the
-forced value). Since `get()` returns `forced_value_`, PLC logic is correct. But any code
-reading via `raw_ptr()` (including the debug system's value display) would see the hardware
-value. This function ensures `value_` matches the forced state after HAL reads.
+### Key Differences from Current Baremetal.ino
 
-For OUTPUT variables, this is not needed: `force()` sets `value_`, and `set()` is a no-op
-when forced, so `value_` stays at the forced value through PLC cycles. The HAL reads from
-`raw_ptr()` and writes the forced value to hardware.
+| Aspect | Current (Baremetal.ino) | New (StrucppBaremetal.ino) |
+|--------|------------------------|--------------------------|
+| Includes | `extern "C" { #include "openplc.h" }` | `#include "generated.hpp"` |
+| Init | `config_init__()` + `glueVars()` | Static `Configuration_Config0` + `bindLocatedVars()` + `discoverTasks()` |
+| PLC run | Single `config_run__(__tick++)` | Per-program `run()` with divisor check |
+| Task scheduling | All tasks at same rate | GCD-based round-robin per task |
+| Time | `common_ticktime__` from generated code | `common_ticktime__` computed at runtime |
+| Modbus | Unchanged | Unchanged |
+| HAL | Unchanged | Unchanged |
 
-#### Section 5: Time Update and MD5
+### What Changes in openplc.h
 
-```cpp
-// --- Time management ---
-extern IEC_TIME __CURRENT_TIME;
+The current `openplc.h` declares MatIEC-specific functions (`config_init__`, `config_run__`,
+`glueVars`, `updateTime`). For STruC++, these are no longer needed -- the sketch handles
+everything directly. The sketch needs a version of `openplc.h` that only has:
+- IEC type definitions (`IEC_BOOL`, `IEC_INT`, etc.)
+- Buffer pointer declarations (`bool_input`, `int_output`, etc.)
+- Buffer size macros (`MAX_DIGITAL_INPUT`, etc.)
+- HAL function declarations (`hardwareInit`, `updateInputBuffers`, `updateOutputBuffers`)
 
-void updateTime() {
-    __CURRENT_TIME = __CURRENT_TIME + (int64_t)common_ticktime__;
-}
+The MatIEC-specific declarations should be guarded or removed in the STruC++ variant.
 
-// --- Program MD5 hash ---
-const char plc_program_md5[] = "a1b2c3d4e5f6...";
-```
-
-#### Section 6: Debug Arrays (detailed in Phase 3)
-
-The debug pointer arrays are also generated in this file. See Phase 3 for details.
-
-## Step 2.4: C++17 Compilation Flag
+## Step 2.3: C++17 Compilation Flag
 
 **File to modify**: `resources/sources/boards/hals.json`
 
-For every board entry, ensure CXX flags include `-std=gnu++17`:
+Add `-std=gnu++17` to CXX flags and `"compiler_backend": "strucpp"` field per board:
 
 ```json
 {
@@ -436,9 +261,6 @@ For every board entry, ensure CXX flags include `-std=gnu++17`:
 }
 ```
 
-The `"compiler_backend": "strucpp"` field (default: `"matiec"` if absent) controls which
-compilation pipeline the editor uses for this board.
-
 **C++17 support by platform**:
 
 | Platform | GCC Version | C++17 Support |
@@ -451,64 +273,63 @@ compilation pipeline the editor uses for this board.
 
 ## Design Notes
 
+### Why the Sketch is Fully Static
+
+Every project produces the same C++ structures (`ConfigurationInstance`, `TaskInstance`,
+`ProgramBase`, `LocatedVar`). The sketch navigates these structures with generic loops.
+Nothing is project-specific except:
+- The Configuration class name: always `Configuration_Config0` (hardcoded by OpenPLC)
+- The `generated.hpp`/`generated.cpp` files: included, not generated by the sketch
+
 ### Why Keep openplc.h Buffer Arrays
 
 The HAL files (`uno_leonardo_nano_micro_zero.cpp`, `esp32.cpp`, `mega_due.cpp`, etc.) use
 `openplc.h` buffer pointer arrays: `bool_input[byte][bit]`, `int_input[index]`, etc.
 
-Rewriting all HAL files for STruC++ types would be a massive effort with no benefit. Instead,
-the glue layer populates these same buffer pointers from STruC++ LocatedVar descriptors.
-The HAL files see no difference.
+Rewriting all HAL files for STruC++ types would be a massive effort with no benefit. The
+sketch's `bindLocatedVars()` populates these same buffer pointers from STruC++ `LocatedVar`
+descriptors. The HAL files see no difference.
 
 ### Memory Layout: IECVar vs MatIEC __IEC_type_p
 
 | MatIEC | STruC++ |
 |--------|---------|
 | `__IEC_INT_p { int16_t value; int16_t fvalue; uint8_t flags; }` = 5 bytes | `IECVar<int16_t> { int16_t value_; bool forced_; int16_t forced_value_; }` = 5 bytes |
-| `__IEC_BOOL_p { uint8_t value; uint8_t fvalue; uint8_t flags; }` = 3 bytes | `IECVar<bool> { bool value_; bool forced_; bool forced_value_; }` = 3 bytes |
 
 Memory overhead is essentially the same.
 
-### Board Memory Classes
+### Dynamic Memory in discoverTasks()
 
-The buffer sizes in `openplc.h` vary by chip:
+The `discoverTasks()` function uses `new` to allocate the program pointer and divisor arrays.
+This happens once at `setup()` time and the arrays live for the lifetime of the program. On
+Arduino, this is acceptable since:
+- It happens once (not in the scan loop)
+- The total size is small (a few pointers per task)
+- The memory is never freed (matches Arduino's typical pattern)
 
-| Class | Boards | Digital I/O | Analog I/O | Memory |
-|-------|--------|-------------|------------|--------|
-| avr-small | ATmega328P, ATmega168, ATmega32U4 | 8 DIN, 32 DOUT | 6 AIN, 32 AOUT | 0 |
-| avr-large | ATmega2560, all others | 56 DIN/DOUT | 32 AIN/AOUT | 20 W/DW/LW |
-
-The glue generator uses this to validate located variable addresses don't exceed buffer limits.
+For boards with very tight memory (ATmega328P), the total overhead is ~8 bytes per program
+instance (pointer + divisor).
 
 ## Testing Strategy
 
 1. **Minimal project test**: Single program, one digital output (%QX0.0)
-   - Generate glue code
    - Verify `bool_output[0][0]` is bound to the variable's `raw_ptr()`
    - Compile with arduino-cli for Simulator target
 
 2. **Multi-task test**: Two tasks at T#20ms and T#40ms
-   - Verify `common_ticktime__ = 20000000`
-   - Verify `task_divisors = {1, 2}`
-   - Verify `TASK_COUNT = 2`
+   - Verify GCD computation: `common_ticktime__ = 20000000`
+   - Verify divisors: `[1, 2]`
+   - Verify task1 runs every cycle, task2 every other cycle
 
-3. **Forced input test**: Located input variable (%IX0.0)
-   - Force the variable, call `updateInputBuffers()` (simulated HAL write)
-   - Call `strucpp_restore_forced_inputs()`
-   - Verify `raw_ptr()` returns the forced value
-
-4. **HAL compatibility test**: Compile with each HAL file
-   - Verify no compilation errors
-   - Verify HAL functions (`hardwareInit`, `updateInputBuffers`, `updateOutputBuffers`)
-     are resolved correctly
+3. **HAL compatibility test**: Compile with each major HAL file
+   - Verify no compilation errors with STruC++ C++17 code
 
 ## Files Created/Modified
 
 | File | Action |
 |------|--------|
-| `resources/sources/StrucppBaremetal/StrucppBaremetal.ino` | **New** -- Arduino sketch |
-| `src/backend/shared/utils/PLC/generate-arduino-glue.ts` | **New** -- Glue code generator |
+| `resources/sources/StrucppBaremetal/StrucppBaremetal.ino` | **New** -- static Arduino sketch |
 | `resources/sources/boards/hals.json` | Modified -- add cxx_flags, compiler_backend |
 
-Note: Runtime headers are NOT stored in this repo. They come from `resources/strucpp/runtime/include/`
-which is downloaded by `scripts/download-binaries.ts` (see Phase 1).
+Note: Runtime headers come from `resources/strucpp/runtime/include/` (downloaded, Phase 1).
+No glue code generator. No per-project code generation.
