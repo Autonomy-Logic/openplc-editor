@@ -30,6 +30,7 @@ jobs:
           repository: Autonomy-Logic/openplc-web
           ref: ${{ github.event.pull_request.base.ref }}
           path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
         continue-on-error: true
         id: checkout-web-target
 
@@ -40,6 +41,7 @@ jobs:
           repository: Autonomy-Logic/openplc-web
           ref: main
           path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Warn about branch fallback
         if: steps.checkout-web-target.outcome == 'failure'
@@ -77,7 +79,7 @@ jobs:
         if: steps.compare-target.outputs.match == 'False'
         id: find-prs
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
         run: |
           BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
 
