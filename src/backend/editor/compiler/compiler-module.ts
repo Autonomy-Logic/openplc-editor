@@ -320,15 +320,15 @@ class CompilerModule {
     projectFolderPath: string,
     boardTarget: string,
   ): Promise<MethodsResult<string | string[]>> {
-    // INFO: We don't need to check if the directories already exist, as mkdir with { recursive: true } will handle that.
-    // INFO: We will create a build directory (if it does not exist), a board-specific directory, and a source directory within the board directory.
     let result: MethodsResult<string | string[]> = { success: false }
     const buildDirectory = join(projectFolderPath, 'build')
     const boardDirectory = join(buildDirectory, boardTarget)
     const sourceDirectory = join(boardDirectory, 'src')
 
-    // Create the directories recursively.
-    // INFO: We don't have to create the build directory separately
+    // Clean the board directory to remove stale files from previous builds
+    await fs.rm(boardDirectory, { recursive: true, force: true })
+
+    // Recreate the directories
     const results = await Promise.all([
       mkdir(boardDirectory, { recursive: true }),
       mkdir(sourceDirectory, { recursive: true }),
