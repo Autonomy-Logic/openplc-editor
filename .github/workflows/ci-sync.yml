@@ -1,4 +1,4 @@
-name: CI - Surface Sync
+name: CI - Cross-Repo Sync
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   surface-sync:
-    name: Shared Surface Sync Check
+    name: Shared Surface Sync
     runs-on: ubuntu-latest
 
     steps:
@@ -37,7 +37,7 @@ jobs:
           cd editor
           git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
           CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
-          if echo "$CHANGED" | grep -qE '^(src/frontend/|src/middleware/shared/|src/backend/shared/|src/__architecture__/|scripts/compare-surfaces\.py|\.github/workflows/ci-sync\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(src/frontend/|src/middleware/shared/|src/backend/shared/|src/__architecture__/)'; then
             echo "shared=true" >> "$GITHUB_OUTPUT"
           else
             echo "shared=false" >> "$GITHUB_OUTPUT"
@@ -199,3 +199,183 @@ jobs:
           "
             exit 1
           fi
+
+  deps-sync:
+    name: Shared Dependencies Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for cross-repo token
+        id: token-check
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set. Skipping sync check (expected on fork PRs)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
+      - name: Check for package.json changes
+        if: steps.token-check.outputs.skip == 'false'
+        id: filter
+        run: |
+          cd editor
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+          if echo "$CHANGED" | grep -qE '^package\.json$'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No package.json changes detected. Skipping dependency sync check."
+          fi
+
+      - name: Checkout web repo (target branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-target
+
+      - name: Checkout web repo (main fallback)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-target.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: main
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Compare shared dependencies
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        run: |
+          python3 << 'PYEOF'
+          import json, sys
+
+          with open("editor/package.json") as f:
+              editor_pkg = json.load(f)
+          with open("web/package.json") as f:
+              web_pkg = json.load(f)
+
+          editor_deps = editor_pkg.get("dependencies", {})
+          web_deps = web_pkg.get("dependencies", {})
+
+          shared = sorted(set(editor_deps) & set(web_deps))
+          mismatches = []
+
+          for pkg in shared:
+              if editor_deps[pkg] != web_deps[pkg]:
+                  mismatches.append((pkg, editor_deps[pkg], web_deps[pkg]))
+
+          if mismatches:
+              print(f"::error::Found {len(mismatches)} shared dependency version mismatch(es):")
+              for pkg, editor_ver, web_ver in mismatches:
+                  print(f"  {pkg}: editor={editor_ver}  web={web_ver}")
+              sys.exit(1)
+          else:
+              print(f"All {len(shared)} shared dependencies match.")
+          PYEOF
+
+  script-sync:
+    name: Comparison Script Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for cross-repo token
+        id: token-check
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set. Skipping sync check (expected on fork PRs)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
+      - name: Check for compare script changes
+        if: steps.token-check.outputs.skip == 'false'
+        id: filter
+        run: |
+          cd editor
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+          if echo "$CHANGED" | grep -qE '^scripts/compare-surfaces\.py$'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No compare script changes detected. Skipping script sync check."
+          fi
+
+      - name: Checkout web repo (target branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-target
+
+      - name: Checkout web repo (main fallback)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-target.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: main
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Compare SURFACES definitions
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        run: |
+          python3 << 'PYEOF'
+          import ast, sys
+
+          def extract_surfaces(filepath):
+              with open(filepath) as f:
+                  tree = ast.parse(f.read())
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Assign):
+                      for target in node.targets:
+                          if isinstance(target, ast.Name) and target.id == "SURFACES":
+                              return sorted(ast.literal_eval(node.value))
+              return None
+
+          editor = extract_surfaces("editor/scripts/compare-surfaces.py")
+          web = extract_surfaces("web/scripts/compare-surfaces.py")
+
+          if editor is None or web is None:
+              print("::error::Could not extract SURFACES from one or both scripts.")
+              sys.exit(1)
+
+          if editor != web:
+              editor_only = set(editor) - set(web)
+              web_only = set(web) - set(editor)
+              print("::error::SURFACES definitions do not match:")
+              if editor_only:
+                  print(f"  Only in editor: {', '.join(sorted(editor_only))}")
+              if web_only:
+                  print(f"  Only in web: {', '.join(sorted(web_only))}")
+              sys.exit(1)
+          else:
+              print(f"SURFACES definitions match: {editor}")
+          PYEOF
