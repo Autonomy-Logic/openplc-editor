@@ -5,6 +5,13 @@ on:
     branches:
       - main
       - development
+    paths:
+      - 'src/frontend/**'
+      - 'src/middleware/shared/**'
+      - 'src/backend/shared/**'
+      - 'src/__architecture__/**'
+      - 'scripts/compare-surfaces.py'
+      - '.github/workflows/ci-sync.yml'
 
 jobs:
   surface-sync:
@@ -12,30 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout editor repo
-        uses: actions/checkout@v4
-        with:
-          path: editor
-
-      - name: Check for shared surface changes
-        uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            shared:
-              - 'src/frontend/**'
-              - 'src/middleware/shared/**'
-              - 'src/backend/shared/**'
-              - 'src/__architecture__/**'
-              - 'scripts/compare-surfaces.py'
-              - '.github/workflows/ci-sync.yml'
-
-      - name: Skip if no shared changes
-        if: steps.filter.outputs.shared != 'true'
-        run: echo "No shared surface changes detected. Skipping sync check."
-
       - name: Check for cross-repo token
-        if: steps.filter.outputs.shared == 'true'
         id: token-check
         run: |
           if [ -z "$TOKEN" ]; then
@@ -47,8 +31,14 @@ jobs:
         env:
           TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
 
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
       - name: Checkout web repo (target branch)
-        if: steps.filter.outputs.shared == 'true' && steps.token-check.outputs.skip == 'false'
+        if: steps.token-check.outputs.skip == 'false'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -59,7 +49,7 @@ jobs:
         id: checkout-web-target
 
       - name: Checkout web repo (main fallback)
-        if: steps.filter.outputs.shared == 'true' && steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -68,12 +58,12 @@ jobs:
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Warn about branch fallback
-        if: steps.filter.outputs.shared == 'true' && steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
         run: |
           echo "::warning::Web repo does not have branch '${{ github.event.pull_request.base.ref }}'. Fell back to 'main'."
 
       - name: Compare surfaces against target branch
-        if: steps.filter.outputs.shared == 'true' && steps.token-check.outputs.skip == 'false'
+        if: steps.token-check.outputs.skip == 'false'
         id: compare-target
         run: |
           set +e
@@ -101,7 +91,7 @@ jobs:
           fi
 
       - name: Find matching web PRs
-        if: steps.filter.outputs.shared == 'true' && steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False'
+        if: steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False'
         id: find-prs
         env:
           GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
@@ -128,7 +118,7 @@ jobs:
           fi
 
       - name: Check web PRs for sync
-        if: steps.filter.outputs.shared == 'true' && steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False' && steps.find-prs.outputs.pr_count != '0'
+        if: steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False' && steps.find-prs.outputs.pr_count != '0'
         id: check-prs
         run: |
           PR_JSON=$(cat /tmp/web-prs.json)
@@ -174,21 +164,13 @@ jobs:
           done
 
       - name: Report result
-        if: always()
+        if: always() && steps.token-check.outputs.skip == 'false'
         run: |
-          SHARED="${{ steps.filter.outputs.shared }}"
-          SKIP="${{ steps.token-check.outputs.skip }}"
           MATCH="${{ steps.compare-target.outputs.match }}"
           MATCHED_PR="${{ steps.check-prs.outputs.matched_pr }}"
           MATCHED_TITLE="${{ steps.check-prs.outputs.matched_title }}"
 
-          if [ "$SHARED" != "true" ]; then
-            echo "No shared surface changes detected. Sync check skipped."
-            exit 0
-          elif [ "$SKIP" = "true" ]; then
-            echo "Cross-repo token not available. Sync check skipped."
-            exit 0
-          elif [ "$MATCH" = "True" ]; then
+          if [ "$MATCH" = "True" ]; then
             echo "Shared surfaces are in sync with web's ${{ github.event.pull_request.base.ref }} branch."
             exit 0
           elif [ -n "$MATCHED_PR" ]; then
