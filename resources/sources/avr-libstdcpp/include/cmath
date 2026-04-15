@@ -2,12 +2,19 @@
 #ifndef _AVR_CMATH
 #define _AVR_CMATH
 #include <math.h>
+#include <stdlib.h>
 namespace std {
   using ::fabs; using ::fabsf; using ::fmod; using ::fmodf;
   using ::sqrt; using ::sqrtf; using ::floor; using ::floorf;
   using ::ceil; using ::ceilf; using ::round; using ::roundf;
-  using ::pow; using ::powf; using ::log; using ::logf;
+  using ::pow; using ::powf; using ::log; using ::logf; using ::log10;
   using ::exp; using ::expf; using ::sin; using ::cos; using ::tan;
   using ::asin; using ::acos; using ::atan; using ::atan2;
+  using ::trunc;
+  // abs overloads for float/double (Arduino's abs macro handles int only)
+  inline float abs(float x) { return fabsf(x); }
+  inline double abs(double x) { return fabs(x); }
+  inline long abs(long x) { return x < 0 ? -x : x; }
+  inline long long abs(long long x) { return x < 0 ? -x : x; }
 }
 #endif

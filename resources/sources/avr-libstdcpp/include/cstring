@@ -5,5 +5,6 @@
 namespace std {
   using ::memcpy; using ::memset; using ::memmove; using ::memcmp;
   using ::strlen; using ::strcmp; using ::strncmp; using ::strcpy; using ::strncpy;
+  using ::strstr; using ::strchr; using ::strrchr; using ::strcat; using ::strncat;
 }
 #endif

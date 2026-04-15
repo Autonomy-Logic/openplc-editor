@@ -2,6 +2,9 @@
 #ifndef _AVR_CSTDDEF
 #define _AVR_CSTDDEF
 #include <stddef.h>
-namespace std { using ::size_t; using ::ptrdiff_t; }
-using nullptr_t = decltype(nullptr);
+namespace std {
+  using ::size_t;
+  using ::ptrdiff_t;
+  using nullptr_t = decltype(nullptr);
+}
 #endif

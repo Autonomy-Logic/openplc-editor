@@ -63,9 +63,15 @@ extern IEC_ULINT *lint_memory[MAX_MEMORY_LWORD];
 
 #endif
 
-//Hardware Layer
+//Hardware Layer (implemented in arduino.cpp HAL file, compiled as extern "C")
+#ifdef __cplusplus
+extern "C" {
+#endif
 void hardwareInit();
 void updateInputBuffers();
 void updateOutputBuffers();
+#ifdef __cplusplus
+}
+#endif
 
 #endif

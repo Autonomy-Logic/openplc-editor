@@ -7,14 +7,39 @@
 // - Computes GCD of task intervals for the scan cycle base tick
 // - Schedules programs round-robin with per-task divisors
 
-// Arduino.h defines min/max as macros which conflict with std::min/std::max
-// and numeric_limits::min()/max(). Undefine them before including STruC++ headers.
+// Arduino.h defines several macros that conflict with C++ standard library
+// and STruC++ runtime headers. Undefine them before including anything.
 #undef min
 #undef max
+#undef abs
+#undef round
+// Arduino timer macros conflict with user variable names (STruC++ uppercases identifiers)
+#undef TIMER0A
+#undef TIMER0B
+#undef TIMER1A
+#undef TIMER1B
+#undef TIMER1C
+#undef TIMER2
+#undef TIMER2A
+#undef TIMER2B
+#undef TIMER3A
+#undef TIMER3B
+#undef TIMER3C
+#undef TIMER4A
+#undef TIMER4B
+#undef TIMER4C
+#undef TIMER4D
+#undef TIMER5A
+#undef TIMER5B
+#undef TIMER5C
 
-#include "generated.hpp"
+// Include openplc.h FIRST (defines IEC_BOOL etc. as plain typedefs)
 #include "openplc.h"
 #include "defines.h"
+
+// STruC++ headers define IEC_BOOL etc. inside namespace strucpp.
+// Avoid "using namespace strucpp" globally to prevent ambiguity with openplc.h types.
+#include "generated.hpp"
 
 #ifdef MODBUS_ENABLED
 #include "ModbusSlave.h"
@@ -30,9 +55,32 @@
 #endif
 
 // ---------------------------------------------------------------------------
-// STruC++ Configuration instance (always Config0 in OpenPLC)
+// AVR: provide sized operator delete (virtual destructors generate this)
 // ---------------------------------------------------------------------------
-static strucpp::Configuration_Config0 g_config;
+void operator delete(void* ptr, unsigned int) { free(ptr); }
+
+// ---------------------------------------------------------------------------
+// STruC++ time variable (used by generated code for TIME operations)
+// ---------------------------------------------------------------------------
+int64_t __CURRENT_TIME_NS = 0;
+
+// ---------------------------------------------------------------------------
+// I/O Buffer definitions (declared extern in openplc.h, must be defined here)
+// ---------------------------------------------------------------------------
+IEC_BOOL *bool_input[MAX_DIGITAL_INPUT/8][8] = {};
+IEC_BOOL *bool_output[MAX_DIGITAL_OUTPUT/8][8] = {};
+IEC_UINT *int_input[MAX_ANALOG_INPUT] = {};
+IEC_UINT *int_output[MAX_ANALOG_OUTPUT] = {};
+#if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
+IEC_UINT *int_memory[MAX_MEMORY_WORD] = {};
+IEC_UDINT *dint_memory[MAX_MEMORY_DWORD] = {};
+IEC_ULINT *lint_memory[MAX_MEMORY_LWORD] = {};
+#endif
+
+// ---------------------------------------------------------------------------
+// STruC++ Configuration instance (always CONFIG0 in OpenPLC)
+// ---------------------------------------------------------------------------
+static strucpp::Configuration_CONFIG0 g_config;
 
 // ---------------------------------------------------------------------------
 // Task scheduling state (populated by discoverTasks)
@@ -85,10 +133,10 @@ void bindLocatedVars() {
         case LocatedArea::Input:
             switch (lv.size) {
             case LocatedSize::Bit:
-                bool_input[lv.byte_index][lv.bit_index] = (IEC_BOOL*)lv.pointer;
+                bool_input[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
                 break;
             case LocatedSize::Word:
-                int_input[lv.byte_index] = (IEC_UINT*)lv.pointer;
+                int_input[lv.byte_index] = (::IEC_UINT*)lv.pointer;
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
@@ -105,10 +153,10 @@ void bindLocatedVars() {
         case LocatedArea::Output:
             switch (lv.size) {
             case LocatedSize::Bit:
-                bool_output[lv.byte_index][lv.bit_index] = (IEC_BOOL*)lv.pointer;
+                bool_output[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
                 break;
             case LocatedSize::Word:
-                int_output[lv.byte_index] = (IEC_UINT*)lv.pointer;
+                int_output[lv.byte_index] = (::IEC_UINT*)lv.pointer;
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
@@ -126,13 +174,13 @@ void bindLocatedVars() {
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             switch (lv.size) {
             case LocatedSize::Word:
-                int_memory[lv.byte_index] = (IEC_UINT*)lv.pointer;
+                int_memory[lv.byte_index] = (::IEC_UINT*)lv.pointer;
                 break;
             case LocatedSize::DWord:
-                dint_memory[lv.byte_index] = (IEC_UDINT*)lv.pointer;
+                dint_memory[lv.byte_index] = (::IEC_UDINT*)lv.pointer;
                 break;
             case LocatedSize::LWord:
-                lint_memory[lv.byte_index] = (IEC_ULINT*)lv.pointer;
+                lint_memory[lv.byte_index] = (::IEC_ULINT*)lv.pointer;
                 break;
             default: break;
             }

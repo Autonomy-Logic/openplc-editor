@@ -2,5 +2,20 @@
 #ifndef _AVR_CSTDLIB
 #define _AVR_CSTDLIB
 #include <stdlib.h>
-namespace std { using ::malloc; using ::free; using ::abort; using ::abs; using ::atoi; using ::atol; }
+
+// AVR libc doesn't have strtoll/strtoull -- provide minimal implementations
+#ifdef __AVR__
+inline long long strtoll(const char* s, char** endp, int base) {
+    return (long long)strtol(s, endp, base); // truncated to 32-bit on AVR
+}
+inline unsigned long long strtoull(const char* s, char** endp, int base) {
+    return (unsigned long long)strtoul(s, endp, base);
+}
+#endif
+
+namespace std {
+  using ::malloc; using ::free; using ::abort; using ::abs;
+  using ::atoi; using ::atol; using ::strtol; using ::strtoul;
+  using ::strtod; using ::strtoll; using ::strtoull;
+}
 #endif
