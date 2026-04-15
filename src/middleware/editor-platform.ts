@@ -38,6 +38,10 @@ export function setRuntimeIpAddress(ip: string): void {
   _runtimeIpAddress = ip
 }
 
+// macOS has a native application menu bar; Windows and Linux do not
+// (the Electron menu is hidden on those platforms — see menu.ts buildDefaultTemplate).
+const isMac = navigator.platform.startsWith('Mac')
+
 /**
  * Editor platform ports — all port interfaces wired to Electron IPC bridge.
  */
@@ -54,5 +58,5 @@ export const editorPorts: PlatformPorts = {
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
   versionControl: createEditorVersionControlAdapter(),
-  capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
+  capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development', hasNativeMenu: isMac },
 }
