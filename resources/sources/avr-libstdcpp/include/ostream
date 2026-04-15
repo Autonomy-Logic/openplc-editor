@@ -1,0 +1,4 @@
+// Stub: I/O streams not available on AVR
+#ifndef _AVR_OSTREAM_STUB
+#define _AVR_OSTREAM_STUB
+#endif

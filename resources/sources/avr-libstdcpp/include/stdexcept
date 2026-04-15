@@ -1,0 +1,4 @@
+// Stub: exceptions not available on AVR
+#ifndef _AVR_STDEXCEPT_STUB
+#define _AVR_STDEXCEPT_STUB
+#endif

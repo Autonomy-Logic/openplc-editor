@@ -972,7 +972,7 @@ class CompilerModule {
       // Add avr-libstdcpp headers so STruC++ runtime compiles on AVR targets.
       const avrLibStdCppPath = join(this.sourceDirectoryPath, 'avr-libstdcpp', 'include')
       if (boardHalsContent['core']?.startsWith('arduino:avr')) {
-        cxxFlags.push(`-isystem "${avrLibStdCppPath}"`)
+        cxxFlags.push(`-I "${avrLibStdCppPath}"`)
       }
       buildProjectFlags = [
         ...buildProjectFlags,

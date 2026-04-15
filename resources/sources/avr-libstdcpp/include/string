@@ -1,0 +1,4 @@
+// Stub: std::string not available on AVR (requires heap + exceptions)
+#ifndef _AVR_STRING_STUB
+#define _AVR_STRING_STUB
+#endif

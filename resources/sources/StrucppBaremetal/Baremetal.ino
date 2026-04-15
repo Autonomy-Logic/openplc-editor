@@ -7,6 +7,11 @@
 // - Computes GCD of task intervals for the scan cycle base tick
 // - Schedules programs round-robin with per-task divisors
 
+// Arduino.h defines min/max as macros which conflict with std::min/std::max
+// and numeric_limits::min()/max(). Undefine them before including STruC++ headers.
+#undef min
+#undef max
+
 #include "generated.hpp"
 #include "openplc.h"
 #include "defines.h"
