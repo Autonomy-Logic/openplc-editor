@@ -24,25 +24,25 @@ jobs:
         env:
           TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
 
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
       - name: Check for shared surface changes
         if: steps.token-check.outputs.skip == 'false'
         id: filter
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          FILES=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --paginate --jq '.[].filename')
-          if echo "$FILES" | grep -qE '^(src/frontend/|src/middleware/shared/|src/backend/shared/|src/__architecture__/|scripts/compare-surfaces\.py|\.github/workflows/ci-sync\.yml)'; then
+          cd editor
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+          if echo "$CHANGED" | grep -qE '^(src/frontend/|src/middleware/shared/|src/backend/shared/|src/__architecture__/|scripts/compare-surfaces\.py|\.github/workflows/ci-sync\.yml)'; then
             echo "shared=true" >> "$GITHUB_OUTPUT"
           else
             echo "shared=false" >> "$GITHUB_OUTPUT"
             echo "No shared surface changes detected. Skipping sync check."
           fi
-
-      - name: Checkout editor repo
-        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true'
-        uses: actions/checkout@v4
-        with:
-          path: editor
 
       - name: Checkout web repo (target branch)
         if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true'
