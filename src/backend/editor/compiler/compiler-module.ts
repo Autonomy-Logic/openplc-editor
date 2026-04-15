@@ -344,40 +344,43 @@ class CompilerModule {
 
   // INFO: This method is a placeholder for copying static files.
   async copyStaticFiles(compilationPath: string, boardTarget: string): Promise<MethodsResult<string>> {
-    let result: MethodsResult<string> = { success: false }
     const sourceTargetFolderPath = join(compilationPath, 'src')
 
     const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
     const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'StrucppBaremetal')
 
-    let filesToCopy: Promise<void>[]
+    const filesToCopy: Promise<void>[] = []
 
     if (boardTarget !== 'openplc-compiler') {
-      // Arduino targets: copy Arduino support files, STruC++ headers, and sketch
-      filesToCopy = [
+      // Arduino targets: copy Arduino support files and STruC++ runtime headers
+      filesToCopy.push(
         cp(staticArduinoFilesPath, sourceTargetFolderPath, { recursive: true }),
         this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
-        cp(staticBaremetalFilesPath, join(compilationPath, 'examples', 'Baremetal'), { recursive: true }),
-      ]
+      )
+      // Copy sketch if available (created in Phase 3)
+      try {
+        await fs.access(staticBaremetalFilesPath)
+        filesToCopy.push(
+          cp(staticBaremetalFilesPath, join(compilationPath, 'examples', 'Baremetal'), { recursive: true }),
+        )
+      } catch {
+        // StrucppBaremetal sketch not yet available -- Phase 3 will create it
+      }
     } else {
       // OpenPLC Runtime targets: copy STruC++ headers and C/C++ block templates
       const cBlocksHeaderPath = join(this.sourceDirectoryPath, 'arduino', 'c_blocks.h')
-      const cBlocksCodePath = join(this.sourceDirectoryPath, 'StrucppBaremetal', 'c_blocks_code.cpp')
-      filesToCopy = [
+      filesToCopy.push(
         this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
         cp(cBlocksHeaderPath, join(sourceTargetFolderPath, 'c_blocks.h')),
-        cp(cBlocksCodePath, join(sourceTargetFolderPath, 'c_blocks_code.cpp')),
-      ]
+      )
     }
 
     try {
       await Promise.all(filesToCopy)
-      result = { success: true, data: 'Static build files available' }
+      return { success: true, data: 'Static build files available' }
     } catch (error) {
       throw new Error(`Error copying static files: ${error as string}`)
     }
-
-    return result
   }
 
   /**
