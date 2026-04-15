@@ -115,7 +115,7 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
     .replace(/\n/g, '\\n"\n            "')
 
   const stCode = `(* Type definitions *)
-{{
+{external
     typedef uint8_t  IEC_BOOL;
     typedef int8_t    IEC_SINT;
     typedef int16_t   IEC_INT;
@@ -140,10 +140,10 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
     } IEC_STRING;
 
 ${cStructs}
-}}
+}
 
 if first_run = false then
-    {{
+    {external
         pid_t pid = getpid();
         void *shm_in_ptr = NULL;
         void *shm_out_ptr = NULL;
@@ -162,10 +162,10 @@ if first_run = false then
 
         data__->SHM_IN_PTR.value = (uint64_t)shm_in_ptr;
         data__->SHM_OUT_PTR.value = (uint64_t)shm_out_ptr;
-    }}
+    }
     first_run := true;
 else
-    {{
+    {external
         void *shm_in_ptr = (void *)data__->SHM_IN_PTR.value;
         void *shm_out_ptr = (void *)data__->SHM_OUT_PTR.value;
 
@@ -180,7 +180,7 @@ else
             return;
         }
 
-${inputCopyCode}${outputCopyCode}    }}
+${inputCopyCode}${outputCopyCode}    }
 end_if;`
 
   return stCode

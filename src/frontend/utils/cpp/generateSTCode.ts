@@ -13,8 +13,8 @@ type STCodeGenerationParams = {
 
 /**
  * Generate flat temporary array declarations for array variables.
- * iec2c wraps each element in __IEC_TYPE_t (value + flags), so we need
- * flat IEC_TYPE arrays for C code that expects contiguous typed elements.
+ * STruC++ wraps each element in IECVar<T> (value + forced flag + forced value), so we need
+ * flat arrays for C code that expects contiguous typed elements.
  */
 const generateFlatArrayDeclarations = (arrayVariables: PLCVariable[]): string => {
   let code = ''
@@ -94,22 +94,22 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
 
   const outputCopyBack = generateOutputArrayCopyBack(outputVariables)
 
-  let stCode = `{{
+  let stCode = `{external
 ${structName} vars;
-${flatArrayDecl}${flatArrayCopiesIn}${variableAssignments}}}
+${flatArrayDecl}${flatArrayCopiesIn}${variableAssignments}}
 if hasBeenInitialized = False then
-{{
+{external
 ${setupFunctionName}(&vars);
-}}
+}
 hasBeenInitialized := True;
 end_if;
-{{
+{external
 ${loopFunctionName}(&vars);
-}}`
+}`
 
   if (outputCopyBack) {
-    stCode += `\n{{
-${outputCopyBack}}}`
+    stCode += `\n{external
+${outputCopyBack}}`
   }
 
   return stCode
