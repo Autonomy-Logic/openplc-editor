@@ -259,33 +259,7 @@ jobs:
 
       - name: Compare shared dependencies
         if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
-        run: |
-          python3 << 'PYEOF'
-          import json, sys
-
-          with open("editor/package.json") as f:
-              editor_pkg = json.load(f)
-          with open("web/package.json") as f:
-              web_pkg = json.load(f)
-
-          editor_deps = editor_pkg.get("dependencies", {})
-          web_deps = web_pkg.get("dependencies", {})
-
-          shared = sorted(set(editor_deps) & set(web_deps))
-          mismatches = []
-
-          for pkg in shared:
-              if editor_deps[pkg] != web_deps[pkg]:
-                  mismatches.append((pkg, editor_deps[pkg], web_deps[pkg]))
-
-          if mismatches:
-              print(f"::error::Found {len(mismatches)} shared dependency version mismatch(es):")
-              for pkg, editor_ver, web_ver in mismatches:
-                  print(f"  {pkg}: editor={editor_ver}  web={web_ver}")
-              sys.exit(1)
-          else:
-              print(f"All {len(shared)} shared dependencies match.")
-          PYEOF
+        run: python3 editor/scripts/compare-dependencies.py --web-root web --editor-root editor
 
   script-sync:
     name: Comparison Script Sync
@@ -346,36 +320,4 @@ jobs:
 
       - name: Compare SURFACES definitions
         if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
-        run: |
-          python3 << 'PYEOF'
-          import ast, sys
-
-          def extract_surfaces(filepath):
-              with open(filepath) as f:
-                  tree = ast.parse(f.read())
-              for node in ast.walk(tree):
-                  if isinstance(node, ast.Assign):
-                      for target in node.targets:
-                          if isinstance(target, ast.Name) and target.id == "SURFACES":
-                              return sorted(ast.literal_eval(node.value))
-              return None
-
-          editor = extract_surfaces("editor/scripts/compare-surfaces.py")
-          web = extract_surfaces("web/scripts/compare-surfaces.py")
-
-          if editor is None or web is None:
-              print("::error::Could not extract SURFACES from one or both scripts.")
-              sys.exit(1)
-
-          if editor != web:
-              editor_only = set(editor) - set(web)
-              web_only = set(web) - set(editor)
-              print("::error::SURFACES definitions do not match:")
-              if editor_only:
-                  print(f"  Only in editor: {', '.join(sorted(editor_only))}")
-              if web_only:
-                  print(f"  Only in web: {', '.join(sorted(web_only))}")
-              sys.exit(1)
-          else:
-              print(f"SURFACES definitions match: {editor}")
-          PYEOF
+        run: python3 editor/scripts/compare-surface-definitions.py --web-root web --editor-root editor
