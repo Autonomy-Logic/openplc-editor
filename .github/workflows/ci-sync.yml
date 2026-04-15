@@ -237,8 +237,19 @@ jobs:
             echo "No package.json changes detected. Skipping dependency sync check."
           fi
 
-      - name: Checkout web repo (target branch)
+      - name: Checkout web repo (head branch)
         if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.head_ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-head
+
+      - name: Checkout web repo (base branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -246,10 +257,10 @@ jobs:
           path: web
           token: ${{ secrets.CROSS_REPO_TOKEN }}
         continue-on-error: true
-        id: checkout-web-target
+        id: checkout-web-base
 
       - name: Checkout web repo (main fallback)
-        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure' && steps.checkout-web-base.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -298,8 +309,19 @@ jobs:
             echo "No compare script changes detected. Skipping script sync check."
           fi
 
-      - name: Checkout web repo (target branch)
+      - name: Checkout web repo (head branch)
         if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.head_ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-head
+
+      - name: Checkout web repo (base branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -307,10 +329,10 @@ jobs:
           path: web
           token: ${{ secrets.CROSS_REPO_TOKEN }}
         continue-on-error: true
-        id: checkout-web-target
+        id: checkout-web-base
 
       - name: Checkout web repo (main fallback)
-        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure' && steps.checkout-web-base.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -359,8 +381,19 @@ jobs:
             echo "No tooling changes detected. Skipping tooling sync check."
           fi
 
-      - name: Checkout web repo (target branch)
+      - name: Checkout web repo (head branch)
         if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.head_ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-head
+
+      - name: Checkout web repo (base branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -368,10 +401,10 @@ jobs:
           path: web
           token: ${{ secrets.CROSS_REPO_TOKEN }}
         continue-on-error: true
-        id: checkout-web-target
+        id: checkout-web-base
 
       - name: Checkout web repo (main fallback)
-        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure' && steps.checkout-web-base.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
