@@ -2,8 +2,15 @@
   "OpenPLC Simulator": {
     "compiler": "simulator",
     "core": "arduino:avr",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "ld_flags": ["-Wl,--defsym,__DATA_REGION_LENGTH__=0xFE00", "-Wl,--defsym,__stack=0x80FFFF"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "ld_flags": [
+      "-Wl,--defsym,__DATA_REGION_LENGTH__=0xFE00",
+      "-Wl,--defsym,__stack=0x80FFFF"
+    ],
     "default_ain": "A0, A1, A2, A3, A4, A5, A6, A7",
     "default_aout": "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13",
     "default_din": "62, 63, 64, 65, 66, 67, 68, 69, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52",
@@ -22,7 +29,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Due (native USB port)": {
     "compiler": "arduino-cli",
@@ -44,7 +54,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Due (programming port)": {
     "compiler": "arduino-cli",
@@ -66,7 +79,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Edge Control": {
     "compiler": "arduino-cli",
@@ -88,7 +104,10 @@
       "WiFi": "Yes - requires Arduino MKR board",
       "Bluetooth": "Yes",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Giga": {
     "compiler": "arduino-cli",
@@ -111,7 +130,10 @@
       "WiFi": "Yes",
       "Bluetooth": "Yes",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Leonardo": {
     "compiler": "arduino-cli",
@@ -133,7 +155,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Mega": {
     "compiler": "arduino-cli",
@@ -155,7 +180,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Micro": {
     "compiler": "arduino-cli",
@@ -177,7 +205,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Nano": {
     "compiler": "arduino-cli",
@@ -199,7 +230,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Nano ESP32": {
     "compiler": "arduino-cli",
@@ -208,7 +242,9 @@
     "default_aout": "9, 10, 11",
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 12, 13",
-    "define": ["BOARD_PORTENTA"],
+    "define": [
+      "BOARD_PORTENTA"
+    ],
     "platform": "esp32:esp32:nano_nora",
     "preview": "generic.png",
     "source": "esp32.cpp",
@@ -222,7 +258,10 @@
       "WiFi": "Yes",
       "Bluetooth": "Yes",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Opta": {
     "compiler": "arduino-cli",
@@ -245,7 +284,10 @@
       "WiFi": "Yes - on the Opta WiFi model",
       "Bluetooth": "Yes - on the Opta WiFi model",
       "Ethernet": "Yes"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Uno": {
     "compiler": "arduino-cli",
@@ -267,7 +309,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Uno R4": {
     "compiler": "arduino-cli",
@@ -289,7 +334,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Uno R4 WiFi": {
     "compiler": "arduino-cli",
@@ -312,7 +360,10 @@
       "WiFi": "Yes",
       "Bluetooth": "Yes",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Uno Q": {
     "compiler": "arduino-cli",
@@ -334,7 +385,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Zero (native USB port)": {
     "compiler": "arduino-cli",
@@ -356,7 +410,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Arduino Zero (programming port)": {
     "compiler": "arduino-cli",
@@ -378,7 +435,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Blackpill STM32-F411CE (DFU STM32 Bootloader)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -389,7 +449,11 @@
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9",
     "default_dout": "PB10, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F411CE",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE,upload_method=dfuMethod,usb=CDCgen",
     "preview": "generic.png",
@@ -404,7 +468,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Blackpill STM32-F411CE (HID Bootloader 2.2)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -415,7 +482,11 @@
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9",
     "default_dout": "PB10, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F411CE",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE,upload_method=hidMethod,usb=CDCgen",
     "preview": "generic.png",
@@ -430,7 +501,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Blackpill STM32-F411CE (SWD Programmer)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -441,7 +515,11 @@
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9",
     "default_dout": "PB10, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F411CE",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE,upload_method=swdMethod,usb=CDCgen",
     "preview": "generic.png",
@@ -456,7 +534,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Blackpill STM32-F411CE (Serial Programmer)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -467,7 +548,11 @@
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9",
     "default_dout": "PB10, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F411CE",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE,upload_method=serialMethod,usb=CDCgen",
     "preview": "generic.png",
@@ -482,7 +567,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Bluepill STM32-F103CB (DFU STM32 Bootloader)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -493,7 +581,11 @@
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9, PB10",
     "default_dout": "PB11, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F103CB",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,upload_method=dfuMethod,usb=CDCgen",
     "preview": "generic.png",
@@ -508,7 +600,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Bluepill STM32-F103CB (HID Bootloader 2.2)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -519,7 +614,11 @@
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9, PB10",
     "default_dout": "PB11, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F103CB",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,upload_method=hidMethod,usb=CDCgen",
     "preview": "generic.png",
@@ -534,7 +633,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Bluepill STM32-F103CB (SWD Programmer)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -545,7 +647,11 @@
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9, PB10",
     "default_dout": "PB11, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F103CB",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,upload_method=swdMethod,usb=CDCgen",
     "preview": "generic.png",
@@ -560,7 +666,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Bluepill STM32-F103CB (Serial Programmer)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -571,7 +680,11 @@
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9, PB10",
     "default_dout": "PB11, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F103CB",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,upload_method=serialMethod,usb=CDCgen",
     "preview": "generic.png",
@@ -586,7 +699,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "CONTROLLINO MAXI": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
@@ -610,7 +726,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "Yes"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "CONTROLLINO MAXI Automation": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
@@ -634,7 +753,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "Yes"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "CONTROLLINO MEGA": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
@@ -658,7 +780,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "Yes"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "CONTROLLINO MICRO": {
     "board_manager_url": "https://github.com/CONTROLLINO-PLC/controllino_rp2/releases/download/global/package_controllino_rp2_index.json",
@@ -682,7 +807,10 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "Yes"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "CONTROLLINO MINI": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
@@ -706,14 +834,25 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "ESP32 Generic": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
     "default_din": "17, 18, 19, 21, 22, 23, 27, 32, 33",
@@ -739,8 +878,16 @@
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
     "default_din": "17, 18, 19, 21, 22, 23, 27, 32, 33",
@@ -766,8 +913,16 @@
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
     "default_din": "18, 19, 21, 22, 23, 27, 32, 33",
@@ -793,8 +948,16 @@
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
     "default_din": "17, 18, 19, 21, 22, 23, 27, 32, 33",
@@ -820,8 +983,16 @@
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "0, 1, 2, 3",
     "default_aout": "18, 19, 20, 21",
     "default_din": "4, 5, 10, 11",
@@ -847,8 +1018,16 @@
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
     "default_din": "17, 18, 19, 21, 22, 23, 27, 32, 33",
@@ -874,8 +1053,16 @@
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
     "default_din": "17, 18, 19, 21, 22, 23, 27, 32, 33",
@@ -901,8 +1088,16 @@
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "1, 2, 3, 4",
     "default_aout": "36, 37",
     "default_din": "6, 7, 8, 9",
@@ -928,7 +1123,11 @@
     "board_manager_url": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
     "compiler": "arduino-cli",
     "core": "esp8266:esp8266",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A0",
     "default_aout": "D8",
     "default_din": "D4, D5, D6, D7",
@@ -948,13 +1147,20 @@
       "WiFi": "Yes",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "ESP8266 NodeMCU": {
     "board_manager_url": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
     "compiler": "arduino-cli",
     "core": "esp8266:esp8266",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A0",
     "default_aout": "D8",
     "default_din": "D4, D5, D6, D7",
@@ -974,13 +1180,20 @@
       "WiFi": "Yes",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "FX3U-14M / LE3U-14M": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
     "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A0, A1, A2, A3",
     "default_aout": "2, 3, 4, 5",
     "default_din": "A4, A5, A6, A7, A8, A9, 18, 19",
@@ -999,13 +1212,20 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "WS3U-14Mx": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
     "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "PA1, PA3, PC4, PC5, PC0, PC1",
     "default_aout": "PA4, PA5",
     "default_din": "PB13, PB14, PB11, PB12, PE15, PB10, PE13, PE14",
@@ -1024,13 +1244,20 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "FX3U-24MR / DollaTek": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
     "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "PA1, PA3, PC4, PC5, PC0, PC1",
     "default_aout": "PA4, PA5",
     "default_din": "PB13, PB14, PB11, PB12, PE15, PB10, PE13, PE14, PE11, PE12, PE9, PE10, PE7, PE8",
@@ -1053,13 +1280,20 @@
     "user_ain": "PA1, PA3, PC4, PC5, PC0, PC1",
     "user_aout": "PA4, PA5",
     "user_din": "PB13, PB14, PB11, PB12, PE15, PB10, PE13, PE14, PE11, PE12, PE9, PE10, PE7, PE8",
-    "user_dout": "PC9, PC8, PA8, PA0, PB3, PD12, PB15, PA7, PA6, PA2"
+    "user_dout": "PC9, PC8, PA8, PA0, PB3, PD12, PB15, PA7, PA6, PA2",
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Iruino VEA": {
     "board_manager_url": "https://raw.githubusercontent.com/VEA-SRL/IRUINO_Library/main/package_vea_index.json",
     "compiler": "arduino-cli",
     "core": "iruino:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A0, A1",
     "default_aout": "",
     "default_din": "I0, I1, I2, I3, I4,I5, I6, I7",
@@ -1079,12 +1313,19 @@
       "WiFi": "Yes",
       "Bluetooth": "Yes",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Mkr WiFi": {
     "compiler": "arduino-cli",
     "core": "arduino:samd",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A1, A2, A3, A4, A5, A6",
     "default_aout": "6, 15",
     "default_din": "0, 1, 2, 3, 4, 5",
@@ -1103,12 +1344,19 @@
       "WiFi": "Yes",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Mkr Zero": {
     "compiler": "arduino-cli",
     "core": "arduino:samd",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A1, A2, A3, A4, A5, A6",
     "default_aout": "6, 15",
     "default_din": "0, 1, 2, 3, 4, 5",
@@ -1126,12 +1374,19 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Nano 33 BLE": {
     "compiler": "arduino-cli",
     "core": "arduino:mbed_nano",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "15, 16, 17, 18, 19, 20, 21",
     "default_aout": "9, 14",
     "default_din": "2, 3, 4, 5, 6",
@@ -1149,12 +1404,19 @@
       "WiFi": "No",
       "Bluetooth": "Yes",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Nano 33 IoT": {
     "core": "arduino:samd",
     "compiler": "arduino-cli",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "15, 16, 17, 18, 19, 20, 21",
     "default_aout": "9, 14",
     "default_din": "2, 3, 4, 5, 6",
@@ -1173,12 +1435,19 @@
       "WiFi": "Yes",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Nano Every": {
     "compiler": "arduino-cli",
     "core": "arduino:megaavr",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "15, 16, 17, 18, 19, 20, 21",
     "default_aout": "9, 14",
     "default_din": "2, 3, 4, 5, 6",
@@ -1196,12 +1465,19 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Nano RP2040 Connect": {
     "compiler": "arduino-cli",
     "core": "arduino:mbed_nano",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A1, A2, A3",
     "default_aout": "14",
     "default_din": "2, 3, 4, 5, 6, 7",
@@ -1220,20 +1496,33 @@
       "WiFi": "Yes",
       "Bluetooth": "Yes",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "OpenPLC Runtime v4": {
     "compiler": "openplc-compiler",
-    "preview": "generic.png"
+    "preview": "generic.png",
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "OpenPLC Runtime v3": {
     "compiler": "openplc-compiler",
-    "preview": "generic.png"
+    "preview": "generic.png",
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "P1AM-100": {
     "compiler": "arduino-cli",
     "core": "arduino:samd",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A1, A2, A5, A6",
     "default_aout": "A0",
     "default_din": "31, 0, 1, 2, 3, 4",
@@ -1251,13 +1540,20 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "Yes with Ethernet module"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "P1AM-200": {
     "board_manager_url": "https://raw.githubusercontent.com/facts-engineering/facts-engineering.github.io/master/package_productivity-P1AM-boardmanagermodule_index.json",
     "compiler": "arduino-cli",
     "core": "FACTS:samd",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "A1, A2, A5, A6",
     "default_aout": "A0",
     "default_din": "31, 0, 1, 2, 3, 4",
@@ -1276,12 +1572,19 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "Yes with Ethernet module"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Portenta Machine Control H7": {
     "compiler": "arduino-cli",
     "core": "arduino:mbed_portenta",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "0, 1, 2",
     "default_aout": "0, 1, 2, 3",
     "default_din": "DIN_READ_CH_PIN_00, DIN_READ_CH_PIN_01, DIN_READ_CH_PIN_02, DIN_READ_CH_PIN_03, DIN_READ_CH_PIN_04, DIN_READ_CH_PIN_05, DIN_READ_CH_PIN_06, DIN_READ_CH_PIN_07",
@@ -1300,17 +1603,27 @@
       "WiFi": "Yes",
       "Bluetooth": "Yes",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Raspberry Pi": {
     "compiler": "openplc-compiler",
-    "preview": "raspberry-pi.png"
+    "preview": "raspberry-pi.png",
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Raspberry Pico": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
     "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "26, 27, 28",
     "default_aout": "4,5",
     "default_din": "6, 7, 8, 9, 10, 11, 12, 13",
@@ -1329,13 +1642,20 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Raspberry Pico 2": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
     "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "26, 27, 28",
     "default_aout": "4,5",
     "default_din": "6, 7, 8, 9, 10, 11, 12, 13",
@@ -1354,14 +1674,21 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Raspberry Pico 2 (RISCV)": {
     "arch": "riscv",
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
     "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "26, 27, 28",
     "default_aout": "4,5",
     "default_din": "6, 7, 8, 9, 10, 11, 12, 13",
@@ -1380,13 +1707,20 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "Raspberry Pico W": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
     "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "26, 27, 28",
     "default_aout": "4,5",
     "default_din": "6, 7, 8, 9, 10, 11, 12, 13",
@@ -1406,14 +1740,25 @@
       "WiFi": "Yes",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   },
   "SEQUENT-ESP32-PI": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
     "compiler": "arduino-cli",
     "core": "esp32:esp32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "cxx_flags": ["-MMD", "-c"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "cxx_flags": [
+      "-std=gnu++17",
+      "-MMD",
+      "-c"
+    ],
     "default_ain": "34, 35",
     "default_aout": "25",
     "default_din": "27, 32",
@@ -1439,7 +1784,11 @@
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
     "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
     "default_ain": "PA0, PA1, PA4, PA5, PA6, PA7",
     "default_aout": "PB0, PB1",
     "default_din": "PA8, PA11, PA12, PB3, PB4, PB5, PB8, PB9",
@@ -1459,6 +1808,9 @@
       "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
-    }
+    },
+    "cxx_flags": [
+      "-std=gnu++17"
+    ]
   }
 }

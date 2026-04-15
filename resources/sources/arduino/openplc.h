@@ -63,30 +63,9 @@ extern IEC_ULINT *lint_memory[MAX_MEMORY_LWORD];
 
 #endif
 
-//MatIEC Compiler
-void config_run__(unsigned long tick);
-void config_init__(void);
-
-//Common task timer
-extern unsigned long long common_ticktime__;
-#define DELAY_TIME      20
-
-//glueVars.c
-void updateTime();
-void glueVars();
-
-//OpenPLC Buffers
-//Booleans
-
-//extern IEC_BOOL buffer_bool_input[MAX_DIGITAL_INPUT/8][8];
-//extern IEC_BOOL buffer_bool_output[MAX_DIGITAL_OUTPUT/8][8];
-//extern IEC_UINT buffer_int_input[MAX_ANALOG_INPUT];
-//extern IEC_UINT buffer_int_output[MAX_ANALOG_OUTPUT];
-
 //Hardware Layer
 void hardwareInit();
 void updateInputBuffers();
 void updateOutputBuffers();
-void setupCycleDelay(unsigned long long cycle_time);
-void cycleDelay();
+
 #endif
