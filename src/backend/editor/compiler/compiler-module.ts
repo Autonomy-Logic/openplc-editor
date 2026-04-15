@@ -992,9 +992,7 @@ class CompilerModule {
     buildProjectFlags = [
       ...buildProjectFlags,
       '--library',
-      `${join(compilationPath, 'src')}`, // Basic libraries
-      '--library',
-      `${join(compilationPath, 'src', 'lib')}`, // Arduino libraries
+      `${join(compilationPath, 'src')}`, // STruC++ generated code + runtime headers
       '--export-binaries', // Export binaries
       '-b',
       boardHalsContent['platform'], // Board target
