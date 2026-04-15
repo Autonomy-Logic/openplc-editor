@@ -30,7 +30,8 @@ type VariablePanelProps = {
   variableTree?: Map<string, DebugTreeNode>
   graphList?: string[]
   setGraphList: React.Dispatch<React.SetStateAction<string[]>>
-  debugVariableValues?: Map<string, string>
+  debugBoolValues?: Map<string, string>
+  debugNonBoolValues?: Map<string, string>
   debugVariableIndexes?: Map<string, number>
   debugForcedVariables?: Map<string, boolean>
   debugExpandedNodes?: Map<string, boolean>
@@ -101,7 +102,8 @@ const VariablesPanel = ({
   variableTree,
   setGraphList,
   graphList,
-  debugVariableValues,
+  debugBoolValues,
+  debugNonBoolValues,
   debugVariableIndexes,
   debugForcedVariables,
   debugExpandedNodes,
@@ -126,7 +128,7 @@ const VariablesPanel = ({
   } | null>(null)
 
   const getValue = (compositeKey: string): string | undefined => {
-    return debugVariableValues?.get(compositeKey)
+    return debugBoolValues?.get(compositeKey) ?? debugNonBoolValues?.get(compositeKey)
   }
 
   const toggleGraphVisibility = (variableName: string) => {

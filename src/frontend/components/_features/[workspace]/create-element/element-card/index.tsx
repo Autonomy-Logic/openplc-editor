@@ -24,6 +24,7 @@ import {
 } from '../../../../../utils/device'
 import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
 import { useToast } from '../../../[app]/toast/use-toast'
+import { validatePouOrDataTypeName } from '../hooks/use-name-validation'
 
 type ElementCardProps = {
   target: 'function' | 'function-block' | 'program' | 'data-type' | 'server' | 'remote-device'
@@ -135,20 +136,19 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const isArduinoTarget = checkIsArduinoTarget(currentBoardInfo)
   const isSimulator = isSimulatorTarget(currentBoardInfo)
   const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard)
-  const allowServersAndRemoteDevices = isRuntimeV4 || isSimulator
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
-    try {
-      const pouWasCreated = create(data)
-      if (!pouWasCreated) throw new TypeError()
-      toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
-      closeContainer((prev) => !prev)
-      setIsOpen(false)
-    } catch (_error) {
+    const pouWasCreated = create(data)
+    if (!pouWasCreated.ok) {
       pouSetError('name', {
         type: 'already-exists',
       })
+      toast({ title: 'Invalid Pou', description: "You can't create a Pou with this name.", variant: 'fail' })
+      return
     }
+    toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
+    closeContainer((prev) => !prev)
+    setIsOpen(false)
   }
 
   const handleCancelCreateElement = () => {
@@ -288,9 +288,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                           * data type name already exists
                         </span>
                       )}
-                      <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
-                        ** Name must be at least 3 characters
-                      </span>
+                      {!datatypeErrors.name && (
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
+                          ** Name must follow CamelCase, PascalCase, or snake_case
+                        </span>
+                      )}
                     </div>
                     <div id='data-type-derivation-form-container' className='flex w-full flex-col gap-[6px] '>
                       <label
@@ -374,7 +376,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
-                {!allowServersAndRemoteDevices ? (
+                {!(isRuntimeV4 || isSimulator) ? (
                   <div className='flex flex-col gap-2 py-2'>
                     <p className='text-sm text-neutral-700 dark:text-neutral-300'>
                       Server configuration is only available for OpenPLC Runtime v4 targets.
@@ -509,7 +511,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
-                {!allowServersAndRemoteDevices ? (
+                {!(isRuntimeV4 || isSimulator) ? (
                   <div className='flex flex-col gap-2 py-2'>
                     <p className='text-sm text-neutral-700 dark:text-neutral-300'>
                       Remote device configuration is only available for OpenPLC Runtime v4 targets.
@@ -658,8 +660,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       </label>
                       <InputWithRef
                         {...pouRegister('name', {
-                          required: true,
-                          minLength: 3,
+                          required: 'Name is required',
+                          validate: validatePouOrDataTypeName,
                         })}
                         id='pou-name'
                         type='text'
@@ -671,9 +673,21 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                           * POU name already exists
                         </span>
                       )}
-                      <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
-                        ** Name must be at least 3 characters
-                      </span>
+                      {pouErrors.name?.type === 'validate' && (
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                          * {pouErrors.name.message}
+                        </span>
+                      )}
+                      {pouErrors.name?.type === 'required' && (
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                          * {pouErrors.name.message}
+                        </span>
+                      )}
+                      {!pouErrors.name && (
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
+                          ** Name must follow CamelCase, PascalCase, or snake_case
+                        </span>
+                      )}
                     </div>
                     <div id='pou-language-form-container' className='flex w-full flex-col gap-[6px] '>
                       <label

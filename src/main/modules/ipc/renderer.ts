@@ -55,6 +55,8 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
   pathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
     ipcRenderer.invoke('project:path-picker'),
+  openPathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
+    ipcRenderer.invoke('project:open-path-picker'),
   readProjectFiles: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('project:read-files', projectPath),
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),

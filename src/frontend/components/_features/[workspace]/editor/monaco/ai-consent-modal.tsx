@@ -5,19 +5,21 @@ const AIConsentModal = () => {
   const {
     modals,
     modalActions: { onOpenChange },
-    aiActions: { setAIConsented, setAIEnabled },
+    aiActions: { setAIConsented, setChatOpen },
   } = useOpenPLCStore()
 
   const isOpen = modals['ai-consent']?.open ?? false
 
   const handleAccept = () => {
+    localStorage.setItem('ai-consent-v1', 'accepted')
     setAIConsented(true)
     onOpenChange('ai-consent', false)
+    setChatOpen(true)
   }
 
   const handleDecline = () => {
+    localStorage.setItem('ai-consent-v1', 'declined')
     setAIConsented(false)
-    setAIEnabled(false)
     onOpenChange('ai-consent', false)
   }
 

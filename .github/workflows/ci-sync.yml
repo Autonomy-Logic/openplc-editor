@@ -1,0 +1,194 @@
+name: CI - Surface Sync
+
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+    paths:
+      - 'src/frontend/**'
+      - 'src/middleware/shared/**'
+      - 'src/backend/shared/**'
+      - 'src/__architecture__/**'
+      - 'scripts/compare-surfaces.py'
+      - '.github/workflows/ci-sync.yml'
+
+jobs:
+  surface-sync:
+    name: Shared Surface Sync Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for cross-repo token
+        id: token-check
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set. Skipping sync check (expected on fork PRs)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
+      - name: Checkout web repo (target branch)
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-target
+
+      - name: Checkout web repo (main fallback)
+        if: steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: main
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Warn about branch fallback
+        if: steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
+        run: |
+          echo "::warning::Web repo does not have branch '${{ github.event.pull_request.base.ref }}'. Fell back to 'main'."
+
+      - name: Compare surfaces against target branch
+        if: steps.token-check.outputs.skip == 'false'
+        id: compare-target
+        run: |
+          set +e
+          RESULT=$(python3 editor/scripts/compare-surfaces.py \
+            --web-root web/src \
+            --editor-root editor/src \
+            --github-annotations 2>&1 1>/tmp/compare-result.json)
+          EXIT_CODE=$?
+          set -e
+
+          # Forward annotations to stderr
+          if [ -n "$RESULT" ]; then
+            echo "$RESULT" >&2
+          fi
+
+          MATCH=$(python3 -c "import json; print(json.load(open('/tmp/compare-result.json'))['match'])")
+          echo "match=$MATCH" >> "$GITHUB_OUTPUT"
+
+          if [ "$MATCH" = "True" ]; then
+            echo "All shared surfaces match the web's ${{ github.event.pull_request.base.ref }} branch."
+          else
+            DIFF_COUNT=$(python3 -c "import json; print(json.load(open('/tmp/compare-result.json'))['total_diffs'])")
+            echo "Found $DIFF_COUNT difference(s) against web's ${{ github.event.pull_request.base.ref }} branch."
+            echo "Checking open web PRs for a matching sync..."
+          fi
+
+      - name: Find matching web PRs
+        if: steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False'
+        id: find-prs
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+        run: |
+          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+
+          PR_JSON=$(gh pr list \
+            --repo Autonomy-Logic/openplc-web \
+            --base "$BASE_BRANCH" \
+            --state open \
+            --limit 10 \
+            --json number,headRefName,title)
+
+          PR_COUNT=$(echo "$PR_JSON" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+          echo "pr_count=$PR_COUNT" >> "$GITHUB_OUTPUT"
+
+          # Save PR list for next step
+          echo "$PR_JSON" > /tmp/web-prs.json
+
+          if [ "$PR_COUNT" = "0" ]; then
+            echo "No open web PRs targeting '$BASE_BRANCH'."
+          else
+            echo "Found $PR_COUNT open web PR(s) targeting '$BASE_BRANCH'."
+          fi
+
+      - name: Check web PRs for sync
+        if: steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False' && steps.find-prs.outputs.pr_count != '0'
+        id: check-prs
+        run: |
+          PR_JSON=$(cat /tmp/web-prs.json)
+          MATCHED_PR=""
+
+          for PR_NUMBER in $(echo "$PR_JSON" | python3 -c "import json,sys; [print(p['number']) for p in json.load(sys.stdin)]"); do
+            TITLE=$(echo "$PR_JSON" | python3 -c "import json,sys; prs=json.load(sys.stdin); [print(p['title']) for p in prs if p['number']==$PR_NUMBER]")
+            BRANCH=$(echo "$PR_JSON" | python3 -c "import json,sys; prs=json.load(sys.stdin); [print(p['headRefName']) for p in prs if p['number']==$PR_NUMBER]")
+
+            echo "::group::Checking web PR #$PR_NUMBER: $TITLE ($BRANCH)"
+
+            # Fetch the PR head using refs/pull/N/head (works for forks too)
+            if ! git -C web fetch origin "refs/pull/$PR_NUMBER/head" 2>/dev/null; then
+              echo "::warning::Could not fetch PR #$PR_NUMBER head"
+              echo "::endgroup::"
+              continue
+            fi
+
+            git -C web checkout FETCH_HEAD --quiet
+
+            # Run comparison (suppress annotations, just check match)
+            set +e
+            RESULT=$(python3 editor/scripts/compare-surfaces.py \
+              --web-root web/src \
+              --editor-root editor/src \
+              2>/dev/null)
+            set -e
+
+            IS_MATCH=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['match'])")
+
+            if [ "$IS_MATCH" = "True" ]; then
+              echo "Surfaces MATCH with web PR #$PR_NUMBER ($BRANCH)"
+              echo "matched_pr=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+              echo "matched_title=$TITLE" >> "$GITHUB_OUTPUT"
+              echo "::endgroup::"
+              exit 0
+            else
+              DIFF_COUNT=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['total_diffs'])")
+              echo "Still $DIFF_COUNT difference(s) with PR #$PR_NUMBER"
+            fi
+
+            echo "::endgroup::"
+          done
+
+      - name: Report result
+        if: always() && steps.token-check.outputs.skip == 'false'
+        run: |
+          MATCH="${{ steps.compare-target.outputs.match }}"
+          MATCHED_PR="${{ steps.check-prs.outputs.matched_pr }}"
+          MATCHED_TITLE="${{ steps.check-prs.outputs.matched_title }}"
+
+          if [ "$MATCH" = "True" ]; then
+            echo "Shared surfaces are in sync with web's ${{ github.event.pull_request.base.ref }} branch."
+            exit 0
+          elif [ -n "$MATCHED_PR" ]; then
+            echo "::warning::Surfaces will be in sync once web PR #${MATCHED_PR} is merged: ${MATCHED_TITLE}"
+            echo "Shared surfaces match web PR #${MATCHED_PR}."
+            exit 0
+          else
+            echo "::error::Shared surfaces are NOT in sync with openplc-web."
+            echo ""
+            echo "Differing files:"
+            python3 -c "
+          import json
+          with open('/tmp/compare-result.json') as f:
+              data = json.load(f)
+          for surface, info in data['surfaces'].items():
+              if not info['match']:
+                  for d in info['diffs']:
+                      print(f\"  {d['reason']}: src/{d['file']}\")
+          "
+            exit 1
+          fi

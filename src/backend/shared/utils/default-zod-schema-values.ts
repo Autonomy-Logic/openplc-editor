@@ -20,7 +20,13 @@ import {
 } from 'zod'
 
 export const getDefaultSchemaValues = (schema: ZodTypeAny): unknown => {
-  if (schema instanceof ZodDefault) return schema._def.defaultValue()
+  if (schema instanceof ZodDefault) {
+    const innerType = schema._def.innerType as ZodTypeAny
+    if (innerType instanceof ZodObject) {
+      return getDefaultSchemaValues(innerType)
+    }
+    return schema._def.defaultValue()
+  }
   if (schema instanceof ZodObject) {
     const shape = schema.shape
     return Object.fromEntries(Object.entries(shape).map(([k, v]) => [k, getDefaultSchemaValues(v as ZodTypeAny)]))

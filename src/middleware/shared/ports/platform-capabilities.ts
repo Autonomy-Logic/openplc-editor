@@ -54,6 +54,9 @@ export interface PlatformCapabilities {
   /** True if the app supports exporting projects as XML files (Codesys, old-editor formats). */
   hasProjectExport: boolean
 
+  /** True if the app supports version control (branches, commits, change tracking). */
+  hasVersionControl: boolean
+
   /** True if the app supports the "About" dialog. */
   hasAboutDialog: boolean
 
@@ -115,6 +118,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasInProcessSimulator: true,
   hasLocalFilesystem: true,
   hasProjectExport: true,
+  hasVersionControl: false,
   hasAboutDialog: true,
   hasPythonLSP: true,
   hasUndoRedoHistory: true,
@@ -138,6 +142,7 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasInProcessSimulator: true,
   hasLocalFilesystem: false,
   hasProjectExport: false,
+  hasVersionControl: true,
   hasAboutDialog: false,
   hasPythonLSP: false,
   hasUndoRedoHistory: false,

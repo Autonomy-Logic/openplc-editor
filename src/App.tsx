@@ -1,6 +1,6 @@
 import '@xyflow/react/dist/style.css'
 import 'tailwindcss/tailwind.css'
-import './backend/styles/globals.css'
+import './backend/shared/styles/globals.css'
 
 import { useEffect } from 'react'
 

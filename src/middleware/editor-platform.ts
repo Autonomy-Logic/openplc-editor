@@ -24,6 +24,7 @@ import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
 import { createEditorSystemAdapter } from './adapters/editor/system-adapter'
 import { createEditorThemeAdapter } from './adapters/editor/theme-adapter'
+import { createEditorVersionControlAdapter } from './adapters/editor/version-control-adapter'
 import { createEditorWindowAdapter } from './adapters/editor/window-adapter'
 import { EDITOR_CAPABILITIES } from './shared/ports/platform-capabilities'
 import type { PlatformPorts } from './shared/providers/types'
@@ -43,6 +44,10 @@ export function setProjectPath(path: string): void {
   _projectPath = path
 }
 
+// macOS has a native application menu bar; Windows and Linux do not
+// (the Electron menu is hidden on those platforms — see menu.ts buildDefaultTemplate).
+const isMac = navigator.platform.startsWith('Mac')
+
 /**
  * Editor platform ports — all port interfaces wired to Electron IPC bridge.
  */
@@ -59,5 +64,6 @@ export const editorPorts: PlatformPorts = {
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
   esi: createEditorEsiAdapter(() => _projectPath),
-  capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
+  versionControl: createEditorVersionControlAdapter(),
+  capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development', hasNativeMenu: isMac },
 }

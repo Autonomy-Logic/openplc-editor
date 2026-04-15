@@ -94,6 +94,10 @@ export function useTheme() {
   return usePlatform().theme
 }
 
+export function useVersionControl() {
+  return usePlatform().versionControl
+}
+
 export function useCapabilities() {
   return usePlatform().capabilities
 }
