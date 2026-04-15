@@ -967,10 +967,17 @@ class CompilerModule {
     }
 
     if (boardHalsContent['cxx_flags']) {
+      const cxxFlags = [...boardHalsContent['cxx_flags']]
+      // AVR toolchains don't ship the C++ standard library (no <type_traits>, <algorithm>, etc.).
+      // Add avr-libstdcpp headers so STruC++ runtime compiles on AVR targets.
+      const avrLibStdCppPath = join(this.sourceDirectoryPath, 'avr-libstdcpp', 'include')
+      if (boardHalsContent['core']?.startsWith('arduino:avr')) {
+        cxxFlags.push(`-isystem "${avrLibStdCppPath}"`)
+      }
       buildProjectFlags = [
         ...buildProjectFlags,
         '--build-property',
-        `compiler.cpp.extra_flags=${boardHalsContent['cxx_flags'].map((f) => f).join(' ')}`,
+        `compiler.cpp.extra_flags=${cxxFlags.join(' ')}`,
       ]
     }
 
