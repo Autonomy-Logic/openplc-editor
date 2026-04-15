@@ -21,7 +21,6 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
-          working-directory: editor
           filters: |
             shared:
               - 'src/frontend/**'
