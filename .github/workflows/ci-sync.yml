@@ -321,3 +321,64 @@ jobs:
       - name: Compare SURFACES definitions
         if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
         run: python3 editor/scripts/compare-surface-definitions.py --web-root web --editor-root editor
+
+  tooling-sync:
+    name: Tooling Configuration Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for cross-repo token
+        id: token-check
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set. Skipping sync check (expected on fork PRs)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
+      - name: Check for tooling changes
+        if: steps.token-check.outputs.skip == 'false'
+        id: filter
+        run: |
+          cd editor
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+          if echo "$CHANGED" | grep -qE '^(\.prettierrc$|eslint\.config\.|tsconfig|scripts/)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No tooling changes detected. Skipping tooling sync check."
+          fi
+
+      - name: Checkout web repo (target branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-target
+
+      - name: Checkout web repo (main fallback)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-target.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: main
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Compare tooling configuration
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        run: python3 editor/scripts/compare-tooling.py --web-root web --editor-root editor --github-annotations
