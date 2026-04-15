@@ -1,21 +1,14 @@
-name: CI - Surface Sync
+name: CI - Cross-Repo Sync
 
 on:
   pull_request:
     branches:
       - main
       - development
-    paths:
-      - 'src/frontend/**'
-      - 'src/middleware/shared/**'
-      - 'src/backend/shared/**'
-      - 'src/__architecture__/**'
-      - 'scripts/compare-surfaces.py'
-      - '.github/workflows/ci-sync.yml'
 
 jobs:
   surface-sync:
-    name: Shared Surface Sync Check
+    name: Shared Surface Sync
     runs-on: ubuntu-latest
 
     steps:
@@ -37,8 +30,22 @@ jobs:
         with:
           path: editor
 
-      - name: Checkout web repo (target branch)
+      - name: Check for shared surface changes
         if: steps.token-check.outputs.skip == 'false'
+        id: filter
+        run: |
+          cd editor
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+          if echo "$CHANGED" | grep -qE '^(src/frontend/|src/middleware/shared/|src/backend/shared/|src/__architecture__/)'; then
+            echo "shared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "shared=false" >> "$GITHUB_OUTPUT"
+            echo "No shared surface changes detected. Skipping sync check."
+          fi
+
+      - name: Checkout web repo (target branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -49,7 +56,7 @@ jobs:
         id: checkout-web-target
 
       - name: Checkout web repo (main fallback)
-        if: steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true' && steps.checkout-web-target.outcome == 'failure'
         uses: actions/checkout@v4
         with:
           repository: Autonomy-Logic/openplc-web
@@ -58,12 +65,12 @@ jobs:
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Warn about branch fallback
-        if: steps.token-check.outputs.skip == 'false' && steps.checkout-web-target.outcome == 'failure'
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true' && steps.checkout-web-target.outcome == 'failure'
         run: |
           echo "::warning::Web repo does not have branch '${{ github.event.pull_request.base.ref }}'. Fell back to 'main'."
 
       - name: Compare surfaces against target branch
-        if: steps.token-check.outputs.skip == 'false'
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true'
         id: compare-target
         run: |
           set +e
@@ -91,7 +98,7 @@ jobs:
           fi
 
       - name: Find matching web PRs
-        if: steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False'
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true' && steps.compare-target.outputs.match == 'False'
         id: find-prs
         env:
           GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
@@ -118,7 +125,7 @@ jobs:
           fi
 
       - name: Check web PRs for sync
-        if: steps.token-check.outputs.skip == 'false' && steps.compare-target.outputs.match == 'False' && steps.find-prs.outputs.pr_count != '0'
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true' && steps.compare-target.outputs.match == 'False' && steps.find-prs.outputs.pr_count != '0'
         id: check-prs
         run: |
           PR_JSON=$(cat /tmp/web-prs.json)
@@ -164,7 +171,7 @@ jobs:
           done
 
       - name: Report result
-        if: always() && steps.token-check.outputs.skip == 'false'
+        if: always() && steps.token-check.outputs.skip == 'false' && steps.filter.outputs.shared == 'true'
         run: |
           MATCH="${{ steps.compare-target.outputs.match }}"
           MATCHED_PR="${{ steps.check-prs.outputs.matched_pr }}"
@@ -192,3 +199,219 @@ jobs:
           "
             exit 1
           fi
+
+  deps-sync:
+    name: Shared Dependencies Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for cross-repo token
+        id: token-check
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set. Skipping sync check (expected on fork PRs)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
+      - name: Check for package.json changes
+        if: steps.token-check.outputs.skip == 'false'
+        id: filter
+        run: |
+          cd editor
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+          if echo "$CHANGED" | grep -qE '^package\.json$'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No package.json changes detected. Skipping dependency sync check."
+          fi
+
+      - name: Checkout web repo (head branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.head_ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-head
+
+      - name: Checkout web repo (base branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-base
+
+      - name: Checkout web repo (main fallback)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure' && steps.checkout-web-base.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: main
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Compare shared dependencies
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        run: python3 editor/scripts/compare-dependencies.py --web-root web --editor-root editor
+
+  script-sync:
+    name: Comparison Script Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for cross-repo token
+        id: token-check
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set. Skipping sync check (expected on fork PRs)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
+      - name: Check for compare script changes
+        if: steps.token-check.outputs.skip == 'false'
+        id: filter
+        run: |
+          cd editor
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+          if echo "$CHANGED" | grep -qE '^scripts/compare-surfaces\.py$'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No compare script changes detected. Skipping script sync check."
+          fi
+
+      - name: Checkout web repo (head branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.head_ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-head
+
+      - name: Checkout web repo (base branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-base
+
+      - name: Checkout web repo (main fallback)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure' && steps.checkout-web-base.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: main
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Compare SURFACES definitions
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        run: python3 editor/scripts/compare-surface-definitions.py --web-root web --editor-root editor
+
+  tooling-sync:
+    name: Tooling Configuration Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for cross-repo token
+        id: token-check
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set. Skipping sync check (expected on fork PRs)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Checkout editor repo
+        if: steps.token-check.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          path: editor
+
+      - name: Check for tooling changes
+        if: steps.token-check.outputs.skip == 'false'
+        id: filter
+        run: |
+          cd editor
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+          if echo "$CHANGED" | grep -qE '^(\.prettierrc$|eslint\.config\.|tsconfig|scripts/)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No tooling changes detected. Skipping tooling sync check."
+          fi
+
+      - name: Checkout web repo (head branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.head_ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-head
+
+      - name: Checkout web repo (base branch)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+        continue-on-error: true
+        id: checkout-web-base
+
+      - name: Checkout web repo (main fallback)
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true' && steps.checkout-web-head.outcome == 'failure' && steps.checkout-web-base.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: Autonomy-Logic/openplc-web
+          ref: main
+          path: web
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
+      - name: Compare tooling configuration
+        if: steps.token-check.outputs.skip == 'false' && steps.filter.outputs.changed == 'true'
+        run: python3 editor/scripts/compare-tooling.py --web-root web --editor-root editor --github-annotations
