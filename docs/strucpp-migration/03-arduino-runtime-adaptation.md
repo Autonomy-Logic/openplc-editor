@@ -270,6 +270,16 @@ Arduino, this is acceptable since:
 For boards with very tight memory (ATmega328P), the total overhead is ~8 bytes per program
 instance (pointer + divisor).
 
+## Step 3.3: Add `-std=gnu++17` to hals.json
+
+**File to modify**: `resources/sources/boards/hals.json`
+
+Add `"cxx_flags": ["-std=gnu++17", "-MMD", "-c"]` to all board entries. This is required
+for arduino-cli to compile the STruC++ C++17 output.
+
+(Deferred from Phase 2 since it's only needed once the sketch exists and arduino-cli
+actually compiles the STruC++ output.)
+
 ## Testing Strategy
 
 1. **End-to-end compile**: Simple ST project through the full pipeline
@@ -289,11 +299,18 @@ instance (pointer + divisor).
 4. **HAL compatibility test**: Compile with each major HAL file
    - Verify no compilation errors with STruC++ C++17 code
 
+5. **End-to-end code generation test**: Verify the full pipeline from `program.st` through
+   STruC++ `compile()` to `generated.cpp`/`generated.hpp` in the build directory, followed
+   by a successful `arduino-cli` compilation producing a firmware binary.
+   (Deferred from Phase 2 -- code generation was validated via unit tests, but the full
+   arduino-cli round-trip requires the sketch and adapted openplc.h from this phase.)
+
 ## Files Created/Modified
 
 | File | Action |
 |------|--------|
 | `resources/sources/StrucppBaremetal/StrucppBaremetal.ino` | **New** -- static Arduino sketch |
 | `resources/sources/arduino/openplc.h` | Modified -- remove MatIEC-specific declarations |
+| `resources/sources/boards/hals.json` | Modified -- add `-std=gnu++17` to `cxx_flags` |
 
 Note: Runtime headers come from `resources/strucpp/runtime/include/` (downloaded in Phase 1).
