@@ -9,11 +9,6 @@ export type { ChatMessage, ChatMessageRole }
 export type AIModel = 'haiku' | 'sonnet'
 export type AIAction = 'complete' | 'chat'
 
-export type ChatConversation = {
-  pouName: string
-  messages: ChatMessage[]
-}
-
 // ---------------------------------------------------------------------------
 // AI state
 // ---------------------------------------------------------------------------
@@ -28,8 +23,9 @@ export type AIState = {
     creditsTotal: number
     tier: 'free' | 'pro'
     currentPeriodEnd: string | null
-    conversations: ChatConversation[]
-    activeConversationPou: string | null
+    messages: ChatMessage[]
+    activeEditorPou: string | null
+    isAgenticLoopRunning: boolean
     isChatOpen: boolean
     error: string | null
   }
@@ -48,11 +44,12 @@ export type AIActions = {
   setTier: (tier: 'free' | 'pro') => void
   setCurrentPeriodEnd: (date: string | null) => void
   setAIError: (error: string | null) => void
-  setActiveConversationPou: (pouName: string | null) => void
-  addMessage: (pouName: string, message: ChatMessage) => void
-  updateMessageContent: (pouName: string, messageId: string, content: string) => void
-  rateMessage: (pouName: string, messageId: string, rating: 'up' | 'down' | undefined) => void
-  clearConversation: (pouName: string) => void
+  setActiveEditorPou: (pouName: string | null) => void
+  setAgenticLoopRunning: (running: boolean) => void
+  addMessage: (message: ChatMessage) => void
+  updateMessageContent: (messageId: string, content: string) => void
+  rateMessage: (messageId: string, rating: 'up' | 'down' | undefined) => void
+  clearConversation: () => void
   toggleChat: () => void
   setChatOpen: (open: boolean) => void
 }
@@ -69,4 +66,4 @@ export type AISlice = AIState & {
 // Constants
 // ---------------------------------------------------------------------------
 
-export const MAX_CONVERSATION_MESSAGES = 20
+export const MAX_CONVERSATION_MESSAGES = 50

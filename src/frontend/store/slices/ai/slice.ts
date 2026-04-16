@@ -14,8 +14,9 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   creditsTotal: 500,
   tier: 'free',
   currentPeriodEnd: null,
-  conversations: [],
-  activeConversationPou: null,
+  messages: [],
+  activeEditorPou: null,
+  isAgenticLoopRunning: false,
   isChatOpen: false,
   error: null,
 }
@@ -83,60 +84,55 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           }),
         )
       },
-      setActiveConversationPou: (pouName) => {
+      setActiveEditorPou: (pouName) => {
         setState(
           produce(({ ai }: AISlice) => {
-            ai.activeConversationPou = pouName
+            ai.activeEditorPou = pouName
           }),
         )
       },
-      addMessage: (pouName, message) => {
+      setAgenticLoopRunning: (running) => {
         setState(
           produce(({ ai }: AISlice) => {
-            let conversation = ai.conversations.find((c) => c.pouName === pouName)
-            if (!conversation) {
-              conversation = { pouName, messages: [] }
-              ai.conversations.push(conversation)
-            }
-            conversation.messages.push(message)
-            if (conversation.messages.length > MAX_CONVERSATION_MESSAGES) {
-              conversation.messages = conversation.messages.slice(-MAX_CONVERSATION_MESSAGES)
+            ai.isAgenticLoopRunning = running
+          }),
+        )
+      },
+      addMessage: (message) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.messages.push(message)
+            if (ai.messages.length > MAX_CONVERSATION_MESSAGES) {
+              ai.messages = ai.messages.slice(-MAX_CONVERSATION_MESSAGES)
             }
           }),
         )
       },
-      updateMessageContent: (pouName, messageId, content) => {
+      updateMessageContent: (messageId, content) => {
         setState(
           produce(({ ai }: AISlice) => {
-            const conversation = ai.conversations.find((c) => c.pouName === pouName)
-            if (!conversation) return
-            const msg = conversation.messages.find((m) => m.id === messageId)
+            const msg = ai.messages.find((m) => m.id === messageId)
             if (msg) {
               msg.content = content
             }
           }),
         )
       },
-      rateMessage: (pouName, messageId, rating) => {
+      rateMessage: (messageId, rating) => {
         setState(
           produce(({ ai }: AISlice) => {
-            const conversation = ai.conversations.find((c) => c.pouName === pouName)
-            if (!conversation) return
-            const msg = conversation.messages.find((m) => m.id === messageId)
+            const msg = ai.messages.find((m) => m.id === messageId)
             if (msg) {
               msg.rating = rating
             }
           }),
         )
       },
-      clearConversation: (pouName) => {
+      clearConversation: () => {
         setState(
           produce(({ ai }: AISlice) => {
-            ai.conversations = ai.conversations.filter((c) => c.pouName !== pouName)
-            if (ai.activeConversationPou === pouName) {
-              ai.activeConversationPou = null
-              ai.error = null
-            }
+            ai.messages = []
+            ai.error = null
           }),
         )
       },

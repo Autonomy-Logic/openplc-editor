@@ -1,6 +1,6 @@
 import './configs'
 
-import { DiffEditor, Editor as PrimitiveEditor } from '@monaco-editor/react'
+import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -176,24 +176,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   })
   const watchedFilePathRef = useRef<string | null>(null)
 
-  // AI diff review state — when active, swaps the editor to a DiffEditor
-  const [diffReview, setDiffReview] = useState<{
-    active: boolean
-    proposedBody: string
-    variableSummary: string
-  }>({ active: false, proposedBody: '', variableSummary: '' })
-
   const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
 
   const pou = pous.find((p) => p.name === name)
   const pouVariables = pou?.interface?.variables ?? []
-
-  // Restore custom theme after DiffEditor unmounts
-  useEffect(() => {
-    if (diffReview.active) return
-    const m = monacoRef.current
-    if (m) requestAnimationFrame(() => applyThemeNow(m, shouldUseDarkMode))
-  }, [diffReview.active, shouldUseDarkMode])
 
   // Sync local text when POU identity changes
   useEffect(() => {
@@ -957,40 +943,46 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       window.addEventListener('ai-insert-at-cursor', handleInsertAtCursor)
     }
 
-    // Listen for AI chat "review code" events — opens the inline diff review
-    const handleCodeReview = (e: Event) => {
-      const {
-        pouName: targetPou,
-        proposedBody,
-        variableSummary,
-      } = (e as CustomEvent<{ pouName: string; proposedBody: string; variableSummary: string }>).detail
+    // Listen for AI tool updates — sync editor model with new body
+    const handlePouUpdated = (e: Event) => {
+      const { pouName: targetPou, body } = (e as CustomEvent<{ pouName: string; body: string; oldBody?: string }>)
+        .detail
       if (targetPou !== name) return
-      setDiffReview({ active: true, proposedBody, variableSummary })
-    }
-    window.addEventListener('ai-review-code', handleCodeReview)
 
-    // Listen for AI chat "apply code" — applies after the user accepted the diff
-    const handleCodeApplied = (e: Event) => {
-      const { pouName: targetPou, body } = (e as CustomEvent<{ pouName: string; body: string }>).detail
-      if (targetPou !== name) return
       const model = editorInstance.getModel()
-      if (model) {
+      if (model && model.getValue() !== body) {
         isSyncingModelRef.current = true
         const fullRange = model.getFullModelRange()
-        editorInstance.executeEdits('ai-code-apply', [{ range: fullRange, text: body }])
+        editorInstance.executeEdits('ai-tool-update', [{ range: fullRange, text: body }])
         isSyncingModelRef.current = false
-        editorInstance.focus()
       }
+      setLocalText(body)
     }
-    window.addEventListener('ai-code-applied', handleCodeApplied)
+    window.addEventListener('ai-pou-updated', handlePouUpdated)
+
+    // Listen for global accept/reject from chat panel
+    const handleAcceptAllHunks = (e: Event) => {
+      const { pouName: targetPou } = (e as CustomEvent<{ pouName: string }>).detail
+      if (targetPou !== name) return
+      // No-op — changes are already in the editor model
+    }
+    window.addEventListener('ai-accept-all-hunks', handleAcceptAllHunks)
+
+    const handleRejectAllHunks = (e: Event) => {
+      const { pouName: targetPou } = (e as CustomEvent<{ pouName: string }>).detail
+      if (targetPou !== name) return
+      // Body is restored by the chat panel's undo handler via store setState
+    }
+    window.addEventListener('ai-reject-all-hunks', handleRejectAllHunks)
 
     editorInstance.onDidDispose(() => {
       window.removeEventListener('keyup', handleKeyUp)
       if (handleInsertAtCursor) {
         window.removeEventListener('ai-insert-at-cursor', handleInsertAtCursor)
       }
-      window.removeEventListener('ai-review-code', handleCodeReview)
-      window.removeEventListener('ai-code-applied', handleCodeApplied)
+      window.removeEventListener('ai-pou-updated', handlePouUpdated)
+      window.removeEventListener('ai-accept-all-hunks', handleAcceptAllHunks)
+      window.removeEventListener('ai-reject-all-hunks', handleRejectAllHunks)
     })
 
     editorInstance.focus()
@@ -1307,23 +1299,6 @@ void loop()
   }, [])
 
   // -----------------------------------------------------------------------
-  // AI diff review handlers
-  // -----------------------------------------------------------------------
-
-  const handleDiffAccept = useCallback(() => {
-    if (!diffReview.active) return
-    setDiffReview({ active: false, proposedBody: '', variableSummary: '' })
-    window.dispatchEvent(
-      new CustomEvent('ai-review-accepted', { detail: { pouName: name, body: diffReview.proposedBody } }),
-    )
-  }, [diffReview, name])
-
-  const handleDiffReject = useCallback(() => {
-    setDiffReview({ active: false, proposedBody: '', variableSummary: '' })
-  }, [])
-
-  const diffThemeName = shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'
-
   // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
@@ -1331,69 +1306,23 @@ void loop()
   return (
     <>
       <div id='editor drop handler' className='oplc-monaco-wrapper relative h-full w-full' onDrop={handleDrop}>
-        {diffReview.active ? (
-          <>
-            {/* Diff review label bar */}
-            <div className='flex items-center gap-2 px-2 py-1'>
-              {diffReview.variableSummary && (
-                <span className='text-[10px] font-medium text-green-600 dark:text-green-400'>
-                  {diffReview.variableSummary}
-                </span>
-              )}
-              <span className='text-[10px] text-neutral-400 dark:text-neutral-500'>AI suggestion</span>
-              <div className='ml-auto flex items-center gap-1'>
-                <button
-                  onClick={handleDiffReject}
-                  className='rounded px-2 py-0.5 text-[10px] font-medium text-neutral-500 transition-colors hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
-                >
-                  Reject
-                </button>
-                <button
-                  onClick={handleDiffAccept}
-                  className='rounded bg-brand px-2 py-0.5 text-[10px] font-medium text-white transition-colors hover:bg-brand-dark'
-                >
-                  Accept
-                </button>
-              </div>
-            </div>
-            <DiffEditor
-              original={localText}
-              modified={diffReview.proposedBody}
-              language={language}
-              theme={diffThemeName}
-              beforeMount={(m) => ensureOpenplcThemes(m)}
-              options={{
-                readOnly: true,
-                minimap: { enabled: false },
-                fontSize: 13,
-                scrollBeyondLastLine: false,
-                domReadOnly: true,
-                renderSideBySide: true,
-                originalEditable: false,
-              }}
-            />
-          </>
-        ) : (
-          <>
-            {capabilities.hasAIAssistant && <AIStatusIndicator />}
-            <PrimitiveEditor
-              key={capabilities.hasLocalFilesystem ? undefined : path}
-              options={monacoEditorUserOptions}
-              height='100%'
-              width='100%'
-              path={uniqueMonacoPath}
-              language={language}
-              defaultValue={''}
-              value={localText}
-              beforeMount={handleEditorBeforeMount}
-              onMount={handleEditorDidMount}
-              onChange={handleWriteInPou}
-              theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
-              saveViewState={false}
-              keepCurrentModel={true}
-            />
-          </>
-        )}
+        {capabilities.hasAIAssistant && <AIStatusIndicator />}
+        <PrimitiveEditor
+          key={capabilities.hasLocalFilesystem ? undefined : path}
+          options={monacoEditorUserOptions}
+          height='100%'
+          width='100%'
+          path={uniqueMonacoPath}
+          language={language}
+          defaultValue={''}
+          value={localText}
+          beforeMount={handleEditorBeforeMount}
+          onMount={handleEditorDidMount}
+          onChange={handleWriteInPou}
+          theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
+          saveViewState={false}
+          keepCurrentModel={true}
+        />
       </div>
       <Modal open={isOpen} onOpenChange={setIsOpen}>
         <ModalContent className='flex h-56 w-96 select-none flex-col justify-between gap-2 rounded-lg p-8'>
