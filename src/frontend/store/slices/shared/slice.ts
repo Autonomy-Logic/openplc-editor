@@ -359,17 +359,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
 
     closeFile: (name) => {
-      // EtherCAT slave tabs are views over data owned by the parent remote
-      // device — they have no entry in the `files` store and no per-tab
-      // dirty state. `getSavedState` would default to `false` and trigger
-      // a phantom "save changes?" prompt, so close them directly. Any real
-      // edits to slave config already dirty the parent bus tab through
-      // syncDevicesToStore -> setEditingState('unsaved').
-      const tab = getState().tabs.find((t) => t.name === name)
-      if (tab?.elementType.type === 'ethercat-device') {
-        return getState().sharedWorkspaceActions.forceCloseFile(name)
-      }
-
       // Check if file has unsaved changes
       const isSaved = getState().fileActions.getSavedState({ name })
 
@@ -613,6 +602,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (remoteDevices) {
         remoteDevices.forEach((d) => {
           files[d.name] = { type: 'remote-device', filePath: d.name, saved: true }
+          // Register file entries for EtherCAT slave devices (children of the bus)
+          if (d.protocol === 'ethercat' && d.ethercatConfig?.devices) {
+            for (const slave of d.ethercatConfig.devices) {
+              files[slave.name] = { type: 'ethercat-device', filePath: d.name, saved: true }
+            }
+          }
         })
       }
       files['Resource'] = { type: 'resource', filePath: 'Resource', saved: true }

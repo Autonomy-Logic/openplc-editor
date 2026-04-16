@@ -460,8 +460,12 @@ const EtherCATEditor = () => {
       }
 
       syncDevicesToStore([...configuredDevices, newDevice])
+
+      // Register file entry for the new slave so Ctrl+S and dirty tracking work
+      const { fileActions } = useOpenPLCStore.getState()
+      fileActions.addFile({ name: newDevice.name, type: 'ethercat-device', filePath: deviceName })
     },
-    [configuredDevices, syncDevicesToStore, projectPath, project.data.remoteDevices],
+    [configuredDevices, syncDevicesToStore, deviceName, project.data.remoteDevices],
   )
 
   const handleRemoveDevice = useCallback(

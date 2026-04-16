@@ -97,12 +97,20 @@ const EtherCATDeviceEditor = () => {
   }, [usedAddresses, device])
 
   // Sync helpers
+  const deviceName = device?.name ?? ''
+
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
       projectActions.updateEthercatConfig(busName, { masterConfig, devices })
-      workspaceActions.setEditingState('unsaved')
+      // Mark the slave file dirty (same pattern as other file types)
+      const { sharedWorkspaceActions } = useOpenPLCStore.getState()
+      if (deviceName) {
+        sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
+      } else {
+        workspaceActions.setEditingState('unsaved')
+      }
     },
-    [busName, projectActions, masterConfig],
+    [busName, projectActions, masterConfig, deviceName],
   )
 
   const handleUpdateDevice = useCallback(
