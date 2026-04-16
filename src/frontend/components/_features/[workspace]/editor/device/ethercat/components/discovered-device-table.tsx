@@ -1,7 +1,7 @@
-import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
-import type { ScannedDeviceMatch } from '@root/middleware/shared/ports/esi-types'
-import { cn } from '@root/frontend/utils/cn'
 import { getBestMatchQuality } from '@root/backend/shared/ethercat/device-matcher'
+import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
+import { cn } from '@root/frontend/utils/cn'
+import type { ScannedDeviceMatch } from '@root/middleware/shared/ports/esi-types'
 
 type DiscoveredDeviceTableProps = {
   deviceMatches: ScannedDeviceMatch[]

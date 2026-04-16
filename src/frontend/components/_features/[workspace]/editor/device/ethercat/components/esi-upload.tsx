@@ -1,6 +1,6 @@
 import { cn } from '@root/frontend/utils/cn'
-import { useEsi } from '@root/middleware/shared/providers/platform-context'
 import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import { useEsi } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useRef, useState } from 'react'
 
 import { ESIParseProgress } from './esi-parse-progress'

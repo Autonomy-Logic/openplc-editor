@@ -188,11 +188,7 @@ class CompilerModule {
       return halsFileContent[board]['compiler']
     }
 
-    // Board not found in hals.json
-    try {
-    } catch {
-      // ignore package manager errors
-    }
+    // Board not found in hals.json or installed VPP packages
 
     throw new Error(`Board "${board}" not found in hals.json or installed VPP packages`)
   }

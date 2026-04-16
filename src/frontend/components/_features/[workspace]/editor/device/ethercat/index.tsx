@@ -6,8 +6,6 @@ import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-da
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
-import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
-import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
 import type {
   ConfiguredEtherCATDevice,
   ESIDeviceRef,
@@ -15,6 +13,8 @@ import type {
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
 } from '@root/middleware/shared/ports/esi-types'
+import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 

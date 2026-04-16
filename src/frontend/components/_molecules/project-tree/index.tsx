@@ -283,7 +283,7 @@ const ProjectTreeExpandableLeaf = ({
   const handleRenameFile = async (renamed: string) => {
     setIsEditing(false)
     if (!renamed || !label) return
-    const res = await renameRemoteDevice(label, renamed)
+    const res = renameRemoteDevice(label, renamed)
     if (!res.ok) setNewLabel(label || '')
   }
 
@@ -574,7 +574,7 @@ const ProjectTreeLeaf = ({
     }
 
     if (isEthercatDevice && busName && deviceId) {
-      const res = await renameEthercatDevice(busName, deviceId, newLabel)
+      const res = renameEthercatDevice(busName, deviceId, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
       }

@@ -11,12 +11,7 @@ import type { FileSliceDataObject } from '../file'
 import type { HistorySnapshot } from '../history'
 import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
-import {
-  CreateEditorObjectFromTab,
-  CreateEtherCATDeviceEditor,
-  CreateRemoteDeviceEditor,
-  CreateServerEditor,
-} from '../tabs/utils'
+import { CreateEditorObjectFromTab, CreateRemoteDeviceEditor, CreateServerEditor } from '../tabs/utils'
 import type { SharedRootState, SharedSlice } from './types'
 import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
 

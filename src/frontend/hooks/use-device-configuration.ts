@@ -1,3 +1,6 @@
+import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
+import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
+import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'
 import type {
   ConfiguredEtherCATDevice,
   EnrichDeviceData,
@@ -6,9 +9,6 @@ import type {
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
 } from '@root/middleware/shared/ports/esi-types'
-import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
-import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
-import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useRef, useState } from 'react'
 

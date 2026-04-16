@@ -11,7 +11,13 @@
  * in src/main/services/esi-service/esi-parser-main.ts.
  */
 
-import type { ESIChannel, ESIDataType, ESIDevice, ESIPdo, EtherCATChannelMapping } from '@root/middleware/shared/ports/esi-types'
+import type {
+  ESIChannel,
+  ESIDataType,
+  ESIDevice,
+  ESIPdo,
+  EtherCATChannelMapping,
+} from '@root/middleware/shared/ports/esi-types'
 
 /**
  * Map ESI data type to IEC 61131-3 type

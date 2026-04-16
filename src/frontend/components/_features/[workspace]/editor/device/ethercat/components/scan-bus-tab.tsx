@@ -2,7 +2,7 @@ import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
 import TableActions from '@root/frontend/components/_atoms/table-actions'
-import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
+import { cn } from '@root/frontend/utils/cn'
 import type {
   ConfiguredEtherCATDevice,
   ESIDeviceRef,
@@ -10,7 +10,7 @@ import type {
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
 } from '@root/middleware/shared/ports/esi-types'
-import { cn } from '@root/frontend/utils/cn'
+import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
 import { useState } from 'react'
 
 import { DeviceBrowserModal } from './device-browser-modal'

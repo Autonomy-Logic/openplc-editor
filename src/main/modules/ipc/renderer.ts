@@ -1,4 +1,5 @@
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -11,7 +12,6 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/types/ethercat'
-import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'

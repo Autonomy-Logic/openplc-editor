@@ -4,6 +4,7 @@ import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-mai
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { ESIRepositoryItem } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -15,7 +16,6 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/types/ethercat'
-import type { ESIRepositoryItem } from '@root/middleware/shared/ports/esi-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'

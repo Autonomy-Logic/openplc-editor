@@ -4,13 +4,13 @@
  * Provides functions to match scanned EtherCAT devices against ESI repository items.
  */
 
-import type { EtherCATDevice } from '@root/types/ethercat'
 import type {
   DeviceMatch,
   DeviceMatchQuality,
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
 } from '@root/middleware/shared/ports/esi-types'
+import type { EtherCATDevice } from '@root/types/ethercat'
 
 /**
  * Parse a hex string to a number for comparison

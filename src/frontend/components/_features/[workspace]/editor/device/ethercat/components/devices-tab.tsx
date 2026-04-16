@@ -1,13 +1,13 @@
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
 import TableActions from '@root/frontend/components/_atoms/table-actions'
+import { cn } from '@root/frontend/utils/cn'
 import type {
   ConfiguredEtherCATDevice,
   ESIDeviceRef,
   ESIDeviceSummary,
   ESIRepositoryItemLight,
 } from '@root/middleware/shared/ports/esi-types'
-import { cn } from '@root/frontend/utils/cn'
 import { useCallback, useMemo, useState } from 'react'
 
 import { DeviceBrowserModal } from './device-browser-modal'
