@@ -1,6 +1,6 @@
 import { getDeviceSummary } from '@root/backend/shared/ethercat/esi-parser'
 import { cn } from '@root/frontend/utils/cn'
-import type { ESIDevice, ESIFile } from '@root/types/ethercat/esi-types'
+import type { ESIDevice, ESIFile } from '@root/middleware/shared/ports/esi-types'
 
 type ESIDeviceInfoProps = {
   esiFile: ESIFile

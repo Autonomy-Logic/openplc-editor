@@ -11,7 +11,7 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/types/ethercat'
-import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'

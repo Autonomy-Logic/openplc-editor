@@ -19,7 +19,7 @@ import type {
   ESIPdoEntry,
   ESISyncManager,
   ESIVendor,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 import { XMLParser } from 'fast-xml-parser'
 
 // ===================== SHARED HELPERS =====================

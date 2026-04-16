@@ -9,7 +9,7 @@ import type {
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
   SDOConfigurationEntry,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 
 import { ChannelMappingTable } from './channel-mapping-table'
 import { SdoParametersTable } from './sdo-parameters-table'

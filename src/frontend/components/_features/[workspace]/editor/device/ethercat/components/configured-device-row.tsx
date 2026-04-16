@@ -9,7 +9,7 @@ import type {
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
   SDOConfigurationEntry,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 import { useMemo } from 'react'
 
 import { ChannelMappingsSection, DeviceConfigurationForm, SdoParametersSection } from './device-configuration-form'

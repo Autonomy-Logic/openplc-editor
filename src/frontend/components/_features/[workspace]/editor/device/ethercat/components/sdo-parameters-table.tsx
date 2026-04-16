@@ -1,6 +1,6 @@
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { cn } from '@root/frontend/utils/cn'
-import type { SDOConfigurationEntry } from '@root/types/ethercat/esi-types'
+import type { SDOConfigurationEntry } from '@root/middleware/shared/ports/esi-types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 type SdoParametersTableProps = {

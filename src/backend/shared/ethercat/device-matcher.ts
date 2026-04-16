@@ -10,7 +10,7 @@ import type {
   DeviceMatchQuality,
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 
 /**
  * Parse a hex string to a number for comparison

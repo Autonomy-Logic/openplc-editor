@@ -9,7 +9,7 @@ import type {
   ESIDeviceSummary,
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 import { cn } from '@root/frontend/utils/cn'
 import { useState } from 'react'
 

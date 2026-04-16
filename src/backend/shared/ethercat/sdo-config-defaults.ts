@@ -6,7 +6,7 @@
  * manufacturer-specific and profile-specific ranges.
  */
 
-import type { ESICoEObject, SDOConfigurationEntry } from '@root/types/ethercat/esi-types'
+import type { ESICoEObject, SDOConfigurationEntry } from '@root/middleware/shared/ports/esi-types'
 
 /**
  * Parse a hex index string to a number for range comparison.

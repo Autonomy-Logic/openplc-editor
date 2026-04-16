@@ -13,7 +13,7 @@ import type {
   PersistedPdo,
   PersistedPdoEntry,
   SDOConfigurationEntry,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 
 import { esiTypeToIecType, generateDefaultChannelMappings, pdoToChannels } from './esi-parser'
 import { extractDefaultSdoConfigurations } from './sdo-config-defaults'

@@ -1,5 +1,5 @@
 import { cn } from '@root/frontend/utils/cn'
-import type { ESIChannel, EtherCATChannelMapping } from '@root/types/ethercat/esi-types'
+import type { ESIChannel, EtherCATChannelMapping } from '@root/middleware/shared/ports/esi-types'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 type ChannelMappingTableProps = {

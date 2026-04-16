@@ -1,6 +1,6 @@
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { cn } from '@root/frontend/utils/cn'
-import type { ESIChannel } from '@root/types/ethercat/esi-types'
+import type { ESIChannel } from '@root/middleware/shared/ports/esi-types'
 import { useMemo, useState } from 'react'
 
 type ESIChannelsTableProps = {

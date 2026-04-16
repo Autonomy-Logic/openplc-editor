@@ -4,7 +4,7 @@ import type {
   PersistedChannelInfo,
   PersistedPdo,
   SDOConfigurationEntry,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 
 import { ethercatTaskName } from './ethercat-task-helpers'
 

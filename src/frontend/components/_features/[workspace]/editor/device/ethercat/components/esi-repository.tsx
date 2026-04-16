@@ -1,5 +1,5 @@
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
-import type { ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { useCallback, useState } from 'react'
 
 import { ESIRepositoryTable } from './esi-repository-table'

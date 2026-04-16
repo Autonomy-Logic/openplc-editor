@@ -11,7 +11,7 @@ import type {
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
   SDOConfigurationEntry,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 import { cn } from '@root/frontend/utils/cn'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 

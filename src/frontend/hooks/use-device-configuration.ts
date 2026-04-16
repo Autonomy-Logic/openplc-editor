@@ -5,7 +5,7 @@ import type {
   ESICoEObject,
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
 import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'

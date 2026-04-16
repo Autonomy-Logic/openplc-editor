@@ -1,4 +1,4 @@
-import type { ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 
 import { ESIRepository } from './esi-repository'
 

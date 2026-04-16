@@ -1,6 +1,6 @@
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
-import type { ScannedDeviceMatch } from '@root/types/ethercat/esi-types'
+import type { ScannedDeviceMatch } from '@root/middleware/shared/ports/esi-types'
 import { cn } from '@root/frontend/utils/cn'
 
 import { DiscoveredDeviceTable } from './discovered-device-table'

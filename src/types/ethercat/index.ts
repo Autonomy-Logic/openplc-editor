@@ -5,8 +5,9 @@
  * Based on the runtime's /api/discovery/* REST API.
  */
 
-// Re-export ESI types
-export * from './esi-types'
+// NOTE: ESI types (ESIDevice, ESIRepositoryItemLight, etc.) live in
+// src/middleware/shared/ports/esi-types.ts (shared surface). Import them
+// from '@root/middleware/shared/ports/esi-types' directly.
 
 // ===================== ENUMS =====================
 

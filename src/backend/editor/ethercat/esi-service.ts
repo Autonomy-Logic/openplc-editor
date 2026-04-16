@@ -1,4 +1,4 @@
-import type { ESIDeviceSummary, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import type { ESIDeviceSummary, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { promises } from 'fs'
 import { basename, dirname, join } from 'path'
 import { v4 as uuidv4 } from 'uuid'

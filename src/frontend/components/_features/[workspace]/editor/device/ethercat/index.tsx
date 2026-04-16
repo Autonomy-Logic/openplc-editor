@@ -14,7 +14,7 @@ import type {
   ESIDeviceSummary,
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
-} from '@root/types/ethercat/esi-types'
+} from '@root/middleware/shared/ports/esi-types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 

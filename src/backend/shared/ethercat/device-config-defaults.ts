@@ -1,4 +1,4 @@
-import type { EtherCATSlaveConfig } from '@root/types/ethercat/esi-types'
+import type { EtherCATSlaveConfig } from '@root/middleware/shared/ports/esi-types'
 
 /**
  * Default per-slave configuration for a newly added EtherCAT device.

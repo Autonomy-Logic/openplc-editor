@@ -1,5 +1,5 @@
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
-import type { ScannedDeviceMatch } from '@root/types/ethercat/esi-types'
+import type { ScannedDeviceMatch } from '@root/middleware/shared/ports/esi-types'
 import { cn } from '@root/frontend/utils/cn'
 import { getBestMatchQuality } from '@root/backend/shared/ethercat/device-matcher'
 

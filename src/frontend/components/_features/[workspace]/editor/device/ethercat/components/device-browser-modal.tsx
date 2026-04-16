@@ -1,6 +1,6 @@
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { cn } from '@root/frontend/utils/cn'
-import type { ESIDeviceRef, ESIDeviceSummary, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import type { ESIDeviceRef, ESIDeviceSummary, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { useCallback, useMemo, useState } from 'react'
 
 type DeviceBrowserModalProps = {
