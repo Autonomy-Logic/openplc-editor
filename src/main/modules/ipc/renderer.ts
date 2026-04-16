@@ -1,45 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
-import type {
-  EtherCATRuntimeStatusResponse,
-  EtherCATScanRequest,
-  EtherCATScanResponse,
-  EtherCATServiceStatusResponse,
-  EtherCATTestRequest,
-  EtherCATTestResponse,
-  EtherCATValidateRequest,
-  EtherCATValidateResponse,
-  NetworkInterface,
-} from '@root/types/ethercat'
-import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/types/ethercat/esi-types'
+import type { PLCProjectData, RuntimeLogEntry } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
-import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { RuntimeLogEntry } from '@root/types/PLC/runtime-logs'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
-import { ProjectState } from '../../../renderer/store/slices'
-import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
+type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
-type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
-
-type IDataToWrite = {
-  projectPath: string
-  content: {
-    projectData: PLCProject
-    pous: PLCPou[]
-    deviceConfiguration: DeviceConfiguration
-    devicePinMapping: DevicePin[]
-    servers?: ProjectState['data']['servers']
-    remoteDevices?: ProjectState['data']['remoteDevices']
-  }
-}
-
-export type ISaveDataResponse = {
-  success: boolean
-  reason: {
-    title: string
-    description: string
-  }
+/** Data posted through the MessagePort by the compiler module. */
+type CompilerPortMessage = {
+  message?: string
+  logLevel?: string
+  simulatorFirmwarePath?: string
+  plcStatus?: string
+  closePort?: boolean
 }
 
 /**
@@ -70,6 +42,9 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
   pathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
     ipcRenderer.invoke('project:path-picker'),
+  openPathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
+    ipcRenderer.invoke('project:open-path-picker'),
+  readProjectFiles: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('project:read-files', projectPath),
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
@@ -81,8 +56,8 @@ const rendererProcessBridge = {
   saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:save-file', filePath, content),
   saveFileAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-file-accelerator', callback),
-  saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
-    ipcRenderer.invoke('project:save', dataToWrite),
+  writeProjectFiles: (files: unknown): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:write-files', files),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
@@ -138,28 +113,31 @@ const rendererProcessBridge = {
 
   // ===================== THEME =====================
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
-  winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
+  winHandleUpdateTheme: (theme?: 'light' | 'dark') => ipcRenderer.send('system:update-theme', theme),
 
   // ===================== COMPILER/BUILD METHODS =====================
   // !! Deprecated: This method is an outdated implementation and should be substituted.
   exportProjectXml: async (
     pathToUserProject: string,
-    dataToCreateXml: ProjectState['data'],
+    dataToCreateXml: PLCProjectData,
     parseTo: 'old-editor' | 'codesys',
   ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo),
+    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo) as Promise<{
+      success: boolean
+      message: string
+    }>,
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
   runCompileProgram: (
-    compileProgramArgs: Array<string | boolean | null | ProjectState['data']>,
-    callback: (args: any) => void,
+    compileProgramArgs: Array<string | boolean | null | PLCProjectData>,
+    callback: (args: CompilerPortMessage) => void,
   ) => {
     // Create a MessageChannel to communicate between the renderer and main process
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     // Send to the main process a message to run the compile program
     // The main process will handle the compilation and send the result back through the port
     ipcRenderer.postMessage('compiler:run-compile-program', compileProgramArgs, [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data)
+    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
     rendererProcessPort.addEventListener('close', () =>
       callback({
         closePort: true,
@@ -169,10 +147,10 @@ const rendererProcessBridge = {
     // Set up the renderer process port to listen for messages from the main process
   },
 
-  runDebugCompilation: (compileArgs: Array<string | ProjectState['data']>, callback: (args: any) => void) => {
+  runDebugCompilation: (compileArgs: Array<string | PLCProjectData>, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-debug-compilation', compileArgs, [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data)
+    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
     rendererProcessPort.addEventListener('close', () =>
       callback({
         closePort: true,
@@ -181,33 +159,39 @@ const rendererProcessBridge = {
   },
 
   // !! Deprecated: These methods are an outdated implementation and should be removed.
-  compileRequest: (xmlPath: string, callback: (args: any) => void) => {
+  compileRequest: (xmlPath: string, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:build-st-program', xmlPath, [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data)
-    rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
+    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
+    rendererProcessPort.addEventListener('close', () => {})
   },
   createBuildDirectory: async (pathToUserProject: string): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject),
+    ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject) as Promise<{
+      success: boolean
+      message: string
+    }>,
   createXmlFileToBuild: async (
     pathToUserProject: string,
-    dataToCreateXml: ProjectState['data'],
+    dataToCreateXml: PLCProjectData,
   ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:build-xml-file', pathToUserProject, dataToCreateXml),
+    ipcRenderer.invoke('compiler:build-xml-file', pathToUserProject, dataToCreateXml) as Promise<{
+      success: boolean
+      message: string
+    }>,
   exportProjectRequest: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('compiler:export-project-request', (_event, value) => callback(_event, value)),
-  generateCFilesRequest: (pathToStProgram: string, callback: (args: any) => void) => {
+  generateCFilesRequest: (pathToStProgram: string, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:generate-c-files', pathToStProgram, [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data)
-    rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
+    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
+    rendererProcessPort.addEventListener('close', () => {})
   },
   removeExportProjectListener: () => ipcRenderer.removeAllListeners('compiler:export-project-request'),
-  setupCompilerEnvironment: (callback: (args: any) => void) => {
+  setupCompilerEnvironment: (callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:setup-environment', '', [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data)
-    rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
+    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
+    rendererProcessPort.addEventListener('close', () => {})
   },
 
   // ===================== HARDWARE METHODS =====================
@@ -371,187 +355,6 @@ const rendererProcessBridge = {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)
   },
-
-  // ===================== ETHERCAT DISCOVERY METHODS =====================
-  /**
-   * Get list of network interfaces available for EtherCAT communication
-   */
-  etherCATGetInterfaces: (
-    ipAddress: string,
-    jwtToken: string,
-  ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> =>
-    ipcRenderer.invoke('ethercat:get-interfaces', ipAddress, jwtToken),
-
-  /**
-   * Check if EtherCAT discovery service is available on the runtime
-   */
-  etherCATGetStatus: (
-    ipAddress: string,
-    jwtToken: string,
-  ): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:get-status', ipAddress, jwtToken),
-
-  /**
-   * Scan for EtherCAT devices on a network interface
-   */
-  etherCATScan: (
-    ipAddress: string,
-    jwtToken: string,
-    scanRequest: EtherCATScanRequest,
-  ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:scan', ipAddress, jwtToken, scanRequest),
-
-  /**
-   * Test connection to a specific EtherCAT slave
-   */
-  etherCATTest: (
-    ipAddress: string,
-    jwtToken: string,
-    testRequest: EtherCATTestRequest,
-  ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:test', ipAddress, jwtToken, testRequest),
-
-  /**
-   * Validate an EtherCAT configuration
-   */
-  etherCATValidate: (
-    ipAddress: string,
-    jwtToken: string,
-    validateRequest: EtherCATValidateRequest,
-  ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:validate', ipAddress, jwtToken, validateRequest),
-
-  /**
-   * Get EtherCAT runtime status (state machine state, slave states, metrics)
-   */
-  etherCATGetRuntimeStatus: (
-    ipAddress: string,
-    jwtToken: string,
-  ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress, jwtToken),
-
-  // ===================== ESI REPOSITORY METHODS =====================
-
-  /**
-   * Load ESI repository index from project
-   */
-  esiLoadRepositoryIndex: (
-    projectPath: string,
-  ): Promise<{
-    success: boolean
-    data?: {
-      version: number
-      items: Array<{
-        id: string
-        filename: string
-        vendorId: string
-        vendorName: string
-        deviceCount: number
-        loadedAt: number
-        warnings?: string[]
-      }>
-    } | null
-    error?: string
-  }> => ipcRenderer.invoke('esi:load-repository-index', projectPath),
-
-  /**
-   * Save ESI repository index to project
-   */
-  esiSaveRepositoryIndex: (
-    projectPath: string,
-    items: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:save-repository-index', projectPath, items),
-
-  /**
-   * Save an ESI XML file to project
-   */
-  esiSaveXmlFile: (
-    projectPath: string,
-    itemId: string,
-    xmlContent: string,
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:save-xml-file', projectPath, itemId, xmlContent),
-
-  /**
-   * Load an ESI XML file from project
-   */
-  esiLoadXmlFile: (
-    projectPath: string,
-    itemId: string,
-  ): Promise<{ success: boolean; content?: string; error?: string }> =>
-    ipcRenderer.invoke('esi:load-xml-file', projectPath, itemId),
-
-  /**
-   * Delete an ESI XML file from project
-   */
-  esiDeleteXmlFile: (projectPath: string, itemId: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:delete-xml-file', projectPath, itemId),
-
-  /**
-   * Save a complete ESI repository item (XML + update index)
-   */
-  esiSaveRepositoryItem: (
-    projectPath: string,
-    item: ESIRepositoryItem,
-    xmlContent: string,
-    existingItems: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:save-repository-item', projectPath, item, xmlContent, existingItems),
-
-  /**
-   * Delete an ESI repository item (XML + update index)
-   */
-  esiDeleteRepositoryItem: (
-    projectPath: string,
-    itemId: string,
-    existingItems: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:delete-repository-item', projectPath, itemId, existingItems),
-
-  // ===================== ESI OPTIMIZED (v2) METHODS =====================
-
-  /**
-   * Parse and save a single ESI file in the main process
-   */
-  esiParseAndSaveFile: (
-    projectPath: string,
-    filename: string,
-    content: string,
-  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> =>
-    ipcRenderer.invoke('esi:parse-and-save-file', projectPath, filename, content),
-
-  /**
-   * Clear the entire ESI repository (bulk delete all files + reset index)
-   */
-  esiClearRepository: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:clear-repository', projectPath),
-
-  /**
-   * Load a full ESI device on-demand (with PDOs, SM, FMMU)
-   */
-  esiLoadDeviceFull: (
-    projectPath: string,
-    itemId: string,
-    deviceIndex: number,
-  ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> =>
-    ipcRenderer.invoke('esi:load-device-full', projectPath, itemId, deviceIndex),
-
-  /**
-   * Load repository as lightweight items (instant from v2 cache)
-   */
-  esiLoadRepositoryLight: (
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; needsMigration?: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:load-repository-light', projectPath),
-
-  /**
-   * Migrate v1 repository to v2 with device summaries
-   */
-  esiMigrateRepository: (
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> =>
-    ipcRenderer.invoke('esi:migrate-repository', projectPath),
 
   // ===================== SIMULATOR METHODS =====================
   simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
