@@ -1,4 +1,4 @@
-import { PLCPou } from '@root/types/PLC/open-plc'
+import { PLCPou } from '@root/backend/shared/types/PLC/open-plc'
 
 export * from './create-pou-file'
 

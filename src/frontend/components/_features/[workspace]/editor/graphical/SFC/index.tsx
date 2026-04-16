@@ -1,0 +1,3 @@
+export default function SfcEditor() {
+  return <div>heres the sfceditor </div>
+}
