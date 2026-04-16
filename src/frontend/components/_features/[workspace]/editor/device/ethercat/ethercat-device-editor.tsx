@@ -84,10 +84,7 @@ const EtherCATDeviceEditor = () => {
   }, [remoteDevice])
 
   // Collect all IEC addresses used across all remote devices
-  const usedAddresses = useMemo(
-    () => collectUsedIecAddresses(project.data.remoteDevices),
-    [project.data.remoteDevices],
-  )
+  const usedAddresses = useMemo(() => collectUsedIecAddresses(project.data.remoteDevices), [project.data.remoteDevices])
 
   // Exclude the current device's own addresses from the "external" set
   const externalAddresses = useMemo(() => {

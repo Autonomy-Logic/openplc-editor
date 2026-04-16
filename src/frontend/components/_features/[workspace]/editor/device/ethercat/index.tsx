@@ -387,10 +387,7 @@ const EtherCATEditor = () => {
       if (!repoItem) continue
 
       let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
-      const result = await esi!.loadDeviceFull(
-        bestMatch.repositoryItemId,
-        bestMatch.deviceIndex,
-      )
+      const result = await esi!.loadDeviceFull(bestMatch.repositoryItemId, bestMatch.deviceIndex)
       if (result.success && result.device) {
         enriched = enrichDeviceData(result.device, usedAddresses)
         // Reserve the freshly assigned addresses so the next device in the

@@ -47,7 +47,7 @@ const GlobalSettingsTab = ({
             />
           </label>
           <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-            {masterConfig.enabled ?? true ? 'Plugin will start when PLC runs' : 'Plugin is disabled'}
+            {(masterConfig.enabled ?? true) ? 'Plugin will start when PLC runs' : 'Plugin is disabled'}
           </span>
         </div>
       </div>

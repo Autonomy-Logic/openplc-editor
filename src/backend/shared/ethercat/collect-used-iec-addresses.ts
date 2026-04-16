@@ -21,9 +21,7 @@ type RemoteDeviceForAddressCollection = {
   }
 }
 
-export function collectUsedIecAddresses(
-  remoteDevices: RemoteDeviceForAddressCollection[] | undefined,
-): Set<string> {
+export function collectUsedIecAddresses(remoteDevices: RemoteDeviceForAddressCollection[] | undefined): Set<string> {
   const addresses = new Set<string>()
   if (!remoteDevices) return addresses
 

@@ -33,7 +33,7 @@ const AdvancedTab = ({ masterConfig, onUpdateMasterConfig }: AdvancedTabProps) =
             />
           </label>
           <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-            {masterConfig.enabled ?? true ? 'EtherCAT bus will start when PLC runs' : 'EtherCAT bus is disabled'}
+            {(masterConfig.enabled ?? true) ? 'EtherCAT bus will start when PLC runs' : 'EtherCAT bus is disabled'}
           </span>
         </div>
       </div>

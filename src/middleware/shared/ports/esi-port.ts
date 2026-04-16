@@ -13,7 +13,7 @@
  * (src/backend/shared/ethercat/). The port only handles persistence I/O.
  */
 
-import type { ESIDevice, ESIRepositoryItemLight } from '../../../types/ethercat/esi-types'
+import type { ESIDevice, ESIRepositoryItemLight } from './esi-types'
 import type { Result } from './types'
 
 export interface EsiPort {
