@@ -13,6 +13,11 @@ import { fileOrDirectoryExists } from '../utils'
 /**
  * ESI Repository Index stored in devices/esi/repository.json
  * Version 2 includes device summaries inline for instant loading.
+ *
+ * The in-disk format keeps loadedAt as Unix ms (number) for backward
+ * compatibility with existing project files. The shared
+ * ESIRepositoryItem{Light} types expose loadedAt as an ISO 8601 string
+ * (matching the web backend); conversion happens at every border.
  */
 interface ESIRepositoryIndex {
   version: number
@@ -26,6 +31,26 @@ interface ESIRepositoryIndex {
     warnings?: string[]
     devices?: ESIDeviceSummary[]
   }>
+}
+
+/**
+ * Convert a loadedAt value coming from the shared types (string, ISO 8601)
+ * into the Unix ms format persisted on disk. Tolerates numeric inputs
+ * during the transition so nothing breaks if an older caller still passes
+ * a number.
+ */
+function isoToMs(value: string | number): number {
+  if (typeof value === 'number') return value
+  const ms = new Date(value).getTime()
+  return Number.isFinite(ms) ? ms : Date.now()
+}
+
+/**
+ * Convert a loadedAt value from the in-disk format (Unix ms) into the
+ * ISO 8601 string exposed through the shared types.
+ */
+function msToIso(value: number): string {
+  return new Date(value).toISOString()
 }
 
 /**
@@ -129,7 +154,7 @@ class ESIService {
           vendorId: item.vendor.id,
           vendorName: item.vendor.name,
           deviceCount: item.devices.length,
-          loadedAt: item.loadedAt,
+          loadedAt: isoToMs(item.loadedAt),
           warnings: item.warnings,
         })),
       }
@@ -162,7 +187,7 @@ class ESIService {
           vendorId: item.vendor.id,
           vendorName: item.vendor.name,
           deviceCount: item.devices.length,
-          loadedAt: item.loadedAt,
+          loadedAt: isoToMs(item.loadedAt),
           warnings: item.warnings,
           devices: item.devices,
         })),
@@ -271,7 +296,7 @@ class ESIService {
           vendorId: item.vendor.id,
           vendorName: item.vendor.name,
           deviceCount: item.devices.length,
-          loadedAt: item.loadedAt,
+          loadedAt: isoToMs(item.loadedAt),
           warnings: item.warnings,
         },
       ]
@@ -352,7 +377,7 @@ class ESIService {
         filename: i.filename,
         vendor: { id: i.vendorId, name: i.vendorName },
         devices: i.devices || [],
-        loadedAt: i.loadedAt,
+        loadedAt: msToIso(i.loadedAt),
         warnings: i.warnings,
       }))
   }
@@ -416,7 +441,7 @@ class ESIService {
                   filename: indexItem.filename,
                   vendor: parseResult.vendor,
                   devices: parseResult.devices,
-                  loadedAt: indexItem.loadedAt,
+                  loadedAt: msToIso(indexItem.loadedAt),
                   warnings: parseResult.warnings || indexItem.warnings,
                 })
               }
@@ -478,7 +503,7 @@ class ESIService {
           filename,
           vendor: parseResult.vendor!,
           devices: parseResult.devices!,
-          loadedAt: Date.now(),
+          loadedAt: new Date().toISOString(),
           warnings: parseResult.warnings,
         }
 

@@ -423,8 +423,8 @@ export interface ESIRepositoryItem {
   vendor: ESIVendor
   /** Devices contained in this file */
   devices: ESIDevice[]
-  /** Timestamp when this file was loaded */
-  loadedAt: number
+  /** ISO 8601 UTC timestamp when this file was loaded */
+  loadedAt: string
   /** Parsing warnings (non-fatal issues) */
   warnings?: string[]
 }
@@ -442,8 +442,8 @@ export interface ESIRepositoryItemLight {
   vendor: ESIVendor
   /** Lightweight device summaries */
   devices: ESIDeviceSummary[]
-  /** Timestamp when this file was loaded */
-  loadedAt: number
+  /** ISO 8601 UTC timestamp when this file was loaded */
+  loadedAt: string
   /** Parsing warnings (non-fatal issues) */
   warnings?: string[]
 }
