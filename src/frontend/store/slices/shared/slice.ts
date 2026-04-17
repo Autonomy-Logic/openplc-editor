@@ -280,7 +280,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'remote-device' })
     },
 
-    delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteRemoteDevice(n)),
+    delete: (name) => {
+      // Cascade: purge EtherCAT children first so their tabs, editor
+      // models, and file entries are cleaned up before the bus vanishes
+      // from the tree. Without this step the children survive the
+      // parent delete as orphan state.
+      const state = getState()
+      const bus = state.project.data.remoteDevices?.find((d) => d.name === name)
+      const children = bus?.protocol === 'ethercat' ? (bus.ethercatConfig?.devices ?? []) : []
+      // Snapshot ids — ethercatDeviceActions.delete mutates the same
+      // array via updateEthercatConfig, so iterating the live array
+      // would skip every second child.
+      for (const childId of children.map((d) => d.id)) {
+        state.ethercatDeviceActions.delete(name, childId)
+      }
+      return deleteElement(getState(), name, (n) => getState().projectActions.deleteRemoteDevice(n))
+    },
 
     rename: (oldName, newName) =>
       renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateRemoteDeviceName(o, n)),
@@ -306,6 +321,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
       state.editorActions.removeModel(deviceName)
       state.tabsActions.removeTab(deviceName)
+      // EtherCAT children are registered in the file slice on project
+      // load (see register files for save-state tracking). Drop the
+      // entry here so it doesn't linger when the child is removed
+      // directly or via a bus cascade.
+      state.fileActions.removeFile({ name: deviceName })
 
       const currentEditor = state.editor
       if (currentEditor.type !== 'available' && currentEditor.meta.name === deviceName) {
