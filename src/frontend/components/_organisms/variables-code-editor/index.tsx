@@ -1,0 +1,66 @@
+import Editor, { OnMount } from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
+import { useEffect, useRef } from 'react'
+
+interface VariablesCodeEditorProps {
+  code: string
+  onCodeChange: (code: string) => void
+  shouldUseDarkMode: boolean
+}
+
+const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode }: VariablesCodeEditorProps) => {
+  const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  const handleEditorDidMount: OnMount = (editor) => {
+    editorRef.current = editor
+    editor.layout()
+  }
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const observer = new ResizeObserver(() => {
+      if (editorRef.current) {
+        editorRef.current.layout()
+      }
+    })
+
+    observer.observe(containerRef.current)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
+  return (
+    <div
+      ref={containerRef}
+      aria-label='Variable Code Editor Container'
+      className='h-full w-full'
+      style={{ overflow: 'hidden' }}
+    >
+      <Editor
+        height='100%'
+        width='100%'
+        language='st'
+        defaultValue={''}
+        value={code}
+        onMount={handleEditorDidMount}
+        onChange={(value) => onCodeChange(value ?? '')}
+        options={{
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          wordWrap: 'on',
+          fontSize: 14,
+          tabSize: 2,
+          inlineSuggest: { enabled: false },
+          quickSuggestions: false,
+        }}
+        theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
+      />
+    </div>
+  )
+}
+
+export { VariablesCodeEditor }

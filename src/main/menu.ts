@@ -1,8 +1,8 @@
+import { i18n } from '@root/frontend/locales/i18n'
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
-import { i18n } from '../utils/i18n'
+import { ProjectService } from '../backend/editor/services'
 import { store } from './modules/store'
-import { ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
@@ -19,6 +19,24 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export default class MenuBuilder {
   private mainWindow: BrowserWindow
   private projectService: ProjectService
+  private readonly handleDevelopmentContextMenu = (
+    _: Electron.Event,
+    props: Electron.ContextMenuParams,
+  ): void => {
+    if (!this.hasLiveWindow()) return
+
+    const { x, y } = props
+
+    Menu.buildFromTemplate([
+      {
+        label: 'Inspect element',
+        click: () => {
+          if (!this.hasLiveWindow()) return
+          this.mainWindow.webContents.inspectElement(x, y)
+        },
+      },
+    ]).popup({ window: this.mainWindow })
+  }
 
   developOptions: MenuItemConstructorOptions[] = [
     { type: 'separator' },
@@ -143,21 +161,8 @@ export default class MenuBuilder {
   setupDevelopmentEnvironment(): void {
     if (!this.hasLiveWindow()) return
 
-    this.mainWindow.webContents.on('context-menu', (_, props) => {
-      if (!this.hasLiveWindow()) return
-
-      const { x, y } = props
-
-      Menu.buildFromTemplate([
-        {
-          label: 'Inspect element',
-          click: () => {
-            if (!this.hasLiveWindow()) return
-            this.mainWindow.webContents.inspectElement(x, y)
-          },
-        },
-      ]).popup({ window: this.mainWindow })
-    })
+    this.mainWindow.webContents.removeListener('context-menu', this.handleDevelopmentContextMenu)
+    this.mainWindow.webContents.on('context-menu', this.handleDevelopmentContextMenu)
   }
 
   updateAppTheme() {
@@ -167,7 +172,9 @@ export default class MenuBuilder {
     if (this.hasLiveWindow()) {
       this.mainWindow.webContents.send('system:update-theme')
     }
-    void this.buildMenu()
+    void this.buildMenu().catch((error) => {
+      console.error('Error rebuilding application menu:', error)
+    })
   }
 
   /**

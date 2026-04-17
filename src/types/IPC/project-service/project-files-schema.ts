@@ -1,5 +1,5 @@
-import { deviceConfigurationSchema, devicePinSchema } from '@root/types/PLC/devices'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
+import { deviceConfigurationSchema, devicePinSchema } from '@root/backend/shared/types/PLC/devices'
+import { PLCProjectSchema } from '@root/backend/shared/types/PLC/open-plc'
 
 export const projectDefaultFilesMapSchema = {
   'project.json': PLCProjectSchema,
