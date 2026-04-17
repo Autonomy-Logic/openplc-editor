@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
-import { useProject, useSystem } from '../../../middleware/shared/providers'
+import { useCapabilities, useProject, useSystem } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
 import { cn } from '../../utils/cn'
@@ -25,6 +25,7 @@ type AppLayoutProps = ComponentPropsWithoutRef<'main'>
 const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const system = useSystem()
   const projectPort = useProject()
+  const caps = useCapabilities()
   const [showComponent, setShowComponent] = useState(true)
   const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
   const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
@@ -65,7 +66,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const showTitleBar = OS !== 'linux'
+  const showTitleBar = !caps.isNativeApplication || OS !== 'linux'
 
   return (
     <>

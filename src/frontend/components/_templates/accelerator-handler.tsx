@@ -318,44 +318,44 @@ const AcceleratorHandler = () => {
    * Window lifecycle events (editor-only, gated by capabilities)
    */
   useEffect(() => {
-    if (!capabilities.hasNativeWindowControls) return
+    if (!capabilities.isNativeApplication) return
 
     const unsub = windowPort.enableAutoCloseHandshake?.()
     return unsub
-  }, [capabilities.hasNativeWindowControls, windowPort])
+  }, [capabilities.isNativeApplication, windowPort])
 
   useEffect(() => {
-    if (!capabilities.hasNativeWindowControls) return
+    if (!capabilities.isNativeApplication) return
 
     const unsub = windowPort.onCloseRequested(() => {
       setCloseWindow(true)
     })
     return unsub
-  }, [capabilities.hasNativeWindowControls, windowPort, setCloseWindow])
+  }, [capabilities.isNativeApplication, windowPort, setCloseWindow])
 
   useEffect(() => {
-    if (!capabilities.hasNativeWindowControls) return
+    if (!capabilities.isNativeApplication) return
 
     const unsub = windowPort.onDarwinAppQuitting?.(() => {
       setCloseAppDarwin(true)
     })
     return unsub
-  }, [capabilities.hasNativeWindowControls, windowPort, setCloseAppDarwin])
+  }, [capabilities.isNativeApplication, windowPort, setCloseAppDarwin])
 
   useEffect(() => {
-    if (!capabilities.hasNativeWindowControls) return
+    if (!capabilities.isNativeApplication) return
 
     const unsub = windowPort.onMaximizedChanged?.(() => {
       toggleMaximizedWindow()
     })
     return unsub
-  }, [capabilities.hasNativeWindowControls, windowPort, toggleMaximizedWindow])
+  }, [capabilities.isNativeApplication, windowPort, toggleMaximizedWindow])
 
   /**
    * beforeunload event (editor-only)
    */
   useEffect(() => {
-    if (!capabilities.hasNativeWindowControls) return
+    if (!capabilities.isNativeApplication) return
 
     const handler = (e: BeforeUnloadEvent) => {
       if (capabilities.isDevMode) return
@@ -380,7 +380,7 @@ const AcceleratorHandler = () => {
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [
-    capabilities.hasNativeWindowControls,
+    capabilities.isNativeApplication,
     close.window,
     close.app,
     close.appDarwin,
