@@ -9,7 +9,7 @@ import type { PlatformPorts } from './types'
  *   // In a component:
  *   const { compiler, runtime, capabilities } = usePlatform()
  *   await compiler.compileProgram(args, onProgress)
- *   if (capabilities.hasNativeWindowControls) { ... }
+ *   if (capabilities.isNativeApplication) { ... }
  *
  * Wiring:
  *   // At the app root (editor):
