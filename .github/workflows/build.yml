@@ -1,17 +1,7 @@
-name: Build
-
-run-name: OpenPLC CI pipeline - Build test
+name: Complete Build
 
 on:
-  push:
-    branches:
-      - main
-      - development
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches:
-      - main
-      - development
+  workflow_call:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
