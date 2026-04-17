@@ -109,6 +109,16 @@ type LadderFlowActions = {
   }) => void
   addEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
 
+  setHandleBranches: ({
+    handleBranches,
+    rungId,
+    editorName,
+  }: {
+    handleBranches: import('../../../../middleware/shared/ports/types').HandleBranch[]
+    rungId: string
+    editorName: string
+  }) => void
+
   /**
    * Control the flow viewport of the rung
    */

@@ -1,8 +1,10 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
-import { newGraphicalEditorNodeID } from '@root/frontend/utils/new-graphical-editor-node-id'
 import type { Node, ReactFlowInstance } from '@xyflow/react'
+import { v4 as uuidv4 } from 'uuid'
 
-import { nodesBuilder } from '../../../../../../../_atoms/graphical-editor/ladder/node-builders'
+import { defaultCustomNodesStyles, nodesBuilder } from '../../../../../../../_atoms/graphical-editor/ladder/node-builders'
+import type { BasicNodeData, BlockVariant } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import { canPlaceElementOnHandle, hasBranchOnHandle } from '../handle-branch'
 import { getDeepestNodesInsideParallels, getNodesInsideAllParallels, getPlaceholderPositionBasedOnNode } from '../utils'
 
 export const removePlaceholderElements = (nodes: Node[]) => {
@@ -36,10 +38,145 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
       return
     }
 
-    if (node.id.startsWith('left-rail')) {
+    // Branch elements: generate left/right placeholders with handleBranchTarget data
+    // so drops trigger branch insertion, plus bottom (parallel) placeholder.
+    if ((node.data as BasicNodeData).branchContext) {
+      // OPEN/CLOSE junction nodes in branches: generate one serial placeholder each
+      // so users can insert elements before/after the parallel group.
+      if (node.type === 'parallel') {
+        const ctx = (node.data as BasicNodeData).branchContext!
+        const branch = rung.handleBranches?.find((b) => b.blockId === ctx.blockId && b.handleId === ctx.handleId)
+        const nodeIndex = branch?.nodeIds.indexOf(node.id) ?? -1
+
+        if (nodeIndex !== -1) {
+          const branchTarget = (insertIdx: number) => ({
+            blockId: ctx.blockId,
+            handleId: ctx.handleId,
+            direction: ctx.direction,
+            handlePosition: { x: 0, y: 0 },
+            insertIndex: insertIdx,
+          })
+
+          const parallelData = node.data as { type?: string }
+          if (parallelData.type === 'open') {
+            const ph = nodesBuilder.placeholder({
+              id: `placeholder_${node.id}_${uuidv4()}`,
+              type: 'default',
+              relatedNode: node,
+              position: 'left',
+              ...getPlaceholderPositionBasedOnNode(node, 'left'),
+            })
+            ph.data = { ...ph.data, handleBranchTarget: branchTarget(nodeIndex) }
+            placeholderNodes.push(ph, node)
+          } else {
+            const ph = nodesBuilder.placeholder({
+              id: `placeholder_${node.id}_${uuidv4()}`,
+              type: 'default',
+              relatedNode: node,
+              position: 'right',
+              ...getPlaceholderPositionBasedOnNode(node, 'right'),
+            })
+            ph.data = { ...ph.data, handleBranchTarget: branchTarget(nodeIndex + 1) }
+            placeholderNodes.push(node, ph)
+          }
+        } else {
+          placeholderNodes.push(node)
+        }
+        return
+      }
+
+      const ctx = (node.data as BasicNodeData).branchContext!
+      const branch = rung.handleBranches?.find((b) => b.blockId === ctx.blockId && b.handleId === ctx.handleId)
+      // For copycat nodes, look up the original ID in nodeIds so the copycat
+      // gets proper serial-spine placeholders during drag operations.
+      const lookupId = node.id.startsWith('copycat_') ? node.id.slice(8) : node.id
+      const nodeIndex = branch?.nodeIds.indexOf(lookupId) ?? -1
+
+      // Parallel-path elements are not in nodeIds (indexOf returns -1).
+      // Generate left/right placeholders (without handleBranchTarget) so users can
+      // drag-drop in series with them. Also allow bottom placeholder for depth logic.
+      if (nodeIndex === -1) {
+        const ppPlaceholders = [
+          nodesBuilder.placeholder({
+            id: `placeholder_${node.id}_${uuidv4()}`,
+            type: 'default',
+            relatedNode: node,
+            position: 'left',
+            ...getPlaceholderPositionBasedOnNode(node, 'left'),
+          }),
+          nodesBuilder.placeholder({
+            id: `placeholder_${node.id}_${uuidv4()}`,
+            type: 'default',
+            relatedNode: node,
+            position: 'right',
+            ...getPlaceholderPositionBasedOnNode(node, 'right'),
+          }),
+        ]
+
+        if (!nodesInsideParallels.includes(node) || deepestNodesParallels.includes(node)) {
+          const bottomPlaceholder = nodesBuilder.placeholder({
+            id: `parallelPlaceholder_${node.id}_${uuidv4()}`,
+            type: 'parallel',
+            relatedNode: node,
+            position: 'bottom',
+            ...getPlaceholderPositionBasedOnNode(node, 'bottom'),
+          })
+          placeholderNodes.push(ppPlaceholders[0], node, bottomPlaceholder, ppPlaceholders[1])
+        } else {
+          placeholderNodes.push(ppPlaceholders[0], node, ppPlaceholders[1])
+        }
+        return
+      }
+
+      const branchTarget = (insertIndex: number) => ({
+        blockId: ctx.blockId,
+        handleId: ctx.handleId,
+        direction: ctx.direction,
+        handlePosition: { x: 0, y: 0 },
+        insertIndex,
+      })
+
       placeholders = [
         nodesBuilder.placeholder({
-          id: newGraphicalEditorNodeID(`placeholder_${node.id}`),
+          id: `placeholder_${node.id}_${uuidv4()}`,
+          type: 'default',
+          relatedNode: node,
+          position: 'left',
+          ...getPlaceholderPositionBasedOnNode(node, 'left'),
+        }),
+        nodesBuilder.placeholder({
+          id: `placeholder_${node.id}_${uuidv4()}`,
+          type: 'default',
+          relatedNode: node,
+          position: 'right',
+          ...getPlaceholderPositionBasedOnNode(node, 'right'),
+        }),
+      ]
+
+      placeholders[0].data = { ...placeholders[0].data, handleBranchTarget: branchTarget(nodeIndex) }
+      placeholders[1].data = { ...placeholders[1].data, handleBranchTarget: branchTarget(nodeIndex + 1) }
+
+      if (!nodesInsideParallels.includes(node) || deepestNodesParallels.includes(node)) {
+        placeholders.push(
+          nodesBuilder.placeholder({
+            id: `parallelPlaceholder_${node.id}_${uuidv4()}`,
+            type: 'parallel',
+            relatedNode: node,
+            position: 'bottom',
+            ...getPlaceholderPositionBasedOnNode(node, 'bottom'),
+          }),
+        )
+        placeholderNodes.push(placeholders[0], node, placeholders[2], placeholders[1])
+      } else {
+        placeholderNodes.push(placeholders[0], node, placeholders[1])
+      }
+      return
+    }
+
+    if (node.id === 'left-rail') {
+      placeholders = [
+        nodesBuilder.placeholder({
+          id: `placeholder_${node.id}_${uuidv4()}`,
           type: 'default',
           relatedNode: node,
           position: 'right',
@@ -50,10 +187,10 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
       return
     }
 
-    if (node.id.startsWith('right-rail')) {
+    if (node.id === 'right-rail') {
       placeholders = [
         nodesBuilder.placeholder({
-          id: newGraphicalEditorNodeID(`placeholder_${node.id}`),
+          id: `placeholder_${node.id}_${uuidv4()}`,
           type: 'default',
           relatedNode: node,
           position: 'left',
@@ -68,7 +205,7 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
       if (node.data.type === 'open') {
         placeholders = [
           nodesBuilder.placeholder({
-            id: newGraphicalEditorNodeID(`placeholder_${node.id}`),
+            id: `placeholder_${node.id}_${uuidv4()}`,
             type: 'default',
             relatedNode: node,
             position: 'left',
@@ -80,7 +217,7 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
       }
       placeholders = [
         nodesBuilder.placeholder({
-          id: newGraphicalEditorNodeID(`placeholder_${node.id}`),
+          id: `placeholder_${node.id}_${uuidv4()}`,
           type: 'default',
           relatedNode: node,
           position: 'right',
@@ -94,14 +231,14 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
 
     placeholders = [
       nodesBuilder.placeholder({
-        id: newGraphicalEditorNodeID(`placeholder_${node.id}`),
+        id: `placeholder_${node.id}_${uuidv4()}`,
         type: 'default',
         relatedNode: node,
         position: 'left',
         ...getPlaceholderPositionBasedOnNode(node, 'left'),
       }),
       nodesBuilder.placeholder({
-        id: newGraphicalEditorNodeID(`placeholder_${node.id}`),
+        id: `placeholder_${node.id}_${uuidv4()}`,
         type: 'default',
         relatedNode: node,
         position: 'right',
@@ -112,7 +249,7 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
     if (!nodesInsideParallels.includes(node) || deepestNodesParallels.includes(node)) {
       placeholders.push(
         nodesBuilder.placeholder({
-          id: newGraphicalEditorNodeID(`parallelPlaceholder_${node.id}`),
+          id: `parallelPlaceholder_${node.id}_${uuidv4()}`,
           type: 'parallel',
           relatedNode: node,
           position: 'bottom',
@@ -125,6 +262,92 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
 
     placeholderNodes.push(placeholders[0], node, placeholders[1])
   })
+
+  // Generate handle placeholders for block input handles (BOOL-type, index > 0, no existing branch).
+  // Note: this runs during onDragEnterViewport, after updateDiagramElementsPosition has positioned
+  // all nodes, so handle.glbPosition values are current.
+  const pStyle = defaultCustomNodesStyles.placeholder
+  nodes.forEach((node) => {
+    if (node.type !== 'block') return
+
+    const blockData = node.data as BasicNodeData & { variant: BlockVariant }
+    const inputHandles = blockData.inputHandles
+
+    // Skip index 0 (rail connector), iterate remaining input handles
+    for (let i = 1; i < inputHandles.length; i++) {
+      const handle = inputHandles[i]
+      const handleId = handle.id as string
+
+      // Find the variable type for this handle from the block variant
+      const variableType = blockData.variant?.variables?.find((v) => v.name === handleId)
+      if (!variableType) continue
+
+      // Only generate for BOOL-compatible handles without existing branches
+      if (!canPlaceElementOnHandle(variableType)) continue
+      if (hasBranchOnHandle(rung, node.id, handleId)) continue
+
+      const placeholder = nodesBuilder.placeholder({
+        id: `placeholder_handle_${node.id}_${handleId}`,
+        type: 'default',
+        relatedNode: node,
+        position: 'left',
+        posX: node.position.x - pStyle.gap - pStyle.width / 2,
+        posY: handle.glbPosition.y - pStyle.handle.y,
+        handleX: node.position.x - pStyle.gap - pStyle.width / 2,
+        handleY: handle.glbPosition.y,
+      })
+
+      // Add branch target data to distinguish from regular placeholders
+      placeholder.data = {
+        ...placeholder.data,
+        handleBranchTarget: {
+          blockId: node.id,
+          handleId,
+          direction: 'input' as const,
+          handlePosition: { x: handle.glbPosition.x, y: handle.glbPosition.y },
+        },
+      }
+
+      placeholderNodes.push(placeholder)
+    }
+
+    // Generate handle placeholders for block output handles (BOOL-type, index > 0, no existing branch).
+    const outputHandles = blockData.outputHandles
+    for (let i = 1; i < outputHandles.length; i++) {
+      const handle = outputHandles[i]
+      const handleId = handle.id as string
+
+      const variableType = blockData.variant?.variables?.find((v) => v.name === handleId)
+      if (!variableType) continue
+
+      if (!canPlaceElementOnHandle(variableType)) continue
+      if (hasBranchOnHandle(rung, node.id, handleId)) continue
+
+      const placeholder = nodesBuilder.placeholder({
+        id: `placeholder_handle_${node.id}_${handleId}`,
+        type: 'default',
+        relatedNode: node,
+        position: 'right',
+        posX: node.position.x + (defaultCustomNodesStyles.block?.width ?? 80) + pStyle.gap + pStyle.width / 2,
+        posY: handle.glbPosition.y - pStyle.handle.y,
+        handleX: node.position.x + (defaultCustomNodesStyles.block?.width ?? 80) + pStyle.gap + pStyle.width / 2,
+        handleY: handle.glbPosition.y,
+      })
+
+      placeholder.data = {
+        ...placeholder.data,
+        handleBranchTarget: {
+          blockId: node.id,
+          handleId,
+          direction: 'output' as const,
+          handlePosition: { x: handle.glbPosition.x, y: handle.glbPosition.y },
+        },
+      }
+
+      placeholderNodes.push(placeholder)
+    }
+  })
+
   return placeholderNodes
 }
 

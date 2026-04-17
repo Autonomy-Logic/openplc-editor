@@ -316,9 +316,10 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          const { nodes: newNodes, edges: newEdges } = removeElements(rung, nodes)
+          const { nodes: newNodes, edges: newEdges, handleBranches } = removeElements(rung, nodes)
           rung.nodes = newNodes
           rung.edges = newEdges
+          if (handleBranches) rung.handleBranches = handleBranches
           flow.updated = true
         }),
       )
@@ -432,6 +433,21 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (!rung) return
 
           rung.edges.push(edge)
+          flow.updated = true
+        }),
+      )
+    },
+
+    setHandleBranches({ handleBranches, editorName, rungId }) {
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          rung.handleBranches = handleBranches
           flow.updated = true
         }),
       )

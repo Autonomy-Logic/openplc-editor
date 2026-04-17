@@ -29,6 +29,7 @@ import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types
 import { getBlockDocumentation, getVariableRestrictionType } from '../../../../../../../_atoms/graphical-editor/utils'
 import { InputWithRef } from '../../../../../../../_atoms/input'
 import { updateDiagramElementsPosition } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import { reconcileBranchesIfNeeded } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
 import ArrowButtonGroup from '../../arrow-button-group'
 import { ModalBlockLibrary } from './library'
@@ -69,7 +70,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     editor,
     editorActions: { updateModelVariables },
     ladderFlows,
-    ladderFlowActions: { setNodes, setEdges },
+    ladderFlowActions: { setNodes, setEdges, setHandleBranches },
     project: {
       data: { pous },
     },
@@ -416,6 +417,20 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
     newNodes = newNodes.map((n) => (n.id === node.id ? newNode : n))
 
+    // Reconcile branches when the block changes: remap surviving branches
+    // to the new block ID and remove branches for deleted/incompatible handles.
+    const reconciled = reconcileBranchesIfNeeded(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      node.id,
+      newNode.id,
+      (LadderBlockVariant?.variables as LadderBlockVariant['variables']) ?? [],
+    )
+    if (reconciled) {
+      newNodes = reconciled.nodes
+      newEdges = reconciled.edges
+    }
+    const reconciledHandleBranches = reconciled?.handleBranches
+
     edges.source?.forEach((edge) => {
       const newEdge = {
         ...edge,
@@ -440,6 +455,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         ...rung,
         nodes: newNodes,
         edges: newEdges,
+        ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
@@ -454,6 +470,13 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       rungId: rung.id,
       edges: variableEdges,
     })
+    if (reconciledHandleBranches) {
+      setHandleBranches({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        handleBranches: reconciledHandleBranches,
+      })
+    }
 
     handleCloseModal()
   }

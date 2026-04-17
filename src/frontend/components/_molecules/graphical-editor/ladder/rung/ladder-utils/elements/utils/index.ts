@@ -38,6 +38,7 @@ export const getPreviousElementsByEdge = (
      * If the node is undefined or an variable, skip it
      */
     if (!n || n.type === 'variable') return
+    if ((n.data as BasicNodeData).branchContext) return
 
     /**
      * If there is a parallel node, check if it is an open or close parallel
@@ -54,8 +55,9 @@ export const getPreviousElementsByEdge = (
 
     lastNodes.nodes.serial.push({ ...n })
   })
-  lastNodes.edges = connectedEdges
   lastNodes.nodes.all = [...lastNodes.nodes.serial, ...lastNodes.nodes.parallel]
+  const allNodeIds = new Set(lastNodes.nodes.all.map((n) => n.id))
+  lastNodes.edges = connectedEdges.filter((e) => allNodeIds.has(e.source))
 
   return lastNodes
 }
@@ -377,7 +379,7 @@ export const getNodesInsideParallel = (
     let nextEdge = parallelEdge
     while (nextEdge && nextEdge.target !== closeParallelNode.id) {
       const node = rung.nodes.find((n) => n.id === nextEdge.target)
-      if (!node) continue
+      if (!node) break
       nextEdge = rung.edges.find(
         (edge) =>
           edge.source === nextEdge.target && edge.sourceHandle === (node.data as BasicNodeData).outputConnector?.id,
