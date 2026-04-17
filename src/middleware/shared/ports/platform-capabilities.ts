@@ -13,14 +13,8 @@
 export interface PlatformCapabilities {
   // --- Window & Chrome ---
 
-  /** True if the app has native window controls (minimize, maximize, close buttons in title bar). */
-  hasNativeWindowControls: boolean
-
-  /** True if the app has a native application menu (Electron menu bar). */
-  hasNativeMenu: boolean
-
-  /** True if the app has a native title bar with drag-to-move support (Electron frameless window). */
-  hasNativeTitleBar: boolean
+  /** True if the app is a native desktop application (Electron editor). */
+  isNativeApplication: boolean
 
   /** True if the app supports native file dialogs (open, save, pick directory). */
   hasNativeFileDialogs: boolean
@@ -98,9 +92,7 @@ export interface PlatformCapabilities {
 // ---------------------------------------------------------------------------
 
 export const EDITOR_CAPABILITIES: PlatformCapabilities = {
-  hasNativeWindowControls: true,
-  hasNativeMenu: true,
-  hasNativeTitleBar: true,
+  isNativeApplication: true,
   hasNativeFileDialogs: true,
   hasAuthentication: false,
   hasLocalSerialPorts: true,
@@ -121,9 +113,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
 }
 
 export const WEB_CAPABILITIES: PlatformCapabilities = {
-  hasNativeWindowControls: false,
-  hasNativeMenu: false,
-  hasNativeTitleBar: false,
+  isNativeApplication: false,
   hasNativeFileDialogs: false,
   hasAuthentication: true,
   hasLocalSerialPorts: false,
