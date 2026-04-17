@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+
+jobs:
+  architecture:
+    uses: ./.github/workflows/ci-architecture.yml
+
+  build-check:
+    uses: ./.github/workflows/ci-build.yml
+
+  lint:
+    uses: ./.github/workflows/ci-lint.yml
+
+  format:
+    needs: [architecture, build-check, lint]
+    uses: ./.github/workflows/ci-format.yml
+
+  sync:
+    needs: [format]
+    uses: ./.github/workflows/ci-sync.yml
+    secrets: inherit
+
+  code-quality:
+    needs: [sync]
+    uses: ./.github/workflows/code_quality.yml
+
+  claude-review:
+    needs: [code-quality]
+    uses: ./.github/workflows/claude-code-review.yml
+    secrets: inherit
+
+  complete-build:
+    needs: [claude-review]
+    uses: ./.github/workflows/build.yml
