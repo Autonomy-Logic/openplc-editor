@@ -47,7 +47,7 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
       <PrimitiveSelect.Portal>
         <PrimitiveSelect.Content
           ref={forwardedRef}
-          className={className}
+          className={cn('flex flex-col', className)}
           sideOffset={sideOffset}
           alignOffset={alignOffset}
           position={position}
@@ -55,9 +55,15 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
           side={side}
           {...res}
         >
-          <PrimitiveSelect.Viewport ref={viewportRef} className=' h-full w-full overflow-auto'>
+          <PrimitiveSelect.ScrollUpButton className='flex h-6 cursor-default select-none items-center justify-center'>
+            <ArrowIcon direction='up' size='sm' className='stroke-neutral-400 dark:stroke-neutral-600' />
+          </PrimitiveSelect.ScrollUpButton>
+          <PrimitiveSelect.Viewport ref={viewportRef} className='min-h-0 w-full flex-1 overflow-auto'>
             {children}
           </PrimitiveSelect.Viewport>
+          <PrimitiveSelect.ScrollDownButton className='flex h-6 cursor-default select-none items-center justify-center'>
+            <ArrowIcon direction='down' size='sm' className='stroke-neutral-400 dark:stroke-neutral-600' />
+          </PrimitiveSelect.ScrollDownButton>
         </PrimitiveSelect.Content>
       </PrimitiveSelect.Portal>
     )
