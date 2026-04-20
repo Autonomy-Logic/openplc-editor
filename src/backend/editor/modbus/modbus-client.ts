@@ -153,7 +153,11 @@ export class ModbusTcpClient {
       throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
     }
 
-    const md5String = data.slice(9).toString('utf-8').trim()
+    // Phase 4 response trailer echoes the endianness probe (2 bytes) at
+    // the end so the editor can detect target byte order. Strip it off
+    // before parsing the MD5 ASCII.
+    const md5Region = data.slice(9, data.length - 2)
+    const md5String = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
     return md5String
   }
 
@@ -174,7 +178,9 @@ export class ModbusTcpClient {
     const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
     const numIndexes = variableIndexes.length
 
-    const pduLength = 4 + 2 * numIndexes
+    // Phase 4 PDU: each address is 3 bytes (arr:u8, elem_hi, elem_lo).
+    // Editor represents a DebugAddr as packed number: (arr << 16) | elem.
+    const pduLength = 4 + 3 * numIndexes
     const request = Buffer.alloc(6 + pduLength)
 
     request.writeUInt16BE(transactionId, 0)
@@ -185,7 +191,11 @@ export class ModbusTcpClient {
     request.writeUInt16BE(numIndexes, 8)
 
     for (let i = 0; i < numIndexes; i++) {
-      request.writeUInt16BE(variableIndexes[i], 10 + i * 2)
+      const packed = variableIndexes[i]!
+      const arr = (packed >>> 16) & 0xff
+      const elem = packed & 0xffff
+      request.writeUInt8(arr, 10 + i * 3)
+      request.writeUInt16BE(elem, 10 + i * 3 + 1)
     }
 
     try {
@@ -267,8 +277,13 @@ export class ModbusTcpClient {
     const unitId = 0x00
     const functionCode = ModbusFunctionCode.DEBUG_SET
 
+    // Phase 4 PDU: [FC, arr:u8, elem:u16, force:u8, len:u16, value...]
+    // DebugAddr packed as (arr << 16) | elem on the JS side.
+    const arr = (variableIndex >>> 16) & 0xff
+    const elem = variableIndex & 0xffff
+
     const dataLength = force && valueBuffer ? valueBuffer.length : 1
-    const pduLength = 7 + dataLength
+    const pduLength = 8 + dataLength
     const request = Buffer.alloc(6 + pduLength)
 
     request.writeUInt16BE(transactionId, 0)
@@ -276,16 +291,17 @@ export class ModbusTcpClient {
     request.writeUInt16BE(pduLength, 4)
     request.writeUInt8(unitId, 6)
     request.writeUInt8(functionCode, 7)
-    request.writeUInt16BE(variableIndex, 8)
-    request.writeUInt8(force ? 1 : 0, 10)
-    request.writeUInt16BE(dataLength, 11)
+    request.writeUInt8(arr, 8)
+    request.writeUInt16BE(elem, 9)
+    request.writeUInt8(force ? 1 : 0, 11)
+    request.writeUInt16BE(dataLength, 12)
 
     if (force && valueBuffer) {
       for (let i = 0; i < valueBuffer.length; i++) {
-        request.writeUInt8(valueBuffer[i], 13 + i)
+        request.writeUInt8(valueBuffer[i], 14 + i)
       }
     } else {
-      request.writeUInt8(0, 13)
+      request.writeUInt8(0, 14)
     }
 
     try {

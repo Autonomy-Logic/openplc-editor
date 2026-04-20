@@ -67,3 +67,67 @@ export function parseDebugFile(content: string): ParsedDebugData {
 
   return { variables, totalCount }
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 debug-map.json parser (produced by STruC++ compile() -> debugMap).
+// ---------------------------------------------------------------------------
+
+/** Address of a single leaf in the Phase 4 per-project debug table. */
+export interface DebugAddr {
+  arrayIdx: number
+  elemIdx: number
+}
+
+export interface DebugMapLeafV2 {
+  arrayIdx: number
+  elemIdx: number
+  path: string
+  type: string
+  size: number
+}
+
+export interface DebugMapV2 {
+  version: 2
+  md5: string
+  typeTags: Record<string, number>
+  arrays: Array<{ index: number; count: number }>
+  leaves: DebugMapLeafV2[]
+}
+
+/**
+ * Pack a DebugAddr into a single number for compatibility with APIs that
+ * expect a flat u32-ish index (e.g. getVariablesList). arr goes in the high
+ * byte, elem in the low 16 bits: `(arr << 16) | elem`.
+ *
+ * This keeps the existing editor's store types (`Map<compositeKey, number>`)
+ * unchanged while speaking the new (arr, elem) wire protocol downstream.
+ */
+export function packDebugAddr(addr: DebugAddr): number {
+  return ((addr.arrayIdx & 0xff) << 16) | (addr.elemIdx & 0xffff)
+}
+
+/** Inverse of packDebugAddr — useful in tests / debugger UI tooltips. */
+export function unpackDebugAddr(packed: number): DebugAddr {
+  return {
+    arrayIdx: (packed >>> 16) & 0xff,
+    elemIdx: packed & 0xffff,
+  }
+}
+
+/**
+ * Parse the debug-map.json written alongside generated_debug.cpp by the
+ * editor's compile step. Returns undefined when the content isn't a v2
+ * manifest (lets callers transparently fall back to the legacy debug.c
+ * path while both coexist).
+ */
+export function parseDebugMapV2(content: string): DebugMapV2 | undefined {
+  try {
+    const raw = JSON.parse(content) as Partial<DebugMapV2>
+    if (raw.version !== 2 || !Array.isArray(raw.leaves) || !Array.isArray(raw.arrays)) {
+      return undefined
+    }
+    return raw as DebugMapV2
+  } catch {
+    return undefined
+  }
+}
