@@ -60,11 +60,6 @@
 void operator delete(void* ptr, unsigned int) { free(ptr); }
 
 // ---------------------------------------------------------------------------
-// STruC++ time variable (used by generated code for TIME operations)
-// ---------------------------------------------------------------------------
-int64_t __CURRENT_TIME_NS = 0;
-
-// ---------------------------------------------------------------------------
 // I/O Buffer definitions (declared extern in openplc.h, must be defined here)
 // ---------------------------------------------------------------------------
 IEC_BOOL *bool_input[MAX_DIGITAL_INPUT/8][8] = {};
@@ -235,8 +230,7 @@ void discoverTasks() {
 // Time update
 // ---------------------------------------------------------------------------
 void updateTime() {
-    extern int64_t __CURRENT_TIME_NS;
-    __CURRENT_TIME_NS += (int64_t)common_ticktime__;
+    strucpp::__CURRENT_TIME_NS += (int64_t)common_ticktime__;
 }
 
 // ---------------------------------------------------------------------------
