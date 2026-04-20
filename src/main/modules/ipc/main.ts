@@ -334,9 +334,7 @@ class MainProcessBridge implements MainIpcModule {
     responseParser: (data: string) => T,
     timeoutMs?: number,
   ): Promise<{ success: true; data: T } | { success: false; error: string }> {
-    type PostResult =
-      | { success: true; data: T }
-      | { success: false; error: string; statusCode?: number }
+    type PostResult = { success: true; data: T } | { success: false; error: string; statusCode?: number }
 
     const doRequest = (token: string): Promise<PostResult> => {
       return new Promise((resolve) => {
