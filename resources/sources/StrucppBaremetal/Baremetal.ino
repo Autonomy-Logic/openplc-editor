@@ -7,31 +7,14 @@
 // - Computes GCD of task intervals for the scan cycle base tick
 // - Schedules programs round-robin with per-task divisors
 
-// Arduino.h defines several macros that conflict with C++ standard library
-// and STruC++ runtime headers. Undefine them before including anything.
+// Arduino.h defines min/max/abs/round as function-like macros that break
+// C++ standard library templates (<algorithm>, <limits>, etc). Undefine them
+// before including anything. TIMER* macros are left intact so user C/C++
+// function blocks can reference them directly.
 #undef min
 #undef max
 #undef abs
 #undef round
-// Arduino timer macros conflict with user variable names (STruC++ uppercases identifiers)
-#undef TIMER0A
-#undef TIMER0B
-#undef TIMER1A
-#undef TIMER1B
-#undef TIMER1C
-#undef TIMER2
-#undef TIMER2A
-#undef TIMER2B
-#undef TIMER3A
-#undef TIMER3B
-#undef TIMER3C
-#undef TIMER4A
-#undef TIMER4B
-#undef TIMER4C
-#undef TIMER4D
-#undef TIMER5A
-#undef TIMER5B
-#undef TIMER5C
 
 // Include openplc.h FIRST (defines IEC_BOOL etc. as plain typedefs)
 #include "openplc.h"
