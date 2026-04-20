@@ -472,11 +472,16 @@ class CompilerModule {
       // No libs directory available, compile without libraries
     }
 
+    // Precompute MD5 so STruC++ can embed it into debugMap (so the editor
+    // can detect stale layouts without re-reading program.st).
+    const md5Hash = crypto.createHash('md5').update(stSource).digest('hex')
+
     const result = strucppCompile(stSource, {
       headerFileName: 'generated.hpp',
       debug: true,
       lineMapping: true,
       libraryPaths,
+      md5: md5Hash,
     })
 
     if (!result.success) {
@@ -491,10 +496,29 @@ class CompilerModule {
     await writeFile(join(sourceTargetFolderPath, 'generated.cpp'), result.cppCode, { encoding: 'utf8' })
     await writeFile(join(sourceTargetFolderPath, 'generated.hpp'), result.headerCode, { encoding: 'utf8' })
 
-    handleOutputData(`C++ files generated at: ${sourceTargetFolderPath}`, 'info')
+    // Phase 4 debugger artifacts (present starting with strucpp v0.3.0).
+    // debugTableCpp is the per-project pointer table for generated_debug.cpp.
+    // debugMap is the editor-consumed manifest (path -> (arrayIdx, elemIdx)).
+    if (result.debugTableCpp !== undefined) {
+      await writeFile(
+        join(sourceTargetFolderPath, 'generated_debug.cpp'),
+        result.debugTableCpp,
+        { encoding: 'utf8' },
+      )
+    }
+    if (result.debugMap !== undefined) {
+      await writeFile(
+        join(sourceTargetFolderPath, 'debug-map.json'),
+        JSON.stringify(result.debugMap, null, 2),
+        { encoding: 'utf8' },
+      )
+      handleOutputData(
+        `Debug map: ${result.debugMap.leaves.length} leaves in ${result.debugMap.arrays.length} arrays`,
+        'info',
+      )
+    }
 
-    // Compute MD5 hash directly from the ST source
-    const md5Hash = crypto.createHash('md5').update(stSource).digest('hex')
+    handleOutputData(`C++ files generated at: ${sourceTargetFolderPath}`, 'info')
     handleOutputData(`Program MD5: ${md5Hash}`, 'info')
 
     return { md5Hash }

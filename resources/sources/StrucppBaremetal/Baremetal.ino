@@ -59,9 +59,12 @@ IEC_ULINT *lint_memory[MAX_MEMORY_LWORD] = {};
 #endif
 
 // ---------------------------------------------------------------------------
-// STruC++ Configuration instance (always CONFIG0 in OpenPLC)
+// STruC++ Configuration instance (always CONFIG0 in OpenPLC).
+// NOT static — the debugger's generated_debug.cpp references this global
+// via compile-time address-of expressions (extern declaration) so it must
+// have external linkage.
 // ---------------------------------------------------------------------------
-static strucpp::Configuration_CONFIG0 g_config;
+strucpp::Configuration_CONFIG0 g_config;
 
 // ---------------------------------------------------------------------------
 // Task scheduling state (populated by discoverTasks)
