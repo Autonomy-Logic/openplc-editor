@@ -183,6 +183,42 @@ export function generateIecLocation(channel: ESIChannel, globalBitOffset?: numbe
 }
 
 /**
+ * A direction-tagged bit range for conflict detection on IEC locations.
+ * Used to catch overlaps across different access widths (e.g. `%IX0.0`,
+ * `%IB0`, and `%IW0` all touch byte 0 but compare unequal as strings).
+ */
+type IecBitRange = { direction: 'I' | 'Q'; startBit: number; endBit: number }
+
+const IEC_WIDTH_BITS: Record<string, number> = {
+  X: 1,
+  B: 8,
+  W: 16,
+  D: 32,
+  L: 64,
+}
+
+/**
+ * Parse an IEC location string (`%IX0.0`, `%IB0`, `%QW2`, ...) into a bit range.
+ * Returns `null` for unrecognized formats so callers can skip them instead of
+ * treating them as false matches.
+ */
+export function parseIecLocationToBitRange(location: string): IecBitRange | null {
+  const match = /^%([IQ])([XBWDL])(\d+)(?:\.(\d+))?$/.exec(location)
+  if (!match) return null
+  const [, dir, kind, byteStr, bitStr] = match
+  const width = IEC_WIDTH_BITS[kind]
+  if (width === undefined) return null
+  const byte = Number.parseInt(byteStr, 10)
+  const bit = bitStr !== undefined ? Number.parseInt(bitStr, 10) : 0
+  const startBit = byte * 8 + bit
+  return { direction: dir as 'I' | 'Q', startBit, endBit: startBit + width - 1 }
+}
+
+function bitRangesOverlap(a: IecBitRange, b: IecBitRange): boolean {
+  return a.direction === b.direction && a.startBit <= b.endBit && b.startBit <= a.endBit
+}
+
+/**
  * Get the size in bits for a channel based on its IEC type.
  */
 function getChannelBitSize(channel: ESIChannel): number {
@@ -222,7 +258,22 @@ export function generateDefaultChannelMappings(
   channels: ESIChannel[],
   usedAddresses?: Set<string>,
 ): EtherCATChannelMapping[] {
-  const used = new Set(usedAddresses)
+  // Normalize existing addresses to bit ranges so conflict detection catches
+  // overlaps across widths (e.g. `%IB0` vs `%IW0` vs `%IX0.0` all overlap byte 0).
+  const usedRanges: IecBitRange[] = []
+  if (usedAddresses) {
+    for (const addr of usedAddresses) {
+      const range = parseIecLocationToBitRange(addr)
+      if (range) usedRanges.push(range)
+    }
+  }
+
+  const conflicts = (candidate: string): boolean => {
+    const range = parseIecLocationToBitRange(candidate)
+    if (!range) return false
+    return usedRanges.some((r) => bitRangesOverlap(range, r))
+  }
+
   const inputChannels = channels.filter((c) => c.direction === 'input')
   const outputChannels = channels.filter((c) => c.direction === 'output')
 
@@ -241,8 +292,8 @@ export function generateDefaultChannelMappings(
 
       let candidate = generateIecLocation(channel, currentBitOffset)
 
-      // Find a non-conflicting address
-      while (used.has(candidate)) {
+      // Find a non-conflicting address (checks bit-range overlap, not string equality)
+      while (conflicts(candidate)) {
         currentBitOffset += bitSize
         // Re-align if needed
         if (bitSize > 1 && currentBitOffset % 8 !== 0) {
@@ -251,7 +302,8 @@ export function generateDefaultChannelMappings(
         candidate = generateIecLocation(channel, currentBitOffset)
       }
 
-      used.add(candidate)
+      const candidateRange = parseIecLocationToBitRange(candidate)
+      if (candidateRange) usedRanges.push(candidateRange)
       mappings.push({
         channelId: channel.id,
         iecLocation: candidate,

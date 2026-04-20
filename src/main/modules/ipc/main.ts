@@ -4,7 +4,6 @@ import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-mai
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
-import type { ESIRepositoryItem } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -335,7 +334,11 @@ class MainProcessBridge implements MainIpcModule {
     responseParser: (data: string) => T,
     timeoutMs?: number,
   ): Promise<{ success: true; data: T } | { success: false; error: string }> {
-    const doRequest = (token: string): Promise<{ success: true; data: T } | { success: false; error: string }> => {
+    type PostResult =
+      | { success: true; data: T }
+      | { success: false; error: string; statusCode?: number }
+
+    const doRequest = (token: string): Promise<PostResult> => {
       return new Promise((resolve) => {
         const req = https.request(
           {
@@ -363,7 +366,13 @@ class MainProcessBridge implements MainIpcModule {
                   resolve({ success: false, error: err instanceof Error ? err.message : 'Invalid response format' })
                 }
               } else {
-                resolve({ success: false, error: data || `Unexpected status: ${res.statusCode}` })
+                // Propagate HTTP status so the caller can detect 401/403 for
+                // token-refresh without relying on brittle message parsing.
+                resolve({
+                  success: false,
+                  error: data || `Unexpected status: ${res.statusCode}`,
+                  statusCode: res.statusCode,
+                })
               }
             })
           },
@@ -380,19 +389,23 @@ class MainProcessBridge implements MainIpcModule {
       })
     }
 
+    const stripStatus = (r: PostResult): { success: true; data: T } | { success: false; error: string } =>
+      r.success ? r : { success: false, error: r.error }
+
     return doRequest(jwtToken).then((result) => {
-      if (!result.success && this.isTokenExpiredError(undefined, result.error)) {
+      const statusCode = !result.success ? result.statusCode : undefined
+      if (!result.success && this.isTokenExpiredError(statusCode, result.error)) {
         return this.attemptTokenRefresh().then((refreshResult) => {
           if (refreshResult.success && refreshResult.accessToken) {
             if (this.mainWindow && this.mainWindow.webContents) {
               this.mainWindow.webContents.send('runtime:token-refreshed', refreshResult.accessToken)
             }
-            return doRequest(refreshResult.accessToken)
+            return doRequest(refreshResult.accessToken).then(stripStatus)
           }
           return { success: false as const, error: `Token refresh failed: ${refreshResult.error || 'Unknown error'}` }
         })
       }
-      return result
+      return stripStatus(result)
     })
   }
 
@@ -663,12 +676,9 @@ class MainProcessBridge implements MainIpcModule {
 
     // ===================== ESI REPOSITORY =====================
     this.registerHandle('esi:load-repository-index', this.handleESILoadRepositoryIndex)
-    this.registerHandle('esi:save-repository-index', this.handleESISaveRepositoryIndex)
     this.registerHandle('esi:save-xml-file', this.handleESISaveXmlFile)
     this.registerHandle('esi:load-xml-file', this.handleESILoadXmlFile)
     this.registerHandle('esi:delete-xml-file', this.handleESIDeleteXmlFile)
-    this.registerHandle('esi:save-repository-item', this.handleESISaveRepositoryItem)
-    this.registerHandle('esi:delete-repository-item', this.handleESIDeleteRepositoryItem)
     this.registerHandle('esi:parse-and-save-file', this.handleESIParseAndSaveFile)
     this.registerHandle('esi:clear-repository', this.handleESIClearRepository)
     this.registerHandle('esi:load-device-full', this.handleESILoadDeviceFull)
@@ -1679,9 +1689,6 @@ class MainProcessBridge implements MainIpcModule {
       return { success: true as const, data: index }
     })
 
-  handleESISaveRepositoryIndex = async (_event: IpcMainInvokeEvent, projectPath: string, items: ESIRepositoryItem[]) =>
-    this.wrapServiceCall(() => this.esiService.saveRepositoryIndex(projectPath, items))
-
   handleESISaveXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string, xmlContent: string) =>
     this.wrapServiceCall(() => this.esiService.saveXmlFile(projectPath, itemId, xmlContent))
 
@@ -1690,21 +1697,6 @@ class MainProcessBridge implements MainIpcModule {
 
   handleESIDeleteXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string) =>
     this.wrapServiceCall(() => this.esiService.deleteRepositoryItemV2(projectPath, itemId))
-
-  handleESISaveRepositoryItem = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    item: ESIRepositoryItem,
-    xmlContent: string,
-    existingItems: ESIRepositoryItem[],
-  ) => this.wrapServiceCall(() => this.esiService.saveRepositoryItem(projectPath, item, xmlContent, existingItems))
-
-  handleESIDeleteRepositoryItem = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    itemId: string,
-    existingItems: ESIRepositoryItem[],
-  ) => this.wrapServiceCall(() => this.esiService.deleteRepositoryItem(projectPath, itemId, existingItems))
 
   handleESIParseAndSaveFile = async (
     _event: IpcMainInvokeEvent,

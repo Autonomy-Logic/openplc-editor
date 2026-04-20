@@ -4,6 +4,7 @@ import { InputWithRef } from '@root/frontend/components/_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { cn } from '@root/frontend/utils/cn'
 import type { NetworkInterface } from '@root/types/ethercat'
+import { useEffect, useState } from 'react'
 
 type GlobalSettingsTabProps = {
   masterConfig: EtherCATMasterConfig
@@ -25,6 +26,29 @@ const GlobalSettingsTab = ({
   isLoadingInterfaces,
   onRefreshInterfaces,
 }: GlobalSettingsTabProps) => {
+  // Local draft state so the user's in-progress keystrokes (including
+  // temporarily empty or out-of-range values) render without writing
+  // NaN / invalid numbers into the persisted masterConfig. Only finite,
+  // in-range values propagate to the store on change; onBlur clamps any
+  // remaining bad draft back into range.
+  const [cycleTimeDraft, setCycleTimeDraft] = useState(String(masterConfig.cycleTimeUs))
+  const [watchdogDraft, setWatchdogDraft] = useState(String(masterConfig.watchdogTimeoutCycles ?? 3))
+
+  useEffect(() => {
+    setCycleTimeDraft(String(masterConfig.cycleTimeUs))
+  }, [masterConfig.cycleTimeUs])
+
+  useEffect(() => {
+    setWatchdogDraft(String(masterConfig.watchdogTimeoutCycles ?? 3))
+  }, [masterConfig.watchdogTimeoutCycles])
+
+  const commitIfValid = (raw: string, min: number, max: number, commit: (value: number) => void) => {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed) && parsed >= min && parsed <= max) {
+      commit(parsed)
+    }
+  }
+
   return (
     <div className='flex flex-col gap-6 overflow-auto pb-4'>
       {/* Enable Plugin */}
@@ -132,12 +156,20 @@ const GlobalSettingsTab = ({
         <div className='flex flex-col gap-1'>
           <InputWithRef
             type='number'
-            value={masterConfig.cycleTimeUs}
-            onChange={(e) => onUpdateMasterConfig({ cycleTimeUs: Number(e.target.value) })}
+            value={cycleTimeDraft}
+            onChange={(e) => {
+              setCycleTimeDraft(e.target.value)
+              commitIfValid(e.target.value, 100, 100000, (v) => onUpdateMasterConfig({ cycleTimeUs: v }))
+            }}
             onBlur={(e) => {
               const val = Number(e.target.value)
-              if (!val || val < 100) onUpdateMasterConfig({ cycleTimeUs: 100 })
-              else if (val > 100000) onUpdateMasterConfig({ cycleTimeUs: 100000 })
+              if (!Number.isFinite(val) || val < 100) {
+                onUpdateMasterConfig({ cycleTimeUs: 100 })
+                setCycleTimeDraft('100')
+              } else if (val > 100000) {
+                onUpdateMasterConfig({ cycleTimeUs: 100000 })
+                setCycleTimeDraft('100000')
+              }
             }}
             min={100}
             max={100000}
@@ -157,12 +189,20 @@ const GlobalSettingsTab = ({
         <div className='flex flex-col gap-1'>
           <InputWithRef
             type='number'
-            value={masterConfig.watchdogTimeoutCycles ?? 3}
-            onChange={(e) => onUpdateMasterConfig({ watchdogTimeoutCycles: Number(e.target.value) })}
+            value={watchdogDraft}
+            onChange={(e) => {
+              setWatchdogDraft(e.target.value)
+              commitIfValid(e.target.value, 1, 100, (v) => onUpdateMasterConfig({ watchdogTimeoutCycles: v }))
+            }}
             onBlur={(e) => {
               const val = Number(e.target.value)
-              if (!val || val < 1) onUpdateMasterConfig({ watchdogTimeoutCycles: 1 })
-              else if (val > 100) onUpdateMasterConfig({ watchdogTimeoutCycles: 100 })
+              if (!Number.isFinite(val) || val < 1) {
+                onUpdateMasterConfig({ watchdogTimeoutCycles: 1 })
+                setWatchdogDraft('1')
+              } else if (val > 100) {
+                onUpdateMasterConfig({ watchdogTimeoutCycles: 100 })
+                setWatchdogDraft('100')
+              }
             }}
             min={1}
             max={100}

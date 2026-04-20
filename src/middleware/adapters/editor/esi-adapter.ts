@@ -61,13 +61,12 @@ export function createEditorEsiAdapter(getProjectPath: () => string): EsiPort {
         const projectPath = requireProjectPath()
         const result = await window.bridge.esiParseAndSaveFile(projectPath, filename, content)
         if (result.success && result.item) {
-          return { success: true, item: result.item } as Result<{ item: NonNullable<typeof result.item> }>
+          return { success: true, item: result.item }
         }
         if (result.success) {
-          // Duplicate file — silently skip
-          return { success: true, item: undefined } as unknown as Result<{
-            item: NonNullable<typeof result.item>
-          }>
+          // Duplicate file — surface it explicitly so callers can distinguish
+          // a successful add from a silent skip instead of squinting at `!item`.
+          return { success: true, duplicate: true }
         }
         return { success: false, error: result.error ?? 'Parse failed' }
       } catch (err) {

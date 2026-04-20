@@ -141,12 +141,15 @@ const EtherCATDeviceEditor = () => {
     [configuredDevices, deviceId, syncDevicesToStore],
   )
 
-  // Load ESI repository
+  // Load ESI repository. Resets and reloads whenever `projectPath` changes
+  // so switching projects picks up the new project's repository instead of
+  // serving the prior one from the stale "already loaded" flag.
   useEffect(() => {
     let cancelled = false
+    repositoryLoadedRef.current = false
 
     const loadRepository = async () => {
-      if (!projectPath || repositoryLoadedRef.current) return
+      if (!projectPath) return
 
       try {
         const result = await esi!.loadRepositoryLight()
@@ -175,12 +178,7 @@ const EtherCATDeviceEditor = () => {
     return () => {
       cancelled = true
     }
-  }, [projectPath])
-
-  // Reset repository loaded flag when project changes
-  useEffect(() => {
-    repositoryLoadedRef.current = false
-  }, [projectPath])
+  }, [projectPath, esi])
 
   // Resolve ESI device summary and repo item for info display
   const esiDevice = useMemo<ESIDeviceSummary | null>(() => {

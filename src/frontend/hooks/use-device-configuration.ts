@@ -79,7 +79,7 @@ export function useDeviceConfiguration({
           }
 
           if (!device.channelInfo || !device.rxPdos || !device.txPdos) {
-            const { sdoConfigurations, ...rest } = enrichDeviceData(result.device)
+            const { sdoConfigurations, ...rest } = enrichDeviceData(result.device, externalAddresses)
             onEnrichDeviceRef.current(device.sdoConfigurations !== undefined ? rest : { ...rest, sdoConfigurations })
           } else if (device.sdoConfigurations === undefined && result.device.coeObjects?.length) {
             onEnrichDeviceRef.current({

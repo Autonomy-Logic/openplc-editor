@@ -391,9 +391,11 @@ export interface PLCRemoteDevice {
   modbusTcpConfig?: ModbusRemoteTcpConfig
   ethercatConfig?: {
     masterConfig?: {
+      enabled?: boolean
       networkInterface: string
       cycleTimeUs: number
       watchdogTimeoutCycles?: number
+      taskPriority?: number
     }
     devices: Array<{
       id: string

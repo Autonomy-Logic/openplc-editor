@@ -356,6 +356,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
       state.editorActions.updateEditorName(oldName, newName)
       state.tabsActions.updateTabName(oldName, newName)
+      // Rekey the file slice entry so save-state tracking follows the rename
+      // instead of orphaning the old name when the slave is first-class.
+      state.fileActions.updateFile({ name: oldName, newName })
 
       return { ok: true }
     },
@@ -622,7 +625,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (remoteDevices) {
         remoteDevices.forEach((d) => {
           files[d.name] = { type: 'remote-device', filePath: d.name, saved: true }
-          // Register file entries for EtherCAT slave devices (children of the bus)
+          // Register file entries for EtherCAT slave devices (children of the bus).
+          // Keyed by slave.name to match how the rest of the file registry, tabs,
+          // and editor models identify slaves. Rename flows in
+          // `ethercatDeviceActions.rename` call `fileActions.updateFile({ name, newName })`
+          // to rekey this entry so it never orphans.
           if (d.protocol === 'ethercat' && d.ethercatConfig?.devices) {
             for (const slave of d.ethercatConfig.devices) {
               files[slave.name] = { type: 'ethercat-device', filePath: d.name, saved: true }

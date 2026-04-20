@@ -85,8 +85,11 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false, projectPath }
 
           if (result.success && result.item) {
             newItems.push(result.item)
-          } else if ('error' in result ? result.error : 'Parse failed') {
-            errors.push({ filename: file.name, error: 'error' in result ? result.error : 'Parse failed' })
+          } else if (result.success) {
+            // Duplicate content already in the repository — skip silently.
+            // See EsiPort.parseAndSaveFile for the duplicate-handling contract.
+          } else {
+            errors.push({ filename: file.name, error: result.error ?? 'Parse failed' })
           }
         } catch (err) {
           errors.push({ filename: file.name, error: err instanceof Error ? err.message : String(err) })

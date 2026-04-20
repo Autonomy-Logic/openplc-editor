@@ -32,8 +32,15 @@ export interface EsiPort {
   /**
    * Parse an ESI XML file and save it to the repository.
    * The filename and raw XML content are provided; parsing happens on the backend.
+   *
+   * On success, `item` is present when the file was newly added, and omitted
+   * with `duplicate: true` when the file's content hash already exists in the
+   * repository — letting callers distinguish a real add from a silent skip.
    */
-  parseAndSaveFile(filename: string, content: string): Promise<Result<{ item: ESIRepositoryItemLight }>>
+  parseAndSaveFile(
+    filename: string,
+    content: string,
+  ): Promise<Result<{ item?: ESIRepositoryItemLight; duplicate?: boolean }>>
 
   /**
    * Delete a single repository item and its associated XML file.

@@ -126,15 +126,21 @@ function extractErrorMessage(rawError: string): string {
   return rawError
 }
 
+/**
+ * Detect only errors that indicate the EtherCAT plugin endpoint is missing or
+ * disabled on the runtime (HTTP 404, HTML error page, or explicit not-loaded
+ * messages). Network/connectivity failures like timeouts and "connection
+ * refused" are NOT plugin-state issues — they must surface as real errors so
+ * users can diagnose their connection instead of seeing a misleading
+ * "plugin not active" banner.
+ */
 function isPluginNotActiveError(message: string): boolean {
   const lower = message.toLowerCase()
   return (
-    lower.includes('not found') ||
     lower.includes('not loaded') ||
     lower.includes('not available') ||
-    lower.includes('no response from runtime') ||
-    lower.includes('timeout') ||
-    lower.includes('connection refused') ||
+    lower.includes('plugin not active') ||
+    lower.includes('plugin not found') ||
     lower.includes('<!doctype') ||
     lower.includes('<html') ||
     lower.includes('404')

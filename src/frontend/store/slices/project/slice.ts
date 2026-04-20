@@ -202,11 +202,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             )
             if (!existingTask) {
               const cycleTimeUs = device.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000
+              const taskPriority = device.ethercatConfig?.masterConfig?.taskPriority ?? 1
               slice.project.data.configurations.resource.tasks.unshift({
                 name: ethercatTaskName(device.name),
                 triggering: 'Cyclic' as const,
                 interval: cycleTimeUsToIecInterval(cycleTimeUs),
-                priority: 1,
+                priority: taskPriority,
                 isSystemTask: true,
                 associatedDevice: device.name,
               })
@@ -1045,11 +1046,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           // Auto-create system task for EtherCAT devices
           if (device.protocol === 'ethercat') {
             const cycleTimeUs = device.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000
+            const taskPriority = device.ethercatConfig?.masterConfig?.taskPriority ?? 1
             slice.project.data.configurations.resource.tasks.unshift({
               name: ethercatTaskName(device.name),
               triggering: 'Cyclic' as const,
               interval: cycleTimeUsToIecInterval(cycleTimeUs),
-              priority: 1,
+              priority: taskPriority,
               isSystemTask: true,
               associatedDevice: device.name,
             })

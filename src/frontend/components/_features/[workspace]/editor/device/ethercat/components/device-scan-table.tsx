@@ -80,10 +80,20 @@ const DeviceScanTable = ({ devices, selectedPosition, onSelectDevice, isScanning
             devices.map((device) => (
               <tr
                 key={device.position}
+                role='button'
+                tabIndex={0}
+                aria-pressed={selectedPosition === device.position}
                 onClick={() => onSelectDevice(device.position)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelectDevice(device.position)
+                  }
+                }}
                 className={cn(
                   'cursor-pointer border-b border-neutral-200 transition-colors dark:border-neutral-800',
                   'hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1',
                   selectedPosition === device.position && 'bg-brand/10 dark:bg-brand/20',
                 )}
               >

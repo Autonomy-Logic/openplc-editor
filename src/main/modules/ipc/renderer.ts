@@ -1,5 +1,5 @@
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
-import type { ESIDevice, ESIRepositoryItem, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -418,12 +418,6 @@ const rendererProcessBridge = {
     error?: string
   }> => ipcRenderer.invoke('esi:load-repository-index', projectPath),
 
-  esiSaveRepositoryIndex: (
-    projectPath: string,
-    items: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:save-repository-index', projectPath, items),
-
   esiSaveXmlFile: (
     projectPath: string,
     itemId: string,
@@ -440,27 +434,11 @@ const rendererProcessBridge = {
   esiDeleteXmlFile: (projectPath: string, itemId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('esi:delete-xml-file', projectPath, itemId),
 
-  esiSaveRepositoryItem: (
-    projectPath: string,
-    item: ESIRepositoryItem,
-    xmlContent: string,
-    existingItems: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:save-repository-item', projectPath, item, xmlContent, existingItems),
-
-  esiDeleteRepositoryItem: (
-    projectPath: string,
-    itemId: string,
-    existingItems: ESIRepositoryItem[],
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:delete-repository-item', projectPath, itemId, existingItems),
-
-  // ===================== ESI OPTIMIZED (v2) METHODS =====================
   esiParseAndSaveFile: (
     projectPath: string,
     filename: string,
     content: string,
-  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> =>
+  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; duplicate?: boolean; error?: string }> =>
     ipcRenderer.invoke('esi:parse-and-save-file', projectPath, filename, content),
 
   esiClearRepository: (projectPath: string): Promise<{ success: boolean; error?: string }> =>

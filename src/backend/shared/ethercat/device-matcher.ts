@@ -13,12 +13,14 @@ import type {
 import type { EtherCATDevice } from '@root/types/ethercat'
 
 /**
- * Parse a hex string to a number for comparison
- * Handles formats: "0x1234", "#x1234", "1234"
+ * Parse a hex string to a number for comparison.
+ * Handles formats: "0x1234", "#x1234", "1234".
+ * Returns NaN for unparseable input so callers can explicitly reject invalid IDs
+ * instead of silently coercing them to 0 and producing false matches.
  */
 function parseHexToNumber(hexString: string): number {
   const cleaned = hexString.replace(/#x/gi, '0x')
-  return Number(cleaned) || 0
+  return Number(cleaned)
 }
 
 /**
@@ -35,6 +37,12 @@ function getMatchQuality(
   const esiVendorNum = parseHexToNumber(esiVendorId)
   const esiProductNum = parseHexToNumber(esiProductCode)
   const esiRevisionNum = parseHexToNumber(esiRevisionNo)
+
+  // Reject ESI entries whose numeric IDs failed to parse — without this,
+  // unparseable strings used to collapse to 0 and falsely match real devices.
+  if (Number.isNaN(esiVendorNum) || Number.isNaN(esiProductNum) || Number.isNaN(esiRevisionNum)) {
+    return 'none'
+  }
 
   // Check vendor ID first - must match for any level of match
   if (scannedVendorId !== esiVendorNum) {

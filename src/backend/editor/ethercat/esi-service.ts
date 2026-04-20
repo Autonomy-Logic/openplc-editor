@@ -1,8 +1,4 @@
-import type {
-  ESIDeviceSummary,
-  ESIRepositoryItem,
-  ESIRepositoryItemLight,
-} from '@root/middleware/shared/ports/esi-types'
+import type { ESIDeviceSummary, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { promises } from 'fs'
 import { basename, dirname, join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
@@ -126,49 +122,39 @@ class ESIService {
   async loadRepositoryIndex(projectPath: string): Promise<ESIRepositoryIndex | null> {
     const repoPath = this.getRepositoryPath(projectPath)
 
+    let content: string
     try {
-      const content = await promises.readFile(repoPath, 'utf-8')
-      const index = JSON.parse(content) as ESIRepositoryIndex
-      return index
+      content = await promises.readFile(repoPath, 'utf-8')
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return null
       }
-      // Re-throw for corrupted/unreadable files so callers don't silently overwrite
+      // Re-throw I/O errors (permission, locked file, ...) so callers don't
+      // silently overwrite what is probably a working file.
       throw error
     }
-  }
 
-  /**
-   * Save the ESI repository index to disk (v1 format for backward compat)
-   */
-  async saveRepositoryIndex(projectPath: string, items: ESIRepositoryItem[]): Promise<ESIServiceResponse> {
     try {
-      await this.ensureEsiDir(projectPath)
-
-      const index: ESIRepositoryIndex = {
-        version: 1,
-        items: items.map((item) => ({
-          id: item.id,
-          filename: item.filename,
-          vendorId: item.vendor.id,
-          vendorName: item.vendor.name,
-          deviceCount: item.devices.length,
-          loadedAt: isoToMs(item.loadedAt),
-          warnings: item.warnings,
-        })),
+      return JSON.parse(content) as ESIRepositoryIndex
+    } catch (parseError) {
+      // Corrupted JSON: rename the bad file to `.corrupt-<timestamp>.bak` and
+      // treat the repository as empty. This gives callers a clear recovery
+      // path (re-parse the XMLs on disk) instead of being stuck with a fatal
+      // throw on every load, while preserving the original file for forensics.
+      const backupPath = `${repoPath}.corrupt-${Date.now()}.bak`
+      try {
+        await promises.rename(repoPath, backupPath)
+        console.warn(
+          `[ESIService] Corrupted repository index at ${repoPath} — backed up to ${backupPath} and treating repository as empty.`,
+          parseError,
+        )
+      } catch (renameError) {
+        console.error(
+          `[ESIService] Corrupted repository index at ${repoPath} and backup rename failed. Leaving file in place.`,
+          { parseError, renameError },
+        )
       }
-
-      const repoPath = this.getRepositoryPath(projectPath)
-      await promises.writeFile(repoPath, JSON.stringify(index, null, 2), 'utf-8')
-
-      return { success: true }
-    } catch (error) {
-      console.error('Error saving ESI repository index:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to save repository index',
-      }
+      return null
     }
   }
 
@@ -270,76 +256,6 @@ class ESIService {
   }
 
   /**
-   * Save a complete ESI repository item (XML + update index)
-   */
-  async saveRepositoryItem(
-    projectPath: string,
-    item: ESIRepositoryItem,
-    xmlContent: string,
-    _existingItems: ESIRepositoryItem[],
-  ): Promise<ESIServiceResponse> {
-    return this.withIndexLock(async () => {
-      // Save the XML file
-      const xmlResult = await this.saveXmlFile(projectPath, item.id, xmlContent)
-      if (!xmlResult.success) {
-        return xmlResult
-      }
-
-      // Read current index from disk instead of trusting caller snapshot
-      const currentIndex = await this.loadRepositoryIndex(projectPath)
-      const currentItems = currentIndex?.items ?? []
-      const updatedItems = [
-        ...currentItems.filter((i) => i.id !== item.id),
-        {
-          id: item.id,
-          filename: item.filename,
-          vendorId: item.vendor.id,
-          vendorName: item.vendor.name,
-          deviceCount: item.devices.length,
-          loadedAt: isoToMs(item.loadedAt),
-          warnings: item.warnings,
-        },
-      ]
-      const repoPath = this.getRepositoryPath(projectPath)
-      await promises.writeFile(
-        repoPath,
-        JSON.stringify({ version: currentIndex?.version ?? 1, items: updatedItems }, null, 2),
-        'utf-8',
-      )
-      return { success: true }
-    })
-  }
-
-  /**
-   * Delete a repository item (XML + update index)
-   */
-  async deleteRepositoryItem(
-    projectPath: string,
-    itemId: string,
-    _existingItems: ESIRepositoryItem[],
-  ): Promise<ESIServiceResponse> {
-    return this.withIndexLock(async () => {
-      // Delete the XML file
-      const deleteResult = await this.deleteXmlFile(projectPath, itemId)
-      if (!deleteResult.success) {
-        return deleteResult
-      }
-
-      // Read current index from disk instead of trusting caller snapshot
-      const currentIndex = await this.loadRepositoryIndex(projectPath)
-      const currentItems = currentIndex?.items ?? []
-      const updatedItems = currentItems.filter((i) => i.id !== itemId)
-      const repoPath = this.getRepositoryPath(projectPath)
-      await promises.writeFile(
-        repoPath,
-        JSON.stringify({ version: currentIndex?.version ?? 1, items: updatedItems }, null, 2),
-        'utf-8',
-      )
-      return { success: true }
-    })
-  }
-
-  /**
    * Delete a repository item and update the v2 index (no re-parsing)
    */
   async deleteRepositoryItemV2(projectPath: string, itemId: string): Promise<ESIServiceResponse> {
@@ -365,25 +281,32 @@ class ESIService {
   }
 
   /**
-   * Load light items from the v2 repository index
+   * Load light items from the v2 repository index.
+   *
+   * Assumes the caller has already confirmed the index is fully v2-shaped
+   * (all items carry `devices`). Items missing `devices` are treated as a
+   * schema violation — they were already rejected by `loadRepositoryLight`.
    */
   private async loadLightItemsFromIndex(projectPath: string): Promise<ESIRepositoryItemLight[]> {
     const index = await this.loadRepositoryIndex(projectPath)
     if (!index || index.version !== 2) return []
-    return index.items
-      .filter((i) => i.devices)
-      .map((i) => ({
-        id: i.id,
-        filename: i.filename,
-        vendor: { id: i.vendorId, name: i.vendorName },
-        devices: i.devices || [],
-        loadedAt: msToIso(i.loadedAt),
-        warnings: i.warnings,
-      }))
+    return index.items.map((i) => ({
+      id: i.id,
+      filename: i.filename,
+      vendor: { id: i.vendorId, name: i.vendorName },
+      devices: i.devices ?? [],
+      loadedAt: msToIso(i.loadedAt),
+      warnings: i.warnings,
+    }))
   }
 
   /**
-   * Load repository as lightweight items (v2 instant, v1 needs migration)
+   * Load repository as lightweight items (v2 instant, v1 needs migration).
+   *
+   * A v2 index is only considered valid when ALL items carry a `devices`
+   * array. If any item is missing it (partial write, manual edit, external
+   * corruption), we flag the whole index as needing re-migration so the
+   * user's view never silently drops items.
    */
   async loadRepositoryLight(
     projectPath: string,
@@ -395,18 +318,20 @@ class ESIService {
         return { success: true, items: [] }
       }
 
-      // V2 index has device summaries inline
-      if (index.version === 2 && index.items.length > 0 && index.items[0].devices) {
+      if (index.items.length === 0) {
+        return { success: true, items: [] }
+      }
+
+      // V2 index is valid only when every item has inline device summaries.
+      // Any item missing `devices` means we either have a v1 index or a
+      // partially-migrated v2 — in both cases, trigger migration.
+      const allItemsHaveDevices = index.version === 2 && index.items.every((i) => i.devices !== undefined)
+      if (allItemsHaveDevices) {
         const items = await this.loadLightItemsFromIndex(projectPath)
         return { success: true, items }
       }
 
-      // V1 index needs migration
-      if (index.items.length > 0) {
-        return { success: true, needsMigration: true }
-      }
-
-      return { success: true, items: [] }
+      return { success: true, needsMigration: true }
     } catch (error) {
       return {
         success: false,
@@ -470,12 +395,20 @@ class ESIService {
   /**
    * Parse and save a single ESI file. Returns the saved item on success.
    * Called once per file from the renderer's sequential upload loop.
+   *
+   * ## Duplicate handling
+   * When `filename` already exists in the repository index, we return
+   * `{ success: true, duplicate: true }` WITHOUT `item`. The adapter (and
+   * ultimately the UI) treats this as a no-op rather than an error — uploading
+   * the same file again is not a failure, it's just nothing to do. Callers
+   * that need to distinguish "added" from "skipped" must check `duplicate` or
+   * the presence of `item`.
    */
   async parseAndSaveFile(
     projectPath: string,
     filename: string,
     content: string,
-  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; error?: string }> {
+  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; duplicate?: boolean; error?: string }> {
     // Parse outside the lock (CPU-bound, no index access)
     const parseResult = parseESILight(content, filename)
     if (!parseResult.success || !parseResult.vendor || !parseResult.devices) {
@@ -488,7 +421,10 @@ class ESIService {
         const existingIndex = await this.loadRepositoryIndex(projectPath)
         const existingFilenames = new Set(existingIndex?.items.map((i) => i.filename) ?? [])
         if (existingFilenames.has(filename)) {
-          return { success: true } // skip duplicate silently
+          // Skip duplicate: success with an explicit `duplicate` flag so the
+          // caller can tell this apart from a real add without inferring it
+          // from a missing `item`.
+          return { success: true, duplicate: true }
         }
 
         // Save XML to disk

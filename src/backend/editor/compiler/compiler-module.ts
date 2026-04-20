@@ -1710,6 +1710,43 @@ class CompilerModule {
         message: 'Source files generated successfully at: ' + sourceTargetFolderPath,
       })
 
+      // Generate Runtime v4 conf/* files for BOTH compile-only and upload flows.
+      // Without this, compile-only never produces ethercat.json (and other configs),
+      // so users who only want the generated sources miss runtime configuration.
+      if (isRuntimeV4) {
+        try {
+          await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateModbusMasterConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateS7CommConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateOpcUaConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+        } catch (error) {
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message: `Error generating Runtime v4 configs: ${error instanceof Error ? error.message : String(error)}`,
+          })
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message: 'Stopping compilation process.',
+          })
+          _mainProcessPort.close()
+          return
+        }
+      }
+
       if (compileOnly) {
         _mainProcessPort.postMessage({
           logLevel: 'info',
@@ -1762,36 +1799,8 @@ class CompilerModule {
           filename = 'program.st'
           contentType = 'text/plain'
         } else {
-          // Clean conf folder from previous compilations to avoid stale config files
-          await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate Modbus Slave config for Runtime v4
-          await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate Modbus Master config for Runtime v4
-          await this.handleGenerateModbusMasterConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate S7Comm config for Runtime v4
-          await this.handleGenerateS7CommConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate OPC-UA config for Runtime v4
-          await this.handleGenerateOpcUaConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate EtherCAT config for Runtime v4
-          await this.handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
+          // Runtime v4 conf/* files were already generated above, before the
+          // compile-only early return, so compile-only flows also get them.
           _mainProcessPort.postMessage({
             logLevel: 'info',
             message: 'Compressing source files for OpenPLC Runtime v4...',

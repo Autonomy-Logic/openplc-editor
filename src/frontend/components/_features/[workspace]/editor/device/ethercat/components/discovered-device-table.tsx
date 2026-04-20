@@ -71,10 +71,23 @@ const DiscoveredDeviceTable = ({
               return (
                 <tr
                   key={dm.device.position}
+                  role={isSelectable ? 'button' : undefined}
+                  tabIndex={isSelectable ? 0 : undefined}
+                  aria-pressed={isSelectable ? isSelected : undefined}
+                  aria-disabled={!isSelectable}
                   onClick={() => isSelectable && onSelectDevice(dm.device.position, !isSelected)}
+                  onKeyDown={(e) => {
+                    if (!isSelectable) return
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelectDevice(dm.device.position, !isSelected)
+                    }
+                  }}
                   className={cn(
                     'border-b border-neutral-200 transition-colors dark:border-neutral-800',
                     isSelectable && 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
+                    isSelectable &&
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1',
                     isSelected && 'bg-brand/10 dark:bg-brand/20',
                     !isSelectable && 'opacity-60',
                   )}
