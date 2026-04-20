@@ -180,7 +180,9 @@ class ESIService {
       }
 
       const repoPath = this.getRepositoryPath(projectPath)
-      await promises.writeFile(repoPath, JSON.stringify(index, null, 2), 'utf-8')
+      const tmpPath = `${repoPath}.tmp`
+      await promises.writeFile(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
+      await promises.rename(tmpPath, repoPath)
 
       return { success: true }
     } catch (error) {
@@ -443,9 +445,14 @@ class ESIService {
           warnings: parseResult.warnings,
         }
 
-        // Append to v2 index
+        // Append to v2 index. If the index write fails, delete the XML we just
+        // wrote so we don't leave an orphan that's unreferenced by the index.
         const currentItems = await this.loadLightItemsFromIndex(projectPath)
-        await this.saveRepositoryIndexV2(projectPath, [...currentItems, item])
+        const indexResult = await this.saveRepositoryIndexV2(projectPath, [...currentItems, item])
+        if (!indexResult.success) {
+          await this.deleteXmlFile(projectPath, itemId)
+          return { success: false, error: indexResult.error ?? 'Failed to update repository index' }
+        }
 
         return { success: true, item }
       } catch (error) {

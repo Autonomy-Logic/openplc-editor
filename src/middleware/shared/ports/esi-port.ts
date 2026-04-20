@@ -34,8 +34,11 @@ export interface EsiPort {
    * The filename and raw XML content are provided; parsing happens on the backend.
    *
    * On success, `item` is present when the file was newly added, and omitted
-   * with `duplicate: true` when the file's content hash already exists in the
-   * repository — letting callers distinguish a real add from a silent skip.
+   * with `duplicate: true` when a repository entry with the same filename
+   * already exists — letting callers distinguish a real add from a silent skip.
+   * Dedup is filename-based: reimporting the same bytes under a different name
+   * will add a new entry, and replacing a file's contents without renaming it
+   * is reported as a duplicate.
    */
   parseAndSaveFile(
     filename: string,

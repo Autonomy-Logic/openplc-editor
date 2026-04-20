@@ -81,12 +81,7 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
   return (
     <div className='flex flex-1 flex-col gap-4 overflow-hidden'>
       {/* Upload Area */}
-      <ESIUpload
-        onFilesLoaded={handleFilesLoaded}
-        repository={repository}
-        isLoading={isProcessing}
-        projectPath={projectPath}
-      />
+      <ESIUpload onFilesLoaded={handleFilesLoaded} repository={repository} isLoading={isProcessing} />
 
       {/* Error Summary (collapsible) */}
       {uploadErrors.length > 0 && (

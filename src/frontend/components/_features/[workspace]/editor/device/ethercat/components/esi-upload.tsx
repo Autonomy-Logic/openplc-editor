@@ -17,7 +17,6 @@ type ESIUploadProps = {
   onFilesLoaded: (items: ESIRepositoryItemLight[], errors?: Array<{ filename: string; error: string }>) => void
   repository: ESIRepositoryItemLight[]
   isLoading?: boolean
-  projectPath: string
 }
 
 /**
@@ -26,7 +25,7 @@ type ESIUploadProps = {
  * Allows users to upload multiple EtherCAT ESI XML files via drag-and-drop or file picker.
  * Files are read and sent to the main process one at a time to avoid memory issues.
  */
-const ESIUpload = ({ onFilesLoaded, repository, isLoading = false, projectPath }: ESIUploadProps) => {
+const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadProps) => {
   const esi = useEsi()
   const [isDragging, setIsDragging] = useState(false)
   const [parseProgress, setParseProgress] = useState<ParseProgress>({
@@ -105,7 +104,7 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false, projectPath }
 
       onFilesLoaded([...repository, ...newItems], errors.length > 0 ? errors : undefined)
     },
-    [onFilesLoaded, repository, projectPath],
+    [onFilesLoaded, repository, esi],
   )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {

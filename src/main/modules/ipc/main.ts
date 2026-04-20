@@ -61,7 +61,6 @@ class MainProcessBridge implements MainIpcModule {
   private fileWatchers: Map<string, { lastMtime: number }> = new Map()
   // avr8js ATmega2560 emulator instance for the built-in simulator
   private simulatorModule = new SimulatorModule()
-  // VPP package manager for board package operations
   // ESI repository service for EtherCAT device descriptions
   private esiService = new ESIService()
 
@@ -636,8 +635,6 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('hardware:get-available-boards', this.handleHardwareGetAvailableBoards)
     this.registerHandle('hardware:refresh-communication-ports', this.handleHardwareRefreshCommunicationPorts)
     this.registerHandle('hardware:refresh-available-boards', this.handleHardwareRefreshAvailableBoards)
-
-    // ===================== PACKAGE MANAGER =====================
 
     // ===================== UTILITIES =====================
     this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
@@ -1539,7 +1536,18 @@ class MainProcessBridge implements MainIpcModule {
         ipAddress,
         jwtToken,
         '/api/discovery/ethercat/status',
-        (data: string) => JSON.parse(data) as EtherCATServiceStatusResponse,
+        (data: string) => {
+          const parsed = JSON.parse(data) as unknown
+          if (
+            !parsed ||
+            typeof parsed !== 'object' ||
+            typeof (parsed as { available?: unknown }).available !== 'boolean' ||
+            typeof (parsed as { message?: unknown }).message !== 'string'
+          ) {
+            throw new Error('EtherCAT status response did not match expected shape')
+          }
+          return parsed as EtherCATServiceStatusResponse
+        },
       )
       if (result.success && result.data) {
         return { success: true, data: result.data }
@@ -1577,7 +1585,7 @@ class MainProcessBridge implements MainIpcModule {
             status: (pluginResponse.status as string) ?? 'success',
             devices: (pluginResponse.devices as EtherCATScanResponse['devices']) ?? [],
             message: (pluginResponse.message as string) ?? '',
-            scan_time_ms: 0,
+            scan_time_ms: (pluginResponse.scan_time_ms as number) ?? 0,
             interface: scanRequest.interface,
           } as EtherCATScanResponse
         },

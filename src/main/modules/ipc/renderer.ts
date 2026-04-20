@@ -1,4 +1,4 @@
-import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import type {
