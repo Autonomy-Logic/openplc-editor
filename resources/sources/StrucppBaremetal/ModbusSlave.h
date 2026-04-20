@@ -67,21 +67,17 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #include "Controllino.h"
 #endif
 
-// Debugger functions
-extern "C" uint16_t get_var_count(void);
-extern "C" size_t get_var_size(size_t);// {return 0;}
-extern "C" void *get_var_addr(size_t);// {return 0;}
-extern "C" void force_var(size_t, bool, void *);// {}
-extern "C" void set_trace(size_t, bool, void *);// {}
-extern "C" void trace_reset(void);// {}
-extern "C" void set_endianness(uint8_t value);
+// Scan-cycle tick counter defined by the Arduino sketch — reported in
+// DEBUG_GET / DEBUG_GET_LIST responses so the editor can detect cycle
+// boundaries.
 extern uint32_t __tick;
 
+// Status codes (match strucpp::debug::STATUS_* in debug_dispatch.hpp, kept
+// as macros here so the Modbus layer doesn't have to include the C++
+// runtime header when the rest of the protocol is C-style).
 #define MB_DEBUG_SUCCESS                 0x7E
 #define MB_DEBUG_ERROR_OUT_OF_BOUNDS     0x81
 #define MB_DEBUG_ERROR_OUT_OF_MEMORY     0x82
-#define SAME_ENDIANNESS                  0
-#define REVERSE_ENDIANNESS               1
 
 //Modbus registers struct
 struct MBinfo {
@@ -181,9 +177,12 @@ void readInputStatus(uint16_t startreg, uint16_t numregs);
 void readInputRegisters(uint16_t startreg, uint16_t numregs);
 void writeSingleCoil(uint16_t reg, uint16_t status);
 void writeMultipleCoils(uint16_t startreg, uint16_t numoutputs, uint16_t bytecount);
+// Phase 4 debugger entrypoints. Signatures changed from MatIEC-era
+// (flat u16 index) to the (array_idx: u8, elem_idx: u16) addressing model.
 void debugInfo(void);
-void debugSetTrace(uint16_t varidx, uint8_t flag, uint16_t len, void *value);
-void debugGetTrace(uint16_t startidx, uint16_t endidx);
+void debugSetTrace(uint8_t arr, uint16_t elem, uint8_t flag,
+                   uint16_t len, void *value);
+void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx);
 void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray);
 void debugGetMd5(void *endianness);
 
