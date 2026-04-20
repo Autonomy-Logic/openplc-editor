@@ -40,7 +40,10 @@
 // ---------------------------------------------------------------------------
 // AVR: provide sized operator delete (virtual destructors generate this)
 // ---------------------------------------------------------------------------
-void operator delete(void* ptr, unsigned int) { free(ptr); }
+void operator delete(void* ptr, unsigned int)
+{
+    free(ptr);
+}
 
 // ---------------------------------------------------------------------------
 // I/O Buffer definitions (declared extern in openplc.h, must be defined here)
@@ -93,23 +96,33 @@ extern uint8_t pinMask_AOUT[];
 // ---------------------------------------------------------------------------
 // GCD utility
 // ---------------------------------------------------------------------------
-static uint64_t gcd(uint64_t a, uint64_t b) {
-    while (b) { uint64_t t = b; b = a % b; a = t; }
+static uint64_t gcd(uint64_t a, uint64_t b)
+{
+    while (b)
+    {
+        uint64_t t = b;
+        b = a % b;
+        a = t;
+    }
     return a;
 }
 
 // ---------------------------------------------------------------------------
 // I/O Binding: walk locatedVars[] and bind to openplc.h buffer pointers
 // ---------------------------------------------------------------------------
-void bindLocatedVars() {
+void bindLocatedVars()
+{
     using namespace strucpp;
-    for (uint32_t i = 0; i < locatedVarsCount; ++i) {
+    for (uint32_t i = 0; i < locatedVarsCount; ++i)
+    {
         LocatedVar& lv = locatedVars[i];
         if (!lv.pointer) continue;
 
-        switch (lv.area) {
+        switch (lv.area)
+        {
         case LocatedArea::Input:
-            switch (lv.size) {
+            switch (lv.size)
+            {
             case LocatedSize::Bit:
                 bool_input[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
                 break;
@@ -129,7 +142,8 @@ void bindLocatedVars() {
             break;
 
         case LocatedArea::Output:
-            switch (lv.size) {
+            switch (lv.size)
+            {
             case LocatedSize::Bit:
                 bool_output[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
                 break;
@@ -150,7 +164,8 @@ void bindLocatedVars() {
 
         case LocatedArea::Memory:
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-            switch (lv.size) {
+            switch (lv.size)
+            {
             case LocatedSize::Word:
                 int_memory[lv.byte_index] = (::IEC_UINT*)lv.pointer;
                 break;
@@ -171,14 +186,17 @@ void bindLocatedVars() {
 // ---------------------------------------------------------------------------
 // Task Discovery: walk Configuration → Resource → Task to find programs
 // ---------------------------------------------------------------------------
-void discoverTasks() {
+void discoverTasks()
+{
     // First pass: count programs and compute GCD of intervals
     uint64_t gcd_ns = 0;
     size_t prog_count = 0;
 
     auto* resources = g_config.get_resources();
-    for (size_t r = 0; r < g_config.get_resource_count(); ++r) {
-        for (size_t t = 0; t < resources[r].task_count; ++t) {
+    for (size_t r = 0; r < g_config.get_resource_count(); ++r)
+    {
+        for (size_t t = 0; t < resources[r].task_count; ++t)
+        {
             auto& task = resources[r].tasks[t];
             prog_count += task.program_count;
             uint64_t interval = task.interval_ns > 0 ? task.interval_ns : 20000000ULL;
@@ -195,12 +213,15 @@ void discoverTasks() {
     total_programs = prog_count;
 
     size_t idx = 0;
-    for (size_t r = 0; r < g_config.get_resource_count(); ++r) {
-        for (size_t t = 0; t < resources[r].task_count; ++t) {
+    for (size_t r = 0; r < g_config.get_resource_count(); ++r)
+    {
+        for (size_t t = 0; t < resources[r].task_count; ++t)
+        {
             auto& task = resources[r].tasks[t];
             uint64_t interval = task.interval_ns > 0 ? task.interval_ns : gcd_ns;
             uint32_t divisor = (uint32_t)(interval / gcd_ns);
-            for (size_t p = 0; p < task.program_count; ++p) {
+            for (size_t p = 0; p < task.program_count; ++p)
+            {
                 all_programs[idx] = task.programs[p];
                 task_divisors[idx] = divisor;
                 idx++;
@@ -212,14 +233,16 @@ void discoverTasks() {
 // ---------------------------------------------------------------------------
 // Time update
 // ---------------------------------------------------------------------------
-void updateTime() {
+void updateTime()
+{
     strucpp::__CURRENT_TIME_NS += (int64_t)common_ticktime__;
 }
 
 // ---------------------------------------------------------------------------
 // Scan cycle delay setup
 // ---------------------------------------------------------------------------
-void setupCycleDelay(unsigned long long cycle_time) {
+void setupCycleDelay(unsigned long long cycle_time)
+{
     scan_cycle = (uint32_t)(cycle_time / 1000);
     last_run = micros();
 }
@@ -227,7 +250,8 @@ void setupCycleDelay(unsigned long long cycle_time) {
 // =============================================================================
 // SETUP
 // =============================================================================
-void setup() {
+void setup()
+{
     // Turn off WiFi radio on ESP32/ESP8266 if not using WiFi
     #ifndef MBTCP
         #if defined(BOARD_ESP8266) || defined(BOARD_ESP32)
@@ -248,16 +272,20 @@ void setup() {
         #ifdef MBSERIAL
             #ifdef MBSERIAL_TXPIN
                 // Disable TX pin from OpenPLC hardware layer
-                for (int i = 0; i < NUM_DISCRETE_INPUT; i++) {
+                for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
+                {
                     if (pinMask_DIN[i] == MBSERIAL_TXPIN) pinMask_DIN[i] = 255;
                 }
-                for (int i = 0; i < NUM_ANALOG_INPUT; i++) {
+                for (int i = 0; i < NUM_ANALOG_INPUT; i++)
+                {
                     if (pinMask_AIN[i] == MBSERIAL_TXPIN) pinMask_AIN[i] = 255;
                 }
-                for (int i = 0; i < NUM_DISCRETE_OUTPUT; i++) {
+                for (int i = 0; i < NUM_DISCRETE_OUTPUT; i++)
+                {
                     if (pinMask_DOUT[i] == MBSERIAL_TXPIN) pinMask_DOUT[i] = 255;
                 }
-                for (int i = 0; i < NUM_ANALOG_OUTPUT; i++) {
+                for (int i = 0; i < NUM_ANALOG_OUTPUT; i++)
+                {
                     if (pinMask_AOUT[i] == MBSERIAL_TXPIN) pinMask_AOUT[i] = 255;
                 }
                 MBSERIAL_IFACE.begin(MBSERIAL_BAUD);
@@ -303,42 +331,57 @@ void setup() {
 // MAP EMPTY BUFFERS (for Modbus -- identical to current Baremetal.ino)
 // =============================================================================
 #ifdef MODBUS_ENABLED
-void mapEmptyBuffers() {
-    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++) {
-        if (bool_output[i/8][i%8] == NULL) {
+void mapEmptyBuffers()
+{
+    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
+    {
+        if (bool_output[i/8][i%8] == NULL)
+        {
             bool_output[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
             *bool_output[i/8][i%8] = 0;
         }
     }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++) {
-        if (int_output[i] == NULL) {
+    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
+    {
+        if (int_output[i] == NULL)
+        {
             int_output[i] = (IEC_UINT *)(modbus.holding + i);
         }
     }
-    for (int i = 0; i < MAX_DIGITAL_INPUT; i++) {
-        if (bool_input[i/8][i%8] == NULL) {
+    for (int i = 0; i < MAX_DIGITAL_INPUT; i++)
+    {
+        if (bool_input[i/8][i%8] == NULL)
+        {
             bool_input[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
             *bool_input[i/8][i%8] = 0;
         }
     }
-    for (int i = 0; i < MAX_ANALOG_INPUT; i++) {
-        if (int_input[i] == NULL) {
+    for (int i = 0; i < MAX_ANALOG_INPUT; i++)
+    {
+        if (int_input[i] == NULL)
+        {
             int_input[i] = (IEC_UINT *)(modbus.input_regs + i);
         }
     }
     #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-        for (int i = 0; i < MAX_MEMORY_WORD; i++) {
-            if (int_memory[i] == NULL) {
+        for (int i = 0; i < MAX_MEMORY_WORD; i++)
+        {
+            if (int_memory[i] == NULL)
+            {
                 int_memory[i] = (IEC_UINT *)(modbus.holding + MAX_ANALOG_OUTPUT + i);
             }
         }
-        for (int i = 0; i < MAX_MEMORY_DWORD; i++) {
-            if (dint_memory[i] == NULL) {
+        for (int i = 0; i < MAX_MEMORY_DWORD; i++)
+        {
+            if (dint_memory[i] == NULL)
+            {
                 dint_memory[i] = (IEC_UDINT *)(modbus.dint_memory + i);
             }
         }
-        for (int i = 0; i < MAX_MEMORY_LWORD; i++) {
-            if (lint_memory[i] == NULL) {
+        for (int i = 0; i < MAX_MEMORY_LWORD; i++)
+        {
+            if (lint_memory[i] == NULL)
+            {
                 lint_memory[i] = (IEC_ULINT *)(modbus.lint_memory + i);
             }
         }
@@ -348,41 +391,56 @@ void mapEmptyBuffers() {
 // =============================================================================
 // MODBUS TASK (identical to current Baremetal.ino)
 // =============================================================================
-void modbusTask() {
+void modbusTask()
+{
     // Sync OpenPLC Buffers with Modbus Buffers
-    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++) {
-        if (bool_output[i/8][i%8] != NULL) {
+    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
+    {
+        if (bool_output[i/8][i%8] != NULL)
+        {
             write_discrete(i, COILS, (bool)*bool_output[i/8][i%8]);
         }
     }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++) {
-        if (int_output[i] != NULL) {
+    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
+    {
+        if (int_output[i] != NULL)
+        {
             modbus.holding[i] = *int_output[i];
         }
     }
-    for (int i = 0; i < MAX_DIGITAL_INPUT; i++) {
-        if (bool_input[i/8][i%8] != NULL) {
+    for (int i = 0; i < MAX_DIGITAL_INPUT; i++)
+    {
+        if (bool_input[i/8][i%8] != NULL)
+        {
             write_discrete(i, INPUTSTATUS, (bool)*bool_input[i/8][i%8]);
         }
     }
-    for (int i = 0; i < MAX_ANALOG_INPUT; i++) {
-        if (int_input[i] != NULL) {
+    for (int i = 0; i < MAX_ANALOG_INPUT; i++)
+    {
+        if (int_input[i] != NULL)
+        {
             modbus.input_regs[i] = *int_input[i];
         }
     }
     #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-        for (int i = 0; i < MAX_MEMORY_WORD; i++) {
-            if (int_memory[i] != NULL) {
+        for (int i = 0; i < MAX_MEMORY_WORD; i++)
+        {
+            if (int_memory[i] != NULL)
+            {
                 modbus.holding[i + MAX_ANALOG_OUTPUT] = *int_memory[i];
             }
         }
-        for (int i = 0; i < MAX_MEMORY_DWORD; i++) {
-            if (dint_memory[i] != NULL) {
+        for (int i = 0; i < MAX_MEMORY_DWORD; i++)
+        {
+            if (dint_memory[i] != NULL)
+            {
                 modbus.dint_memory[i] = *dint_memory[i];
             }
         }
-        for (int i = 0; i < MAX_MEMORY_LWORD; i++) {
-            if (lint_memory[i] != NULL) {
+        for (int i = 0; i < MAX_MEMORY_LWORD; i++)
+        {
+            if (lint_memory[i] != NULL)
+            {
                 modbus.lint_memory[i] = *lint_memory[i];
             }
         }
@@ -392,29 +450,39 @@ void modbusTask() {
     mbtask();
 
     // Write changes back to OpenPLC Buffers
-    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++) {
-        if (bool_output[i/8][i%8] != NULL) {
+    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
+    {
+        if (bool_output[i/8][i%8] != NULL)
+        {
             *bool_output[i/8][i%8] = get_discrete(i, COILS);
         }
     }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++) {
-        if (int_output[i] != NULL) {
+    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
+    {
+        if (int_output[i] != NULL)
+        {
             *int_output[i] = modbus.holding[i];
         }
     }
     #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-        for (int i = 0; i < MAX_MEMORY_WORD; i++) {
-            if (int_memory[i] != NULL) {
+        for (int i = 0; i < MAX_MEMORY_WORD; i++)
+        {
+            if (int_memory[i] != NULL)
+            {
                 *int_memory[i] = modbus.holding[i + MAX_ANALOG_OUTPUT];
             }
         }
-        for (int i = 0; i < MAX_MEMORY_DWORD; i++) {
-            if (dint_memory[i] != NULL) {
+        for (int i = 0; i < MAX_MEMORY_DWORD; i++)
+        {
+            if (dint_memory[i] != NULL)
+            {
                 *dint_memory[i] = modbus.dint_memory[i];
             }
         }
-        for (int i = 0; i < MAX_MEMORY_LWORD; i++) {
-            if (lint_memory[i] != NULL) {
+        for (int i = 0; i < MAX_MEMORY_LWORD; i++)
+        {
+            if (lint_memory[i] != NULL)
+            {
                 *lint_memory[i] = modbus.lint_memory[i];
             }
         }
@@ -425,12 +493,15 @@ void modbusTask() {
 // =============================================================================
 // PLC CYCLE TASK
 // =============================================================================
-void plcCycleTask() {
+void plcCycleTask()
+{
     updateInputBuffers();
 
     // Run each program according to its task divisor
-    for (size_t i = 0; i < total_programs; ++i) {
-        if (task_divisors[i] == 0 || (__tick % task_divisors[i]) == 0) {
+    for (size_t i = 0; i < total_programs; ++i)
+    {
+        if (task_divisors[i] == 0 || (__tick % task_divisors[i]) == 0)
+        {
             all_programs[i]->run();
         }
     }
@@ -443,7 +514,8 @@ void plcCycleTask() {
 // =============================================================================
 // SCHEDULER
 // =============================================================================
-void scheduler() {
+void scheduler()
+{
     plcCycleTask();
 
     #ifdef USE_ARDUINO_SKETCH
@@ -454,7 +526,8 @@ void scheduler() {
         modbusTask();
     #endif
 
-    if (!first_cycle) {
+    if (!first_cycle)
+    {
         first_cycle = true;
         // Recalculate last_run to avoid time drift on the first cycle
         last_run = micros() - scan_cycle;
@@ -464,15 +537,18 @@ void scheduler() {
 // =============================================================================
 // MAIN LOOP
 // =============================================================================
-void loop() {
-    if ((micros() - last_run) >= scan_cycle) {
+void loop()
+{
+    if ((micros() - last_run) >= scan_cycle)
+    {
         scheduler();
         last_run += scan_cycle;
     }
 
     #ifdef MODBUS_ENABLED
     // Only run Modbus task again if we have at least 10ms gap until the next cycle
-    if ((micros() - last_run) >= 10000) {
+    if ((micros() - last_run) >= 10000)
+    {
         modbusTask();
     }
     #endif
