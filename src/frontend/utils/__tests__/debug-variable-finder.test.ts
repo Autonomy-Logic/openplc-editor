@@ -47,115 +47,115 @@ describe('findInstanceName', () => {
 
 describe('buildDebugPath', () => {
   it('builds simple variable path', () => {
-    expect(buildDebugPath('INSTANCE0', 'SPEED')).toBe('RES0__INSTANCE0.SPEED')
+    expect(buildDebugPath('INSTANCE0', 'SPEED')).toBe('INSTANCE0.SPEED')
   })
 
-  it('builds FB instance variable path (no .value.)', () => {
-    expect(buildDebugPath('INSTANCE0', 'TIMER0.Q')).toBe('RES0__INSTANCE0.TIMER0.Q')
+  it('builds FB instance variable path', () => {
+    expect(buildDebugPath('INSTANCE0', 'TIMER0.Q')).toBe('INSTANCE0.TIMER0.Q')
   })
 
   it('builds simple array element path', () => {
     const result = buildDebugPath('INSTANCE0', 'ARR', { isArrayElement: true, arrayIndex: 3 })
-    expect(result).toBe('RES0__INSTANCE0.ARR.value.table[3]')
+    expect(result).toBe('INSTANCE0.ARR[3]')
   })
 
-  it('builds structure field path with .value. insertion', () => {
-    const result = buildDebugPath('INSTANCE0', 'MY_STRUCT.FIELD1', { isStructureField: true })
-    expect(result).toBe('RES0__INSTANCE0.MY_STRUCT.value.FIELD1')
+  it('builds structure field path (no .value. shim in STruC++ paths)', () => {
+    const result = buildDebugPath('INSTANCE0', 'MY_STRUCT.FIELD1')
+    expect(result).toBe('INSTANCE0.MY_STRUCT.FIELD1')
   })
 
   it('builds structure field path with array index within structure', () => {
-    const result = buildDebugPath('INSTANCE0', 'MY_STRUCT.[0]', { isStructureField: true })
-    expect(result).toBe('RES0__INSTANCE0.MY_STRUCT.value.table[0]')
+    const result = buildDebugPath('INSTANCE0', 'MY_STRUCT.[0]')
+    expect(result).toBe('INSTANCE0.MY_STRUCT[0]')
   })
 
   it('handles array index in non-structure path (FB_ARRAY.[0].ET)', () => {
     const result = buildDebugPath('INSTANCE0', 'FB_ARRAY.[0].ET')
-    expect(result).toBe('RES0__INSTANCE0.FB_ARRAY.value.table[0].ET')
+    expect(result).toBe('INSTANCE0.FB_ARRAY[0].ET')
   })
 
   it('uppercases the instance name', () => {
-    expect(buildDebugPath('instance0', 'X')).toBe('RES0__INSTANCE0.X')
+    expect(buildDebugPath('instance0', 'X')).toBe('INSTANCE0.X')
   })
 
   it('uses default arrayIndex of 0 when isArrayElement but no arrayIndex provided', () => {
     const result = buildDebugPath('INSTANCE0', 'ARR', { isArrayElement: true })
-    expect(result).toBe('RES0__INSTANCE0.ARR.value.table[0]')
+    expect(result).toBe('INSTANCE0.ARR[0]')
   })
 
-  it('builds nested structure field paths', () => {
-    const result = buildDebugPath('INSTANCE0', 'OUTER.INNER.FIELD', { isStructureField: true })
-    expect(result).toBe('RES0__INSTANCE0.OUTER.value.INNER.value.FIELD')
+  it('builds nested struct/FB field paths', () => {
+    const result = buildDebugPath('INSTANCE0', 'OUTER.INNER.FIELD')
+    expect(result).toBe('INSTANCE0.OUTER.INNER.FIELD')
   })
 })
 
 describe('buildGlobalDebugPath', () => {
-  it('builds CONFIG0__ prefixed path', () => {
-    expect(buildGlobalDebugPath('MY_GLOBAL')).toBe('CONFIG0__MY_GLOBAL')
+  it('returns uppercased name', () => {
+    expect(buildGlobalDebugPath('MY_GLOBAL')).toBe('MY_GLOBAL')
   })
 
   it('uppercases the variable path', () => {
-    expect(buildGlobalDebugPath('my_global')).toBe('CONFIG0__MY_GLOBAL')
+    expect(buildGlobalDebugPath('my_global')).toBe('MY_GLOBAL')
   })
 })
 
 describe('findDebugVariable', () => {
   const debugVars = [
-    makeDebugVar('RES0__INSTANCE0.SPEED', 'INT_ENUM', 0),
-    makeDebugVar('RES0__INSTANCE0.TEMP', 'REAL_ENUM', 1),
+    makeDebugVar('INSTANCE0.SPEED', 'INT_ENUM', 0),
+    makeDebugVar('INSTANCE0.TEMP', 'REAL_ENUM', 1),
   ]
 
   it('finds variable by exact path (case-insensitive)', () => {
-    const result = findDebugVariable(debugVars, 'RES0__INSTANCE0.SPEED')
+    const result = findDebugVariable(debugVars, 'INSTANCE0.SPEED')
     expect(result).toEqual(debugVars[0])
   })
 
   it('finds variable with different case', () => {
-    const result = findDebugVariable(debugVars, 'res0__instance0.speed')
+    const result = findDebugVariable(debugVars, 'instance0.speed')
     expect(result).toEqual(debugVars[0])
   })
 
   it('returns null when not found', () => {
-    const result = findDebugVariable(debugVars, 'RES0__INSTANCE0.MISSING')
+    const result = findDebugVariable(debugVars, 'INSTANCE0.MISSING')
     expect(result).toBeNull()
   })
 })
 
 describe('findDebugVariableWithFallback', () => {
-  it('finds variable using FB-style path first', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.FB1.Q', 'BOOL_ENUM', 10)]
+  it('resolves FB field paths', () => {
+    const debugVars = [makeDebugVar('INSTANCE0.FB1.Q', 'BOOL_ENUM', 10)]
     const result = findDebugVariableWithFallback(debugVars, 'INSTANCE0', 'FB1.Q')
 
     expect(result.match).toEqual(debugVars[0])
     expect(result.usedStructureStyle).toBe(false)
   })
 
-  it('falls back to structure-style path when FB-style fails', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.STRUCT.value.FIELD', 'INT_ENUM', 20)]
+  it('resolves struct field paths with the same convention as FB fields', () => {
+    const debugVars = [makeDebugVar('INSTANCE0.STRUCT.FIELD', 'INT_ENUM', 20)]
     const result = findDebugVariableWithFallback(debugVars, 'INSTANCE0', 'STRUCT.FIELD')
 
     expect(result.match).toEqual(debugVars[0])
-    expect(result.usedStructureStyle).toBe(true)
+    expect(result.usedStructureStyle).toBe(false)
   })
 
-  it('returns null match when neither path style works', () => {
+  it('returns null when the path is not found', () => {
     const result = findDebugVariableWithFallback([], 'INSTANCE0', 'MISSING.PATH')
 
     expect(result.match).toBeNull()
     expect(result.usedStructureStyle).toBe(false)
-    expect(result.matchedPath).toBe('RES0__INSTANCE0.MISSING.PATH')
+    expect(result.matchedPath).toBe('INSTANCE0.MISSING.PATH')
   })
 })
 
 describe('findVariableIndexWithFallback', () => {
-  it('returns the index when FB-style path matches', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.FB.Q', 'BOOL_ENUM', 15)]
+  it('returns the index for FB field paths', () => {
+    const debugVars = [makeDebugVar('INSTANCE0.FB.Q', 'BOOL_ENUM', 15)]
     const result = findVariableIndexWithFallback('INSTANCE0', 'FB.Q', debugVars)
     expect(result).toBe(15)
   })
 
-  it('returns the index when structure-style path matches', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.S.value.F', 'INT_ENUM', 25)]
+  it('returns the index for struct field paths', () => {
+    const debugVars = [makeDebugVar('INSTANCE0.S.F', 'INT_ENUM', 25)]
     const result = findVariableIndexWithFallback('INSTANCE0', 'S.F', debugVars)
     expect(result).toBe(25)
   })
@@ -167,54 +167,54 @@ describe('findVariableIndexWithFallback', () => {
 })
 
 describe('findDebugVariableForField', () => {
-  it('finds field using FB-style path (no .value.)', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.MY_FB.Q', 'BOOL_ENUM', 30)]
-    const result = findDebugVariableForField(debugVars, 'RES0__INSTANCE0.MY_FB', 'Q')
+  it('finds FB field', () => {
+    const debugVars = [makeDebugVar('INSTANCE0.MY_FB.Q', 'BOOL_ENUM', 30)]
+    const result = findDebugVariableForField(debugVars, 'INSTANCE0.MY_FB', 'Q')
 
     expect(result.match).toEqual(debugVars[0])
-    expect(result.matchedPath).toBe('RES0__INSTANCE0.MY_FB.Q')
+    expect(result.matchedPath).toBe('INSTANCE0.MY_FB.Q')
     expect(result.usedStructureStyle).toBe(false)
   })
 
-  it('finds field using struct-style path (with .value.)', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.STRUCT.value.FIELD', 'INT_ENUM', 31)]
-    const result = findDebugVariableForField(debugVars, 'RES0__INSTANCE0.STRUCT', 'FIELD')
+  it('finds struct field using the same path convention as FB', () => {
+    const debugVars = [makeDebugVar('INSTANCE0.STRUCT.FIELD', 'INT_ENUM', 31)]
+    const result = findDebugVariableForField(debugVars, 'INSTANCE0.STRUCT', 'FIELD')
 
     expect(result.match).toEqual(debugVars[0])
-    expect(result.matchedPath).toBe('RES0__INSTANCE0.STRUCT.value.FIELD')
-    expect(result.usedStructureStyle).toBe(true)
+    expect(result.matchedPath).toBe('INSTANCE0.STRUCT.FIELD')
+    expect(result.usedStructureStyle).toBe(false)
   })
 
-  it('returns null match when neither path works', () => {
-    const result = findDebugVariableForField([], 'RES0__INSTANCE0.BASE', 'MISSING')
+  it('returns null when field is absent', () => {
+    const result = findDebugVariableForField([], 'INSTANCE0.BASE', 'MISSING')
 
     expect(result.match).toBeNull()
-    expect(result.matchedPath).toBe('RES0__INSTANCE0.BASE.MISSING')
+    expect(result.matchedPath).toBe('INSTANCE0.BASE.MISSING')
     expect(result.usedStructureStyle).toBe(false)
   })
 
   it('uppercases field name in lookup', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.FB.FIELD', 'INT_ENUM', 32)]
-    const result = findDebugVariableForField(debugVars, 'RES0__INSTANCE0.FB', 'field')
+    const debugVars = [makeDebugVar('INSTANCE0.FB.FIELD', 'INT_ENUM', 32)]
+    const result = findDebugVariableForField(debugVars, 'INSTANCE0.FB', 'field')
 
     expect(result.match).toEqual(debugVars[0])
   })
 })
 
 describe('getIndexFromMapWithFallback', () => {
-  it('returns index from FB-style path', () => {
-    const indexMap = new Map([['RES0__INSTANCE0.FB.Q', 40]])
+  it('returns index by instance + variable path', () => {
+    const indexMap = new Map([['INSTANCE0.FB.Q', 40]])
     const result = getIndexFromMapWithFallback(indexMap, 'INSTANCE0', 'FB.Q')
     expect(result).toBe(40)
   })
 
-  it('returns index from struct-style path when FB-style fails', () => {
-    const indexMap = new Map([['RES0__INSTANCE0.STRUCT.value.FIELD', 41]])
+  it('returns index for struct field paths', () => {
+    const indexMap = new Map([['INSTANCE0.STRUCT.FIELD', 41]])
     const result = getIndexFromMapWithFallback(indexMap, 'INSTANCE0', 'STRUCT.FIELD')
     expect(result).toBe(41)
   })
 
-  it('returns undefined when neither path is in the map', () => {
+  it('returns undefined when path is not in the map', () => {
     const indexMap = new Map<string, number>()
     const result = getIndexFromMapWithFallback(indexMap, 'INSTANCE0', 'NOTHING')
     expect(result).toBeUndefined()
@@ -222,34 +222,34 @@ describe('getIndexFromMapWithFallback', () => {
 })
 
 describe('getFieldIndexFromMapWithFallback', () => {
-  it('returns index from FB-style field path', () => {
-    const indexMap = new Map([['RES0__INSTANCE0.FB.FIELD', 50]])
-    const result = getFieldIndexFromMapWithFallback(indexMap, 'RES0__INSTANCE0.FB', 'FIELD')
+  it('returns index by base path + field name', () => {
+    const indexMap = new Map([['INSTANCE0.FB.FIELD', 50]])
+    const result = getFieldIndexFromMapWithFallback(indexMap, 'INSTANCE0.FB', 'FIELD')
     expect(result).toBe(50)
   })
 
-  it('returns index from struct-style field path when FB-style fails', () => {
-    const indexMap = new Map([['RES0__INSTANCE0.S.value.F', 51]])
-    const result = getFieldIndexFromMapWithFallback(indexMap, 'RES0__INSTANCE0.S', 'F')
+  it('returns index for struct field paths', () => {
+    const indexMap = new Map([['INSTANCE0.S.F', 51]])
+    const result = getFieldIndexFromMapWithFallback(indexMap, 'INSTANCE0.S', 'F')
     expect(result).toBe(51)
   })
 
   it('returns undefined when neither field path is in the map', () => {
     const indexMap = new Map<string, number>()
-    const result = getFieldIndexFromMapWithFallback(indexMap, 'RES0__INSTANCE0.X', 'Y')
+    const result = getFieldIndexFromMapWithFallback(indexMap, 'INSTANCE0.X', 'Y')
     expect(result).toBeUndefined()
   })
 
   it('uppercases field name in path lookup', () => {
-    const indexMap = new Map([['RES0__INSTANCE0.FB.LOWERCASE', 52]])
-    const result = getFieldIndexFromMapWithFallback(indexMap, 'RES0__INSTANCE0.FB', 'lowercase')
+    const indexMap = new Map([['INSTANCE0.FB.LOWERCASE', 52]])
+    const result = getFieldIndexFromMapWithFallback(indexMap, 'INSTANCE0.FB', 'lowercase')
     expect(result).toBe(52)
   })
 })
 
 describe('findVariableIndex', () => {
   it('returns the index for a simple variable', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.SPEED', 'INT_ENUM', 60)]
+    const debugVars = [makeDebugVar('INSTANCE0.SPEED', 'INT_ENUM', 60)]
     const result = findVariableIndex('INSTANCE0', 'SPEED', debugVars)
     expect(result).toBe(60)
   })
@@ -260,21 +260,21 @@ describe('findVariableIndex', () => {
   })
 
   it('passes options through to buildDebugPath', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.ARR.value.table[2]', 'INT_ENUM', 61)]
+    const debugVars = [makeDebugVar('INSTANCE0.ARR[2]', 'INT_ENUM', 61)]
     const result = findVariableIndex('INSTANCE0', 'ARR', debugVars, { isArrayElement: true, arrayIndex: 2 })
     expect(result).toBe(61)
   })
 
-  it('handles structure field option', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.S.value.F', 'INT_ENUM', 62)]
-    const result = findVariableIndex('INSTANCE0', 'S.F', debugVars, { isStructureField: true })
+  it('handles struct field paths', () => {
+    const debugVars = [makeDebugVar('INSTANCE0.S.F', 'INT_ENUM', 62)]
+    const result = findVariableIndex('INSTANCE0', 'S.F', debugVars)
     expect(result).toBe(62)
   })
 })
 
 describe('findGlobalVariableIndex', () => {
   it('returns the index for a global variable', () => {
-    const debugVars = [makeDebugVar('CONFIG0__GLOBAL_FLAG', 'BOOL_ENUM', 70)]
+    const debugVars = [makeDebugVar('GLOBAL_FLAG', 'BOOL_ENUM', 70)]
     const result = findGlobalVariableIndex('GLOBAL_FLAG', debugVars)
     expect(result).toBe(70)
   })
@@ -286,22 +286,22 @@ describe('findGlobalVariableIndex', () => {
 })
 
 describe('buildDebugPathPrefix', () => {
-  it('returns RES0__INSTANCE_NAME prefix', () => {
-    expect(buildDebugPathPrefix('INSTANCE0')).toBe('RES0__INSTANCE0')
+  it('returns INSTANCE_NAME prefix', () => {
+    expect(buildDebugPathPrefix('INSTANCE0')).toBe('INSTANCE0')
   })
 
   it('uppercases the instance name', () => {
-    expect(buildDebugPathPrefix('instance0')).toBe('RES0__INSTANCE0')
+    expect(buildDebugPathPrefix('instance0')).toBe('INSTANCE0')
   })
 })
 
 describe('appendToDebugPath', () => {
   it('appends child name with dot separator and uppercases it', () => {
-    expect(appendToDebugPath('RES0__INSTANCE0.FB', 'field')).toBe('RES0__INSTANCE0.FB.FIELD')
+    expect(appendToDebugPath('INSTANCE0.FB', 'field')).toBe('INSTANCE0.FB.FIELD')
   })
 
   it('handles already uppercased child name', () => {
-    expect(appendToDebugPath('RES0__INSTANCE0', 'VAR')).toBe('RES0__INSTANCE0.VAR')
+    expect(appendToDebugPath('INSTANCE0', 'VAR')).toBe('INSTANCE0.VAR')
   })
 })
 

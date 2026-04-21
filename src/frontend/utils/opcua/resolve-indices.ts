@@ -6,7 +6,7 @@ import {
   findDebugVariableWithFallback,
   findInstanceName,
   type PLCInstanceMapping,
-} from '@root/frontend/utils/debug-variable-finder'
+} from './debug-paths'
 import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/ports/open-plc-types'
 
 import type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'

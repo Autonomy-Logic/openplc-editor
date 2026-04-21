@@ -189,7 +189,8 @@ function traverseNestedNode<T>(
 
     return visitor.visitComplex(name, fullPath, compositeKey, typeName, children)
   } else if (typeDefinition === 'user-data-type') {
-    // Structure type - fields use .value. prefix in debug path
+    // Structure type — STruC++ emits struct fields as `PARENT.FIELD`
+    // (same convention as FB fields), no `.value.` shim.
     const structVariables = findStructureVariables(typeName, dataTypes)
 
     if (!structVariables) {
@@ -200,8 +201,7 @@ function traverseNestedNode<T>(
     const children: T[] = []
 
     for (const field of structVariables) {
-      // Structure fields use .value. prefix
-      const fieldFullPath = `${fullPath}.value.${field.name.toUpperCase()}`
+      const fieldFullPath = `${fullPath}.${field.name.toUpperCase()}`
       const fieldCompositeKey = `${compositeKey}.${field.name}`
 
       if (field.type.definition === 'base-type') {
@@ -246,7 +246,8 @@ function traverseNestedNode<T>(
 
     return visitor.visitComplex(name, fullPath, compositeKey, typeName, children)
   } else if (typeDefinition === 'array' && arrayData) {
-    // Array type - elements use .value.table[i] pattern
+    // Array type — STruC++ emits array elements as `PARENT[iec_idx]` using
+    // IEC-based indexing (the start of the declared range, not 0).
     const dimensions = arrayData.dimensions
     if (dimensions.length === 0) {
       return visitor.visitLeaf(name, fullPath, compositeKey, 'ARRAY', undefined)
@@ -266,7 +267,7 @@ function traverseNestedNode<T>(
 
     for (let i = 0; i < arraySize; i++) {
       const elementIndex = startIndex + i
-      const elementFullPath = `${fullPath}.value.table[${i}]`
+      const elementFullPath = `${fullPath}[${elementIndex}]`
       const elementCompositeKey = `${compositeKey}[${elementIndex}]`
 
       if (baseType.definition === 'base-type') {

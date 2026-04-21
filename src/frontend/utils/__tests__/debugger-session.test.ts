@@ -265,8 +265,8 @@ describe('buildDebugVariableTreeMap', () => {
     const pou = makePou('Main', 'program', [makeBaseVariable('X', 'INT'), makeBaseVariable('Y', 'BOOL')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const debugVars = [
-      makeDebugVar('RES0__INSTANCE0.X', 'INT_ENUM', 0),
-      makeDebugVar('RES0__INSTANCE0.Y', 'BOOL_ENUM', 1),
+      makeDebugVar('INSTANCE0.X', 'INT_ENUM', 0),
+      makeDebugVar('INSTANCE0.Y', 'BOOL_ENUM', 1),
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
@@ -282,9 +282,9 @@ describe('buildDebugVariableTreeMap', () => {
     const pou = makePou('Main', 'program', [makeDerivedVariable('mySR', 'SR')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const debugVars = [
-      makeDebugVar('RES0__INSTANCE0.MYSR.S1', 'BOOL_ENUM', 0),
-      makeDebugVar('RES0__INSTANCE0.MYSR.R', 'BOOL_ENUM', 1),
-      makeDebugVar('RES0__INSTANCE0.MYSR.Q1', 'BOOL_ENUM', 2),
+      makeDebugVar('INSTANCE0.MYSR.S1', 'BOOL_ENUM', 0),
+      makeDebugVar('INSTANCE0.MYSR.R', 'BOOL_ENUM', 1),
+      makeDebugVar('INSTANCE0.MYSR.Q1', 'BOOL_ENUM', 2),
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
@@ -297,9 +297,9 @@ describe('buildDebugVariableTreeMap', () => {
     const pou = makePou('Main', 'program', [makeDerivedVariable('mySR', 'SR')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const debugVars = [
-      makeDebugVar('RES0__INSTANCE0.MYSR.S1', 'BOOL_ENUM', 0),
-      makeDebugVar('RES0__INSTANCE0.MYSR.R', 'BOOL_ENUM', 1),
-      makeDebugVar('RES0__INSTANCE0.MYSR.Q1', 'BOOL_ENUM', 2),
+      makeDebugVar('INSTANCE0.MYSR.S1', 'BOOL_ENUM', 0),
+      makeDebugVar('INSTANCE0.MYSR.R', 'BOOL_ENUM', 1),
+      makeDebugVar('INSTANCE0.MYSR.Q1', 'BOOL_ENUM', 2),
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
@@ -343,7 +343,7 @@ describe('buildDebugVariableTreeMap', () => {
     const goodVar = makeBaseVariable('good', 'INT')
     const pou = makePou('Main', 'program', [badVar, goodVar])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.GOOD', 'INT_ENUM', 0)]
+    const debugVars = [makeDebugVar('INSTANCE0.GOOD', 'INT_ENUM', 0)]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
     // Should not throw, should still include the good variable
@@ -358,10 +358,10 @@ describe('buildDebugVariableTreeMap', () => {
     const pou = makePou('Main', 'program', [])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const debugVars = [
-      makeDebugVar('RES0__INSTANCE0._TMP_ADD3_OUT', 'INT_ENUM', 100),
-      makeDebugVar('RES0__INSTANCE0._TMP_MUL5_RES', 'REAL_O_ENUM', 101),
-      makeDebugVar('RES0__INSTANCE0._TMP_SUB1_X', 'DINT_P_ENUM', 102),
-      makeDebugVar('RES0__INSTANCE0._TMP_DIV2_Y', 'LINT_ENUM', 103),
+      makeDebugVar('INSTANCE0._TMP_ADD3_OUT', 'INT_ENUM', 100),
+      makeDebugVar('INSTANCE0._TMP_MUL5_RES', 'REAL_O_ENUM', 101),
+      makeDebugVar('INSTANCE0._TMP_SUB1_X', 'DINT_P_ENUM', 102),
+      makeDebugVar('INSTANCE0._TMP_DIV2_Y', 'LINT_ENUM', 103),
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
@@ -378,8 +378,8 @@ describe('buildDebugVariableTreeMap', () => {
     const pou = makePou('Main', 'program', [])
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const debugVars = [
-      makeDebugVar('CONFIG0__GLOBAL_VAR', 'INT_ENUM', 200),
-      makeDebugVar('RES0__INSTANCE1._TMP_X', 'INT_ENUM', 201),
+      makeDebugVar('GLOBAL_VAR', 'INT_ENUM', 200),
+      makeDebugVar('INSTANCE1._TMP_X', 'INT_ENUM', 201),
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
@@ -391,7 +391,7 @@ describe('buildDebugVariableTreeMap', () => {
   it('skips debug vars that do not start with _TMP_ after the instance prefix', () => {
     const pou = makePou('Main', 'program', [])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.REGULAR_VAR', 'INT_ENUM', 300)]
+    const debugVars = [makeDebugVar('INSTANCE0.REGULAR_VAR', 'INT_ENUM', 300)]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
     const { trees } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
@@ -403,7 +403,7 @@ describe('buildDebugVariableTreeMap', () => {
   it('handles _TMP_ variables with type that does not end in _ENUM', () => {
     const pou = makePou('Main', 'program', [])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const debugVars = [makeDebugVar('RES0__INSTANCE0._TMP_FUNC1_OUT', 'CUSTOM_TYPE', 500)]
+    const debugVars = [makeDebugVar('INSTANCE0._TMP_FUNC1_OUT', 'CUSTOM_TYPE', 500)]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
     const { treeMap } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
