@@ -8,6 +8,21 @@
  *
  * The resulting JSON is what the runtime plugin reads at startup to configure
  * bus settings and know which modules are installed in which slots.
+ *
+ * Slot format conforms to the convention used by runtime plugins (e.g., synergy):
+ *   {
+ *     "slot": 1,
+ *     "module_hw_id": "0x24A500E1",       // from VPP manifest module.hwId
+ *     "module_id": "slm-acdci-8np-rly8",  // canonical id from manifest, for debugging
+ *     "module_name": "SLM-ACDCI-8NP-RLY8",
+ *     "io_mapping": {
+ *       "digital_inputs":  { "base_byte": 0, "base_bit": 0, "count": 8 },
+ *       "digital_outputs": { "base_byte": 0, "base_bit": 1, "count": 8 },
+ *       "analog_inputs":   { "base_word": 0, "count": 4 },
+ *       "analog_outputs":  { "base_word": 0, "count": 2 }
+ *     },
+ *     "channels": [ /* per-channel iecLocation + alias, for debugging/reference * / ]
+ *   }
  */
 
 type ModuleChannel = {
@@ -20,6 +35,7 @@ type ModuleChannel = {
 type VppModuleDefinition = {
   id: string
   name: string
+  hwId?: string
   addressMapping?: unknown
 }
 
@@ -48,11 +64,93 @@ type PluginSlotChannel = {
   alias: string
 }
 
+type BitRangeMapping = {
+  base_byte: number
+  base_bit: number
+  count: number
+}
+
+type WordRangeMapping = {
+  base_word: number
+  count: number
+}
+
+type PluginSlotIoMapping = {
+  digital_inputs?: BitRangeMapping
+  digital_outputs?: BitRangeMapping
+  analog_inputs?: WordRangeMapping
+  analog_outputs?: WordRangeMapping
+}
+
 type PluginSlot = {
   slot: number
-  moduleId: string
-  moduleName: string
+  module_hw_id?: string
+  module_id: string
+  module_name: string
+  io_mapping: PluginSlotIoMapping
   channels: PluginSlotChannel[]
+}
+
+const BIT_ADDRESS_REGEX = /^%[IQ]X(\d+)\.(\d+)$/
+const WORD_ADDRESS_REGEX = /^%[IQ]W(\d+)$/
+
+/** Parse a bit IEC address (%IX5.3 / %QX1.7) into a byte+bit pair. */
+function parseBitAddress(addr: string): { byte: number; bit: number } | null {
+  const m = BIT_ADDRESS_REGEX.exec(addr)
+  if (!m) return null
+  return { byte: Number(m[1]), bit: Number(m[2]) }
+}
+
+/** Parse a word IEC address (%IW12 / %QW5) into a word index. */
+function parseWordAddress(addr: string): number | null {
+  const m = WORD_ADDRESS_REGEX.exec(addr)
+  if (!m) return null
+  return Number(m[1])
+}
+
+/**
+ * Convert (byte, bit) to a linear bit index so that wrap-across-byte
+ * channel ranges can still be expressed as base + count.
+ * %IX0.0 → 0, %IX0.7 → 7, %IX1.0 → 8, %IX1.7 → 15, etc.
+ */
+function bitAddressToLinear(byte: number, bit: number): number {
+  return byte * 8 + bit
+}
+
+/**
+ * Given a list of channels of the same type and their assigned IEC addresses,
+ * compute a contiguous base_byte / base_bit / count mapping. Addresses are
+ * assumed to be linearly contiguous (editor allocator allocates a block for
+ * each module's channel type), but we tolerate a non-contiguous layout by
+ * falling back to count=channels.length even if there are gaps — the plugin
+ * would still see the correct count.
+ */
+function buildBitRange(channels: { name: string; address: string }[]): BitRangeMapping | null {
+  if (channels.length === 0) return null
+  const parsed: { byte: number; bit: number; linear: number }[] = []
+  for (const ch of channels) {
+    const p = parseBitAddress(ch.address)
+    if (!p) return null
+    parsed.push({ ...p, linear: bitAddressToLinear(p.byte, p.bit) })
+  }
+  parsed.sort((a, b) => a.linear - b.linear)
+  return {
+    base_byte: parsed[0].byte,
+    base_bit: parsed[0].bit,
+    count: parsed.length,
+  }
+}
+
+function buildWordRange(channels: { name: string; address: string }[]): WordRangeMapping | null {
+  if (channels.length === 0) return null
+  const parsed: number[] = []
+  for (const ch of channels) {
+    const w = parseWordAddress(ch.address)
+    if (w === null) return null
+    parsed.push(w)
+  }
+  parsed.sort((a, b) => a - b)
+  return { base_word: parsed[0], count: parsed.length }
 }
 
 /**
@@ -60,6 +158,7 @@ type PluginSlot = {
  *   - Which module is in each slot (from vendor screen `module-configuration`)
  *   - The channel definitions of that module (from VPP manifest `addressMapping`)
  *   - The assigned IEC addresses and user aliases (from vendor screen `io-mapping`)
+ *   - The manifest module's hwId for the plugin's module database lookup
  */
 function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefinition[]): PluginSlot[] {
   const moduleConfig = (vendorScreenData['module-configuration'] as ModuleConfiguration | undefined) ?? {}
@@ -79,6 +178,7 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
     const slotNumber = slotIndex + 1
     const channels = (moduleDef.addressMapping as { channels?: ModuleChannel[] } | undefined)?.channels ?? []
 
+    // Build debug channel list
     const pluginChannels: PluginSlotChannel[] = channels.map((channel) => {
       const ioEntry = ioEntries.find((e) => e.slot === slotNumber && e.channelName === channel.name)
       return {
@@ -90,12 +190,39 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
       }
     })
 
-    slots.push({
+    // Group channels by type for the io_mapping block
+    const di: { name: string; address: string }[] = []
+    const dout: { name: string; address: string }[] = []
+    const ai: { name: string; address: string }[] = []
+    const ao: { name: string; address: string }[] = []
+
+    for (const ch of pluginChannels) {
+      if (!ch.iecLocation) continue
+      if (ch.type === 'digitalInput') di.push({ name: ch.name, address: ch.iecLocation })
+      else if (ch.type === 'digitalOutput') dout.push({ name: ch.name, address: ch.iecLocation })
+      else if (ch.type === 'analogInput') ai.push({ name: ch.name, address: ch.iecLocation })
+      else if (ch.type === 'analogOutput') ao.push({ name: ch.name, address: ch.iecLocation })
+    }
+
+    const ioMappingBlock: PluginSlotIoMapping = {}
+    const diRange = buildBitRange(di)
+    const doRange = buildBitRange(dout)
+    const aiRange = buildWordRange(ai)
+    const aoRange = buildWordRange(ao)
+    if (diRange) ioMappingBlock.digital_inputs = diRange
+    if (doRange) ioMappingBlock.digital_outputs = doRange
+    if (aiRange) ioMappingBlock.analog_inputs = aiRange
+    if (aoRange) ioMappingBlock.analog_outputs = aoRange
+
+    const slot: PluginSlot = {
       slot: slotNumber,
-      moduleId,
-      moduleName: moduleDef.name,
+      module_id: moduleId,
+      module_name: moduleDef.name,
+      io_mapping: ioMappingBlock,
       channels: pluginChannels,
-    })
+    }
+    if (moduleDef.hwId) slot.module_hw_id = moduleDef.hwId
+    slots.push(slot)
   }
 
   return slots
@@ -132,4 +259,4 @@ export function generateVendorPluginConfig(
   return result
 }
 
-export type { PluginSlot, PluginSlotChannel, VendorScreenData, VppModuleDefinition }
+export type { PluginSlot, PluginSlotChannel, PluginSlotIoMapping, VendorScreenData, VppModuleDefinition }

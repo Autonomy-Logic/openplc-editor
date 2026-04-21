@@ -59,6 +59,7 @@ const deviceConfigurationSchema = z.object({
         .default({}),
     })
     .default({}),
+  vendorScreenData: z.record(z.string(), z.unknown()).optional(),
 })
 
 type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>

@@ -62,6 +62,7 @@ type PackageManifest = {
       modules: Array<{
         id: string
         name: string
+        hwId?: string
         image?: string
         io: {
           digitalInputs: number
