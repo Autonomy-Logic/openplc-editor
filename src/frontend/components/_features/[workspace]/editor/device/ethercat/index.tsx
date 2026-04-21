@@ -98,7 +98,7 @@ const EtherCATEditor = () => {
   }, [project.data.remoteDevices, deviceName])
 
   const configuredDevices = useMemo(() => {
-    return (remoteDevice?.ethercatConfig?.devices ?? []) as unknown as ConfiguredEtherCATDevice[]
+    return remoteDevice?.ethercatConfig?.devices ?? []
   }, [remoteDevice])
 
   const masterConfig = useMemo(() => {
