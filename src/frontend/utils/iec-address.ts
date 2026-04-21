@@ -1,29 +1,30 @@
 /**
  * IEC 61131-3 address utilities for global address allocation.
  *
- * Manages IEC address allocation across all IO sources: local pin mapping,
- * remote devices (Modbus TCP IO groups), and vendor module IO mappings.
- * This prevents address collisions when multiple IO sources coexist.
+ * Manages IEC address allocation across IO sources that share the runtime's
+ * image table: remote devices (Modbus TCP IO groups) and VPP vendor module
+ * IO mappings. These live on Runtime v4 targets and must not collide.
+ *
+ * Local pin mapping is deliberately NOT included here — pin mapping is an
+ * Arduino-target-only concern and its addresses don't reach the same image
+ * table that runtime plugins / remote devices write to, so sharing the
+ * namespace with them would produce false conflicts when the user switches
+ * targets.
  *
  * Pure frontend utility — no backend or platform dependencies.
  */
 
-import type { DevicePin, VendorIoMapping } from '../../middleware/shared/ports/types'
+import type { VendorIoMapping } from '../../middleware/shared/ports/types'
 
 /**
- * Collects all used IEC addresses across the entire project:
- * local pin mapping, remote devices, and vendor module IO mappings.
+ * Collects all used IEC addresses from sources that share the Runtime v4
+ * image table: remote devices and vendor module IO mappings.
  */
 export function collectUsedIecAddresses(
-  pinMapping: DevicePin[],
   remoteDevices: Array<{ modbusTcpConfig?: { ioGroups?: Array<{ ioPoints: Array<{ iecLocation: string }> }> } }>,
   vendorIoMapping?: VendorIoMapping,
 ): Set<string> {
   const used = new Set<string>()
-
-  for (const pin of pinMapping) {
-    if (pin.address) used.add(pin.address)
-  }
 
   for (const device of remoteDevices) {
     if (device.modbusTcpConfig?.ioGroups) {

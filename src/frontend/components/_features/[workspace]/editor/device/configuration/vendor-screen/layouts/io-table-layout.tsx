@@ -22,7 +22,6 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     return {
       slots: moduleConfig?.slots ?? [],
       storedMapping,
-      pinMapping: state.deviceDefinitions.pinMapping.pins,
       remoteDevices: (state.project.data.remoteDevices ?? []) as Array<{
         modbusTcpConfig?: { ioGroups?: Array<{ ioPoints: Array<{ iecLocation: string }> }> }
       }>,
@@ -51,7 +50,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     if (slotsKey === lastSlotsRef.current) return
     lastSlotsRef.current = slotsKey
 
-    const { pinMapping, remoteDevices, storedMapping } = getStoreState()
+    const { remoteDevices, storedMapping } = getStoreState()
 
     const existingAliases = new Map<string, string>()
     const existingEntries = storedMapping?.entries ?? entries
@@ -61,7 +60,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       }
     }
 
-    const usedAddresses = collectUsedIecAddresses(pinMapping, remoteDevices)
+    const usedAddresses = collectUsedIecAddresses(remoteDevices)
     const newEntries: IoMappingEntry[] = []
 
     for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
