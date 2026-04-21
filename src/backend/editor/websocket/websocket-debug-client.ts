@@ -138,7 +138,9 @@ export class WebSocketDebugClient {
             return
           }
 
-          const md5String = responseBuffer.slice(2).toString('utf-8').trim()
+          // Phase 4: response trailer echoes the 2-byte endianness probe.
+          const md5Region = responseBuffer.slice(2, responseBuffer.length - 2)
+          const md5String = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
           resolve(md5String)
         } catch (error) {
           reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
@@ -164,12 +166,18 @@ export class WebSocketDebugClient {
     const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
     const numIndexes = variableIndexes.length
 
-    const request = Buffer.alloc(3 + 2 * numIndexes)
+    // Phase 4 PDU: each address is (arr:u8, elem:u16) — 3 bytes.
+    // Editor packs DebugAddr as (arr << 16) | elem.
+    const request = Buffer.alloc(3 + 3 * numIndexes)
     request.writeUInt8(functionCode, 0)
     request.writeUInt16BE(numIndexes, 1)
 
     for (let i = 0; i < numIndexes; i++) {
-      request.writeUInt16BE(variableIndexes[i], 3 + i * 2)
+      const packed = variableIndexes[i]!
+      const arr = (packed >>> 16) & 0xff
+      const elem = packed & 0xffff
+      request.writeUInt8(arr, 3 + i * 3)
+      request.writeUInt16BE(elem, 3 + i * 3 + 1)
     }
 
     const commandHex = this.bufferToHexString(request)
@@ -279,20 +287,25 @@ export class WebSocketDebugClient {
 
     const functionCode = ModbusFunctionCode.DEBUG_SET
 
+    // Phase 4 PDU: [FC, arr:u8, elem:u16, force:u8, len:u16, value...]
+    const arr = (variableIndex >>> 16) & 0xff
+    const elem = variableIndex & 0xffff
+
     const dataLength = force && valueBuffer ? valueBuffer.length : 1
-    const request = Buffer.alloc(6 + dataLength)
+    const request = Buffer.alloc(7 + dataLength)
 
     request.writeUInt8(functionCode, 0)
-    request.writeUInt16BE(variableIndex, 1)
-    request.writeUInt8(force ? 1 : 0, 3)
-    request.writeUInt16BE(dataLength, 4)
+    request.writeUInt8(arr, 1)
+    request.writeUInt16BE(elem, 2)
+    request.writeUInt8(force ? 1 : 0, 4)
+    request.writeUInt16BE(dataLength, 5)
 
     if (force && valueBuffer) {
       for (let i = 0; i < valueBuffer.length; i++) {
-        request.writeUInt8(valueBuffer[i], 6 + i)
+        request.writeUInt8(valueBuffer[i], 7 + i)
       }
     } else {
-      request.writeUInt8(0, 6)
+      request.writeUInt8(0, 7)
     }
 
     const commandHex = this.bufferToHexString(request)

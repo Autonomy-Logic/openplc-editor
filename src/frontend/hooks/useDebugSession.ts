@@ -14,8 +14,14 @@ import { useCallback, useRef } from 'react'
 import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
 import { useDebugger, useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
-import { parseDebugFile } from '../utils/debug-parser'
-import { buildDebugVariableTreeMap, buildFbInstanceMap, buildVariableIndexMap } from '../utils/debugger-session'
+import { parseDebugFile, parseDebugMapV2 } from '../utils/debug-parser'
+import {
+  buildDebugVariableTreeMap,
+  buildFbInstanceMap,
+  buildVariableIndexMap,
+  buildVariableIndexMapV2,
+  debugMapV2ToEntries,
+} from '../utils/debugger-session'
 import { hexToBytes } from '../utils/hex'
 
 export interface UseDebugSessionReturn {
@@ -64,7 +70,9 @@ export function useDebugSession(): UseDebugSessionReturn {
       logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Connecting debugger...' })
 
       try {
-        // Read debug file
+        // Read debug artifacts. Phase 4 (STruC++) projects ship
+        // debug-map.json; legacy MatIEC projects ship debug.c. The port's
+        // readDebugFile returns whichever exists — v2 JSON takes priority.
         const debugFileResult = await debuggerPort.readDebugFile(projectPath, boardTarget)
         if (!debugFileResult.success || !debugFileResult.content) {
           const error = `Failed to read debug file: ${debugFileResult.error ?? 'No content'}`
@@ -74,12 +82,33 @@ export function useDebugSession(): UseDebugSessionReturn {
 
         wsActions.setDebugCContent(debugFileResult.content)
 
-        // Parse debug file and build variable maps
-        const parsed = parseDebugFile(debugFileResult.content)
         const instances = project.data.configurations.resource.instances
 
-        // Build variable index map
-        const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, parsed)
+        // Try the v2 (debug-map.json) path first; fall back to v1 (debug.c).
+        const v2 = parseDebugMapV2(debugFileResult.content)
+
+        let indexMap: Map<string, number>
+        let warnings: string[]
+        let entriesForTree: ReturnType<typeof debugMapV2ToEntries>
+
+        if (v2) {
+          const v2Result = buildVariableIndexMapV2(project.data.pous, instances, v2)
+          indexMap = v2Result.indexMap
+          warnings = v2Result.warnings
+          entriesForTree = debugMapV2ToEntries(v2)
+          logActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Debug map v2: ${v2.leaves.length} leaves across ${v2.arrays.length} arrays.`,
+          })
+        } else {
+          const parsed = parseDebugFile(debugFileResult.content)
+          const v1Result = buildVariableIndexMap(project.data.pous, instances, parsed)
+          indexMap = v1Result.indexMap
+          warnings = v1Result.warnings
+          entriesForTree = parsed.variables
+        }
+
         for (const w of warnings) {
           logActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
         }
@@ -88,7 +117,7 @@ export function useDebugSession(): UseDebugSessionReturn {
         let treeMap = new Map<string, DebugTreeNode>()
         const pouTrees: Record<string, DebugTreeNode[]> = {}
         try {
-          const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, parsed.variables, project.data)
+          const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, entriesForTree, project.data)
           treeMap = treeResult.treeMap
 
           // Group trees by POU name for polling hook

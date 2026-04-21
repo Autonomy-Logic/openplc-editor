@@ -259,9 +259,12 @@ describe('ModbusRtuClient', () => {
 
       const md5 = 'abc123def456'
       const md5Bytes = new TextEncoder().encode(md5)
-      const payload = new Uint8Array(1 + md5Bytes.length)
+      // Phase 4: response payload is [STATUS, md5_ascii..., endian_echo_hi, endian_echo_lo]
+      const payload = new Uint8Array(1 + md5Bytes.length + 2)
       payload[0] = ModbusDebugResponse.SUCCESS
       payload.set(md5Bytes, 1)
+      payload[1 + md5Bytes.length] = 0xde     // endian echo
+      payload[1 + md5Bytes.length + 1] = 0xad
       autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_MD5, payload))
 
       const result = await client.getMd5Hash()

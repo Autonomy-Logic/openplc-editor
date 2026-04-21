@@ -832,14 +832,24 @@ class MainProcessBridge implements MainIpcModule {
       if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
         return { success: false, error: 'Invalid board target' }
       }
-      const debugFilePath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug.c')
+      // Phase 4 (STruC++) projects ship debug-map.json; legacy MatIEC
+      // projects ship debug.c. Prefer v2 when present so the renderer's
+      // parseDebugMapV2 picks it up.
+      const v2Path = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      try {
+        const v2Content = await fs.readFile(v2Path, 'utf-8')
+        return { success: true, content: v2Content }
+      } catch {
+        // Fall through to legacy debug.c
+      }
 
+      const debugFilePath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug.c')
       const content = await fs.readFile(debugFilePath, 'utf-8')
       return { success: true, content }
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to read debug.c file',
+        error: error instanceof Error ? error.message : 'Failed to read debug file',
       }
     }
   }
