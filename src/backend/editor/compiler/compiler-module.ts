@@ -22,6 +22,7 @@ import {
 import { generateModbusMasterConfig } from '@root/backend/shared/utils/modbus/generate-modbus-master-config'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import { parsePlcStatus } from '@root/backend/shared/utils/plc-status'
+import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
@@ -30,6 +31,7 @@ import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
+import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import type { ArduinoCoreControl, HalsFile } from './types'
@@ -1392,6 +1394,98 @@ class CompilerModule {
   }
 
   /**
+   * Generate a VPP vendor plugin config for Runtime v4.
+   *
+   * When the selected board comes from an installed VPP package and defines
+   * a runtime-v4-plugin HAL with a config template, this handler:
+   *   1. Reads the VPP package's config_template.json
+   *   2. Reads the project's devices/configuration.json for vendor screen data
+   *   3. Merges form data and module/IO-mapping into a final plugin config
+   *   4. Writes it to conf/<plugin_name>.json for the runtime to pick up
+   *
+   * For non-VPP boards or VPP boards without a config template, this is a no-op.
+   */
+  async handleGenerateVendorPluginConfig(
+    boardTarget: string,
+    normalizedProjectPath: string,
+    sourceTargetFolderPath: string,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    try {
+      const packageManager = new PackageManagerModule()
+      const installed = packageManager.listInstalled()
+
+      let matchingPackagePath: string | null = null
+      let matchingDevice: PackageManifest['devices'][number] | null = null
+
+      for (const pkg of installed) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+        const device = manifest.devices.find((d) => d.name === boardTarget)
+        if (device) {
+          matchingPackagePath = pkg.path
+          matchingDevice = device
+          break
+        }
+      }
+
+      if (!matchingDevice || !matchingPackagePath) {
+        // Not a VPP board — nothing to do
+        return
+      }
+
+      if (matchingDevice.target.type !== 'runtime-v4') {
+        // VPP board but not runtime-v4 — no plugin config applies
+        return
+      }
+
+      const configTemplateRelPath = matchingDevice.hal?.configTemplate
+      if (!configTemplateRelPath) {
+        handleOutputData('VPP board has no HAL configTemplate, skipping plugin config generation', 'info')
+        return
+      }
+
+      // Read config template from the installed package
+      const configTemplatePath = join(matchingPackagePath, configTemplateRelPath)
+      let configTemplate: Record<string, unknown>
+      try {
+        const templateRaw = await readFile(configTemplatePath, 'utf-8')
+        configTemplate = JSON.parse(templateRaw) as Record<string, unknown>
+      } catch (err) {
+        handleOutputData(
+          `Failed to read VPP config template at ${configTemplateRelPath}: ${getErrorMessage(err)}`,
+          'error',
+        )
+        return
+      }
+
+      // Read device configuration from the project for vendor screen data
+      const deviceConfigPath = join(normalizedProjectPath, 'devices', 'configuration.json')
+      let vendorScreenData: Record<string, unknown> = {}
+      try {
+        const deviceConfigRaw = await readFile(deviceConfigPath, 'utf-8')
+        const deviceConfig = JSON.parse(deviceConfigRaw) as { vendorScreenData?: Record<string, unknown> }
+        vendorScreenData = deviceConfig.vendorScreenData ?? {}
+      } catch {
+        // Device configuration may not exist yet — use empty vendor data
+      }
+
+      const modules = matchingDevice.moduleSystem?.modules ?? []
+      const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
+
+      const pluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
+      const confFolderPath = join(sourceTargetFolderPath, 'conf')
+      await mkdir(confFolderPath, { recursive: true })
+      const configFilePath = join(confFolderPath, `${pluginName}.json`)
+      await writeFile(configFilePath, JSON.stringify(finalConfig, null, 2), 'utf-8')
+      handleOutputData(`Generated conf/${pluginName}.json for VPP plugin`, 'info')
+    } catch (error) {
+      const errorMessage = getErrorMessage(error)
+      handleOutputData(`Failed to generate VPP plugin config: ${errorMessage}`, 'error')
+    }
+  }
+
+  /**
    * This will be the main entry point for the compiler module.
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
    */
@@ -1783,6 +1877,16 @@ class CompilerModule {
           await this.handleGenerateOpcUaConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
+
+          // Generate VPP vendor plugin config (if the board is a VPP package)
+          await this.handleGenerateVendorPluginConfig(
+            boardTarget,
+            normalizedProjectPath,
+            sourceTargetFolderPath,
+            (data, logLevel) => {
+              _mainProcessPort.postMessage({ logLevel, message: data })
+            },
+          )
 
           _mainProcessPort.postMessage({
             logLevel: 'info',
