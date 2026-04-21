@@ -12,16 +12,13 @@
  * Slot format conforms to the convention used by runtime plugins (e.g., synergy):
  *   {
  *     "slot": 1,
- *     "module_hw_id": "0x24A500E1",       // from VPP manifest module.hwId
- *     "module_id": "slm-acdci-8np-rly8",  // canonical id from manifest, for debugging
- *     "module_name": "SLM-ACDCI-8NP-RLY8",
+ *     "module_hw_id": "0x24A500E1",   // from VPP manifest module.hwId
  *     "io_mapping": {
  *       "digital_inputs":  { "base_byte": 0, "base_bit": 0, "count": 8 },
  *       "digital_outputs": { "base_byte": 0, "base_bit": 1, "count": 8 },
  *       "analog_inputs":   { "base_word": 0, "count": 4 },
  *       "analog_outputs":  { "base_word": 0, "count": 2 }
- *     },
- *     "channels": [ /* per-channel iecLocation + alias, for debugging/reference * / ]
+ *     }
  *   }
  */
 
@@ -56,14 +53,6 @@ type IoMapping = {
 
 type VendorScreenData = Record<string, unknown>
 
-type PluginSlotChannel = {
-  name: string
-  type: string
-  dataType: string
-  iecLocation: string
-  alias: string
-}
-
 type BitRangeMapping = {
   base_byte: number
   base_bit: number
@@ -85,10 +74,7 @@ type PluginSlotIoMapping = {
 type PluginSlot = {
   slot: number
   module_hw_id?: string
-  module_id: string
-  module_name: string
   io_mapping: PluginSlotIoMapping
-  channels: PluginSlotChannel[]
 }
 
 const BIT_ADDRESS_REGEX = /^%[IQ]X(\d+)\.(\d+)$/
@@ -178,30 +164,20 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
     const slotNumber = slotIndex + 1
     const channels = (moduleDef.addressMapping as { channels?: ModuleChannel[] } | undefined)?.channels ?? []
 
-    // Build debug channel list
-    const pluginChannels: PluginSlotChannel[] = channels.map((channel) => {
-      const ioEntry = ioEntries.find((e) => e.slot === slotNumber && e.channelName === channel.name)
-      return {
-        name: channel.name,
-        type: channel.type,
-        dataType: channel.dataType,
-        iecLocation: ioEntry?.iecAddress ?? '',
-        alias: ioEntry?.alias ?? '',
-      }
-    })
-
-    // Group channels by type for the io_mapping block
+    // Group channels by type and resolve each channel's assigned IEC address
     const di: { name: string; address: string }[] = []
     const dout: { name: string; address: string }[] = []
     const ai: { name: string; address: string }[] = []
     const ao: { name: string; address: string }[] = []
 
-    for (const ch of pluginChannels) {
-      if (!ch.iecLocation) continue
-      if (ch.type === 'digitalInput') di.push({ name: ch.name, address: ch.iecLocation })
-      else if (ch.type === 'digitalOutput') dout.push({ name: ch.name, address: ch.iecLocation })
-      else if (ch.type === 'analogInput') ai.push({ name: ch.name, address: ch.iecLocation })
-      else if (ch.type === 'analogOutput') ao.push({ name: ch.name, address: ch.iecLocation })
+    for (const channel of channels) {
+      const ioEntry = ioEntries.find((e) => e.slot === slotNumber && e.channelName === channel.name)
+      const address = ioEntry?.iecAddress
+      if (!address) continue
+      if (channel.type === 'digitalInput') di.push({ name: channel.name, address })
+      else if (channel.type === 'digitalOutput') dout.push({ name: channel.name, address })
+      else if (channel.type === 'analogInput') ai.push({ name: channel.name, address })
+      else if (channel.type === 'analogOutput') ao.push({ name: channel.name, address })
     }
 
     const ioMappingBlock: PluginSlotIoMapping = {}
@@ -216,10 +192,7 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
 
     const slot: PluginSlot = {
       slot: slotNumber,
-      module_id: moduleId,
-      module_name: moduleDef.name,
       io_mapping: ioMappingBlock,
-      channels: pluginChannels,
     }
     if (moduleDef.hwId) slot.module_hw_id = moduleDef.hwId
     slots.push(slot)
@@ -259,4 +232,4 @@ export function generateVendorPluginConfig(
   return result
 }
 
-export type { PluginSlot, PluginSlotChannel, PluginSlotIoMapping, VendorScreenData, VppModuleDefinition }
+export type { PluginSlot, PluginSlotIoMapping, VendorScreenData, VppModuleDefinition }
