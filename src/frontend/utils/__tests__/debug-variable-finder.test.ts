@@ -13,7 +13,6 @@ import {
   findVariableIndexWithFallback,
   getFieldIndexFromMapWithFallback,
   getIndexFromMapWithFallback,
-  parseDebugVariables,
   type PLCInstanceMapping,
 } from '../debug-variable-finder'
 
@@ -306,10 +305,3 @@ describe('appendToDebugPath', () => {
   })
 })
 
-describe('parseDebugVariables (re-exported)', () => {
-  it('is re-exported from debug-variable-finder and works', () => {
-    const content = `debug_vars[] = { {&(VAR), INT_ENUM} };`
-    const result = parseDebugVariables(content)
-    expect(result).toEqual([{ name: 'VAR', type: 'INT_ENUM', index: 0 }])
-  })
-})

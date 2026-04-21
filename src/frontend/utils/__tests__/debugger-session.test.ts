@@ -1,9 +1,10 @@
 import type { PLCDataType, PLCInstance, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
-import type { DebugVariableEntry, ParsedDebugData } from '../debug-parser'
+import type { DebugMapV2, DebugVariableEntry } from '../debug-parser'
+import { packDebugAddr } from '../debug-parser'
 import {
   buildDebugVariableTreeMap,
   buildFbInstanceMap,
-  buildVariableIndexMap,
+  buildVariableIndexMapV2,
   logCompilerEvent,
 } from '../debugger-session'
 
@@ -141,34 +142,42 @@ describe('logCompilerEvent', () => {
 })
 
 // ---------------------------------------------------------------------------
-// buildVariableIndexMap
+// buildVariableIndexMapV2
 // ---------------------------------------------------------------------------
 
-describe('buildVariableIndexMap', () => {
+function makeMapV2(leaves: Array<{ path: string; type: string; size: number }>): DebugMapV2 {
+  return {
+    version: 2,
+    md5: 'deadbeef',
+    typeTags: { BOOL: 0, INT: 3, REAL: 9, LREAL: 10, DINT: 5 },
+    arrays: [{ index: 0, count: leaves.length }],
+    leaves: leaves.map((l, i) => ({ arrayIdx: 0, elemIdx: i, ...l })),
+  }
+}
+
+function addr(arrayIdx: number, elemIdx: number): number {
+  return packDebugAddr({ arrayIdx, elemIdx })
+}
+
+describe('buildVariableIndexMapV2', () => {
   it('builds index map for simple base-type variables', () => {
     const pou = makePou('Main', 'program', [makeBaseVariable('SPEED', 'INT'), makeBaseVariable('TEMP', 'REAL')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = {
-      variables: [
-        makeDebugVar('RES0__INSTANCE0.SPEED', 'INT_ENUM', 0),
-        makeDebugVar('RES0__INSTANCE0.TEMP', 'REAL_ENUM', 1),
-      ],
-      totalCount: 2,
-    }
+    const map = makeMapV2([
+      { path: 'INSTANCE0.SPEED', type: 'INT', size: 2 },
+      { path: 'INSTANCE0.TEMP', type: 'REAL', size: 4 },
+    ])
 
-    const { indexMap, warnings } = buildVariableIndexMap([pou], instances, parsed)
+    const { indexMap, warnings } = buildVariableIndexMapV2([pou], instances, map)
 
-    expect(indexMap.get('Main:SPEED')).toBe(0)
-    expect(indexMap.get('Main:TEMP')).toBe(1)
+    expect(indexMap.get('Main:SPEED')).toBe(addr(0, 0))
+    expect(indexMap.get('Main:TEMP')).toBe(addr(0, 1))
     expect(warnings).toHaveLength(0)
   })
 
   it('warns when no instance is found for a program POU', () => {
     const pou = makePou('Orphan', 'program', [makeBaseVariable('X', 'INT')])
-    const instances: PLCInstance[] = []
-    const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
-
-    const { warnings } = buildVariableIndexMap([pou], instances, parsed)
+    const { warnings } = buildVariableIndexMapV2([pou], [], makeMapV2([]))
 
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toContain('Orphan')
@@ -176,239 +185,74 @@ describe('buildVariableIndexMap', () => {
 
   it('skips non-program POUs', () => {
     const fb = makePou('MyFB', 'function-block', [makeBaseVariable('Q', 'BOOL')])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
-
-    const { indexMap } = buildVariableIndexMap([fb], instances, parsed)
+    const { indexMap } = buildVariableIndexMapV2([fb], [makeInstance('INSTANCE0', 'Main')], makeMapV2([]))
 
     expect(indexMap.size).toBe(0)
   })
 
-  it('handles external base-type variables using global path', () => {
-    const pou = makePou('Main', 'program', [makeBaseVariable('GFLAG', 'BOOL', 'external')])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = {
-      variables: [makeDebugVar('CONFIG0__GFLAG', 'BOOL_ENUM', 5)],
-      totalCount: 1,
-    }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-
-    expect(indexMap.get('Main:GFLAG')).toBe(5)
-  })
-
-  it('handles array variables with proper element indexing', () => {
+  it('handles array variables with IEC-indexed element paths', () => {
     const pou = makePou('Main', 'program', [makeArrayVariable('ARR', 'INT', '0..2')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = {
-      variables: [
-        makeDebugVar('RES0__INSTANCE0.ARR.value.table[0]', 'INT_ENUM', 10),
-        makeDebugVar('RES0__INSTANCE0.ARR.value.table[1]', 'INT_ENUM', 11),
-        makeDebugVar('RES0__INSTANCE0.ARR.value.table[2]', 'INT_ENUM', 12),
-      ],
-      totalCount: 3,
-    }
+    const map = makeMapV2([
+      { path: 'INSTANCE0.ARR[0]', type: 'INT', size: 2 },
+      { path: 'INSTANCE0.ARR[1]', type: 'INT', size: 2 },
+      { path: 'INSTANCE0.ARR[2]', type: 'INT', size: 2 },
+    ])
 
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
+    const { indexMap } = buildVariableIndexMapV2([pou], instances, map)
 
-    expect(indexMap.get('Main:ARR[0]')).toBe(10)
-    expect(indexMap.get('Main:ARR[1]')).toBe(11)
-    expect(indexMap.get('Main:ARR[2]')).toBe(12)
-  })
-
-  it('handles external array variables using global path', () => {
-    const pou = makePou('Main', 'program', [makeArrayVariable('GARR', 'INT', '1..2', 'external')])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = {
-      variables: [
-        makeDebugVar('CONFIG0__GARR.value.table[0]', 'INT_ENUM', 20),
-        makeDebugVar('CONFIG0__GARR.value.table[1]', 'INT_ENUM', 21),
-      ],
-      totalCount: 2,
-    }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-
-    expect(indexMap.get('Main:GARR[1]')).toBe(20)
-    expect(indexMap.get('Main:GARR[2]')).toBe(21)
+    expect(indexMap.get('Main:ARR[0]')).toBe(addr(0, 0))
+    expect(indexMap.get('Main:ARR[1]')).toBe(addr(0, 1))
+    expect(indexMap.get('Main:ARR[2]')).toBe(addr(0, 2))
   })
 
   it('handles arrays with negative start index', () => {
     const pou = makePou('Main', 'program', [makeArrayVariable('NEG', 'BOOL', '-1..1')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = {
-      variables: [
-        makeDebugVar('RES0__INSTANCE0.NEG.value.table[0]', 'BOOL_ENUM', 30),
-        makeDebugVar('RES0__INSTANCE0.NEG.value.table[1]', 'BOOL_ENUM', 31),
-        makeDebugVar('RES0__INSTANCE0.NEG.value.table[2]', 'BOOL_ENUM', 32),
-      ],
-      totalCount: 3,
-    }
+    const map = makeMapV2([
+      { path: 'INSTANCE0.NEG[-1]', type: 'BOOL', size: 1 },
+      { path: 'INSTANCE0.NEG[0]', type: 'BOOL', size: 1 },
+      { path: 'INSTANCE0.NEG[1]', type: 'BOOL', size: 1 },
+    ])
 
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
+    const { indexMap } = buildVariableIndexMapV2([pou], instances, map)
 
-    expect(indexMap.get('Main:NEG[-1]')).toBe(30)
-    expect(indexMap.get('Main:NEG[0]')).toBe(31)
-    expect(indexMap.get('Main:NEG[1]')).toBe(32)
+    expect(indexMap.get('Main:NEG[-1]')).toBe(addr(0, 0))
+    expect(indexMap.get('Main:NEG[0]')).toBe(addr(0, 1))
+    expect(indexMap.get('Main:NEG[1]')).toBe(addr(0, 2))
   })
 
-  it('skips array elements with null index', () => {
-    const pou = makePou('Main', 'program', [makeArrayVariable('ARR', 'INT', '0..0')])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-
-    expect(indexMap.has('Main:ARR[0]')).toBe(false)
-  })
-
-  it('skips non-array variables with null index', () => {
-    const pou = makePou('Main', 'program', [makeBaseVariable('MISSING', 'INT')])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-
-    expect(indexMap.has('Main:MISSING')).toBe(false)
-  })
-
-  it('appends unmatched parsed variables as fallback entries', () => {
+  it('falls back to raw debug path for unmatched leaves (nested fields)', () => {
     const pou = makePou('Main', 'program', [])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = {
-      variables: [makeDebugVar('SOME__UNKNOWN.VAR', 'INT_ENUM', 99)],
-      totalCount: 1,
-    }
+    const map = makeMapV2([{ path: 'INSTANCE0.FB.FIELD', type: 'INT', size: 2 }])
 
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
+    const { indexMap } = buildVariableIndexMapV2([pou], instances, map)
 
-    expect(indexMap.get('SOME__UNKNOWN.VAR')).toBe(99)
+    expect(indexMap.get('INSTANCE0.FB.FIELD')).toBe(addr(0, 0))
   })
 
-  it('does not overwrite existing entries with fallback entries', () => {
+  it('does not lose entries across multiple arrays', () => {
     const pou = makePou('Main', 'program', [makeBaseVariable('X', 'INT')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const debugVar = makeDebugVar('RES0__INSTANCE0.X', 'INT_ENUM', 0)
-    const parsed: ParsedDebugData = {
-      variables: [debugVar],
-      totalCount: 1,
+    const map: DebugMapV2 = {
+      version: 2,
+      md5: 'deadbeef',
+      typeTags: { INT: 3 },
+      arrays: [
+        { index: 0, count: 1 },
+        { index: 1, count: 1 },
+      ],
+      leaves: [
+        { arrayIdx: 0, elemIdx: 0, path: 'INSTANCE0.X', type: 'INT', size: 2 },
+        { arrayIdx: 1, elemIdx: 0, path: 'INSTANCE0.OTHER', type: 'INT', size: 2 },
+      ],
     }
 
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
+    const { indexMap } = buildVariableIndexMapV2([pou], instances, map)
 
-    // 'Main:X' was set to 0 first; 'RES0__INSTANCE0.X' is a fallback key
-    expect(indexMap.get('Main:X')).toBe(0)
-  })
-
-  it('skips fallback entry when the debug variable name already exists in the map', () => {
-    // Scenario: composite key matches the debug variable name exactly.
-    // We name the pou's variable so that the composite key equals the debug var's name.
-    const pou = makePou('Main', 'program', [makeBaseVariable('X', 'INT')])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    // The first debug var sets composite key 'Main:X' -> 0
-    // The second debug var has name 'Main:X' which already exists -> should be skipped
-    const parsed: ParsedDebugData = {
-      variables: [makeDebugVar('RES0__INSTANCE0.X', 'INT_ENUM', 0), makeDebugVar('Main:X', 'INT_ENUM', 99)],
-      totalCount: 2,
-    }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-
-    // 'Main:X' was set to 0 by the composite key, so the fallback with value 99 is skipped
-    expect(indexMap.get('Main:X')).toBe(0)
-  })
-
-  it('handles POUs with no interface', () => {
-    const pou: PLCPou = {
-      name: 'Empty',
-      pouType: 'program',
-      body: { language: 'st', value: '' },
-    }
-    const instances = [makeInstance('INSTANCE0', 'Empty')]
-    const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
-
-    const { indexMap, warnings } = buildVariableIndexMap([pou], instances, parsed)
-    expect(indexMap.size).toBe(0)
-    expect(warnings).toHaveLength(0)
-  })
-
-  it('skips array variables with invalid dimension format', () => {
-    const pou = makePou('Main', 'program', [
-      {
-        name: 'BAD',
-        class: 'local',
-        type: {
-          definition: 'array',
-          value: 'ARRAY',
-          data: {
-            baseType: { definition: 'base-type', value: 'INT' },
-            dimensions: [{ dimension: 'bad' }],
-          },
-        },
-        location: '',
-        documentation: '',
-      },
-    ])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-    expect(indexMap.has('Main:BAD[0]')).toBe(false)
-  })
-
-  it('skips array variables with no dimensions', () => {
-    const pou = makePou('Main', 'program', [
-      {
-        name: 'EMPTY_ARR',
-        class: 'local',
-        type: {
-          definition: 'array',
-          value: 'ARRAY',
-          data: {
-            baseType: { definition: 'base-type', value: 'INT' },
-            dimensions: [],
-          },
-        },
-        location: '',
-        documentation: '',
-      },
-    ])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    const parsed: ParsedDebugData = { variables: [], totalCount: 0 }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-    expect(indexMap.size).toBe(0)
-  })
-
-  it('handles external array elements that are not found (null match)', () => {
-    const pou = makePou('Main', 'program', [makeArrayVariable('EXT_ARR', 'INT', '0..1', 'external')])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    // Only provide index for element [0], not [1]
-    const parsed: ParsedDebugData = {
-      variables: [makeDebugVar('CONFIG0__EXT_ARR.value.table[0]', 'INT_ENUM', 50)],
-      totalCount: 1,
-    }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-    expect(indexMap.get('Main:EXT_ARR[0]')).toBe(50)
-    expect(indexMap.has('Main:EXT_ARR[1]')).toBe(false)
-  })
-
-  it('does not duplicate fallback entries that already exist', () => {
-    const pou = makePou('Main', 'program', [makeBaseVariable('X', 'INT')])
-    const instances = [makeInstance('INSTANCE0', 'Main')]
-    const debugVar = makeDebugVar('RES0__INSTANCE0.X', 'INT_ENUM', 0)
-    const parsed: ParsedDebugData = {
-      variables: [debugVar],
-      totalCount: 1,
-    }
-
-    const { indexMap } = buildVariableIndexMap([pou], instances, parsed)
-
-    // Main:X was set first (value 0). The debugVar name 'RES0__INSTANCE0.X' should also be in the map
-    // as a fallback since it won't match 'Main:X'
-    expect(indexMap.get('Main:X')).toBe(0)
-    expect(indexMap.get('RES0__INSTANCE0.X')).toBe(0)
+    expect(indexMap.get('Main:X')).toBe(addr(0, 0))
+    expect(indexMap.get('INSTANCE0.OTHER')).toBe(addr(1, 0))
   })
 })
 

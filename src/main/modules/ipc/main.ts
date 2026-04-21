@@ -827,29 +827,19 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const path = await import('path')
 
-      // projectPath is already the project directory, not a file path
-      // Guard against traversal/absolute input in boardTarget
       if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
         return { success: false, error: 'Invalid board target' }
       }
-      // Phase 4 (STruC++) projects ship debug-map.json; legacy MatIEC
-      // projects ship debug.c. Prefer v2 when present so the renderer's
-      // parseDebugMapV2 picks it up.
-      const v2Path = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
-      try {
-        const v2Content = await fs.readFile(v2Path, 'utf-8')
-        return { success: true, content: v2Content }
-      } catch {
-        // Fall through to legacy debug.c
-      }
 
-      const debugFilePath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug.c')
-      const content = await fs.readFile(debugFilePath, 'utf-8')
+      // STruC++ writes debug-map.json alongside generated_debug.cpp.
+      // Consumed by the renderer via parseDebugMapV2.
+      const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      const content = await fs.readFile(debugMapPath, 'utf-8')
       return { success: true, content }
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to read debug file',
+        error: error instanceof Error ? error.message : 'Failed to read debug-map.json',
       }
     }
   }
@@ -983,44 +973,25 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const path = await import('path')
 
-      // Guard against traversal/absolute input in boardTarget
       if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
         return { success: false, error: 'Invalid board target' }
       }
 
-      // Phase 4 (STruC++) projects store the MD5 in debug-map.json. Prefer
-      // that — compiler-module.ts computes md5 from the ST source and the
-      // debug-table-gen embeds it into the manifest so the editor sees the
-      // same value the target sees via FC 0x45.
+      // STruC++ writes the MD5 into debug-map.json alongside the pointer
+      // tables. It's the single source of truth the editor and the target
+      // agree on (target exposes the same value via FC 0x45).
       const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
-      try {
-        const raw = await fs.readFile(debugMapPath, 'utf-8')
-        const parsed = JSON.parse(raw) as { md5?: unknown }
-        if (typeof parsed.md5 === 'string' && /^[a-fA-F0-9]{32}$/.test(parsed.md5)) {
-          return { success: true, md5: parsed.md5 }
-        }
-      } catch {
-        // Fall through to legacy program.st comment
+      const raw = await fs.readFile(debugMapPath, 'utf-8')
+      const parsed = JSON.parse(raw) as { md5?: unknown }
+
+      if (typeof parsed.md5 !== 'string' || !/^[a-fA-F0-9]{32}$/.test(parsed.md5)) {
+        return { success: false, error: 'debug-map.json is missing a valid md5 field' }
       }
-
-      // Legacy (MatIEC) projects carry the MD5 as a DBG comment in program.st.
-      const programStPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'program.st')
-      const content = await fs.readFile(programStPath, 'utf-8')
-      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
-      const match = content.match(md5Pattern)
-
-      if (!match || !match[1]) {
-        return {
-          success: false,
-          error: 'Could not find MD5 hash in debug-map.json or program.st',
-        }
-      }
-
-      return { success: true, md5: match[1] }
+      return { success: true, md5: parsed.md5 }
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to read MD5',
+        error: error instanceof Error ? error.message : 'Failed to read debug-map.json',
       }
     }
   }

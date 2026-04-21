@@ -1,10 +1,9 @@
 /**
- * Shared utilities for finding debug variable indices from debug.c
- * Used by both the debugger (renderer) and OPC-UA config generator (main).
+ * Shared utilities for finding variables in a DebugVariableEntry[] list
+ * (produced by debugMapV2ToEntries from a debug-map.json).
  */
 
-// Re-export types and parser from canonical debug-parser module
-export { type DebugVariableEntry, parseDebugVariables } from './debug-parser'
+export { type DebugVariableEntry } from './debug-parser'
 
 import type { DebugVariableEntry } from './debug-parser'
 

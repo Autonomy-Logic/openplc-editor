@@ -1,8 +1,9 @@
 /**
  * Debug Session Hook
  *
- * Manages the debug session lifecycle: read debug.c, build index/tree maps,
- * commit debug artifacts to the store, connect/disconnect via DebuggerPort.
+ * Manages the debug session lifecycle: read debug-map.json, build index/tree
+ * maps, commit debug artifacts to the store, connect/disconnect via
+ * DebuggerPort.
  *
  * Platform-agnostic — all protocol operations are delegated to the
  * DebuggerPort and SimulatorPort provided by the PlatformProvider.
@@ -14,11 +15,10 @@ import { useCallback, useRef } from 'react'
 import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
 import { useDebugger, useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
-import { parseDebugFile, parseDebugMapV2 } from '../utils/debug-parser'
+import { parseDebugMapV2 } from '../utils/debug-parser'
 import {
   buildDebugVariableTreeMap,
   buildFbInstanceMap,
-  buildVariableIndexMap,
   buildVariableIndexMapV2,
   debugMapV2ToEntries,
 } from '../utils/debugger-session'
@@ -84,30 +84,20 @@ export function useDebugSession(): UseDebugSessionReturn {
 
         const instances = project.data.configurations.resource.instances
 
-        // Try the v2 (debug-map.json) path first; fall back to v1 (debug.c).
-        const v2 = parseDebugMapV2(debugFileResult.content)
-
-        let indexMap: Map<string, number>
-        let warnings: string[]
-        let entriesForTree: ReturnType<typeof debugMapV2ToEntries>
-
-        if (v2) {
-          const v2Result = buildVariableIndexMapV2(project.data.pous, instances, v2)
-          indexMap = v2Result.indexMap
-          warnings = v2Result.warnings
-          entriesForTree = debugMapV2ToEntries(v2)
-          logActions.addLog({
-            id: crypto.randomUUID(),
-            level: 'info',
-            message: `Debug map v2: ${v2.leaves.length} leaves across ${v2.arrays.length} arrays.`,
-          })
-        } else {
-          const parsed = parseDebugFile(debugFileResult.content)
-          const v1Result = buildVariableIndexMap(project.data.pous, instances, parsed)
-          indexMap = v1Result.indexMap
-          warnings = v1Result.warnings
-          entriesForTree = parsed.variables
+        const debugMap = parseDebugMapV2(debugFileResult.content)
+        if (!debugMap) {
+          const error = 'Invalid debug-map.json (expected version 2)'
+          logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+          return { success: false, error }
         }
+
+        const { indexMap, warnings } = buildVariableIndexMapV2(project.data.pous, instances, debugMap)
+        const entriesForTree = debugMapV2ToEntries(debugMap)
+        logActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: `Debug map: ${debugMap.leaves.length} leaves across ${debugMap.arrays.length} arrays.`,
+        })
 
         for (const w of warnings) {
           logActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })

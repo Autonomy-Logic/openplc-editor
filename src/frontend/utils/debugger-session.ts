@@ -2,11 +2,8 @@
  * Shared debugger session helpers.
  *
  * Builds the debug variable index map, debug tree, and FB instance map
- * from parsed debug.c data and project structure. These artifacts are
- * stored in the workspace Zustand store for the debugger UI.
- *
- * Works with the port-format types (PLCPou flat format) used by both
- * the editor and web platforms.
+ * from STruC++'s debug-map.json and the project structure. The artifacts
+ * are stored in the workspace Zustand store for the debugger UI.
  */
 
 import type {
@@ -17,19 +14,10 @@ import type {
   PLCPou,
   PLCVariable,
 } from '../../middleware/shared/ports/types'
-import type { DebugMapV2, DebugVariableEntry, ParsedDebugData } from './debug-parser'
+import type { DebugMapV2, DebugVariableEntry } from './debug-parser'
 import { packDebugAddr } from './debug-parser'
 import { buildDebugTree } from './debug-tree-builder'
-import {
-  buildDebugPathPrefix,
-  buildGlobalDebugPath,
-  findDebugVariable,
-  findGlobalVariableIndex,
-  findInstanceName,
-  findVariableIndex,
-  findVariableIndexWithFallback,
-  type PLCInstanceMapping,
-} from './debug-variable-finder'
+import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from './debug-variable-finder'
 
 // ---------------------------------------------------------------------------
 // 0. logCompilerEvent — shared log helper for compile/debug progress
@@ -56,7 +44,7 @@ export function logCompilerEvent(
 }
 
 // ---------------------------------------------------------------------------
-// 1. buildVariableIndexMap
+// 1. buildVariableIndexMapV2 — composite-key -> packed-DebugAddr
 // ---------------------------------------------------------------------------
 
 export interface VariableIndexMapResult {
@@ -65,92 +53,11 @@ export interface VariableIndexMapResult {
 }
 
 /**
- * Build a composite-key -> debug-index map from parsed debug variables.
- * Pure function — caller is responsible for logging warnings.
- */
-export function buildVariableIndexMap(
-  pous: PLCPou[],
-  instances: PLCInstance[],
-  parsed: ParsedDebugData,
-): VariableIndexMapResult {
-  const indexMap = new Map<string, number>()
-  const warnings: string[] = []
-
-  const instanceMappings: PLCInstanceMapping[] = instances.map((inst) => ({
-    name: inst.name,
-    program: inst.program,
-  }))
-
-  pous.forEach((pou) => {
-    if (pou.pouType !== 'program') return
-
-    const instanceName = findInstanceName(pou.name, instanceMappings)
-    if (!instanceName) {
-      warnings.push(`No instance found for program '${pou.name}', skipping debug variable parsing.`)
-      return
-    }
-
-    const variables = pou.interface?.variables ?? []
-    variables.forEach((v: PLCVariable) => {
-      if (v.type.definition === 'array' && v.type.data) {
-        const dimensions = v.type.data.dimensions
-        if (dimensions.length > 0) {
-          const dimMatch = dimensions[0].dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
-          if (dimMatch) {
-            const startIdx = parseInt(dimMatch[1], 10)
-            const endIdx = parseInt(dimMatch[2], 10)
-            for (let i = 0; i <= endIdx - startIdx; i++) {
-              let elementIndex: number | null
-              if (v.class === 'external') {
-                const globalPath = `${buildGlobalDebugPath(v.name)}.value.table[${i}]`
-                const match = findDebugVariable(parsed.variables, globalPath)
-                elementIndex = match ? match.index : null
-              } else {
-                elementIndex = findVariableIndex(instanceName, v.name, parsed.variables, {
-                  isArrayElement: true,
-                  arrayIndex: i,
-                })
-              }
-              if (elementIndex !== null) {
-                const compositeKey = `${pou.name}:${v.name}[${startIdx + i}]`
-                indexMap.set(compositeKey, elementIndex)
-              }
-            }
-          }
-        }
-      } else {
-        const index =
-          v.class === 'external'
-            ? findGlobalVariableIndex(v.name, parsed.variables)
-            : findVariableIndexWithFallback(instanceName, v.name, parsed.variables)
-        if (index !== null) {
-          const compositeKey = `${pou.name}:${v.name}`
-          indexMap.set(compositeKey, index)
-        }
-      }
-    })
-  })
-
-  // Append any unmatched parsed variables as fallback entries
-  parsed.variables.forEach((debugVar) => {
-    if (!indexMap.has(debugVar.name)) {
-      indexMap.set(debugVar.name, debugVar.index)
-    }
-  })
-
-  return { indexMap, warnings }
-}
-
-// ---------------------------------------------------------------------------
-// 1b. buildVariableIndexMapV2 — Phase 4 debug-map.json path
-// ---------------------------------------------------------------------------
-
-/**
  * Build a composite-key -> packed-DebugAddr map from a v2 DebugMap.
  *
  * The v2 map addresses variables as (arrayIdx, elemIdx) pairs; we pack those
  * into a single number `(arr << 16) | elem` so downstream store types and
- * the polling loop continue to see a plain `number` key, same as v1.
+ * the polling loop see a plain `number` key.
  *
  * Path convention emitted by STruC++:
  *   INSTANCE_NAME.VAR_NAME            (scalar)
