@@ -983,22 +983,36 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const path = await import('path')
 
-      // projectPath is already the project directory, not a file path
       // Guard against traversal/absolute input in boardTarget
       if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
         return { success: false, error: 'Invalid board target' }
       }
+
+      // Phase 4 (STruC++) projects store the MD5 in debug-map.json. Prefer
+      // that — compiler-module.ts computes md5 from the ST source and the
+      // debug-table-gen embeds it into the manifest so the editor sees the
+      // same value the target sees via FC 0x45.
+      const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      try {
+        const raw = await fs.readFile(debugMapPath, 'utf-8')
+        const parsed = JSON.parse(raw) as { md5?: unknown }
+        if (typeof parsed.md5 === 'string' && /^[a-fA-F0-9]{32}$/.test(parsed.md5)) {
+          return { success: true, md5: parsed.md5 }
+        }
+      } catch {
+        // Fall through to legacy program.st comment
+      }
+
+      // Legacy (MatIEC) projects carry the MD5 as a DBG comment in program.st.
       const programStPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'program.st')
-
       const content = await fs.readFile(programStPath, 'utf-8')
-
       const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
       const match = content.match(md5Pattern)
 
       if (!match || !match[1]) {
         return {
           success: false,
-          error: 'Could not find MD5 hash in program.st file',
+          error: 'Could not find MD5 hash in debug-map.json or program.st',
         }
       }
 
@@ -1006,7 +1020,7 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to read program.st file',
+        error: error instanceof Error ? error.message : 'Failed to read MD5',
       }
     }
   }
