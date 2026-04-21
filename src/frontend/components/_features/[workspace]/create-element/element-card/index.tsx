@@ -134,7 +134,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const isArduinoTarget = checkIsArduinoTarget(currentBoardInfo)
   const isSimulator = isSimulatorTarget(currentBoardInfo)
-  const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard)
+  const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard, currentBoardInfo)
   const allowServersAndRemoteDevices = isRuntimeV4 || isSimulator
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {

@@ -1639,7 +1639,18 @@ class CompilerModule {
     })
 
     // --- Check for unsupported features on non-v4 targets ---
-    const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4'
+    // A VPP board whose manifest target.type is 'runtime-v4' is also a v4 target.
+    const isVppRuntimeV4 = (() => {
+      const packageManager = new PackageManagerModule()
+      for (const pkg of packageManager.listInstalled()) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+        const device = manifest.devices.find((d) => d.name === boardTarget)
+        if (device) return device.target.type === 'runtime-v4'
+      }
+      return false
+    })()
+    const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4' || isVppRuntimeV4
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
 

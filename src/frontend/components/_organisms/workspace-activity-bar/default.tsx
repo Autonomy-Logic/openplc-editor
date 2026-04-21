@@ -457,7 +457,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           setIsDebuggerProcessing(false)
           return
         }
-        if (isOpenPLCRuntimeV4Target(boardTarget)) {
+        if (isOpenPLCRuntimeV4Target(boardTarget, boardInfo)) {
           const token = rtConn.jwtToken || undefined
           if (!token) {
             await showDebuggerMessage(
