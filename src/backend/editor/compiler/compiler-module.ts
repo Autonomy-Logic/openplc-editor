@@ -2055,20 +2055,20 @@ class CompilerModule {
                     })
                   }
 
-                  const pollCompilationStatus = async () => {
+                  const pollCompilationStatus = async (): Promise<'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'ERROR'> => {
                     let lastLogCount = 0
-                    let shouldContinuePolling = true
+                    let finalResult: 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'ERROR' | null = null
                     const startTime = Date.now()
                     const timeout = CompilerModule.COMPILATION_STATUS_TIMEOUT_MS
                     const pollInterval = CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS
 
-                    while (shouldContinuePolling) {
+                    while (finalResult === null) {
                       if (Date.now() - startTime > timeout) {
                         _mainProcessPort.postMessage({
                           logLevel: 'error',
                           message: 'Compilation status polling timed out after 5 minutes.',
                         })
-                        shouldContinuePolling = false
+                        finalResult = 'TIMEOUT'
                         continue
                       }
 
@@ -2088,7 +2088,7 @@ class CompilerModule {
                             logLevel: 'error',
                             message: `Error polling compilation status: ${result.error}`,
                           })
-                          shouldContinuePolling = false
+                          finalResult = 'ERROR'
                           continue
                         }
 
@@ -2111,26 +2111,92 @@ class CompilerModule {
                             logLevel: 'info',
                             message: `Compilation completed successfully (exit code: ${exit_code ?? 0}).`,
                           })
-                          shouldContinuePolling = false
+                          finalResult = 'SUCCESS'
                         } else if (status === 'FAILED') {
                           _mainProcessPort.postMessage({
                             logLevel: 'error',
                             message: `Compilation failed (exit code: ${exit_code ?? 1}).`,
                           })
-                          shouldContinuePolling = false
+                          finalResult = 'FAILED'
                         }
                       } catch (pollError) {
                         _mainProcessPort.postMessage({
                           logLevel: 'error',
                           message: `Error polling compilation status: ${pollError instanceof Error ? pollError.message : String(pollError)}`,
                         })
-                        shouldContinuePolling = false
+                        finalResult = 'ERROR'
                       }
                     }
+                    return finalResult
+                  }
+
+                  /**
+                   * Send START to the runtime after a successful build, retrying on
+                   * COMMAND:BUSY (the runtime returns BUSY while its STOP transition
+                   * thread is still finishing the unload — plugin cleanup, pthread_join,
+                   * etc.). Any non-BUSY error response (invalid program, compilation
+                   * error, etc.) stops the retry immediately.
+                   */
+                  const startPlcAfterBuildWithRetry = async (): Promise<void> => {
+                    const maxWaitMs = 5000
+                    const pollIntervalMs = 150
+                    const deadline = Date.now() + maxWaitMs
+
+                    while (Date.now() < deadline) {
+                      const result = await mainProcessBridge.makeRuntimeApiRequest<string>(
+                        runtimeIpAddress,
+                        runtimeJwtToken,
+                        '/api/start-plc',
+                        (data: string) => {
+                          const parsed = JSON.parse(data) as { status?: string }
+                          return (parsed.status ?? '').trim()
+                        },
+                      )
+
+                      if (!result.success) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'error',
+                          message: `Failed to start PLC: ${result.error}`,
+                        })
+                        return
+                      }
+
+                      const rawStatus = result.data ?? ''
+                      if (rawStatus.includes('START:OK') || rawStatus.includes('ALREADY_RUNNING')) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'info',
+                          message: 'PLC started.',
+                        })
+                        return
+                      }
+
+                      // Only BUSY is retryable — everything else is a real error from the runtime.
+                      if (!rawStatus.includes('BUSY')) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'error',
+                          message: `Failed to start PLC: ${rawStatus || 'unknown response'}`,
+                        })
+                        return
+                      }
+
+                      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+                    }
+
+                    _mainProcessPort.postMessage({
+                      logLevel: 'warning',
+                      message: `PLC did not start within ${maxWaitMs}ms — runtime remained busy. Press Play to retry.`,
+                    })
                   }
 
                   pollCompilationStatus()
-                    .then(async () => {
+                    .then(async (compileStatus) => {
+                      // Auto-start the PLC on successful build. The runtime no longer
+                      // restarts on its own after an upload, so the editor owns the
+                      // retry-on-BUSY policy and the error reporting.
+                      if (compileStatus === 'SUCCESS' && !compileOnly) {
+                        await startPlcAfterBuildWithRetry()
+                      }
+
                       if (runtimeIpAddress && runtimeJwtToken) {
                         try {
                           const statusResult = await mainProcessBridge.makeRuntimeApiRequest<string>(
