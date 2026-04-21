@@ -1,10 +1,10 @@
 import type { PLCDataType, PLCInstance, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
-import type { DebugMapV2, DebugVariableEntry } from '../debug-parser'
+import type { DebugMap, DebugVariableEntry } from '../debug-parser'
 import { packDebugAddr } from '../debug-parser'
 import {
   buildDebugVariableTreeMap,
   buildFbInstanceMap,
-  buildVariableIndexMapV2,
+  buildVariableIndexMap,
   logCompilerEvent,
 } from '../debugger-session'
 
@@ -142,10 +142,10 @@ describe('logCompilerEvent', () => {
 })
 
 // ---------------------------------------------------------------------------
-// buildVariableIndexMapV2
+// buildVariableIndexMap
 // ---------------------------------------------------------------------------
 
-function makeMapV2(leaves: Array<{ path: string; type: string; size: number }>): DebugMapV2 {
+function makeMap(leaves: Array<{ path: string; type: string; size: number }>): DebugMap {
   return {
     version: 2,
     md5: 'deadbeef',
@@ -159,16 +159,16 @@ function addr(arrayIdx: number, elemIdx: number): number {
   return packDebugAddr({ arrayIdx, elemIdx })
 }
 
-describe('buildVariableIndexMapV2', () => {
+describe('buildVariableIndexMap', () => {
   it('builds index map for simple base-type variables', () => {
     const pou = makePou('Main', 'program', [makeBaseVariable('SPEED', 'INT'), makeBaseVariable('TEMP', 'REAL')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const map = makeMapV2([
+    const map = makeMap([
       { path: 'INSTANCE0.SPEED', type: 'INT', size: 2 },
       { path: 'INSTANCE0.TEMP', type: 'REAL', size: 4 },
     ])
 
-    const { indexMap, warnings } = buildVariableIndexMapV2([pou], instances, map)
+    const { indexMap, warnings } = buildVariableIndexMap([pou], instances, map)
 
     expect(indexMap.get('Main:SPEED')).toBe(addr(0, 0))
     expect(indexMap.get('Main:TEMP')).toBe(addr(0, 1))
@@ -177,7 +177,7 @@ describe('buildVariableIndexMapV2', () => {
 
   it('warns when no instance is found for a program POU', () => {
     const pou = makePou('Orphan', 'program', [makeBaseVariable('X', 'INT')])
-    const { warnings } = buildVariableIndexMapV2([pou], [], makeMapV2([]))
+    const { warnings } = buildVariableIndexMap([pou], [], makeMap([]))
 
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toContain('Orphan')
@@ -185,7 +185,7 @@ describe('buildVariableIndexMapV2', () => {
 
   it('skips non-program POUs', () => {
     const fb = makePou('MyFB', 'function-block', [makeBaseVariable('Q', 'BOOL')])
-    const { indexMap } = buildVariableIndexMapV2([fb], [makeInstance('INSTANCE0', 'Main')], makeMapV2([]))
+    const { indexMap } = buildVariableIndexMap([fb], [makeInstance('INSTANCE0', 'Main')], makeMap([]))
 
     expect(indexMap.size).toBe(0)
   })
@@ -193,13 +193,13 @@ describe('buildVariableIndexMapV2', () => {
   it('handles array variables with IEC-indexed element paths', () => {
     const pou = makePou('Main', 'program', [makeArrayVariable('ARR', 'INT', '0..2')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const map = makeMapV2([
+    const map = makeMap([
       { path: 'INSTANCE0.ARR[0]', type: 'INT', size: 2 },
       { path: 'INSTANCE0.ARR[1]', type: 'INT', size: 2 },
       { path: 'INSTANCE0.ARR[2]', type: 'INT', size: 2 },
     ])
 
-    const { indexMap } = buildVariableIndexMapV2([pou], instances, map)
+    const { indexMap } = buildVariableIndexMap([pou], instances, map)
 
     expect(indexMap.get('Main:ARR[0]')).toBe(addr(0, 0))
     expect(indexMap.get('Main:ARR[1]')).toBe(addr(0, 1))
@@ -209,13 +209,13 @@ describe('buildVariableIndexMapV2', () => {
   it('handles arrays with negative start index', () => {
     const pou = makePou('Main', 'program', [makeArrayVariable('NEG', 'BOOL', '-1..1')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const map = makeMapV2([
+    const map = makeMap([
       { path: 'INSTANCE0.NEG[-1]', type: 'BOOL', size: 1 },
       { path: 'INSTANCE0.NEG[0]', type: 'BOOL', size: 1 },
       { path: 'INSTANCE0.NEG[1]', type: 'BOOL', size: 1 },
     ])
 
-    const { indexMap } = buildVariableIndexMapV2([pou], instances, map)
+    const { indexMap } = buildVariableIndexMap([pou], instances, map)
 
     expect(indexMap.get('Main:NEG[-1]')).toBe(addr(0, 0))
     expect(indexMap.get('Main:NEG[0]')).toBe(addr(0, 1))
@@ -225,9 +225,9 @@ describe('buildVariableIndexMapV2', () => {
   it('falls back to raw debug path for unmatched leaves (nested fields)', () => {
     const pou = makePou('Main', 'program', [])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const map = makeMapV2([{ path: 'INSTANCE0.FB.FIELD', type: 'INT', size: 2 }])
+    const map = makeMap([{ path: 'INSTANCE0.FB.FIELD', type: 'INT', size: 2 }])
 
-    const { indexMap } = buildVariableIndexMapV2([pou], instances, map)
+    const { indexMap } = buildVariableIndexMap([pou], instances, map)
 
     expect(indexMap.get('INSTANCE0.FB.FIELD')).toBe(addr(0, 0))
   })
@@ -235,7 +235,7 @@ describe('buildVariableIndexMapV2', () => {
   it('does not lose entries across multiple arrays', () => {
     const pou = makePou('Main', 'program', [makeBaseVariable('X', 'INT')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const map: DebugMapV2 = {
+    const map: DebugMap = {
       version: 2,
       md5: 'deadbeef',
       typeTags: { INT: 3 },
@@ -249,7 +249,7 @@ describe('buildVariableIndexMapV2', () => {
       ],
     }
 
-    const { indexMap } = buildVariableIndexMapV2([pou], instances, map)
+    const { indexMap } = buildVariableIndexMap([pou], instances, map)
 
     expect(indexMap.get('Main:X')).toBe(addr(0, 0))
     expect(indexMap.get('INSTANCE0.OTHER')).toBe(addr(1, 0))

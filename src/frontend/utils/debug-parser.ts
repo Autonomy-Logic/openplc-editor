@@ -13,7 +13,7 @@ export interface DebugAddr {
   elemIdx: number
 }
 
-export interface DebugMapLeafV2 {
+export interface DebugMapLeaf {
   arrayIdx: number
   elemIdx: number
   path: string
@@ -21,12 +21,14 @@ export interface DebugMapLeafV2 {
   size: number
 }
 
-export interface DebugMapV2 {
+export interface DebugMap {
+  /** Wire-schema version. Bumped when the file format changes in a
+   *  non-backward-compatible way. */
   version: 2
   md5: string
   typeTags: Record<string, number>
   arrays: Array<{ index: number; count: number }>
-  leaves: DebugMapLeafV2[]
+  leaves: DebugMapLeaf[]
 }
 
 /**
@@ -64,13 +66,13 @@ export function unpackDebugAddr(packed: number): DebugAddr {
  * Parse debug-map.json. Returns undefined if the content is missing or
  * malformed so callers can surface a clean error.
  */
-export function parseDebugMapV2(content: string): DebugMapV2 | undefined {
+export function parseDebugMap(content: string): DebugMap | undefined {
   try {
-    const raw = JSON.parse(content) as Partial<DebugMapV2>
+    const raw = JSON.parse(content) as Partial<DebugMap>
     if (raw.version !== 2 || !Array.isArray(raw.leaves) || !Array.isArray(raw.arrays)) {
       return undefined
     }
-    return raw as DebugMapV2
+    return raw as DebugMap
   } catch {
     return undefined
   }

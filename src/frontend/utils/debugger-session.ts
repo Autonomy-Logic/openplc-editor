@@ -14,7 +14,7 @@ import type {
   PLCPou,
   PLCVariable,
 } from '../../middleware/shared/ports/types'
-import type { DebugMapV2, DebugVariableEntry } from './debug-parser'
+import type { DebugMap, DebugVariableEntry } from './debug-parser'
 import { packDebugAddr } from './debug-parser'
 import { buildDebugTree } from './debug-tree-builder'
 import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from './debug-variable-finder'
@@ -44,7 +44,7 @@ export function logCompilerEvent(
 }
 
 // ---------------------------------------------------------------------------
-// 1. buildVariableIndexMapV2 — composite-key -> packed-DebugAddr
+// 1. buildVariableIndexMap — composite-key -> packed-DebugAddr
 // ---------------------------------------------------------------------------
 
 export interface VariableIndexMapResult {
@@ -53,9 +53,9 @@ export interface VariableIndexMapResult {
 }
 
 /**
- * Build a composite-key -> packed-DebugAddr map from a v2 DebugMap.
+ * Build a composite-key -> packed-DebugAddr map from a DebugMap.
  *
- * The v2 map addresses variables as (arrayIdx, elemIdx) pairs; we pack those
+ * The map addresses variables as (arrayIdx, elemIdx) pairs; we pack those
  * into a single number `(arr << 16) | elem` so downstream store types and
  * the polling loop see a plain `number` key.
  *
@@ -64,10 +64,10 @@ export interface VariableIndexMapResult {
  *   INSTANCE_NAME.VAR_NAME[5]         (array element, IEC-indexed)
  *   INSTANCE_NAME.FB_INST.FIELD       (nested struct/FB field)
  */
-export function buildVariableIndexMapV2(
+export function buildVariableIndexMap(
   pous: PLCPou[],
   instances: PLCInstance[],
-  map: DebugMapV2,
+  map: DebugMap,
 ): VariableIndexMapResult {
   const indexMap = new Map<string, number>()
   const warnings: string[] = []
@@ -135,11 +135,10 @@ export function buildVariableIndexMapV2(
 }
 
 /**
- * Synthesize a DebugVariableEntry[] from a DebugMapV2 so the existing tree
- * builder (which consumes v1-shaped data) works unchanged. The `index`
- * field carries the packed (arr<<16|elem) address.
+ * Flatten a DebugMap's leaves into the DebugVariableEntry[] shape the tree
+ * builder consumes. `index` carries the packed (arr<<16|elem) address.
  */
-export function debugMapV2ToEntries(map: DebugMapV2): DebugVariableEntry[] {
+export function debugMapToEntries(map: DebugMap): DebugVariableEntry[] {
   return map.leaves.map((leaf) => ({
     name: leaf.path,
     type: `${leaf.type}_ENUM`,

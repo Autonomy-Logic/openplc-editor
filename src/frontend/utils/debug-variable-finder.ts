@@ -1,6 +1,6 @@
 /**
  * Shared utilities for finding variables in a DebugVariableEntry[] list
- * (produced by debugMapV2ToEntries from a debug-map.json).
+ * (produced by debugMapToEntries from a debug-map.json).
  */
 
 export { type DebugVariableEntry } from './debug-parser'

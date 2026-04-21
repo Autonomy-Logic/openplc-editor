@@ -15,12 +15,12 @@ import { useCallback, useRef } from 'react'
 import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
 import { useDebugger, useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
-import { parseDebugMapV2 } from '../utils/debug-parser'
+import { parseDebugMap } from '../utils/debug-parser'
 import {
   buildDebugVariableTreeMap,
   buildFbInstanceMap,
-  buildVariableIndexMapV2,
-  debugMapV2ToEntries,
+  buildVariableIndexMap,
+  debugMapToEntries,
 } from '../utils/debugger-session'
 import { hexToBytes } from '../utils/hex'
 
@@ -70,12 +70,9 @@ export function useDebugSession(): UseDebugSessionReturn {
       logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Connecting debugger...' })
 
       try {
-        // Read debug artifacts. Phase 4 (STruC++) projects ship
-        // debug-map.json; legacy MatIEC projects ship debug.c. The port's
-        // readDebugFile returns whichever exists — v2 JSON takes priority.
         const debugFileResult = await debuggerPort.readDebugFile(projectPath, boardTarget)
         if (!debugFileResult.success || !debugFileResult.content) {
-          const error = `Failed to read debug file: ${debugFileResult.error ?? 'No content'}`
+          const error = `Failed to read debug-map.json: ${debugFileResult.error ?? 'No content'}`
           logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
           return { success: false, error }
         }
@@ -84,15 +81,15 @@ export function useDebugSession(): UseDebugSessionReturn {
 
         const instances = project.data.configurations.resource.instances
 
-        const debugMap = parseDebugMapV2(debugFileResult.content)
+        const debugMap = parseDebugMap(debugFileResult.content)
         if (!debugMap) {
-          const error = 'Invalid debug-map.json (expected version 2)'
+          const error = 'Invalid debug-map.json (expected schema version 2)'
           logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
           return { success: false, error }
         }
 
-        const { indexMap, warnings } = buildVariableIndexMapV2(project.data.pous, instances, debugMap)
-        const entriesForTree = debugMapV2ToEntries(debugMap)
+        const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, debugMap)
+        const entriesForTree = debugMapToEntries(debugMap)
         logActions.addLog({
           id: crypto.randomUUID(),
           level: 'info',

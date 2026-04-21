@@ -832,7 +832,7 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       // STruC++ writes debug-map.json alongside generated_debug.cpp.
-      // Consumed by the renderer via parseDebugMapV2.
+      // Consumed by the renderer via parseDebugMap.
       const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
       const content = await fs.readFile(debugMapPath, 'utf-8')
       return { success: true, content }
