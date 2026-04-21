@@ -27,6 +27,34 @@
   background-color: transparent;
 }
 
+/*
+ * Dropdown / popover scrollbar — more prominent than the default app-wide
+ * scrollbar because these lists are typically short and only appear briefly,
+ * so users need an immediate visual hint that more items are below. Applied
+ * to any Radix popper viewport (Select, DropdownMenu, Combobox, etc.) and
+ * to the generic `.popover-scrollable` escape hatch for custom dropdowns.
+ */
+[data-radix-select-viewport]::-webkit-scrollbar,
+[data-radix-popper-content-wrapper] [role='listbox']::-webkit-scrollbar,
+.popover-scrollable::-webkit-scrollbar {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+[data-radix-select-viewport]::-webkit-scrollbar-thumb,
+[data-radix-popper-content-wrapper] [role='listbox']::-webkit-scrollbar-thumb,
+.popover-scrollable::-webkit-scrollbar-thumb {
+  @apply bg-brand-medium bg-opacity-60 hover:bg-opacity-100;
+}
+
+/* Firefox — thin-with-color renders a visible always-on scrollbar */
+[data-radix-select-viewport],
+[data-radix-popper-content-wrapper] [role='listbox'],
+.popover-scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(3, 80, 201, 0.6) transparent;
+}
+
 @layer base {
   :root {
     --primary-default: #0464fb;
