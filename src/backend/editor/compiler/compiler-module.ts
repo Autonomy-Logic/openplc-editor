@@ -1,6 +1,7 @@
 import { exec, spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
 import os from 'node:os'
@@ -1394,18 +1395,22 @@ class CompilerModule {
   }
 
   /**
-   * Generate a VPP vendor plugin config for Runtime v4.
+   * Handle VPP runtime-v4 package integration for the uploaded program.
    *
-   * When the selected board comes from an installed VPP package and defines
-   * a runtime-v4-plugin HAL with a config template, this handler:
-   *   1. Reads the VPP package's config_template.json
-   *   2. Reads the project's devices/configuration.json for vendor screen data
-   *   3. Merges form data and module/IO-mapping into a final plugin config
-   *   4. Writes it to conf/<plugin_name>.json for the runtime to pick up
+   * When the selected board is from an installed VPP package, this handler:
+   *   1. Generates conf/<plugin_name>.json from the package's config_template.json
+   *      merged with vendor screen data (hal-config, module-configuration, io-mapping)
+   *   2. Copies the plugin source directory (containing the Makefile and .c/.h files)
+   *      into the source folder under vpp_plugin/
+   *   3. Computes a SHA-256 checksum over all plugin source files and writes it to
+   *      vpp_plugin/checksum.sha256 so the runtime's compile.sh can skip
+   *      recompilation when the source hasn't changed.
    *
-   * For non-VPP boards or VPP boards without a config template, this is a no-op.
+   * For non-VPP boards or VPP boards without the necessary HAL metadata, the
+   * relevant sub-steps are skipped. A header log is always emitted so the
+   * user can see whether VPP handling kicked in at all.
    */
-  async handleGenerateVendorPluginConfig(
+  async handleVendorPluginPackaging(
     boardTarget: string,
     normalizedProjectPath: string,
     sourceTargetFolderPath: string,
@@ -1430,58 +1435,147 @@ class CompilerModule {
       }
 
       if (!matchingDevice || !matchingPackagePath) {
-        // Not a VPP board — nothing to do
+        handleOutputData(`Board "${boardTarget}" is not from a VPP package, skipping VPP packaging`, 'info')
         return
       }
 
       if (matchingDevice.target.type !== 'runtime-v4') {
-        // VPP board but not runtime-v4 — no plugin config applies
+        handleOutputData(
+          `VPP board "${boardTarget}" is not runtime-v4 (target=${matchingDevice.target.type}), skipping VPP packaging`,
+          'info',
+        )
         return
       }
 
+      handleOutputData(`Detected VPP runtime-v4 board: ${boardTarget}`, 'info')
+
+      // --- Step 1: Generate plugin config file ---
       const configTemplateRelPath = matchingDevice.hal?.configTemplate
-      if (!configTemplateRelPath) {
+      let pluginName = 'vendor_plugin'
+
+      if (configTemplateRelPath) {
+        const configTemplatePath = join(matchingPackagePath, configTemplateRelPath)
+        let configTemplate: Record<string, unknown> | null = null
+        try {
+          const templateRaw = await readFile(configTemplatePath, 'utf-8')
+          configTemplate = JSON.parse(templateRaw) as Record<string, unknown>
+        } catch (err) {
+          handleOutputData(
+            `Failed to read VPP config template at ${configTemplateRelPath}: ${getErrorMessage(err)}`,
+            'error',
+          )
+        }
+
+        if (configTemplate) {
+          // Read vendor screen data from the project's device configuration
+          const deviceConfigPath = join(normalizedProjectPath, 'devices', 'configuration.json')
+          let vendorScreenData: Record<string, unknown> = {}
+          try {
+            const deviceConfigRaw = await readFile(deviceConfigPath, 'utf-8')
+            const deviceConfig = JSON.parse(deviceConfigRaw) as { vendorScreenData?: Record<string, unknown> }
+            vendorScreenData = deviceConfig.vendorScreenData ?? {}
+          } catch {
+            // Device configuration may not exist yet — use empty vendor data
+          }
+
+          const modules = matchingDevice.moduleSystem?.modules ?? []
+          const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
+
+          pluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
+          const confFolderPath = join(sourceTargetFolderPath, 'conf')
+          await mkdir(confFolderPath, { recursive: true })
+          const configFilePath = join(confFolderPath, `${pluginName}.json`)
+          await writeFile(configFilePath, JSON.stringify(finalConfig, null, 2), 'utf-8')
+          handleOutputData(`Generated conf/${pluginName}.json for VPP plugin`, 'info')
+        }
+      } else {
         handleOutputData('VPP board has no HAL configTemplate, skipping plugin config generation', 'info')
+      }
+
+      // --- Step 2: Copy plugin source + generate checksum ---
+      const pluginEntryRelPath = matchingDevice.hal?.pluginEntry
+      if (!pluginEntryRelPath) {
+        handleOutputData('VPP board has no HAL pluginEntry, skipping plugin source upload', 'info')
         return
       }
 
-      // Read config template from the installed package
-      const configTemplatePath = join(matchingPackagePath, configTemplateRelPath)
-      let configTemplate: Record<string, unknown>
+      // The plugin source directory is the parent directory of pluginEntry
+      const pluginSourceDir = join(matchingPackagePath, path.dirname(pluginEntryRelPath))
+      let pluginSourceStat
       try {
-        const templateRaw = await readFile(configTemplatePath, 'utf-8')
-        configTemplate = JSON.parse(templateRaw) as Record<string, unknown>
+        pluginSourceStat = await stat(pluginSourceDir)
       } catch (err) {
         handleOutputData(
-          `Failed to read VPP config template at ${configTemplateRelPath}: ${getErrorMessage(err)}`,
+          `VPP plugin source directory not found at ${pluginEntryRelPath}: ${getErrorMessage(err)}`,
           'error',
         )
         return
       }
 
-      // Read device configuration from the project for vendor screen data
-      const deviceConfigPath = join(normalizedProjectPath, 'devices', 'configuration.json')
-      let vendorScreenData: Record<string, unknown> = {}
-      try {
-        const deviceConfigRaw = await readFile(deviceConfigPath, 'utf-8')
-        const deviceConfig = JSON.parse(deviceConfigRaw) as { vendorScreenData?: Record<string, unknown> }
-        vendorScreenData = deviceConfig.vendorScreenData ?? {}
-      } catch {
-        // Device configuration may not exist yet — use empty vendor data
+      if (!pluginSourceStat.isDirectory()) {
+        handleOutputData(`VPP plugin source path is not a directory: ${pluginEntryRelPath}`, 'error')
+        return
       }
 
-      const modules = matchingDevice.moduleSystem?.modules ?? []
-      const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
+      const destPluginDir = join(sourceTargetFolderPath, 'vpp_plugin')
+      // Clean up any previous vpp_plugin directory from a prior build
+      try {
+        await fs.rm(destPluginDir, { recursive: true, force: true })
+      } catch {
+        // Ignore — may not exist yet
+      }
 
-      const pluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
-      const confFolderPath = join(sourceTargetFolderPath, 'conf')
-      await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, `${pluginName}.json`)
-      await writeFile(configFilePath, JSON.stringify(finalConfig, null, 2), 'utf-8')
-      handleOutputData(`Generated conf/${pluginName}.json for VPP plugin`, 'info')
+      // Copy the plugin source, excluding files that are only useful in the editor
+      // (config_template.json is already turned into conf/<plugin>.json, and
+      // requirements.txt is for Python-style plugins that don't apply here).
+      const EXCLUDE_FILES = new Set(['config_template.json', 'requirements.txt'])
+      const copiedFiles: string[] = []
+      const collectAndCopy = async (sourceDir: string, destDir: string, relPath: string = ''): Promise<void> => {
+        const entries = await readdir(sourceDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (EXCLUDE_FILES.has(entry.name)) continue
+          const sourcePath = join(sourceDir, entry.name)
+          const destPath = join(destDir, entry.name)
+          const relFilePath = relPath ? `${relPath}/${entry.name}` : entry.name
+          if (entry.isDirectory()) {
+            await mkdir(destPath, { recursive: true })
+            await collectAndCopy(sourcePath, destPath, relFilePath)
+          } else if (entry.isFile()) {
+            await mkdir(destDir, { recursive: true })
+            const content = await readFile(sourcePath)
+            await writeFile(destPath, content as unknown as Uint8Array)
+            copiedFiles.push(relFilePath)
+          }
+        }
+      }
+
+      await mkdir(destPluginDir, { recursive: true })
+      await collectAndCopy(pluginSourceDir, destPluginDir)
+
+      if (copiedFiles.length === 0) {
+        handleOutputData('VPP plugin source directory contained no files to copy', 'info')
+        return
+      }
+
+      // Compute SHA-256 over all copied files (sorted for determinism)
+      // Format: "<sha256> <relative-path>\n" per file, then a final SHA-256 of that list
+      copiedFiles.sort()
+      const hash = createHash('sha256')
+      for (const relFile of copiedFiles) {
+        const fileContent = await readFile(join(destPluginDir, relFile))
+        const fileHash = createHash('sha256').update(fileContent as unknown as Uint8Array).digest('hex')
+        hash.update(`${fileHash}  ${relFile}\n`)
+      }
+      const combinedHash = hash.digest('hex')
+      await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
+
+      handleOutputData(
+        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}…)`,
+        'info',
+      )
     } catch (error) {
       const errorMessage = getErrorMessage(error)
-      handleOutputData(`Failed to generate VPP plugin config: ${errorMessage}`, 'error')
+      handleOutputData(`Failed VPP plugin packaging: ${errorMessage}`, 'error')
     }
   }
 
@@ -1878,8 +1972,8 @@ class CompilerModule {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
 
-          // Generate VPP vendor plugin config (if the board is a VPP package)
-          await this.handleGenerateVendorPluginConfig(
+          // Generate VPP plugin config + copy plugin source (if board is a VPP package)
+          await this.handleVendorPluginPackaging(
             boardTarget,
             normalizedProjectPath,
             sourceTargetFolderPath,
