@@ -55,15 +55,9 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
           side={side}
           {...res}
         >
-          <PrimitiveSelect.ScrollUpButton className='flex h-6 cursor-default items-center justify-center bg-white dark:bg-neutral-950'>
-            <ArrowIcon size='sm' className='rotate-[270deg] stroke-brand dark:stroke-brand-light' />
-          </PrimitiveSelect.ScrollUpButton>
-          <PrimitiveSelect.Viewport ref={viewportRef} className=' h-full w-full overflow-auto'>
+          <PrimitiveSelect.Viewport ref={viewportRef} className='oplc-select-viewport h-full w-full'>
             {children}
           </PrimitiveSelect.Viewport>
-          <PrimitiveSelect.ScrollDownButton className='flex h-6 cursor-default items-center justify-center bg-white dark:bg-neutral-950'>
-            <ArrowIcon size='sm' className='rotate-90 stroke-brand dark:stroke-brand-light' />
-          </PrimitiveSelect.ScrollDownButton>
         </PrimitiveSelect.Content>
       </PrimitiveSelect.Portal>
     )
