@@ -255,10 +255,12 @@ const applyDynamicBlockHandleOffsets = (rung: RungLadderState): Node[] => {
       }))
       const newHandles = [...newInputHandles, ...newOutputHandles]
 
+      const defaultHeight = Math.max(blockStyle.height, defaultCumulativeY[maxHandles - 1] + 24)
+
       nodes[blockIdx] = {
         ...blockNode,
-        height: blockStyle.height,
-        measured: { width: blockNode.measured?.width ?? blockNode.width ?? 0, height: blockStyle.height },
+        height: defaultHeight,
+        measured: { width: blockNode.measured?.width ?? blockNode.width ?? 0, height: defaultHeight },
         data: {
           ...blockData,
           handles: newHandles,

@@ -128,7 +128,7 @@ function removeFromSourceContext(
   const outEdge = rung.edges.find(
     (e) => e.source === nodeId && e.sourceHandle === (element.data as BasicNodeData).outputConnector?.id,
   )
-  if (!outEdge) return { nodes: rung.nodes, edges: rung.edges, handleBranches: rung.handleBranches ?? [] }
+  if (!outEdge) return { nodes: newNodes, edges: rung.edges, handleBranches: rung.handleBranches ?? [] }
 
   const newEdges = disconnectNodes(rung, outEdge.source, outEdge.target)
 

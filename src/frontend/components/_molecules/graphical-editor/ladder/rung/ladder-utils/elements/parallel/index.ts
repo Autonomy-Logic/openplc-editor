@@ -46,7 +46,9 @@ export const startParallelConnection = <T>(
   if (!aboveElement) return { nodes: newNodes, edges: newEdges }
 
   const aboveData = aboveElement.data as BasicNodeData
-  const incomingEdge = newEdges.find((edge) => edge.target === aboveElement.id)
+  const incomingEdge = newEdges.find(
+    (edge) => edge.target === aboveElement.id && edge.targetHandle === aboveData.inputConnector?.id,
+  )
   const outgoingEdge = newEdges.find(
     (edge) => edge.source === aboveElement.id && edge.sourceHandle === aboveData.outputConnector?.id,
   )
