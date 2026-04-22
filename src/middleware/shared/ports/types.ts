@@ -57,6 +57,8 @@ export interface PLCTask {
   triggering: 'Cyclic' | 'Interrupt'
   interval: string
   priority: number
+  isSystemTask?: boolean
+  associatedDevice?: string
 }
 
 export interface PLCInstance {
@@ -387,6 +389,26 @@ export interface PLCRemoteDevice {
   name: string
   protocol: RemoteDeviceProtocol
   modbusTcpConfig?: ModbusRemoteTcpConfig
+  ethercatConfig?: {
+    masterConfig?: {
+      enabled?: boolean
+      networkInterface: string
+      cycleTimeUs: number
+      watchdogTimeoutCycles?: number
+      taskPriority?: number
+    }
+    devices: Array<{
+      id: string
+      name: string
+      channelMappings: Array<{
+        channelId: string
+        iecLocation: string
+        userEdited: boolean
+        alias?: string
+      }>
+      [key: string]: unknown
+    }>
+  }
 }
 
 // ---------------------------------------------------------------------------

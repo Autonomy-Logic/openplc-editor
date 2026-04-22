@@ -37,6 +37,18 @@
  *   - runtimeLogout()
  */
 
+import type {
+  EtherCATRuntimeStatusResponse,
+  EtherCATScanRequest,
+  EtherCATScanResponse,
+  EtherCATServiceStatusResponse,
+  EtherCATTestRequest,
+  EtherCATTestResponse,
+  EtherCATValidateRequest,
+  EtherCATValidateResponse,
+  NetworkInterface,
+} from '@root/types/ethercat'
+
 import type { PlcStatus, RuntimeLogEntry, SerialPort, TimingStats, Unsubscribe } from './types'
 
 export interface LoginParams {
@@ -138,4 +150,30 @@ export interface RuntimePort {
    * Returns unsubscribe function.
    */
   onTokenRefreshed?(callback: (newToken: string) => void): Unsubscribe
+
+  // --- EtherCAT Discovery (runtime device commands) ---
+
+  /** Get network interfaces available on the runtime device. */
+  getNetworkInterfaces?(): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }>
+
+  /** Check if the EtherCAT service is available on the runtime. */
+  getEthercatServiceStatus?(): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }>
+
+  /** Scan for EtherCAT devices on a network interface. */
+  scanEthercatDevices?(
+    request: EtherCATScanRequest,
+  ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }>
+
+  /** Test connection to a specific EtherCAT slave. */
+  testEthercatConnection?(
+    request: EtherCATTestRequest,
+  ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }>
+
+  /** Validate an EtherCAT configuration against the runtime. */
+  validateEthercatConfig?(
+    request: EtherCATValidateRequest,
+  ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }>
+
+  /** Get EtherCAT runtime status (plugin state, slave status, cycle metrics). */
+  getEthercatRuntimeStatus?(): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }>
 }

@@ -8,7 +8,9 @@ export function parseResourceConfigurationToString(taskList: PLCTask[], instance
     return '(* No tasks or program instances declared. *)'
   }
 
-  const usedTasks: PLCTask[] = [...taskList]
+  const usedTasks: PLCTask[] = [...taskList].sort(
+    (a, b) => (a.priority ?? DEFAULT_PRIORITY) - (b.priority ?? DEFAULT_PRIORITY),
+  )
 
   let out = 'CONFIGURATION Config0\n'
   out += '\tRESOURCE Res0 ON PLC\n\n'
