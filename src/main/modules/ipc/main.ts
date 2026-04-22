@@ -309,37 +309,36 @@ class MainProcessBridge implements MainIpcModule {
       // Build the endpoint path with optional include_stats query parameter
       const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
 
+      type TimingStatsWire = {
+        scan_count: number
+        scan_time_min: number | null
+        scan_time_max: number | null
+        scan_time_avg: number | null
+        cycle_time_min: number | null
+        cycle_time_max: number | null
+        cycle_time_avg: number | null
+        cycle_latency_min: number | null
+        cycle_latency_max: number | null
+        cycle_latency_avg: number | null
+        overruns: number
+        // Optional plugin-contributed statistics — opaque pass-through
+        // so plugins can add fields without touching the editor.
+        plugin_stats?: Record<
+          string,
+          {
+            label: string
+            fields: Array<{ label: string; value: string | number | boolean; unit?: string }>
+          }
+        >
+      }
+
       const result = await this.makeRuntimeApiRequest<{
         status: string
-        timing_stats?: {
-          scan_count: number
-          scan_time_min: number | null
-          scan_time_max: number | null
-          scan_time_avg: number | null
-          cycle_time_min: number | null
-          cycle_time_max: number | null
-          cycle_time_avg: number | null
-          cycle_latency_min: number | null
-          cycle_latency_max: number | null
-          cycle_latency_avg: number | null
-          overruns: number
-        }
+        timing_stats?: TimingStatsWire
       }>(ipAddress, jwtToken, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
-          timing_stats?: {
-            scan_count: number
-            scan_time_min: number | null
-            scan_time_max: number | null
-            scan_time_avg: number | null
-            cycle_time_min: number | null
-            cycle_time_max: number | null
-            cycle_time_avg: number | null
-            cycle_latency_min: number | null
-            cycle_latency_max: number | null
-            cycle_latency_avg: number | null
-            overruns: number
-          }
+          timing_stats?: TimingStatsWire
         }
         return response
       })

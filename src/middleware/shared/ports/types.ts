@@ -630,6 +630,17 @@ export interface DeviceConfiguration {
 
 export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'UNKNOWN'
 
+export interface PluginStatsField {
+  label: string
+  value: string | number | boolean
+  unit?: string
+}
+
+export interface PluginStatsPayload {
+  label: string
+  fields: PluginStatsField[]
+}
+
 export interface TimingStats {
   scan_count: number
   scan_time_min: number | null
@@ -642,6 +653,7 @@ export interface TimingStats {
   cycle_latency_max: number | null
   cycle_latency_avg: number | null
   overruns: number
+  plugin_stats?: Record<string, PluginStatsPayload>
 }
 
 export type RuntimeLogLevel = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR'
