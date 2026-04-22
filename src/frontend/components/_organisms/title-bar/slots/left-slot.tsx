@@ -6,8 +6,9 @@ import { MenuBar } from '../../../_molecules/menu-bar'
 export const TitleBarLeftSlot = () => {
   const caps = useCapabilities()
   const path = useOpenPLCStore((state) => state.project.meta.path)
+  const OS = useOpenPLCStore((state) => state.workspace.systemConfigs.OS)
 
-  if (caps.hasNativeMenu) {
+  if (caps.isNativeApplication && OS !== 'win32') {
     return <div className='flex items-center justify-start gap-1 px-4 py-0.5' />
   }
 

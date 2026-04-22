@@ -10,10 +10,10 @@ const TitleBarCenterSlot = () => {
   return (
     <div
       className={cn('flex flex-1 items-center justify-center gap-2', {
-        'oplc-titlebar-drag-region': caps.hasNativeTitleBar,
+        'oplc-titlebar-drag-region': caps.isNativeApplication,
       })}
     >
-      {caps.hasNativeMenu ? (
+      {caps.isNativeApplication ? (
         <>
           <OpenPLCIcon />
           <span className='font-caption text-xs font-normal'>OpenPLC Editor</span>

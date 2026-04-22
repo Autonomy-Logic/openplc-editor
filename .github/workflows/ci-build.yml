@@ -1,11 +1,7 @@
 name: CI - Build
 
 on:
-  pull_request:
-    branches:
-      - main
-      - development
-      - refactor/shared-ui-migration
+  workflow_call:
 
 jobs:
   build:
