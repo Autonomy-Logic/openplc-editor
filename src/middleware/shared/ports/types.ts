@@ -738,6 +738,24 @@ export type RungLadderState = {
   selectedNodes: import('@xyflow/react').Node[]
   nodes: import('@xyflow/react').Node[]
   edges: import('@xyflow/react').Edge[]
+  /** Index of active handle branches in this rung (undefined for backward compatibility) */
+  handleBranches?: HandleBranch[]
+}
+
+/**
+ * Represents a branch of elements connected to a specific block handle.
+ * Input branches connect from the left rail to a block input handle.
+ * Output branches connect from a block output handle to the right rail.
+ */
+export type HandleBranch = {
+  /** The block node ID this branch connects to */
+  blockId: string
+  /** The handle ID on the block (e.g., "R", "PV", "CV") */
+  handleId: string
+  /** Direction: 'input' means elements feed INTO the block, 'output' means elements come OUT */
+  direction: 'input' | 'output'
+  /** Ordered list of node IDs in this branch (left-to-right for input, block-to-right for output) */
+  nodeIds: string[]
 }
 
 // ---------------------------------------------------------------------------

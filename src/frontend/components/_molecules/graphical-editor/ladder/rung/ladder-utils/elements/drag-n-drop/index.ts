@@ -2,15 +2,186 @@ import type { RungLadderState } from '@root/frontend/store/slices'
 import type { Edge, Node, ReactFlowInstance } from '@xyflow/react'
 import { toInteger } from 'lodash'
 
+import type { BasicNodeData } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { isNodeOfType } from '../../nodes'
-import { removeElement } from '..'
-import { updateDiagramElementsPosition } from '../diagram'
-import { startParallelConnection } from '../parallel'
-import { removePlaceholderElements } from '../placeholder'
+import { getBranch } from '../handle-branch'
 import { renderPlaceholderElements, searchNearestPlaceholder } from '../placeholder'
-import { appendSerialConnection } from '../serial'
 import { removeVariableBlock } from '../variable-block'
+import {
+  type DropContext,
+  type DropResult,
+  handleBranchCreate,
+  handleBranchParallel,
+  handleBranchParallelPath,
+  handleBranchSerial,
+  handleMainParallel,
+  handleMainSerial,
+  handleRestore,
+} from './handlers'
+
+// ---------------------------------------------------------------------------
+// Drop classification types & helpers
+// ---------------------------------------------------------------------------
+
+type DropAction =
+  | { type: 'restore' }
+  | { type: 'branch-parallel'; aboveElement: Node }
+  | { type: 'main-parallel'; sourceIsBranch: boolean }
+  | {
+      type: 'branch-serial'
+      target: { blockId: string; handleId: string; direction: 'input' | 'output'; insertIndex: number }
+    }
+  | {
+      type: 'branch-parallel-path'
+      targetNode: Node
+      branchContext: NonNullable<BasicNodeData['branchContext']>
+      position: 'left' | 'right'
+    }
+  | {
+      type: 'branch-create'
+      target: {
+        blockId: string
+        handleId: string
+        direction: 'input' | 'output'
+        handlePosition: { x: number; y: number }
+      }
+    }
+  | { type: 'main-serial'; sourceIsBranch: boolean }
+
+/**
+ * Pure classifier: inspects the placeholder and node to determine which drop
+ * scenario applies without performing any mutations.
+ */
+function classifyDrop(
+  selectedPlaceholder: PlaceholderNode,
+  copycatNode: Node,
+  draggedNode: Node,
+  oldStateRung: RungLadderState,
+): DropAction | null {
+  // Blocks cannot be dropped on branch handles — the branch layout system
+  // is designed for single-handle elements (contacts/coils) only.
+  if (draggedNode.type === 'block' && selectedPlaceholder.data.handleBranchTarget) {
+    return null
+  }
+
+  // Path 1: drop back on original position
+  if (selectedPlaceholder.data.relatedNode?.id === copycatNode.id) {
+    return { type: 'restore' }
+  }
+
+  const sourceIsBranch = !!(draggedNode.data as BasicNodeData).branchContext
+
+  if (isNodeOfType(selectedPlaceholder as Node, 'parallelPlaceholder')) {
+    const relatedNode = selectedPlaceholder.data.relatedNode
+    const branchCtx = relatedNode && (relatedNode.data as BasicNodeData).branchContext
+
+    if (branchCtx) {
+      // Path 2: any → branch parallel
+      const branch = getBranch(oldStateRung, branchCtx.blockId, branchCtx.handleId)
+      const aboveElement = oldStateRung.nodes.find((n) => n.id === relatedNode.id)
+      if (branch && aboveElement && branch.nodeIds.includes(relatedNode.id)) {
+        return { type: 'branch-parallel', aboveElement }
+      }
+      return null // fallback
+    }
+
+    // Paths 3 & 4: main parallel (branch or main source)
+    return { type: 'main-parallel', sourceIsBranch }
+  }
+
+  // Serial placeholder
+  const serialRelated = selectedPlaceholder.data.relatedNode
+  const serialBranchTarget = selectedPlaceholder.data.handleBranchTarget
+
+  if (
+    serialRelated &&
+    (serialRelated.data as BasicNodeData).branchContext &&
+    serialBranchTarget?.insertIndex !== undefined
+  ) {
+    // Path 5: any → branch serial
+    return {
+      type: 'branch-serial',
+      target: {
+        blockId: serialBranchTarget.blockId,
+        handleId: serialBranchTarget.handleId,
+        direction: serialBranchTarget.direction,
+        insertIndex: serialBranchTarget.insertIndex,
+      },
+    }
+  }
+
+  if (serialRelated && (serialRelated.data as BasicNodeData).branchContext) {
+    // Path 6: any → branch parallel-path
+    const ctx = (serialRelated.data as BasicNodeData).branchContext!
+    const targetId = serialRelated.id.startsWith('copycat_') ? serialRelated.id.slice(8) : serialRelated.id
+    const targetNode = oldStateRung.nodes.find((n) => n.id === targetId)
+    if (targetNode) {
+      return {
+        type: 'branch-parallel-path',
+        targetNode,
+        branchContext: ctx,
+        position: (selectedPlaceholder.data.position as 'left' | 'right') ?? 'left',
+      }
+    }
+    return null // fallback
+  }
+
+  if (serialBranchTarget && serialBranchTarget.insertIndex === undefined) {
+    // Path 7: any → empty block handle (create new branch)
+    return {
+      type: 'branch-create',
+      target: {
+        blockId: serialBranchTarget.blockId,
+        handleId: serialBranchTarget.handleId,
+        direction: serialBranchTarget.direction,
+        handlePosition: serialBranchTarget.handlePosition,
+      },
+    }
+  }
+
+  // Paths 8 & 9: main serial (branch or main source)
+  return { type: 'main-serial', sourceIsBranch }
+}
+
+/**
+ * Find the currently selected placeholder node in the rung.
+ */
+function findSelectedPlaceholder(rung: RungLadderState): {
+  selectedPlaceholder: PlaceholderNode | undefined
+  selectedPlaceholderIndex: number
+} {
+  const entry = Object.entries(rung.nodes).find(
+    ([, n]) => (n.type === 'placeholder' || n.type === 'parallelPlaceholder') && n.selected,
+  )
+  if (!entry) return { selectedPlaceholder: undefined, selectedPlaceholderIndex: -1 }
+  return {
+    selectedPlaceholder: entry[1] as PlaceholderNode,
+    selectedPlaceholderIndex: toInteger(entry[0]),
+  }
+}
+
+/**
+ * Prepare the rung state for a drop operation:
+ * removes variable blocks, finds copycat node, removes the dragged node from nodes array.
+ */
+function prepareDropState(
+  rung: RungLadderState,
+  node: Node,
+): {
+  preparedNodes: Node[]
+  preparedEdges: Edge[]
+  copycatNode: Node | undefined
+  oldNodeIndex: number
+} {
+  const { nodes: cleanedNodes, edges: cleanedEdges } = removeVariableBlock(rung)
+
+  const copycatNode = cleanedNodes.filter((n) => n.type !== 'variable').find((n) => n.id === `copycat_${node.id}`)
+  const oldNodeIndex = cleanedNodes.findIndex((n) => n.id === node.id)
+  const preparedNodes = oldNodeIndex !== -1 ? cleanedNodes.filter((n) => n.id !== node.id) : cleanedNodes
+
+  return { preparedNodes, preparedEdges: cleanedEdges, copycatNode, oldNodeIndex }
+}
 
 export const onElementDragStart = (rung: RungLadderState, draggedNode: Node) => {
   /**
@@ -77,133 +248,58 @@ export const onElementDragOver = (
 }
 
 /**
- * Drag and drop function to stop the drag of an element and connect it to the nearest placeholder
- *
- * @param rung The current rung state
- * @param node The node to be connected
- *
- * @returns The new nodes and edges
+ * Drag and drop function to stop the drag of an element and connect it to the nearest placeholder.
+ * Classifies the drop scenario once, then dispatches to a focused handler.
  */
-export const onElementDrop = (
-  rung: RungLadderState,
-  oldStateRung: RungLadderState,
-  node: Node,
-): { nodes: Node[]; edges: Edge[] } => {
-  /**
-   * Find the selected placeholder
-   * If not found, return the old rung as it is (remove the placeholder nodes)
-   */
-  const [selectedPlaceholderIndex, selectedPlaceholder] = Object.entries(rung.nodes).find(
-    (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
-  ) ?? [undefined, undefined]
-  if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
+export const onElementDrop = (rung: RungLadderState, oldStateRung: RungLadderState, node: Node): DropResult => {
+  const fallback = { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
 
-  let newNodes = [...rung.nodes]
-  let newEdges = [...rung.edges]
+  // 1. Find selected placeholder
+  const { selectedPlaceholder, selectedPlaceholderIndex } = findSelectedPlaceholder(rung)
+  if (!selectedPlaceholder) return fallback
 
-  const { nodes: removedVariablesNodes, edges: removedVariablesEdges } = removeVariableBlock({
-    ...rung,
-    nodes: newNodes,
-    edges: newEdges,
-  })
-  newNodes = removedVariablesNodes
-  newEdges = removedVariablesEdges
+  // 2. Prepare state: remove variable blocks, find copycat, remove dragged node
+  const { preparedNodes, preparedEdges, copycatNode, oldNodeIndex } = prepareDropState(rung, node)
+  if (!copycatNode || oldNodeIndex === -1) return fallback
 
-  /**
-   * Find the copycat node
-   * If not found, return the old rung as it is
-   */
-  const copycatNode = newNodes.filter((n) => n.type !== 'variable').find((n) => n.id === `copycat_${node.id}`)
-  if (!copycatNode) return { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
+  // 3. Classify the drop scenario
+  const action = classifyDrop(selectedPlaceholder, copycatNode, node, oldStateRung)
+  if (!action) return fallback
 
-  /**
-   * Remove the old node and the copycat node
-   * If the old node is not found, return the old rung as it is
-   */
-  const oldNodeIndex = newNodes.findIndex((n) => n.id === node.id)
-  if (oldNodeIndex === -1) return { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
-  newNodes = newNodes.filter((n) => n.id !== node.id)
-
-  // Check if the selected placeholder is the same as the copycat node
-  if ((selectedPlaceholder as PlaceholderNode).data.relatedNode?.id === copycatNode.id) {
-    newNodes[newNodes.indexOf(copycatNode)] = {
-      ...node,
-      id: node.id,
-      dragging: false,
-    }
-    newEdges.forEach((edge, index) => {
-      if (edge.source === copycatNode.id) {
-        newEdges[index] = { ...edge, source: node.id, id: edge.id.replace('copycat_', '') }
-      }
-      if (edge.target === copycatNode.id) {
-        newEdges[index] = { ...edge, target: node.id, id: edge.id.replace('copycat_', '') }
-      }
-    })
-    // Remove the placeholder nodes
-    newNodes = removePlaceholderElements(newNodes)
-
-    /**
-     * After adding the new element, update the diagram with the new rung
-     */
-    const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = updateDiagramElementsPosition(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      rung.defaultBounds as [number, number],
-    )
-    newNodes = updatedDiagramNodes
-    newEdges = updatedDiagramEdges
-    return { nodes: newNodes, edges: newEdges }
-  }
-
-  /**
-   * Check if the selected placeholder is a parallel placeholder
-   * If it is, create a new parallel junction and add the new element to it
-   * If it is not, add the new element to the selected placeholder
-   */
-  if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnection(
-      {
-        ...rung,
-        nodes: newNodes,
-        edges: newEdges,
-      },
-      {
-        selected: selectedPlaceholder as PlaceholderNode,
-        index:
-          oldNodeIndex < toInteger(selectedPlaceholderIndex)
-            ? toInteger(selectedPlaceholderIndex) - 1
-            : toInteger(selectedPlaceholderIndex),
-      },
-      node,
-    )
-    newEdges = parallelEdges
-    newNodes = parallelNodes
-  } else {
-    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnection(
-      {
-        ...rung,
-        nodes: newNodes,
-        edges: newEdges,
-      },
-      {
-        selected: selectedPlaceholder as PlaceholderNode,
-        index:
-          oldNodeIndex < toInteger(selectedPlaceholderIndex)
-            ? toInteger(selectedPlaceholderIndex) - 1
-            : toInteger(selectedPlaceholderIndex),
-      },
-      node,
-    )
-    newEdges = serialEdges
-    newNodes = serialNodes
-  }
-
-  // If the selected placeholder is not the same as the copycat node, remove the copycat node and the old one
-  const { nodes: removedCopycatNodes, edges: removedCopycatEdges } = removeElement(
-    { ...rung, nodes: newNodes, edges: newEdges },
+  // 4. Build shared context for handlers
+  const ctx: DropContext = {
+    rung,
+    oldStateRung,
+    node,
     copycatNode,
-  )
-  newNodes = removedCopycatNodes
-  newEdges = removedCopycatEdges
+    selectedPlaceholder,
+    oldNodeIndex,
+    selectedPlaceholderIndex,
+    preparedNodes,
+    preparedEdges,
+  }
 
-  return { nodes: newNodes, edges: newEdges }
+  // 5. Dispatch to the appropriate handler
+  switch (action.type) {
+    case 'restore':
+      return handleRestore(ctx)
+
+    case 'branch-parallel':
+      return handleBranchParallel(oldStateRung, node, action.aboveElement)
+
+    case 'main-parallel':
+      return handleMainParallel(ctx, action.sourceIsBranch)
+
+    case 'branch-serial':
+      return handleBranchSerial(oldStateRung, node, action.target)
+
+    case 'branch-parallel-path':
+      return handleBranchParallelPath(oldStateRung, node, action.targetNode, action.branchContext, action.position)
+
+    case 'branch-create':
+      return handleBranchCreate(oldStateRung, node, action.target)
+
+    case 'main-serial':
+      return handleMainSerial(ctx, action.sourceIsBranch)
+  }
 }

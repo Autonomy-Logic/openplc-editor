@@ -24,7 +24,25 @@ export type BasicNodeData = {
   draggable: boolean
   selectable: boolean
   deletable: boolean
+  /** Marks this node as part of a handle branch (contact/coil on a block input/output) */
+  branchContext?: {
+    blockId: string
+    handleId: string
+    direction: 'input' | 'output'
+  }
+  /** Set on placeholders to indicate dropping here creates a handle branch */
+  handleBranchTarget?: {
+    blockId: string
+    handleId: string
+    direction: 'input' | 'output'
+    handlePosition: { x: number; y: number }
+    /** When set, insert into existing branch at this position in nodeIds. When undefined, create new branch. */
+    insertIndex?: number
+  }
 }
+
+/** Re-export HandleBranch from ports (canonical definition) so callers in the UI layer can import it here. */
+export type { HandleBranch } from '../../../../../../middleware/shared/ports/types'
 
 // block
 

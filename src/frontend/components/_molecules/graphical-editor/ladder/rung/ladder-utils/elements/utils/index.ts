@@ -38,6 +38,7 @@ export const getPreviousElementsByEdge = (
      * If the node is undefined or an variable, skip it
      */
     if (!n || n.type === 'variable') return
+    if ((n.data as BasicNodeData).branchContext) return
 
     /**
      * If there is a parallel node, check if it is an open or close parallel
@@ -54,8 +55,9 @@ export const getPreviousElementsByEdge = (
 
     lastNodes.nodes.serial.push({ ...n })
   })
-  lastNodes.edges = connectedEdges
   lastNodes.nodes.all = [...lastNodes.nodes.serial, ...lastNodes.nodes.parallel]
+  const allNodeIds = new Set(lastNodes.nodes.all.map((n) => n.id))
+  lastNodes.edges = connectedEdges.filter((e) => allNodeIds.has(e.source))
 
   return lastNodes
 }
@@ -265,7 +267,8 @@ export const findAllParallelsDepthAndNodes = (
   // check serial nodes
   const serialNodes = nodesInsideParallel.serial
   let highestNode = serialNodes[0]
-  let serialHeight = highestNode.height ?? 0
+  let serialHeight =
+    highestNode.height ?? highestNode.measured?.height ?? getDefaultNodeStyle({ node: highestNode }).height
   for (const serialNode of serialNodes) {
     // If it is a parallel node, check if it is an open parallel
     // If it is, call the function recursively
@@ -276,8 +279,10 @@ export const findAllParallelsDepthAndNodes = (
         objectParallel = { ...objectParallel, ...object }
       }
     }
-    if (serialHeight < (serialNode.height ?? 0)) {
-      serialHeight = serialNode.height ?? 0
+    const serialNodeHeight =
+      serialNode.height ?? serialNode.measured?.height ?? getDefaultNodeStyle({ node: serialNode }).height
+    if (serialHeight < serialNodeHeight) {
+      serialHeight = serialNodeHeight
       highestNode = serialNode
     }
   }
@@ -377,7 +382,7 @@ export const getNodesInsideParallel = (
     let nextEdge = parallelEdge
     while (nextEdge && nextEdge.target !== closeParallelNode.id) {
       const node = rung.nodes.find((n) => n.id === nextEdge.target)
-      if (!node) continue
+      if (!node) break
       nextEdge = rung.edges.find(
         (edge) =>
           edge.source === nextEdge.target && edge.sourceHandle === (node.data as BasicNodeData).outputConnector?.id,
