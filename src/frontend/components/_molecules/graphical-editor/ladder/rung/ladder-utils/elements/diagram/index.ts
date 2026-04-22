@@ -283,6 +283,12 @@ const applyDynamicBlockHandleOffsets = (rung: RungLadderState): Node[] => {
       cumulativeY.push(cumulativeY[i - 1] + Math.max(prevInputOffset, prevOutputOffset))
     }
 
+    // The block's natural bottom before any expansion — nodes starting below this
+    // are in a different visual region (e.g. main-line parallel-path contacts
+    // wrapping the block) and must not inflate handle offsets.
+    const defaultBlockBottom =
+      blockNode.position.y + Math.max(blockStyle.height, FIRST_HANDLE_Y + (maxHandles - 1) * DEFAULT_OFFSET + 24)
+
     // Overlap resolution: when handle[i+1] has a branch, ensure main-line nodes
     // (e.g. parallel-path elements on handle[i]'s serial chain) don't extend into
     // handle[i+1]'s branch area.
@@ -308,6 +314,10 @@ const applyDynamicBlockHandleOffsets = (rung: RungLadderState): Node[] => {
           n.type === 'parallelPlaceholder'
         )
           continue
+
+        // Skip nodes positioned below the block's natural extent — they belong to
+        // a main-line parallel wrapping the block and don't overlap branch elements.
+        if (n.position.y >= defaultBlockBottom) continue
 
         const nodeHeight = n.height ?? n.measured?.height ?? getDefaultNodeStyle({ node: n }).height
         const nodeBottom = n.position.y + nodeHeight
