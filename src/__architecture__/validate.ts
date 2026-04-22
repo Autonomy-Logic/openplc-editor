@@ -23,6 +23,7 @@ type LayerName =
   | 'ports'
   | 'provider'
   | 'adapters'
+  | 'adapter-components'
   | 'backend-shared'
   | 'backend-web'
   | 'store'
@@ -64,8 +65,24 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
     allowedDeps: ['ports', 'utils'],
   },
   adapters: {
-    name: 'Adapters (middleware/adapters/)',
+    name: 'Adapter Services (middleware/adapters/**/services/, middleware/adapters/*.ts)',
     allowedDeps: ['ports', 'provider', 'utils', 'backend-shared', 'backend-web', 'store', 'assets'],
+  },
+  'adapter-components': {
+    name: 'Adapter Components (middleware/adapters/**/components/)',
+    allowedDeps: [
+      'ports',
+      'provider',
+      'store',
+      'hooks',
+      'services',
+      'components',
+      'data',
+      'utils',
+      'assets',
+      'adapters',
+      'adapter-components',
+    ],
   },
   'backend-shared': {
     name: 'Backend Shared (backend/shared/)',
@@ -131,6 +148,7 @@ function getLayer(filePath: string): LayerName | null {
   // Middleware layers
   if (rel.startsWith('middleware/shared/ports/')) return 'ports'
   if (rel.startsWith('middleware/shared/providers/')) return 'provider'
+  if (rel.match(/^middleware\/adapters\/[^/]+\/components\//)) return 'adapter-components'
   if (rel.startsWith('middleware/adapters/')) return 'adapters'
 
   // Backend layers
