@@ -8,7 +8,9 @@ import { convertTypeToXml } from './type-xml'
 export const oldEditorInstanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => {
   const { instances, tasks, globalVariables } = configuration.resource
 
-  tasks.forEach((task) => {
+  const sortedTasks = [...tasks].sort((a, b) => a.priority - b.priority)
+
+  sortedTasks.forEach((task) => {
     const i: PouInstance[] =
       instances
         .filter((i) => i.task === task.name)

@@ -47,6 +47,7 @@ const TabIcons = {
   orchestrators: <OrchestratorIcon className='h-4 w-4 flex-shrink-0' />,
   'remote-device': <RemoteDeviceIcon className='h-4 w-4 flex-shrink-0' />,
   server: <ServerIcon className='h-4 w-4 flex-shrink-0' />,
+  'ethercat-device': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
 const Tab = (props: ITabProps) => {
@@ -71,7 +72,8 @@ const Tab = (props: ITabProps) => {
     | 'pin-mapping'
     | 'orchestrators'
     | 'remote-device'
-    | 'server' = 'il'
+    | 'server'
+    | 'ethercat-device' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
     languageOrDerivation = fileDerivation?.derivation
@@ -91,6 +93,9 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'server') {
     languageOrDerivation = 'server'
+  }
+  if (fileDerivation?.type === 'ethercat-device') {
+    languageOrDerivation = 'ethercat-device'
   }
 
   const { file: associatedFile } = getFile({ name: fileName || '' })
