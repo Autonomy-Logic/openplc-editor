@@ -496,7 +496,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setVendorScreenData: (persistenceKey, data): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
           if (!deviceDefinitions.configuration.vendorScreenData) {
             deviceDefinitions.configuration.vendorScreenData = {}
           }
