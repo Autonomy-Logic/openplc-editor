@@ -1,5 +1,6 @@
+import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
 import { useOpenPLCStore } from '@root/frontend/store'
-import { collectUsedIecAddresses, generateIecAddress } from '@root/frontend/utils/iec-address'
+import { generateIecAddress } from '@root/frontend/utils/iec-address'
 import type { IoMappingEntry, VendorIoMapping } from '@root/middleware/shared/ports/types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -24,6 +25,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       storedMapping,
       remoteDevices: (state.project.data.remoteDevices ?? []) as Array<{
         modbusTcpConfig?: { ioGroups?: Array<{ ioPoints: Array<{ iecLocation: string }> }> }
+        ethercatConfig?: { devices?: Array<{ channelMappings?: Array<{ iecLocation: string }> }> }
       }>,
     }
   }, [persistenceKey])
@@ -60,6 +62,9 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       }
     }
 
+    // Seed "used" from every other I/O source (Modbus TCP, EtherCAT) so the
+    // VPP allocator avoids collisions. We explicitly DON'T pass vendorScreenData
+    // here — the existing VPP entries are the ones we're about to re-generate.
     const usedAddresses = collectUsedIecAddresses(remoteDevices)
     const newEntries: IoMappingEntry[] = []
 

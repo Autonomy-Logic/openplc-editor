@@ -1,4 +1,3 @@
-export { collectUsedIecAddresses } from './collect-used-iec-addresses'
 export { createDefaultSlaveConfig, DEFAULT_SLAVE_CONFIG } from './device-config-defaults'
 export { countMatchedDevices, getBestMatchQuality, matchDevicesToRepository } from './device-matcher'
 export { buildChannelInfo, deriveSlaveType, persistPdos } from './enrich-device-data'
