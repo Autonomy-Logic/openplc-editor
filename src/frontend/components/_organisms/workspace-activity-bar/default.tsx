@@ -635,7 +635,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
         />
       </TooltipSidebarWrapperButton>
-      <ChatButton />
+      <TooltipSidebarWrapperButton tooltipContent='AI Chat'>
+        <ChatButton />
+      </TooltipSidebarWrapperButton>
     </>
   )
 }

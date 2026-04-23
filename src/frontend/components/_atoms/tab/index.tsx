@@ -50,6 +50,7 @@ const TabIcons: Record<string, React.ReactNode> = {
   server: <ServerIcon className='h-4 w-4 flex-shrink-0' />,
   'vendor-screen': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   'package-manager': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
+  'ethercat-device': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
 const Tab = (props: ITabProps) => {
@@ -58,7 +59,26 @@ const Tab = (props: ITabProps) => {
   } = useOpenPLCStore()
 
   const { fileName, fileDerivation, currentTab, handleDeleteTab, handleClickedTab, ...res } = props
-  let languageOrDerivation: string = 'il'
+  let languageOrDerivation:
+    | 'il'
+    | 'st'
+    | 'python'
+    | 'cpp'
+    | 'resource'
+    | 'ld'
+    | 'sfc'
+    | 'fbd'
+    | 'array'
+    | 'enumerated'
+    | 'structure'
+    | 'configuration'
+    | 'pin-mapping'
+    | 'orchestrators'
+    | 'remote-device'
+    | 'server'
+    | 'vendor-screen'
+    | 'package-manager'
+    | 'ethercat-device' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
     languageOrDerivation = fileDerivation?.derivation
@@ -84,6 +104,9 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'package-manager') {
     languageOrDerivation = 'package-manager'
+  }
+  if (fileDerivation?.type === 'ethercat-device') {
+    languageOrDerivation = 'ethercat-device'
   }
 
   const { file: associatedFile } = getFile({ name: fileName || '' })

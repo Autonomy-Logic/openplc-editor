@@ -10,7 +10,7 @@ export const TooltipSidebarWrapperButton = ({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className='w-full'>{children}</div>
+          <div className='flex w-full justify-center'>{children}</div>
         </TooltipTrigger>
         <SidebarTooltipContent side='right' sideOffset={5} arrow={false}>
           <div className='w-full text-center font-caption text-xs'>{tooltipContent}</div>

@@ -17,6 +17,7 @@ import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-ad
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
+import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
@@ -24,6 +25,7 @@ import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
 import { createEditorSystemAdapter } from './adapters/editor/system-adapter'
 import { createEditorThemeAdapter } from './adapters/editor/theme-adapter'
+import { createEditorVersionControlAdapter } from './adapters/editor/version-control-adapter'
 import { createEditorWindowAdapter } from './adapters/editor/window-adapter'
 import { EDITOR_CAPABILITIES } from './shared/ports/platform-capabilities'
 import type { PlatformPorts } from './shared/providers/types'
@@ -33,9 +35,14 @@ import type { PlatformPorts } from './shared/providers/types'
  * Set by the store/UI when the user configures or connects to a device.
  */
 let _runtimeIpAddress = ''
+let _projectPath = ''
 
 export function setRuntimeIpAddress(ip: string): void {
   _runtimeIpAddress = ip
+}
+
+export function setProjectPath(path: string): void {
+  _projectPath = path
 }
 
 /**
@@ -54,5 +61,7 @@ export const editorPorts: PlatformPorts = {
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
   packages: createEditorPackageAdapter(),
+  esi: createEditorEsiAdapter(() => _projectPath),
+  versionControl: createEditorVersionControlAdapter(),
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

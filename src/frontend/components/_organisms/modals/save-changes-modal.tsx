@@ -78,7 +78,7 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
         clearAndClose()
         return
       case 'close-app':
-        if (capabilities.hasNativeWindowControls) {
+        if (capabilities.isNativeApplication) {
           windowPort.quit()
         }
         return

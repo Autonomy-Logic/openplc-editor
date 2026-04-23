@@ -1,7 +1,20 @@
+import { ESIService } from '@root/backend/editor/ethercat'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import { RuntimeLogEntry } from '@root/middleware/shared/ports/types'
+import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type {
+  EtherCATRuntimeStatusResponse,
+  EtherCATScanRequest,
+  EtherCATScanResponse,
+  EtherCATServiceStatusResponse,
+  EtherCATTestRequest,
+  EtherCATTestResponse,
+  EtherCATValidateRequest,
+  EtherCATValidateResponse,
+  NetworkInterface,
+} from '@root/types/ethercat'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
@@ -17,7 +30,7 @@ import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
-import { getProjectPath } from '../../../backend/editor/utils'
+import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/utils'
 import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
@@ -51,6 +64,8 @@ class MainProcessBridge implements MainIpcModule {
   private simulatorModule = new SimulatorModule()
   // VPP package manager for board package operations
   private packageManagerModule = new PackageManagerModule()
+  // ESI repository service for EtherCAT device descriptions
+  private esiService = new ESIService()
 
   constructor({
     ipcMain,
@@ -244,8 +259,8 @@ class MainProcessBridge implements MainIpcModule {
     if (responseParser) {
       try {
         return { success: true, data: responseParser(data) }
-      } catch {
-        return { success: false, error: 'Invalid response format' }
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Invalid response format' }
       }
     }
     return { success: true }
@@ -297,6 +312,101 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
+  }
+
+  /**
+   * Wrap a service call with standardized error handling.
+   */
+  private async wrapServiceCall<T>(fn: () => Promise<T>): Promise<T | { success: false; error: string }> {
+    try {
+      return await fn()
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * Make an authenticated POST request to the runtime API with automatic token refresh on 401/403.
+   */
+  makeRuntimeApiPostRequest<T>(
+    ipAddress: string,
+    jwtToken: string,
+    endpoint: string,
+    body: string,
+    responseParser: (data: string) => T,
+    timeoutMs?: number,
+  ): Promise<{ success: true; data: T } | { success: false; error: string }> {
+    type PostResult = { success: true; data: T } | { success: false; error: string; statusCode?: number }
+
+    const doRequest = (token: string): Promise<PostResult> => {
+      return new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: endpoint,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(body),
+              Authorization: `Bearer ${token}`,
+            },
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  resolve({ success: true, data: responseParser(data) })
+                } catch (err) {
+                  resolve({ success: false, error: err instanceof Error ? err.message : 'Invalid response format' })
+                }
+              } else {
+                // Propagate HTTP status so the caller can detect 401/403 for
+                // token-refresh without relying on brittle message parsing.
+                resolve({
+                  success: false,
+                  error: data || `Unexpected status: ${res.statusCode}`,
+                  statusCode: res.statusCode,
+                })
+              }
+            })
+          },
+        )
+        req.setTimeout(timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        req.write(body)
+        req.end()
+      })
+    }
+
+    const stripStatus = (r: PostResult): { success: true; data: T } | { success: false; error: string } =>
+      r.success ? r : { success: false, error: r.error }
+
+    return doRequest(jwtToken).then((result) => {
+      const statusCode = !result.success ? result.statusCode : undefined
+      if (!result.success && this.isTokenExpiredError(statusCode, result.error)) {
+        return this.attemptTokenRefresh().then((refreshResult) => {
+          if (refreshResult.success && refreshResult.accessToken) {
+            if (this.mainWindow && this.mainWindow.webContents) {
+              this.mainWindow.webContents.send('runtime:token-refreshed', refreshResult.accessToken)
+            }
+            return doRequest(refreshResult.accessToken).then(stripStatus)
+          }
+          return { success: false as const, error: `Token refresh failed: ${refreshResult.error || 'Unknown error'}` }
+        })
+      }
+      return stripStatus(result)
+    })
   }
 
   handleRuntimeGetStatus = async (
@@ -477,6 +587,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:create', this.handleProjectCreate)
     this.registerHandle('project:open', this.handleProjectOpen)
     this.registerHandle('project:path-picker', this.handleProjectPathPicker)
+    this.registerHandle('project:open-path-picker', this.handleOpenProjectPathPicker)
     this.registerHandle('project:write-files', this.handleWriteProjectFiles)
     this.registerHandle('project:save-file', this.handleFileSave)
     this.registerHandle('project:open-by-path', this.handleProjectOpenByPath)
@@ -558,6 +669,25 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
 
+    // ===================== ETHERCAT DISCOVERY =====================
+    this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
+    this.registerHandle('ethercat:get-status', this.handleEtherCATGetStatus)
+    this.registerHandle('ethercat:scan', this.handleEtherCATScan)
+    this.registerHandle('ethercat:test', this.handleEtherCATTest)
+    this.registerHandle('ethercat:validate', this.handleEtherCATValidate)
+    this.registerHandle('ethercat:get-runtime-status', this.handleEtherCATGetRuntimeStatus)
+
+    // ===================== ESI REPOSITORY =====================
+    this.registerHandle('esi:load-repository-index', this.handleESILoadRepositoryIndex)
+    this.registerHandle('esi:save-xml-file', this.handleESISaveXmlFile)
+    this.registerHandle('esi:load-xml-file', this.handleESILoadXmlFile)
+    this.registerHandle('esi:delete-xml-file', this.handleESIDeleteXmlFile)
+    this.registerHandle('esi:parse-and-save-file', this.handleESIParseAndSaveFile)
+    this.registerHandle('esi:clear-repository', this.handleESIClearRepository)
+    this.registerHandle('esi:load-device-full', this.handleESILoadDeviceFull)
+    this.registerHandle('esi:load-repository-light', this.handleESILoadRepositoryLight)
+    this.registerHandle('esi:migrate-repository', this.handleESIMigrateRepository)
+
     // ===================== SIMULATOR =====================
     this.registerHandle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
     this.registerHandle('simulator:stop', this.handleSimulatorStop)
@@ -595,6 +725,20 @@ class MainProcessBridge implements MainIpcModule {
       logger.error('Window object not defined')
     } catch (error) {
       logger.error('Error getting project path: ' + getErrorMessage(error))
+    }
+  }
+  handleOpenProjectPathPicker = async (_event: IpcMainInvokeEvent) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getOpenProjectPath(windowManager)
+        return res
+      }
+      logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
+    } catch (error) {
+      logger.error('Error getting project path: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
     }
   }
   handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) => {
@@ -1390,6 +1534,241 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.webContents.send('simulator:stopped')
     }
   }
+
+  // ===================== ETHERCAT DISCOVERY HANDLERS =====================
+
+  handleEtherCATGetInterfaces = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> => {
+    try {
+      const result = await this.makeRuntimeApiRequest<{ interfaces: NetworkInterface[] }>(
+        ipAddress,
+        jwtToken,
+        '/api/discovery/interfaces',
+        (data: string) => {
+          const response = JSON.parse(data) as { status: string; interfaces: NetworkInterface[] }
+          return { interfaces: response.interfaces || [] }
+        },
+      )
+      if (result.success && result.data) {
+        return { success: true, data: result.data.interfaces }
+      } else {
+        return { success: false, error: result.success ? 'No data returned' : result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleEtherCATGetStatus = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }> => {
+    try {
+      const result = await this.makeRuntimeApiRequest<EtherCATServiceStatusResponse>(
+        ipAddress,
+        jwtToken,
+        '/api/discovery/ethercat/status',
+        (data: string) => {
+          const parsed = JSON.parse(data) as unknown
+          if (
+            !parsed ||
+            typeof parsed !== 'object' ||
+            typeof (parsed as { available?: unknown }).available !== 'boolean' ||
+            typeof (parsed as { message?: unknown }).message !== 'string'
+          ) {
+            throw new Error('EtherCAT status response did not match expected shape')
+          }
+          return parsed as EtherCATServiceStatusResponse
+        },
+      )
+      if (result.success && result.data) {
+        return { success: true, data: result.data }
+      } else {
+        return { success: false, error: result.success ? 'No data returned' : result.error }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleEtherCATScan = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+    scanRequest: EtherCATScanRequest,
+  ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> => {
+    try {
+      const postData = JSON.stringify({
+        plugin: 'ethercat',
+        command: 'scan',
+        params: { interface: scanRequest.interface, timeout_ms: scanRequest.timeout_ms },
+      })
+      const scanTimeout = (scanRequest.timeout_ms || 5000) + 10000
+
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        jwtToken,
+        '/api/plugin-command',
+        postData,
+        (data: string) => {
+          const pluginResponse = JSON.parse(data) as Record<string, unknown>
+          if (pluginResponse.error) throw new Error(pluginResponse.error as string)
+          return {
+            status: (pluginResponse.status as string) ?? 'success',
+            devices: (pluginResponse.devices as EtherCATScanResponse['devices']) ?? [],
+            message: (pluginResponse.message as string) ?? '',
+            scan_time_ms: (pluginResponse.scan_time_ms as number) ?? 0,
+            interface: scanRequest.interface,
+          } as EtherCATScanResponse
+        },
+        scanTimeout,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleEtherCATTest = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+    testRequest: EtherCATTestRequest,
+  ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> => {
+    try {
+      const postData = JSON.stringify(testRequest)
+      const testTimeout = (testRequest.timeout_ms || 3000) + 10000
+
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        jwtToken,
+        '/api/discovery/ethercat/test',
+        postData,
+        (data: string) => JSON.parse(data) as EtherCATTestResponse,
+        testTimeout,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleEtherCATValidate = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+    validateRequest: EtherCATValidateRequest,
+  ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> => {
+    try {
+      const postData = JSON.stringify(validateRequest)
+
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        jwtToken,
+        '/api/discovery/ethercat/validate',
+        postData,
+        (data: string) => JSON.parse(data) as EtherCATValidateResponse,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleEtherCATGetRuntimeStatus = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> => {
+    try {
+      const postData = JSON.stringify({
+        plugin: 'ethercat',
+        command: 'status',
+      })
+
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        jwtToken,
+        '/api/plugin-command',
+        postData,
+        (data: string) => {
+          const pluginResponse = JSON.parse(data) as Record<string, unknown>
+          if (pluginResponse.error) throw new Error(pluginResponse.error as string)
+          return pluginResponse as unknown as EtherCATRuntimeStatusResponse
+        },
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  // ===================== ESI REPOSITORY HANDLERS =====================
+
+  handleESILoadRepositoryIndex = async (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.wrapServiceCall(async () => {
+      const index = await this.esiService.loadRepositoryIndex(projectPath)
+      return { success: true as const, data: index }
+    })
+
+  handleESISaveXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string, xmlContent: string) =>
+    this.wrapServiceCall(() => this.esiService.saveXmlFile(projectPath, itemId, xmlContent))
+
+  handleESILoadXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string) =>
+    this.wrapServiceCall(() => this.esiService.loadXmlFile(projectPath, itemId))
+
+  handleESIDeleteXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string) =>
+    this.wrapServiceCall(() => this.esiService.deleteRepositoryItemV2(projectPath, itemId))
+
+  handleESIParseAndSaveFile = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    filename: string,
+    content: string,
+  ) => this.wrapServiceCall(() => this.esiService.parseAndSaveFile(projectPath, filename, content))
+
+  handleESIClearRepository = async (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.wrapServiceCall(() => this.esiService.clearRepository(projectPath))
+
+  handleESILoadDeviceFull = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    itemId: string,
+    deviceIndex: number,
+  ) =>
+    this.wrapServiceCall(async () => {
+      const xmlResult = await this.esiService.loadXmlFile(projectPath, itemId)
+      if (!xmlResult.success || !xmlResult.content) {
+        return { success: false as const, error: xmlResult.error || 'XML file not found' }
+      }
+      return parseESIDeviceFull(xmlResult.content, deviceIndex)
+    })
+
+  handleESILoadRepositoryLight = async (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.wrapServiceCall(() => this.esiService.loadRepositoryLight(projectPath))
+
+  handleESIMigrateRepository = async (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.wrapServiceCall(() => this.esiService.migrateRepositoryToV2(projectPath))
 
   handleSimulatorLoadFirmware = async (
     _event: IpcMainInvokeEvent,

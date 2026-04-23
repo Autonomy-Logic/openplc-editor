@@ -63,6 +63,7 @@ export type { RuntimePort } from './runtime-port'
 export type { SimulatorPort } from './simulator-port'
 export type { SystemPort } from './system-port'
 export type { ThemePort } from './theme-port'
+export type { VersionControlPort } from './version-control-port'
 export type { WindowPort } from './window-port'
 
 // --- Feature toggles ---
@@ -152,3 +153,16 @@ export type {
   UsersInfoResult,
 } from './runtime-port'
 export type { ThemeVariant } from './theme-port'
+export type {
+  Branch,
+  Commit,
+  CommitFile,
+  CommitInfo,
+  DiffStatus,
+  FlowData,
+  GraphicalDiffResult,
+  ListCommitsOptions,
+  ParsedVariable,
+  PendingChange,
+  VarDiffEntry,
+} from './version-control-port'

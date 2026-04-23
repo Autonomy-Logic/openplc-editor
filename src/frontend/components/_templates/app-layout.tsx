@@ -1,12 +1,13 @@
-import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
+import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
-import { useProject, useSystem } from '../../../middleware/shared/providers'
+import { useCapabilities, useProject, useSystem } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
 import { cn } from '../../utils/cn'
 import { ResolutionWarning } from '../_atoms/resolution-warning-message'
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
+import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
 import { RuntimeCreateUserModal, RuntimeLoginModal } from '../_organisms/modals'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
@@ -24,14 +25,11 @@ type AppLayoutProps = ComponentPropsWithoutRef<'main'>
 const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const system = useSystem()
   const projectPort = useProject()
+  const caps = useCapabilities()
   const [showComponent, setShowComponent] = useState(true)
-  const {
-    modals,
-    workspace: {
-      systemConfigs: { OS },
-    },
-    workspaceActions: { setSystemConfigs, setRecent },
-  } = useOpenPLCStore()
+  const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
+  const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
+  const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
 
   // Theme initialization - applies dark class before DisplayMenu mounts
   useEffect(() => {
@@ -68,7 +66,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const showTitleBar = OS !== 'linux'
+  const showTitleBar = !caps.isNativeApplication || OS !== 'linux'
 
   return (
     <>
@@ -120,6 +118,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
+          {modals?.['ai-consent']?.open === true && <AIConsentModal />}
           <AcceleratorHandler />
         </main>
       </div>

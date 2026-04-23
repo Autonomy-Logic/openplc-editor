@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import type { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
@@ -1353,6 +1354,24 @@ class CompilerModule {
     }
   }
 
+  async handleGenerateEthercatConfig(
+    sourceTargetFolderPath: string,
+    projectData: PLCProjectData,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    const ethercatConfig = generateEthercatConfig(projectData.remoteDevices)
+
+    if (ethercatConfig) {
+      const confFolderPath = join(sourceTargetFolderPath, 'conf')
+      await mkdir(confFolderPath, { recursive: true })
+      const configFilePath = join(confFolderPath, 'ethercat.json')
+      await writeFile(configFilePath, ethercatConfig, 'utf-8')
+      handleOutputData('Generated conf/ethercat.json', 'info')
+    } else {
+      handleOutputData('No EtherCAT devices configured, skipping ethercat.json generation', 'info')
+    }
+  }
+
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1639,18 +1658,10 @@ class CompilerModule {
     })
 
     // --- Check for unsupported features on non-v4 targets ---
-    // A VPP board whose manifest target.type is 'runtime-v4' is also a v4 target.
-    const isVppRuntimeV4 = (() => {
-      const packageManager = new PackageManagerModule()
-      for (const pkg of packageManager.listInstalled()) {
-        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
-        if (!manifest) continue
-        const device = manifest.devices.find((d) => d.name === boardTarget)
-        if (device) return device.target.type === 'runtime-v4'
-      }
-      return false
-    })()
-    const isRuntimeV4 = boardTarget === 'OpenPLC Runtime v4' || isVppRuntimeV4
+    // VPP boards with runtime-v4 target type use openplc-compiler and are also v4-capable
+    const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
+    const isRuntimeV4 = boardRuntime === 'openplc-compiler' && !isRuntimeV3
+
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
 
@@ -1904,6 +1915,52 @@ class CompilerModule {
         message: 'Source files generated successfully at: ' + sourceTargetFolderPath,
       })
 
+      // Generate Runtime v4 conf/* files for BOTH compile-only and upload flows.
+      // Without this, compile-only never produces ethercat.json (and other configs),
+      // so users who only want the generated sources miss runtime configuration.
+      if (isRuntimeV4) {
+        try {
+          await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateModbusMasterConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateS7CommConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateOpcUaConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          await this.handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          })
+          // VPP plugin config + source copy for boards whose target is runtime-v4
+          await this.handleVendorPluginPackaging(
+            boardTarget,
+            normalizedProjectPath,
+            sourceTargetFolderPath,
+            (data, logLevel) => {
+              _mainProcessPort.postMessage({ logLevel, message: data })
+            },
+          )
+        } catch (error) {
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message: `Error generating Runtime v4 configs: ${error instanceof Error ? error.message : String(error)}`,
+          })
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message: 'Stopping compilation process.',
+          })
+          _mainProcessPort.close()
+          return
+        }
+      }
+
       if (compileOnly) {
         _mainProcessPort.postMessage({
           logLevel: 'info',
@@ -1935,8 +1992,6 @@ class CompilerModule {
       }
 
       try {
-        const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
-
         let fileBuffer: Buffer
         let filename: string
         let contentType: string
@@ -1958,41 +2013,8 @@ class CompilerModule {
           filename = 'program.st'
           contentType = 'text/plain'
         } else {
-          // Clean conf folder from previous compilations to avoid stale config files
-          await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate Modbus Slave config for Runtime v4
-          await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate Modbus Master config for Runtime v4
-          await this.handleGenerateModbusMasterConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate S7Comm config for Runtime v4
-          await this.handleGenerateS7CommConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate OPC-UA config for Runtime v4
-          await this.handleGenerateOpcUaConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Generate VPP plugin config + copy plugin source (if board is a VPP package)
-          await this.handleVendorPluginPackaging(
-            boardTarget,
-            normalizedProjectPath,
-            sourceTargetFolderPath,
-            (data, logLevel) => {
-              _mainProcessPort.postMessage({ logLevel, message: data })
-            },
-          )
-
+          // Runtime v4 conf/* files were already generated above, before the
+          // compile-only early return, so compile-only flows also get them.
           _mainProcessPort.postMessage({
             logLevel: 'info',
             message: 'Compressing source files for OpenPLC Runtime v4...',

@@ -9,9 +9,10 @@ import { Project } from './project'
 
 type ExplorerProps = {
   collapse: LegacyRef<ImperativePanelHandle> | undefined
+  defaultSize?: number
 }
 
-const Explorer = ({ collapse }: ExplorerProps): ReactElement => {
+const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement => {
   const {
     editor,
     project: {
@@ -64,7 +65,7 @@ const Explorer = ({ collapse }: ExplorerProps): ReactElement => {
       order={1}
       collapsible={true}
       minSize={13}
-      defaultSize={16}
+      defaultSize={defaultSize}
       maxSize={80}
       className="flex h-full w-[200px] max-w-lg flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size='0.0']:hidden dark:border-neutral-850 dark:bg-neutral-950"
     >

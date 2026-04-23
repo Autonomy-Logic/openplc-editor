@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { PLCVariable } from '../../../../../middleware/shared/ports'
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
+import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
+import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
 import { useOpenPLCStore } from '../../../../store'
 import { RungLadderState } from '../../../../store/slices/ladder'
 import { cn } from '../../../../utils/cn'
@@ -36,11 +38,12 @@ const VariableElement = (block: VariableProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: { isDebuggerVisible, debugVariableIndexes, debugForcedVariables },
-    workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
   const debugger_ = useDebugger()
+  const isDebuggerVisible = useIsDebuggerVisible()
   const getCompositeKey = useDebugCompositeKey()
+  const compositeKey = getCompositeKey(data.variable.name)
+  const { isForced, forcedValue: forcedBoolValue, debugIndex } = useDebugValue(compositeKey)
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -254,57 +257,21 @@ const VariableElement = (block: VariableProps) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-
-    if (!data.variable.name) return
-
-    const compositeKey = getCompositeKey(data.variable.name)
-    const variableIndex = debugVariableIndexes.get(compositeKey)
-    if (variableIndex === undefined) return
-
-    const success = await debugger_.setVariable(variableIndex, true, new Uint8Array([1]))
-    if (success) {
-      const newForcedVariables = new Map(debugForcedVariables)
-      newForcedVariables.set(compositeKey, true)
-      setDebugForcedVariables(newForcedVariables)
-    }
+    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
   }
 
   const handleForceFalse = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-
-    if (!data.variable.name) return
-
-    const compositeKey = getCompositeKey(data.variable.name)
-    const variableIndex = debugVariableIndexes.get(compositeKey)
-    if (variableIndex === undefined) return
-
-    const success = await debugger_.setVariable(variableIndex, true, new Uint8Array([0]))
-    if (success) {
-      const newForcedVariables = new Map(debugForcedVariables)
-      newForcedVariables.set(compositeKey, false)
-      setDebugForcedVariables(newForcedVariables)
-    }
+    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
   }
 
   const handleReleaseForce = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-
-    if (!data.variable.name) return
-
-    const compositeKey = getCompositeKey(data.variable.name)
-    const variableIndex = debugVariableIndexes.get(compositeKey)
-    if (variableIndex === undefined) return
-
-    const success = await debugger_.setVariable(variableIndex, false)
-    if (success) {
-      const newForcedVariables = new Map(debugForcedVariables)
-      newForcedVariables.delete(compositeKey)
-      setDebugForcedVariables(newForcedVariables)
-    }
+    if (data.variable.name) await releaseDebugVariable(debugger_, compositeKey, debugIndex)
   }
 
   const handleForceValueOpen = (e: React.MouseEvent) => {
@@ -321,10 +288,7 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
-    const compositeKey = getCompositeKey(data.variable.name)
-    const variableIndex = debugVariableIndexes.get(compositeKey)
-
-    if (variableIndex === undefined) {
+    if (debugIndex === undefined) {
       setForceValueModalOpen(false)
       setForceValue('')
       return
@@ -380,13 +344,7 @@ const VariableElement = (block: VariableProps) => {
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    const success = await debugger_.setVariable(variableIndex, true, valueBuffer)
-
-    if (success) {
-      const newForcedVariables = new Map(debugForcedVariables)
-      newForcedVariables.set(compositeKey, forcedValueForState)
-      setDebugForcedVariables(newForcedVariables)
-    }
+    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState)
 
     setForceValueModalOpen(false)
     setForceValue('')
@@ -415,10 +373,6 @@ const VariableElement = (block: VariableProps) => {
   const variableType = getVariableType()
   const isBoolVariable = variableType?.toUpperCase() === 'BOOL'
 
-  const compositeKey = getCompositeKey(data.variable.name)
-  const isForced = debugForcedVariables.has(compositeKey)
-  const forcedValue2 = debugForcedVariables.get(compositeKey)
-
   return (
     <>
       <div
@@ -433,8 +387,8 @@ const VariableElement = (block: VariableProps) => {
             'text-left placeholder:text-left': data.variant === 'output',
             'text-right placeholder:text-right': data.variant === 'input',
             'font-bold': isForced,
-            'text-[#80C000]': isForced && forcedValue2,
-            'text-[#4080FF]': isForced && !forcedValue2,
+            'text-[#80C000]': isForced && forcedBoolValue,
+            'text-[#4080FF]': isForced && !forcedBoolValue,
           })}
           highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-left placeholder:text-left': data.variant === 'output',

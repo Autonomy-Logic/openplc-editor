@@ -163,6 +163,14 @@ export type EditorModel = EditorModelBase &
           name: string
         }
       }
+    | {
+        type: 'plc-ethercat-device'
+        meta: {
+          name: string
+          busName: string
+          deviceId: string
+        }
+      }
   )
 
 // ---------------------------------------------------------------------------

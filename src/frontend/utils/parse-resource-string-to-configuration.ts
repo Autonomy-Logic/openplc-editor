@@ -108,7 +108,7 @@ export function parseResourceStringToConfiguration(configString: string): {
           name,
           triggering: DEFAULT_TRIGGERING,
           interval: '',
-          priority: 0,
+          priority: 1,
         }
 
         if (params) {

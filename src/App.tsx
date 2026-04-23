@@ -1,6 +1,6 @@
 import '@xyflow/react/dist/style.css'
 import 'tailwindcss/tailwind.css'
-import './backend/styles/globals.css'
+import './backend/shared/styles/globals.css'
 
 import { useEffect } from 'react'
 
@@ -27,7 +27,7 @@ import {
 import { StartScreen } from './frontend/screens/start-screen'
 import { WorkspaceScreen } from './frontend/screens/workspace-screen'
 import { openPLCStoreBase, useOpenPLCStore } from './frontend/store'
-import { editorPorts, setRuntimeIpAddress } from './middleware/editor-platform'
+import { editorPorts, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { PlatformProvider } from './middleware/shared/providers'
 
 // Initialize system libraries at module load time (before first render)
@@ -65,6 +65,12 @@ export default function App() {
   useEffect(() => {
     setRuntimeIpAddress(runtimeIpAddress)
   }, [runtimeIpAddress])
+
+  // Sync project path to the platform adapter so the ESI port can access it
+  const projectPath = useOpenPLCStore((state) => state.project.meta.path)
+  useEffect(() => {
+    setProjectPath(projectPath)
+  }, [projectPath])
 
   return (
     <PlatformProvider ports={editorPorts}>

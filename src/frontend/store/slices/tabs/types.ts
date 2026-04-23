@@ -16,6 +16,7 @@ export type TabsProps = {
     | { type: 'remote-device'; protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet' }
     | { type: 'vendor-screen'; screenName: string }
     | { type: 'package-manager' }
+    | { type: 'ethercat-device'; busName: string; deviceId: string }
   configuration?: Record<string, unknown>
 }
 

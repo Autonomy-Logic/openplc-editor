@@ -266,6 +266,16 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
         JSON.stringify(device, null, 2),
       )
       if (!res.success) return fail(res.error ?? 'Save failed')
+    } else if (file.type === 'ethercat-device') {
+      // Slave devices live inside the parent bus file. filePath holds the bus name.
+      const busName = file.filePath
+      const bus = project.data.remoteDevices?.find((d) => d.name === busName)
+      if (!bus) return fail(`Parent bus "${busName}" not found for device "${fileName}".`)
+      const res = await projectPort.saveFile(
+        joinPath(projectPath, 'devices/remote', `${busName}.json`),
+        JSON.stringify(bus, null, 2),
+      )
+      if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
       // data-type, resource: live in project.json
       const debugVariables = collectDebugVariables(

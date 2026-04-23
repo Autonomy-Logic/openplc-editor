@@ -17,6 +17,7 @@ import type { ModalSlice } from '../modal'
 import type { ProjectSlice } from '../project'
 import type { SearchSlice } from '../search'
 import type { TabsSlice } from '../tabs'
+import type { VersionControlSlice } from '../version-control'
 import type { WorkspaceSlice } from '../workspace'
 
 // ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ export type SharedRootState = ProjectSlice &
   FBDFlowSlice &
   LadderFlowSlice &
   HistorySlice &
+  VersionControlSlice &
   SharedSlice
 
 // ---------------------------------------------------------------------------
@@ -105,6 +107,11 @@ export type RemoteDeviceActions = {
   rename: (oldName: string, newName: string) => SharedResponse
 }
 
+export type EtherCATDeviceActions = {
+  delete: (busName: string, deviceId: string) => SharedResponse
+  rename: (busName: string, deviceId: string, newName: string) => SharedResponse
+}
+
 export type SnapshotActions = {
   pushToHistory: (pouName: string, snapshot: PouHistorySnapshot) => void
   markSaved: (pouName: string) => void
@@ -149,6 +156,7 @@ export type SharedSlice = {
   datatypeActions: DatatypeActions
   serverActions: ServerActions
   remoteDeviceActions: RemoteDeviceActions
+  ethercatDeviceActions: EtherCATDeviceActions
   snapshotActions: SnapshotActions
   sharedWorkspaceActions: SharedWorkspaceActions
 }

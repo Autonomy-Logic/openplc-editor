@@ -135,5 +135,61 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
       }
       return window.bridge.onRuntimeTokenRefreshed(handler)
     },
+
+    // --- EtherCAT Discovery ---
+
+    async getNetworkInterfaces() {
+      try {
+        const ip = requireIp()
+        return await window.bridge.etherCATGetInterfaces(ip, jwtToken)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getEthercatServiceStatus() {
+      try {
+        const ip = requireIp()
+        return await window.bridge.etherCATGetStatus(ip, jwtToken)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async scanEthercatDevices(request) {
+      try {
+        const ip = requireIp()
+        return await window.bridge.etherCATScan(ip, jwtToken, request)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async testEthercatConnection(request) {
+      try {
+        const ip = requireIp()
+        return await window.bridge.etherCATTest(ip, jwtToken, request)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async validateEthercatConfig(request) {
+      try {
+        const ip = requireIp()
+        return await window.bridge.etherCATValidate(ip, jwtToken, request)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getEthercatRuntimeStatus() {
+      try {
+        const ip = requireIp()
+        return await window.bridge.etherCATGetRuntimeStatus(ip, jwtToken)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
   }
 }
