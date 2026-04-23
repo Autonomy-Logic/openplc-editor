@@ -234,3 +234,21 @@
 [role='listbox'] {
   z-index: 1000 !important;
 }
+
+/* AI Diff Review decorations */
+.ai-diff-added {
+  background: rgba(34, 197, 94, 0.12) !important;
+}
+.dark .ai-diff-added {
+  background: rgba(34, 197, 94, 0.1) !important;
+}
+.ai-diff-added-gutter {
+  background: rgba(34, 197, 94, 0.3) !important;
+  border-left: 3px solid #22c55e !important;
+}
+.ai-diff-removed-zone {
+  background: rgba(239, 68, 68, 0.06);
+}
+.dark .ai-diff-removed-zone {
+  background: rgba(239, 68, 68, 0.08);
+}
