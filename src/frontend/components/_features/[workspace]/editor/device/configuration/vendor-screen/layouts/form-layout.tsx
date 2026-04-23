@@ -1,6 +1,7 @@
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
 import { useOpenPLCStore } from '@root/frontend/store'
 
 import type { ScreenSection } from '../index'
@@ -22,6 +23,30 @@ type FormLayoutProps = {
   section: ScreenSection
 }
 
+// Small "info" glyph that reveals the field's help text on hover.
+function FieldHelpIcon({ text }: { text: string }) {
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          aria-label='Field help'
+          className='inline-flex h-3.5 w-3.5 cursor-help select-none items-center justify-center rounded-full text-neutral-400 hover:text-neutral-600 focus:outline-none focus-visible:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
+        >
+          <svg viewBox='0 0 16 16' fill='none' className='h-3.5 w-3.5'>
+            <circle cx='8' cy='8' r='7' stroke='currentColor' strokeWidth='1.5' />
+            <path d='M8 7.25v4.25' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
+            <circle cx='8' cy='4.75' r='0.85' fill='currentColor' />
+          </svg>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side='right' align='start' sideOffset={6} className='text-xs'>
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function FormLayout({ section }: FormLayoutProps) {
   const fields = (section.fields ?? []) as FieldDef[]
 
@@ -40,10 +65,10 @@ function FormLayout({ section }: FormLayoutProps) {
   }
 
   return (
-    <div className='flex flex-col gap-3'>
-      {fields.map((field) => (
-        <div key={field.id} className='flex flex-col gap-1'>
-          <div className='flex items-center gap-2'>
+    <TooltipProvider>
+      <div className='flex flex-col gap-3'>
+        {fields.map((field) => (
+          <div key={field.id} className='flex items-center gap-2'>
             {field.type === 'boolean' ? (
               <>
                 <Checkbox
@@ -59,6 +84,7 @@ function FormLayout({ section }: FormLayoutProps) {
                 <Label htmlFor={`vendor-field-${field.id}`} className='text-xs text-neutral-950 dark:text-white'>
                   {field.label}
                 </Label>
+                {field.help && <FieldHelpIcon text={field.help} />}
               </>
             ) : (
               <>
@@ -116,13 +142,13 @@ function FormLayout({ section }: FormLayoutProps) {
                     className='flex h-[30px] w-48 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                   />
                 )}
+                {field.help && <FieldHelpIcon text={field.help} />}
               </>
             )}
           </div>
-          {field.help && <span className='ml-32 text-[11px] text-neutral-400 dark:text-neutral-500'>{field.help}</span>}
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </TooltipProvider>
   )
 }
 
