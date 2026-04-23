@@ -37,7 +37,6 @@ import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import type { ArduinoCoreControl, HalsFile } from './types'
-import { FormatMacAddress } from './utils/formatters'
 
 interface MethodsResult<T> {
   success: boolean
@@ -744,9 +743,6 @@ class CompilerModule {
 
     // === Files contents that we need ===
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
-    const {
-      communicationConfiguration: { modbusRTU, modbusTCP, communicationPreferences },
-    } = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
     const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
     const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
 
@@ -786,55 +782,26 @@ class CompilerModule {
     DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
     DEFINES_CONTENT += `\n\n`
 
-    // 3.2. Device Configuration
-    DEFINES_CONTENT += '//Comms Configuration\n'
+    // 3.2. Simulator communication defines
+    //
+    // Baremetal/Arduino-family targets used to emit a full //Comms
+    // Configuration block here, read from deviceConfigurationSchema's
+    // communicationConfiguration field. That schema is gone — Arduino
+    // targets will return as VPP packages and each package owns its
+    // own defines emission. The only target still emitting communication
+    // defines from the core compiler is the built-in simulator.
     if (boardRuntime === 'simulator') {
       // Simulator forces fixed Modbus RTU settings over emulated USART0.
       // On ATmega2560, Serial = USART0. avr8js bridges usart0.
+      DEFINES_CONTENT += '//Comms Configuration\n'
       DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
       DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial\n'
       DEFINES_CONTENT += '#define MBSERIAL_BAUD 115200\n'
       DEFINES_CONTENT += '#define MBSERIAL_SLAVE 1\n'
-    } else {
-      DEFINES_CONTENT += `#define MBSERIAL_IFACE ${modbusRTU.rtuInterface}\n`
-      DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
-      if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
-      if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
-    }
-    if (modbusTCP.tcpMacAddress !== null)
-      DEFINES_CONTENT += `#define MBTCP_MAC ${FormatMacAddress(modbusTCP.tcpMacAddress)}\n`
-    // OBS: This is giving us an empty string and this is being printed as a space
-    if (modbusTCP.tcpStaticHostConfiguration.ipAddress !== null)
-      DEFINES_CONTENT += `#define MBTCP_IP ${modbusTCP.tcpStaticHostConfiguration.ipAddress.replaceAll('.', ',')}\n`
-    if (modbusTCP.tcpStaticHostConfiguration.dns !== null)
-      DEFINES_CONTENT += `#define MBTCP_DNS ${modbusTCP.tcpStaticHostConfiguration.dns.replaceAll('.', ',')}\n`
-    if (modbusTCP.tcpStaticHostConfiguration.gateway !== null)
-      DEFINES_CONTENT += `#define MBTCP_GATEWAY ${modbusTCP.tcpStaticHostConfiguration.gateway.replaceAll('.', ',')}\n`
-    if (modbusTCP.tcpStaticHostConfiguration.subnet !== null)
-      DEFINES_CONTENT += `#define MBTCP_SUBNET ${modbusTCP.tcpStaticHostConfiguration.subnet.replaceAll('.', ',')}\n`
-
-    if (communicationPreferences.enabledRTU || boardRuntime === 'simulator') {
       DEFINES_CONTENT += '#define MBSERIAL\n'
       DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
+      DEFINES_CONTENT += `\n\n`
     }
-
-    if (communicationPreferences.enabledTCP) {
-      DEFINES_CONTENT += '#define MBTCP\n'
-      DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
-      if (modbusTCP.tcpInterface === 'Wi-Fi') {
-        if (modbusTCP.tcpWifiSSID !== null) {
-          DEFINES_CONTENT += `#define MBTCP_SSID "${modbusTCP.tcpWifiSSID}"\n`
-        }
-        if (modbusTCP.tcpWifiPassword !== null) {
-          DEFINES_CONTENT += `#define MBTCP_PWD "${modbusTCP.tcpWifiPassword}"\n`
-        }
-        DEFINES_CONTENT += '#define MBTCP_WIFI\n'
-      } else {
-        DEFINES_CONTENT += '#define MBTCP_ETHERNET\n'
-      }
-    }
-
-    DEFINES_CONTENT += `\n\n`
 
     // INFO: If null, only the define value
     // 3.3. IO Config defines

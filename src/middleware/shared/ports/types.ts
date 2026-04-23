@@ -537,10 +537,6 @@ export interface PackageManifest {
     }
     defaults?: {
       runtimeIpAddress?: string
-      communicationPreferences?: {
-        enabledRTU?: boolean
-        enabledTCP?: boolean
-      }
       pins?: {
         defaultDin?: string[]
         defaultDout?: string[]
@@ -609,41 +605,12 @@ export interface DevicePin {
   name?: string
 }
 
-export interface ModbusRTUConfig {
-  rtuInterface: string
-  rtuBaudRate: string
-  rtuSlaveId: number | null
-  rtuRS485ENPin: string | null
-}
-
-export interface ModbusTCPConfig {
-  tcpInterface: string
-  tcpMacAddress: string | null
-  tcpWifiSSID?: string | null
-  tcpWifiPassword?: string | null
-  tcpStaticHostConfiguration: {
-    ipAddress: string
-    dns: string
-    gateway: string
-    subnet: string
-  }
-}
-
 export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
   runtimeIpAddress?: string
   compileOnly: boolean
   vendorScreenData?: Record<string, unknown>
-  communicationConfiguration: {
-    modbusRTU: ModbusRTUConfig
-    modbusTCP: ModbusTCPConfig
-    communicationPreferences: {
-      enabledRTU: boolean
-      enabledTCP: boolean
-      enabledDHCP: boolean
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------

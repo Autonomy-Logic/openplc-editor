@@ -42,10 +42,6 @@ type PackageManifest = {
     }
     defaults?: {
       runtimeIpAddress?: string
-      communicationPreferences?: {
-        enabledRTU?: boolean
-        enabledTCP?: boolean
-      }
       pins?: {
         defaultDin?: string[]
         defaultDout?: string[]

@@ -161,7 +161,6 @@ const createProjectDefaultStructure = (
       switch (file) {
         case 'devices/configuration.json':
           content.deviceConfiguration = defaultValue as DeviceConfiguration
-          content.deviceConfiguration.communicationConfiguration.modbusRTU.rtuBaudRate = '115200'
           try {
             CreateJSONFile(filePath, JSON.stringify(content.deviceConfiguration, null, 2), fileName.split('.')[0])
           } catch (error) {

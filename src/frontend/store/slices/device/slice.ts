@@ -16,9 +16,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
   deviceAvailableOptions: {
     availableBoards: new Map(),
     availableCommunicationPorts: [],
-    availableRTUInterfaces: ['Serial', 'Serial1', 'Serial2', 'Serial3'],
-    availableRTUBaudRates: ['9600', '14400', '19200', '38400', '57600', '115200'],
-    availableTCPInterfaces: ['Ethernet', 'Wi-Fi'],
   },
   deviceDefinitions: {
     configuration: defaultDeviceConfiguration,
@@ -321,93 +318,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    setCommunicationPreferences: (preferences) => {
-      setState(
-        produce(({ deviceDefinitions: { configuration }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (preferences.enableRTU !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledRTU = preferences.enableRTU
-          }
-          if (preferences.enableTCP !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledTCP = preferences.enableTCP
-          }
-          if (preferences.enableDHCP !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledDHCP = preferences.enableDHCP
-          }
-        }),
-      )
-    },
-    setRTUConfig: (rtuConfigOption): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          const { rtuConfig, value } = rtuConfigOption
-          switch (rtuConfig) {
-            case 'rtuBaudRate':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuBaudRate = value
-              break
-            case 'rtuInterface':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuInterface = value
-              break
-            case 'rtuSlaveId':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuSlaveId = value
-              break
-            case 'rtuRS485ENPin':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuRS485ENPin = value
-              break
-          }
-        }),
-      )
-    },
-    setTCPConfig: (tcpConfigOption): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          const { tcpConfig, value } = tcpConfigOption
-          switch (tcpConfig) {
-            case 'tcpInterface':
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface = value
-              break
-            case 'tcpMacAddress':
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpMacAddress = value
-              break
-          }
-        }),
-      )
-    },
-    setWifiConfig: (wifiConfig): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'Wi-Fi') {
-            if (wifiConfig.tcpWifiSSID)
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.tcpWifiSSID
-            if (wifiConfig.tcpWifiPassword)
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiPassword =
-                wifiConfig.tcpWifiPassword
-          }
-        }),
-      )
-    },
-    setStaticHostConfiguration: (staticHostConfiguration): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (staticHostConfiguration.ipAddress !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.ipAddress =
-              staticHostConfiguration.ipAddress
-          if (staticHostConfiguration.dns !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.dns =
-              staticHostConfiguration.dns
-          if (staticHostConfiguration.gateway !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.gateway =
-              staticHostConfiguration.gateway
-          if (staticHostConfiguration.subnet !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.subnet =
-              staticHostConfiguration.subnet
-        }),
-      )
-    },
     setCompileOnly: (compileOnly): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
@@ -473,13 +383,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    setTemporaryDhcpIp: (ipAddress): void => {
-      setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
-          deviceDefinitions.temporaryDhcpIp = ipAddress
-        }),
-      )
-    },
     clearRuntimeConnection: (): void => {
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
@@ -518,19 +421,6 @@ function mergeDeviceConfigWithDefaults(
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
     compileOnly: provided.compileOnly ?? defaults.compileOnly,
     vendorScreenData: provided.vendorScreenData ?? defaults.vendorScreenData,
-    communicationConfiguration: {
-      modbusRTU: {
-        ...defaults.communicationConfiguration.modbusRTU,
-        ...(provided.communicationConfiguration?.modbusRTU || {}),
-      },
-      modbusTCP: provided.communicationConfiguration?.modbusTCP?.tcpInterface
-        ? provided.communicationConfiguration.modbusTCP
-        : defaults.communicationConfiguration.modbusTCP,
-      communicationPreferences: {
-        ...defaults.communicationConfiguration.communicationPreferences,
-        ...(provided.communicationConfiguration?.communicationPreferences || {}),
-      },
-    },
   }
 }
 

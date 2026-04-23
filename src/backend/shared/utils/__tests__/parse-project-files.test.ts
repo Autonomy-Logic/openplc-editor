@@ -30,29 +30,6 @@ function makeDeviceConfig() {
     deviceBoard: 'uno',
     communicationPort: 'COM1',
     compileOnly: false,
-    communicationConfiguration: {
-      modbusRTU: {
-        rtuInterface: 'Serial',
-        rtuBaudRate: '9600',
-        rtuSlaveId: null,
-        rtuRS485ENPin: null,
-      },
-      modbusTCP: {
-        tcpInterface: 'Ethernet',
-        tcpMacAddress: null,
-        tcpStaticHostConfiguration: {
-          ipAddress: '0.0.0.0',
-          dns: '0.0.0.0',
-          gateway: '0.0.0.0',
-          subnet: '0.0.0.0',
-        },
-      },
-      communicationPreferences: {
-        enabledRTU: false,
-        enabledTCP: false,
-        enabledDHCP: false,
-      },
-    },
   })
 }
 
@@ -452,10 +429,12 @@ describe('parseProjectFiles — device config error paths', () => {
   })
 
   it('uses defaults when device config has invalid structure', () => {
+    // deviceBoard must be a string — feeding a number forces a Zod
+    // validation failure, exercising the invalid-structure fallback.
     const result = parseProjectFiles(
       '/p',
       makeProjectJson(),
-      JSON.stringify({ foo: 'bar' }),
+      JSON.stringify({ deviceBoard: 123 }),
       makePinMapping(),
       [],
       [],

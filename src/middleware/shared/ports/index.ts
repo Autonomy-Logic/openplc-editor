@@ -92,8 +92,6 @@ export type {
   // Console
   LogObject,
   Md5VerifyResult,
-  ModbusRTUConfig,
-  ModbusTCPConfig,
   PinType,
   // System
   Platform,

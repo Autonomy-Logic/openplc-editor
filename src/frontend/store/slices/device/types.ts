@@ -14,9 +14,6 @@ import type {
 export type DeviceAvailableOptions = {
   availableBoards: Map<string, BoardInfo>
   availableCommunicationPorts: CommunicationPort[]
-  availableRTUInterfaces: string[]
-  availableRTUBaudRates: string[]
-  availableTCPInterfaces: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +63,6 @@ export type DeviceState = {
   deviceDefinitions: {
     configuration: DeviceConfiguration
     pinMapping: DevicePinMapping
-    temporaryDhcpIp?: string
   }
   deviceUpdated: {
     updated: boolean
@@ -77,16 +73,6 @@ export type DeviceState = {
 // ---------------------------------------------------------------------------
 // Action parameter types
 // ---------------------------------------------------------------------------
-
-export type RTUConfigParam =
-  | { rtuConfig: 'rtuInterface'; value: string }
-  | { rtuConfig: 'rtuBaudRate'; value: string }
-  | { rtuConfig: 'rtuSlaveId'; value: number }
-  | { rtuConfig: 'rtuRS485ENPin'; value: string | null }
-
-export type TCPConfigParam =
-  | { tcpConfig: 'tcpInterface'; value: string }
-  | { tcpConfig: 'tcpMacAddress'; value: string }
 
 export type PinUpdateResponse = {
   ok: boolean
@@ -121,11 +107,6 @@ export type DeviceActions = {
   updatePin: (updatedData: Partial<DevicePin>) => PinUpdateResponse
   setDeviceBoard: (board: string) => void
   setCommunicationPort: (port: string) => void
-  setCommunicationPreferences: (prefs: { enableRTU?: boolean; enableTCP?: boolean; enableDHCP?: boolean }) => void
-  setRTUConfig: (config: RTUConfigParam) => void
-  setTCPConfig: (config: TCPConfigParam) => void
-  setWifiConfig: (config: { tcpWifiSSID?: string; tcpWifiPassword?: string }) => void
-  setStaticHostConfiguration: (config: { ipAddress?: string; dns?: string; gateway?: string; subnet?: string }) => void
   setCompileOnly: (compileOnly: boolean) => void
   setRuntimeIpAddress: (ipAddress: string) => void
   setRuntimeJwtToken: (token: string | null) => void
@@ -135,7 +116,6 @@ export type DeviceActions = {
   setStoredCredentials: (credentials: StoredCredentials | null) => void
   setTimingStats: (stats: TimingStats | null) => void
   setIncludeTimingStatsInPolling: (include: boolean) => void
-  setTemporaryDhcpIp: (ipAddress?: string) => void
   clearRuntimeConnection: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
 }

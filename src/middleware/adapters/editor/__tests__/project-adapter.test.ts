@@ -43,15 +43,6 @@ const mockIpcProjectResponse = {
         deviceBoard: 'Arduino Uno',
         communicationPort: '/dev/ttyUSB0',
         compileOnly: false,
-        communicationConfiguration: {
-          modbusRTU: { rtuInterface: '', rtuBaudRate: '115200', rtuSlaveId: null, rtuRS485ENPin: null },
-          modbusTCP: {
-            tcpInterface: 'eth0',
-            tcpMacAddress: null,
-            tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
-          },
-          communicationPreferences: { enabledRTU: false, enabledTCP: false, enabledDHCP: true },
-        },
       },
       devicePinMapping: [{ pin: '2', pinType: 'digitalInput', address: '%IX0.0' }],
     },
@@ -92,15 +83,6 @@ const mockRawProjectFiles = {
       deviceBoard: 'Arduino Uno',
       communicationPort: '/dev/ttyUSB0',
       compileOnly: false,
-      communicationConfiguration: {
-        modbusRTU: { rtuInterface: '', rtuBaudRate: '115200', rtuSlaveId: null, rtuRS485ENPin: null },
-        modbusTCP: {
-          tcpInterface: 'eth0',
-          tcpMacAddress: null,
-          tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
-        },
-        communicationPreferences: { enabledRTU: false, enabledTCP: false, enabledDHCP: true },
-      },
     }),
     pinMapping: JSON.stringify([{ pin: '2', pinType: 'digitalInput', address: '%IX0.0' }]),
     pouFiles: [
