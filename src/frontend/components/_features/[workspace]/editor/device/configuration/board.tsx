@@ -336,25 +336,31 @@ const Board = memo(function () {
   }, [setIncludeTimingStatsInPolling])
 
   return (
-    <DeviceEditorSlot heading='Board Settings'>
-      {!isSimulatorTarget(currentBoardInfo) && (
-        <div id='compile-only-container' className='flex select-none items-center gap-2'>
-          <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
-            Compile Only
-          </Label>
-          <Checkbox
-            id='compile-only-checkbox'
-            className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
-            checked={compileOnly}
-            onCheckedChange={handleCompileOnly}
-          />
-        </div>
-      )}
-      <div id='board-selection-container' className='flex h-2/5 min-h-[325px] w-full justify-between'>
+    <DeviceEditorSlot>
+      <div
+        id='board-selection-container'
+        className='flex w-full flex-wrap items-start gap-8 lg:gap-16'
+      >
         <div
           id='board-preferences-container'
-          className='flex h-full w-1/2 max-w-[400px] flex-col items-start justify-start gap-3 overflow-hidden'
+          className='flex w-[360px] flex-shrink-0 flex-col items-start justify-start gap-3'
         >
+          <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
+            Board Settings
+          </h2>
+          {!isSimulatorTarget(currentBoardInfo) && (
+            <div id='compile-only-container' className='flex select-none items-center gap-2'>
+              <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
+                Compile Only
+              </Label>
+              <Checkbox
+                id='compile-only-checkbox'
+                className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
+                checked={compileOnly}
+                onCheckedChange={handleCompileOnly}
+              />
+            </div>
+          )}
           <div id='board-selector' className='flex w-full items-center justify-start gap-1 pr-5'>
             <Label id='device-selector-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Device
@@ -539,15 +545,24 @@ const Board = memo(function () {
             </div>
           )}
         </div>
-        <div id='board-preview-container' className='flex h-full w-1/2 items-center justify-center pb-8'>
+        <div id='board-preview-container' className='flex flex-shrink-0 items-start'>
           <div className='h-[16rem] w-[20rem]'>
             <img src={previewImage} alt='Device preview' className='h-full w-full object-contain' />
           </div>
         </div>
       </div>
-      {!isSimulatorTarget(currentBoardInfo) && (
-        <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-      )}
+      {(() => {
+        // Only draw the divider when there's actually content below it:
+        // Runtime targets render stats only when connected with data; pin
+        // mapping (future Arduino-family VPP path) always renders.
+        const isSim = isSimulatorTarget(currentBoardInfo)
+        const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
+        const hasStats = connectionStatus === 'connected' && timingStats && timingStats.scan_count > 0
+        const showDivider = !isSim && (isRuntime ? hasStats : true)
+        return showDivider ? (
+          <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
+        ) : null
+      })()}
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
         connectionStatus === 'connected' &&
         timingStats &&
