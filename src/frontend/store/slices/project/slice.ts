@@ -495,24 +495,36 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }
       }
 
+      let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
           const variables =
             scope === 'local' && associatedPou
               ? slice.project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables
               : slice.project.data.configurations.resource.globalVariables
-          if (!variables) return
+          if (!variables) {
+            response = fail('Variable container not found')
+            return
+          }
 
           if (variableName) {
             const idx = variables.findIndex((v) => v.name.toLowerCase() === variableName.toLowerCase())
-            if (idx !== -1) variables.splice(idx, 1)
+            if (idx === -1) {
+              response = fail(`Variable "${variableName}" not found`, 'Variable not found')
+              return
+            }
+            variables.splice(idx, 1)
             return
           }
           const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
-          if (found) variables.splice(found.index, 1)
+          if (!found) {
+            response = fail('Variable not found')
+            return
+          }
+          variables.splice(found.index, 1)
         }),
       )
-      return ok()
+      return response
     },
     rearrangeVariables: ({ scope, associatedPou, rowId, variableId, newIndex }) => {
       setState(

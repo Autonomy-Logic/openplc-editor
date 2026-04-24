@@ -39,7 +39,6 @@ describe('createAISlice', () => {
       expect(ai.isEnabled).toBe(false)
       expect(ai.isLoading).toBe(false)
       expect(ai.hasConsented).toBe(false)
-      expect(ai.model).toBe('haiku')
       expect(ai.creditsUsed).toBe(0)
       expect(ai.creditsTotal).toBe(500)
       expect(ai.tier).toBe('free')
@@ -49,6 +48,21 @@ describe('createAISlice', () => {
       expect(ai.isAgenticLoopRunning).toBe(false)
       expect(ai.isChatOpen).toBe(false)
       expect(ai.error).toBeNull()
+      expect(ai.preferences).toEqual({ inlineCompletionsEnabled: true })
+      expect(ai.pendingDiffs).toEqual({})
+    })
+  })
+
+  describe('setPreference', () => {
+    it('toggles inlineCompletionsEnabled off', () => {
+      store.getState().aiActions.setPreference('inlineCompletionsEnabled', false)
+      expect(store.getState().ai.preferences.inlineCompletionsEnabled).toBe(false)
+    })
+
+    it('toggles inlineCompletionsEnabled back on', () => {
+      store.getState().aiActions.setPreference('inlineCompletionsEnabled', false)
+      store.getState().aiActions.setPreference('inlineCompletionsEnabled', true)
+      expect(store.getState().ai.preferences.inlineCompletionsEnabled).toBe(true)
     })
   })
 
@@ -92,19 +106,6 @@ describe('createAISlice', () => {
       store.getState().aiActions.setAIConsented(true)
       store.getState().aiActions.setAIConsented(false)
       expect(store.getState().ai.hasConsented).toBe(false)
-    })
-  })
-
-  describe('setAIModel', () => {
-    it('changes the model to sonnet', () => {
-      store.getState().aiActions.setAIModel('sonnet')
-      expect(store.getState().ai.model).toBe('sonnet')
-    })
-
-    it('changes the model back to haiku', () => {
-      store.getState().aiActions.setAIModel('sonnet')
-      store.getState().aiActions.setAIModel('haiku')
-      expect(store.getState().ai.model).toBe('haiku')
     })
   })
 
@@ -327,6 +328,82 @@ describe('createAISlice', () => {
       expect(store.getState().ai.isChatOpen).toBe(false)
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Pending diff review (per-POU)
+  // ---------------------------------------------------------------------------
+
+  describe('pendingDiffs', () => {
+    const sampleEntry = {
+      oldBody: 'OLD',
+      newBody: 'NEW',
+      hunks: [{ id: 'h1', type: 'added' as const, startLine: 1, endLine: 1, newLines: ['NEW'], oldLines: [] }],
+      acceptedHunks: ['h1'],
+    }
+
+    it('defaults to empty object', () => {
+      expect(store.getState().ai.pendingDiffs).toEqual({})
+    })
+
+    it('setPendingDiff writes an entry keyed by POU name', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      expect(store.getState().ai.pendingDiffs.main).toEqual(sampleEntry)
+    })
+
+    it('supports multiple POUs simultaneously', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      store.getState().aiActions.setPendingDiff('helper', { ...sampleEntry, oldBody: 'OLD2' })
+      expect(Object.keys(store.getState().ai.pendingDiffs)).toEqual(['main', 'helper'])
+    })
+
+    it('updatePendingDiffAcceptedHunks updates only the acceptedHunks of an existing entry', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      store.getState().aiActions.updatePendingDiffAcceptedHunks('main', [])
+      expect(store.getState().ai.pendingDiffs.main.acceptedHunks).toEqual([])
+      expect(store.getState().ai.pendingDiffs.main.newBody).toBe('NEW')
+    })
+
+    it('updatePendingDiffAcceptedHunks is a no-op for missing POU', () => {
+      store.getState().aiActions.updatePendingDiffAcceptedHunks('nope', ['x'])
+      expect(store.getState().ai.pendingDiffs.nope).toBeUndefined()
+    })
+
+    it('updatePendingDiff replaces newBody + hunks + acceptedHunks atomically', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      const freshHunks = [
+        { id: 'h2', type: 'modified' as const, startLine: 2, endLine: 2, newLines: ['X'], oldLines: ['Y'] },
+      ]
+      store
+        .getState()
+        .aiActions.updatePendingDiff('main', { newBody: 'NEWER', hunks: freshHunks, acceptedHunks: ['h2'] })
+      const entry = store.getState().ai.pendingDiffs.main
+      expect(entry.newBody).toBe('NEWER')
+      expect(entry.hunks).toEqual(freshHunks)
+      expect(entry.acceptedHunks).toEqual(['h2'])
+      // Old body preserved
+      expect(entry.oldBody).toBe('OLD')
+    })
+
+    it('updatePendingDiff is a no-op for missing POU', () => {
+      store.getState().aiActions.updatePendingDiff('nope', { newBody: 'x', hunks: [], acceptedHunks: [] })
+      expect(store.getState().ai.pendingDiffs.nope).toBeUndefined()
+    })
+
+    it('clearPendingDiff removes a specific POU entry', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      store.getState().aiActions.setPendingDiff('helper', sampleEntry)
+      store.getState().aiActions.clearPendingDiff('main')
+      expect(store.getState().ai.pendingDiffs.main).toBeUndefined()
+      expect(store.getState().ai.pendingDiffs.helper).toBeDefined()
+    })
+
+    it('clearAllPendingDiffs resets to empty', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      store.getState().aiActions.setPendingDiff('helper', sampleEntry)
+      store.getState().aiActions.clearAllPendingDiffs()
+      expect(store.getState().ai.pendingDiffs).toEqual({})
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -342,16 +419,26 @@ describe('createAISliceFactory', () => {
   })
 
   it('overrides isEnabled and hasConsented from config', () => {
-    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }))
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true, inlineCompletionsEnabled: true }),
+    )
     const { ai } = store.getState()
     expect(ai.isEnabled).toBe(true)
     expect(ai.hasConsented).toBe(true)
   })
 
+  it('hydrates inlineCompletionsEnabled preference from config', () => {
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true, inlineCompletionsEnabled: false }),
+    )
+    expect(store.getState().ai.preferences.inlineCompletionsEnabled).toBe(false)
+  })
+
   it('preserves other default values when config is provided', () => {
-    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false }))
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false, inlineCompletionsEnabled: true }),
+    )
     const { ai } = store.getState()
-    expect(ai.model).toBe('haiku')
     expect(ai.creditsUsed).toBe(0)
     expect(ai.creditsTotal).toBe(500)
     expect(ai.tier).toBe('free')
@@ -364,7 +451,9 @@ describe('createAISliceFactory', () => {
   })
 
   it('creates functional actions when config is provided', () => {
-    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }))
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true, inlineCompletionsEnabled: true }),
+    )
     store.getState().aiActions.setAIEnabled(false)
     expect(store.getState().ai.isEnabled).toBe(false)
   })

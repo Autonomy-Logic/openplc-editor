@@ -2,24 +2,21 @@ import * as monaco from 'monaco-editor'
 
 import type { DiffHunk } from '../../../../../utils/ai-diff-review'
 
+// Brand colors (must match src/backend/shared/styles/globals.css :root vars)
+const BRAND_DEFAULT = '#0464fb'
+const BRAND_MEDIUM_DARK = '#023c97'
+// Subtle 10%-alpha tint of the brand color — used for the outlined Reject button's hover.
+// The solid BRAND_LIGHT (#b4d0fe) was too loud against the blue text/border.
+const REJECT_HOVER_BG = 'rgba(4, 100, 251, 0.1)'
+
 /** Render all diff review UI for the given hunks. Returns a cleanup function. */
 export function renderDiffReview(
   editor: monaco.editor.IStandaloneCodeEditor,
   hunks: DiffHunk[],
-  onKeep: (hunkId: string) => void,
-  onUndo: (hunkId: string) => void,
+  onAccept: (hunkId: string) => void,
+  onReject: (hunkId: string) => void,
 ): () => void {
   const viewZoneIds: string[] = []
-
-  // Clean up any stale buttons from previous renders
-  const editorDom = editor.getDomNode()
-  if (editorDom) {
-    editorDom.querySelectorAll('.ai-hunk-buttons').forEach((el) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(el as any)._scrollDisposable?.dispose()
-      el.remove()
-    })
-  }
 
   // 1. Line decorations (green backgrounds for added/modified lines)
   const decoOptions: monaco.editor.IModelDeltaDecoration[] = []
@@ -70,11 +67,29 @@ export function renderDiffReview(
     }
   })
 
-  // 3. Action buttons per hunk ("Keep" / "Undo")
+  // 3. Action buttons per hunk ("Accept" / "Reject") — rendered as a right-aligned DOM
+  //    overlay anchored to each hunk's start line. Monaco content widgets can't be
+  //    anchored to the viewport edge (they track a code column), so we use a manual
+  //    overlay with an onDidScrollChange handler to keep buttons in sync with scroll.
+  //    Adjacent hunks get a vertical offset if their natural positions would collide.
   const buttonContainers: HTMLDivElement[] = []
+  const scrollDisposables: monaco.IDisposable[] = []
+  const editorDom = editor.getDomNode()
+
+  const BUTTON_HEIGHT = 18 // approx height of one row of buttons (10px font + 2×padding + border)
+  const MIN_GAP = 4
+
+  // Clean up any stale button containers from previous renders (defensive — the cleanup
+  // closure below should handle this, but guard in case the caller forgets to invoke it).
+  if (editorDom) {
+    editorDom.querySelectorAll('.ai-hunk-buttons').forEach((el) => el.remove())
+  }
 
   if (editorDom) {
-    for (const hunk of hunks) {
+    // Sort by startLine so collision offsetting reads prior bottom positions correctly.
+    const sortedHunks = [...hunks].sort((a, b) => a.startLine - b.startLine)
+
+    for (const hunk of sortedHunks) {
       const container = document.createElement('div')
       container.className = 'ai-hunk-buttons'
       container.style.cssText = `
@@ -82,64 +97,75 @@ export function renderDiffReview(
         display: inline-flex; flex-direction: row; gap: 4px;
       `
 
-      const keepBtn = document.createElement('button')
-      keepBtn.textContent = 'Keep'
-      keepBtn.style.cssText = `
-        cursor: pointer; border: none; background: rgba(34,197,94,0.2);
-        color: #4ade80; border-radius: 3px; padding: 1px 8px;
+      const acceptBtn = document.createElement('button')
+      acceptBtn.textContent = 'Accept'
+      acceptBtn.style.cssText = `
+        cursor: pointer; border: none; background: ${BRAND_DEFAULT};
+        color: #ffffff; border-radius: 3px; padding: 1px 8px;
         font-size: 10px; font-weight: 500; font-family: inherit;
         transition: background 0.15s; line-height: 16px;
       `
-      keepBtn.onmouseenter = () => {
-        keepBtn.style.background = 'rgba(34,197,94,0.35)'
+      acceptBtn.onmouseenter = () => {
+        acceptBtn.style.background = BRAND_MEDIUM_DARK
       }
-      keepBtn.onmouseleave = () => {
-        keepBtn.style.background = 'rgba(34,197,94,0.2)'
+      acceptBtn.onmouseleave = () => {
+        acceptBtn.style.background = BRAND_DEFAULT
       }
-      keepBtn.addEventListener('click', (e) => {
+      acceptBtn.addEventListener('click', (e) => {
         e.stopPropagation()
-        onKeep(hunk.id)
+        onAccept(hunk.id)
       })
 
-      const undoBtn = document.createElement('button')
-      undoBtn.textContent = 'Undo'
-      undoBtn.style.cssText = `
-        cursor: pointer; border: none; background: rgba(239,68,68,0.2);
-        color: #f87171; border-radius: 3px; padding: 1px 8px;
+      const rejectBtn = document.createElement('button')
+      rejectBtn.textContent = 'Reject'
+      rejectBtn.style.cssText = `
+        cursor: pointer; background: transparent; color: ${BRAND_DEFAULT};
+        border: 1px solid ${BRAND_DEFAULT}; border-radius: 3px; padding: 0 7px;
         font-size: 10px; font-weight: 500; font-family: inherit;
         transition: background 0.15s; line-height: 16px;
       `
-      undoBtn.onmouseenter = () => {
-        undoBtn.style.background = 'rgba(239,68,68,0.35)'
+      rejectBtn.onmouseenter = () => {
+        rejectBtn.style.background = REJECT_HOVER_BG
       }
-      undoBtn.onmouseleave = () => {
-        undoBtn.style.background = 'rgba(239,68,68,0.2)'
+      rejectBtn.onmouseleave = () => {
+        rejectBtn.style.background = 'transparent'
       }
-      undoBtn.addEventListener('click', (e) => {
+      rejectBtn.addEventListener('click', (e) => {
         e.stopPropagation()
-        onUndo(hunk.id)
+        onReject(hunk.id)
       })
 
-      container.appendChild(keepBtn)
-      container.appendChild(undoBtn)
-
-      // Position based on the line's top coordinate
-      const topPx = Math.max(0, editor.getTopForLineNumber(hunk.startLine) - editor.getScrollTop())
-      container.style.top = `${topPx}px`
+      container.appendChild(acceptBtn)
+      container.appendChild(rejectBtn)
 
       editorDom.appendChild(container)
       buttonContainers.push(container)
-
-      // Update position on scroll
-      const scrollDisposable = editor.onDidScrollChange(() => {
-        const newTop = Math.max(0, editor.getTopForLineNumber(hunk.startLine) - editor.getScrollTop())
-        container.style.top = `${newTop}px`
-      })
-
-      // Store disposable for cleanup
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(container as any)._scrollDisposable = scrollDisposable
     }
+
+    const layoutButtons = () => {
+      const scrollTop = editor.getScrollTop()
+      const editorHeight = editor.getLayoutInfo().height
+      let lastBottom = -Infinity
+      sortedHunks.forEach((hunk, idx) => {
+        const container = buttonContainers[idx]
+        const natural = editor.getTopForLineNumber(hunk.startLine) - scrollTop
+
+        // Hide buttons whose anchor line is outside the visible editor area — otherwise
+        // hunks that scroll off the top would clamp to top:0 and pile up at the viewport edge.
+        if (natural < 0 || natural > editorHeight - BUTTON_HEIGHT) {
+          container.style.display = 'none'
+          return
+        }
+
+        container.style.display = 'inline-flex'
+        const top = Math.max(natural, lastBottom + MIN_GAP)
+        container.style.top = `${top}px`
+        lastBottom = top + BUTTON_HEIGHT
+      })
+    }
+
+    layoutButtons()
+    scrollDisposables.push(editor.onDidScrollChange(() => layoutButtons()))
   }
 
   // Cleanup function — removes everything
@@ -150,10 +176,7 @@ export function renderDiffReview(
         accessor.removeZone(id)
       }
     })
-    for (const container of buttonContainers) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(container as any)._scrollDisposable?.dispose()
-      container.remove()
-    }
+    for (const d of scrollDisposables) d.dispose()
+    for (const container of buttonContainers) container.remove()
   }
 }

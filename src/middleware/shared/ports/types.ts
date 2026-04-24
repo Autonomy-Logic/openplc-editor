@@ -714,6 +714,8 @@ export interface AIFeatureConfig {
   isFeatureEnabled: boolean
   /** Whether the user has previously consented to AI usage */
   hasUserConsented: boolean
+  /** User preference: whether inline ghost-text completions are active in editors */
+  inlineCompletionsEnabled: boolean
 }
 
 // ---------------------------------------------------------------------------
