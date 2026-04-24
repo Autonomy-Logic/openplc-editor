@@ -7,6 +7,7 @@ export type FileSliceType =
   | 'resource'
   | 'server'
   | 'remote-device'
+  | 'ethercat-device'
   | null
 
 export type FileSliceData = {

@@ -44,8 +44,9 @@ describe('createAISlice', () => {
       expect(ai.creditsTotal).toBe(500)
       expect(ai.tier).toBe('free')
       expect(ai.currentPeriodEnd).toBeNull()
-      expect(ai.conversations).toEqual([])
-      expect(ai.activeConversationPou).toBeNull()
+      expect(ai.messages).toEqual([])
+      expect(ai.activeEditorPou).toBeNull()
+      expect(ai.isAgenticLoopRunning).toBe(false)
       expect(ai.isChatOpen).toBe(false)
       expect(ai.error).toBeNull()
     })
@@ -154,69 +155,68 @@ describe('createAISlice', () => {
     })
   })
 
-  describe('setActiveConversationPou', () => {
-    it('sets the active conversation POU name', () => {
-      store.getState().aiActions.setActiveConversationPou('MainProgram')
-      expect(store.getState().ai.activeConversationPou).toBe('MainProgram')
+  describe('setActiveEditorPou', () => {
+    it('sets the active editor POU name', () => {
+      store.getState().aiActions.setActiveEditorPou('MainProgram')
+      expect(store.getState().ai.activeEditorPou).toBe('MainProgram')
     })
 
-    it('clears the active conversation POU', () => {
-      store.getState().aiActions.setActiveConversationPou('MainProgram')
-      store.getState().aiActions.setActiveConversationPou(null)
-      expect(store.getState().ai.activeConversationPou).toBeNull()
+    it('clears the active editor POU', () => {
+      store.getState().aiActions.setActiveEditorPou('MainProgram')
+      store.getState().aiActions.setActiveEditorPou(null)
+      expect(store.getState().ai.activeEditorPou).toBeNull()
+    })
+  })
+
+  describe('setAgenticLoopRunning', () => {
+    it('sets the agentic loop to running', () => {
+      store.getState().aiActions.setAgenticLoopRunning(true)
+      expect(store.getState().ai.isAgenticLoopRunning).toBe(true)
+    })
+
+    it('sets the agentic loop to not running', () => {
+      store.getState().aiActions.setAgenticLoopRunning(true)
+      store.getState().aiActions.setAgenticLoopRunning(false)
+      expect(store.getState().ai.isAgenticLoopRunning).toBe(false)
     })
   })
 
   // ---------------------------------------------------------------------------
-  // Conversation management
+  // Message management (project-scoped)
   // ---------------------------------------------------------------------------
 
   describe('addMessage', () => {
-    it('creates a new conversation when none exists for the POU', () => {
+    it('adds a message to the flat messages array', () => {
       const msg = makeMessage({ id: 'msg-1', role: 'user', content: 'Help me' })
-      store.getState().aiActions.addMessage('MyPou', msg)
+      store.getState().aiActions.addMessage(msg)
 
-      const conversations = store.getState().ai.conversations
-      expect(conversations).toHaveLength(1)
-      expect(conversations[0].pouName).toBe('MyPou')
-      expect(conversations[0].messages).toHaveLength(1)
-      expect(conversations[0].messages[0]).toEqual(msg)
+      const messages = store.getState().ai.messages
+      expect(messages).toHaveLength(1)
+      expect(messages[0]).toEqual(msg)
     })
 
-    it('appends to an existing conversation', () => {
+    it('appends multiple messages in order', () => {
       const msg1 = makeMessage({ id: 'msg-1' })
       const msg2 = makeMessage({ id: 'msg-2', role: 'assistant', content: 'Sure' })
 
-      store.getState().aiActions.addMessage('MyPou', msg1)
-      store.getState().aiActions.addMessage('MyPou', msg2)
+      store.getState().aiActions.addMessage(msg1)
+      store.getState().aiActions.addMessage(msg2)
 
-      const conversations = store.getState().ai.conversations
-      expect(conversations).toHaveLength(1)
-      expect(conversations[0].messages).toHaveLength(2)
-      expect(conversations[0].messages[1].id).toBe('msg-2')
-    })
-
-    it('keeps separate conversations per POU', () => {
-      store.getState().aiActions.addMessage('PouA', makeMessage({ id: 'a-1' }))
-      store.getState().aiActions.addMessage('PouB', makeMessage({ id: 'b-1' }))
-
-      const conversations = store.getState().ai.conversations
-      expect(conversations).toHaveLength(2)
-      expect(conversations[0].pouName).toBe('PouA')
-      expect(conversations[1].pouName).toBe('PouB')
+      const messages = store.getState().ai.messages
+      expect(messages).toHaveLength(2)
+      expect(messages[0].id).toBe('msg-1')
+      expect(messages[1].id).toBe('msg-2')
     })
 
     it('enforces MAX_CONVERSATION_MESSAGES by keeping the most recent messages', () => {
-      expect(MAX_CONVERSATION_MESSAGES).toBe(20)
+      expect(MAX_CONVERSATION_MESSAGES).toBe(50)
 
-      // Add MAX + 5 messages
       for (let i = 0; i < MAX_CONVERSATION_MESSAGES + 5; i++) {
-        store.getState().aiActions.addMessage('MyPou', makeMessage({ id: `msg-${i}`, content: `Message ${i}` }))
+        store.getState().aiActions.addMessage(makeMessage({ id: `msg-${i}`, content: `Message ${i}` }))
       }
 
-      const messages = store.getState().ai.conversations[0].messages
+      const messages = store.getState().ai.messages
       expect(messages).toHaveLength(MAX_CONVERSATION_MESSAGES)
-      // The first 5 messages should have been trimmed
       expect(messages[0].id).toBe('msg-5')
       expect(messages[MAX_CONVERSATION_MESSAGES - 1].id).toBe(`msg-${MAX_CONVERSATION_MESSAGES + 4}`)
     })
@@ -224,101 +224,77 @@ describe('createAISlice', () => {
 
   describe('updateMessageContent', () => {
     it('updates the content of an existing message', () => {
-      store.getState().aiActions.addMessage('MyPou', makeMessage({ id: 'msg-1', content: 'initial' }))
-      store.getState().aiActions.updateMessageContent('MyPou', 'msg-1', 'updated content')
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1', content: 'initial' }))
+      store.getState().aiActions.updateMessageContent('msg-1', 'updated content')
 
-      expect(store.getState().ai.conversations[0].messages[0].content).toBe('updated content')
-    })
-
-    it('does nothing when the conversation does not exist', () => {
-      store.getState().aiActions.updateMessageContent('NonExistent', 'msg-1', 'content')
-      expect(store.getState().ai.conversations).toHaveLength(0)
+      expect(store.getState().ai.messages[0].content).toBe('updated content')
     })
 
     it('does nothing when the message id does not match', () => {
-      store.getState().aiActions.addMessage('MyPou', makeMessage({ id: 'msg-1', content: 'original' }))
-      store.getState().aiActions.updateMessageContent('MyPou', 'msg-999', 'changed')
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1', content: 'original' }))
+      store.getState().aiActions.updateMessageContent('msg-999', 'changed')
 
-      expect(store.getState().ai.conversations[0].messages[0].content).toBe('original')
+      expect(store.getState().ai.messages[0].content).toBe('original')
+    })
+
+    it('does nothing when there are no messages', () => {
+      store.getState().aiActions.updateMessageContent('msg-1', 'content')
+      expect(store.getState().ai.messages).toHaveLength(0)
     })
   })
 
   describe('rateMessage', () => {
     it('sets a thumbs-up rating', () => {
-      store.getState().aiActions.addMessage('MyPou', makeMessage({ id: 'msg-1' }))
-      store.getState().aiActions.rateMessage('MyPou', 'msg-1', 'up')
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+      store.getState().aiActions.rateMessage('msg-1', 'up')
 
-      expect(store.getState().ai.conversations[0].messages[0].rating).toBe('up')
+      expect(store.getState().ai.messages[0].rating).toBe('up')
     })
 
     it('sets a thumbs-down rating', () => {
-      store.getState().aiActions.addMessage('MyPou', makeMessage({ id: 'msg-1' }))
-      store.getState().aiActions.rateMessage('MyPou', 'msg-1', 'down')
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+      store.getState().aiActions.rateMessage('msg-1', 'down')
 
-      expect(store.getState().ai.conversations[0].messages[0].rating).toBe('down')
+      expect(store.getState().ai.messages[0].rating).toBe('down')
     })
 
     it('clears the rating when set to undefined', () => {
-      store.getState().aiActions.addMessage('MyPou', makeMessage({ id: 'msg-1' }))
-      store.getState().aiActions.rateMessage('MyPou', 'msg-1', 'up')
-      store.getState().aiActions.rateMessage('MyPou', 'msg-1', undefined)
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+      store.getState().aiActions.rateMessage('msg-1', 'up')
+      store.getState().aiActions.rateMessage('msg-1', undefined)
 
-      expect(store.getState().ai.conversations[0].messages[0].rating).toBeUndefined()
-    })
-
-    it('does nothing when the conversation does not exist', () => {
-      store.getState().aiActions.rateMessage('NonExistent', 'msg-1', 'up')
-      expect(store.getState().ai.conversations).toHaveLength(0)
+      expect(store.getState().ai.messages[0].rating).toBeUndefined()
     })
 
     it('does nothing when the message id does not match', () => {
-      store.getState().aiActions.addMessage('MyPou', makeMessage({ id: 'msg-1' }))
-      store.getState().aiActions.rateMessage('MyPou', 'msg-999', 'up')
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+      store.getState().aiActions.rateMessage('msg-999', 'up')
 
-      expect(store.getState().ai.conversations[0].messages[0].rating).toBeUndefined()
+      expect(store.getState().ai.messages[0].rating).toBeUndefined()
+    })
+
+    it('does nothing when there are no messages', () => {
+      store.getState().aiActions.rateMessage('msg-1', 'up')
+      expect(store.getState().ai.messages).toHaveLength(0)
     })
   })
 
   describe('clearConversation', () => {
-    it('removes the conversation for the given POU', () => {
-      store.getState().aiActions.addMessage('PouA', makeMessage({ id: 'a-1' }))
-      store.getState().aiActions.addMessage('PouB', makeMessage({ id: 'b-1' }))
-
-      store.getState().aiActions.clearConversation('PouA')
-
-      const conversations = store.getState().ai.conversations
-      expect(conversations).toHaveLength(1)
-      expect(conversations[0].pouName).toBe('PouB')
-    })
-
-    it('clears activeConversationPou and error if it matches the cleared POU', () => {
-      store.getState().aiActions.addMessage('MyPou', makeMessage({ id: 'msg-1' }))
-      store.getState().aiActions.setActiveConversationPou('MyPou')
+    it('clears all messages and the error', () => {
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-2' }))
       store.getState().aiActions.setAIError('some error')
 
-      store.getState().aiActions.clearConversation('MyPou')
+      store.getState().aiActions.clearConversation()
 
-      expect(store.getState().ai.activeConversationPou).toBeNull()
+      expect(store.getState().ai.messages).toHaveLength(0)
       expect(store.getState().ai.error).toBeNull()
     })
 
-    it('does not clear activeConversationPou when it does not match', () => {
-      store.getState().aiActions.addMessage('PouA', makeMessage({ id: 'a-1' }))
-      store.getState().aiActions.addMessage('PouB', makeMessage({ id: 'b-1' }))
-      store.getState().aiActions.setActiveConversationPou('PouB')
-      store.getState().aiActions.setAIError('preserved error')
-
-      store.getState().aiActions.clearConversation('PouA')
-
-      expect(store.getState().ai.activeConversationPou).toBe('PouB')
-      expect(store.getState().ai.error).toBe('preserved error')
-    })
-
-    it('is a no-op when the POU has no conversation', () => {
-      store.getState().aiActions.addMessage('MyPou', makeMessage({ id: 'msg-1' }))
-      store.getState().aiActions.clearConversation('NonExistent')
-
-      expect(store.getState().ai.conversations).toHaveLength(1)
+    it('is a no-op on empty state (no error)', () => {
+      store.getState().aiActions.clearConversation()
+      expect(store.getState().ai.messages).toHaveLength(0)
+      expect(store.getState().ai.error).toBeNull()
     })
   })
 
@@ -380,8 +356,9 @@ describe('createAISliceFactory', () => {
     expect(ai.creditsTotal).toBe(500)
     expect(ai.tier).toBe('free')
     expect(ai.currentPeriodEnd).toBeNull()
-    expect(ai.conversations).toEqual([])
-    expect(ai.activeConversationPou).toBeNull()
+    expect(ai.messages).toEqual([])
+    expect(ai.activeEditorPou).toBeNull()
+    expect(ai.isAgenticLoopRunning).toBe(false)
     expect(ai.isChatOpen).toBe(false)
     expect(ai.error).toBeNull()
   })

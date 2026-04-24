@@ -14,6 +14,7 @@ export type TabsProps = {
     | { type: 'device'; derivation: 'configuration' | 'pin-mapping' | 'orchestrators' }
     | { type: 'server'; protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' }
     | { type: 'remote-device'; protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet' }
+    | { type: 'ethercat-device'; busName: string; deviceId: string }
   configuration?: Record<string, unknown>
 }
 
