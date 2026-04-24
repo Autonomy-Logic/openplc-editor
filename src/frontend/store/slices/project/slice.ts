@@ -1,5 +1,4 @@
 import { cycleTimeUsToIecInterval, ethercatTaskName } from '@root/backend/shared/ethercat/ethercat-task-helpers'
-import type { EthercatConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -1184,7 +1183,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
       return ok()
     },
-    updateEthercatConfig: (deviceName: string, ethercatConfig: EthercatConfig | Record<string, unknown>) => {
+    updateEthercatConfig: (deviceName, ethercatConfig) => {
       let response = ok()
       setState(
         produce((slice: ProjectSlice) => {
@@ -1201,10 +1200,10 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response = { ok: false, message: 'Device is not an EtherCAT device' }
             return
           }
-          device.ethercatConfig = ethercatConfig as typeof device.ethercatConfig
+          device.ethercatConfig = ethercatConfig
 
           // Sync master config fields to the associated system task
-          const masterCfg = (ethercatConfig as EthercatConfig).masterConfig
+          const masterCfg = ethercatConfig.masterConfig
           if (masterCfg) {
             const systemTask = slice.project.data.configurations.resource.tasks.find(
               (t) => t.isSystemTask && t.associatedDevice === deviceName,

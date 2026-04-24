@@ -1,4 +1,5 @@
 import type {
+  EthercatConfig,
   ModbusBufferMapping,
   ModbusIOGroup,
   OpcUaNodeConfig,
@@ -239,7 +240,7 @@ export type ProjectActions = {
   ) => ProjectResponse
   deleteIOGroup: (deviceName: string, groupId: string) => ProjectResponse
   updateIOPointAlias: (deviceName: string, groupId: string, pointId: string, alias: string) => ProjectResponse
-  updateEthercatConfig: (deviceName: string, ethercatConfig: Record<string, unknown>) => ProjectResponse
+  updateEthercatConfig: (deviceName: string, ethercatConfig: EthercatConfig) => ProjectResponse
 }
 
 // ---------------------------------------------------------------------------

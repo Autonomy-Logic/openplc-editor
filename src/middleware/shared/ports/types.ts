@@ -7,6 +7,8 @@
  * implement the ports that use them.
  */
 
+import type { ConfiguredEtherCATDevice } from './esi-types'
+
 // ---------------------------------------------------------------------------
 // Result wrappers
 // ---------------------------------------------------------------------------
@@ -384,31 +386,26 @@ export interface PLCServer {
   opcuaServerConfig?: OpcUaServerConfig
 }
 
+// EtherCAT
+export interface EtherCATMasterConfig {
+  enabled?: boolean
+  networkInterface: string
+  cycleTimeUs: number
+  watchdogTimeoutCycles?: number
+  taskPriority?: number
+}
+
+export interface EthercatConfig {
+  masterConfig?: EtherCATMasterConfig
+  devices: ConfiguredEtherCATDevice[]
+}
+
 // PLCRemoteDevice
 export interface PLCRemoteDevice {
   name: string
   protocol: RemoteDeviceProtocol
   modbusTcpConfig?: ModbusRemoteTcpConfig
-  ethercatConfig?: {
-    masterConfig?: {
-      enabled?: boolean
-      networkInterface: string
-      cycleTimeUs: number
-      watchdogTimeoutCycles?: number
-      taskPriority?: number
-    }
-    devices: Array<{
-      id: string
-      name: string
-      channelMappings: Array<{
-        channelId: string
-        iecLocation: string
-        userEdited: boolean
-        alias?: string
-      }>
-      [key: string]: unknown
-    }>
-  }
+  ethercatConfig?: EthercatConfig
 }
 
 // ---------------------------------------------------------------------------
