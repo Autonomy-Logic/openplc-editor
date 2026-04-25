@@ -10,7 +10,7 @@ import { useAI, useCapabilities, useProject } from '../../../../../../middleware
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
-import { applyAcceptedHunks, computeHunks, type DiffHunk } from '../../../../../utils/ai-diff-review'
+import { applyAcceptedHunks, computeHunks } from '../../../../../utils/ai-diff-review'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
@@ -161,6 +161,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     projectActions: { updatePou, createVariable },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { pushToHistory },
+    ai: { pendingDiffs },
+    aiActions: { updatePendingDiff, updatePendingDiffAcceptedHunks, clearPendingDiff },
   } = useOpenPLCStore()
   const debugBoolValues = useDebugBoolValuesMap()
   const debugNonBoolValues = useDebugNonBoolValuesMap()
@@ -177,14 +179,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   })
   const watchedFilePathRef = useRef<string | null>(null)
 
-  // AI diff review state — per-hunk inline review with keep/undo buttons
-  const [diffReview, setDiffReview] = useState<{
-    active: boolean
-    oldBody: string
-    newBody: string
-    hunks: DiffHunk[]
-    acceptedHunks: Set<string>
-  } | null>(null)
+  /**
+   * Bumped every time @monaco-editor/react re-mounts the underlying editor
+   * (happens on tab switch in web, because `<PrimitiveEditor key={path} />`).
+   * Used as a render-effect dep so the diff-review UI re-attaches to the fresh
+   * editor instance. Without this, the render effect runs before the new
+   * editor's onMount fires and silently no-ops on a disposed editor instance.
+   */
+  const [editorInstanceId, setEditorInstanceId] = useState(0)
 
   const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
 
@@ -206,84 +208,87 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [name, language, pous])
 
-  // Render/clear diff review decorations when state changes
+  // Render/clear diff review decorations when the store's pending entry for this POU
+  // changes, or when the editor instance remounts on tab switch.
+  //
+  // Why `editorInstanceId` is a dep: in the web build, <PrimitiveEditor key={path}>
+  // remounts on tab switch. The new editor's onMount fires AFTER this effect first runs
+  // with the new `name`, so the effect would otherwise see a stale/disposed editor ref.
+  // The counter bumps inside handleEditorDidMount, triggering this effect to re-run
+  // once the new editor is actually ready.
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
-    if (!diffReview?.active || diffReview.hunks.length === 0) return () => {}
 
-    // Get only pending (unresolved) hunks
-    const pendingHunks = diffReview.hunks.filter((h) => diffReview.acceptedHunks.has(h.id))
+    const entry = pendingDiffs[name]
+    if (!entry || entry.hunks.length === 0) return () => {}
+
+    const pendingSet = new Set(entry.acceptedHunks)
+    const pendingHunks = entry.hunks.filter((h) => pendingSet.has(h.id))
     if (pendingHunks.length === 0) {
-      // All hunks resolved — exit diff review
-      setDiffReview(null)
+      clearPendingDiff(name)
       return () => {}
     }
 
     const handleKeepHunk = (hunkId: string) => {
-      // "Keep" = accept this hunk (new code stays), remove from pending
-      setDiffReview((prev) => {
-        if (!prev) return prev
-        const newAccepted = new Set(prev.acceptedHunks)
-        newAccepted.delete(hunkId) // Remove from pending set = resolved as kept
-        const remaining = prev.hunks.filter((h) => newAccepted.has(h.id))
-        if (remaining.length === 0) return null // All resolved
-        return { ...prev, acceptedHunks: newAccepted }
-      })
+      const state = openPLCStoreBase.getState()
+      const current = state.ai.pendingDiffs[name]
+      if (!current) return
+      const nextAccepted = current.acceptedHunks.filter((id) => id !== hunkId)
+      if (nextAccepted.length === 0) {
+        clearPendingDiff(name)
+        return
+      }
+      updatePendingDiffAcceptedHunks(name, nextAccepted)
     }
 
     const handleUndoHunk = (hunkId: string) => {
-      // "Undo" = reject this hunk, revert those lines to old version
-      setDiffReview((prev) => {
-        if (!prev) return prev
-        const newAccepted = new Set(prev.acceptedHunks)
-        newAccepted.delete(hunkId)
+      const state = openPLCStoreBase.getState()
+      const current = state.ai.pendingDiffs[name]
+      if (!current) return
 
-        // Rebuild body: accepted hunks keep new code, this rejected hunk keeps old code
-        const keptIds = new Set<string>()
-        for (const h of prev.hunks) {
-          if (h.id === hunkId) continue // This one is undone
-          if (!newAccepted.has(h.id)) {
-            // Already resolved as kept
-            keptIds.add(h.id)
-          } else {
-            // Still pending — treat as kept for now (new code)
-            keptIds.add(h.id)
-          }
-        }
+      // Rebuild body: every hunk except this one is treated as "kept" (new code),
+      // the rejected one reverts to the old text.
+      const keptIds = new Set(current.hunks.filter((h) => h.id !== hunkId).map((h) => h.id))
+      const newBody = applyAcceptedHunks(current.oldBody, current.newBody, current.hunks, keptIds)
 
-        const newBody = applyAcceptedHunks(prev.oldBody, prev.newBody, prev.hunks, keptIds)
+      // Update editor model with rebuilt body
+      const model = editor.getModel()
+      if (model) {
+        isSyncingModelRef.current = true
+        const fullRange = model.getFullModelRange()
+        editor.executeEdits('ai-diff-undo-hunk', [{ range: fullRange, text: newBody }])
+        isSyncingModelRef.current = false
+      }
+      setLocalText(newBody)
 
-        // Update editor model with rebuilt body
-        const model = editor.getModel()
-        if (model) {
-          isSyncingModelRef.current = true
-          const fullRange = model.getFullModelRange()
-          editor.executeEdits('ai-diff-undo-hunk', [{ range: fullRange, text: newBody }])
-          isSyncingModelRef.current = false
-        }
-        setLocalText(newBody)
+      // Propagate to project slice
+      state.projectActions.updatePou({ name, content: { language, value: newBody } })
 
-        // Update store
-        const state = openPLCStoreBase.getState()
-        state.projectActions.updatePou({ name, content: { language, value: newBody } })
-
-        // Recompute hunks for remaining pending changes
-        const remainingHunks = prev.hunks.filter((h) => newAccepted.has(h.id))
-        if (remainingHunks.length === 0) return null
-
-        // Recompute line positions for remaining hunks
-        const freshHunks = computeHunks(prev.oldBody, newBody)
-        const freshAccepted = new Set(freshHunks.map((h) => h.id))
-
-        if (freshHunks.length === 0) return null
-        return { ...prev, newBody, hunks: freshHunks, acceptedHunks: freshAccepted }
+      // Recompute hunks for remaining pending changes, against the new body.
+      const freshHunks = computeHunks(current.oldBody, newBody)
+      if (freshHunks.length === 0) {
+        clearPendingDiff(name)
+        return
+      }
+      updatePendingDiff(name, {
+        newBody,
+        hunks: freshHunks,
+        acceptedHunks: freshHunks.map((h) => h.id),
       })
     }
 
     const cleanup = renderDiffReview(editor, pendingHunks, handleKeepHunk, handleUndoHunk)
     return cleanup
-  }, [diffReview, name, language])
+  }, [
+    pendingDiffs,
+    name,
+    language,
+    editorInstanceId,
+    clearPendingDiff,
+    updatePendingDiff,
+    updatePendingDiffAcceptedHunks,
+  ])
 
   useEffect(() => {
     if (editorRef.current && searchQuery) {
@@ -827,6 +832,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!capabilities.hasAIAssistant) return
     if (!aiState.isEnabled) return
     if (!aiState.hasConsented) return
+    if (!aiState.preferences.inlineCompletionsEnabled) return
 
     if (!aiPort?.registerInlineCompletions) return
 
@@ -837,7 +843,15 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     })
 
     return () => registration.dispose()
-  }, [name, language, aiState.isEnabled, aiState.hasConsented, capabilities.hasAIAssistant, aiPort])
+  }, [
+    name,
+    language,
+    aiState.isEnabled,
+    aiState.hasConsented,
+    aiState.preferences.inlineCompletionsEnabled,
+    capabilities.hasAIAssistant,
+    aiPort,
+  ])
 
   // -----------------------------------------------------------------------
   // Theme management
@@ -865,6 +879,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorRef.current = editorInstance
     monacoRef.current = monacoInstance
     setEditorMounted(true)
+    // Bump every mount (including remounts on tab switch) so the diff-review effect
+    // re-runs against the fresh editor instance. `editorMounted` only ever flips
+    // false→true once, so it won't re-trigger on remount.
+    setEditorInstanceId((id) => id + 1)
 
     if (!editorInstance || !monacoInstance) return
 
@@ -1032,29 +1050,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       window.addEventListener('ai-insert-at-cursor', handleInsertAtCursor)
     }
 
-    // Listen for AI tool updates — enter diff review mode
+    // Listen for AI tool updates. This handler's only job is to sync the editor
+    // model for the POU currently displayed here — the pending-diff entry is
+    // written to the store by tool-executor so it's available even for POUs
+    // that have no editor mounted. When the user switches to such a POU, the
+    // render effect below reads pendingDiffs[name] and attaches the overlay.
     const handlePouUpdated = (e: Event) => {
-      const {
-        pouName: targetPou,
-        body,
-        oldBody,
-      } = (e as CustomEvent<{ pouName: string; body: string; oldBody?: string }>).detail
+      const { pouName: targetPou, body } = (e as CustomEvent<{ pouName: string; body: string; oldBody?: string }>)
+        .detail
       if (targetPou !== name) return
 
-      // If no old body provided (backward compat), apply directly
-      if (oldBody === undefined) {
-        const model = editorInstance.getModel()
-        if (model && model.getValue() !== body) {
-          isSyncingModelRef.current = true
-          const fullRange = model.getFullModelRange()
-          editorInstance.executeEdits('ai-tool-update', [{ range: fullRange, text: body }])
-          isSyncingModelRef.current = false
-        }
-        setLocalText(body)
-        return
-      }
-
-      // Update the editor model with the new body first (so decorations render on actual lines)
       const model = editorInstance.getModel()
       if (model && model.getValue() !== body) {
         isSyncingModelRef.current = true
@@ -1063,29 +1068,21 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         isSyncingModelRef.current = false
       }
       setLocalText(body)
-
-      // Compute diff hunks
-      const hunks = computeHunks(oldBody, body)
-      if (hunks.length === 0) return // No changes
-
-      // All hunks accepted by default
-      const acceptedIds = new Set(hunks.map((h) => h.id))
-      setDiffReview({ active: true, oldBody, newBody: body, hunks, acceptedHunks: acceptedIds })
     }
     window.addEventListener('ai-pou-updated', handlePouUpdated)
 
-    // Listen for global accept/reject from chat panel
+    // Listen for global accept/reject from chat panel. These fire on the chat's
+    // Keep/Undo All buttons and clear per-POU entries; the chat panel itself
+    // also calls clearAllPendingDiffs() to cover POUs that aren't currently active.
     const handleAcceptAllHunks = (e: Event) => {
       const { pouName: targetPou } = (e as CustomEvent<{ pouName: string }>).detail
-      if (targetPou !== name) return
-      setDiffReview(null)
+      clearPendingDiff(targetPou)
     }
     window.addEventListener('ai-accept-all-hunks', handleAcceptAllHunks)
 
     const handleRejectAllHunks = (e: Event) => {
       const { pouName: targetPou } = (e as CustomEvent<{ pouName: string }>).detail
-      if (targetPou !== name) return
-      setDiffReview(null)
+      clearPendingDiff(targetPou)
     }
     window.addEventListener('ai-reject-all-hunks', handleRejectAllHunks)
 

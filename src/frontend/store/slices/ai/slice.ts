@@ -9,7 +9,9 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   isEnabled: false,
   isLoading: false,
   hasConsented: false,
-  model: 'haiku',
+  preferences: {
+    inlineCompletionsEnabled: true,
+  },
   creditsUsed: 0,
   creditsTotal: 500,
   tier: 'free',
@@ -19,10 +21,17 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   isAgenticLoopRunning: false,
   isChatOpen: false,
   error: null,
+  pendingDiffs: {},
 }
 
 export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AISlice, [], [], AISlice> {
-  const overrides = config ? { isEnabled: config.isFeatureEnabled, hasConsented: config.hasUserConsented } : {}
+  const overrides = config
+    ? {
+        isEnabled: config.isFeatureEnabled,
+        hasConsented: config.hasUserConsented,
+        preferences: { inlineCompletionsEnabled: config.inlineCompletionsEnabled },
+      }
+    : {}
   return (setState) => ({
     ai: { ...DEFAULT_AI_STATE, ...overrides },
 
@@ -48,10 +57,10 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           }),
         )
       },
-      setAIModel: (model) => {
+      setPreference: (key, value) => {
         setState(
           produce(({ ai }: AISlice) => {
-            ai.model = model
+            ai.preferences[key] = value
           }),
         )
       },
@@ -147,6 +156,47 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.isChatOpen = open
+          }),
+        )
+      },
+      setPendingDiff: (pouName, entry) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.pendingDiffs[pouName] = entry
+          }),
+        )
+      },
+      updatePendingDiffAcceptedHunks: (pouName, acceptedHunks) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            const existing = ai.pendingDiffs[pouName]
+            if (!existing) return
+            existing.acceptedHunks = acceptedHunks
+          }),
+        )
+      },
+      updatePendingDiff: (pouName, { newBody, hunks, acceptedHunks }) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            const existing = ai.pendingDiffs[pouName]
+            if (!existing) return
+            existing.newBody = newBody
+            existing.hunks = hunks
+            existing.acceptedHunks = acceptedHunks
+          }),
+        )
+      },
+      clearPendingDiff: (pouName) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            delete ai.pendingDiffs[pouName]
+          }),
+        )
+      },
+      clearAllPendingDiffs: () => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.pendingDiffs = {}
           }),
         )
       },
