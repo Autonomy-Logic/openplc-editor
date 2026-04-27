@@ -561,60 +561,60 @@ const Board = memo(function () {
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
         <>
           {connectionStatus === 'connected' && timingStats && timingStats.scan_count > 0 && (
-          <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-4'>
-            <h2
-              id='scan-cycle-stats-title'
-              className='select-none text-lg font-medium text-neutral-950 dark:text-white'
-            >
-              Scan Cycle Statistics
-            </h2>
-            <div id='scan-cycle-stats-cards' className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'>
-              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Count</span>
-                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                  {timingStats.scan_count.toLocaleString()}
-                </span>
-              </div>
-              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Overruns</span>
-                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>{timingStats.overruns}</span>
-              </div>
-              {timingStats.scan_time_avg !== null && (
+            <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-4'>
+              <h2
+                id='scan-cycle-stats-title'
+                className='select-none text-lg font-medium text-neutral-950 dark:text-white'
+              >
+                Scan Cycle Statistics
+              </h2>
+              <div id='scan-cycle-stats-cards' className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'>
                 <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Time (avg)</span>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Count</span>
                   <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {timingStats.scan_time_avg} <span className='text-sm font-normal'>us</span>
+                    {timingStats.scan_count.toLocaleString()}
                   </span>
-                  {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
-                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                      min: {timingStats.scan_time_min} / max: {timingStats.scan_time_max}
+                </div>
+                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Overruns</span>
+                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>{timingStats.overruns}</span>
+                </div>
+                {timingStats.scan_time_avg !== null && (
+                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Time (avg)</span>
+                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                      {timingStats.scan_time_avg} <span className='text-sm font-normal'>us</span>
                     </span>
-                  )}
-                </div>
-              )}
-              {timingStats.cycle_time_avg !== null && (
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {timingStats.cycle_time_avg} <span className='text-sm font-normal'>us</span>
-                  </span>
-                  {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
-                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                      min: {timingStats.cycle_time_min} / max: {timingStats.cycle_time_max}
+                    {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                        min: {timingStats.scan_time_min} / max: {timingStats.scan_time_max}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {timingStats.cycle_time_avg !== null && (
+                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
+                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                      {timingStats.cycle_time_avg} <span className='text-sm font-normal'>us</span>
                     </span>
-                  )}
-                </div>
-              )}
-              {timingStats.cycle_latency_avg !== null && (
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Latency (avg)</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {timingStats.cycle_latency_avg} <span className='text-sm font-normal'>us</span>
-                  </span>
-                </div>
-              )}
+                    {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                        min: {timingStats.cycle_time_min} / max: {timingStats.cycle_time_max}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {timingStats.cycle_latency_avg !== null && (
+                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Latency (avg)</span>
+                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                      {timingStats.cycle_latency_avg} <span className='text-sm font-normal'>us</span>
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
           )}
           {connectionStatus === 'connected' &&
             ethercatMasters.map((master, idx) => {
@@ -633,10 +633,7 @@ const Board = memo(function () {
                     EtherCAT Statistics{' '}
                     <span className='font-normal text-neutral-500 dark:text-neutral-400'>— {busLabel}</span>
                   </h2>
-                  <div
-                    id={`${sectionId}-cards`}
-                    className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'
-                  >
+                  <div id={`${sectionId}-cards`} className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'>
                     <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
                       <span className='text-xs text-neutral-500 dark:text-neutral-400'>Master State</span>
                       <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
