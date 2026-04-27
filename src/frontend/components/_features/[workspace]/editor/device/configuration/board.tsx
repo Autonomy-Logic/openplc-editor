@@ -67,6 +67,10 @@ const Board = memo(function () {
   const setIncludeTimingStatsInPolling = useOpenPLCStore(
     (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
   )
+  const ethercatStatus = useOpenPLCStore((state) => state.runtimeConnection.ethercatStatus)
+  const setIncludeEthercatStatsInPolling = useOpenPLCStore(
+    (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
+  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -316,6 +320,44 @@ const Board = memo(function () {
     }
   }, [setIncludeTimingStatsInPolling])
 
+  // Same pattern for EtherCAT runtime status: only fetched while this
+  // screen is mounted, so non-EtherCAT setups don't pay for the extra
+  // round-trip on every poll.
+  useEffect(() => {
+    setIncludeEthercatStatsInPolling(true)
+    return () => {
+      setIncludeEthercatStatsInPolling(false)
+    }
+  }, [setIncludeEthercatStatsInPolling])
+
+  // Normalise the runtime's two response shapes into a single array. Modern
+  // runtimes ship `masters[]` (one entry per configured EtherCAT bus); older
+  // ones inline the fields for a single master at the response root. Either
+  // way we render one stats section per master.
+  const ethercatMasters = useMemo(() => {
+    if (!ethercatStatus) return []
+    if (ethercatStatus.masters && ethercatStatus.masters.length > 0) return ethercatStatus.masters
+    if (ethercatStatus.plugin_state === undefined) return []
+    return [
+      {
+        name: '',
+        plugin_state: ethercatStatus.plugin_state,
+        slave_count: ethercatStatus.slave_count ?? 0,
+        expected_wkc: ethercatStatus.expected_wkc ?? 0,
+        slaves: ethercatStatus.slaves ?? [],
+        metrics: ethercatStatus.metrics ?? {
+          cycle_count: 0,
+          wkc_error_count: 0,
+          avg_cycle_us: 0,
+          max_cycle_us: 0,
+          max_exchange_us: 0,
+          consecutive_wkc_errors: 0,
+          recovery_attempts: 0,
+        },
+      },
+    ]
+  }, [ethercatStatus])
+
   return (
     <DeviceEditorSlot heading='Board Settings'>
       {!isSimulatorTarget(currentBoardInfo) && (
@@ -517,9 +559,8 @@ const Board = memo(function () {
         <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
       )}
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
-        connectionStatus === 'connected' &&
-        timingStats &&
-        timingStats.scan_count > 0 && (
+        <>
+          {connectionStatus === 'connected' && timingStats && timingStats.scan_count > 0 && (
           <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-4'>
             <h2
               id='scan-cycle-stats-title'
@@ -574,7 +615,85 @@ const Board = memo(function () {
               )}
             </div>
           </div>
-        )
+          )}
+          {connectionStatus === 'connected' &&
+            ethercatMasters.map((master, idx) => {
+              // Project supports more than one EtherCAT bus per device; surface
+              // the bus name in the section header so users can tell which set
+              // of stats they're looking at. Fall back to a positional label
+              // for the single-master legacy response shape (no `name`).
+              const busLabel = master.name || `Bus ${idx + 1}`
+              const sectionId = master.name ? `ethercat-stats-${master.name}` : `ethercat-stats-${idx}`
+              return (
+                <div key={sectionId} id={sectionId} className='flex w-full flex-col gap-4'>
+                  <h2
+                    id={`${sectionId}-title`}
+                    className='select-none text-lg font-medium text-neutral-950 dark:text-white'
+                  >
+                    EtherCAT Statistics{' '}
+                    <span className='font-normal text-neutral-500 dark:text-neutral-400'>— {busLabel}</span>
+                  </h2>
+                  <div
+                    id={`${sectionId}-cards`}
+                    className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'
+                  >
+                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Master State</span>
+                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                        {master.plugin_state}
+                      </span>
+                    </div>
+                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Slave Count</span>
+                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                        {master.slave_count}
+                      </span>
+                    </div>
+                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Count</span>
+                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                        {master.metrics.cycle_count.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>WKC Errors</span>
+                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                        {master.metrics.wkc_error_count.toLocaleString()}
+                      </span>
+                      {master.metrics.consecutive_wkc_errors > 0 && (
+                        <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                          consecutive: {master.metrics.consecutive_wkc_errors}
+                        </span>
+                      )}
+                    </div>
+                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
+                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                        {master.metrics.avg_cycle_us} <span className='text-sm font-normal'>us</span>
+                      </span>
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                        max: {master.metrics.max_cycle_us} us
+                      </span>
+                    </div>
+                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Max Exchange Time</span>
+                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                        {master.metrics.max_exchange_us} <span className='text-sm font-normal'>us</span>
+                      </span>
+                    </div>
+                    {master.metrics.recovery_attempts > 0 && (
+                      <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                        <span className='text-xs text-neutral-500 dark:text-neutral-400'>Recovery Attempts</span>
+                        <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                          {master.metrics.recovery_attempts}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+        </>
       ) : (
         <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
           <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>
