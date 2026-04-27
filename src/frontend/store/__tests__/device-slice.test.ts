@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 
+import type { EtherCATRuntimeStatusResponse } from '../../../middleware/shared/ports/runtime-port'
 import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../../../middleware/shared/ports/types'
-import type { EtherCATRuntimeStatusResponse } from '../../../types/ethercat'
 import { createDeviceSlice, DeviceSlice } from '../slices/device'
 import { defaultDeviceConfiguration } from '../slices/device/data/types'
 import * as pinsValidation from '../slices/device/validation/pins'

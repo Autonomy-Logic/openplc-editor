@@ -1,3 +1,4 @@
+import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/runtime-port'
 import type {
   BoardInfo,
   CommunicationPort,
@@ -6,7 +7,6 @@ import type {
   PlcStatus,
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
-import type { EtherCATRuntimeStatusResponse } from '../../../../types/ethercat'
 
 // ---------------------------------------------------------------------------
 // Device available options
