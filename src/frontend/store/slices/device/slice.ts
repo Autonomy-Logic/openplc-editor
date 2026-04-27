@@ -39,6 +39,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     storedCredentials: null,
     timingStats: null,
     includeTimingStatsInPolling: false,
+    ethercatStatus: null,
+    includeEthercatStatsInPolling: false,
   },
 
   deviceActions: {
@@ -86,6 +88,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           runtimeConnection.storedCredentials = null
           runtimeConnection.timingStats = null
           runtimeConnection.includeTimingStatsInPolling = false
+          runtimeConnection.ethercatStatus = null
+          runtimeConnection.includeEthercatStatsInPolling = false
         }),
       )
     },
@@ -473,6 +477,20 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    setEthercatStatus: (status): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.ethercatStatus = status
+        }),
+      )
+    },
+    setIncludeEthercatStatsInPolling: (include): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.includeEthercatStatsInPolling = include
+        }),
+      )
+    },
     setTemporaryDhcpIp: (ipAddress): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
@@ -491,6 +509,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           runtimeConnection.storedCredentials = null
           runtimeConnection.timingStats = null
           runtimeConnection.includeTimingStatsInPolling = false
+          runtimeConnection.ethercatStatus = null
+          runtimeConnection.includeEthercatStatsInPolling = false
         }),
       )
     },

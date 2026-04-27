@@ -23,11 +23,12 @@ const DiscoveredDeviceTable = ({
   onSelectAll,
   isScanning,
 }: DiscoveredDeviceTableProps) => {
-  // Calculate selection state
-  const selectableDevices = deviceMatches.filter((dm) => getBestMatchQuality(dm.matches) !== 'none')
-  const allSelected =
-    selectableDevices.length > 0 && selectableDevices.every((dm) => selectedDevices.has(dm.device.position))
-  const someSelected = selectableDevices.some((dm) => selectedDevices.has(dm.device.position))
+  // All scanned devices are selectable. Devices without a repository match get
+  // a visual "No XML" hint — they're still selectable, but on "Add Selected"
+  // the parent opens a modal explaining they can't be added until the ESI XML
+  // is imported in the Repository tab.
+  const allSelected = deviceMatches.length > 0 && deviceMatches.every((dm) => selectedDevices.has(dm.device.position))
+  const someSelected = deviceMatches.some((dm) => selectedDevices.has(dm.device.position))
 
   const handleSelectAll = () => {
     onSelectAll(!allSelected)
@@ -42,7 +43,7 @@ const DiscoveredDeviceTable = ({
               <Checkbox
                 checked={someSelected && !allSelected ? 'indeterminate' : allSelected}
                 onCheckedChange={handleSelectAll}
-                disabled={selectableDevices.length === 0}
+                disabled={deviceMatches.length === 0}
               />
             </th>
             <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>Pos</th>
@@ -65,31 +66,27 @@ const DiscoveredDeviceTable = ({
               const bestQuality = getBestMatchQuality(dm.matches)
               const bestMatch = dm.matches.length > 0 ? dm.matches[0] : null
               const displayName = bestMatch?.esiDevice?.name || dm.device.name
-              const isSelectable = bestQuality !== 'none'
+              const hasNoXml = bestQuality === 'none'
               const isSelected = selectedDevices.has(dm.device.position)
 
               return (
                 <tr
                   key={dm.device.position}
-                  role={isSelectable ? 'button' : undefined}
-                  tabIndex={isSelectable ? 0 : undefined}
-                  aria-pressed={isSelectable ? isSelected : undefined}
-                  aria-disabled={!isSelectable}
-                  onClick={() => isSelectable && onSelectDevice(dm.device.position, !isSelected)}
+                  role='button'
+                  tabIndex={0}
+                  aria-pressed={isSelected}
+                  onClick={() => onSelectDevice(dm.device.position, !isSelected)}
                   onKeyDown={(e) => {
-                    if (!isSelectable) return
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
                       onSelectDevice(dm.device.position, !isSelected)
                     }
                   }}
                   className={cn(
-                    'border-b border-neutral-200 transition-colors dark:border-neutral-800',
-                    isSelectable && 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
-                    isSelectable &&
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1',
+                    'cursor-pointer border-b border-neutral-200 transition-colors dark:border-neutral-800',
+                    'hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1',
                     isSelected && 'bg-brand/10 dark:bg-brand/20',
-                    !isSelectable && 'opacity-60',
                   )}
                 >
                   <td className='px-2 py-2'>
@@ -97,7 +94,6 @@ const DiscoveredDeviceTable = ({
                       checked={isSelected}
                       onCheckedChange={(checked) => onSelectDevice(dm.device.position, !!checked)}
                       onClick={(e) => e.stopPropagation()}
-                      disabled={!isSelectable}
                     />
                   </td>
                   <td className='px-2 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300'>
@@ -105,9 +101,19 @@ const DiscoveredDeviceTable = ({
                   </td>
                   <td
                     className='whitespace-nowrap px-2 py-2 text-sm font-medium text-neutral-950 dark:text-neutral-100'
-                    title={displayName}
+                    title={hasNoXml ? `${displayName} — no ESI XML in repository` : displayName}
                   >
-                    {displayName}
+                    <span className='inline-flex items-center gap-2'>
+                      {displayName}
+                      {hasNoXml && (
+                        <span
+                          className='rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-700 dark:bg-neutral-700/60 dark:text-neutral-300'
+                          title='ESI XML not in repository — import it from the Repository tab before adding.'
+                        >
+                          No XML
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className='px-2 py-2 font-mono text-xs text-neutral-600 dark:text-neutral-400'>
                     0x{dm.device.vendor_id.toString(16).padStart(4, '0').toUpperCase()}

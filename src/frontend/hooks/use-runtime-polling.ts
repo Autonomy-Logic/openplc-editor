@@ -23,6 +23,7 @@ export const useRuntimePolling = () => {
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const setPlcRuntimeStatus = useOpenPLCStore((state) => state.deviceActions.setPlcRuntimeStatus)
   const setTimingStats = useOpenPLCStore((state) => state.deviceActions.setTimingStats)
+  const setEthercatStatus = useOpenPLCStore((state) => state.deviceActions.setEthercatStatus)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -36,6 +37,7 @@ export const useRuntimePolling = () => {
     deviceActions.setRuntimeConnectionStatus('disconnected')
     deviceActions.setPlcRuntimeStatus(null)
     deviceActions.setTimingStats(null)
+    deviceActions.setEthercatStatus(null)
   }, [])
 
   const handleConnectionLost = useCallback(() => {
@@ -55,7 +57,12 @@ export const useRuntimePolling = () => {
 
     const currentState = useOpenPLCStore.getState()
     const {
-      runtimeConnection: { connectionStatus: curStatus, jwtToken: curToken, includeTimingStatsInPolling },
+      runtimeConnection: {
+        connectionStatus: curStatus,
+        jwtToken: curToken,
+        includeTimingStatsInPolling,
+        includeEthercatStatsInPolling,
+      },
       workspace: { plcLogsLastId, plcLogs },
       workspaceActions,
     } = currentState
@@ -78,9 +85,20 @@ export const useRuntimePolling = () => {
       const isV4 = Array.isArray(plcLogs) || plcLogs === ''
       const minId = isV4 && plcLogsLastId !== null ? plcLogsLastId + 1 : undefined
 
-      const [statusResult, logsResult] = await Promise.all([
+      // EtherCAT runtime status piggybacks on the same polling cycle as
+      // status/logs so the Configuration screen's stats stay fresh without
+      // running a second timer. Only requested when the consumer opted in
+      // via setIncludeEthercatStatsInPolling — otherwise we skip the call
+      // entirely and clear any stale data left in the store.
+      const ethercatPromise =
+        includeEthercatStatsInPolling && runtime.getEthercatRuntimeStatus
+          ? runtime.getEthercatRuntimeStatus()
+          : Promise.resolve(null)
+
+      const [statusResult, logsResult, ethercatResult] = await Promise.all([
         runtime.getStatus(includeTimingStatsInPolling),
         runtime.getLogs(minId),
+        ethercatPromise,
       ])
 
       // Process status
@@ -100,6 +118,16 @@ export const useRuntimePolling = () => {
           setTimingStats(statusResult.timingStats)
         } else if (!includeTimingStatsInPolling) {
           setTimingStats(null)
+        }
+
+        if (includeEthercatStatsInPolling) {
+          if (ethercatResult && ethercatResult.success && ethercatResult.data) {
+            setEthercatStatus(ethercatResult.data)
+          }
+          // Soft-fail: keep previous data on transient errors so the UI
+          // doesn't flicker between populated and empty between polls.
+        } else {
+          setEthercatStatus(null)
         }
       } else {
         handlePollFailure()
@@ -138,7 +166,7 @@ export const useRuntimePolling = () => {
     } finally {
       isPollingRef.current = false
     }
-  }, [runtime, handleConnectionLost, setPlcRuntimeStatus, setTimingStats])
+  }, [runtime, handleConnectionLost, setPlcRuntimeStatus, setTimingStats, setEthercatStatus])
 
   useEffect(() => {
     const { workspaceActions } = useOpenPLCStore.getState()

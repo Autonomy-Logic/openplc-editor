@@ -6,6 +6,7 @@ import type {
   PlcStatus,
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
+import type { EtherCATRuntimeStatusResponse } from '../../../../types/ethercat'
 
 // ---------------------------------------------------------------------------
 // Device available options
@@ -55,6 +56,8 @@ export type RuntimeConnection = {
   storedCredentials: StoredCredentials | null
   timingStats: TimingStats | null
   includeTimingStatsInPolling: boolean
+  ethercatStatus: EtherCATRuntimeStatusResponse | null
+  includeEthercatStatsInPolling: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +138,8 @@ export type DeviceActions = {
   setStoredCredentials: (credentials: StoredCredentials | null) => void
   setTimingStats: (stats: TimingStats | null) => void
   setIncludeTimingStatsInPolling: (include: boolean) => void
+  setEthercatStatus: (status: EtherCATRuntimeStatusResponse | null) => void
+  setIncludeEthercatStatsInPolling: (include: boolean) => void
   setTemporaryDhcpIp: (ipAddress?: string) => void
   clearRuntimeConnection: () => void
 }
