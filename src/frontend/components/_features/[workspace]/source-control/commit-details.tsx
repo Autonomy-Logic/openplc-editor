@@ -54,17 +54,11 @@ export function CommitDetails({ commit, projectId }: CommitDetailsProps) {
   }
 
   const handleViewFiles = () => {
-    window.open(
-      `/history?project_id=${encodeURIComponent(effectiveProjectId)}&commit_hash=${encodeURIComponent(commit.hash)}`,
-      '_blank',
-    )
+    window.location.href = `/history?project_id=${encodeURIComponent(effectiveProjectId)}&commit_hash=${encodeURIComponent(commit.hash)}`
   }
 
   const handleFileClick = (filePath: string) => {
-    window.open(
-      `/history?project_id=${encodeURIComponent(effectiveProjectId)}&commit_hash=${encodeURIComponent(commit.hash)}&file=${encodeURIComponent(filePath)}`,
-      '_blank',
-    )
+    window.location.href = `/history?project_id=${encodeURIComponent(effectiveProjectId)}&commit_hash=${encodeURIComponent(commit.hash)}&file=${encodeURIComponent(filePath)}`
   }
 
   const handleRestore = async () => {

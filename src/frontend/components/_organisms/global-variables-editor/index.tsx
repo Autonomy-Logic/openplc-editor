@@ -99,6 +99,7 @@ const GlobalVariablesEditor = () => {
 
   useEffect(() => {
     lastParsedCodeRef.current = editorCode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor.meta.name])
 
   useEffect(() => {
@@ -318,7 +319,7 @@ const GlobalVariablesEditor = () => {
 
   useEffect(() => {
     commitCodeRef.current = commitCode
-  }, [commitCode])
+  })
 
   return (
     <div ref={containerRef} aria-label='Variables editor container' className='flex  w-full flex-col gap-4'>
