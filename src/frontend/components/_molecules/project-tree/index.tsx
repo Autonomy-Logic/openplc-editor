@@ -1,6 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useProject } from '../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
@@ -28,6 +29,7 @@ import { ServerIcon } from '../../../assets/icons/project/Server'
 import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
+import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
@@ -262,6 +264,7 @@ const ProjectTreeExpandableLeaf = ({
     remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
     fileActions: { getFile },
   } = useOpenPLCStore()
+  const projectPort = useProject()
 
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
@@ -283,8 +286,15 @@ const ProjectTreeExpandableLeaf = ({
   const handleRenameFile = async (renamed: string) => {
     setIsEditing(false)
     if (!renamed || !label) return
+    if (renamed === label) return
     const res = renameRemoteDevice(label, renamed)
-    if (!res.ok) setNewLabel(label || '')
+    if (!res.ok) {
+      setNewLabel(label || '')
+      return
+    }
+    // Persist immediately so refresh doesn't show the old name (rename
+    // queues the old path's deletion in `pendingDeletions`, save propagates).
+    await executeSaveProject(projectPort)
   }
 
   const handleDeleteFile = () => {
@@ -487,6 +497,7 @@ const ProjectTreeLeaf = ({
     ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
     fileActions: { getFile },
   } = useOpenPLCStore()
+  const projectPort = useProject()
 
   const [isEditing, setIsEditing] = useState(false)
   const [newLabel, setNewLabel] = useState(label || '')
@@ -541,11 +552,19 @@ const ProjectTreeLeaf = ({
       return
     }
 
+    // No-op: user blurred or hit Enter without changing anything. Skip the
+    // auto-save below so we don't persist a phantom rename event.
+    if (newLabel === label) return
+
     if (isAPou) {
       const res = renamePou(label, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
+        return
       }
+      // Persist immediately: rename creates a new file in S3 and removes
+      // the old, plus updates the badge correctly via pendingDeletions.
+      await executeSaveProject(projectPort)
       return
     }
 
@@ -553,7 +572,11 @@ const ProjectTreeLeaf = ({
       const res = renameDatatype(label, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
+        return
       }
+      // Datatype lives inside project.json — saving rewrites it with the
+      // renamed entry. No separate file deletion needed.
+      await executeSaveProject(projectPort)
       return
     }
 
@@ -561,7 +584,9 @@ const ProjectTreeLeaf = ({
       const res = renameServer(label, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
+        return
       }
+      await executeSaveProject(projectPort)
       return
     }
 
@@ -569,7 +594,9 @@ const ProjectTreeLeaf = ({
       const res = renameRemoteDevice(label, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
+        return
       }
+      await executeSaveProject(projectPort)
       return
     }
 
@@ -578,11 +605,15 @@ const ProjectTreeLeaf = ({
       if (!res.ok) {
         setNewLabel(label || '')
       }
+      // Ethercat device lives inside its parent bus file — the parent will
+      // be re-serialized on the next regular save. Skipping auto-save here
+      // matches the existing behavior; if persistence becomes an issue,
+      // we'll add it.
       return
     }
   }
 
-  const handleDuplicateFile = () => {
+  const handleDuplicateFile = async () => {
     if (!isAPou && !isDatatype) {
       toast({
         title: 'Error',
@@ -603,11 +634,18 @@ const ProjectTreeLeaf = ({
 
     if (isAPou) {
       duplicatePou(label, `${label}_copy`)
+      // Persist the new POU file to S3 immediately. Without this, the duplicate
+      // exists only in editor memory and disappears on refresh — same class of
+      // bug as the delete flow we fixed in delete-confirmation-modal.
+      await executeSaveProject(projectPort)
       return
     }
 
     if (isDatatype) {
       duplicateDatatype(label, `${label}_copy`)
+      // Datatypes live inside project.json; saving the project rewrites it
+      // with the new datatype included.
+      await executeSaveProject(projectPort)
       return
     }
 

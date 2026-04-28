@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PendingChange } from '../../../../../middleware/shared/ports/version-control-port'
 import { useProject, useVersionControl } from '../../../../../middleware/shared/providers'
+import { buildAllProjectFileContents, buildAllProjectFileContentsPure } from '../../../../services/save-actions'
 import { useOpenPLCStore } from '../../../../store'
 import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
 import { cn } from '../../../../utils/cn'
 import { serializePouToText } from '../../../../utils/PLC/pou-text-serializer'
 import { sanitizePou } from '../../../../utils/save-project'
+import { isSystemFile } from '../../../../utils/system-files'
 import { toast } from '../../../../utils/toast'
 import { DiscardConfirmationModal } from './modals/discard-confirmation-modal'
 
@@ -297,19 +299,23 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [previewFile, setPreviewFile] = useState<{ path: string; content: string } | null>(null)
 
-  const tree = useMemo(() => buildChangesTree(files), [files])
+  // System files (e.g. legacy `git-data.tar.gz` from migration) ride along on
+  // commits silently — they're never shown, never selectable, never discardable.
+  const visibleFiles = useMemo(() => files.filter((f) => !isSystemFile(f.path)), [files])
+
+  const tree = useMemo(() => buildChangesTree(visibleFiles), [visibleFiles])
 
   // Auto-expand all folders
   const folderKey = useMemo(() => {
     const folders = new Set<string>()
-    for (const file of files) {
+    for (const file of visibleFiles) {
       const parts = file.path.split('/').filter(Boolean)
       for (let i = 1; i < parts.length; i++) {
         folders.add(parts.slice(0, i).join('/'))
       }
     }
     return folders
-  }, [files])
+  }, [visibleFiles])
 
   const prevFolderKeyRef = useRef<Set<string>>(new Set())
   useEffect(() => {
@@ -325,8 +331,12 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     setIsFetching(true)
     try {
       const data = await versionControl.getChanges(projectId)
+      // Keep system-file changes in `files` (so they ride along on commit), but
+      // count and display only consider user-visible files (see `visibleFiles`).
       setFiles(data.changes)
-      versionControlActions.setPendingChangesCount(data.changes.length)
+      versionControlActions.syncFromChanges(
+        data.changes.filter((c) => !isSystemFile(c.path)).map((c) => ({ path: c.path, status: c.status })),
+      )
     } catch {
       setFiles([])
     } finally {
@@ -339,28 +349,30 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     void fetchChanges()
   }, [fetchChanges])
 
-  // Auto-select all files on initial load or when file list changes
+  // Auto-select all files on initial load or when file list changes.
+  // Only visible files are tracked in `selectedFiles`; system files are auto-
+  // included at commit time regardless of selection.
   const fileListKey = useMemo(
     () =>
-      files
+      visibleFiles
         .map((f) => f.path)
         .sort()
         .join('\n'),
-    [files],
+    [visibleFiles],
   )
   const prevFileListKey = useRef(fileListKey)
   const isInitialLoad = useRef(true)
 
   useEffect(() => {
     if (isInitialLoad.current || fileListKey !== prevFileListKey.current) {
-      setSelectedFiles(new Set(files.map((f) => f.path)))
+      setSelectedFiles(new Set(visibleFiles.map((f) => f.path)))
       prevFileListKey.current = fileListKey
       isInitialLoad.current = false
     }
-  }, [fileListKey, files])
+  }, [fileListKey, visibleFiles])
 
-  const allSelected = files.length > 0 && selectedFiles.size === files.length
-  const someSelected = selectedFiles.size > 0 && selectedFiles.size < files.length
+  const allSelected = visibleFiles.length > 0 && selectedFiles.size === visibleFiles.length
+  const someSelected = selectedFiles.size > 0 && selectedFiles.size < visibleFiles.length
 
   const toggleFile = (path: string) => {
     setSelectedFiles((prev) => {
@@ -384,7 +396,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
 
   const toggleAll = () => {
     if (allSelected) setSelectedFiles(new Set())
-    else setSelectedFiles(new Set(files.map((f) => f.path)))
+    else setSelectedFiles(new Set(visibleFiles.map((f) => f.path)))
   }
 
   const toggleExpand = (path: string) => {
@@ -475,7 +487,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     [pous, project, deviceDefinitions, updateTabs, getEditorFromEditors, addModel, setEditor],
   )
 
-  const hasChanges = files.length > 0
+  const hasChanges = visibleFiles.length > 0
   const canCommit = message.trim().length > 0 && selectedFiles.size > 0
 
   const handleCommit = async () => {
@@ -493,17 +505,33 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         return
       }
 
-      const validPaths = [...selectedFiles].filter((p) => freshFiles.some((f) => f.path === p))
-      if (validPaths.length === 0) {
+      const validUserPaths = [...selectedFiles].filter((p) => freshFiles.some((f) => f.path === p))
+      if (validUserPaths.length === 0) {
         setIsCommitting(false)
         return
       }
 
+      // Always include system-file changes — the user never sees or controls
+      // them, but they ride along on whatever the user commits so they don't
+      // pile up as ghost pending changes.
+      const freshSystemPaths = freshFiles.filter((f) => isSystemFile(f.path)).map((f) => f.path)
+      const pathsToCommit = [...validUserPaths, ...freshSystemPaths]
+
       await versionControl.createCommit(
         projectId,
         message.trim(),
-        validPaths.length === freshFiles.length ? undefined : validPaths,
+        pathsToCommit.length === freshFiles.length ? undefined : pathsToCommit,
       )
+
+      // Commit landed: S3 == HEAD again. Refresh the version-control
+      // baseline to the just-committed state and clear all pending lists.
+      // We pass two snapshots: the actual upload (mixed raw + serialized,
+      // for diff baseline) and the pure serialization of current state
+      // (for the save flow's "state == sync state?" detection).
+      versionControlActions.commitBaseline({
+        newBaseline: buildAllProjectFileContents(),
+        loadedSerialized: buildAllProjectFileContentsPure(),
+      })
 
       setMessage('')
       setSelectedFiles(new Set())
@@ -523,8 +551,10 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     setErrorMessage(null)
 
     try {
+      // Discard only what the user explicitly selected — never `undefined`
+      // (which would also discard system-file changes the user can't see).
       const selectedPaths = [...selectedFiles]
-      await versionControl.discardChanges(projectId, selectedPaths.length === files.length ? undefined : selectedPaths)
+      await versionControl.discardChanges(projectId, selectedPaths)
       setShowDiscardModal(false)
 
       // Reload project data in-place (no hard page reload)
@@ -577,8 +607,8 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
             {!hasChanges
               ? 'No changes'
               : someSelected
-                ? `${selectedFiles.size} of ${files.length} selected`
-                : `${files.length} file${files.length > 1 ? 's' : ''} changed`}
+                ? `${selectedFiles.size} of ${visibleFiles.length} selected`
+                : `${visibleFiles.length} file${visibleFiles.length > 1 ? 's' : ''} changed`}
           </span>
         </div>
         <button
@@ -684,7 +714,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         isOpen={showDiscardModal}
         isLoading={isDiscarding}
         fileCount={selectedFiles.size}
-        totalCount={files.length}
+        totalCount={visibleFiles.length}
         onConfirm={() => void handleDiscard()}
         onCancel={() => setShowDiscardModal(false)}
       />
