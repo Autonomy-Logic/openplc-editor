@@ -453,6 +453,7 @@ class CompilerModule {
   async handleCompileSTtoCpp(
     sourceTargetFolderPath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+    projectData?: PLCProjectData,
   ): Promise<{ md5Hash: string }> {
     const stFilePath = join(sourceTargetFolderPath, 'program.st')
     const stSource = await readFile(stFilePath, { encoding: 'utf8' })
@@ -476,12 +477,34 @@ class CompilerModule {
     // can detect stale layouts without re-reading program.st).
     const md5Hash = crypto.createHash('md5').update(stSource).digest('hex')
 
+    // Build the debug leaf list from the editor's library + project. This
+    // is the same walk the tree builder runs, so the debugger materializes
+    // exactly the leaves the watch panel displays. Without project data
+    // (e.g. older callers), strucpp falls back to its built-in AST walk.
+    let debugLeaves: Array<{ path: string; type: string }> | undefined
+    if (projectData) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { buildDebugLeaves } = require('@root/frontend/utils/build-debug-leaves') as {
+        buildDebugLeaves: typeof import('@root/frontend/utils/build-debug-leaves').buildDebugLeaves
+      }
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { ipcPouToFlat } = require('@root/backend/editor/utils/ipc-pou-to-flat') as {
+        ipcPouToFlat: typeof import('@root/backend/editor/utils/ipc-pou-to-flat').ipcPouToFlat
+      }
+      debugLeaves = buildDebugLeaves({
+        pous: projectData.pous.map(ipcPouToFlat),
+        dataTypes: projectData.dataTypes,
+        instances: projectData.configuration.resource.instances,
+      })
+    }
+
     const result = strucppCompile(stSource, {
       headerFileName: 'generated.hpp',
       debug: true,
       lineMapping: true,
       libraryPaths,
       md5: md5Hash,
+      ...(debugLeaves ? { debugLeaves } : {}),
     })
 
     if (!result.success) {
@@ -1514,9 +1537,13 @@ class CompilerModule {
 
     // Step 4: Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      const { md5Hash } = await this.handleCompileSTtoCpp(sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      const { md5Hash } = await this.handleCompileSTtoCpp(
+        sourceTargetFolderPath,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        projectData,
+      )
       buildMD5Hash = md5Hash
     } catch (error) {
       _mainProcessPort.postMessage({
@@ -2145,9 +2172,13 @@ class CompilerModule {
 
     // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      await this.handleCompileSTtoCpp(sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      await this.handleCompileSTtoCpp(
+        sourceTargetFolderPath,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        projectData,
+      )
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
