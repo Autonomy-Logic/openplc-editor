@@ -1256,12 +1256,21 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
         return;
     }
 
+    // The request indexArray (at mb_frame[4..]) and the response buffer
+    // (mb_frame[11..]) overlap. Once handle_read writes the first response
+    // byte, later index entries inside mb_frame are clobbered. Snapshot the
+    // request first.
+    uint8_t localIndex[VARIDX_SIZE * 3];
+    for (uint16_t i = 0; i < numIndexes * 3; i++) {
+        localIndex[i] = indexArray[i];
+    }
+
     // Each address pair is 3 bytes: [arr:u8, elem_hi, elem_lo]
     for (uint16_t i = 0; i < numIndexes; i++)
     {
-        uint8_t  arr  = indexArray[i * 3];
-        uint16_t elem = (uint16_t)indexArray[i * 3 + 1] << 8 |
-                         (uint16_t)indexArray[i * 3 + 2];
+        uint8_t  arr  = localIndex[i * 3];
+        uint16_t elem = (uint16_t)localIndex[i * 3 + 1] << 8 |
+                         (uint16_t)localIndex[i * 3 + 2];
 
         uint16_t varSize = strucpp::debug::handle_size(arr, elem);
         if (varSize == 0)
