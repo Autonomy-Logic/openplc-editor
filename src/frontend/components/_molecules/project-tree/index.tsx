@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { useProject } from '../../../../middleware/shared/providers'
+import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
@@ -265,6 +265,7 @@ const ProjectTreeExpandableLeaf = ({
     fileActions: { getFile },
   } = useOpenPLCStore()
   const projectPort = useProject()
+  const { hasVersionControl } = useCapabilities()
 
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
@@ -292,9 +293,15 @@ const ProjectTreeExpandableLeaf = ({
       setNewLabel(label || '')
       return
     }
-    // Persist immediately so refresh doesn't show the old name (rename
-    // queues the old path's deletion in `pendingDeletions`, save propagates).
-    await executeSaveProject(projectPort)
+    // Only auto-persist on platforms that track per-file changes — otherwise
+    // the user's first action on a fresh project triggers a full save with
+    // no version-control benefit. Local editor users keep the existing
+    // "save on Ctrl+S" mental model.
+    if (hasVersionControl) {
+      // Persist immediately so refresh doesn't show the old name (rename
+      // queues the old path's deletion in `pendingDeletions`, save propagates).
+      await executeSaveProject(projectPort)
+    }
   }
 
   const handleDeleteFile = () => {
@@ -498,6 +505,7 @@ const ProjectTreeLeaf = ({
     fileActions: { getFile },
   } = useOpenPLCStore()
   const projectPort = useProject()
+  const { hasVersionControl } = useCapabilities()
 
   const [isEditing, setIsEditing] = useState(false)
   const [newLabel, setNewLabel] = useState(label || '')
@@ -556,6 +564,15 @@ const ProjectTreeLeaf = ({
     // auto-save below so we don't persist a phantom rename event.
     if (newLabel === label) return
 
+    // Auto-save on rename only matters on platforms that track per-file
+    // changes (web). Local editor users would otherwise eat a full project
+    // save on every rename with no version-control payoff — so gate the
+    // persist behind the capability and let the editor follow the regular
+    // Ctrl+S flow.
+    const persist = async () => {
+      if (hasVersionControl) await executeSaveProject(projectPort)
+    }
+
     if (isAPou) {
       const res = renamePou(label, newLabel)
       if (!res.ok) {
@@ -564,7 +581,7 @@ const ProjectTreeLeaf = ({
       }
       // Persist immediately: rename creates a new file in S3 and removes
       // the old, plus updates the badge correctly via pendingDeletions.
-      await executeSaveProject(projectPort)
+      await persist()
       return
     }
 
@@ -576,7 +593,7 @@ const ProjectTreeLeaf = ({
       }
       // Datatype lives inside project.json — saving rewrites it with the
       // renamed entry. No separate file deletion needed.
-      await executeSaveProject(projectPort)
+      await persist()
       return
     }
 
@@ -586,7 +603,7 @@ const ProjectTreeLeaf = ({
         setNewLabel(label || '')
         return
       }
-      await executeSaveProject(projectPort)
+      await persist()
       return
     }
 
@@ -596,7 +613,7 @@ const ProjectTreeLeaf = ({
         setNewLabel(label || '')
         return
       }
-      await executeSaveProject(projectPort)
+      await persist()
       return
     }
 

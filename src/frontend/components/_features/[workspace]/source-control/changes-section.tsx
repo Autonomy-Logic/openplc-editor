@@ -8,9 +8,8 @@ import { buildAllProjectFileContents, buildAllProjectFileContentsPure } from '..
 import { useOpenPLCStore } from '../../../../store'
 import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
+import type { PendingChangeStatus } from '../../../../store/slices/version-control/types'
 import { cn } from '../../../../utils/cn'
-import { serializePouToText } from '../../../../utils/PLC/pou-text-serializer'
-import { sanitizePou } from '../../../../utils/save-project'
 import { isSystemFile } from '../../../../utils/system-files'
 import { toast } from '../../../../utils/toast'
 import { DiscardConfirmationModal } from './modals/discard-confirmation-modal'
@@ -19,19 +18,19 @@ type ChangesSectionProps = {
   projectId: string
 }
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL: Record<PendingChangeStatus, string> = {
   modified: 'M',
   added: 'A',
   deleted: 'D',
 }
 
-const STATUS_COLOR: Record<string, string> = {
+const STATUS_COLOR: Record<PendingChangeStatus, string> = {
   modified: 'text-yellow-500 dark:text-yellow-400',
   added: 'text-green-500 dark:text-green-400',
   deleted: 'text-red-500 dark:text-red-400',
 }
 
-const STATUS_TOOLTIP: Record<string, string> = {
+const STATUS_TOOLTIP: Record<PendingChangeStatus, string> = {
   modified: 'Modified -- File has been changed since last commit',
   added: 'Added -- New file not in previous commit',
   deleted: 'Deleted -- File has been removed',
@@ -103,13 +102,13 @@ function FilePreviewModal({ filePath, content, onClose }: { filePath: string; co
 // Tree types & helpers
 // ---------------------------------------------------------------------------
 
-type ChangedFile = { path: string; status: string }
+type ChangedFile = { path: string; status: PendingChangeStatus }
 
 type FileTreeNode = {
   name: string
   path: string
   type: 'file' | 'folder'
-  status?: string
+  status?: PendingChangeStatus
   children?: FileTreeNode[]
 }
 
@@ -259,11 +258,11 @@ function ChangesTreeItem({
       <span
         className={cn(
           'w-4 shrink-0 text-right font-mono text-[10px] font-bold',
-          STATUS_COLOR[node.status ?? ''] ?? 'text-neutral-500',
+          node.status ? STATUS_COLOR[node.status] : 'text-neutral-500',
         )}
-        title={STATUS_TOOLTIP[node.status ?? ''] ?? node.status}
+        title={node.status ? STATUS_TOOLTIP[node.status] : undefined}
       >
-        {STATUS_LABEL[node.status ?? ''] ?? node.status}
+        {node.status ? STATUS_LABEL[node.status] : ''}
       </span>
     </div>
   )
@@ -280,14 +279,21 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     versionControlActions,
     sharedWorkspaceActions,
     project,
-    deviceDefinitions,
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
 
   const pous = project.data.pous
 
-  const [files, setFiles] = useState<PendingChange[]>([])
+  // System files (e.g. legacy `git-data.tar.gz` from migration) ride along on
+  // commits silently — they're never shown, never selectable, never discardable.
+  // We keep them in a separate bucket so the UI never has to filter them out
+  // again, and the commit path can pass them straight through.
+  const [pendingFiles, setPendingFiles] = useState<{ visible: PendingChange[]; system: PendingChange[] }>({
+    visible: [],
+    system: [],
+  })
+  const visibleFiles = pendingFiles.visible
   const [isLoading, setIsLoading] = useState(true)
   const [isFetching, setIsFetching] = useState(false)
   const [message, setMessage] = useState('')
@@ -298,10 +304,6 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   const [isDiscarding, setIsDiscarding] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [previewFile, setPreviewFile] = useState<{ path: string; content: string } | null>(null)
-
-  // System files (e.g. legacy `git-data.tar.gz` from migration) ride along on
-  // commits silently — they're never shown, never selectable, never discardable.
-  const visibleFiles = useMemo(() => files.filter((f) => !isSystemFile(f.path)), [files])
 
   const tree = useMemo(() => buildChangesTree(visibleFiles), [visibleFiles])
 
@@ -331,14 +333,19 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     setIsFetching(true)
     try {
       const data = await versionControl.getChanges(projectId)
-      // Keep system-file changes in `files` (so they ride along on commit), but
-      // count and display only consider user-visible files (see `visibleFiles`).
-      setFiles(data.changes)
-      versionControlActions.syncFromChanges(
-        data.changes.filter((c) => !isSystemFile(c.path)).map((c) => ({ path: c.path, status: c.status })),
-      )
+      // Split into visible (user-facing) and system (silent passengers) once,
+      // so subsequent renders and the commit path can read them directly
+      // without re-filtering.
+      const visible: PendingChange[] = []
+      const system: PendingChange[] = []
+      for (const c of data.changes) {
+        if (isSystemFile(c.path)) system.push(c)
+        else visible.push(c)
+      }
+      setPendingFiles({ visible, system })
+      versionControlActions.syncFromChanges(visible.map((c) => ({ path: c.path, status: c.status })))
     } catch {
-      setFiles([])
+      setPendingFiles({ visible: [], system: [] })
     } finally {
       setIsLoading(false)
       setIsFetching(false)
@@ -439,52 +446,20 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         return
       }
 
-      // Non-POU files: resolve content from store and show in preview modal
+      // Non-POU files: resolve content via the same canonical serializer
+      // the save flow uses. Building ad-hoc shapes here previously made the
+      // preview diverge from what got committed (e.g. `project.json` showed
+      // {name,type,path} while save wrote {meta,data,...}).
       try {
-        let content: string | null = null
-
-        if (filePath === 'project.json') {
-          content = JSON.stringify(
-            { name: project.meta.name, type: project.meta.type, path: project.meta.path },
-            null,
-            2,
-          )
-        } else if (filePath === 'devices/configuration.json') {
-          content = JSON.stringify(deviceDefinitions.configuration, null, 2)
-        } else if (filePath === 'devices/pin-mapping.json') {
-          content = JSON.stringify(deviceDefinitions.pinMapping, null, 2)
-        } else if (filePath.startsWith('devices/remote/')) {
-          const name = filePath.split('/').pop()?.replace('.json', '')
-          const rd = project.data.remoteDevices?.find((d) => d.name === name)
-          if (rd) content = JSON.stringify(rd, null, 2)
-        } else if (filePath.startsWith('devices/servers/')) {
-          const name = filePath.split('/').pop()?.replace('.json', '')
-          const srv = project.data.servers?.find((s) => s.name === name)
-          if (srv) content = JSON.stringify(srv, null, 2)
-        }
-
-        // Try POU serialization as fallback (in case the path format differs)
-        if (content === null) {
-          const filename = filePath.split('/').pop() ?? ''
-          const dotIndex = filename.lastIndexOf('.')
-          if (dotIndex > 0) {
-            const pouName = filename.substring(0, dotIndex)
-            const pou = pous.find((p) => p.name === pouName)
-            if (pou) {
-              const sanitized = sanitizePou(pou, undefined)
-              content = serializePouToText(sanitized)
-            }
-          }
-        }
-
-        if (content !== null) {
+        const content = buildAllProjectFileContentsPure()[filePath]
+        if (content !== undefined) {
           setPreviewFile({ path: filePath, content })
         }
       } catch {
         // Serialization failed — ignore
       }
     },
-    [pous, project, deviceDefinitions, updateTabs, getEditorFromEditors, addModel, setEditor],
+    [pous, updateTabs, getEditorFromEditors, addModel, setEditor],
   )
 
   const hasChanges = visibleFiles.length > 0
@@ -497,15 +472,23 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     setErrorMessage(null)
 
     try {
-      // Re-fetch to avoid stale state
+      // Re-fetch to avoid stale state. Split into visible/system once so the
+      // commit path doesn't re-filter and so we can detect whether the user
+      // selected literally everything (passing `undefined` lets the backend
+      // commit all pending changes in one shot).
       const freshData = await versionControl.getChanges(projectId)
-      const freshFiles = freshData.changes
-      if (freshFiles.length === 0) {
+      const freshVisible: PendingChange[] = []
+      const freshSystem: PendingChange[] = []
+      for (const c of freshData.changes) {
+        if (isSystemFile(c.path)) freshSystem.push(c)
+        else freshVisible.push(c)
+      }
+      if (freshVisible.length + freshSystem.length === 0) {
         setIsCommitting(false)
         return
       }
 
-      const validUserPaths = [...selectedFiles].filter((p) => freshFiles.some((f) => f.path === p))
+      const validUserPaths = [...selectedFiles].filter((p) => freshVisible.some((f) => f.path === p))
       if (validUserPaths.length === 0) {
         setIsCommitting(false)
         return
@@ -514,13 +497,14 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
       // Always include system-file changes — the user never sees or controls
       // them, but they ride along on whatever the user commits so they don't
       // pile up as ghost pending changes.
-      const freshSystemPaths = freshFiles.filter((f) => isSystemFile(f.path)).map((f) => f.path)
+      const freshSystemPaths = freshSystem.map((f) => f.path)
       const pathsToCommit = [...validUserPaths, ...freshSystemPaths]
+      const totalFresh = freshVisible.length + freshSystem.length
 
       await versionControl.createCommit(
         projectId,
         message.trim(),
-        pathsToCommit.length === freshFiles.length ? undefined : pathsToCommit,
+        pathsToCommit.length === totalFresh ? undefined : pathsToCommit,
       )
 
       // Commit landed: S3 == HEAD again. Refresh the version-control

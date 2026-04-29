@@ -16,26 +16,83 @@
  *   7. Strip trailing `.lock`.
  *   8. Strip ASCII control characters.
  *   9. Truncate to 255.
+ *
+ * `sanitizeBranchName` returns just the cleaned string. `sanitizeBranchNameDetailed`
+ * also returns the set of transforms that actually happened, which feeds the
+ * live-preview notes in `getBranchNameFeedback` without re-running the regex
+ * chain a second time.
  */
-export function sanitizeBranchName(input: string): string {
-  if (!input) return ''
 
-  let result = input
+type TransformKind =
+  | 'spaces-replaced'
+  | 'non-ascii-stripped'
+  | 'diacritics-stripped'
+  | 'forbidden-chars-replaced'
+  | 'dot-sequences-replaced'
+  | 'at-brace-replaced'
+  | 'leading-or-trailing-stripped'
+  | 'lock-suffix-stripped'
+  | 'truncated'
 
-  // Decompose accented chars into base + combining marks, then drop the marks.
-  // Non-ASCII characters that don't decompose into ASCII (e.g. kanji) survive
-  // this step and are stripped by the next.
-  result = result.normalize('NFD').replace(/[̀-ͯ]/g, '')
+const TRANSFORM_NOTES: Record<TransformKind, string> = {
+  'spaces-replaced': "Spaces will be replaced with '-'.",
+  'non-ascii-stripped': 'Non-ASCII characters (e.g. kanji, emojis) will be removed.',
+  'diacritics-stripped': 'Accent marks will be stripped (e.g. "é" → "e").',
+  'forbidden-chars-replaced': "Characters ~ ^ : ? * [ ] \\ will be replaced with '-'.",
+  'dot-sequences-replaced': "Sequences of '.' will be replaced with '-'.",
+  'at-brace-replaced': "'@{' is not allowed and will be replaced with '-'.",
+  'leading-or-trailing-stripped': "Leading/trailing '.', '/' or '-' will be stripped.",
+  'lock-suffix-stripped': "'.lock' suffix is reserved and will be stripped.",
+  truncated: 'Names longer than 255 characters will be truncated.',
+}
+
+// Fixed display order for notes in the live preview, independent of the
+// internal transform order in the sanitizer. Keep in sync with the original
+// `getBranchNameFeedback` ordering so existing screenshots/tests still match.
+const NOTE_ORDER: readonly TransformKind[] = [
+  'spaces-replaced',
+  'non-ascii-stripped',
+  'diacritics-stripped',
+  'forbidden-chars-replaced',
+  'dot-sequences-replaced',
+  'at-brace-replaced',
+  'leading-or-trailing-stripped',
+  'lock-suffix-stripped',
+  'truncated',
+]
+
+function sanitizeBranchNameDetailed(input: string): { result: string; transforms: Set<TransformKind> } {
+  const transforms = new Set<TransformKind>()
+  if (!input) return { result: '', transforms }
+
+  // Decompose accented chars into base + combining marks.
+  const decomposed = input.normalize('NFD')
+  const withoutDiacritics = decomposed.replace(/[̀-ͯ]/g, '')
+  if (withoutDiacritics !== decomposed) transforms.add('diacritics-stripped')
 
   // Strip non-ASCII (anything outside printable ASCII range).
-  result = result.replace(/[^\x20-\x7E]/g, '')
+  let result = withoutDiacritics.replace(/[^\x20-\x7E]/g, '')
+  if (result !== withoutDiacritics) transforms.add('non-ascii-stripped')
 
   // Whitespace and forbidden-anywhere characters → '-'.
-  result = result.replace(/[\s~^:?*[\]\\]/g, '-')
+  // We split spaces from the other forbidden chars so the user gets a
+  // targeted note ("spaces" vs "~ ^ : ? *…").
+  const beforeSpaces = result
+  result = result.replace(/\s+/g, '-')
+  if (result !== beforeSpaces) transforms.add('spaces-replaced')
+
+  const beforeForbidden = result
+  result = result.replace(/[~^:?*[\]\\]/g, '-')
+  if (result !== beforeForbidden) transforms.add('forbidden-chars-replaced')
 
   // Forbidden sequences.
+  const beforeDots = result
   result = result.replace(/\.\.+/g, '-')
+  if (result !== beforeDots) transforms.add('dot-sequences-replaced')
+
+  const beforeAtBrace = result
   result = result.replace(/@\{/g, '-')
+  if (result !== beforeAtBrace) transforms.add('at-brace-replaced')
 
   // Strip ASCII control chars (defensive — most are filtered above).
   result = result
@@ -50,15 +107,26 @@ export function sanitizeBranchName(input: string): string {
   result = result.replace(/-+/g, '-')
 
   // Strip leading/trailing '.', '/', '-'.
+  const beforeEdges = result
   result = result.replace(/^[./-]+/, '').replace(/[./-]+$/, '')
+  if (result !== beforeEdges) transforms.add('leading-or-trailing-stripped')
 
   // Strip trailing '.lock' (case-insensitive).
+  const beforeLock = result
   result = result.replace(/\.lock$/i, '')
+  if (result !== beforeLock) transforms.add('lock-suffix-stripped')
 
   // Truncate.
-  if (result.length > 255) result = result.slice(0, 255)
+  if (result.length > 255) {
+    result = result.slice(0, 255)
+    transforms.add('truncated')
+  }
 
-  return result
+  return { result, transforms }
+}
+
+export function sanitizeBranchName(input: string): string {
+  return sanitizeBranchNameDetailed(input).result
 }
 
 export type BranchNameFeedback = {
@@ -83,36 +151,10 @@ export type BranchNameFeedback = {
  * uses this to render a live preview without reaching the backend.
  */
 export function getBranchNameFeedback(input: string): BranchNameFeedback {
-  const sanitized = sanitizeBranchName(input)
-  const changed = sanitized !== input
+  const { result: sanitized, transforms } = sanitizeBranchNameDetailed(input)
   const notes: string[] = []
-
-  if (input.length > 0 && /\s/.test(input)) {
-    notes.push("Spaces will be replaced with '-'.")
-  }
-  if (/[^\x20-\x7E]/.test(input.normalize('NFD').replace(/[̀-ͯ]/g, ''))) {
-    notes.push('Non-ASCII characters (e.g. kanji, emojis) will be removed.')
-  }
-  if (/[̀-ͯ]/.test(input.normalize('NFD'))) {
-    notes.push('Accent marks will be stripped (e.g. "é" → "e").')
-  }
-  if (/[~^:?*[\]\\]/.test(input)) {
-    notes.push("Characters ~ ^ : ? * [ ] \\ will be replaced with '-'.")
-  }
-  if (input.includes('..')) {
-    notes.push("Sequences of '.' will be replaced with '-'.")
-  }
-  if (input.includes('@{')) {
-    notes.push("'@{' is not allowed and will be replaced with '-'.")
-  }
-  if (/^[./-]/.test(input) || /[./-]$/.test(input)) {
-    notes.push("Leading/trailing '.', '/' or '-' will be stripped.")
-  }
-  if (/\.lock$/i.test(input)) {
-    notes.push("'.lock' suffix is reserved and will be stripped.")
-  }
-  if (input.length > 255) {
-    notes.push('Names longer than 255 characters will be truncated.')
+  for (const kind of NOTE_ORDER) {
+    if (transforms.has(kind)) notes.push(TRANSFORM_NOTES[kind])
   }
 
   let error: string | null = null
@@ -120,5 +162,5 @@ export function getBranchNameFeedback(input: string): BranchNameFeedback {
     error = 'No valid characters left after sanitization.'
   }
 
-  return { sanitized, changed, notes, error }
+  return { sanitized, changed: sanitized !== input, notes, error }
 }

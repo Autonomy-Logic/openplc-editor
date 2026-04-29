@@ -319,7 +319,7 @@ const GlobalVariablesEditor = () => {
 
   useEffect(() => {
     commitCodeRef.current = commitCode
-  })
+  }, [commitCode])
 
   return (
     <div ref={containerRef} aria-label='Variables editor container' className='flex  w-full flex-col gap-4'>

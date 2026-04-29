@@ -7,7 +7,6 @@ export type InitialPendingEntry = { path: string; status: PendingChangeStatus }
 export type VersionControlState = {
   versionControl: {
     activePanel: SidePanel
-    activeBranch: string | null
     selectedCommitHash: string | null
     /**
      * Files flagged by /changes at the last sync point, paired with the
@@ -60,7 +59,6 @@ export type SavedFileRecord = { path: string; content: string }
 
 export type VersionControlActions = {
   setActivePanel: (panel: SidePanel) => void
-  setActiveBranch: (branchName: string | null) => void
   setSelectedCommitHash: (hash: string | null) => void
   /**
    * Snapshot baseline + initial pending at the last "in-sync" point

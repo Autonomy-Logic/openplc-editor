@@ -82,14 +82,13 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
   const handleMerge = useCallback(
     (branch: Branch) => {
       // Source is the clicked branch; default target to the active branch
-      // (if different) — otherwise leave it blank and let the merge page validate.
-      const target = activeBranchName !== branch.name ? activeBranchName : ''
-      const params = new URLSearchParams({
-        project_id: projectId,
-        source: branch.name,
-        target,
-      }).toString()
-      window.location.href = `/merge?${params}`
+      // (if different). When source == active, omit `target` entirely so the
+      // merge page can apply its own default rather than receiving `target=`.
+      const params = new URLSearchParams({ project_id: projectId, source: branch.name })
+      if (activeBranchName !== branch.name) {
+        params.set('target', activeBranchName)
+      }
+      window.location.href = `/merge?${params.toString()}`
     },
     [projectId, activeBranchName],
   )

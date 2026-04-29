@@ -907,7 +907,7 @@ const VariablesEditor = () => {
 
   useEffect(() => {
     commitCodeRef.current = commitCode
-  })
+  }, [commitCode])
 
   return (
     <>

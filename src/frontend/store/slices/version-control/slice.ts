@@ -5,7 +5,6 @@ import type { InitialPendingEntry, SavedFileRecord, SidePanel, VersionControlSli
 
 const initialState: VersionControlSlice['versionControl'] = {
   activePanel: 'explorer',
-  activeBranch: null,
   selectedCommitHash: null,
   initialPending: [],
   baselineContent: {},
@@ -41,13 +40,6 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
       setState(
         produce<VersionControlSlice>((draft) => {
           draft.versionControl.activePanel = panel
-        }),
-      ),
-
-    setActiveBranch: (branchName: string | null) =>
-      setState(
-        produce<VersionControlSlice>((draft) => {
-          draft.versionControl.activeBranch = branchName
         }),
       ),
 
