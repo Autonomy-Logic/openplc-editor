@@ -34,13 +34,7 @@ const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g,
 
 type StoreState = ReturnType<typeof openPLCStoreBase.getState>
 
-type ProjectFileCategory =
-  | 'pou'
-  | 'server'
-  | 'remote-device'
-  | 'device-config'
-  | 'pin-mapping'
-  | 'project-json'
+type ProjectFileCategory = 'pou' | 'server' | 'remote-device' | 'device-config' | 'pin-mapping' | 'project-json'
 
 type ProjectFileSpec = {
   path: string
@@ -162,9 +156,7 @@ function serializeProjectFile(
   if (file.type === 'server') {
     const server = project.data.servers?.find((s) => s.name === fileName)
     if (!server) return []
-    return [
-      { path: `devices/servers/${fileName}.json`, content: JSON.stringify(server, null, 2), category: 'server' },
-    ]
+    return [{ path: `devices/servers/${fileName}.json`, content: JSON.stringify(server, null, 2), category: 'server' }]
   }
 
   if (file.type === 'remote-device') {
