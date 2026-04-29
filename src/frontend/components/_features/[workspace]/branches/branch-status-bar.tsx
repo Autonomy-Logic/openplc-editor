@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
-import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { useNavigation, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useActiveBranch } from '../../../../hooks/use-active-branch'
 import { BranchSwitcherPopover } from './branch-switcher-popover'
 import { DeleteBranchModal } from './delete-branch-modal'
@@ -14,6 +14,7 @@ type BranchStatusBarProps = {
 
 export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarProps) {
   const versionControl = useVersionControl()
+  const navigation = useNavigation()
   const [activeBranchName, setActiveBranch] = useActiveBranch(projectId)
   const branchButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -84,13 +85,13 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
       // Source is the clicked branch; default target to the active branch
       // (if different). When source == active, omit `target` entirely so the
       // merge page can apply its own default rather than receiving `target=`.
-      const params = new URLSearchParams({ project_id: projectId, source: branch.name })
-      if (activeBranchName !== branch.name) {
-        params.set('target', activeBranchName)
-      }
-      window.location.href = `/merge?${params.toString()}`
+      navigation.navigate('/merge', {
+        project_id: projectId,
+        source: branch.name,
+        target: activeBranchName !== branch.name ? activeBranchName : undefined,
+      })
     },
-    [projectId, activeBranchName],
+    [projectId, activeBranchName, navigation],
   )
 
   const handleDeleted = useCallback(() => {
