@@ -402,7 +402,7 @@ const WorkspaceScreen = () => {
               hitAreaMargins={{ coarse: 12, fine: 3 }}
               className='z-[99] my-[2px] w-[4px] py-2 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700 data-[resize-handle-state="hover"]:dark:bg-neutral-700'
             />
-            <ResizablePanel id='workspacePanel' order={2} defaultSize={84} className='flex h-full min-h-0 w-[400px]'>
+            <ResizablePanel id='workspacePanel' order={2} defaultSize={68} minSize={50} className='flex h-full min-h-0 overflow-hidden'>
               <div
                 id='workspaceContentPanel'
                 className='flex h-full min-h-0 flex-1 grow flex-col gap-2 overflow-hidden'
@@ -658,8 +658,9 @@ const WorkspaceScreen = () => {
                   id='chatPanel'
                   order={3}
                   defaultSize={16}
+                  minSize={16}
                   maxSize={25}
-                  className='min-w-xs relative flex h-full min-h-0 w-full'
+                  className='relative flex h-full min-h-0 w-full'
                 >
                   <ChatPanel />
                 </ResizablePanel>

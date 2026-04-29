@@ -11,7 +11,7 @@ const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-1 flex-grow gap-1 bg-neutral-100 p-2 dark:bg-neutral-900',
+        'flex h-full w-full min-w-0 flex-1 flex-grow gap-1 overflow-hidden bg-neutral-100 p-2 dark:bg-neutral-900',
         `${OS !== 'linux' && '!rounded-tl-lg'}`,
       )}
       {...res}
