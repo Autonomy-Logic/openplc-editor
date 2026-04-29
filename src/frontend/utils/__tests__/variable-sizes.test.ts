@@ -321,29 +321,29 @@ describe('parseVariableValue', () => {
     expect(result).toEqual({ value: '42', bytesRead: 1 })
   })
 
-  // TIME / DATE / TOD parsing (via formatTimeValue)
+  // TIME parsing — STruC++ wire format is a single int64_t nanoseconds duration.
+  // Helper: write `ns` as a little-endian int64 into `buf` at offset 0.
+  const writeTimeNs = (buf: Uint8Array, ns: bigint): void => {
+    new DataView(buf.buffer).setBigInt64(0, ns, true)
+  }
+
   it('parses TIME with zero value', () => {
-    const data = new Uint8Array(8)
-    // sec=0, nsec=0
-    const result = parseVariableValue(data, 0, makeBaseVar('t', 'TIME'))
+    const buf = new Uint8Array(8) // all-zero is 0 ns
+    const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result).toEqual({ value: '0s', bytesRead: 8 })
   })
 
   it('parses TIME with seconds only', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, 5, true) // 5 seconds
-    view.setInt32(4, 0, true) // 0 nanoseconds
+    writeTimeNs(buf, 5n * 1_000_000_000n) // 5 s
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result).toEqual({ value: '5s', bytesRead: 8 })
   })
 
   it('parses TIME with days, hours, minutes, seconds', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    // 1 day + 2 hours + 3 minutes + 4 seconds = 86400 + 7200 + 180 + 4 = 93784
-    view.setInt32(0, 93784, true)
-    view.setInt32(4, 0, true)
+    // 1 day + 2 hours + 3 minutes + 4 seconds = 93,784 s
+    writeTimeNs(buf, 93_784n * 1_000_000_000n)
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result.value).toBe('1d2h')
     expect(result.bytesRead).toBe(8)
@@ -351,109 +351,73 @@ describe('parseVariableValue', () => {
 
   it('parses TIME with milliseconds', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, 0, true)
-    view.setInt32(4, 5_000_000, true) // 5ms
+    writeTimeNs(buf, 5_000_000n) // 5 ms
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result.value).toBe('5ms')
   })
 
   it('parses TIME with microseconds', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, 0, true)
-    view.setInt32(4, 5_000, true) // 5us
+    writeTimeNs(buf, 5_000n) // 5 us
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result.value).toBe('5us')
   })
 
   it('parses TIME with nanoseconds only', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, 0, true)
-    view.setInt32(4, 500, true) // 500ns
+    writeTimeNs(buf, 500n)
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result.value).toBe('500ns')
   })
 
   it('parses negative TIME', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, -5, true)
-    view.setInt32(4, 0, true)
+    writeTimeNs(buf, -5n * 1_000_000_000n)
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result.value).toBe('-5s')
   })
 
-  it('parses DATE (same as TIME)', () => {
+  it('combines sec and sub-second components from a single int64', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, 10, true)
-    view.setInt32(4, 0, true)
-    const result = parseVariableValue(buf, 0, makeBaseVar('d', 'DATE'))
-    expect(result).toEqual({ value: '10s', bytesRead: 8 })
-  })
-
-  it('parses TOD (same as TIME)', () => {
-    const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, 3600, true) // 1 hour
-    view.setInt32(4, 0, true)
-    const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TOD'))
-    expect(result).toEqual({ value: '1h', bytesRead: 8 })
-  })
-
-  it('handles nsec overflow (>= 1 billion)', () => {
-    const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, 1, true) // 1 second
-    view.setInt32(4, 1_500_000_000, true) // 1.5 billion nsec = 1 extra sec + 500ms
-    const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
-    // 1 + 1 = 2 seconds, 500ms
-    expect(result.value).toBe('2s500ms')
-  })
-
-  it('handles positive sec with negative nsec', () => {
-    const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, 3, true)
-    view.setInt32(4, -500_000_000, true) // -0.5s
-    // After normalization: sec=2, nsec=500_000_000
+    // 2.5 s = 2_500_000_000 ns
+    writeTimeNs(buf, 2_500_000_000n)
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result.value).toBe('2s500ms')
   })
 
-  it('handles negative sec with positive nsec', () => {
+  it('handles negative durations with sub-second magnitudes', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, -3, true)
-    view.setInt32(4, 500_000_000, true) // +0.5s
-    // After normalization: sec=-2, nsec=-500_000_000 => negative -2s500ms
-    const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
-    expect(result.value).toBe('-2s500ms')
-  })
-
-  it('handles nsec overflow below -1 billion', () => {
-    const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    view.setInt32(0, -1, true)
-    view.setInt32(4, -1_500_000_000, true) // -1.5 billion nsec
-    // sec = -1 + trunc(-1_500_000_000/1_000_000_000) = -1 + (-1) = -2
-    // nsec = -1_500_000_000 % 1_000_000_000 = -500_000_000
-    // Both negative so no further adjustment
+    // -2.5 s = -2_500_000_000 ns
+    writeTimeNs(buf, -2_500_000_000n)
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
     expect(result.value).toBe('-2s500ms')
   })
 
   it('formats TIME with exactly two components when more exist', () => {
     const buf = new Uint8Array(8)
-    const view = new DataView(buf.buffer)
-    // 1 hour + 1 minute + 1 second = 3661
-    view.setInt32(0, 3661, true)
-    view.setInt32(4, 0, true)
+    // 1 hour + 1 minute + 1 second = 3661 s
+    writeTimeNs(buf, 3_661n * 1_000_000_000n)
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TIME'))
-    // Should show only first two: "1h1m"
     expect(result.value).toBe('1h1m')
+  })
+
+  // DATE / TOD share the int64 ns wire format but represent absolute
+  // timestamps (epoch / midnight reference). Their formatters need
+  // different epoch handling and are deferred — until then the parser
+  // returns a placeholder so consumers don't misread a duration string
+  // as a date.
+  it('parses DATE as deferred placeholder', () => {
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, 10n * 1_000_000_000n)
+    const result = parseVariableValue(buf, 0, makeBaseVar('d', 'DATE'))
+    expect(result).toEqual({ value: '<TIME>', bytesRead: 8 })
+  })
+
+  it('parses TOD as deferred placeholder', () => {
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, 3_600n * 1_000_000_000n) // 1 hour
+    const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TOD'))
+    expect(result).toEqual({ value: '<TIME>', bytesRead: 8 })
   })
 })
 

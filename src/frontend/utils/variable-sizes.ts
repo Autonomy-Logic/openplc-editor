@@ -215,13 +215,24 @@ export function parseVariableValue(
       case 'dint':
         return { value: readInt32LE(data, offset).toString(), bytesRead: 4 }
 
-      case 'time':
-      case 'date':
-      case 'tod': {
-        const tv_sec = readInt32LE(data, offset)
-        const tv_nsec = readInt32LE(data, offset + 4)
-        return { value: formatTimeValue(tv_sec, tv_nsec), bytesRead: 8 }
+      case 'time': {
+        // STruC++ stores TIME as a single int64_t nanoseconds duration
+        // (iec_types.hpp: `using TIME_t = int64_t`). Read 8 bytes as a
+        // BigInt and split into (seconds, nanoseconds) for formatTimeValue,
+        // which already handles duration formatting.
+        const totalNs = readBigInt64LE(data, offset)
+        const NS_PER_SEC = 1_000_000_000n
+        const sec = totalNs / NS_PER_SEC
+        const ns = totalNs % NS_PER_SEC
+        return { value: formatTimeValue(Number(sec), Number(ns)), bytesRead: 8 }
       }
+
+      case 'date':
+      case 'tod':
+        // DATE/TOD are also int64 ns in STruC++ but represent absolute
+        // timestamps (epoch / midnight reference) rather than durations.
+        // Their formatters need different epoch handling — deferred.
+        return { value: '<TIME>', bytesRead: 8 }
 
       case 'udint':
       case 'dword':
