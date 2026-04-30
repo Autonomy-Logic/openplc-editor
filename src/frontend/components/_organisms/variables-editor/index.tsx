@@ -194,6 +194,7 @@ const VariablesEditor = () => {
 
   useEffect(() => {
     lastParsedCodeRef.current = editorCode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor.meta.name])
 
   useEffect(() => {
@@ -219,16 +220,9 @@ const VariablesEditor = () => {
   useEffect(() => {
     if (editorVariables.display !== 'code') return
 
-    const onDocMouseDown = (e: MouseEvent) => {
-      if (!containerRef.current) return
-
-      const isInside = containerRef.current.contains(e.target as Node)
-      if (isInside) return
-
+    const tryCommit = () => {
       if (confirmRenameBlocksOpen || typeChangeModalOpen) return
-
       if (isParsingRef.current) return
-
       if (editorCode === lastParsedCodeRef.current) return
 
       isParsingRef.current = true
@@ -245,9 +239,27 @@ const VariablesEditor = () => {
         })
     }
 
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!containerRef.current) return
+      if (containerRef.current.contains(e.target as Node)) return
+      tryCommit()
+    }
+
+    // Commit on focus leaving the variables editor (covers keyboard navigation,
+    // Tab, shortcuts — anything that moves focus without a mousedown).
+    const onFocusOut = (e: FocusEvent) => {
+      if (!containerRef.current) return
+      const newTarget = e.relatedTarget as Node | null
+      if (newTarget && containerRef.current.contains(newTarget)) return
+      tryCommit()
+    }
+
+    const container = containerRef.current
     document.addEventListener('mousedown', onDocMouseDown, true)
+    container?.addEventListener('focusout', onFocusOut)
     return () => {
       document.removeEventListener('mousedown', onDocMouseDown, true)
+      container?.removeEventListener('focusout', onFocusOut)
     }
   }, [editorVariables.display, editorCode, confirmRenameBlocksOpen, typeChangeModalOpen])
 

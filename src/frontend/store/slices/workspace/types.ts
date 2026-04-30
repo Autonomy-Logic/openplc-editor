@@ -34,6 +34,7 @@ export type WorkspaceProjectTreeLeafType =
   | 'resource'
   | 'server'
   | 'remote-device'
+  | 'ethercat-device'
   | null
 
 // ---------------------------------------------------------------------------
@@ -78,7 +79,8 @@ export type WorkspaceState = {
     debuggerTargetIp: string | null
     debugCContent: string | null
     debugVariableIndexes: Map<string, number>
-    debugVariableValues: Map<string, string>
+    debugBoolValues: Map<string, string>
+    debugNonBoolValues: Map<string, string>
     debugForcedVariables: Map<string, boolean>
     debugTick: number
     debugVariableTree: Map<string, DebugTreeNode>
@@ -137,7 +139,8 @@ export type WorkspaceActions = {
   setDebuggerTargetIp: (targetIp: string | null) => void
   setDebugCContent: (content: string | null) => void
   setDebugVariableIndexes: (indexes: Map<string, number>) => void
-  setDebugVariableValues: (values: Map<string, string>) => void
+  setDebugBoolValues: (values: Map<string, string>) => void
+  setDebugNonBoolValues: (values: Map<string, string>) => void
   setDebugForcedVariables: (forced: Map<string, boolean>) => void
   setDebugTick: (tick: number) => void
   setDebugVariableTree: (tree: Map<string, DebugTreeNode>) => void

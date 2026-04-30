@@ -10,6 +10,8 @@ import { ConfigIcon } from '../../../assets/icons/interface/Config'
 import { ArrayIcon } from '../../../assets/icons/project/Array'
 import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { PLCIcon } from '../../../assets/icons/project/PLC'
+import { RemoteDeviceIcon } from '../../../assets/icons/project/RemoteDevice'
+import { ServerIcon } from '../../../assets/icons/project/Server'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
 import { LanguageIcon, LanguageIconType } from '../../../data/constants/language-icons'
 import { PouIcon, PouIconType } from '../../../data/constants/pou-icons'
@@ -28,7 +30,7 @@ type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
 
 const Breadcrumbs = () => {
   const {
-    editor: { meta },
+    editor,
     project: {
       meta: { name },
       data: { dataTypes },
@@ -36,6 +38,8 @@ const Breadcrumbs = () => {
     workspace: { isDebuggerVisible, fbDebugInstances, fbSelectedInstance },
     workspaceActions: { setFbSelectedInstance },
   } = useOpenPLCStore()
+
+  const { meta } = editor
 
   const derivationIcons = {
     enumerated: EnumIcon,
@@ -104,6 +108,45 @@ const Breadcrumbs = () => {
 
   // Determine if we should show the instance dropdown
   const showInstanceDropdown = isFunctionBlock && isDebuggerVisible && fbInstances.length > 0
+
+  // Remote device and server breadcrumbs
+  if (editor.type === 'plc-remote-device' || editor.type === 'plc-server') {
+    const Icon = editor.type === 'plc-server' ? ServerIcon : RemoteDeviceIcon
+    const category = editor.type === 'plc-server' ? 'Servers' : 'Remote Devices'
+    return (
+      <ol className='flex h-1/2 cursor-default select-none items-center p-2'>
+        <li>
+          <BreadcrumbItem Icon={PLCIcon} text={name} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={Icon} text={category} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={Icon} text={meta.name} isLast />
+        </li>
+      </ol>
+    )
+  }
+
+  // EtherCAT slave device breadcrumbs
+  if (editor.type === 'plc-ethercat-device') {
+    return (
+      <ol className='flex h-1/2 cursor-default select-none items-center p-2'>
+        <li>
+          <BreadcrumbItem Icon={PLCIcon} text={name} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={RemoteDeviceIcon} text='Remote Devices' isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={RemoteDeviceIcon} text={editor.meta.busName} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={RemoteDeviceIcon} text={meta.name} isLast />
+        </li>
+      </ol>
+    )
+  }
 
   return (
     <NavigationPanelBreadcrumbs

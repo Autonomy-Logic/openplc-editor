@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
+import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
+import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -23,11 +25,13 @@ export const Contact = (block: ContactProps) => {
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
-    workspace: { isDebuggerVisible, debugVariableValues, debugVariableIndexes, debugForcedVariables },
-    workspaceActions: { setDebugForcedVariables },
   } = useOpenPLCStore()
 
   const debugger_ = useDebugger()
+  const isDebuggerVisible = useIsDebuggerVisible()
+  const getCompositeKey = useDebugCompositeKey()
+  const compositeKey = getCompositeKey(data.variable.name)
+  const { value: debugValue, isForced, forcedValue, debugIndex } = useDebugValue(compositeKey)
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
   const [contactVariableValue, setContactVariableValue] = useState<string>(data.variable.name)
@@ -48,8 +52,6 @@ export const Contact = (block: ContactProps) => {
       triggerSubmit: () => void
     }
   >(null)
-
-  const getCompositeKey = useDebugCompositeKey()
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
@@ -129,31 +131,16 @@ export const Contact = (block: ContactProps) => {
     setWrongVariable(false)
   }, [pous])
 
-  const getDebuggerStrokeColor = (): string | undefined => {
-    if (!isDebuggerVisible || !data.variable.name || wrongVariable) {
-      return undefined
-    }
+  const debuggerStrokeColor = (() => {
+    if (!isDebuggerVisible || !data.variable.name || wrongVariable) return undefined
+    if (debugValue === undefined) return undefined
 
-    const compositeKey = getCompositeKey(data.variable.name)
-    const value = debugVariableValues.get(compositeKey)
-
-    if (value === undefined) {
-      return undefined
-    }
-
-    const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
+    const isTrue = debugValue === '1' || debugValue.toUpperCase() === 'TRUE'
     const displayState = data.variant === 'negated' ? !isTrue : isTrue
 
-    const isForced = debugForcedVariables.has(compositeKey)
-    if (isForced) {
-      const forcedValue = debugForcedVariables.get(compositeKey)
-      return forcedValue ? '#80C000' : '#4080FF'
-    }
-
+    if (isForced) return forcedValue ? '#80C000' : '#4080FF'
     return displayState ? '#00FF00' : '#0464FB'
-  }
-
-  const debuggerStrokeColor = getDebuggerStrokeColor()
+  })()
 
   const [isContextMenuOpen, setIsContextMenuOpen] = useState<boolean>(false)
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
@@ -162,57 +149,21 @@ export const Contact = (block: ContactProps) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-
-    if (!data.variable.name) return
-
-    const compositeKey = getCompositeKey(data.variable.name)
-    const variableIndex = debugVariableIndexes.get(compositeKey)
-    if (variableIndex === undefined) return
-
-    const success = await debugger_.setVariable(variableIndex, true, new Uint8Array([1]))
-    if (success) {
-      const newForced = new Map(debugForcedVariables)
-      newForced.set(compositeKey, true)
-      setDebugForcedVariables(newForced)
-    }
+    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
   }
 
   const handleForceFalse = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-
-    if (!data.variable.name) return
-
-    const compositeKey = getCompositeKey(data.variable.name)
-    const variableIndex = debugVariableIndexes.get(compositeKey)
-    if (variableIndex === undefined) return
-
-    const success = await debugger_.setVariable(variableIndex, true, new Uint8Array([0]))
-    if (success) {
-      const newForced = new Map(debugForcedVariables)
-      newForced.set(compositeKey, false)
-      setDebugForcedVariables(newForced)
-    }
+    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
   }
 
   const handleReleaseForce = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-
-    if (!data.variable.name) return
-
-    const compositeKey = getCompositeKey(data.variable.name)
-    const variableIndex = debugVariableIndexes.get(compositeKey)
-    if (variableIndex === undefined) return
-
-    const success = await debugger_.setVariable(variableIndex, false)
-    if (success) {
-      const newForced = new Map(debugForcedVariables)
-      newForced.delete(compositeKey)
-      setDebugForcedVariables(newForced)
-    }
+    if (data.variable.name) await releaseDebugVariable(debugger_, compositeKey, debugIndex)
   }
 
   const handleClick = (e: React.MouseEvent) => {
@@ -376,9 +327,6 @@ export const Contact = (block: ContactProps) => {
         {isDebuggerVisible &&
           contextMenuPosition &&
           (() => {
-            const compositeKey = getCompositeKey(data.variable.name)
-            const isForced = debugForcedVariables.has(compositeKey)
-
             return (
               <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
                 <Popover.Portal>

@@ -14,12 +14,12 @@ const ActivityBarButton = forwardRef<HTMLButtonElement, IActivityBarButtonProps>
     <button
       ref={ref}
       type='button'
-      className={cn('flex h-6 w-full cursor-pointer items-center justify-center', className)}
+      className={cn('flex h-8 w-full cursor-pointer items-center justify-center', className)}
       {...res}
     >
       <div
         className={cn(
-          'rounded-md p-[6px] transition-all duration-150 hover:bg-brand-medium dark:hover:bg-neutral-900',
+          'rounded-md p-[5px] transition-all duration-150 hover:bg-brand-medium dark:hover:bg-neutral-900',
           isActive && 'bg-brand-medium-dark dark:bg-neutral-700',
         )}
       >

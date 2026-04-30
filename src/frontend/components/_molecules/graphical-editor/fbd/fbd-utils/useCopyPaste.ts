@@ -61,6 +61,7 @@ export const useFBDClipboard = ({
         variant: 'default',
       })
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rung],
   )
 
@@ -89,6 +90,7 @@ export const useFBDClipboard = ({
         variant: 'default',
       })
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rung, handleDeleteNodes],
   )
 
@@ -169,6 +171,7 @@ export const useFBDClipboard = ({
         variant: 'default',
       })
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [insideViewport, mousePosition, reactFlowInstance, fbdFlowActions, rung],
   )
 

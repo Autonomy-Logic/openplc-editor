@@ -9,19 +9,29 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   isEnabled: false,
   isLoading: false,
   hasConsented: false,
-  model: 'haiku',
+  preferences: {
+    inlineCompletionsEnabled: true,
+  },
   creditsUsed: 0,
   creditsTotal: 500,
   tier: 'free',
   currentPeriodEnd: null,
-  conversations: [],
-  activeConversationPou: null,
+  messages: [],
+  activeEditorPou: null,
+  isAgenticLoopRunning: false,
   isChatOpen: false,
   error: null,
+  pendingDiffs: {},
 }
 
 export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AISlice, [], [], AISlice> {
-  const overrides = config ? { isEnabled: config.isFeatureEnabled, hasConsented: config.hasUserConsented } : {}
+  const overrides = config
+    ? {
+        isEnabled: config.isFeatureEnabled,
+        hasConsented: config.hasUserConsented,
+        preferences: { inlineCompletionsEnabled: config.inlineCompletionsEnabled },
+      }
+    : {}
   return (setState) => ({
     ai: { ...DEFAULT_AI_STATE, ...overrides },
 
@@ -47,10 +57,10 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           }),
         )
       },
-      setAIModel: (model) => {
+      setPreference: (key, value) => {
         setState(
           produce(({ ai }: AISlice) => {
-            ai.model = model
+            ai.preferences[key] = value
           }),
         )
       },
@@ -83,60 +93,55 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           }),
         )
       },
-      setActiveConversationPou: (pouName) => {
+      setActiveEditorPou: (pouName) => {
         setState(
           produce(({ ai }: AISlice) => {
-            ai.activeConversationPou = pouName
+            ai.activeEditorPou = pouName
           }),
         )
       },
-      addMessage: (pouName, message) => {
+      setAgenticLoopRunning: (running) => {
         setState(
           produce(({ ai }: AISlice) => {
-            let conversation = ai.conversations.find((c) => c.pouName === pouName)
-            if (!conversation) {
-              conversation = { pouName, messages: [] }
-              ai.conversations.push(conversation)
-            }
-            conversation.messages.push(message)
-            if (conversation.messages.length > MAX_CONVERSATION_MESSAGES) {
-              conversation.messages = conversation.messages.slice(-MAX_CONVERSATION_MESSAGES)
+            ai.isAgenticLoopRunning = running
+          }),
+        )
+      },
+      addMessage: (message) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.messages.push(message)
+            if (ai.messages.length > MAX_CONVERSATION_MESSAGES) {
+              ai.messages = ai.messages.slice(-MAX_CONVERSATION_MESSAGES)
             }
           }),
         )
       },
-      updateMessageContent: (pouName, messageId, content) => {
+      updateMessageContent: (messageId, content) => {
         setState(
           produce(({ ai }: AISlice) => {
-            const conversation = ai.conversations.find((c) => c.pouName === pouName)
-            if (!conversation) return
-            const msg = conversation.messages.find((m) => m.id === messageId)
+            const msg = ai.messages.find((m) => m.id === messageId)
             if (msg) {
               msg.content = content
             }
           }),
         )
       },
-      rateMessage: (pouName, messageId, rating) => {
+      rateMessage: (messageId, rating) => {
         setState(
           produce(({ ai }: AISlice) => {
-            const conversation = ai.conversations.find((c) => c.pouName === pouName)
-            if (!conversation) return
-            const msg = conversation.messages.find((m) => m.id === messageId)
+            const msg = ai.messages.find((m) => m.id === messageId)
             if (msg) {
               msg.rating = rating
             }
           }),
         )
       },
-      clearConversation: (pouName) => {
+      clearConversation: () => {
         setState(
           produce(({ ai }: AISlice) => {
-            ai.conversations = ai.conversations.filter((c) => c.pouName !== pouName)
-            if (ai.activeConversationPou === pouName) {
-              ai.activeConversationPou = null
-              ai.error = null
-            }
+            ai.messages = []
+            ai.error = null
           }),
         )
       },
@@ -151,6 +156,47 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.isChatOpen = open
+          }),
+        )
+      },
+      setPendingDiff: (pouName, entry) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.pendingDiffs[pouName] = entry
+          }),
+        )
+      },
+      updatePendingDiffAcceptedHunks: (pouName, acceptedHunks) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            const existing = ai.pendingDiffs[pouName]
+            if (!existing) return
+            existing.acceptedHunks = acceptedHunks
+          }),
+        )
+      },
+      updatePendingDiff: (pouName, { newBody, hunks, acceptedHunks }) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            const existing = ai.pendingDiffs[pouName]
+            if (!existing) return
+            existing.newBody = newBody
+            existing.hunks = hunks
+            existing.acceptedHunks = acceptedHunks
+          }),
+        )
+      },
+      clearPendingDiff: (pouName) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            delete ai.pendingDiffs[pouName]
+          }),
+        )
+      },
+      clearAllPendingDiffs: () => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.pendingDiffs = {}
           }),
         )
       },

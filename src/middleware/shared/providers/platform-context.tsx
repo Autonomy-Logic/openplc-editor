@@ -9,7 +9,7 @@ import type { PlatformPorts } from './types'
  *   // In a component:
  *   const { compiler, runtime, capabilities } = usePlatform()
  *   await compiler.compileProgram(args, onProgress)
- *   if (capabilities.hasNativeWindowControls) { ... }
+ *   if (capabilities.isNativeApplication) { ... }
  *
  * Wiring:
  *   // At the app root (editor):
@@ -94,10 +94,22 @@ export function useTheme() {
   return usePlatform().theme
 }
 
+export function useVersionControl() {
+  return usePlatform().versionControl
+}
+
+export function useNavigation() {
+  return usePlatform().navigation
+}
+
 export function useCapabilities() {
   return usePlatform().capabilities
 }
 
 export function useAI() {
   return usePlatform().ai
+}
+
+export function useEsi() {
+  return usePlatform().esi
 }

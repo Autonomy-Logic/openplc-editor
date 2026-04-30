@@ -42,9 +42,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
   const [intervalValue, setIntervalValue] = useState('T#20ms')
   const projectPort = useProject()
   const {
-    projectActions: { setProject },
-    deviceActions: { setDeviceDefinitions },
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleOpenProjectResponse },
   } = useOpenPLCStore()
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
@@ -73,18 +71,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
         return
       }
 
-      // Hydrate store with returned project data
-      setProject({
-        meta: result.data.meta,
-        data: result.data.projectData,
-      })
-      if (result.data.deviceConfiguration || result.data.devicePinMapping) {
-        setDeviceDefinitions({
-          configuration: result.data.deviceConfiguration,
-          pinMapping: result.data.devicePinMapping,
-        })
-      }
-      setEditingState('saved')
+      handleOpenProjectResponse(result.data)
     } catch (_error) {
       toast({
         title: 'Cannot create a project!',

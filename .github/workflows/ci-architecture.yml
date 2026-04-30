@@ -1,11 +1,7 @@
 name: CI - Architecture
 
 on:
-  pull_request:
-    branches:
-      - main
-      - development
-      - refactor/shared-ui-migration
+  workflow_call:
 
 jobs:
   architecture:

@@ -1,4 +1,4 @@
-import { useOpenPLCStore } from '../../../store'
+import { useDebugVariableValue } from '../../../hooks/use-debug-value'
 import { cn } from '../../../utils/cn'
 
 type DebugValueBadgeProps = {
@@ -15,15 +15,11 @@ type DebugValueBadgeProps = {
  * Designed to be used by both FBD and LD variable/block nodes.
  */
 const DebugValueBadge = ({ compositeKey, variableType, position = 'right' }: DebugValueBadgeProps) => {
-  const {
-    workspace: { debugVariableValues },
-  } = useOpenPLCStore()
+  const value = useDebugVariableValue(compositeKey)
 
   if (!variableType || variableType.toUpperCase() === 'BOOL') {
     return null
   }
-
-  const value = debugVariableValues.get(compositeKey)
   if (value === undefined) {
     return null
   }

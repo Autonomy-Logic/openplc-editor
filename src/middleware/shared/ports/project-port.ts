@@ -48,6 +48,13 @@ export interface ProjectResponse {
     devicePinMapping?: DevicePin[]
     /** Warnings from parsing (e.g. dropped files that failed validation). */
     warnings?: string[]
+    /**
+     * Raw file contents as returned by the backend (path → text), captured
+     * before parsing. Used by the save flow to upload byte-identical content
+     * for files the user didn't edit, avoiding phantom "modified" diffs that
+     * arise from parse-serialize formatting drift.
+     */
+    rawLoadedFiles?: Record<string, string>
   }
   error?: {
     title: string

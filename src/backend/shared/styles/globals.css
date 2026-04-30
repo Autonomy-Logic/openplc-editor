@@ -153,6 +153,35 @@
   }
 }
 
+.sidebar-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  direction: rtl;
+}
+
+.sidebar-scroll > * {
+  direction: ltr;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+  background-color: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(180, 208, 254, 0.3);
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(180, 208, 254, 0.6);
+}
+
 .apexcharts-yaxis-label tspan,
 .apexcharts-xaxis-label tspan {
   @apply fill-neutral-1000 !text-[10px] dark:fill-neutral-50;
@@ -204,4 +233,22 @@
 [data-radix-select-content],
 [role='listbox'] {
   z-index: 1000 !important;
+}
+
+/* AI Diff Review decorations */
+.ai-diff-added {
+  background: rgba(34, 197, 94, 0.12) !important;
+}
+.dark .ai-diff-added {
+  background: rgba(34, 197, 94, 0.1) !important;
+}
+.ai-diff-added-gutter {
+  background: rgba(34, 197, 94, 0.3) !important;
+  border-left: 3px solid #22c55e !important;
+}
+.ai-diff-removed-zone {
+  background: rgba(239, 68, 68, 0.06);
+}
+.dark .ai-diff-removed-zone {
+  background: rgba(239, 68, 68, 0.08);
 }

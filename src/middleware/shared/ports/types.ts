@@ -7,6 +7,8 @@
  * implement the ports that use them.
  */
 
+import type { ConfiguredEtherCATDevice } from './esi-types'
+
 // ---------------------------------------------------------------------------
 // Result wrappers
 // ---------------------------------------------------------------------------
@@ -57,6 +59,8 @@ export interface PLCTask {
   triggering: 'Cyclic' | 'Interrupt'
   interval: string
   priority: number
+  isSystemTask?: boolean
+  associatedDevice?: string
 }
 
 export interface PLCInstance {
@@ -382,11 +386,26 @@ export interface PLCServer {
   opcuaServerConfig?: OpcUaServerConfig
 }
 
+// EtherCAT
+export interface EtherCATMasterConfig {
+  enabled?: boolean
+  networkInterface: string
+  cycleTimeUs: number
+  watchdogTimeoutCycles?: number
+  taskPriority?: number
+}
+
+export interface EthercatConfig {
+  masterConfig?: EtherCATMasterConfig
+  devices: ConfiguredEtherCATDevice[]
+}
+
 // PLCRemoteDevice
 export interface PLCRemoteDevice {
   name: string
   protocol: RemoteDeviceProtocol
   modbusTcpConfig?: ModbusRemoteTcpConfig
+  ethercatConfig?: EthercatConfig
 }
 
 // ---------------------------------------------------------------------------
@@ -703,6 +722,8 @@ export interface AIFeatureConfig {
   isFeatureEnabled: boolean
   /** Whether the user has previously consented to AI usage */
   hasUserConsented: boolean
+  /** User preference: whether inline ghost-text completions are active in editors */
+  inlineCompletionsEnabled: boolean
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
@@ -28,6 +29,7 @@ import { ServerIcon } from '../../../assets/icons/project/Server'
 import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
+import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
@@ -238,6 +240,204 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
   )
 }
 
+type IProjectTreeExpandableLeafProps = ComponentPropsWithoutRef<'li'> & {
+  leafLang: IProjectTreeLeafProps['leafLang']
+  leafType: WorkspaceProjectTreeLeafType
+  label?: string
+  children?: ReactNode
+}
+
+const ProjectTreeExpandableLeaf = ({
+  leafLang,
+  leafType,
+  label,
+  children,
+  onClick: handleLeafClick,
+  ...res
+}: IProjectTreeExpandableLeafProps) => {
+  const {
+    editor: {
+      meta: { name },
+    },
+    workspace: { selectedProjectTreeLeaf, isDebuggerVisible },
+    workspaceActions: { setSelectedProjectTreeLeaf },
+    remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
+    fileActions: { getFile },
+  } = useOpenPLCStore()
+  const projectPort = useProject()
+  const { hasVersionControl } = useCapabilities()
+
+  const [isExpanded, setIsExpanded] = useState(true)
+  const [isEditing, setIsEditing] = useState(false)
+  const [newLabel, setNewLabel] = useState(label || '')
+  const [isPopoverOpen, setPopoverOpen] = useState(false)
+  const inputNameRef = useRef<HTMLInputElement>(null)
+
+  const { LeafIcon } = LeafSources[leafLang]
+  const { file: associatedFile } = getFile({ name: label || '' })
+  const handleLabel = useCallback((l: string | undefined) => unsavedLabel(l, associatedFile), [associatedFile])
+
+  const handleLeafSelection = () => {
+    if (!label) return
+    const { label: currentLabel } = selectedProjectTreeLeaf
+    if (label === currentLabel) return
+    setSelectedProjectTreeLeaf({ label, type: leafType })
+  }
+
+  const handleRenameFile = async (renamed: string) => {
+    setIsEditing(false)
+    if (!renamed || !label) return
+    if (renamed === label) return
+    const res = renameRemoteDevice(label, renamed)
+    if (!res.ok) {
+      setNewLabel(label || '')
+      return
+    }
+    // Only auto-persist on platforms that track per-file changes — otherwise
+    // the user's first action on a fresh project triggers a full save with
+    // no version-control benefit. Local editor users keep the existing
+    // "save on Ctrl+S" mental model.
+    if (hasVersionControl) {
+      // Persist immediately so refresh doesn't show the old name (rename
+      // queues the old path's deletion in `pendingDeletions`, save propagates).
+      await executeSaveProject(projectPort)
+    }
+  }
+
+  const handleDeleteFile = () => {
+    if (label) deleteRemoteDeviceRequest(label)
+  }
+
+  useEffect(() => {
+    if (isEditing && inputNameRef.current) {
+      inputNameRef.current.focus()
+      inputNameRef.current.select()
+    }
+  }, [inputNameRef, isEditing])
+
+  const popoverOptions = useMemo(
+    () => [
+      {
+        name: 'Rename',
+        onClick: () => setIsEditing(true),
+        icon: <PencilIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+      },
+      {
+        name: 'Delete',
+        onClick: () => handleDeleteFile(),
+        icon: <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [label],
+  )
+
+  return (
+    <li className='cursor-default' {...res}>
+      <div
+        className={cn(
+          'group flex cursor-pointer flex-row items-center py-1 pl-[36px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+          name === label && 'bg-slate-50 dark:bg-neutral-900',
+        )}
+      >
+        <ArrowIcon
+          direction='right'
+          className={cn(
+            'mr-[6px] h-4 w-4 flex-shrink-0 cursor-pointer stroke-brand-light transition-all',
+            isExpanded && 'rotate-270 stroke-brand',
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsExpanded(!isExpanded)
+          }}
+        />
+        <div
+          className='flex flex-1 items-center overflow-hidden'
+          onClick={(e) => {
+            handleLeafSelection()
+            if (label === name) return
+            if (handleLeafClick) handleLeafClick(e as unknown as React.MouseEvent<HTMLLIElement>)
+          }}
+        >
+          <LeafIcon className='flex-shrink-0' />
+          {isEditing ? (
+            <input
+              ref={inputNameRef}
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleRenameFile(newLabel.trim() || '')
+                if (e.key === 'Escape') setIsEditing(false)
+              }}
+              onBlur={() => void handleRenameFile(newLabel || '')}
+              className='w-full border-0 bg-transparent px-1 text-xs text-neutral-850 focus:outline-none dark:text-neutral-300'
+            />
+          ) : (
+            <span
+              className={cn(
+                'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+                name === label && 'font-medium text-neutral-1000 dark:text-white',
+                isUnsaved(associatedFile) && 'italic',
+              )}
+              onDoubleClick={() => !isDebuggerVisible && setIsEditing(true)}
+            >
+              {handleLabel(label) || ''}
+            </span>
+          )}
+        </div>
+
+        <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
+          <Popover.Trigger
+            disabled={isDebuggerVisible}
+            className={cn(
+              'mr-2 flex h-5 w-5 items-center justify-center rounded-md opacity-0 hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-850',
+              {
+                'bg-neutral-200 opacity-100 dark:bg-neutral-850': isPopoverOpen,
+                'cursor-not-allowed': isDebuggerVisible,
+              },
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreOptionsIcon className='h-4 w-4' />
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              align='start'
+              side='right'
+              sideOffset={2}
+              className={cn(
+                'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                'focus:outline-none focus-visible:outline-none',
+                'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {popoverOptions.map((option, index) => (
+                <div
+                  key={option.name}
+                  className={cn(
+                    'flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900',
+                    { 'rounded-t-lg': index === 0, 'rounded-b-lg': index === popoverOptions.length - 1 },
+                  )}
+                  onClick={() => {
+                    option.onClick()
+                    setPopoverOpen(false)
+                  }}
+                >
+                  {option.icon}
+                  <p>{option.name}</p>
+                </div>
+              ))}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
+
+      {children && isExpanded && <ul className='list-none p-0 pl-4'>{children}</ul>}
+    </li>
+  )
+}
+
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   leafLang:
     | 'il'
@@ -256,8 +456,11 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'devOrchestrators'
     | 'server'
     | 'remoteDevice'
+    | 'ethercatDevice'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
+  busName?: string
+  deviceId?: string
 }
 
 const LeafSources = {
@@ -277,8 +480,17 @@ const LeafSources = {
   devOrchestrators: { LeafIcon: OrchestratorIcon },
   server: { LeafIcon: ServerIcon },
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
+  ethercatDevice: { LeafIcon: DeviceTransferIcon },
 }
-const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
+const ProjectTreeLeaf = ({
+  leafLang,
+  leafType,
+  label,
+  busName,
+  deviceId,
+  onClick: handleLeafClick,
+  ...res
+}: IProjectTreeLeafProps) => {
   const {
     editor: {
       meta: { name },
@@ -289,8 +501,11 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
     serverActions: { deleteRequest: deleteServerRequest, rename: renameServer },
     remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
+    ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
     fileActions: { getFile },
   } = useOpenPLCStore()
+  const projectPort = useProject()
+  const { hasVersionControl } = useCapabilities()
 
   const [isEditing, setIsEditing] = useState(false)
   const [newLabel, setNewLabel] = useState(label || '')
@@ -302,6 +517,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
   const isServer = useMemo(() => leafLang === 'server', [leafLang])
   const isRemoteDevice = useMemo(() => leafLang === 'remoteDevice', [leafLang])
+  const isEthercatDevice = useMemo(() => leafLang === 'ethercatDevice', [leafLang])
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -323,10 +539,10 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     setSelectedProjectTreeLeaf({ label, type: leafType })
   }
 
-  const handleRenameFile = (newLabel: string) => {
+  const handleRenameFile = async (newLabel: string) => {
     setIsEditing(false)
 
-    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice) {
+    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice && !isEthercatDevice) {
       toast({
         title: 'Error',
         description: 'Only POU, datatype, server, or remote device files can be renamed.',
@@ -344,11 +560,28 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       return
     }
 
+    // No-op: user blurred or hit Enter without changing anything. Skip the
+    // auto-save below so we don't persist a phantom rename event.
+    if (newLabel === label) return
+
+    // Auto-save on rename only matters on platforms that track per-file
+    // changes (web). Local editor users would otherwise eat a full project
+    // save on every rename with no version-control payoff — so gate the
+    // persist behind the capability and let the editor follow the regular
+    // Ctrl+S flow.
+    const persist = async () => {
+      if (hasVersionControl) await executeSaveProject(projectPort)
+    }
+
     if (isAPou) {
       const res = renamePou(label, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
+        return
       }
+      // Persist immediately: rename creates a new file in S3 and removes
+      // the old, plus updates the badge correctly via pendingDeletions.
+      await persist()
       return
     }
 
@@ -356,7 +589,11 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       const res = renameDatatype(label, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
+        return
       }
+      // Datatype lives inside project.json — saving rewrites it with the
+      // renamed entry. No separate file deletion needed.
+      await persist()
       return
     }
 
@@ -364,7 +601,9 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       const res = renameServer(label, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
+        return
       }
+      await persist()
       return
     }
 
@@ -372,12 +611,26 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       const res = renameRemoteDevice(label, newLabel)
       if (!res.ok) {
         setNewLabel(label || '')
+        return
       }
+      await persist()
+      return
+    }
+
+    if (isEthercatDevice && busName && deviceId) {
+      const res = renameEthercatDevice(busName, deviceId, newLabel)
+      if (!res.ok) {
+        setNewLabel(label || '')
+      }
+      // Ethercat device lives inside its parent bus file — the parent will
+      // be re-serialized on the next regular save. Skipping auto-save here
+      // matches the existing behavior; if persistence becomes an issue,
+      // we'll add it.
       return
     }
   }
 
-  const handleDuplicateFile = () => {
+  const handleDuplicateFile = async () => {
     if (!isAPou && !isDatatype) {
       toast({
         title: 'Error',
@@ -398,11 +651,18 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
 
     if (isAPou) {
       duplicatePou(label, `${label}_copy`)
+      // Persist the new POU file to S3 immediately. Without this, the duplicate
+      // exists only in editor memory and disappears on refresh — same class of
+      // bug as the delete flow we fixed in delete-confirmation-modal.
+      await executeSaveProject(projectPort)
       return
     }
 
     if (isDatatype) {
       duplicateDatatype(label, `${label}_copy`)
+      // Datatypes live inside project.json; saving the project rewrites it
+      // with the new datatype included.
+      await executeSaveProject(projectPort)
       return
     }
 
@@ -414,7 +674,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   }
 
   const handleDeleteFile = () => {
-    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice) {
+    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice && !isEthercatDevice) {
       toast({
         title: 'Error',
         description: 'Only POU, datatype, server, or remote device files can be deleted.',
@@ -452,11 +712,10 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       return
     }
 
-    toast({
-      title: 'Error',
-      description: 'Only POU, datatype, server, or remote device files can be deleted.',
-      variant: 'fail',
-    })
+    if (isEthercatDevice && busName && deviceId) {
+      deleteEthercatDevice(busName, deviceId)
+      return
+    }
   }
 
   const handleLabel = useCallback((label: string | undefined) => unsavedLabel(label, associatedFile), [associatedFile])
@@ -590,4 +849,4 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   )
 }
 
-export { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeNestedBranch, ProjectTreeRoot }
+export { ProjectTreeBranch, ProjectTreeExpandableLeaf, ProjectTreeLeaf, ProjectTreeNestedBranch, ProjectTreeRoot }

@@ -7,12 +7,14 @@ export {
   useCompiler,
   useDebugger,
   useDevice,
+  useNavigation,
   useOrchestrator,
   useProject,
   useRuntime,
   useSimulator,
   useSystem,
   useTheme,
+  useVersionControl,
   useWindow,
 } from './platform-context'
 export type { PlatformPorts } from './types'

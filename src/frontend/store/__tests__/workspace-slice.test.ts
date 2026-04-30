@@ -49,7 +49,8 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debuggerTargetIp).toBeNull()
     expect(workspace.debugCContent).toBeNull()
     expect(workspace.debugVariableIndexes).toEqual(new Map())
-    expect(workspace.debugVariableValues).toEqual(new Map())
+    expect(workspace.debugBoolValues).toEqual(new Map())
+    expect(workspace.debugNonBoolValues).toEqual(new Map())
     expect(workspace.debugForcedVariables).toEqual(new Map())
     expect(workspace.debugTick).toBe(0)
     expect(workspace.debugVariableTree).toEqual(new Map())
@@ -309,15 +310,26 @@ describe('createWorkspaceSlice', () => {
     expect(store.getState().workspace.debugVariableIndexes).toEqual(indexes)
   })
 
-  it('setDebugVariableValues merges values into existing map', () => {
-    const initial = new Map([['var1', 'val1']])
-    store.getState().workspaceActions.setDebugVariableValues(initial)
-    expect(store.getState().workspace.debugVariableValues.get('var1')).toBe('val1')
+  it('setDebugBoolValues merges values into existing map', () => {
+    const initial = new Map([['var1', 'TRUE']])
+    store.getState().workspaceActions.setDebugBoolValues(initial)
+    expect(store.getState().workspace.debugBoolValues.get('var1')).toBe('TRUE')
 
-    const update = new Map([['var2', 'val2']])
-    store.getState().workspaceActions.setDebugVariableValues(update)
-    expect(store.getState().workspace.debugVariableValues.get('var1')).toBe('val1')
-    expect(store.getState().workspace.debugVariableValues.get('var2')).toBe('val2')
+    const update = new Map([['var2', 'FALSE']])
+    store.getState().workspaceActions.setDebugBoolValues(update)
+    expect(store.getState().workspace.debugBoolValues.get('var1')).toBe('TRUE')
+    expect(store.getState().workspace.debugBoolValues.get('var2')).toBe('FALSE')
+  })
+
+  it('setDebugNonBoolValues merges values into existing map', () => {
+    const initial = new Map([['var1', '42']])
+    store.getState().workspaceActions.setDebugNonBoolValues(initial)
+    expect(store.getState().workspace.debugNonBoolValues.get('var1')).toBe('42')
+
+    const update = new Map([['var2', '3.14']])
+    store.getState().workspaceActions.setDebugNonBoolValues(update)
+    expect(store.getState().workspace.debugNonBoolValues.get('var1')).toBe('42')
+    expect(store.getState().workspace.debugNonBoolValues.get('var2')).toBe('3.14')
   })
 
   it('setDebugForcedVariables', () => {
@@ -418,7 +430,7 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setDebuggerTargetIp('192.168.0.1')
     store.getState().workspaceActions.setDebugCContent('code')
     store.getState().workspaceActions.setDebugVariableIndexes(new Map([['x', 1]]))
-    store.getState().workspaceActions.setDebugVariableValues(new Map([['x', 'true']]))
+    store.getState().workspaceActions.setDebugBoolValues(new Map([['x', 'true']]))
     store.getState().workspaceActions.setDebugForcedVariables(new Map([['x', true]]))
     store.getState().workspaceActions.setDebugTick(100)
     store
@@ -456,7 +468,8 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debuggerTargetIp).toBeNull()
     expect(workspace.debugCContent).toBeNull()
     expect(workspace.debugVariableIndexes.size).toBe(0)
-    expect(workspace.debugVariableValues.size).toBe(0)
+    expect(workspace.debugBoolValues.size).toBe(0)
+    expect(workspace.debugNonBoolValues.size).toBe(0)
     expect(workspace.debugForcedVariables.size).toBe(0)
     expect(workspace.debugTick).toBe(0)
     expect(workspace.debugVariableTree.size).toBe(0)
@@ -502,7 +515,7 @@ describe('createWorkspaceSlice', () => {
   it('removeDebugVariable removes from all relevant maps', () => {
     const key = 'PROGRAM0::myVar'
     store.getState().workspaceActions.setDebugVariableIndexes(new Map([[key, 5]]))
-    store.getState().workspaceActions.setDebugVariableValues(new Map([[key, '42']]))
+    store.getState().workspaceActions.setDebugNonBoolValues(new Map([[key, '42']]))
     store.getState().workspaceActions.setDebugForcedVariables(new Map([[key, true]]))
     store
       .getState()
@@ -515,7 +528,8 @@ describe('createWorkspaceSlice', () => {
 
     const { workspace } = store.getState()
     expect(workspace.debugVariableIndexes.has(key)).toBe(false)
-    expect(workspace.debugVariableValues.has(key)).toBe(false)
+    expect(workspace.debugBoolValues.has(key)).toBe(false)
+    expect(workspace.debugNonBoolValues.has(key)).toBe(false)
     expect(workspace.debugForcedVariables.has(key)).toBe(false)
     expect(workspace.debugVariableTree.has(key)).toBe(false)
     expect(workspace.debugExpandedNodes.has(key)).toBe(false)
@@ -558,7 +572,8 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debuggerTargetIp).toBeNull()
     expect(workspace.debugCContent).toBeNull()
     expect(workspace.debugVariableIndexes.size).toBe(0)
-    expect(workspace.debugVariableValues.size).toBe(0)
+    expect(workspace.debugBoolValues.size).toBe(0)
+    expect(workspace.debugNonBoolValues.size).toBe(0)
     expect(workspace.debugForcedVariables.size).toBe(0)
     expect(workspace.debugTick).toBe(0)
     expect(workspace.debugVariableTree.size).toBe(0)
