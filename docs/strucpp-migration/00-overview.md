@@ -83,16 +83,45 @@ Implementation follows this order -- code generation first, then the runtime tha
 
 | Phase | Title | Description |
 |-------|-------|-------------|
-| 5 | [Runtime .so Interface](05-runtime-v4-so-interface.md) | Hierarchical-from-day-one .so interface; static `runtime_v4_entry.cpp`; runtime walks `locatedVars[]` directly; debug handler rewritten around FC 0x41–0x45 with `(arr_idx, elem_idx)` |
-| 6 | [Thread-Per-Task Model](06-runtime-v4-thread-per-task.md) | One SCHED_FIFO thread per IEC task; priority-sorted indexing; per-thread crash handlers; per-task heartbeats |
-| 7 | [Plugin & I/O Coordination](07-runtime-v4-plugin-and-io.md) | Where plugin hooks, the journal, and `updateTime()` live in the thread-per-task world (Option A: ride task 0; Option B preview behind env flag) |
+| 5 | [Runtime .so Interface](05-runtime-v4-so-interface.md) | Runtime sources become C++; `.so` exports a single C-linkage entry (`strucpp_get_config()`) plus the debug-PDU shims; runtime walks `ConfigurationInstance` via virtual dispatch; tiny static shim (~10 lines) lives in the runtime repo, **not** the editor; flat-index plugin compat removed (OPC UA paused pending Phase 9) |
+| 6 | [Thread-Per-Task Model](06-runtime-v4-thread-per-task.md) | One SCHED_FIFO thread per IEC task; priority from user program; CPU pinning **only** if user supplied a mask via Phase 8's `CPU_AFFINITY` extension; per-thread crash handlers; per-task heartbeats |
+| 7 | [Plugin Worker Threads](07-runtime-v4-plugin-and-io.md) | Each native plugin gets its own worker thread with priority + cycle interval + affinity from per-plugin config; IEC tasks call `journal_apply_and_clear()` themselves at the start of each body under the image-tables lock; no "task 0 is special" assumption anywhere |
+| 8 | [STruC++ Codegen Runtime Extensions](08-strucpp-codegen-runtime-extensions.md) | STruC++ side: `IMAGE_TABLES_LOCK_GUARD()` codegen macro for granular locking around located/global variable access; `CPU_AFFINITY` parameter on `TASK` declarations; runtime accessor for per-task affinity; sharedness analysis to skip the lock guard on tasks that touch no shared state |
+| 9 | [Plugin Migration to Hierarchical Debug API](09-plugin-hierarchical-debug-api.md) | Migrate OPC UA (and any other plugin that consumed the old flat-index `get_var_addr`/`get_var_count` API) onto the hierarchical `strucpp_debug_*` PDU surface, consuming the editor's `debug-map.json` for path↔(arr, elem) lookup |
 
-> **Revision history.** The original phase plan had Phase 5 ship a flat-index
+> **Revision history.**
+>
+> *First revision.* The original phase plan had Phase 5 ship a flat-index
 > `debug_vars[]`-shaped compatibility layer that Phase 7 would later replace
 > with hierarchical addressing. After Phase 4 (Arduino) shipped with
 > hierarchical addressing from day one, the intermediate flat layer became
-> dead weight, so Phase 7 was repurposed for plugin/I/O coordination — the
-> question Phase 6's thread-per-task split forces us to answer.
+> dead weight, so Phase 7 was repurposed for plugin/I/O coordination.
+>
+> *Second revision (current).* During implementation review, four changes
+> reshaped Phases 5–7 again and added Phases 8–9:
+>
+> 1. **Runtime → C++.** Originally Phase 5 shipped a fairly large
+>    `runtime_v4_entry.cpp` (~150 lines) into the editor's upload bundle to
+>    bridge the runtime's C code to STruC++'s C++ class hierarchy. Switching
+>    the runtime sources to C++ lets the runtime walk
+>    `ConfigurationInstance*` through plain virtual dispatch — the shim
+>    shrinks to ~10 lines and moves into the runtime repo where it belongs.
+> 2. **Plugin worker threads, not "ride task 0".** Phase 7's "Option A: the
+>    highest-priority task drives the I/O cycle" was always a hack — it
+>    couples plugin tick rate to whatever IEC priority happens to be highest
+>    and makes task 0 a special case throughout the runtime. Replaced with
+>    per-plugin worker threads owning their own priority and cycle interval
+>    via plugin config.
+> 3. **Granular locking via codegen.** A single `buffer_mutex` around every
+>    task body destroys parallelism on multi-core. Phase 8 adds an
+>    `IMAGE_TABLES_LOCK_GUARD()` macro that STruC++ emits only around
+>    located- and global-variable access; on Arduino it expands to a no-op
+>    so the same generated code runs unchanged.
+> 4. **CPU affinity from the user program.** Phase 6's hardcoded
+>    round-robin pinning came out — affinity comes from a new
+>    `CPU_AFFINITY` parameter on `TASK` declarations (Phase 8). When unset,
+>    the runtime makes no `pthread_setaffinity_np` call and the kernel
+>    decides.
 
 ### Rationale for Phase Order
 
@@ -116,11 +145,18 @@ Phase 1 (STruC++ dependency infrastructure)
   |               |
   |               +---> Phase 4 (Debugger -- hierarchical addressing)
   |
-  +---> Phase 5 (Runtime v4 .so interface + hierarchical debug handler)
+  +---> Phase 5 (Runtime → C++; hierarchical debug; flat-index API removed)
           |
           +---> Phase 6 (Thread-per-task)
                   |
-                  +---> Phase 7 (Plugin & I/O coordination)
+                  +---> Phase 7 (Plugin worker threads)
+                          |
+                          +---> Phase 8 (STruC++ codegen extensions:
+                          |              IMAGE_TABLES_LOCK_GUARD,
+                          |              CPU_AFFINITY)
+                          |
+                          +---> Phase 9 (OPC UA + other plugins migrate
+                                          to hierarchical debug API)
 ```
 
 ## Key Architectural Decisions

@@ -1,10 +1,24 @@
 # Phase 6: Thread-Per-Task Model for Runtime v4
 
-> **Revision note** — this doc was rewritten after Phase 3/4 (Arduino) shipped.
-> The old draft assumed an "old single-threaded round-robin .so" and a "new
-> per-task .so" coexisting in the runtime. We're not carrying that forward —
-> Phase 5 already eliminates the single-threaded path (no `config_run__`).
-> Thread-per-task is the only mode the new runtime supports.
+> **Revision note (1).** This doc was first rewritten after Phase 3/4
+> (Arduino) shipped. The old draft assumed an "old single-threaded
+> round-robin .so" and a "new per-task .so" coexisting in the runtime.
+> We're not carrying that forward — Phase 5 already eliminates the
+> single-threaded path (no `config_run__`). Thread-per-task is the only
+> mode the new runtime supports.
+>
+> **Revision note (2, current).** Two changes follow from the Phase 5
+> rewrite (runtime → C++) and the Phase 8 codegen extensions:
+>
+> 1. **No more C-linkage `strucpp_get_task_*` accessors.** The runtime
+>    walks `ConfigurationInstance*` via virtual dispatch; per-task data
+>    (name, interval, priority, affinity) is read straight from the
+>    `TaskInstance` struct.
+> 2. **CPU affinity defaults to "no pinning".** The previous revision
+>    pinned task `i` to CPU `i mod nproc` round-robin — that was always
+>    a placeholder. With Phase 8 adding `CPU_AFFINITY` to `TASK`
+>    declarations, affinity comes from the user program. When unset,
+>    `pthread_setaffinity_np` is **not** called and the kernel decides.
 
 ## Goal
 
@@ -68,20 +82,18 @@ What it does **not** buy:
                           plugin journals
 ```
 
-## Task indexing contract
+## Task indexing
 
-The `.so` from Phase 5 sorts tasks by **priority descending** in
-`strucpp_get_task_count`/`strucpp_run_task`. The runtime relies on this:
+There is **no priority-sorted contract** anymore. Phase 7 (plugin worker
+threads) removed the "task 0 is special" assumption — IEC tasks no longer
+drive plugin hooks, and the watchdog tracks every task's heartbeat
+individually rather than anchoring on one. The runtime spawns task
+threads in the order STruC++ emits them in `ConfigurationInstance` (the
+declaration order from the `.st` file); SCHED_FIFO + the priority on
+each task's `sched_param` decides who actually runs.
 
-- `task_idx == 0` is always the highest-priority task. The I/O coordinator
-  (Phase 7) uses task 0's thread to drive plugin `cycle_start`/`cycle_end`,
-  `journal_apply_and_clear()`, and `updateTime()`.
-- If two tasks declare the same priority, ordering between them is stable
-  (insertion order from the configuration). The runtime must not rely on
-  priority being unique.
-
-This contract is documented in Phase 5 and enforced by `runtime_v4_entry.cpp`'s
-topology builder; the runtime can trust the index ordering it gets back.
+If two tasks share a priority, the kernel round-robins between them
+within that priority band — same as any other SCHED_FIFO setup.
 
 ## Thread descriptor
 
@@ -146,16 +158,20 @@ static void* plc_task_thread(void* arg) {
                  ctx->name, rt_prio, strerror(errno));
     }
 
-    /* Optional CPU affinity. Pin task 0 to CPU 0, task 1 to CPU 1, etc.
-     * Wraps modulo nproc so it doesn't fail on small machines. The user
-     * can override this with the OPENPLC_TASK_AFFINITY env var. */
-    if (getenv("OPENPLC_DISABLE_TASK_AFFINITY") == NULL) {
+    /* CPU affinity — only applied if the user supplied one in the .st via
+     * Phase 8's CPU_AFFINITY parameter. A zero mask means "kernel decides"
+     * and we make no syscall. */
+    uint64_t affinity_mask = task->cpu_affinity_mask;  /* from TaskInstance */
+    if (affinity_mask != 0) {
         cpu_set_t cs;
         CPU_ZERO(&cs);
-        long nproc = sysconf(_SC_NPROCESSORS_ONLN);
-        if (nproc < 1) nproc = 1;
-        CPU_SET(ctx->idx % (size_t)nproc, &cs);
-        pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs);
+        for (int cpu = 0; cpu < CPU_SETSIZE && cpu < 64; ++cpu) {
+            if (affinity_mask & (1ULL << cpu)) CPU_SET(cpu, &cs);
+        }
+        if (pthread_setaffinity_np(pthread_self(), sizeof cs, &cs) != 0) {
+            log_warn("[task %s] pthread_setaffinity_np failed: %s",
+                     ctx->name, strerror(errno));
+        }
     }
 
     /* Per-thread crash recovery. */
@@ -297,11 +313,15 @@ still runs, just without RT preemption. Operational guidance: deployments
 that need RT must grant the capability or use `rtprio` in
 `/etc/security/limits.conf`.
 
-## Open question deliberately not closed here
+## What this thread does NOT do
 
-**Plugin / I/O coordinator placement** — see Phase 7. The thread function
-above intentionally does not call `plugin_driver_cycle_start/end`,
-`journal_apply_and_clear`, or `updateTime`. Phase 7 wires those in.
+- **No plugin cycle hooks.** Plugins run on their own worker threads
+  (Phase 7).
+- **No journal apply.** The journal drain happens at the start of each
+  task body inside the image-tables critical section — emitted by
+  STruC++ via `IMAGE_TABLES_LOCK_GUARD()` (Phase 8).
+- **No `updateTime`.** Time advancement is decoupled from any one task
+  thread; covered in Phase 7's coordination model.
 
 ## Files Created / Modified
 
