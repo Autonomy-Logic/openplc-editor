@@ -117,8 +117,8 @@ export const UsersTab = ({ config, serverName, onConfigChange }: UsersTabProps) 
 
       {/* Warning if username auth is enabled but no users */}
       {usernameAuthEnabled && passwordUserCount === 0 && (
-        <div className='rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950'>
-          <p className='text-xs text-amber-700 dark:text-amber-400'>
+        <div className='rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900'>
+          <p className='text-xs text-neutral-700 dark:text-neutral-300'>
             Warning: Username authentication is enabled but no password users exist. Add at least one user for clients
             to authenticate.
           </p>
@@ -180,7 +180,7 @@ export const UsersTab = ({ config, serverName, onConfigChange }: UsersTabProps) 
                     <button
                       type='button'
                       onClick={() => handleDeleteUser(user.id)}
-                      className='h-[28px] rounded-md border border-red-300 bg-white px-3 font-caption text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950'
+                      className='h-[28px] rounded-md border border-neutral-300 bg-white px-3 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
                     >
                       Delete
                     </button>
