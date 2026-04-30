@@ -322,15 +322,14 @@ const Board = memo(function () {
     }
   }, [setIncludeTimingStatsInPolling])
 
-  // Same pattern for EtherCAT runtime status: only fetched while this
-  // screen is mounted, so non-EtherCAT setups don't pay for the extra
-  // round-trip on every poll.
+  // Only runtime targets expose the EtherCAT endpoint; skip the poll otherwise.
   useEffect(() => {
+    if (!isOpenPLCRuntimeTarget(currentBoardInfo)) return
     setIncludeEthercatStatsInPolling(true)
     return () => {
       setIncludeEthercatStatsInPolling(false)
     }
-  }, [setIncludeEthercatStatsInPolling])
+  }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
 
   const ethercatMasters = useMemo(() => normalizeEthercatStatus(ethercatStatus), [ethercatStatus])
 

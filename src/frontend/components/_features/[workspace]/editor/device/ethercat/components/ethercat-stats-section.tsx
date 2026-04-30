@@ -25,6 +25,13 @@ type EthercatStatsSectionProps = {
 const DEFAULT_SECTION_CLASSNAME = 'flex flex-col gap-4'
 const DEFAULT_CARDS_CLASSNAME = 'grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'
 
+// Bus names are runtime-supplied and may carry spaces / special chars.
+const slugifyBusName = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
 const cardClassName =
   'flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'
 const cardLabelClassName = 'text-xs text-neutral-500 dark:text-neutral-400'
@@ -44,7 +51,9 @@ const EthercatStatsSection = ({
         // of stats they're looking at. Fall back to a positional label
         // for the single-master legacy response shape (no `name`).
         const busLabel = master.name || `Bus ${idx + 1}`
-        const sectionId = master.name ? `ethercat-stats-${master.name}` : `ethercat-stats-${idx}`
+        // idx in the id keeps it unique when two buses share a name.
+        const slug = master.name ? slugifyBusName(master.name) : ''
+        const sectionId = slug ? `ethercat-stats-${slug}-${idx}` : `ethercat-stats-${idx}`
         return (
           <div
             key={sectionId}
