@@ -1,381 +1,410 @@
-# Phase 5: Runtime v4 .so Interface
+# Phase 5: Runtime v4 .so Interface (Hierarchical from Day One)
+
+> **Revision note** — this doc was rewritten after Phase 3/4 (Arduino) shipped.
+> The original draft proposed a flat-index `debug_vars[]`-shaped compatibility
+> table that would later be removed in Phase 7. That intermediate step is gone.
+> Arduino skipped it; the runtime should too. Phase 7's debug-handler work has
+> been folded into this phase. The new Phase 7 covers plugin / I/O coordination.
 
 ## Goal
 
-Generate a C++ shared library (`.so`) that exports the same C-linkage symbols the existing
-OpenPLC Runtime v4 expects via `dlsym()`, but is implemented using STruC++ generated code.
-This allows the runtime to load STruC++ programs without any modification to the runtime's
-core C code (initially).
+Build a STruC++-compiled `.so` that the Linux Runtime v4 can `dlopen()` and
+operate on directly, using the hierarchical `(array_idx, elem_idx)` debug
+addressing that ships with `debug_dispatch.hpp` and the same task-topology
+discovery model the Arduino sketch already uses.
+
+The runtime calls into the `.so` via a small set of `extern "C"` symbols. The
+generated C++ stays untouched (no per-project shim is generated); a single
+hand-written file `runtime_v4_entry.cpp` lives in `resources/strucpp/runtime/`
+and is compiled into every project's `.so` alongside `generated.cpp` and
+`generated_debug.cpp`.
 
 ## Prerequisites
 
-- Phase 1 (STruC++ dependency infrastructure)
+- Phase 1 (STruC++ dependency infrastructure) -- done
+- Phase 2 (Editor compiler pipeline) -- done
+- Phase 3 (Arduino runtime) -- done; reference for binding patterns
+- Phase 4 (Debugger) -- done; `debug_dispatch.hpp` already exposes the C-linkage
+  shims this phase needs (`STRUCPP_V4_DEBUG_EXPORTS_DEFINE` macro)
 - Runtime v4 codebase at `~/Documents/Code/openplc-runtime`
 
-## Current Runtime Symbol Interface
+## What Goes Away
 
-The runtime's `image_tables.c:symbols_init()` resolves these symbols from the loaded `.so`:
+The MatIEC-era `.so` interface had a lot of incidental surface area that we are
+*not* carrying forward:
+
+| Symbol | Status | Why |
+|---|---|---|
+| `config_init__` | **kept** as a no-op for symmetry; constructor of `g_config` does the work | Static initialization runs at `dlopen` time |
+| `config_run__(tick)` | **dropped** | Runtime calls `strucpp_run_task(idx)` per task instead |
+| `glueVars` | **dropped** | Runtime walks `locatedVars[]` directly (same pattern as Arduino sketch) |
+| `setBufferPointers` / `setBufferPointers_v4` | **dropped** | Runtime owns its image tables; no pointer plumbing through the .so |
+| `set_endianness` | **dropped** | STruC++ uses fixed-width types; the editor probes endianness via the MD5 echo (FC 0x45) |
+| `trace_reset` | **dropped** | The editor unforces individually; no need for a bulk-reset path |
+| `get_var_count` / `get_var_size` / `get_var_addr` / `set_trace` (flat) | **dropped** | Replaced by `strucpp_debug_*` (hierarchical) |
+| `python_loader_set_loggers` | **deferred to a later phase** | Python POU bridge is independent of the compiler change; covered separately |
+| `common_ticktime__` | **kept as informational** | Used for diagnostics and as a fallback if no tasks are declared |
+| `updateTime` | **kept** | Increments `__CURRENT_TIME` so IEC time functions work; called once per cycle by the I/O coordinator |
+| `plc_program_md5` | **kept** | Computed by the editor, embedded by STruC++ in `debug-map.json`, exposed as a C string |
+
+## The New .so Symbol Surface
+
+All exports go through `runtime_v4_entry.cpp`. The runtime dlsyms exactly these
+names:
 
 ```c
-// Program lifecycle
-void (*ext_config_init__)(void);
-void (*ext_config_run__)(unsigned long);
-void (*ext_glueVars)(void);
-void (*ext_updateTime)(void);
-unsigned long long *ext_common_ticktime__;
+/* ---- Lifecycle --------------------------------------------------------- */
+void   config_init__(void);                  /* no-op for symmetry */
+void   updateTime(void);                     /* advance __CURRENT_TIME */
+extern unsigned long long common_ticktime__; /* GCD ns; informational */
+extern const char *plc_program_md5;          /* null-terminated hex string */
 
-// Buffer binding (v4 extended)
-void (*ext_setBufferPointers_v4)(
-    IEC_BOOL *[][8], IEC_BOOL *[][8],   // bool_input, bool_output
-    IEC_BYTE *[], IEC_BYTE *[],          // byte_input, byte_output
-    IEC_UINT *[], IEC_UINT *[],          // int_input, int_output
-    IEC_UDINT *[], IEC_UDINT *[],        // dint_input, dint_output
-    IEC_ULINT *[], IEC_ULINT *[],        // lint_input, lint_output
-    IEC_UINT *[], IEC_UDINT *[],         // int_memory, dint_memory
-    IEC_ULINT *[],                       // lint_memory
-    IEC_BOOL *[][8]                      // bool_memory
-);
+/* ---- Topology (replaces config_run__ + glueVars + setBufferPointers) --- */
+size_t      strucpp_get_task_count(void);
+const char* strucpp_get_task_name(size_t task_idx);
+int64_t     strucpp_get_task_interval_ns(size_t task_idx);
+int         strucpp_get_task_priority(size_t task_idx);
+void        strucpp_run_task(size_t task_idx);
 
-// Debug interface
-uint16_t (*ext_get_var_count)(void);
-size_t (*ext_get_var_size)(size_t);
-void *(*ext_get_var_addr)(size_t);
-void (*ext_set_trace)(size_t, bool, void*);
-void (*ext_trace_reset)(void);
-void (*ext_set_endianness)(uint8_t);
-char *ext_plc_program_md5;
+/* ---- I/O binding ------------------------------------------------------- */
+uint32_t          strucpp_get_located_var_count(void);
+const LocatedVar* strucpp_get_located_vars(void); /* descriptor array */
+
+/* ---- Debug (already exposed by debug_dispatch.hpp) --------------------- */
+uint8_t  strucpp_debug_array_count(void);
+uint16_t strucpp_debug_elem_count(uint8_t arr);
+uint16_t strucpp_debug_size(uint8_t arr, uint16_t elem);
+uint8_t  strucpp_debug_set(uint8_t arr, uint16_t elem,
+                           bool forcing,
+                           const uint8_t *bytes, uint16_t len);
+uint16_t strucpp_debug_read(uint8_t arr, uint16_t elem, uint8_t *dest);
+
+/* ---- Capability flag --------------------------------------------------- */
+extern const uint32_t strucpp_capabilities; /* bit 0 = per-task; bit 1 = hier debug */
 ```
 
-## Step 6.1: v4 Compatibility Shim
+`LocatedVar` is the existing struct from `iec_located.hpp`. The runtime header
+`runtime_v4_entry.h` (also shipped in `resources/strucpp/runtime/`) re-declares
+it with C linkage so the runtime's C code can include it without dragging in
+C++ machinery.
 
-A `v4_compat.cpp` file wraps STruC++ generated code with the C-linkage symbols the runtime
-expects. Following the same philosophy as the Arduino sketch, this should be as static as
-possible, navigating STruC++ structures dynamically rather than requiring per-project code
-generation. However, since the runtime resolves symbols via `dlsym()` with a fixed C ABI,
-a thin shim with `extern "C"` functions is needed.
+## runtime_v4_entry.cpp
 
-Since `Configuration_Config0` is always the configuration name (hardcoded by OpenPLC),
-the shim can be mostly static -- the same approach as the Arduino sketch. It walks
-`ConfigurationInstance::get_resources()` dynamically for task/program discovery.
+This file is **not** generated per-project. It is hand-written and lives at:
 
-### v4_compat.cpp Structure
+```
+resources/strucpp/runtime/runtime_v4_entry.cpp
+resources/strucpp/runtime/runtime_v4_entry.h
+```
+
+It walks `g_config.get_resources()` the same way the Arduino sketch does, but
+exposes the topology by index instead of building a flat program array.
 
 ```cpp
-// v4_compat.cpp
-// C-linkage compatibility shim for OpenPLC Runtime v4
-// Generated by openplc-editor -- do not edit manually
+// runtime_v4_entry.cpp
+//
+// Static C-linkage entry points for the OpenPLC Runtime v4 .so.
+// Identical for every project; compiled alongside generated.cpp and
+// generated_debug.cpp into libplc_<hash>.so.
+
+#define STRUCPP_V4_DEBUG_EXPORTS_DEFINE   // exposes strucpp_debug_* shims
+#include "debug_dispatch.hpp"
 
 #include "generated.hpp"
-#include <cstring>
+#include "iec_located.hpp"
+
 #include <cstdint>
+#include <cstddef>
+#include <cstring>
 
 using namespace strucpp;
 
-// =============================================================================
-// Configuration singleton
-// =============================================================================
+// ---------------------------------------------------------------------------
+// Configuration singleton.
+// External linkage so generated_debug.cpp's compile-time address-of expressions
+// resolve at link time. Same constraint as the Arduino sketch's g_config.
+// ---------------------------------------------------------------------------
+Configuration_CONFIG0 g_config;
 
-static Configuration_Config0 g_config;
+// ---------------------------------------------------------------------------
+// Topology cache.
+//
+// We flatten (resource, task) pairs into a single zero-based task_idx so the
+// runtime doesn't need to know the resource layout. Tasks are sorted by
+// priority descending so task 0 is always the highest-priority task — the
+// runtime relies on this when assigning per-task heartbeats and choosing
+// where to drive the I/O coordinator.
+// ---------------------------------------------------------------------------
+struct TaskRef {
+    TaskInstance* task;
+    int32_t       priority;
+};
 
-// =============================================================================
-// Buffer pointer storage (set by runtime via setBufferPointers_v4)
-// =============================================================================
+static constexpr size_t MAX_TASKS = 32;
+static TaskRef g_tasks[MAX_TASKS];
+static size_t  g_task_count = 0;
+static bool    g_topology_built = false;
 
-#define BUFFER_SIZE 1024
+static void build_topology() {
+    if (g_topology_built) return;
 
-static IEC_BOOL (*saved_bool_input)[8]   = nullptr;
-static IEC_BOOL (*saved_bool_output)[8]  = nullptr;
-static IEC_BYTE  *saved_byte_input       = nullptr;
-static IEC_BYTE  *saved_byte_output      = nullptr;
-static IEC_UINT  *saved_int_input        = nullptr;
-static IEC_UINT  *saved_int_output       = nullptr;
-static IEC_UDINT *saved_dint_input       = nullptr;
-static IEC_UDINT *saved_dint_output      = nullptr;
-static IEC_ULINT *saved_lint_input       = nullptr;
-static IEC_ULINT *saved_lint_output      = nullptr;
-static IEC_UINT  *saved_int_memory       = nullptr;
-static IEC_UDINT *saved_dint_memory      = nullptr;
-static IEC_ULINT *saved_lint_memory      = nullptr;
-static IEC_BOOL (*saved_bool_memory)[8]  = nullptr;
-
-// =============================================================================
-// C-linkage exports: Program lifecycle
-// =============================================================================
-
-extern "C" void config_init__(void) {
-    // Configuration constructor already ran (static initialization)
-    // Explicit init call for any post-construction setup
-}
-
-extern "C" void config_run__(unsigned long tick) {
-    // GCD-based multi-task scheduler (same as Arduino version)
-    static const uint32_t task_divisors[] = { /* generated per-project */ };
-    static ProgramBase* task_programs[] = { /* generated per-project */ };
-    static const size_t TASK_COUNT = /* N */;
-
-    for (size_t i = 0; i < TASK_COUNT; ++i) {
-        if (task_divisors[i] == 0 || (tick % task_divisors[i]) == 0) {
-            task_programs[i]->run();
+    auto* resources = g_config.get_resources();
+    for (size_t r = 0; r < g_config.get_resource_count(); ++r) {
+        for (size_t t = 0; t < resources[r].task_count; ++t) {
+            if (g_task_count >= MAX_TASKS) break;
+            g_tasks[g_task_count].task     = &resources[r].tasks[t];
+            g_tasks[g_task_count].priority = resources[r].tasks[t].priority;
+            g_task_count++;
         }
     }
+
+    // Insertion sort by priority descending (priority high → low).
+    for (size_t i = 1; i < g_task_count; ++i) {
+        TaskRef key = g_tasks[i];
+        size_t j = i;
+        while (j > 0 && g_tasks[j - 1].priority < key.priority) {
+            g_tasks[j] = g_tasks[j - 1];
+            --j;
+        }
+        g_tasks[j] = key;
+    }
+
+    g_topology_built = true;
 }
 
-extern "C" unsigned long long common_ticktime__ = /* GCD nanoseconds */;
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+extern "C" void config_init__(void) {
+    build_topology();
+    // Configuration_CONFIG0 default constructor already ran during static init.
+}
+
+extern "C" unsigned long long common_ticktime__ = 20000000ULL; // overwritten in config_init__ once topology is known
+
+extern "C" const char *plc_program_md5 = STRUCPP_PLC_PROGRAM_MD5;
+// STRUCPP_PLC_PROGRAM_MD5 is defined in generated.hpp by the compiler.
 
 extern "C" void updateTime(void) {
-    // Same as Arduino: increment __CURRENT_TIME by common_ticktime__
-}
-
-// =============================================================================
-// C-linkage exports: Buffer binding
-// =============================================================================
-
-extern "C" void setBufferPointers_v4(
-    IEC_BOOL *bi[][8], IEC_BOOL *bo[][8],
-    IEC_BYTE *byi[], IEC_BYTE *byo[],
-    IEC_UINT *ii[], IEC_UINT *io[],
-    IEC_UDINT *di[], IEC_UDINT *do_[],
-    IEC_ULINT *li[], IEC_ULINT *lo[],
-    IEC_UINT *im[], IEC_UDINT *dm[],
-    IEC_ULINT *lm[],
-    IEC_BOOL *bm[][8]
-) {
-    // Store runtime buffer pointers for glueVars to use
-    saved_bool_input  = (IEC_BOOL(*)[8])bi;
-    saved_bool_output = (IEC_BOOL(*)[8])bo;
-    // ... store all pointers
-}
-
-extern "C" void glueVars(void) {
-    // Walk LocatedVar[] and bind to runtime's image table buffers
-    // Same logic as Arduino strucpp_bind_located_vars() but uses saved_* pointers
-    // instead of the openplc.h global arrays
-
-    for (uint32_t i = 0; i < locatedVarsCount; ++i) {
-        LocatedVar& lv = locatedVars[i];
-        if (!lv.pointer) continue;
-
-        switch (lv.area) {
-        case LocatedArea::Input:
-            switch (lv.size) {
-            case LocatedSize::Bit:
-                saved_bool_input[lv.byte_index][lv.bit_index] = (IEC_BOOL*)lv.pointer;
-                break;
-            case LocatedSize::Word:
-                saved_int_input[lv.byte_index] = (IEC_UINT*)lv.pointer;
-                break;
-            case LocatedSize::DWord:
-                saved_dint_input[lv.byte_index] = (IEC_UDINT*)lv.pointer;
-                break;
-            case LocatedSize::LWord:
-                saved_lint_input[lv.byte_index] = (IEC_ULINT*)lv.pointer;
-                break;
-            }
-            break;
-        case LocatedArea::Output:
-            // ... symmetric
-            break;
-        case LocatedArea::Memory:
-            // ... int_memory, dint_memory, lint_memory, bool_memory
-            break;
-        }
+    extern IEC_TIME __CURRENT_TIME;
+    __CURRENT_TIME.tv_nsec += static_cast<int32_t>(common_ticktime__ % 1000000000ULL);
+    __CURRENT_TIME.tv_sec  += static_cast<long>(common_ticktime__ / 1000000000ULL);
+    if (__CURRENT_TIME.tv_nsec >= 1000000000) {
+        __CURRENT_TIME.tv_nsec -= 1000000000;
+        __CURRENT_TIME.tv_sec  += 1;
     }
 }
 
-// =============================================================================
-// C-linkage exports: Debug interface (flat-index compatibility)
-// =============================================================================
-
-// Pre-computed flat-to-hierarchical index table
-// Maps flat index -> (program_idx, var_idx) without array expansion
-struct FlatVarEntry {
-    uint8_t prog_idx;
-    uint16_t var_idx;
-    uint8_t size;
-    void* ptr;           // raw_ptr() for reading
-    void (*get_fn)(void*); // type-erased get() for forced-safe reading
-    void (*force_fn)(bool, void*); // type-erased force/unforce
-};
-
-static const FlatVarEntry flat_var_table[] = {
-    // Generated per-project: one entry per variable (NOT per array element)
-    { 0, 0, 2, &g_config.instance0.counter,
-      [](void* d) { *(int16_t*)d = g_config.instance0.counter.get(); },
-      [](bool f, void* v) { f ? g_config.instance0.counter.force(*(int16_t*)v)
-                               : g_config.instance0.counter.unforce(); }
-    },
-    // ...
-};
-
-static const uint16_t FLAT_VAR_COUNT = /* total vars across all programs */;
-
-extern "C" uint16_t get_var_count(void) {
-    return FLAT_VAR_COUNT;
+// ---------------------------------------------------------------------------
+// Topology
+// ---------------------------------------------------------------------------
+extern "C" size_t strucpp_get_task_count(void) {
+    build_topology();
+    return g_task_count;
 }
 
-extern "C" size_t get_var_size(size_t idx) {
-    if (idx >= FLAT_VAR_COUNT) return 0;
-    return flat_var_table[idx].size;
+extern "C" const char* strucpp_get_task_name(size_t task_idx) {
+    build_topology();
+    if (task_idx >= g_task_count) return "";
+    return g_tasks[task_idx].task->name;
 }
 
-extern "C" void* get_var_addr(size_t idx) {
-    if (idx >= FLAT_VAR_COUNT) return nullptr;
-    return flat_var_table[idx].ptr;
+extern "C" int64_t strucpp_get_task_interval_ns(size_t task_idx) {
+    build_topology();
+    if (task_idx >= g_task_count) return 0;
+    return g_tasks[task_idx].task->interval_ns;
 }
 
-extern "C" void set_trace(size_t idx, bool forced, void* val) {
-    if (idx >= FLAT_VAR_COUNT) return;
-    if (flat_var_table[idx].force_fn) {
-        flat_var_table[idx].force_fn(forced, val);
+extern "C" int strucpp_get_task_priority(size_t task_idx) {
+    build_topology();
+    if (task_idx >= g_task_count) return 0;
+    return g_tasks[task_idx].priority;
+}
+
+extern "C" void strucpp_run_task(size_t task_idx) {
+    if (task_idx >= g_task_count) return;
+    TaskInstance* task = g_tasks[task_idx].task;
+    for (size_t p = 0; p < task->program_count; ++p) {
+        task->programs[p]->run();
     }
 }
 
-extern "C" void trace_reset(void) {
-    for (uint16_t i = 0; i < FLAT_VAR_COUNT; ++i) {
-        if (flat_var_table[i].force_fn) {
-            flat_var_table[i].force_fn(false, nullptr);
-        }
-    }
+// ---------------------------------------------------------------------------
+// I/O binding — descriptor-walking is the runtime's job.
+// ---------------------------------------------------------------------------
+extern "C" uint32_t strucpp_get_located_var_count(void) {
+    return locatedVarsCount;
 }
 
-extern "C" void set_endianness(uint8_t value) {
-    // STruC++ uses native endianness; this is a no-op for local debugging
-    // For remote debugging, endianness is handled at the protocol level
-    (void)value;
+extern "C" const LocatedVar* strucpp_get_located_vars(void) {
+    return locatedVars;
 }
 
-extern "C" char plc_program_md5[] = "/* generated MD5 hash */";
+// ---------------------------------------------------------------------------
+// Capabilities
+//   bit 0 — supports per-task threading (strucpp_run_task)
+//   bit 1 — supports hierarchical debug (strucpp_debug_*)
+// ---------------------------------------------------------------------------
+extern "C" const uint32_t strucpp_capabilities = 0x0003;
 ```
 
-### Key Design: Flat-to-Hierarchical Index Table
+The `STRUCPP_PLC_PROGRAM_MD5` macro is emitted into `generated.hpp` by the
+STruC++ compiler when `--md5=...` is passed; the editor already computes the
+MD5 over `program.st` and forwards it via `compileOptions.md5`.
 
-The runtime's `debug_handler.c` uses flat indices (`get_var_addr(idx)`). The `flat_var_table[]`
-provides this flat interface on top of the hierarchical STruC++ structures:
+## Runtime side: image-table binding
 
-- One entry per variable (NOT per array element) -- the scalability fix
-- Flat index = sequential numbering across all program variables
-- Program 0 vars: indices 0..N0-1
-- Program 1 vars: indices N0..N0+N1-1
-- etc.
+The runtime's `image_tables.c:symbols_init()` is rewritten to dlsym the new
+symbol surface and walk `locatedVars[]` directly. The `setBufferPointers*` /
+`glueVars` plumbing is removed.
 
-This is smaller than the MatIEC debug_vars[] because arrays are not expanded. But it still
-provides the flat index interface that `debug_handler.c` expects.
+```c
+/* image_tables.c (sketch) */
 
-## Step 6.2: Update compile.sh
+static const LocatedVar* (*ext_strucpp_get_located_vars)(void) = NULL;
+static uint32_t          (*ext_strucpp_get_located_var_count)(void) = NULL;
 
-**File to modify**: `openplc-runtime/scripts/compile.sh`
+void image_tables_bind_located_vars(void) {
+    if (!ext_strucpp_get_located_vars) return;
 
-The compilation script needs to handle C++ files:
+    const LocatedVar* lv_array = ext_strucpp_get_located_vars();
+    uint32_t lv_count          = ext_strucpp_get_located_var_count();
+
+    for (uint32_t i = 0; i < lv_count; ++i) {
+        const LocatedVar* lv = &lv_array[i];
+        if (!lv->pointer) {
+            log_warn("locatedVars[%u] has null pointer (area=%d size=%d byte=%u bit=%u)",
+                     i, (int)lv->area, (int)lv->size, lv->byte_index, lv->bit_index);
+            continue;
+        }
+        switch (lv->area) {
+            case LV_INPUT:  bind_input(lv);  break;
+            case LV_OUTPUT: bind_output(lv); break;
+            case LV_MEMORY: bind_memory(lv); break;
+        }
+    }
+}
+```
+
+`LV_INPUT`/`LV_OUTPUT`/`LV_MEMORY` are C-linkage constants for the
+`LocatedArea` enum, declared in `runtime_v4_entry.h`. The bind helpers are
+existing per-area logic adapted from the v3 `glueVars` semantics — same
+buffers (`bool_input[][]`, `int_input[]`, etc.), just driven by the
+descriptor walk instead of a generated function.
+
+## Debug handler
+
+`debug_handler.c` is rewritten around the hierarchical addressing. Function
+codes 0x41–0x45 are kept (wire compatibility with the editor and the Arduino
+runtime); the payload format is the one the editor already speaks.
+
+| FC | Name | Request | Response |
+|---|---|---|---|
+| 0x41 | DEBUG_INFO | `[FC]` | `[FC, arrCount, STATUS, count_0_hi, count_0_lo, count_1_hi, count_1_lo, ...]` |
+| 0x42 | DEBUG_SET | `[FC, arr, elem_hi, elem_lo, force, len_hi, len_lo, value...]` | `[FC, STATUS]` |
+| 0x43 | DEBUG_GET | `[FC, arr, start_hi, start_lo, end_hi, end_lo]` | `[FC, STATUS, last_hi, last_lo, tick(4), size_hi, size_lo, data...]` |
+| 0x44 | DEBUG_GET_LIST | `[FC, count_hi, count_lo, (arr, elem_hi, elem_lo)×count]` | same shape as 0x43 |
+| 0x45 | DEBUG_GET_MD5 | `[FC, endian_hi, endian_lo]` | `[FC, STATUS, md5_ascii..., endian_echo_hi, endian_echo_lo]` |
+
+The Modbus implementation can lift the Arduino logic from
+`StrucppBaremetal/ModbusSlave.cpp:1050-1310` near-verbatim. Keep the
+**request snapshot** trick (`localIndex[]` copy before any response writes —
+the request and response buffers overlap inside `mb_frame[]`).
+
+The runtime supports larger PDUs than Arduino (Modbus TCP/WebSocket can carry
+the full 65,535-byte payload), so the conservative 1400-byte cap from the
+Arduino sketch can be removed; replace with a check against the actual frame
+buffer size.
+
+## compile.sh changes
+
+`openplc-runtime/scripts/compile.sh` is rewritten to compile C++17 with
+STruC++ runtime headers. The MatIEC build is removed (no fallback path).
 
 ```bash
 #!/bin/bash
+set -euo pipefail
 
-# Detect if STruC++ files exist
-if [ -f "core/generated/generated.cpp" ]; then
-    echo "Compiling STruC++ generated code..."
+GENERATED_DIR="core/generated"
+RUNTIME_INCLUDE="$GENERATED_DIR/strucpp_runtime/include"
+BUILD_DIR="build"
 
-    # Compile generated.cpp
-    g++ -std=c++17 -w -O3 -fPIC \
-        -I "core/generated" \
-        -c "core/generated/generated.cpp" \
-        -o "$BUILD_DIR/generated.o"
+mkdir -p "$BUILD_DIR"
 
-    # Compile v4_compat.cpp
-    g++ -std=c++17 -w -O3 -fPIC \
-        -I "core/generated" \
-        -c "core/generated/v4_compat.cpp" \
-        -o "$BUILD_DIR/v4_compat.o"
+CXXFLAGS="-std=c++17 -O2 -fPIC -Wall -Wno-unknown-pragmas \
+          -I$GENERATED_DIR -I$RUNTIME_INCLUDE"
 
-    # Compile c_blocks_code.cpp (unchanged)
-    g++ -std=c++17 -w -O3 -fPIC \
-        -I "core/generated" \
-        -c "core/generated/c_blocks_code.cpp" \
-        -o "$BUILD_DIR/c_blocks_code.o"
+g++ $CXXFLAGS -c "$GENERATED_DIR/generated.cpp"          -o "$BUILD_DIR/generated.o"
+g++ $CXXFLAGS -c "$GENERATED_DIR/generated_debug.cpp"    -o "$BUILD_DIR/generated_debug.o"
+g++ $CXXFLAGS -c "$GENERATED_DIR/runtime_v4_entry.cpp"   -o "$BUILD_DIR/runtime_v4_entry.o"
 
-    # Link into shared library
-    g++ -std=c++17 -w -O3 -fPIC -shared \
-        -o "$BUILD_DIR/new_libplc.so" \
-        "$BUILD_DIR/generated.o" \
-        "$BUILD_DIR/v4_compat.o" \
-        "$BUILD_DIR/c_blocks_code.o" \
-        -lpthread
+if [ -f "$GENERATED_DIR/c_blocks_code.cpp" ]; then
+    g++ $CXXFLAGS -c "$GENERATED_DIR/c_blocks_code.cpp"  -o "$BUILD_DIR/c_blocks_code.o"
+    EXTRA_OBJS="$BUILD_DIR/c_blocks_code.o"
+else
+    EXTRA_OBJS=""
+fi
 
+g++ -shared -fPIC -o "$BUILD_DIR/new_libplc.so" \
+    "$BUILD_DIR/generated.o" \
+    "$BUILD_DIR/generated_debug.o" \
+    "$BUILD_DIR/runtime_v4_entry.o" \
+    $EXTRA_OBJS \
+    -lpthread -lrt
 ```
 
-The MatIEC fallback branch is removed. All programs compile as C++17.
+## Editor upload bundle
 
-## Step 5.3: Update Editor Upload Path
-
-**File to modify**: `src/backend/editor/compiler/compiler-module.ts`
-
-The uploaded zip contains STruC++ files only:
+The editor packages a zip containing exactly:
 
 ```
-generated.cpp, generated.hpp
-v4_compat.cpp
-c_blocks.h, c_blocks_code.cpp
-iec_var.hpp, iec_types.hpp, iec_located.hpp   (copied from resources/strucpp/runtime/include/)
-... (other STruC++ runtime headers)
+core/generated/
+├── generated.cpp
+├── generated.hpp
+├── generated_debug.cpp
+├── runtime_v4_entry.cpp     # copied from resources/strucpp/runtime/
+├── runtime_v4_entry.h       # ditto
+├── c_blocks_code.cpp        # only if present
+├── c_blocks.h               # only if present
+└── strucpp_runtime/
+    └── include/             # mirrors resources/strucpp/runtime/include/
+        ├── debug_dispatch.hpp
+        ├── iec_var.hpp
+        ├── iec_located.hpp
+        └── ... (all STruC++ runtime headers)
 ```
 
-The headers are copied from `resources/strucpp/runtime/include/` (downloaded by
-`scripts/download-binaries.ts`, NOT stored in the repo). They are strictly version-coupled
-with the STruC++ compiler that produced the generated code.
+The runtime headers are version-locked to the STruC++ compiler that produced
+`generated.cpp`. They are downloaded by `scripts/download-binaries.ts`, not
+checked into the editor repo.
 
-## Step 6.4: Configuration File Generation
-
-The editor also generates configuration files for Runtime v4 upload:
-- `conf/modbus_slaves.json`
-- `conf/modbus_masters.json`
-- `conf/s7comm.json`
-- `conf/opcua.json`
-
-These are unchanged -- they're independent of the compiler backend.
-
-## Design Notes
-
-### Why C-Linkage Compatibility (Not Native C++ Interface)
-
-The runtime's core code (`plc_state_manager.c`, `debug_handler.c`, `image_tables.c`) is
-written in C. Changing these to call C++ methods would require significant refactoring.
-The C-linkage shim provides a clean adapter pattern:
-
-```
-Runtime (C) --dlsym--> C-linkage symbols --calls--> STruC++ C++ classes
-```
-
-This allows the runtime to load STruC++ C++ programs without rewriting its core C code.
-
-### Thread Safety of Static Configuration
-
-The `g_config` static instance is created during `.so` loading (before `config_run__` is
-called). All program instances within it are initialized at construction time. The runtime
-calls `config_init__` from the PLC cycle thread, which is single-threaded at that point.
-
-## Testing Strategy
-
-1. **Symbol resolution**: Load the generated `.so` with `dlopen()` and verify all expected
-   symbols are present via `dlsym()`
-
-2. **Simple program**: Upload a counter program to Runtime v4
-   - Verify PLC starts running (status API returns RUNNING)
-   - Verify scan cycle timing is correct
-
-3. **Variable access**: Connect debugger to Runtime v4
-   - Read variables via debug handler
-   - Verify correct values returned
-   - Force a variable, verify persistence
-
-4. **Buffer binding**: Verify located variables are correctly bound to image tables
-   - Write to a Modbus register
-   - Verify the PLC program reads the correct value
-
-5. **No MatIEC remnants**: Verify compile.sh has no MatIEC fallback path
-
-## Files Created/Modified
+## Files Created / Modified
 
 | File | Action |
 |------|--------|
-| `resources/sources/StrucppRuntime/v4_compat.cpp` | **New** -- static C-linkage shim |
-| `openplc-runtime/scripts/compile.sh` | Modified -- C++17 compilation support |
-| `src/backend/editor/compiler/compiler-module.ts` | Modified -- v4 upload path |
+| `resources/strucpp/runtime/runtime_v4_entry.cpp` | **New** – static C-linkage shim |
+| `resources/strucpp/runtime/runtime_v4_entry.h` | **New** – C-linkage `LocatedVar` + enum re-declarations |
+| `resources/strucpp/runtime/include/debug_dispatch.hpp` | Already ships C-linkage shims via `STRUCPP_V4_DEBUG_EXPORTS_DEFINE` |
+| `src/backend/editor/compiler/compiler-module.ts` | Modified – v4 upload bundle includes runtime headers + `runtime_v4_entry.cpp` |
+| `openplc-runtime/scripts/compile.sh` | Modified – C++17 only, no MatIEC |
+| `openplc-runtime/core/src/plc_app/image_tables.h` | Modified – include `runtime_v4_entry.h`; add `LocatedVar` references |
+| `openplc-runtime/core/src/plc_app/image_tables.c` | Modified – walk `strucpp_get_located_vars()` directly; drop `setBufferPointers*` / `glueVars` |
+| `openplc-runtime/core/src/plc_app/debug_handler.c` | Rewritten – hierarchical FC 0x41–0x45 calling `strucpp_debug_*` |
+| `openplc-runtime/core/src/plc_app/debug_handler.h` | Modified – signatures reflect new interface |
+
+## Testing Strategy
+
+1. **Symbol presence**: build a sample `.so` with STruC++ output and a hand-rolled
+   `runtime_v4_entry.cpp`. Verify with `nm -D --defined-only` that every symbol in
+   "The New .so Symbol Surface" is present and unmangled.
+2. **`dlopen`/`dlsym` round-trip**: tiny C harness that loads the `.so` and
+   calls each exported function on a known-good project. Validate task counts,
+   intervals, priorities, located-var counts.
+3. **Debug protocol**: send a hand-crafted FC 0x41 request to the runtime and
+   verify response format matches the editor's adapter expectations.
+4. **End-to-end** (Linux only): upload a sample project, start the runtime,
+   open the debugger in the editor, force a variable, observe expected behavior.
+5. **No MatIEC remnants**: `grep -r 'iec2c\|matiec\|debug_vars\|setBufferPointers' core/` returns nothing in the runtime tree.
+6. **Cross-platform sanity (macOS)**: this phase is implemented on macOS; full
+   compilation requires Linux. Static analysis of the changed C files (compile
+   with `-fsyntax-only -DSTRUCPP_NOOP_STUB`) is the available validation.

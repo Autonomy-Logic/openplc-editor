@@ -1,410 +1,334 @@
 # Phase 6: Thread-Per-Task Model for Runtime v4
 
+> **Revision note** — this doc was rewritten after Phase 3/4 (Arduino) shipped.
+> The old draft assumed an "old single-threaded round-robin .so" and a "new
+> per-task .so" coexisting in the runtime. We're not carrying that forward —
+> Phase 5 already eliminates the single-threaded path (no `config_run__`).
+> Thread-per-task is the only mode the new runtime supports.
+
 ## Goal
 
-Replace the single-threaded round-robin task execution in Runtime v4 with a thread-per-task
-model. Each PLC task gets its own POSIX thread with SCHED_FIFO real-time priority matching the
-task's declared priority. This is only for Runtime v4 (Linux); Arduino retains round-robin.
+Each declared IEC task runs on its own POSIX thread under SCHED_FIFO with a
+priority derived from the task's declared priority. Threads coordinate access
+to shared state through a single `buffer_mutex` (granular per-variable locking
+is a later optimization).
 
 ## Prerequisites
 
-- Phase 5 (v4_compat.cpp with C-linkage interface)
-- Runtime v4 codebase at `~/Documents/Code/openplc-runtime`
+- Phase 5 (.so interface, `strucpp_get_task_count` / `strucpp_run_task` etc.)
+- Linux runtime at `~/Documents/Code/openplc-runtime`
 
-## Current Architecture
+## What thread-per-task buys us (and what it doesn't)
 
-The runtime currently has a single PLC cycle thread (`plc_cycle_thread` in `plc_state_manager.c`):
+It is worth being honest about this up front. With a single `buffer_mutex`
+serializing every task body, **threads do not run their computation in
+parallel**. What we do get:
+
+1. **Period accuracy per task.** Each task wakes on its own
+   `clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME)` deadline; a slow task no
+   longer drags fast tasks. Jitter is bounded by per-task wake-up precision,
+   not by the GCD of all task intervals.
+2. **Priority-driven preemption.** SCHED_FIFO ensures that when a high-priority
+   task becomes runnable, the kernel preempts a sleeping low-priority task
+   instantly. The mutex is priority-inheriting (already used today via
+   `init_rt_mutex` in `utils.c`), so a low-priority task holding the mutex
+   inherits the highest waiter's priority while it runs — no priority
+   inversion stalls.
+3. **Independent crash isolation.** A SIGFPE in one task takes down only that
+   task's thread; the others continue until the runtime tears them all down
+   in response to the resulting `PLC_STATE_ERROR`.
+
+What it does **not** buy:
+
+- True parallel execution of task bodies. That requires either lock-free
+  shared-state access or per-variable locking — both are future work and
+  benefit from the same `.so` interface.
+- A free lunch on multi-core: most PLC programs are I/O-bound and dominated
+  by per-task period, not compute, so this rarely matters.
+
+## Architecture overview
+
+```
+                   +-------------- I/O coordinator ---------------+
+                   | (highest-priority task drives plugin hooks,  |
+                   |  see Phase 7 for the alternative dedicated   |
+                   |  coordinator-thread topology)                |
+                   +----------------------------------------------+
+                              |
++------------------+    +-----+-------+    +------------------+
+| Task 0 (highest) |    | Task 1      |    | Task N           |
+| pri 50, 10ms     |    | pri 30, 50ms|    | pri 10, 1000ms   |
+| SCHED_FIFO       |    | SCHED_FIFO  |    | SCHED_FIFO       |
++--------+---------+    +------+------+    +--------+---------+
+         |                     |                    |
+         +--------- buffer_mutex (PRIO_INHERIT) ----+
+                              |
+                          image tables,
+                          VAR_GLOBAL state,
+                          plugin journals
+```
+
+## Task indexing contract
+
+The `.so` from Phase 5 sorts tasks by **priority descending** in
+`strucpp_get_task_count`/`strucpp_run_task`. The runtime relies on this:
+
+- `task_idx == 0` is always the highest-priority task. The I/O coordinator
+  (Phase 7) uses task 0's thread to drive plugin `cycle_start`/`cycle_end`,
+  `journal_apply_and_clear()`, and `updateTime()`.
+- If two tasks declare the same priority, ordering between them is stable
+  (insertion order from the configuration). The runtime must not rely on
+  priority being unique.
+
+This contract is documented in Phase 5 and enforced by `runtime_v4_entry.cpp`'s
+topology builder; the runtime can trust the index ordering it gets back.
+
+## Thread descriptor
 
 ```c
-// Current: single thread runs everything
-while (plc_state == PLC_STATE_RUNNING) {
-    scan_cycle_time_start();
-    plugin_mutex_take(&buffer_mutex);
-    journal_apply_and_clear();
-    plugin_driver_cycle_start(plugin_driver);
-    ext_config_run__(tick__++);       // Runs ALL tasks sequentially
-    ext_updateTime();
-    plugin_driver_cycle_end(plugin_driver);
-    plugin_mutex_give(&buffer_mutex);
-    scan_cycle_time_end();
-    sleep_until(&timer_start);
-}
-```
+/* core/src/plc_app/plc_state_manager.h */
 
-This works but has limitations:
-- All tasks share the same cycle time (common_ticktime__, which is the GCD)
-- Fast tasks are delayed by slow tasks (no preemption)
-- No priority differentiation between tasks
+#include "runtime_v4_entry.h"  /* C-linkage LocatedVar / TaskInfo */
+#include <pthread.h>
+#include <signal.h>
+#include <stdatomic.h>
 
-## New Architecture
-
-Each task gets its own thread:
-
-```
-Thread 0 (Task "fast", T#10ms, Priority 10):
-  loop:
-    mutex_take(buffer_mutex)
-    run_task(0)  // calls program0.run()
-    mutex_give(buffer_mutex)
-    sleep_until(next_10ms)
-
-Thread 1 (Task "slow", T#100ms, Priority 5):
-  loop:
-    mutex_take(buffer_mutex)
-    run_task(1)  // calls program1.run()
-    mutex_give(buffer_mutex)
-    sleep_until(next_100ms)
-```
-
-## Step 6.1: New .so Symbols
-
-**File to modify**: `v4_compat.cpp` (from Phase 5)
-
-Add new optional symbols to `v4_compat.cpp`:
-
-```cpp
-// =============================================================================
-// Optional per-task interface (for thread-per-task runtime)
-// =============================================================================
-
-extern "C" size_t strucpp_get_task_count(void) {
-    return TASK_COUNT;  // number of tasks in CONFIGURATION
-}
-
-extern "C" int64_t strucpp_get_task_interval_ns(size_t task_idx) {
-    if (task_idx >= TASK_COUNT) return 0;
-    static const int64_t intervals[] = {
-        10000000LL,   // Task 0: T#10ms
-        100000000LL,  // Task 1: T#100ms
-    };
-    return intervals[task_idx];
-}
-
-extern "C" int strucpp_get_task_priority(size_t task_idx) {
-    if (task_idx >= TASK_COUNT) return 0;
-    static const int priorities[] = {
-        10,  // Task 0 priority
-        5,   // Task 1 priority
-    };
-    return priorities[task_idx];
-}
-
-extern "C" void strucpp_run_task(size_t task_idx) {
-    if (task_idx >= TASK_COUNT) return;
-    task_programs[task_idx]->run();
-}
-
-// Signal that this .so supports per-task threading
-extern "C" const uint32_t strucpp_capabilities = 0x0001;  // bit 0 = per-task
-```
-
-## Step 7.2: Runtime Per-Task Thread Spawning
-
-**File to modify**: `openplc-runtime/core/src/plc_app/plc_state_manager.c`
-
-### Symbol Resolution
-
-Add new optional symbol resolution in `symbols_init()` (or a new function):
-
-```c
-// Optional STruC++ per-task symbols
-static size_t (*ext_strucpp_get_task_count)(void) = NULL;
-static int64_t (*ext_strucpp_get_task_interval_ns)(size_t) = NULL;
-static int (*ext_strucpp_get_task_priority)(size_t) = NULL;
-static void (*ext_strucpp_run_task)(size_t) = NULL;
-
-void symbols_init_strucpp(PluginManager* pm) {
-    ext_strucpp_get_task_count = plugin_manager_get_func(pm, ..., "strucpp_get_task_count");
-    ext_strucpp_get_task_interval_ns = plugin_manager_get_func(pm, ..., "strucpp_get_task_interval_ns");
-    ext_strucpp_get_task_priority = plugin_manager_get_func(pm, ..., "strucpp_get_task_priority");
-    ext_strucpp_run_task = plugin_manager_get_func(pm, ..., "strucpp_run_task");
-}
-
-bool has_strucpp_per_task(void) {
-    return ext_strucpp_get_task_count != NULL
-        && ext_strucpp_get_task_interval_ns != NULL
-        && ext_strucpp_get_task_priority != NULL
-        && ext_strucpp_run_task != NULL;
-}
-```
-
-### Thread Creation
-
-In `load_plc_program()`, after symbol resolution:
-
-```c
-void load_plc_program(PluginManager* pm) {
-    if (!plugin_manager_load(pm)) {
-        log_error("Failed to load PLC program");
-        return;
-    }
-
-    plc_state = PLC_STATE_INIT;
-
-    // Standard initialization
-    symbols_init(pm);
-    symbols_init_strucpp(pm);  // Try to resolve optional symbols
-
-    ext_config_init__();
-    ext_glueVars();
-
-    plugin_mutex_take(&buffer_mutex);
-    image_tables_fill_null_pointers();
-    plugin_mutex_give(&buffer_mutex);
-
-    if (has_strucpp_per_task()) {
-        // NEW: Per-task threading model
-        size_t task_count = ext_strucpp_get_task_count();
-        log_info("STruC++ per-task mode: %zu tasks", task_count);
-
-        plc_task_threads = calloc(task_count, sizeof(pthread_t));
-        plc_task_count = task_count;
-
-        for (size_t i = 0; i < task_count; i++) {
-            TaskThreadArgs* args = malloc(sizeof(TaskThreadArgs));
-            args->task_idx = i;
-            args->interval_ns = ext_strucpp_get_task_interval_ns(i);
-            args->priority = ext_strucpp_get_task_priority(i);
-            args->plugin_driver = plugin_driver;
-
-            pthread_create(&plc_task_threads[i], NULL, plc_task_thread, args);
-        }
-    }
-}
-```
-
-### Per-Task Thread Function
-
-```c
 typedef struct {
-    size_t task_idx;
-    int64_t interval_ns;
-    int priority;
-    PluginDriver* plugin_driver;
-} TaskThreadArgs;
+    size_t      idx;             /* matches strucpp_run_task argument */
+    int64_t     interval_ns;
+    int         priority;        /* IEC TASK priority, mapped 1..99 */
+    pthread_t   thread;
+    char        name[32];        /* "plc-task-<n>" for /proc visibility */
+
+    /* Per-thread state — must NOT be shared across threads */
+    sigjmp_buf  crash_jmp;
+    volatile int crash_sig;
+    int         holding_mutex;   /* set inside the critical section */
+
+    /* Heartbeat for the watchdog. The watchdog checks max(time(NULL) - hb)
+     * across all task threads — a single hung task is enough to trip it. */
+    atomic_long heartbeat;
+
+    /* Cycle stats, per-task */
+    atomic_uint_least64_t local_tick;
+    atomic_long           last_overrun_ns;
+} PlcTaskCtx;
+
+extern PlcTaskCtx *plc_tasks;   /* heap-allocated array, plc_task_count entries */
+extern size_t      plc_task_count;
+```
+
+Per-thread state (`crash_jmp`, `crash_sig`, `holding_mutex`) lives **inside the
+context struct**, not in file-scope globals. The old single-thread code path
+relied on a single `crash_jmp_buf` global; that doesn't work with multiple
+threads. Each task's `crash_jmp` is private to its own thread.
+
+## Thread function
+
+```c
+/* core/src/plc_app/plc_state_manager.c */
 
 static void* plc_task_thread(void* arg) {
-    TaskThreadArgs* task = (TaskThreadArgs*)arg;
+    PlcTaskCtx* ctx = (PlcTaskCtx*)arg;
 
-    // Record thread ID for crash handler
-    log_info("Task %zu thread started (interval: %lld ns, priority: %d)",
-             task->task_idx, task->interval_ns, task->priority);
+    /* /proc visibility for debugging */
+    pthread_setname_np(pthread_self(), ctx->name);
 
-    // Set real-time priority
-    struct sched_param param;
-    param.sched_priority = task->priority;
-    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
-        log_warn("Could not set SCHED_FIFO priority %d for task %zu",
-                 task->priority, task->task_idx);
+    /* Real-time priority. Map IEC priority (often 0..100) to SCHED_FIFO
+     * (1..99), clamping at the edges. */
+    int rt_prio = ctx->priority;
+    if (rt_prio < 1)  rt_prio = 1;
+    if (rt_prio > 99) rt_prio = 99;
+    struct sched_param sp = { .sched_priority = rt_prio };
+    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0) {
+        log_warn("[task %s] could not set SCHED_FIFO (priority %d): %s — "
+                 "running at default priority. RT quota / capabilities?",
+                 ctx->name, rt_prio, strerror(errno));
     }
 
-    // Lock memory to prevent page faults
-    lock_memory();
+    /* Optional CPU affinity. Pin task 0 to CPU 0, task 1 to CPU 1, etc.
+     * Wraps modulo nproc so it doesn't fail on small machines. The user
+     * can override this with the OPENPLC_TASK_AFFINITY env var. */
+    if (getenv("OPENPLC_DISABLE_TASK_AFFINITY") == NULL) {
+        cpu_set_t cs;
+        CPU_ZERO(&cs);
+        long nproc = sysconf(_SC_NPROCESSORS_ONLN);
+        if (nproc < 1) nproc = 1;
+        CPU_SET(ctx->idx % (size_t)nproc, &cs);
+        pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs);
+    }
 
-    // Install crash signal handlers (same as plc_cycle_thread)
-    install_crash_handlers();
-
-    // Initialize timing
-    struct timespec next_wakeup;
-    clock_gettime(CLOCK_MONOTONIC, &next_wakeup);
-
-    uint32_t local_tick = 0;
-    volatile int holding_mutex = 0;
-
-    // Set jump point for crash recovery
-    if (sigsetjmp(crash_jmp_buf, 1) != 0) {
-        // Crash recovery
-        if (holding_mutex) {
-            holding_mutex = 0;
-            plugin_mutex_give(&task->plugin_driver->buffer_mutex);
+    /* Per-thread crash recovery. */
+    install_per_thread_crash_handlers(ctx);
+    if (sigsetjmp(ctx->crash_jmp, 1) != 0) {
+        if (ctx->holding_mutex) {
+            ctx->holding_mutex = 0;
+            plugin_mutex_give(&plugin_driver->buffer_mutex);
         }
-        log_error("Task %zu crashed (signal %d), entering ERROR state",
-                  task->task_idx, crash_sig);
-        plc_state = PLC_STATE_ERROR;
-        free(task);
+        log_error("[task %s] crashed (signal %d) — entering ERROR state",
+                  ctx->name, ctx->crash_sig);
+        plc_set_state(PLC_STATE_ERROR);
         return NULL;
     }
 
-    // Main execution loop
-    while (plc_state == PLC_STATE_RUNNING) {
-        // Acquire mutex (priority-inheriting)
-        holding_mutex = 1;
-        plugin_mutex_take(&task->plugin_driver->buffer_mutex);
+    /* Initialize timing. */
+    struct timespec next_wakeup;
+    clock_gettime(CLOCK_MONOTONIC, &next_wakeup);
 
-        // Execute this task's program(s)
-        ext_strucpp_run_task(task->task_idx);
+    while (plc_get_state() == PLC_STATE_RUNNING) {
+        ctx->holding_mutex = 1;
+        plugin_mutex_take(&plugin_driver->buffer_mutex);
 
-        // Update time if this is the highest-priority (first) task
-        if (task->task_idx == 0) {
-            ext_updateTime();
-            atomic_store(&plc_heartbeat, time(NULL));
+        /* Phase 7 inserts plugin hooks here for ctx->idx == 0. The bare
+         * thread-per-task model just runs the task body. */
+        ext_strucpp_run_task(ctx->idx);
+
+        plugin_mutex_give(&plugin_driver->buffer_mutex);
+        ctx->holding_mutex = 0;
+
+        atomic_store_explicit(&ctx->heartbeat, (long)time(NULL),
+                              memory_order_relaxed);
+        atomic_fetch_add_explicit(&ctx->local_tick, 1,
+                                  memory_order_relaxed);
+
+        /* Sleep until next period. */
+        next_wakeup.tv_nsec += (long)(ctx->interval_ns % 1000000000LL);
+        next_wakeup.tv_sec  += (time_t)(ctx->interval_ns / 1000000000LL);
+        if (next_wakeup.tv_nsec >= 1000000000L) {
+            next_wakeup.tv_nsec -= 1000000000L;
+            next_wakeup.tv_sec  += 1;
         }
-
-        // Release mutex
-        plugin_mutex_give(&task->plugin_driver->buffer_mutex);
-        holding_mutex = 0;
-
-        // Sleep until next period
-        next_wakeup.tv_nsec += task->interval_ns;
-        while (next_wakeup.tv_nsec >= 1000000000LL) {
-            next_wakeup.tv_nsec -= 1000000000LL;
-            next_wakeup.tv_sec++;
-        }
-        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wakeup, NULL);
-
-        local_tick++;
+        int rc = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
+                                 &next_wakeup, NULL);
+        if (rc == EINTR) continue; /* shutdown signal will flip state */
     }
 
-    log_info("Task %zu thread stopped after %u ticks", task->task_idx, local_tick);
-    free(task);
+    log_info("[task %s] stopped after %llu ticks", ctx->name,
+             (unsigned long long)atomic_load(&ctx->local_tick));
     return NULL;
 }
 ```
 
-### Thread Cleanup on Stop
+`install_per_thread_crash_handlers(ctx)` is a thin wrapper that uses
+`pthread_sigmask` + `sigaction(SA_SIGINFO)` and stashes the `PlcTaskCtx*` in
+thread-local storage so the signal handler can `siglongjmp` to the right
+`crash_jmp`. Implementation lives in `utils.c` next to the existing
+`init_rt_mutex` helpers.
+
+## Lifecycle
+
+### Spawn
+
+`load_plc_program()` resolves the new symbols, calls `config_init__()`, walks
+`locatedVars[]` to bind image tables (Phase 5), then spawns one thread per
+task:
+
+```c
+size_t n = ext_strucpp_get_task_count();
+plc_tasks = calloc(n, sizeof(PlcTaskCtx));
+plc_task_count = n;
+
+for (size_t i = 0; i < n; ++i) {
+    PlcTaskCtx* ctx = &plc_tasks[i];
+    ctx->idx          = i;
+    ctx->interval_ns  = ext_strucpp_get_task_interval_ns(i);
+    ctx->priority     = ext_strucpp_get_task_priority(i);
+    snprintf(ctx->name, sizeof ctx->name, "plc-task-%zu", i);
+    atomic_init(&ctx->heartbeat,  (long)time(NULL));
+    atomic_init(&ctx->local_tick, 0);
+
+    if (pthread_create(&ctx->thread, NULL, plc_task_thread, ctx) != 0) {
+        log_error("Failed to spawn task %zu: %s", i, strerror(errno));
+        plc_set_state(PLC_STATE_ERROR);
+        return;
+    }
+}
+```
+
+If a task has `interval_ns <= 0` (continuous/event-driven, not yet supported),
+log a warning and skip it. If after spawning, no tasks were created, transition
+to `PLC_STATE_ERROR`.
+
+### Stop
 
 ```c
 void stop_plc_program(void) {
-    plc_state = PLC_STATE_STOPPING;
+    plc_set_state(PLC_STATE_STOPPING);
 
-    if (plc_task_count > 0) {
-        // Per-task model: join all task threads
-        for (size_t i = 0; i < plc_task_count; i++) {
-            pthread_join(plc_task_threads[i], NULL);
-        }
-        free(plc_task_threads);
-        plc_task_threads = NULL;
-        plc_task_count = 0;
-    } else {
-        // Single-thread model: join the one thread
-        pthread_join(plc_thread, NULL);
+    /* SIGUSR1 wakes any task currently blocked in clock_nanosleep so the
+     * EINTR path lets them observe the new state. We mask SIGUSR1 in the
+     * threads' signal mask elsewhere so it isn't accidentally handled. */
+    for (size_t i = 0; i < plc_task_count; ++i) {
+        pthread_kill(plc_tasks[i].thread, SIGUSR1);
+    }
+    for (size_t i = 0; i < plc_task_count; ++i) {
+        pthread_join(plc_tasks[i].thread, NULL);
     }
 
-    plc_state = PLC_STATE_STOPPED;
+    free(plc_tasks);
+    plc_tasks = NULL;
+    plc_task_count = 0;
+    plc_set_state(PLC_STATE_STOPPED);
 }
 ```
 
-## Step 7.3: Plugin Integration
+### Watchdog
 
-Plugins (`plugin_driver_cycle_start`, `plugin_driver_cycle_end`) currently run inside the
-single PLC cycle thread. With per-task threads, we need to decide when plugins run:
+The watchdog (separate thread, already exists today) iterates the task array
+once per second and checks `time(NULL) - max(heartbeat)`. If any task hasn't
+ticked in `WATCHDOG_TIMEOUT_S` seconds, it logs which task is stuck and
+transitions to `PLC_STATE_ERROR`.
 
-**Option A** (recommended): Plugins run in the highest-priority task's thread only.
-- `cycle_start` is called before the first task's `run()`
-- `cycle_end` is called after the first task's `run()`
-- Other tasks only acquire the mutex, run their program, and release
+## Mapping IEC priority to SCHED_FIFO
 
-**Option B**: Plugins run in a separate dedicated thread.
-- More complex, requires a third mutex coordination point
-
-Going with Option A:
+IEC 61131-3 doesn't fix the priority range. Most editors emit 0..100. Linux
+SCHED_FIFO is 1..99. We clamp:
 
 ```c
-// In plc_task_thread, when task->task_idx == 0:
-plugin_mutex_take(&task->plugin_driver->buffer_mutex);
-
-if (task->task_idx == 0) {
-    journal_apply_and_clear();
-    plugin_driver_cycle_start(task->plugin_driver);
-}
-
-ext_strucpp_run_task(task->task_idx);
-
-if (task->task_idx == 0) {
-    ext_updateTime();
-    plugin_driver_cycle_end(task->plugin_driver);
-    atomic_store(&plc_heartbeat, time(NULL));
-}
-
-plugin_mutex_give(&task->plugin_driver->buffer_mutex);
+int rt = ctx->priority;
+if (rt < 1)  rt = 1;
+if (rt > 99) rt = 99;
 ```
 
-## Global Variable Synchronization
+If the runtime lacks `CAP_SYS_NICE` (e.g., running as a non-privileged user
+inside a container without `--cap-add=SYS_NICE`), `pthread_setschedparam`
+fails. We **log a warning and continue** at default scheduling — the task
+still runs, just without RT preemption. Operational guidance: deployments
+that need RT must grant the capability or use `rtprio` in
+`/etc/security/limits.conf`.
 
-### The Problem
+## Open question deliberately not closed here
 
-Different tasks may share global variables declared in `VAR_GLOBAL` of the CONFIGURATION.
-With per-task threads, concurrent access to these variables must be synchronized.
+**Plugin / I/O coordinator placement** — see Phase 7. The thread function
+above intentionally does not call `plugin_driver_cycle_start/end`,
+`journal_apply_and_clear`, or `updateTime`. Phase 7 wires those in.
 
-### The Solution: buffer_mutex
-
-The existing `buffer_mutex` (with `PTHREAD_PRIO_INHERIT`) already provides synchronization:
-
-1. Each task thread acquires `buffer_mutex` before running its program
-2. Tasks execute one at a time (mutex serializes execution)
-3. Between executions, tasks sleep (no mutex held)
-
-This means tasks don't truly run in parallel during their computation phase. The parallelism
-comes from:
-- **Different sleep periods**: A 10ms task wakes up 10x more often than a 100ms task
-- **Independent timing**: Each task has its own clock, not tied to a GCD base tick
-- **Priority scheduling**: SCHED_FIFO ensures the highest-priority waiting task runs first
-
-For most PLC applications, task execution time is much smaller than the cycle period (e.g.,
-1ms execution in a 10ms cycle). The mutex serialization adds negligible overhead.
-
-### Future Optimization: Fine-Grained Locking
-
-For applications where true parallel execution is needed:
-1. Each global variable gets its own read-write lock
-2. Tasks acquire read locks for variables they read, write locks for variables they write
-3. Lock ordering prevents deadlocks
-
-This is a significant optimization that can be added later without changing the .so interface.
-
-## Design Notes
-
-### SCHED_FIFO Priority Mapping
-
-IEC 61131-3 TASK priority values are integers where higher = more important. Linux SCHED_FIFO
-priorities are also integers where higher = more important (range 1-99). The mapping is direct:
-
-```c
-int linux_priority = task->priority;
-if (linux_priority < 1) linux_priority = 1;
-if (linux_priority > 99) linux_priority = 99;
-```
-
-### Watchdog Integration
-
-Only the highest-priority task (task 0) updates the `plc_heartbeat` atomic variable. The
-watchdog monitors this to detect PLC stalls. If any task thread crashes, the crash handler
-sets `plc_state = PLC_STATE_ERROR`, causing all task threads to exit their loops.
-
-### Single-Task Optimization
-
-For single-task projects (only one task in the configuration), the runtime spawns one thread.
-This is functionally identical to the old single-thread model but uses the same code path.
-
-## Testing Strategy
-
-1. **Dual-task test**: Two tasks at T#10ms and T#100ms
-   - Verify both threads are created
-   - Verify each runs at its configured interval (within 10% tolerance)
-   - Verify no deadlock after 10,000 cycles
-
-2. **Priority test**: High-priority task should preempt low-priority task's sleep
-   - Create tasks with priorities 10 and 5
-   - Verify SCHED_FIFO is set (check `/proc/[pid]/sched`)
-
-3. **Global variable test**: Two tasks sharing a global variable
-   - Task 1 writes a counter
-   - Task 2 reads the counter
-   - Verify no torn reads (counter is always a valid value)
-
-4. **Crash recovery**: Introduce a deliberate SIGFPE in task 1
-   - Verify task 1 thread catches the signal
-   - Verify PLC transitions to ERROR state
-   - Verify task 0 thread also stops
-
-5. **Single-task fallback**: Upload a single-task program
-   - Verify single-thread model is used (no per-task threads)
-
-## Files Created/Modified
+## Files Created / Modified
 
 | File | Action |
 |------|--------|
-| `v4_compat.cpp` | Modified -- add per-task symbols |
-| `openplc-runtime/core/src/plc_app/plc_state_manager.c` | Modified -- per-task thread spawning |
-| `openplc-runtime/core/src/plc_app/plc_state_manager.h` | Modified -- new data structures |
-| `openplc-runtime/core/src/plc_app/image_tables.c` | Modified -- resolve new symbols |
+| `core/src/plc_app/plc_state_manager.c` | Rewritten – thread-per-task spawning + per-thread crash handler |
+| `core/src/plc_app/plc_state_manager.h` | Modified – `PlcTaskCtx`, exports |
+| `core/src/plc_app/utils.c` / `.h` | Modified – `install_per_thread_crash_handlers`, `lock_memory`, TLS for per-task ctx |
+| `core/src/plc_app/image_tables.c` | Modified (in Phase 5) – walks `locatedVars[]` directly |
+
+## Testing Strategy
+
+1. **Single-task program**: spawns one thread, runs at the declared interval.
+   Validate `pthread_getschedparam` returns `SCHED_FIFO` and the right priority.
+2. **Two-task program (10 ms / 100 ms, priorities 50 / 30)**: both threads tick
+   at their declared intervals (within ±10% over a 60-second window).
+3. **Priority preemption**: induce a 5-ms busy loop in the low-priority task;
+   verify the high-priority task still meets its deadline. Compare against a
+   non-RT control by running with `OPENPLC_DISABLE_TASK_AFFINITY=1` and
+   without the `CAP_SYS_NICE` capability.
+4. **Per-thread crash**: deliberately divide-by-zero in task 1; verify task 1
+   thread exits cleanly via the `siglongjmp`, the runtime transitions to
+   `PLC_STATE_ERROR`, and no other thread is stuck holding `buffer_mutex`.
+5. **Watchdog**: sleep task 0 for 30 seconds inside the program; verify the
+   watchdog transitions to `PLC_STATE_ERROR` and reports task 0 by name.
+6. **Stop responsiveness**: while running with a 1000 ms task, call
+   `stop_plc_program()`; verify the join completes in < 1100 ms (one period).
+7. **macOS sandbox testing**: SCHED_FIFO and `pthread_setname_np` aren't
+   available on macOS. Wrap them in `#ifdef __linux__` so the file at least
+   compiles syntactically on macOS for development.

@@ -83,9 +83,16 @@ Implementation follows this order -- code generation first, then the runtime tha
 
 | Phase | Title | Description |
 |-------|-------|-------------|
-| 5 | [Runtime .so Interface](05-runtime-v4-so-interface.md) | C-linkage compatibility shims for existing runtime |
-| 6 | [Thread-Per-Task Model](06-runtime-v4-thread-per-task.md) | Per-task pthreads instead of round-robin |
-| 7 | [Runtime Debug Handler](07-runtime-v4-debug-handler.md) | Native hierarchical debug in runtime |
+| 5 | [Runtime .so Interface](05-runtime-v4-so-interface.md) | Hierarchical-from-day-one .so interface; static `runtime_v4_entry.cpp`; runtime walks `locatedVars[]` directly; debug handler rewritten around FC 0x41–0x45 with `(arr_idx, elem_idx)` |
+| 6 | [Thread-Per-Task Model](06-runtime-v4-thread-per-task.md) | One SCHED_FIFO thread per IEC task; priority-sorted indexing; per-thread crash handlers; per-task heartbeats |
+| 7 | [Plugin & I/O Coordination](07-runtime-v4-plugin-and-io.md) | Where plugin hooks, the journal, and `updateTime()` live in the thread-per-task world (Option A: ride task 0; Option B preview behind env flag) |
+
+> **Revision history.** The original phase plan had Phase 5 ship a flat-index
+> `debug_vars[]`-shaped compatibility layer that Phase 7 would later replace
+> with hierarchical addressing. After Phase 4 (Arduino) shipped with
+> hierarchical addressing from day one, the intermediate flat layer became
+> dead weight, so Phase 7 was repurposed for plugin/I/O coordination — the
+> question Phase 6's thread-per-task split forces us to answer.
 
 ### Rationale for Phase Order
 
@@ -107,13 +114,13 @@ Phase 1 (STruC++ dependency infrastructure)
   |       |
   |       +---> Phase 3 (Arduino runtime -- compiles and runs C++)
   |               |
-  |               +---> Phase 4 (Debugger -- deferred)
+  |               +---> Phase 4 (Debugger -- hierarchical addressing)
   |
-  +---> Phase 5 (Runtime v4 .so interface)
+  +---> Phase 5 (Runtime v4 .so interface + hierarchical debug handler)
           |
           +---> Phase 6 (Thread-per-task)
                   |
-                  +---> Phase 7 (Runtime v4 debug handler)
+                  +---> Phase 7 (Plugin & I/O coordination)
 ```
 
 ## Key Architectural Decisions
