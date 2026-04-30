@@ -64,41 +64,24 @@ interface RuntimeStatusPanelProps {
   ipAddress: string | null
   jwtToken: string | null
   isConnected: boolean
-  /** Master name to filter from multi-master response. If omitted, uses first master or flat fields. */
+  /** Master name to filter from the response. If omitted, uses the first master. */
   masterName?: string
 }
 
 /**
- * Resolve the status for a specific master from the runtime response.
- * Tries the multi-master "masters" array first, then falls back to flat fields.
+ * Pick a master from the runtime response — by name when supplied, otherwise
+ * the first one. Returns null when the runtime hasn't reported any.
  */
 function resolveMasterStatus(
   response: EtherCATRuntimeStatusResponse,
   masterName?: string,
 ): EtherCATMasterStatus | null {
-  // Try multi-master array first
-  if (response.masters && response.masters.length > 0) {
-    if (masterName) {
-      const match = response.masters.find((m) => m.name === masterName)
-      if (match) return match
-    }
-    // Fallback: first master in array
-    return response.masters[0]
+  if (!response.masters || response.masters.length === 0) return null
+  if (masterName) {
+    const match = response.masters.find((m) => m.name === masterName)
+    if (match) return match
   }
-
-  // Fallback: flat fields (single-master backward compat)
-  if (response.plugin_state && response.slaves && response.metrics) {
-    return {
-      name: masterName ?? 'default',
-      plugin_state: response.plugin_state,
-      slave_count: response.slave_count ?? 0,
-      expected_wkc: response.expected_wkc ?? 0,
-      slaves: response.slaves,
-      metrics: response.metrics,
-    }
-  }
-
-  return null
+  return response.masters[0]
 }
 
 function extractErrorMessage(rawError: string): string {

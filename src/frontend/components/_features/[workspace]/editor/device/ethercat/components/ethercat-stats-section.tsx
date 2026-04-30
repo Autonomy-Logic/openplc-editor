@@ -46,10 +46,7 @@ const EthercatStatsSection = ({
   return (
     <>
       {masters.map((master, idx) => {
-        // Project supports more than one EtherCAT bus per device; surface
-        // the bus name in the section header so users can tell which set
-        // of stats they're looking at. Fall back to a positional label
-        // for the single-master legacy response shape (no `name`).
+        // Positional fallback when the runtime config didn't name the bus.
         const busLabel = master.name || `Bus ${idx + 1}`
         // idx in the id keeps it unique when two buses share a name.
         const slug = master.name ? slugifyBusName(master.name) : ''

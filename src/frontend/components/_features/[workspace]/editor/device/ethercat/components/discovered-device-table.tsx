@@ -72,29 +72,20 @@ const DiscoveredDeviceTable = ({
               return (
                 <tr
                   key={dm.device.position}
-                  role='button'
-                  tabIndex={0}
-                  aria-pressed={isSelected}
                   onClick={() => onSelectDevice(dm.device.position, !isSelected)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onSelectDevice(dm.device.position, !isSelected)
-                    }
-                  }}
                   className={cn(
                     'cursor-pointer border-b border-neutral-200 transition-colors dark:border-neutral-800',
                     'hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1',
                     isSelected && 'bg-brand/10 dark:bg-brand/20',
                   )}
                 >
                   <td className='px-2 py-2'>
-                    {/* The row carries the button semantics (role/tabIndex/aria-pressed); the
-                        checkbox is purely visual so screen-reader and keyboard users don't get
-                        a duplicate tab stop / "button pressed, checkbox checked" announcement
-                        per row. */}
-                    <Checkbox checked={isSelected} tabIndex={-1} aria-hidden='true' className='pointer-events-none' />
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) => onSelectDevice(dm.device.position, !!checked)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select device at position ${dm.device.position}`}
+                    />
                   </td>
                   <td className='px-2 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300'>
                     {dm.device.position}
