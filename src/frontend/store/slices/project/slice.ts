@@ -337,7 +337,16 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           const pou = slice.project.data.pous.find((p) => p.name === oldName)
-          if (pou) pou.name = newName
+          if (pou) {
+            // Queue the OLD path for deletion. The next save serializes the
+            // POU under its new path; without this, the old file lingers in
+            // S3 (orphan-cleanup catches it) but the version-control badge
+            // wouldn't see the deletion event and would over-count by 1.
+            const folder = getFolderFromPouType(pou.pouType)
+            const ext = getExtensionFromLanguage(pou.body.language)
+            slice.pendingDeletions.push(`pous/${folder}/${oldName}${ext}`)
+            pou.name = newName
+          }
         }),
       )
     },
@@ -765,7 +774,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           const server = slice.project.data.servers?.find((s) => s.name === name)
-          if (server) server.name = newName
+          if (server) {
+            // See `updatePouName` — queue old path so the version-control
+            // badge doesn't over-count the rename.
+            slice.pendingDeletions.push(`devices/servers/${name}.json`)
+            server.name = newName
+          }
         }),
       )
       return ok()
@@ -1101,6 +1115,10 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
           if (!device) return
+
+          // See `updatePouName` — queue old path so the version-control
+          // badge doesn't over-count the rename.
+          slice.pendingDeletions.push(`devices/remote/${name}.json`)
 
           // Update associated system task name for EtherCAT devices
           if (device.protocol === 'ethercat') {

@@ -5,6 +5,10 @@
  * menu items, activity bar, modals) and centralise the save logic so it isn't
  * duplicated. They read state from the store, perform serialization, call the
  * platform port, and update state on success/failure.
+ *
+ * All path → content production funnels through `iterateProjectFiles` so the
+ * preview, the snapshot baselines, the per-file save and the full-project
+ * save can never disagree about what a given file should look like on disk.
  */
 
 import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
@@ -19,62 +23,214 @@ import { parseGraphicalPouFromString, parseTextualPouFromString } from '../utils
 import { serializePouToText } from '../utils/PLC/pou-text-serializer'
 import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
+import { pickContentForSave } from '../utils/version-control-content'
 
 /** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
 const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')
 
-/**
- * Strip transient UI state (selected, selectedNodes) from graphical POU body
- * before serializing to disk. This prevents nodes from loading as selected
- * on the next open, which would cause a spurious dirty mark on first click.
- */
-function stripGraphicalSelections<T extends { body: { language: string; value: unknown } }>(pou: T): T {
-  const lang = pou.body.language
-  if (lang !== 'ld' && lang !== 'fbd') return pou
+// ---------------------------------------------------------------------------
+// Project file iteration — single source of truth for path → content
+// ---------------------------------------------------------------------------
 
-  const body = pou.body.value as Record<string, unknown>
-  if (!body) return pou
+type StoreState = ReturnType<typeof openPLCStoreBase.getState>
 
-  if (lang === 'ld' && Array.isArray(body.rungs)) {
-    return {
-      ...pou,
-      body: {
-        ...pou.body,
-        value: {
-          ...body,
-          rungs: (body.rungs as Array<Record<string, unknown>>).map((rung) => ({
-            ...rung,
-            selectedNodes: [],
-            nodes: Array.isArray(rung.nodes)
-              ? (rung.nodes as Array<Record<string, unknown>>).map((n) => ({ ...n, selected: false }))
-              : rung.nodes,
-          })),
-        },
-      },
-    }
-  }
+type ProjectFileCategory = 'pou' | 'server' | 'remote-device' | 'device-config' | 'pin-mapping' | 'project-json'
 
-  if (lang === 'fbd' && body.rung) {
-    const rung = body.rung as Record<string, unknown>
-    return {
-      ...pou,
-      body: {
-        ...pou.body,
-        value: {
-          ...body,
-          rung: {
-            ...rung,
-            nodes: Array.isArray(rung.nodes)
-              ? (rung.nodes as Array<Record<string, unknown>>).map((n) => ({ ...n, selected: false }))
-              : rung.nodes,
-          },
-        },
-      },
-    }
-  }
-
-  return pou
+type ProjectFileSpec = {
+  path: string
+  content: string
+  category: ProjectFileCategory
 }
+
+function buildProjectJsonContent(state: StoreState): string {
+  const { project } = state
+  const debugVariables = collectDebugVariables(project.data.configurations.resource.globalVariables, project.data.pous)
+  return JSON.stringify(
+    {
+      meta: { name: project.meta.name, type: 'plc-project' },
+      data: {
+        dataTypes: project.data.dataTypes,
+        pous: [],
+        configuration: project.data.configurations,
+        debugVariables,
+      },
+    },
+    null,
+    2,
+  )
+}
+
+function buildPouSpec(pou: PLCPou, state: StoreState): ProjectFileSpec {
+  const folder = getFolderFromPouType(pou.pouType)
+  const ext = getExtensionFromLanguage(pou.body.language)
+  const editorModel = state.editorActions.getEditorFromEditors(pou.name)
+  const sanitized = sanitizePou(pou, editorModel ?? undefined)
+  return {
+    path: `pous/${folder}/${pou.name}${ext}`,
+    content: serializePouToText(sanitized),
+    category: 'pou',
+  }
+}
+
+/**
+ * Yield every file the save flow uploads, in a deterministic order, with the
+ * canonical serialized content for each. Used by `buildAllProjectFileContents*`
+ * for snapshots and previews, and by `executeSaveProject` to build the
+ * platform write payload.
+ */
+function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
+  const { project, deviceDefinitions } = state
+
+  for (const pou of project.data.pous) {
+    yield buildPouSpec(pou, state)
+  }
+
+  for (const s of project.data.servers ?? []) {
+    yield {
+      path: `devices/servers/${s.name}.json`,
+      content: JSON.stringify(s, null, 2),
+      category: 'server',
+    }
+  }
+
+  for (const d of project.data.remoteDevices ?? []) {
+    yield {
+      path: `devices/remote/${d.name}.json`,
+      content: JSON.stringify(d, null, 2),
+      category: 'remote-device',
+    }
+  }
+
+  yield {
+    path: 'devices/configuration.json',
+    content: JSON.stringify(deviceDefinitions.configuration, null, 2),
+    category: 'device-config',
+  }
+
+  yield {
+    path: 'devices/pin-mapping.json',
+    content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+    category: 'pin-mapping',
+  }
+
+  yield {
+    path: 'project.json',
+    content: buildProjectJsonContent(state),
+    category: 'project-json',
+  }
+}
+
+/**
+ * Resolve the canonical specs for a single named file (POU, datatype, server,
+ * etc.). Returns multiple specs only for the `device` editor type, which
+ * persists both the configuration and pin-mapping JSON files.
+ */
+function serializeProjectFile(
+  fileName: string,
+  file: { type: string | null; filePath: string },
+  state: StoreState,
+): ProjectFileSpec[] {
+  const { project, deviceDefinitions } = state
+  const isPouType = file.type === 'program' || file.type === 'function' || file.type === 'function-block'
+
+  if (isPouType) {
+    const pou = project.data.pous.find((p) => p.name === fileName)
+    return pou ? [buildPouSpec(pou, state)] : []
+  }
+
+  if (file.type === 'device') {
+    return [
+      {
+        path: 'devices/configuration.json',
+        content: JSON.stringify(deviceDefinitions.configuration, null, 2),
+        category: 'device-config',
+      },
+      {
+        path: 'devices/pin-mapping.json',
+        content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+        category: 'pin-mapping',
+      },
+    ]
+  }
+
+  if (file.type === 'server') {
+    const server = project.data.servers?.find((s) => s.name === fileName)
+    if (!server) return []
+    return [{ path: `devices/servers/${fileName}.json`, content: JSON.stringify(server, null, 2), category: 'server' }]
+  }
+
+  if (file.type === 'remote-device') {
+    const device = project.data.remoteDevices?.find((d) => d.name === fileName)
+    if (!device) return []
+    return [
+      {
+        path: `devices/remote/${fileName}.json`,
+        content: JSON.stringify(device, null, 2),
+        category: 'remote-device',
+      },
+    ]
+  }
+
+  if (file.type === 'ethercat-device') {
+    const bus = project.data.remoteDevices?.find((d) => d.name === file.filePath)
+    if (!bus) return []
+    return [
+      {
+        path: `devices/remote/${file.filePath}.json`,
+        content: JSON.stringify(bus, null, 2),
+        category: 'remote-device',
+      },
+    ]
+  }
+
+  // data-type, resource: live in project.json
+  return [{ path: 'project.json', content: buildProjectJsonContent(state), category: 'project-json' }]
+}
+
+// ---------------------------------------------------------------------------
+// Public file-content builders
+// ---------------------------------------------------------------------------
+
+/**
+ * Pure-serialize every project file (no raw fallback). Use this to capture
+ * the "state at sync point" snapshot stored in
+ * `versionControl.loadedSerialized`, so the save flow can later detect
+ * "state hasn't changed since sync" via byte-equality comparison.
+ *
+ * Also used by the version-control changes panel to render the diff preview,
+ * so what the user sees there is byte-identical to what the next commit
+ * would upload.
+ */
+export function buildAllProjectFileContentsPure(): Record<string, string> {
+  const state = openPLCStoreBase.getState()
+  const result: Record<string, string> = {}
+  for (const spec of iterateProjectFiles(state)) {
+    result[spec.path] = spec.content
+  }
+  return result
+}
+
+/**
+ * Build the file content map the save flow actually uploads. Like
+ * `buildAllProjectFileContentsPure`, but applies the raw-fallback for files
+ * whose serialized state hasn't changed since the last sync (byte-stable
+ * echo back to S3, no phantom modifications vs HEAD).
+ *
+ * Used as input to `versionControlActions.commitBaseline` so the post-commit
+ * baseline matches what was actually on S3 at commit time.
+ */
+export function buildAllProjectFileContents(): Record<string, string> {
+  const state = openPLCStoreBase.getState()
+  const result: Record<string, string> = {}
+  for (const spec of iterateProjectFiles(state)) {
+    result[spec.path] = pickContentForSave(spec.path, spec.content, state.versionControl)
+  }
+  return result
+}
+
+// ---------------------------------------------------------------------------
+// Save flows
+// ---------------------------------------------------------------------------
 
 /**
  * Save the entire project (all files, device config, debug variables).
@@ -86,10 +242,12 @@ function stripGraphicalSelections<T extends { body: { language: string; value: u
  */
 export async function executeSaveProject(projectPort: ProjectPort): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
-  const { project, pendingDeletions, deviceDefinitions } = state
+  const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
   const { setAllToSaved } = state.fileActions
   const { markAllSaved } = state.snapshotActions
+
+  const deletionsBeforeSave = [...pendingDeletions]
 
   setEditingState('save-request')
   toast({
@@ -99,51 +257,46 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
   })
 
   try {
-    // Serialize all POUs using the same functions as single-file save
-    const pouFiles: RawProjectFile[] = project.data.pous.map((pou) => {
-      const editorModel = state.editorActions.getEditorFromEditors(pou.name)
-      const sanitized = stripGraphicalSelections(sanitizePou(pou, editorModel ?? undefined))
-      const folder = getFolderFromPouType(pou.pouType)
-      const ext = getExtensionFromLanguage(pou.body.language)
-      return { relativePath: `pous/${folder}/${pou.name}${ext}`, content: serializePouToText(sanitized) }
-    })
+    // Group every spec by category so we can build the platform's
+    // category-shaped WriteProjectFiles struct without duplicating the
+    // serialization logic. `pickContentForSave` keeps unedited files
+    // byte-identical to their last-synced raw content.
+    const pouFiles: RawProjectFile[] = []
+    const serverFiles: RawProjectFile[] = []
+    const remoteDeviceFiles: RawProjectFile[] = []
+    let projectJson = ''
+    let deviceConfig = ''
+    let pinMapping = ''
 
-    // Serialize servers as individual JSON files
-    const serverFiles: RawProjectFile[] = (project.data.servers ?? []).map((s) => ({
-      relativePath: `devices/servers/${s.name}.json`,
-      content: JSON.stringify(s, null, 2),
-    }))
-
-    // Serialize remote devices as individual JSON files
-    const remoteDeviceFiles: RawProjectFile[] = (project.data.remoteDevices ?? []).map((d) => ({
-      relativePath: `devices/remote/${d.name}.json`,
-      content: JSON.stringify(d, null, 2),
-    }))
-
-    // Build project.json — same structure as single-file save
-    const debugVariables = collectDebugVariables(
-      project.data.configurations.resource.globalVariables,
-      project.data.pous,
-    )
-    const projectJson = JSON.stringify(
-      {
-        meta: { name: project.meta.name, type: 'plc-project' },
-        data: {
-          dataTypes: project.data.dataTypes,
-          pous: [],
-          configuration: project.data.configurations,
-          debugVariables,
-        },
-      },
-      null,
-      2,
-    )
+    for (const spec of iterateProjectFiles(state)) {
+      const content = pickContentForSave(spec.path, spec.content, state.versionControl)
+      switch (spec.category) {
+        case 'pou':
+          pouFiles.push({ relativePath: spec.path, content })
+          break
+        case 'server':
+          serverFiles.push({ relativePath: spec.path, content })
+          break
+        case 'remote-device':
+          remoteDeviceFiles.push({ relativePath: spec.path, content })
+          break
+        case 'device-config':
+          deviceConfig = content
+          break
+        case 'pin-mapping':
+          pinMapping = content
+          break
+        case 'project-json':
+          projectJson = content
+          break
+      }
+    }
 
     const files: WriteProjectFiles = {
       projectPath: project.meta.path,
       projectJson,
-      deviceConfig: JSON.stringify(deviceDefinitions.configuration, null, 2),
-      pinMapping: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+      deviceConfig,
+      pinMapping,
       pouFiles,
       serverFiles,
       remoteDeviceFiles,
@@ -152,6 +305,23 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
 
     const res = await projectPort.saveProject(files)
     if (res.success) {
+      // Tell the version-control slice exactly which paths were just sent +
+      // their content. The slice compares against baseline to add or remove
+      // paths from `changedPaths` (handles the modify-then-save-then-revert
+      // case correctly without round-tripping to /changes).
+      const savedRecords = [
+        { path: 'project.json', content: projectJson },
+        { path: 'devices/configuration.json', content: deviceConfig },
+        { path: 'devices/pin-mapping.json', content: pinMapping },
+        ...pouFiles.map((f) => ({ path: f.relativePath, content: f.content })),
+        ...serverFiles.map((f) => ({ path: f.relativePath, content: f.content })),
+        ...remoteDeviceFiles.map((f) => ({ path: f.relativePath, content: f.content })),
+      ]
+      state.versionControlActions.recordSavedFiles({
+        saved: savedRecords,
+        deleted: deletionsBeforeSave,
+      })
+
       state.projectActions.clearPendingDeletions()
       setEditingState('saved')
       setAllToSaved()
@@ -226,76 +396,68 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
   }
 
   try {
+    // Use the same canonical serializer as the full-project save path so
+    // both flows agree on what bytes hit disk. For POUs and JSON files this
+    // is a one-shot lookup; the special `device` type returns two specs
+    // (configuration + pin-mapping).
+    const specs = serializeProjectFile(fileName, file, state)
+    if (specs.length === 0) {
+      // Some categories (e.g. ethercat-device) need handling that doesn't
+      // map to a single fileName lookup, so fall through to the legacy path.
+    }
+
     const isPouType = file.type === 'program' || file.type === 'function' || file.type === 'function-block'
 
     if (isPouType) {
+      const spec = specs[0]
+      if (!spec) return fail(`POU "${fileName}" not found.`)
       const pou = project.data.pous.find((p) => p.name === fileName)
       if (!pou) return fail(`POU "${fileName}" not found.`)
-
-      const editorModel = state.editorActions.getEditorFromEditors(fileName)
-      const sanitized = stripGraphicalSelections(sanitizePou(pou, editorModel ?? undefined))
-      const textContent = serializePouToText(sanitized)
       const folder = getFolderFromPouType(pou.pouType)
       const ext = getExtensionFromLanguage(pou.body.language)
-
-      const res = await projectPort.saveFile(joinPath(projectPath, 'pous', folder, `${fileName}${ext}`), textContent)
+      const res = await projectPort.saveFile(joinPath(projectPath, 'pous', folder, `${fileName}${ext}`), spec.content)
       if (!res.success) return fail(res.error ?? 'Save failed')
     } else if (file.type === 'device') {
-      const configRes = await projectPort.saveFile(
-        joinPath(projectPath, 'devices/configuration.json'),
-        JSON.stringify(state.deviceDefinitions.configuration, null, 2),
-      )
-      const pinRes = await projectPort.saveFile(
-        joinPath(projectPath, 'devices/pin-mapping.json'),
-        JSON.stringify(state.deviceDefinitions.pinMapping.pins, null, 2),
-      )
+      const config = specs.find((s) => s.category === 'device-config')
+      const pin = specs.find((s) => s.category === 'pin-mapping')
+      if (!config || !pin) return fail('Save failed')
+      const configRes = await projectPort.saveFile(joinPath(projectPath, 'devices/configuration.json'), config.content)
+      const pinRes = await projectPort.saveFile(joinPath(projectPath, 'devices/pin-mapping.json'), pin.content)
       if (!configRes.success || !pinRes.success) return fail('Save failed')
     } else if (file.type === 'server') {
-      const server = project.data.servers?.find((s) => s.name === fileName)
-      if (!server) return fail(`Server "${fileName}" not found.`)
-      const res = await projectPort.saveFile(
-        joinPath(projectPath, 'devices/servers', `${fileName}.json`),
-        JSON.stringify(server, null, 2),
-      )
+      const spec = specs[0]
+      if (!spec) return fail(`Server "${fileName}" not found.`)
+      const res = await projectPort.saveFile(joinPath(projectPath, 'devices/servers', `${fileName}.json`), spec.content)
       if (!res.success) return fail(res.error ?? 'Save failed')
     } else if (file.type === 'remote-device') {
-      const device = project.data.remoteDevices?.find((d) => d.name === fileName)
-      if (!device) return fail(`Remote device "${fileName}" not found.`)
-      const res = await projectPort.saveFile(
-        joinPath(projectPath, 'devices/remote', `${fileName}.json`),
-        JSON.stringify(device, null, 2),
-      )
+      const spec = specs[0]
+      if (!spec) return fail(`Remote device "${fileName}" not found.`)
+      const res = await projectPort.saveFile(joinPath(projectPath, 'devices/remote', `${fileName}.json`), spec.content)
       if (!res.success) return fail(res.error ?? 'Save failed')
     } else if (file.type === 'ethercat-device') {
       // Slave devices live inside the parent bus file. filePath holds the bus name.
-      const busName = file.filePath
-      const bus = project.data.remoteDevices?.find((d) => d.name === busName)
-      if (!bus) return fail(`Parent bus "${busName}" not found for device "${fileName}".`)
+      const spec = specs[0]
+      if (!spec) return fail(`Parent bus "${file.filePath}" not found for device "${fileName}".`)
       const res = await projectPort.saveFile(
-        joinPath(projectPath, 'devices/remote', `${busName}.json`),
-        JSON.stringify(bus, null, 2),
+        joinPath(projectPath, 'devices/remote', `${file.filePath}.json`),
+        spec.content,
       )
       if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
       // data-type, resource: live in project.json
-      const debugVariables = collectDebugVariables(
-        project.data.configurations.resource.globalVariables,
-        project.data.pous,
-      )
-      const projectJson = {
-        meta: { name: project.meta.name, type: 'plc-project' },
-        data: {
-          dataTypes: project.data.dataTypes,
-          pous: [],
-          configuration: project.data.configurations,
-          debugVariables,
-        },
-      }
-      const res = await projectPort.saveFile(
-        joinPath(projectPath, 'project.json'),
-        JSON.stringify(projectJson, null, 2),
-      )
+      const spec = specs[0]
+      if (!spec) return fail('Save failed')
+      const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), spec.content)
       if (!res.success) return fail(res.error ?? 'Save failed')
+    }
+
+    // Tell the version-control slice exactly which paths/content were just
+    // sent. The slice diffs against baseline to add or remove from changedPaths.
+    if (specs.length > 0) {
+      state.versionControlActions.recordSavedFiles({
+        saved: specs.map((spec) => ({ path: spec.path, content: spec.content })),
+        deleted: [],
+      })
     }
 
     // Mark only this file as saved
