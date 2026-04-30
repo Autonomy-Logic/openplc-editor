@@ -526,7 +526,7 @@ const EditableLocationCell = ({
       { label: 'Digital Outputs', options: doutPins },
       ...remoteGroups,
     ]
-  }, [id, variable, existingPins, remoteIOPoints])
+  }, [id, existingPins, remoteIOPoints])
 
   return selected ? (
     <GenericComboboxCell

@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, File } from 'lucide-react'
 import { useState } from 'react'
 
 import type { Commit, CommitFile } from '../../../../../middleware/shared/ports/version-control-port'
-import { useProject, useVersionControl } from '../../../../../middleware/shared/providers'
+import { useNavigation, useProject, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { toast } from '../../../../utils/toast'
@@ -15,6 +15,7 @@ type CommitDetailsProps = {
 
 export function CommitDetails({ commit, projectId }: CommitDetailsProps) {
   const versionControl = useVersionControl()
+  const navigation = useNavigation()
   const {
     project: {
       meta: { path: storedProjectId },
@@ -54,17 +55,18 @@ export function CommitDetails({ commit, projectId }: CommitDetailsProps) {
   }
 
   const handleViewFiles = () => {
-    window.open(
-      `/history?project_id=${encodeURIComponent(effectiveProjectId)}&commit_hash=${encodeURIComponent(commit.hash)}`,
-      '_blank',
-    )
+    navigation.openInNewWindow('/history', {
+      project_id: effectiveProjectId,
+      commit_hash: commit.hash,
+    })
   }
 
   const handleFileClick = (filePath: string) => {
-    window.open(
-      `/history?project_id=${encodeURIComponent(effectiveProjectId)}&commit_hash=${encodeURIComponent(commit.hash)}&file=${encodeURIComponent(filePath)}`,
-      '_blank',
-    )
+    navigation.openInNewWindow('/history', {
+      project_id: effectiveProjectId,
+      commit_hash: commit.hash,
+      file: filePath,
+    })
   }
 
   const handleRestore = async () => {

@@ -99,6 +99,7 @@ const GlobalVariablesEditor = () => {
 
   useEffect(() => {
     lastParsedCodeRef.current = editorCode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor.meta.name])
 
   useEffect(() => {
