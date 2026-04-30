@@ -94,12 +94,7 @@ const DiscoveredDeviceTable = ({
                         checkbox is purely visual so screen-reader and keyboard users don't get
                         a duplicate tab stop / "button pressed, checkbox checked" announcement
                         per row. */}
-                    <Checkbox
-                      checked={isSelected}
-                      tabIndex={-1}
-                      aria-hidden='true'
-                      className='pointer-events-none'
-                    />
+                    <Checkbox checked={isSelected} tabIndex={-1} aria-hidden='true' className='pointer-events-none' />
                   </td>
                   <td className='px-2 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300'>
                     {dm.device.position}

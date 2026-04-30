@@ -434,10 +434,10 @@ const EtherCATEditor = () => {
     // selections of already-configured positions (silently skipped above)
     // and any state changes that happened while the loop ran are preserved.
     if (newDevices.length > 0) {
-      const addedPositions = new Set(newDevices.map((d) => d.position))
       setSelectedScannedDevices((prev) => {
         const next = new Set(prev)
-        for (const position of addedPositions) next.delete(position)
+        // position is optional in the device type but always set when added here.
+        for (const d of newDevices) if (d.position !== undefined) next.delete(d.position)
         return next
       })
     }

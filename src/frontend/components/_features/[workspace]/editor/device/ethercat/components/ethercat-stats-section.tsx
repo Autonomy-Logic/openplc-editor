@@ -51,10 +51,7 @@ const EthercatStatsSection = ({
             id={withSectionId ? sectionId : undefined}
             className={cn(className ?? DEFAULT_SECTION_CLASSNAME)}
           >
-            <h2
-              id={`${sectionId}-title`}
-              className='select-none text-lg font-medium text-neutral-950 dark:text-white'
-            >
+            <h2 id={`${sectionId}-title`} className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
               EtherCAT Statistics{' '}
               <span className='font-normal text-neutral-500 dark:text-neutral-400'>— {busLabel}</span>
             </h2>
