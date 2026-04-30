@@ -7,9 +7,11 @@ import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
+import { normalizeEthercatStatus } from '../../../../../../utils/ethercat-status'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { EthercatStatsSection } from '../ethercat/components/ethercat-stats-section'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
@@ -312,34 +314,10 @@ const OrchestratorsList = () => {
     }
   }, [deviceActions])
 
-  // Normalise the runtime's two response shapes into a single array. Modern
-  // runtimes ship `masters[]` (one entry per configured EtherCAT bus); older
-  // ones inline the fields for a single master at the response root. Either
-  // way we render one stats section per master.
-  const ethercatMasters = useMemo(() => {
-    const status = runtimeConnection.ethercatStatus
-    if (!status) return []
-    if (status.masters && status.masters.length > 0) return status.masters
-    if (status.plugin_state === undefined) return []
-    return [
-      {
-        name: '',
-        plugin_state: status.plugin_state,
-        slave_count: status.slave_count ?? 0,
-        expected_wkc: status.expected_wkc ?? 0,
-        slaves: status.slaves ?? [],
-        metrics: status.metrics ?? {
-          cycle_count: 0,
-          wkc_error_count: 0,
-          avg_cycle_us: 0,
-          max_cycle_us: 0,
-          max_exchange_us: 0,
-          consecutive_wkc_errors: 0,
-          recovery_attempts: 0,
-        },
-      },
-    ]
-  }, [runtimeConnection.ethercatStatus])
+  const ethercatMasters = useMemo(
+    () => normalizeEthercatStatus(runtimeConnection.ethercatStatus),
+    [runtimeConnection.ethercatStatus],
+  )
 
   // Handle device switch confirmation
   const handleConfirmDeviceSwitch = useCallback(async () => {
@@ -682,82 +660,10 @@ const OrchestratorsList = () => {
               )}
             </div>
 
-            {ethercatMasters.map((master, idx) => {
-              // Project supports more than one EtherCAT bus per device; surface
-              // the bus name in the section header so users can tell which set
-              // of stats they're looking at. Fall back to a positional label
-              // for the single-master legacy response shape (no `name`).
-              const busLabel = master.name || `Bus ${idx + 1}`
-              const sectionId = master.name ? `ethercat-stats-${master.name}` : `ethercat-stats-${idx}`
-              return (
-                <div key={sectionId} className='flex flex-col gap-4'>
-                  <h2
-                    id={`${sectionId}-title`}
-                    className='select-none text-lg font-medium text-neutral-950 dark:text-white'
-                  >
-                    EtherCAT Statistics{' '}
-                    <span className='font-normal text-neutral-500 dark:text-neutral-400'>— {busLabel}</span>
-                  </h2>
-                  <div
-                    id={`${sectionId}-cards`}
-                    className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'
-                  >
-                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Master State</span>
-                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                        {master.plugin_state}
-                      </span>
-                    </div>
-                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Slave Count</span>
-                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                        {master.slave_count}
-                      </span>
-                    </div>
-                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Count</span>
-                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                        {master.metrics.cycle_count.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>WKC Errors</span>
-                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                        {master.metrics.wkc_error_count.toLocaleString()}
-                      </span>
-                      {master.metrics.consecutive_wkc_errors > 0 && (
-                        <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                          consecutive: {master.metrics.consecutive_wkc_errors}
-                        </span>
-                      )}
-                    </div>
-                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
-                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                        {master.metrics.avg_cycle_us} <span className='text-sm font-normal'>us</span>
-                      </span>
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                        max: {master.metrics.max_cycle_us} us
-                      </span>
-                    </div>
-                    <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>Max Exchange Time</span>
-                      <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                        {master.metrics.max_exchange_us} <span className='text-sm font-normal'>us</span>
-                      </span>
-                    </div>
-                    {master.metrics.recovery_attempts > 0 && (
-                      <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                        <span className='text-xs text-neutral-500 dark:text-neutral-400'>Recovery Attempts</span>
-                        <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                          {master.metrics.recovery_attempts}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+            <EthercatStatsSection
+              masters={ethercatMasters}
+              cardsClassName='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'
+            />
           </div>
         )}
     </div>

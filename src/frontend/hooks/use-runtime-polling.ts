@@ -90,9 +90,12 @@ export const useRuntimePolling = () => {
       // running a second timer. Only requested when the consumer opted in
       // via setIncludeEthercatStatsInPolling — otherwise we skip the call
       // entirely and clear any stale data left in the store.
+      // A rejected ethercat call is swallowed to null so a single transient
+      // ethercat error doesn't reject the whole Promise.all and tear down a
+      // healthy runtime connection via handlePollFailure().
       const ethercatPromise =
         includeEthercatStatsInPolling && runtime.getEthercatRuntimeStatus
-          ? runtime.getEthercatRuntimeStatus()
+          ? runtime.getEthercatRuntimeStatus().catch(() => null)
           : Promise.resolve(null)
 
       const [statusResult, logsResult, ethercatResult] = await Promise.all([

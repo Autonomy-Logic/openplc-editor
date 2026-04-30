@@ -429,8 +429,18 @@ const EtherCATEditor = () => {
     }
 
     // Keep unmatched selected so the user can see which ones failed; clear
-    // the successfully-added ones from the selection.
-    setSelectedScannedDevices(new Set(unmatched.map((d) => d.position)))
+    // the successfully-added ones from the selection. We compute the new set
+    // as `prev minus added` rather than rebuilding from `unmatched` so that
+    // selections of already-configured positions (silently skipped above)
+    // and any state changes that happened while the loop ran are preserved.
+    if (newDevices.length > 0) {
+      const addedPositions = new Set(newDevices.map((d) => d.position))
+      setSelectedScannedDevices((prev) => {
+        const next = new Set(prev)
+        for (const position of addedPositions) next.delete(position)
+        return next
+      })
+    }
 
     if (unmatched.length > 0) {
       setUnmatchedAddAttempt(unmatched)
