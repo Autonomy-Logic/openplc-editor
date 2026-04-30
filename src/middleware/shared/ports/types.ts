@@ -627,6 +627,14 @@ export interface DebugTreeNode {
   children?: DebugTreeNode[]
   debugIndex?: number
   arrayIndices?: number[]
+  /**
+   * Member names of an enumerated type, indexed by the underlying integer
+   * value. Set only for leaves whose project type is a `derivation:
+   * 'enumerated'` data type. The wire still carries an INT; the polling
+   * loop maps it to the member name (`enumValues[i]`) on read, and the
+   * force path maps the user-entered name back to its index on write.
+   */
+  enumValues?: string[]
 }
 
 // ---------------------------------------------------------------------------

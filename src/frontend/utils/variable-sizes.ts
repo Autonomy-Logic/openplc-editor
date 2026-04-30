@@ -287,3 +287,96 @@ export function parseValueByTypeName(
   }
   return parseVariableValue(data, offset, fakeVariable)
 }
+
+/**
+ * Encode a user-entered force value into the wire-format byte buffer the
+ * runtime expects. Throws an Error with a human-readable message when the
+ * input doesn't parse — callers should surface that to the user.
+ *
+ * For enum-typed leaves, pass `enumValues`. The function matches the input
+ * against member names (case-insensitive) first, falls back to integer
+ * parsing so power users can still type a number, and emits the underlying
+ * INT bytes either way.
+ */
+export function encodeForceValue(
+  input: string,
+  typeName: string,
+  enumValues?: string[],
+): Uint8Array {
+  const trimmed = input.trim()
+
+  // Enum: name → index, with numeric fallback.
+  let numericInput = trimmed
+  if (enumValues && enumValues.length > 0) {
+    const idx = enumValues.findIndex((name) => name.toLowerCase() === trimmed.toLowerCase())
+    if (idx >= 0) {
+      numericInput = String(idx)
+    } else if (!/^-?\d+$/.test(trimmed)) {
+      throw new Error(
+        `Unknown enum member: "${trimmed}". Expected one of: ${enumValues.join(', ')}`,
+      )
+    }
+  }
+
+  const t = typeName.toUpperCase()
+  switch (t) {
+    case 'BOOL': {
+      const v = trimmed.toLowerCase()
+      const bool = v === 'true' || v === '1' ? 1 : v === 'false' || v === '0' ? 0 : -1
+      if (bool < 0) throw new Error(`Invalid BOOL value: "${trimmed}"`)
+      return new Uint8Array([bool])
+    }
+    case 'SINT':
+    case 'USINT':
+    case 'BYTE': {
+      const n = Number(numericInput)
+      if (!Number.isInteger(n)) throw new Error(`Invalid ${t} value: "${trimmed}"`)
+      return new Uint8Array([n & 0xff])
+    }
+    case 'INT':
+    case 'UINT':
+    case 'WORD': {
+      const n = Number(numericInput)
+      if (!Number.isInteger(n)) throw new Error(`Invalid ${t} value: "${trimmed}"`)
+      return new Uint8Array([n & 0xff, (n >> 8) & 0xff])
+    }
+    case 'DINT':
+    case 'UDINT':
+    case 'DWORD': {
+      const n = Number(numericInput)
+      if (!Number.isInteger(n)) throw new Error(`Invalid ${t} value: "${trimmed}"`)
+      return new Uint8Array([n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >> 24) & 0xff])
+    }
+    case 'REAL': {
+      const n = Number(numericInput)
+      if (!Number.isFinite(n)) throw new Error(`Invalid REAL value: "${trimmed}"`)
+      const buf = new Uint8Array(4)
+      new DataView(buf.buffer).setFloat32(0, n, true)
+      return buf
+    }
+    case 'LREAL': {
+      const n = Number(numericInput)
+      if (!Number.isFinite(n)) throw new Error(`Invalid LREAL value: "${trimmed}"`)
+      const buf = new Uint8Array(8)
+      new DataView(buf.buffer).setFloat64(0, n, true)
+      return buf
+    }
+    case 'LINT':
+    case 'ULINT':
+    case 'LWORD': {
+      let bi: bigint
+      try {
+        bi = BigInt(numericInput)
+      } catch {
+        throw new Error(`Invalid ${t} value: "${trimmed}"`)
+      }
+      const buf = new Uint8Array(8)
+      new DataView(buf.buffer).setBigInt64(0, bi, true)
+      return buf
+    }
+    default:
+      // TIME / DATE / TOD / DT / STRING force is not yet supported via this
+      // helper — those need IEC literal parsing (T#…, D#…) and string framing.
+      throw new Error(`Forcing ${t} values is not supported yet`)
+  }
+}

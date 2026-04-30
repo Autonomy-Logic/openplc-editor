@@ -22,7 +22,7 @@ import {
   buildVariableIndexMap,
   debugMapToEntries,
 } from '../utils/debugger-session'
-import { hexToBytes } from '../utils/hex'
+import { encodeForceValue } from '../utils/variable-sizes'
 
 export interface UseDebugSessionReturn {
   /**
@@ -199,9 +199,27 @@ export function useDebugSession(): UseDebugSessionReturn {
   }, [simulator, debuggerPort, workspaceActions])
 
   const forceVariable = useCallback(
-    async (index: number, force: boolean, valueHex = '00'): Promise<boolean> => {
-      const valueBuffer = hexToBytes(valueHex)
-      const result = await debuggerPort.setVariable(index, force, force ? valueBuffer : undefined)
+    async (
+      index: number,
+      force: boolean,
+      value?: string,
+      type?: string,
+      enumValues?: string[],
+    ): Promise<boolean> => {
+      let valueBuffer: Uint8Array | undefined
+      if (force) {
+        try {
+          valueBuffer = encodeForceValue(value ?? '0', type ?? 'BOOL', enumValues)
+        } catch (err) {
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Force input error: ${err instanceof Error ? err.message : String(err)}`,
+          })
+          return false
+        }
+      }
+      const result = await debuggerPort.setVariable(index, force, valueBuffer)
       if (result.success) {
         consoleActions.addLog({
           id: crypto.randomUUID(),

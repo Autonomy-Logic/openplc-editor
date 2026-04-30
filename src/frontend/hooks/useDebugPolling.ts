@@ -41,12 +41,19 @@ const DEFAULT_BATCH_SIZE = 60
 const RTU_BATCH_SIZE = 20
 const MIN_BATCH_SIZE = 2
 
+interface LeafMeta {
+  compositeKey: string
+  type: string
+  /** Enum member names indexed by integer value, when the leaf is enum-typed. */
+  enumValues?: string[]
+}
+
 /**
  * Collect ALL leaf indexes from a tree (ignoring expansion state).
  * Used to build the full index→metadata lookup for parsing responses.
  */
-function collectAllLeafMeta(nodes: DebugTreeNode[]): Map<number, { compositeKey: string; type: string }> {
-  const result = new Map<number, { compositeKey: string; type: string }>()
+function collectAllLeafMeta(nodes: DebugTreeNode[]): Map<number, LeafMeta> {
+  const result = new Map<number, LeafMeta>()
 
   function walk(node: DebugTreeNode) {
     if (node.isComplex && node.children) {
@@ -54,7 +61,9 @@ function collectAllLeafMeta(nodes: DebugTreeNode[]): Map<number, { compositeKey:
         walk(child)
       }
     } else if (node.debugIndex !== undefined) {
-      result.set(node.debugIndex, { compositeKey: node.compositeKey, type: node.type })
+      const meta: LeafMeta = { compositeKey: node.compositeKey, type: node.type }
+      if (node.enumValues) meta.enumValues = node.enumValues
+      result.set(node.debugIndex, meta)
     }
   }
 
@@ -84,7 +93,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const batchSizeRef = useRef(DEFAULT_BATCH_SIZE)
 
   // Full leaf index→metadata map — computed once when debugger starts.
-  const allLeavesRef = useRef<Map<number, { compositeKey: string; type: string }> | null>(null)
+  const allLeavesRef = useRef<Map<number, LeafMeta> | null>(null)
 
   // Cache for diagram/source-visible variable scan results.
   // Keyed by {pouName, language, fbContextKey}. Invalidated on POU/FB switch.
@@ -100,7 +109,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     if (allLeavesRef.current) return allLeavesRef.current
 
     const allTrees = debugTreesRef.current
-    const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+    const allLeaves = new Map<number, LeafMeta>()
     for (const pouTrees of Object.values(allTrees)) {
       const leaves = collectAllLeafMeta(pouTrees)
       for (const [index, meta] of leaves) {
@@ -185,7 +194,12 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
         try {
           const { value, bytesRead } = parseValueByTypeName(responseBuffer, bufferOffset, meta.type)
-          newValues.set(meta.compositeKey, value)
+          // Translate enum integers to member names so every consumer
+          // (watch panel, ladder, FBD, hover) reads the same display value.
+          // Out-of-range falls back to the raw integer.
+          const stored =
+            meta.enumValues !== undefined ? (meta.enumValues[Number(value)] ?? value) : value
+          newValues.set(meta.compositeKey, stored)
           bufferOffset += bytesRead
         } catch {
           newValues.set(meta.compositeKey, 'ERR')

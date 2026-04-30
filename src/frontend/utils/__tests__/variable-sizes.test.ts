@@ -1,5 +1,11 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { getTypeSizeByName, getVariableSize, parseValueByTypeName, parseVariableValue } from '../variable-sizes'
+import {
+  encodeForceValue,
+  getTypeSizeByName,
+  getVariableSize,
+  parseValueByTypeName,
+  parseVariableValue,
+} from '../variable-sizes'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -436,5 +442,43 @@ describe('parseValueByTypeName', () => {
     const data = u8(42)
     const result = parseValueByTypeName(data, 0, 'usint')
     expect(result).toEqual({ value: '42', bytesRead: 1 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// encodeForceValue
+// ---------------------------------------------------------------------------
+
+describe('encodeForceValue', () => {
+  it('encodes BOOL TRUE/FALSE keywords', () => {
+    expect(Array.from(encodeForceValue('TRUE', 'BOOL'))).toEqual([1])
+    expect(Array.from(encodeForceValue('false', 'BOOL'))).toEqual([0])
+    expect(Array.from(encodeForceValue('1', 'BOOL'))).toEqual([1])
+    expect(Array.from(encodeForceValue('0', 'BOOL'))).toEqual([0])
+  })
+
+  it('encodes INT as 2-byte little-endian', () => {
+    expect(Array.from(encodeForceValue('256', 'INT'))).toEqual([0x00, 0x01])
+    expect(Array.from(encodeForceValue('-1', 'INT'))).toEqual([0xff, 0xff])
+  })
+
+  it('maps an enum member name to its underlying integer', () => {
+    const enumValues = ['Stopped', 'Running', 'Manual']
+    expect(Array.from(encodeForceValue('Manual', 'INT', enumValues))).toEqual([2, 0])
+    // Case-insensitive match.
+    expect(Array.from(encodeForceValue('running', 'INT', enumValues))).toEqual([1, 0])
+    // Numeric input still works as a power-user fallback.
+    expect(Array.from(encodeForceValue('0', 'INT', enumValues))).toEqual([0, 0])
+  })
+
+  it('rejects an unknown enum member name with a helpful error', () => {
+    expect(() => encodeForceValue('Frobnicate', 'INT', ['On', 'Off'])).toThrow(
+      /Unknown enum member.*Expected one of: On, Off/,
+    )
+  })
+
+  it('rejects unsupported types cleanly', () => {
+    expect(() => encodeForceValue('5s', 'TIME')).toThrow(/not supported/)
+    expect(() => encodeForceValue('"hello"', 'STRING')).toThrow(/not supported/)
   })
 })

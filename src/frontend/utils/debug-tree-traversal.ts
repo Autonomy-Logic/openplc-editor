@@ -18,6 +18,34 @@ import {
 import { findFunctionBlockVariables, findStructureVariables, normalizeTypeString } from './pou-helpers'
 
 /**
+ * Pick the right type name for a leaf. The debug-map records the IEC base
+ * type that STruC++ actually emits to C++ (INT for an enum, etc.), which is
+ * what the wire-format parser needs. The project's type may be a user-data
+ * type name like "Irrigation_State" that the parser can't decode, so prefer
+ * the debug-map type whenever a match exists.
+ */
+function resolveLeafType(projectType: string, debugVar: DebugVariableEntry | null): string {
+  if (!debugVar?.type) return projectType
+  // DebugVariableEntry.type is suffixed with `_ENUM` (legacy MatIEC encoding).
+  return debugVar.type.replace(/_(O|P)_ENUM$/, '').replace(/_ENUM$/, '')
+}
+
+/**
+ * If `projectType` names an enumerated data type, return its member names
+ * indexed by the underlying integer value. Returns undefined for any other
+ * type so callers can attach the result unconditionally.
+ */
+function lookupEnumValues(projectType: string, dataTypes: PLCDataType[]): string[] | undefined {
+  const target = projectType.toUpperCase()
+  for (const dt of dataTypes) {
+    if (dt.name.toUpperCase() !== target) continue
+    if (dt.derivation !== 'enumerated') return undefined
+    return dt.values.map((v) => v.description)
+  }
+  return undefined
+}
+
+/**
  * Context for tree traversal containing all necessary lookup data.
  */
 export interface TraversalContext {
@@ -40,8 +68,19 @@ export interface TraversalContext {
 export interface DebugNodeVisitor<T> {
   /**
    * Called for leaf nodes (base types that have a debug index).
+   *
+   * `enumValues` is set when the variable's project type is an enumerated
+   * data type. The wire still carries the underlying INT — consumers map
+   * the integer to `enumValues[i]` for display and reverse-map for force.
    */
-  visitLeaf(name: string, fullPath: string, compositeKey: string, typeName: string, debugIndex: number | undefined): T
+  visitLeaf(
+    name: string,
+    fullPath: string,
+    compositeKey: string,
+    typeName: string,
+    debugIndex: number | undefined,
+    enumValues?: string[],
+  ): T
 
   /**
    * Called for complex nodes (FBs, structs) with children.
@@ -119,7 +158,14 @@ function traverseNestedNode<T>(
     if (!fbVariables) {
       // FB definition not found - treat as leaf
       const debugVar = findDebugVariable(debugVariables, fullPath)
-      return visitor.visitLeaf(name, fullPath, compositeKey, typeName, debugVar?.index)
+      return visitor.visitLeaf(
+        name,
+        fullPath,
+        compositeKey,
+        resolveLeafType(typeName, debugVar),
+        debugVar?.index,
+        lookupEnumValues(typeName, dataTypes),
+      )
     }
 
     const children: T[] = []
@@ -195,7 +241,14 @@ function traverseNestedNode<T>(
 
     if (!structVariables) {
       const debugVar = findDebugVariable(debugVariables, fullPath)
-      return visitor.visitLeaf(name, fullPath, compositeKey, typeName, debugVar?.index)
+      return visitor.visitLeaf(
+        name,
+        fullPath,
+        compositeKey,
+        resolveLeafType(typeName, debugVar),
+        debugVar?.index,
+        lookupEnumValues(typeName, dataTypes),
+      )
     }
 
     const children: T[] = []
@@ -302,7 +355,14 @@ function traverseNestedNode<T>(
 
   // Unknown type - treat as leaf
   const debugVar = findDebugVariable(debugVariables, fullPath)
-  return visitor.visitLeaf(name, fullPath, compositeKey, typeName, debugVar?.index)
+  return visitor.visitLeaf(
+    name,
+    fullPath,
+    compositeKey,
+    resolveLeafType(typeName, debugVar),
+    debugVar?.index,
+    lookupEnumValues(typeName, dataTypes),
+  )
 }
 
 /**
@@ -324,7 +384,7 @@ export function traverseVariable<T>(variable: PLCVariable, context: TraversalCon
   if (variable.type.definition === 'base-type') {
     const baseType = variable.type.value.toUpperCase()
     const debugVar = findDebugVariable(debugVariables, fullPath)
-    return visitor.visitLeaf(variable.name, fullPath, compositeKey, baseType, debugVar?.index)
+    return visitor.visitLeaf(variable.name, fullPath, compositeKey, resolveLeafType(baseType, debugVar), debugVar?.index)
   } else if (variable.type.definition === 'derived') {
     return traverseNestedNode(variable.name, fullPath, compositeKey, variable.type.value, 'derived', context, visitor)
   } else if (variable.type.definition === 'array') {

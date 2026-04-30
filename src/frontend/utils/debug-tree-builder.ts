@@ -64,6 +64,7 @@ class DebugTreeNodeVisitor implements DebugNodeVisitor<DebugTreeNode> {
     compositeKey: string,
     typeName: string,
     debugIndex: number | undefined,
+    enumValues?: string[],
   ): DebugTreeNode {
     return {
       name,
@@ -72,6 +73,7 @@ class DebugTreeNodeVisitor implements DebugNodeVisitor<DebugTreeNode> {
       type: typeName,
       isComplex: false,
       debugIndex,
+      ...(enumValues ? { enumValues } : {}),
     }
   }
 
