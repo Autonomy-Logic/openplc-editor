@@ -107,7 +107,7 @@ Copies the static Arduino sketch and OpenPLC support files to the build director
 
 ```typescript
 private copyStrucppSketchFiles(compilationPath: string): void {
-  const sketchDir = path.join(this.resourcesPath, 'sources', 'StrucppBaremetal')
+  const sketchDir = path.join(this.resourcesPath, 'sources', 'Baremetal')
   for (const file of fs.readdirSync(sketchDir)) {
     fs.copyFileSync(path.join(sketchDir, file), path.join(compilationPath, file))
   }
@@ -182,7 +182,7 @@ build/{boardTarget}/src/
   c_blocks.h, c_blocks_code.cpp
   arduino.cpp, defines.h
   openplc.h               <- Buffer declarations (adapted for STruC++ in Phase 3)
-  StrucppBaremetal.ino     <- Static sketch (from Phase 3)
+  Baremetal.ino     <- Static sketch (from Phase 3)
 ```
 
 ## Testing Strategy

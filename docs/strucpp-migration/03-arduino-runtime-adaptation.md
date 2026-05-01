@@ -73,7 +73,7 @@ always uses `Config0` as the configuration name -- this is not user-configurable
 
 ## Step 3.1: Create New Arduino Sketch
 
-**New file**: `resources/sources/StrucppBaremetal/StrucppBaremetal.ino`
+**New file**: `resources/sources/Baremetal/Baremetal.ino`
 
 This is a **static** sketch -- the same code for every project. It dynamically discovers
 the project structure from STruC++ runtime types at `setup()` time.
@@ -208,9 +208,9 @@ void plcCycleTask() {
 }
 ```
 
-### Key Differences from Current Baremetal.ino
+### Key Differences from the MatIEC-era Baremetal.ino
 
-| Aspect | Current (Baremetal.ino) | New (StrucppBaremetal.ino) |
+| Aspect | Old (MatIEC Baremetal.ino) | New (STruC++ Baremetal.ino) |
 |--------|------------------------|--------------------------|
 | Includes | `extern "C" { #include "openplc.h" }` | `#include "generated.hpp"` |
 | Init | `config_init__()` + `glueVars()` | Static `Configuration_Config0` + `bindLocatedVars()` + `discoverTasks()` |
@@ -309,7 +309,7 @@ actually compiles the STruC++ output.)
 
 | File | Action |
 |------|--------|
-| `resources/sources/StrucppBaremetal/StrucppBaremetal.ino` | **New** -- static Arduino sketch |
+| `resources/sources/Baremetal/Baremetal.ino` | **New** -- static Arduino sketch |
 | `resources/sources/arduino/openplc.h` | Modified -- remove MatIEC-specific declarations |
 | `resources/sources/boards/hals.json` | Modified -- add `-std=gnu++17` to `cxx_flags` |
 

@@ -353,7 +353,7 @@ That's the entire editor-side generator change: two extra writeFile calls.
 
 ### 4.4 Embedded — ModbusSlave integration
 
-`resources/sources/StrucppBaremetal/ModbusSlave.cpp`:
+`resources/sources/Baremetal/ModbusSlave.cpp`:
 - Replace the existing 0x41–0x45 handler bodies (which call the MatIEC-era
   `get_var_count()` / `get_var_addr()` / `set_trace()` weak externs) with direct calls
   into `strucpp::debug::handle_*`.

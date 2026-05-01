@@ -4,6 +4,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "ModbusSlave.h"
+#include "debug_dispatch.hpp"  // Phase 4 debugger — strucpp::debug::handle_*
 
 //Global Modbus vars
 struct MBinfo modbus;
@@ -505,11 +506,9 @@ void handle_serial()
 void process_mbpacket()
 {
     uint8_t fcode  = mb_frame[1];
+    // Standard Modbus fields — preserved for the non-debug FCs.
     uint16_t field1 = (uint16_t)mb_frame[2] << 8 | (uint16_t)mb_frame[3];
     uint16_t field2 = (uint16_t)mb_frame[4] << 8 | (uint16_t)mb_frame[5];
-    uint8_t flag = mb_frame[4];
-    uint16_t len = (uint16_t)mb_frame[5] << 8 | (uint16_t)mb_frame[6];
-    void *value = &mb_frame[7];
     void *endianness_check = &mb_frame[2];
 
     switch (fcode)
@@ -559,18 +558,33 @@ void process_mbpacket()
         break;
 
         case MB_FC_DEBUG_GET:
-            //field1 = startidx, field2 = endidx
-            debugGetTrace(field1, field2);
+        {
+            // PDU: [FC:1][arr:u8][start_elem:u16][end_elem:u16]
+            uint8_t arr       = mb_frame[2];
+            uint16_t startIdx = (uint16_t)mb_frame[3] << 8 | (uint16_t)mb_frame[4];
+            uint16_t endIdx   = (uint16_t)mb_frame[5] << 8 | (uint16_t)mb_frame[6];
+            debugGetTrace(arr, startIdx, endIdx);
+        }
         break;
 
         case MB_FC_DEBUG_GET_LIST:
-            //field1 = numIndexes
-            debugGetTraceList(field1, &mb_frame[4]);
+        {
+            // PDU: [FC:1][count:u16][(arr:u8, elem:u16)×count]
+            uint16_t numIndexes = (uint16_t)mb_frame[2] << 8 | (uint16_t)mb_frame[3];
+            debugGetTraceList(numIndexes, &mb_frame[4]);
+        }
         break;
 
         case MB_FC_DEBUG_SET:
-            //field1 = varidx
-            debugSetTrace(field1, flag, len, value);
+        {
+            // PDU: [FC:1][arr:u8][elem:u16][force:u8][len:u16][value...]
+            uint8_t arr   = mb_frame[2];
+            uint16_t elem = (uint16_t)mb_frame[3] << 8 | (uint16_t)mb_frame[4];
+            uint8_t flag  = mb_frame[5];
+            uint16_t len  = (uint16_t)mb_frame[6] << 8 | (uint16_t)mb_frame[7];
+            void *value   = &mb_frame[8];
+            debugSetTrace(arr, elem, flag, len, value);
+        }
         break;
 
         case MB_FC_DEBUG_GET_MD5:
@@ -1051,13 +1065,32 @@ void writeMultipleCoils(uint16_t startreg, uint16_t numoutputs, uint16_t bytecou
  *
  * @return void
  */
+// Phase 4 PDU:
+// +-----+-------+------+-----------+-----------+-----------+
+// | FC  | arrs  | stat | count_0   | count_1   | ...       |
+// |0x41 | (u8)  | (u8) | (u16 BE)  | (u16 BE)  |           |
+// +-----+-------+------+-----------+-----------+-----------+
+// Response: [FC, arrCount, STATUS_OK, (count×arrCount as u16 BE)]
 void debugInfo()
 {
-    uint16_t variableCount = get_var_count();
-    mb_frame_len = 4;
+    uint8_t arrCount = strucpp::debug::handle_array_count();
+
+    // Cap at what the Modbus frame can hold: 3 header bytes + 2 bytes/array.
+    // Realistic projects have <=10 arrays, so this is never a real limit.
+    uint8_t maxArrs = (MAX_MB_FRAME - 3) / 2;
+    if (arrCount > maxArrs) arrCount = maxArrs;
+
     mb_frame[1] = MB_FC_DEBUG_INFO;
-    mb_frame[2] = (uint8_t)(variableCount >> 8); // High byte
-    mb_frame[3] = (uint8_t)(variableCount & 0xFF); // Low byte
+    mb_frame[2] = arrCount;
+    mb_frame[3] = MB_DEBUG_SUCCESS;
+    uint16_t pos = 4;
+    for (uint8_t i = 0; i < arrCount; i++)
+    {
+        uint16_t c = strucpp::debug::handle_elem_count(i);
+        mb_frame[pos++] = (uint8_t)(c >> 8);
+        mb_frame[pos++] = (uint8_t)(c & 0xFF);
+    }
+    mb_frame_len = pos;
 }
 
 /**
@@ -1082,25 +1115,25 @@ void debugInfo()
  *
  * @return void
  */
-void debugSetTrace(uint16_t varidx, uint8_t flag, uint16_t len, void *value)
+// Phase 4 PDU: [FC, arr, elem_hi, elem_lo, force, len_hi, len_lo, value...]
+// Response:    [FC, STATUS]
+void debugSetTrace(uint8_t arr, uint16_t elem, uint8_t flag,
+                   uint16_t len, void *value)
 {
-    uint16_t variableCount = get_var_count();
-    if (varidx >= variableCount || len > (MAX_MB_FRAME - 7))
+    if (len > (MAX_MB_FRAME - 8))
     {
-        // Respond with an error indicating that the index is out of range
         mb_frame_len = 3;
         mb_frame[1] = MB_FC_DEBUG_SET;
         mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
         return;
     }
 
-    // Execute set trace command
-    set_trace((size_t)varidx, (bool)flag, value);
+    uint8_t status = strucpp::debug::handle_set(
+        arr, elem, (bool)flag, (const uint8_t *)value, len);
 
-    // Response
     mb_frame_len = 3;
     mb_frame[1] = MB_FC_DEBUG_SET;
-    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[2] = status;
 }
 
 /**
@@ -1123,58 +1156,58 @@ void debugSetTrace(uint16_t varidx, uint8_t flag, uint16_t len, void *value)
  *
  * @return void
  */
-void debugGetTrace(uint16_t startidx, uint16_t endidx)
+// Phase 4 PDU: [FC, arr, start_hi, start_lo, end_hi, end_lo]
+// Response: [FC, STATUS, last_elem_hi, last_elem_lo,
+//            tick_hi, tick_mh, tick_ml, tick_lo,
+//            size_hi, size_lo, data...]
+void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
 {
-    uint16_t variableCount = get_var_count();
-    // Verify that startidx and endidx fall within the valid range of variables
-    if (startidx >= variableCount || endidx >= variableCount || startidx > endidx)
+    uint16_t arrCount = strucpp::debug::handle_elem_count(arr);
+    if (arrCount == 0 || startidx >= arrCount ||
+        endidx >= arrCount || startidx > endidx)
     {
-        // Respond with an error indicating that the indices are out of range
         mb_frame_len = 3;
         mb_frame[1] = MB_FC_DEBUG_GET;
         mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
         return;
     }
 
-    uint16_t lastVarIdx = startidx;
-    size_t responseSize = 0;
-    uint8_t *responsePtr = &(mb_frame[11]); // Start of response data
+    uint16_t lastElemIdx = startidx;
+    uint16_t responseSize = 0;
+    uint8_t *responsePtr = &(mb_frame[11]);
 
-    for (uint16_t varidx = startidx; varidx <= endidx; varidx++)
+    for (uint16_t elem = startidx; elem <= endidx; elem++)
     {
-        size_t varSize = get_var_size(varidx);
-        if ((responseSize + 11) + varSize <= MAX_MB_FRAME) // Make sure the response fits
-        {
-            void *varAddr = get_var_addr(varidx);
-
-            // Copy the variable value to the response buffer
-            memcpy(responsePtr, varAddr, varSize);
-
-            // Update response pointer and size
-            responsePtr += varSize;
-            responseSize += varSize;
-
-            // Update the lastVarIdx
-            lastVarIdx = varidx;
+        uint16_t varSize = strucpp::debug::handle_size(arr, elem);
+        // Bounds check — stop packing if this one won't fit.
+        if ((11 + responseSize + varSize) > MAX_MB_FRAME) break;
+        if (varSize == 0) {
+            // Entry has no readable bytes (string stub / out-of-bounds)
+            // — skip gracefully to keep the scan progressing.
+            lastElemIdx = elem;
+            continue;
         }
-        else
-        {
-            // Response buffer is full, break the loop
-            break;
+        uint16_t n = strucpp::debug::handle_read(arr, elem, responsePtr);
+        if (n == 0) {
+            lastElemIdx = elem;
+            continue;
         }
+        responsePtr += n;
+        responseSize += n;
+        lastElemIdx = elem;
     }
 
-    mb_frame_len = 7 + responseSize; // Update response length
+    mb_frame_len = 11 + responseSize;
     mb_frame[1] = MB_FC_DEBUG_GET;
     mb_frame[2] = MB_DEBUG_SUCCESS;
-    mb_frame[3] = (uint8_t)(lastVarIdx >> 8); // High byte
-    mb_frame[4] = (uint8_t)(lastVarIdx & 0xFF); // Low byte
-    mb_frame[5] = (uint8_t)((__tick >> 24) & 0xFF); // Highest byte
-    mb_frame[6] = (uint8_t)((__tick >> 16) & 0xFF); // Second highest byte
-    mb_frame[7] = (uint8_t)((__tick >> 8) & 0xFF);  // Second lowest byte
-    mb_frame[8] = (uint8_t)(__tick & 0xFF);         // Lowest byte
-    mb_frame[9] = (uint8_t)(responseSize >> 8); // High byte
-    mb_frame[10] = (uint8_t)(responseSize & 0xFF); // Low byte
+    mb_frame[3] = (uint8_t)(lastElemIdx >> 8);
+    mb_frame[4] = (uint8_t)(lastElemIdx & 0xFF);
+    mb_frame[5] = (uint8_t)((scan_counter >> 24) & 0xFF);
+    mb_frame[6] = (uint8_t)((scan_counter >> 16) & 0xFF);
+    mb_frame[7] = (uint8_t)((scan_counter >> 8)  & 0xFF);
+    mb_frame[8] = (uint8_t)(scan_counter & 0xFF);
+    mb_frame[9]  = (uint8_t)(responseSize >> 8);
+    mb_frame[10] = (uint8_t)(responseSize & 0xFF);
 }
 
 /**
@@ -1197,12 +1230,17 @@ void debugGetTrace(uint16_t startidx, uint16_t endidx)
  *
  * @return void
  */
+// Phase 4 PDU: [FC, count_hi, count_lo, (arr:u8, elem_hi, elem_lo)×count]
+// Response: [FC, STATUS, last_idx_hi, last_idx_lo,
+//            tick_hi, tick_mh, tick_ml, tick_lo,
+//            size_hi, size_lo, data...]
+// last_idx is the index *into the request list* that was last successfully
+// included — the editor uses it to retry from the next item on overflow.
 void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
 {
-    uint16_t response_idx = 11;  // Start of response data in the response buffer
+    uint16_t response_idx = 11;
     uint16_t responseSize = 0;
-    uint16_t lastVarIdx = 0;
-    uint16_t variableCount = get_var_count();
+    uint16_t lastReqIdx = 0;
 
     #ifdef MBSERIAL
         #define VARIDX_SIZE 20
@@ -1210,98 +1248,78 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
         #define VARIDX_SIZE 60
     #endif
 
-    uint16_t varidx_array[VARIDX_SIZE];
-
-    // Validate if buffer has space for all indexes
     if (numIndexes > VARIDX_SIZE)
     {
-        // Respond with a memory error
         mb_frame_len = 3;
         mb_frame[1] = MB_FC_DEBUG_GET_LIST;
         mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_MEMORY;
         return;
     }
 
-    // Copy all indexes to array
-    for (uint16_t i = 0; i < numIndexes; i++)
-    {
-        varidx_array[i] = (uint16_t)indexArray[i * 2] << 8 | indexArray[i * 2 + 1];
+    // The request indexArray (at mb_frame[4..]) and the response buffer
+    // (mb_frame[11..]) overlap. Once handle_read writes the first response
+    // byte, later index entries inside mb_frame are clobbered. Snapshot the
+    // request first.
+    uint8_t localIndex[VARIDX_SIZE * 3];
+    for (uint16_t i = 0; i < numIndexes * 3; i++) {
+        localIndex[i] = indexArray[i];
     }
 
-    // Validate if all requested indexes are in range
+    // Each address pair is 3 bytes: [arr:u8, elem_hi, elem_lo]
     for (uint16_t i = 0; i < numIndexes; i++)
     {
-        if (varidx_array[i] >= variableCount)
-        {
-            // Respond with an error indicating that the index is out of range
-            mb_frame_len = 3;
-            mb_frame[1] = MB_FC_DEBUG_GET_LIST;
-            mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
-            return;
-        }
+        uint8_t  arr  = localIndex[i * 3];
+        uint16_t elem = (uint16_t)localIndex[i * 3 + 1] << 8 |
+                         (uint16_t)localIndex[i * 3 + 2];
 
-        // Add requested indexes and their traces to the response buffer
-        size_t varSize = get_var_size(varidx_array[i]);
-
-        // Make sure there is enough space in the response buffer
-        if (response_idx + varSize <= MAX_MB_FRAME)
+        uint16_t varSize = strucpp::debug::handle_size(arr, elem);
+        if (varSize == 0)
         {
-            // Add variable data to the response buffer
-            void *varAddr = get_var_addr(varidx_array[i]);
-            memcpy(&mb_frame[response_idx], varAddr, varSize);
-            response_idx += varSize;
-            responseSize += varSize;
+            // Out-of-bounds or string stub — skip gracefully.
+            lastReqIdx = i;
+            continue;
+        }
+        if ((response_idx + varSize) > MAX_MB_FRAME) break;
 
-            // Update the lastVarIdx
-            lastVarIdx = varidx_array[i];
-        }
-        else
+        uint16_t n = strucpp::debug::handle_read(arr, elem, &mb_frame[response_idx]);
+        if (n == 0)
         {
-            // Response buffer is full, break the loop
-            break;
+            lastReqIdx = i;
+            continue;
         }
+        response_idx += n;
+        responseSize += n;
+        lastReqIdx = i;
     }
 
-    // Update response length, lastVarIdx, and response size
     mb_frame_len = response_idx;
     mb_frame[1] = MB_FC_DEBUG_GET_LIST;
     mb_frame[2] = MB_DEBUG_SUCCESS;
-    mb_frame[3] = (uint8_t)(lastVarIdx >> 8); // High byte
-    mb_frame[4] = (uint8_t)(lastVarIdx & 0xFF); // Low byte
-    mb_frame[5] = (uint8_t)((__tick >> 24) & 0xFF); // Highest byte
-    mb_frame[6] = (uint8_t)((__tick >> 16) & 0xFF); // Second highest byte
-    mb_frame[7] = (uint8_t)((__tick >> 8) & 0xFF);  // Second lowest byte
-    mb_frame[8] = (uint8_t)(__tick & 0xFF);         // Lowest byte
-    mb_frame[9] = (uint8_t)(responseSize >> 8); // High byte
-    mb_frame[10] = (uint8_t)(responseSize & 0xFF); // Low byte
+    mb_frame[3] = (uint8_t)(lastReqIdx >> 8);
+    mb_frame[4] = (uint8_t)(lastReqIdx & 0xFF);
+    mb_frame[5] = (uint8_t)((scan_counter >> 24) & 0xFF);
+    mb_frame[6] = (uint8_t)((scan_counter >> 16) & 0xFF);
+    mb_frame[7] = (uint8_t)((scan_counter >> 8)  & 0xFF);
+    mb_frame[8] = (uint8_t)(scan_counter & 0xFF);
+    mb_frame[9]  = (uint8_t)(responseSize >> 8);
+    mb_frame[10] = (uint8_t)(responseSize & 0xFF);
 }
 
+// PDU request:  [FC, endian_check_hi, endian_check_lo]
+// PDU response: [FC, STATUS, md5_ascii..., endian_echo_hi, endian_echo_lo]
+//
+// The target always writes data in native byte order. The editor probes with
+// 0xDEAD and reads back what arrived; if the bytes are reversed it byte-swaps
+// debug reads locally. STruC++ makes no server-side byte-order adaptation —
+// any memcpy dispatch is identical regardless of what the editor sent.
 void debugGetMd5(void *endianness)
 {
-    // Check endianness
-    uint16_t endian_check = 0;
-    memcpy(&endian_check, endianness, 2);
-    if (endian_check == 0xDEAD)
-    {
-        set_endianness(SAME_ENDIANNESS);
-    }
-    else if (endian_check == 0xADDE)
-    {
-        set_endianness(REVERSE_ENDIANNESS);
-    }
-    else
-    {
-        // Respond with an error indicating that the argument is wrong
-        mb_frame_len = 3;
-        mb_frame[1] = MB_FC_DEBUG_GET_MD5;
-        mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
-        //return;
-    }
+    uint8_t echo_hi = ((uint8_t *)endianness)[0];
+    uint8_t echo_lo = ((uint8_t *)endianness)[1];
 
     mb_frame[1] = MB_FC_DEBUG_GET_MD5;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
-    // Copy MD5 string byte by byte to mb_frame starting from index 3
     const char md5[] = PROGRAM_MD5;
     int md5_len = 0;
     for (md5_len = 0; md5[md5_len] != '\0'; md5_len++)
@@ -1309,8 +1327,10 @@ void debugGetMd5(void *endianness)
         mb_frame[md5_len + 3] = md5[md5_len];
     }
 
-    // Calculate mb_frame_len (MD5 string length + 3)
-    mb_frame_len = md5_len + 3;
+    // Echo the endianness probe bytes back to the editor.
+    mb_frame[md5_len + 3] = echo_hi;
+    mb_frame[md5_len + 4] = echo_lo;
+    mb_frame_len = md5_len + 5;
 }
 
 uint16_t calcCrc()

@@ -354,7 +354,7 @@ class CompilerModule {
     const sourceTargetFolderPath = join(compilationPath, 'src')
 
     const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
-    const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'StrucppBaremetal')
+    const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'Baremetal')
 
     const filesToCopy: Promise<void>[] = []
 
@@ -364,16 +364,8 @@ class CompilerModule {
       filesToCopy.push(
         cp(staticArduinoFilesPath, sourceTargetFolderPath, { recursive: true }),
         this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
+        cp(staticBaremetalFilesPath, join(compilationPath, 'examples', 'Baremetal'), { recursive: true }),
       )
-      // Copy sketch if available (created in Phase 3)
-      try {
-        await fs.access(staticBaremetalFilesPath)
-        filesToCopy.push(
-          cp(staticBaremetalFilesPath, join(compilationPath, 'examples', 'Baremetal'), { recursive: true }),
-        )
-      } catch {
-        // StrucppBaremetal sketch not yet available -- Phase 3 will create it
-      }
     } else {
       // OpenPLC Runtime v4 target: headers go under strucpp_runtime/include/
       // — that's where the runtime's scripts/compile.sh expects them after

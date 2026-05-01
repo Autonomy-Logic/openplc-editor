@@ -44,7 +44,7 @@ STruC++ solves both problems:
 | `xml2st --generate-debug` (debug.c) | Deferred -- redesigned in Phase 4 |
 | `xml2st --generate-gluevars` (glueVars.c) | Not needed -- sketch walks `locatedVars[]` dynamically |
 | MatIEC lib/ headers | STruC++ runtime headers (header-only C++17) |
-| `Baremetal.ino` (C integration) | `StrucppBaremetal.ino` (C++ integration) |
+| `Baremetal.ino` (MatIEC C integration) | `Baremetal.ino` (STruC++ C++ integration) |
 | Single `config_run__(tick)` | Per-program `run()` with GCD task scheduler |
 
 ## Revised Pipeline
