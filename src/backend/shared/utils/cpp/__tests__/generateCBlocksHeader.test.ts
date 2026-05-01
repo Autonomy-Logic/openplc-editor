@@ -41,8 +41,8 @@ describe('generateCBlocksHeader', () => {
 
     expect(result).toContain('//definition of external blocks - MYBLOCK')
     expect(result).toContain('typedef struct {')
-    expect(result).toContain('  IEC_INT *SPEED;')
-    expect(result).toContain('  IEC_REAL *RESULT;')
+    expect(result).toContain('  strucpp::IEC_INT *SPEED;')
+    expect(result).toContain('  strucpp::IEC_REAL *RESULT;')
     expect(result).toContain('} MYBLOCK_VARS;')
     expect(result).toContain('void myblock_setup(MYBLOCK_VARS *vars);')
     expect(result).toContain('void myblock_loop(MYBLOCK_VARS *vars);')
@@ -64,8 +64,8 @@ describe('generateCBlocksHeader', () => {
 
     const result = generateCBlocksHeader([{ name: 'test', variables }])
 
-    expect(result).toContain('IEC_INT *INVAR;')
-    expect(result).toContain('IEC_BOOL *OUTVAR;')
+    expect(result).toContain('strucpp::IEC_INT *INVAR;')
+    expect(result).toContain('strucpp::IEC_BOOL *OUTVAR;')
     expect(result).not.toContain('LOCALVAR')
   })
 
@@ -97,6 +97,6 @@ describe('generateCBlocksHeader', () => {
 
     const result = generateCBlocksHeader([{ name: 'ArrBlock', variables }])
 
-    expect(result).toContain('IEC_REAL *TEMPS;')
+    expect(result).toContain('strucpp::IEC_REAL *TEMPS;')
   })
 })

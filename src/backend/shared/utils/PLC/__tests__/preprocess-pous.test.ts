@@ -129,7 +129,8 @@ describe('preprocessPous — Python', () => {
     expect(projectData.pous[0].body.language).toBe('st')
     // The generated ST code should contain C blocks and function references
     const body = projectData.pous[0].body.value as string
-    expect(body).toContain('{{')
+    // STruC++ uses `{external …}` pragma blocks for inline C/C++.
+    expect(body).toContain('{external')
     expect(logger.messages.some((m) => m.includes('Successfully processed'))).toBe(true)
   })
 
@@ -210,7 +211,8 @@ describe('preprocessPous — C++', () => {
     expect(validationFailed).toBe(false)
     expect(projectData.pous[0].body.language).toBe('st')
     const body = projectData.pous[0].body.value as string
-    expect(body).toContain('{{')
+    // STruC++ uses `{external …}` pragma blocks for inline C/C++.
+    expect(body).toContain('{external')
     expect(logger.messages.some((m) => m.includes('Successfully processed'))).toBe(true)
   })
 

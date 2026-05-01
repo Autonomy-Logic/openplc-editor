@@ -35,8 +35,8 @@ const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, d
   debug: false,
 })
 
-describe('generateSTCode', () => {
-  it('generates type definitions and shared memory boilerplate', () => {
+describe('generateSTCode (python)', () => {
+  it('emits the SHM type preamble without redefining strucpp IEC types', () => {
     const result = generateSTCode({
       pouName: 'test',
       allVariables: [],
@@ -44,172 +44,129 @@ describe('generateSTCode', () => {
     })
 
     expect(result).toContain('(* Type definitions *)')
-    expect(result).toContain('typedef uint8_t  IEC_BOOL;')
-    expect(result).toContain('typedef int16_t   IEC_INT;')
-    expect(result).toContain('typedef float    IEC_REAL;')
     expect(result).toContain('#define STR_MAX_LEN 126')
-    expect(result).toContain('IEC_STRING')
+    // Stub-local SHM string layout — distinct name avoids colliding with
+    // strucpp::IEC_STRING (= IECStringVar<254>) which is in scope inside
+    // the {external} block.
+    expect(result).toContain('shm_iec_string_t')
+
+    // The old preamble's typedef block (IEC_BOOL/INT/.../IEC_STRING) is
+    // gone — strucpp's runtime headers already provide them.
+    expect(result).not.toContain('typedef uint8_t  IEC_BOOL')
+    expect(result).not.toContain('typedef int16_t   IEC_INT')
+    expect(result).not.toMatch(/typedef\s+struct\s+\{\s*__strlen_t len[\s\S]*?\}\s+IEC_STRING\b/)
   })
 
-  it('generates shm_data_in_t struct with input variables', () => {
+  it('generates shm_data_in_t / shm_data_out_t structs from interface variables', () => {
     const result = generateSTCode({
       pouName: 'test',
-      allVariables: [makeScalarVar('speed', 'input', 'INT')],
+      allVariables: [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')],
       processedPythonCode: '',
     })
 
     expect(result).toContain('shm_data_in_t')
     expect(result).toContain('IEC_INT speed;')
-  })
-
-  it('generates shm_data_out_t struct with output variables', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeScalarVar('result', 'output', 'REAL')],
-      processedPythonCode: '',
-    })
-
     expect(result).toContain('shm_data_out_t')
     expect(result).toContain('IEC_REAL result;')
   })
 
-  it('adds padding field when no input variables exist', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeScalarVar('result', 'output', 'INT')],
-      processedPythonCode: '',
-    })
-
-    // The input struct should have a padding field
-    expect(result).toContain('uint8_t _padding;')
-  })
-
-  it('adds padding field when no output variables exist', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeScalarVar('speed', 'input', 'INT')],
-      processedPythonCode: '',
-    })
-
-    // One _padding for the output struct
-    expect(result).toContain('uint8_t _padding;')
-  })
-
-  it('generates padding for both structs when no variables exist', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [],
-      processedPythonCode: '',
-    })
-
-    // Both structs get padding
-    const paddingCount = (result.match(/uint8_t _padding;/g) || []).length
-    expect(paddingCount).toBe(2)
-  })
-
-  it('generates input copy code for scalar variables', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeScalarVar('speed', 'input', 'INT')],
-      processedPythonCode: '',
-    })
-
-    expect(result).toContain('data_in.speed = data__->SPEED.value;')
-    expect(result).toContain('memcpy(shm_in_ptr, &data_in, sizeof(data_in));')
-  })
-
-  it('generates output copy code for scalar variables', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeScalarVar('result', 'output', 'REAL')],
-      processedPythonCode: '',
-    })
-
-    expect(result).toContain('memcpy(&data_out, shm_out_ptr, sizeof(data_out));')
-    expect(result).toContain('data__->RESULT.value = data_out.result;')
-  })
-
-  it('generates input copy code for array variables', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeArrayVar('data', 'input', 'INT', '0..4')],
-      processedPythonCode: '',
-    })
-
-    expect(result).toContain(
-      'for (int __i = 0; __i < 5; __i++) data_in.data[__i] = data__->DATA.value.table[__i].value;',
-    )
-  })
-
-  it('generates output copy code for array variables', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeArrayVar('out', 'output', 'REAL', '0..2')],
-      processedPythonCode: '',
-    })
-
-    expect(result).toContain(
-      'for (int __i = 0; __i < 3; __i++) data__->OUT.value.table[__i].value = data_out.out[__i];',
-    )
-  })
-
-  it('generates input copy code for string variables', () => {
+  it('uses shm_iec_string_t (not IEC_STRING) for STRING fields in the SHM struct', () => {
     const result = generateSTCode({
       pouName: 'test',
       allVariables: [makeStringVar('msg', 'input')],
       processedPythonCode: '',
     })
 
-    expect(result).toContain('data_in.msg.len = data__->MSG.value.len;')
-    expect(result).toContain('memcpy(data_in.msg.body, data__->MSG.value.body, STR_MAX_LEN);')
+    expect(result).toContain('shm_iec_string_t msg;')
+    expect(result).not.toMatch(/^\s*IEC_STRING msg;$/m)
   })
 
-  it('generates output copy code for string variables', () => {
+  it('pads empty input/output structs (mmap rejects size 0)', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [],
+      processedPythonCode: '',
+    })
+
+    const paddingCount = (result.match(/uint8_t _padding;/g) || []).length
+    expect(paddingCount).toBe(2)
+  })
+
+  it('reads scalar inputs through the IECVar (force-aware)', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeScalarVar('speed', 'input', 'INT')],
+      processedPythonCode: '',
+    })
+
+    // IECVar's `operator T()` routes through .get() — forced inputs are
+    // reflected in the SHM the Python user observes.
+    expect(result).toContain('data_in.speed = SPEED;')
+    expect(result).toContain('memcpy(shm_in_ptr, &data_in, sizeof(data_in));')
+    expect(result).not.toContain('data__->')
+  })
+
+  it('writes scalar outputs through IECVar::operator= (force-respecting)', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeScalarVar('result', 'output', 'REAL')],
+      processedPythonCode: '',
+    })
+
+    // Operator= routes through .set() which is a no-op when forced —
+    // user writes to a forced output don't override the force.
+    expect(result).toContain('memcpy(&data_out, shm_out_ptr, sizeof(data_out));')
+    expect(result).toContain('RESULT = data_out.result;')
+  })
+
+  it('iterates IEC indices for array inputs (handles non-zero lower bounds)', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeArrayVar('data', 'input', 'INT', '5..9')],
+      processedPythonCode: '',
+    })
+
+    // 5 elements, IEC indices 5..9. Reads through .get() per element.
+    expect(result).toContain(
+      'for (int __i = 0; __i < 5; __i++) data_in.data[__i] = DATA[5 + __i].get();',
+    )
+  })
+
+  it('writes back array outputs via IECVar element-wise (force-respect)', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeArrayVar('out', 'output', 'REAL', '0..2')],
+      processedPythonCode: '',
+    })
+
+    expect(result).toContain('for (int __i = 0; __i < 3; __i++) OUT[0 + __i] = data_out.out[__i];')
+  })
+
+  it('reads STRING inputs into the SHM struct via IECStringVar.get()', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeStringVar('msg', 'input')],
+      processedPythonCode: '',
+    })
+
+    expect(result).toContain('auto __s = MSG.get();')
+    expect(result).toContain('data_in.msg.len = (__strlen_t)__s.length();')
+    expect(result).toContain('std::memcpy(data_in.msg.body, __s.c_str(), STR_MAX_LEN);')
+  })
+
+  it('writes STRING outputs back through IECStringVar (force-respect)', () => {
     const result = generateSTCode({
       pouName: 'test',
       allVariables: [makeStringVar('msg', 'output')],
       processedPythonCode: '',
     })
 
-    expect(result).toContain('data__->MSG.value.len = data_out.msg.len;')
-    expect(result).toContain('memcpy(data__->MSG.value.body, data_out.msg.body, STR_MAX_LEN);')
+    expect(result).toContain(
+      'MSG = strucpp::IECString<254>(reinterpret_cast<const char*>(data_out.msg.body), data_out.msg.len);',
+    )
   })
 
-  it('generates struct fields for array variables', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeArrayVar('arr', 'input', 'INT', '0..9')],
-      processedPythonCode: '',
-    })
-
-    expect(result).toContain('IEC_INT arr[10];')
-  })
-
-  it('embeds escaped python code in the template', () => {
-    const pythonCode = 'print("hello\\nworld")\nx = 1'
-    const result = generateSTCode({
-      pouName: 'myBlock',
-      allVariables: [],
-      processedPythonCode: pythonCode,
-    })
-
-    expect(result).toContain('const char *script_name = "myBlock.py";')
-    // The python code should be escaped for embedding as a C string
-    expect(result).toContain('const char script_template[] =')
-  })
-
-  it('generates python_block_loader call with correct pou name', () => {
-    const result = generateSTCode({
-      pouName: 'controller',
-      allVariables: [],
-      processedPythonCode: 'pass',
-    })
-
-    expect(result).toContain('"controller.py"')
-    expect(result).toContain('python_block_loader')
-  })
-
-  it('generates shared memory pointer storage in first_run branch', () => {
+  it('reads / writes the runtime SHM-pointer locals through their IECVars', () => {
     const result = generateSTCode({
       pouName: 'test',
       allVariables: [],
@@ -217,25 +174,32 @@ describe('generateSTCode', () => {
     })
 
     expect(result).toContain('if first_run = false then')
-    expect(result).toContain('data__->SHM_IN_PTR.value = (uint64_t)shm_in_ptr;')
-    expect(result).toContain('data__->SHM_OUT_PTR.value = (uint64_t)shm_out_ptr;')
+    // First-run branch: cache the SHM pointers into the program-level
+    // ULINT IECVars via operator=.
+    expect(result).toContain('SHM_IN_PTR = (uint64_t)shm_in_ptr;')
+    expect(result).toContain('SHM_OUT_PTR = (uint64_t)shm_out_ptr;')
     expect(result).toContain('first_run := true;')
-  })
 
-  it('generates null checks in the else branch', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [],
-      processedPythonCode: '',
-    })
-
-    expect(result).toContain('void *shm_in_ptr = (void *)data__->SHM_IN_PTR.value;')
-    expect(result).toContain('void *shm_out_ptr = (void *)data__->SHM_OUT_PTR.value;')
+    // Else branch: read them back via the implicit conversion.
+    expect(result).toContain('void *shm_in_ptr = (void *)(uint64_t)SHM_IN_PTR;')
+    expect(result).toContain('void *shm_out_ptr = (void *)(uint64_t)SHM_OUT_PTR;')
     expect(result).toContain('if (shm_in_ptr == NULL)')
     expect(result).toContain('if (shm_out_ptr == NULL)')
   })
 
-  it('filters variables by class correctly', () => {
+  it('embeds the escaped python source into the loader call', () => {
+    const result = generateSTCode({
+      pouName: 'controller',
+      allVariables: [],
+      processedPythonCode: 'pass',
+    })
+
+    expect(result).toContain('const char *script_name = "controller.py";')
+    expect(result).toContain('const char script_template[] =')
+    expect(result).toContain('python_block_loader')
+  })
+
+  it('skips locals — only input/output appear in SHM structs', () => {
     const localVar: PLCVariable = {
       name: 'localVal',
       class: 'local',

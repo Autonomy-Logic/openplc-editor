@@ -1,7 +1,7 @@
 import { exec, spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
 import os from 'node:os'
@@ -961,6 +961,11 @@ class CompilerModule {
     }
 
     const cppPous = originalCppPous
+    // generateCBlocksCode now emits the full file (baseline + per-POU
+    // wrappers + user code), so we overwrite rather than append. The
+    // static Baremetal/c_blocks_code.cpp baseline is now redundant for
+    // projects with C++ POUs but stays as a benign empty unit for
+    // Arduino projects without any.
     const codeContent = generateCBlocksCode(cppPous)
 
     const codeFilePath =
@@ -969,9 +974,7 @@ class CompilerModule {
         : join(compilationPath, 'examples', 'Baremetal', 'c_blocks_code.cpp')
 
     try {
-      const existingContent = await readFile(codeFilePath, { encoding: 'utf8' })
-      const updatedContent = existingContent + '\n' + codeContent
-      await writeFile(codeFilePath, updatedContent, { encoding: 'utf8' })
+      await writeFile(codeFilePath, codeContent, { encoding: 'utf8' })
       handleOutputData(`C blocks code file populated at: ${codeFilePath}`, 'info')
     } catch (error) {
       throw new Error(`Error writing c_blocks_code.cpp file: ${(error as Error).message}`)
