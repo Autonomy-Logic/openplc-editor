@@ -1,4 +1,4 @@
-# Phase 7: Plugin Worker Threads
+# Phase 7: Housekeeping on the Fastest IEC Task
 
 > **Revision history.**
 >
@@ -11,259 +11,275 @@
 >    Default was Option A — task 0's thread also drove
 >    `journal_apply_and_clear`, plugin `cycle_start`/`cycle_end`, and
 >    `updateTime`.
-> 3. **Current draft.** Both options are gone. Option A coupled the
->    plugin tick rate to whatever IEC priority happened to be highest,
->    spread "task 0 is special" assumptions across the codebase, and
->    couldn't accommodate plugins with very different cycle requirements
->    (a 1 ms EtherCAT exchange vs. a 100 ms slow Modbus poll). Option B
->    was an unimplemented placeholder. Replaced with: each native plugin
->    runs on its own worker thread with priority + cycle interval +
->    affinity from per-plugin config.
+> 3. *Third draft.* Replaced Option A/B with **per-plugin worker
+>    threads** owning their own priority and cycle interval via plugin
+>    config. Each IEC task drained the journal independently.
+> 4. **Current draft.** Unwound the plugin-worker-threads idea. The
+>    smallest possible drift from the MatIEC-era runtime is "one thread
+>    per IEC task, with the *fastest* one playing the role the
+>    single-thread runtime's PLC thread used to play". The fastest task
+>    drives `journal_apply_and_clear`, plugin `cycle_start`/`cycle_end`,
+>    `updateTime`, and `tick__++` — same calls, same order, same
+>    cadence the single-thread runtime had. No plugin worker threads.
+>    No per-plugin config additions. Single-task projects are
+>    behaviorally identical to the MatIEC era.
 
 ## Goal
 
-Move all plugin cyclic work — `cycle_start`, `cycle_end`, anything
-plugin-internal that wants to run periodically — onto **per-plugin
-worker threads** owned and scheduled by the plugin driver, independent
-of any IEC task. Each plugin sets its own priority, period, and CPU
-affinity through its config file. IEC tasks become pure compute: they
-run user code, drain the journal at the top of their bodies inside the
-image-tables lock guard (emitted by STruC++ in Phase 8), and have no
-direct relationship with any plugin.
+Reproduce the MatIEC-era housekeeping schedule (one drain per scan, one
+plugin cycle per scan, one `updateTime` per scan, one tick increment per
+scan) on top of the thread-per-task model from Phase 6, by anchoring all
+of it on the **fastest** IEC task's thread.
 
-## Prerequisites
+## Why "Fastest" Not "Highest Priority"
 
-- Phase 5 (runtime → C++; `.so` interface settled) — done in this branch
-- Phase 6 (thread-per-task) — done in this branch (CPU-affinity default
-  fix per Phase 6 revision)
-- Phase 8 (`IMAGE_TABLES_LOCK_GUARD()` codegen) — informally relied on
-  here; can ship Phase 7 with a coarse runtime-side mutex first if Phase
-  8 lands later, then drop the coarse mutex when codegen catches up
+The single-thread runtime ran one scan at the GCD interval of all
+declared tasks — i.e., at the *highest cadence* anybody asked for.
+That's what plugins and I/O are designed around: data flows in and out
+at scan rate, which is the highest rate of any user task.
 
-## What "Plugin Worker Thread" Means Concretely
+Highest *priority* and highest *frequency* are usually the same task
+(fast control loops are also typically declared with high priority for
+jitter reasons), but they don't have to be. If they diverge, it's
+frequency that matters for I/O — not priority. Anchoring on the
+fastest-cadence task gives plugins exactly the tick rate they used to
+have.
 
-For every native plugin that registers `cycle_start` and/or `cycle_end`,
-the plugin driver spawns one pthread:
+## Fastest-Task Selection
 
-```
-Plugin worker thread iteration (period = config.cycle_interval_ns):
+The runtime, after walking the configuration via virtual dispatch, picks
+one task to mark as "fastest":
 
-    # outside the image-tables lock — plugin-internal work, fieldbus I/O,
-    # protocol state machines, etc. Plugins should keep this section short
-    # to minimize wall-clock latency, not because of any lock contention.
+1. The task with the smallest positive `interval_ns` wins.
+2. If multiple tasks tie on `interval_ns`, the one with the highest
+   `priority` wins.
+3. If they also tie on priority, declaration order breaks the tie (the
+   first one STruC++ emits in `ConfigurationInstance` wins).
 
-    plugin->cycle_start_ext()            # external I/O read
-
-    # then atomically publish into the image table via the journal —
-    # journal_write_*() takes its own short-lived lock on the journal
-    # queue, NOT the image-tables lock. The image tables themselves are
-    # not touched here; IEC tasks pick up the writes at their next drain.
-
-    journal_write_int(addr, value);
-    journal_write_bool(addr, value);
-    ...
-
-    plugin->cycle_end_ext()              # protocol acks etc.
-
-    clock_nanosleep(..., next_wakeup);
-```
-
-For plugins like EtherCAT that already have an internal monitor thread
-for connection lifecycle, the new worker thread is **the** thread that
-runs the cyclic exchange. The monitor thread continues to handle
-out-of-band events (link up/down, slave reset, etc.) and does not
-participate in the cycle.
-
-## Plugin Config Schema Additions
-
-`plugins.conf` (or per-plugin `<name>.conf` — whichever is the existing
-mechanism) gains three optional fields:
-
-```ini
-# plugins/native/ethercat/ethercat.conf
-
-cycle_interval_ns = 1000000      # 1 ms — fast fieldbus
-rt_priority       = 80           # SCHED_FIFO 80 — higher than typical PLC tasks
-                                 # so I/O completes before user code reads
-cpu_affinity      = 0x04         # bit 2 — pin to CPU 2; 0 = kernel decides
-```
-
-Defaults (when a field is missing):
-
-| Field | Default | Rationale |
-|---|---|---|
-| `cycle_interval_ns` | `10000000` (10 ms) | Reasonable middle ground; matches the GCD of typical PLC programs |
-| `rt_priority` | `25` | Below typical IEC task priorities (which sit ~30–80) so user code can preempt I/O if it needs to. Plugins that need to finish I/O before user code sees stale data should explicitly set a higher priority. |
-| `cpu_affinity` | `0` | No pinning, kernel decides |
-
-The runtime side validates: `rt_priority` clamped to 1..99 with a
-warning when out-of-range; `cycle_interval_ns` rejected if zero or
-negative; `cpu_affinity` reset to 0 if the bitmask references CPUs
-beyond `nproc`.
-
-## Runtime-Side Spawning
+Concretely:
 
 ```cpp
-// In plugin_driver_start() — runs on the bootstrap thread, after
-// image_tables_bind_located_vars() and journal_init().
+// In plc_state_manager.cpp, right before spawning task threads:
 
-for (size_t i = 0; i < plugin_count; ++i) {
-    plugin_t* p = &plugins[i];
-    if (!p->cycle_start && !p->cycle_end) continue;   // nothing to schedule
-
-    p->worker.cycle_interval_ns = p->config.cycle_interval_ns;
-    p->worker.rt_priority       = p->config.rt_priority;
-    p->worker.cpu_affinity_mask = p->config.cpu_affinity;
-    p->worker.alive             = true;
-    atomic_init(&p->worker.heartbeat, (long)time(NULL));
-
-    if (pthread_create(&p->worker.thread, NULL,
-                       plugin_worker_thread, p) != 0) {
-        log_error("[%s] failed to spawn worker thread: %s",
-                  p->name, strerror(errno));
-        plc_force_error_state();
-        return;
+PlcTaskCtx* fastest = nullptr;
+for (size_t i = 0; i < plc_task_count; ++i) {
+    PlcTaskCtx* c = &plc_tasks[i];
+    if (!fastest ||
+         c->interval_ns < fastest->interval_ns ||
+        (c->interval_ns == fastest->interval_ns &&
+         c->priority    > fastest->priority)) {
+        fastest = c;
     }
 }
+fastest->is_fastest_task = true;
+log_info("Anchoring housekeeping on task %s (interval=%lld ns, priority=%d)",
+         fastest->name, (long long)fastest->interval_ns, fastest->priority);
 ```
 
-The plugin worker thread's body looks structurally identical to
-Phase 6's `plc_task_thread` — same `clock_nanosleep(CLOCK_MONOTONIC,
-TIMER_ABSTIME)` absolute-deadline scheduler, same per-thread `sigsetjmp`
-crash handler, same SCHED_FIFO + optional affinity setup. It just calls
-the plugin's `cycle_start_ext` / `cycle_end_ext` instead of an IEC
-task body.
+Single-task projects: that one task is automatically the fastest. Its
+thread does everything the single PLC thread used to do.
 
-## Tear-Down
-
-`plugin_driver_stop()` flips `p->worker.alive = false`, signals SIGUSR1
-to wake any worker blocked in `clock_nanosleep`, and joins each worker
-thread. After all workers are joined, plugin-internal teardown
-(`plugin_cleanup`, etc.) runs on the bootstrap thread.
-
-The order is:
-
-1. Set `plc_state` to `STOPPING` (existing path).
-2. Signal + join **task threads** (Phase 6's existing teardown).
-3. Signal + join **plugin worker threads**.
-4. Plugin cleanup callbacks.
-5. Image-tables clear, plugin manager destroy.
-
-Tasks join first because they may be holding the image-tables lock
-during their last cycle; plugin workers may be enqueueing journal
-entries. Both must drain to a quiescent state before image tables and
-journal storage are torn down.
-
-## IEC Tasks: What They Do Now
+## What the Fastest Task's Thread Looks Like
 
 ```cpp
-// plc_task_thread loop (Phase 6 + Phase 7 + Phase 8)
-
-while (plc_state == PLC_STATE_RUNNING) {
-    /* IMAGE_TABLES_LOCK_GUARD() is emitted by STruC++ around the task body
-     * in Phase 8 if the task touches any located/global variable.
-     * Tasks that touch nothing shared run lock-free.
+while (plc_get_state() == PLC_STATE_RUNNING) {
+    /* Phase 8 codegen emits IMAGE_TABLES_LOCK_GUARD()/GLOBAL_VARS_LOCK_GUARD()
+     * inside the task body (around individual variable accesses or around the
+     * whole body, depending on the precision of the sharedness analysis).
      *
-     * journal_apply_and_clear() is called at the start of every task
-     * that drains shared state. Calling it more than once per "cycle"
-     * is harmless — second drain finds an empty queue and returns. */
-    {
-        IMAGE_TABLES_LOCK_GUARD();      // expands to lock_guard<mutex> on Linux,
-                                        // no-op on Arduino
-        journal_apply_and_clear();      // see notes below
-        ext_strucpp_run_task(ctx->idx); // → ConfigurationInstance virtual dispatch
-    }
+     * The runtime ALSO needs the image-tables lock for the housekeeping window
+     * — journal apply + plugin hooks + updateTime — because they all touch
+     * the same image-table buffers as the body. That outer lock uses the
+     * SAME mutex Phase 8 emits against (recursive PI mutex), so a body that
+     * re-locks during run_task is a quick lock-counter increment. */
 
-    /* heartbeat + sleep_until — same as Phase 6 */
+    plc_image_tables_lock();             // outer: held across the whole window
+    scan_cycle_time_start();
+
+    /* Housekeeping pre */
+    journal_apply_and_clear();
+    plugin_driver_cycle_start(plugin_driver);
+
+    /* Body — the fastest task's IEC code */
+    ext_strucpp_run_task(ctx->idx);
+
+    /* Housekeeping post */
+    ext_updateTime();
+    plugin_driver_cycle_end(plugin_driver);
+    ++tick__;
+    atomic_store(&plc_heartbeat, time(NULL));
+
+    scan_cycle_time_end();
+    plc_image_tables_unlock();
+
+    atomic_store_explicit(&ctx->heartbeat, (long)time(NULL),
+                          memory_order_relaxed);
+    atomic_fetch_add_explicit(&ctx->local_tick, 1,
+                              memory_order_relaxed);
+
+    /* Sleep until next absolute deadline — same as Phase 6 */
+    next_wakeup += ctx->interval_ns;
+    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wakeup, NULL);
 }
 ```
 
-**The journal-drain location is fully inside the lock.** Any plugin
-worker that enqueues during the lock window contends only on the journal
-queue's own mutex (which is different from the image-tables mutex), so
-plugin throughput isn't blocked by user code execution.
+## What Non-Fastest Tasks Do
 
-**No `updateTime` call here.** Time advancement runs once per "scan" —
-but with multiple tasks at multiple periods, "once per scan" isn't
-defined. Resolution:
+```cpp
+while (plc_get_state() == PLC_STATE_RUNNING) {
+    /* No journal drain, no plugin hooks, no updateTime, no tick++.
+     * Just take the lock (or whatever Phase 8 codegen emits) and run the
+     * body. The lock is held briefly because the body is the only thing
+     * that touches shared state. */
 
-- A **separate dedicated time-tick thread** (very lightweight — wakes
-  every `min(task_intervals)`, calls `strucpp::__CURRENT_TIME_NS += period`,
-  sleeps).
-- Alternative: each task increments `__CURRENT_TIME_NS` by its own
-  interval at the start of its body. Simpler, and matches CODESYS's
-  per-cycle time semantics — `TIME()` returns the same value within a
-  scan, and that scan is the task's. STruC++'s `IEC_TIME` semantics
-  hold: a `TON` running in a 10 ms task sees 10 ms increments;
-  a `TON` in a 100 ms task sees 100 ms increments.
+    ext_strucpp_run_task(ctx->idx);
 
-Going with the second option (per-task increment). It's more correct
-than a single global tick when tasks have different periods, and it
-eliminates a thread.
+    atomic_store_explicit(&ctx->heartbeat, (long)time(NULL),
+                          memory_order_relaxed);
+    atomic_fetch_add_explicit(&ctx->local_tick, 1,
+                              memory_order_relaxed);
+
+    /* Sleep until next absolute deadline */
+    next_wakeup += ctx->interval_ns;
+    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wakeup, NULL);
+}
+```
+
+The non-fastest task's lock acquisition is whatever Phase 8 emits
+inside the task body (`IMAGE_TABLES_LOCK_GUARD()` /
+`GLOBAL_VARS_LOCK_GUARD()`). It contends with the fastest task's outer
+lock, so during the fastest task's housekeeping + body window, slower
+tasks block on the mutex. After the fastest task releases, the slower
+task's lock guard succeeds and it runs.
+
+## Why This Doesn't Cause "Stale Reads" for Slower Tasks
+
+The fastest task drains the journal every cycle. Plugin writes are
+applied to image tables every fastest-task cycle. By the time a slower
+task wakes up and runs, the image tables already reflect the most
+recent plugin writes (give or take one fastest-task cycle, which is by
+definition the smallest interval in the system).
+
+For a 10 ms / 100 ms task pair: the slow task sees plugin data that's
+at most 10 ms stale, every 100 ms when it runs. That's strictly better
+than the MatIEC-era runtime, where the slow task would see data drained
+once per 10 ms scan but only get to *act* on it every 100 ms anyway.
+
+## Why This Doesn't Need a Per-Plugin Config
+
+Plugins continue to expose `cycle_start` and `cycle_end`. The runtime
+calls them at the fastest IEC task's cadence, which is the same rate
+they used to be called at. No `cycle_interval_ns`, no `rt_priority`,
+no `cpu_affinity` per plugin — there is nothing to schedule
+separately. EtherCAT, Modbus master, S7Comm: they all keep their
+existing implementations.
+
+The only plugin behavior that changes is for plugins that internally
+spawn their own threads (EtherCAT's monitor thread is the canonical
+example). Those keep doing what they always did. The runtime doesn't
+spawn anything *for* them.
+
+## What if the User Wants Plugins at a Different Cadence?
+
+The user creates an IEC task at the desired cadence. If the user wants
+EtherCAT to tick at 1 ms but their main control loop is 10 ms, they
+declare a 1 ms task — even an empty one — and the housekeeping
+naturally moves to it. This is a deliberate design choice: the user
+controls everything from one place (the `.st` file), and the runtime
+has no separate scheduler to configure.
 
 ## Watchdog
 
-The watchdog's job stays the same: detect a hung PLC and force the
-runtime into ERROR state so the webserver can keep talking to it. The
-heartbeats it tracks change:
+The watchdog continues to track per-task heartbeats from Phase 6. The
+fastest task's heartbeat doubles as the "I/O alive?" signal because
+that's the thread doing the I/O work. There is no longer a separate
+"plugin heartbeat" — there are no plugin worker threads to track.
 
-| Heartbeat | Source | Stall threshold | What a stall means |
-|---|---|---|---|
-| Task heartbeat | `plc_tasks[i].heartbeat`, set at the end of every task body in `plc_task_thread` | `WATCHDOG_TASK_TIMEOUT_S` (default 10 s) | An IEC task is stuck — infinite loop, deadlock, or busy plugin holding the image-tables lock |
-| Plugin worker heartbeat | `plugins[i].worker.heartbeat`, set at the end of every worker iteration | `WATCHDOG_PLUGIN_TIMEOUT_S` (default 5 s, configurable) | The plugin's `cycle_start`/`cycle_end` is stuck — fieldbus failure, blocking I/O, etc. |
+```c
+/* Watchdog logic — slight simplification of revision 3 */
+for (size_t i = 0; i < plc_task_count; ++i) {
+    long lag = now - atomic_load(&plc_tasks[i].heartbeat);
+    if (lag > WATCHDOG_TASK_TIMEOUT_S) {
+        log_error("watchdog: task %s stalled (%lds since heartbeat)",
+                  plc_tasks[i].name, lag);
+        plc_force_error_state();
+    }
+}
+```
 
-When any heartbeat goes silent past its threshold, the watchdog logs
-which entity stalled (task name or plugin name) and calls
-`plc_force_error_state()`. There's no longer a global "I/O heartbeat"
-because there's no global "I/O thread" — plugin workers each have their
-own.
+If the fastest task hangs (e.g., a plugin's `cycle_start` deadlocks),
+its heartbeat goes silent, and the watchdog reports it by name. No
+distinction between "the plugin is stuck" and "the task body is stuck"
+— both manifest as the same task heartbeat going silent, and both
+require an upload-correct-program response from the operator.
 
-## Migration Path for Existing Plugins
+## Difference Tally vs. Revision 3
 
-| Plugin | Current state | Phase 7 work |
+| Aspect | Revision 3 (plugin worker threads) | Revision 4 (fastest task anchor) |
 |---|---|---|
-| EtherCAT (native) | Has a monitor thread for connection lifecycle; cycle_start/end run on the PLC thread today | Move cycle_start/end onto a new worker thread; keep the monitor thread. Add `cycle_interval_ns` (default match the existing master cycle) and `rt_priority` to its config |
-| S7Comm (native) | Cycle hooks on the PLC thread | Same: move to worker thread |
-| OPC UA (Python) | Server thread already independent; consumed flat-index `get_var_*` API removed in Phase 5 | **No worker thread needed** — OPC UA is event-driven (clients poll). Migration is the Phase 9 work (move from flat-index API to `strucpp_debug_*`). |
-| Modbus master / slave (native, if applicable) | Whatever the current loop is | Move to worker thread |
+| Plugin scheduling | Each plugin gets its own pthread | None — plugins called from fastest IEC task |
+| Plugin config schema | Adds `cycle_interval_ns`, `rt_priority`, `cpu_affinity` per plugin | Unchanged from MatIEC era |
+| Number of threads | N IEC tasks + M plugins + bootstrap | N IEC tasks + bootstrap |
+| Single-task project behavior | Different from MatIEC (plugin runs on its own thread) | **Identical to MatIEC** |
+| Journal drain | Each task drains independently | Only fastest task drains |
+| `updateTime` ownership | Per-task (each increments by its own interval) | Fastest task only — same cadence as MatIEC era |
+| `tick__` semantics | Per-task local tick + global atomic | Fastest task increments once per its cycle — same as MatIEC era |
+| Watchdog | Per-task + per-plugin heartbeats | Per-task heartbeats only |
 
-Plugins that don't register `cycle_start` / `cycle_end` (e.g., OPC UA)
-don't get a worker thread spawned for them — they continue to run their
-own threads (HTTP server, async clients, etc.) as today. The worker
-thread is specifically for the cyclic-hook protocol.
+The "drift from MatIEC" budget is much smaller in revision 4. The price
+is that plugins are forever tied to the fastest IEC task's cadence; if
+that's a problem for some future plugin, the user creates a fast
+empty task to anchor it. The benefit is far less moving machinery.
+
+## Lock Ordering
+
+Phase 8 emits two macros: `IMAGE_TABLES_LOCK_GUARD()` and
+`GLOBAL_VARS_LOCK_GUARD()`. The fastest task's housekeeping window also
+needs the image-tables lock. Both runtime-side and codegen-side acquire
+locks in the same canonical order:
+
+1. **Image-tables lock first**
+2. **Globals lock second**
+
+Codegen always emits in this order; the runtime's housekeeping wrapper
+takes the image-tables lock only (the fastest task's body itself
+re-acquires recursively if needed, plus the globals lock if needed).
+Same order on every site means no AB/BA deadlock is possible.
+
+Both mutexes are recursive priority-inheriting `pthread_mutex_t`
+(initialized with `PTHREAD_MUTEX_RECURSIVE` + `PTHREAD_PRIO_INHERIT`),
+so re-locking by a thread that already holds the lock (the fastest
+task's body inside the housekeeping window) is a quick counter
+increment. See Phase 8 for full details.
 
 ## Files Created / Modified
 
 | File | Action |
 |------|--------|
-| `core/src/drivers/plugin_driver.h` | Add `plugin_worker_t` struct (thread, heartbeat, alive flag, config snapshot); add fields to `plugin_t` |
-| `core/src/drivers/plugin_driver.c` | New `plugin_worker_thread()`; update `plugin_driver_start()` to spawn workers; update `plugin_driver_stop()` to signal + join workers |
-| `core/src/drivers/plugin_config.c` | Parse `cycle_interval_ns`, `rt_priority`, `cpu_affinity` from per-plugin config files |
-| `core/src/plc_app/plc_state_manager.cpp` | **Remove** the bootstrap I/O loop (the per-revision-2 collapse to "just spawn + wait" stays); `journal_apply_and_clear` no longer called here |
-| `core/src/plc_app/plc_io_cycle.{h,cpp}` | **Delete** — no I/O cycle wrapper anymore. Tasks drain the journal themselves; plugin workers fire their hooks themselves |
-| `core/src/plc_app/utils/watchdog.c` | Add per-plugin heartbeat scan; rename `plc_heartbeat` semantics in comments (it's now task-0-heartbeat-only or removed entirely) |
-| `plugins.conf` (or per-plugin configs) | Document new `cycle_interval_ns`, `rt_priority`, `cpu_affinity` fields with their defaults |
+| `core/src/plc_app/plc_state_manager.cpp` | Add `is_fastest_task` field to `PlcTaskCtx`; pick the fastest task before spawning; the per-task thread function branches on it for the housekeeping window |
+| `core/src/plc_app/plc_io_cycle.{h,cpp}` | **Re-introduce** (we deleted them in revision 3): `plc_run_io_cycle_pre()` does `journal_apply_and_clear` + `plugin_driver_cycle_start`; `plc_run_io_cycle_post()` does `updateTime` + `plugin_driver_cycle_end` + heartbeat + `tick__++`. Same shape as the second-revision draft, called only by the fastest task's thread |
+| `core/src/plc_app/plc_state_manager.h` | Add `is_fastest_task : bool` to `PlcTaskCtx` |
+| `core/src/drivers/plugin_driver.{h,c}` | **No changes for plugin scheduling.** (Plugins still register `cycle_start`/`cycle_end` the way they always did.) |
+| `core/src/plc_app/utils/watchdog.c` | Drop per-plugin heartbeat scan added in revision 3; per-task is sufficient |
+| `plugins.conf` (or per-plugin configs) | **No new fields.** Revert revision 3's `cycle_interval_ns` / `rt_priority` / `cpu_affinity` per-plugin schema |
 
 ## Testing Strategy
 
-1. **Two-plugin smoke test**: configure EtherCAT (1 ms / pri 80) and a
-   slow Modbus master (50 ms / pri 25). Verify both worker threads tick
-   at their configured intervals (within ±10% over a 60-second window)
-   and that EtherCAT preempts Modbus when their cycles align.
-2. **Plugin priority preemption**: deliberate 5 ms busy loop in Modbus's
-   `cycle_start`; EtherCAT's deadline must still hold (within ±50 µs).
-   Test inverts the priorities (EtherCAT 25, Modbus 80) and verifies the
-   inverse ordering, confirming priorities flow from config.
-3. **Plugin worker crash**: deliberate SIGFPE in EtherCAT's `cycle_end`;
-   the per-thread `sigsetjmp` catches it, the runtime transitions to
-   ERROR, the IEC task threads exit cleanly. Webserver still responds.
-4. **Watchdog plugin stall**: 30-second `sleep(30)` inside a worker;
-   watchdog reports `[ethercat] worker stalled` and forces ERROR state
-   within `WATCHDOG_PLUGIN_TIMEOUT_S` of the freeze.
-5. **Stop responsiveness**: while running with a 1000 ms slow plugin
-   worker, call `stop_plc_program()`; total teardown time < 1100 ms
-   (one period — SIGUSR1 wakes the sleeper).
-6. **Journal contention**: stress test with one plugin worker writing
-   100 journal entries per cycle and three IEC tasks each draining the
-   journal at their start. No torn reads, no leaked entries, no
-   deadlock.
+1. **Single-task project parity**: identical user `.st`, identical
+   plugin configs. Runtime v4 (single-thread) vs runtime v4 (this
+   phase) produce same observable behavior on a 30-minute soak — same
+   plugin call cadence, same `tick__` rate, same I/O latency.
+2. **Two-task project, fastest selection**: declare 10 ms / 100 ms.
+   Verify the runtime log says "Anchoring housekeeping on task <10ms
+   one>". Plugins tick at 100 Hz (the 10 ms cadence), not at 10 Hz.
+3. **Tied intervals, priority breaks tie**: declare two tasks at 10 ms
+   with priorities 80 and 30. The 80-priority one is the anchor.
+4. **Plugin tick parity**: a counting plugin that increments a counter
+   in `cycle_start`. After 10 seconds, with a 10 ms fastest task, the
+   counter reads 1000 ± a few. Same as MatIEC era.
+5. **Slower task non-stall**: 10 ms task takes 5 ms of CPU; 100 ms
+   task takes 80 ms of CPU. Both meet their deadlines (10 ms cycle has
+   5 ms slack; 100 ms cycle has 20 ms slack).
+6. **Plugin in fastest task's hot path**: deliberate `sleep(30)` in a
+   plugin's `cycle_start`. Watchdog reports `task <fastest> stalled`
+   and forces ERROR within `WATCHDOG_TASK_TIMEOUT_S`.

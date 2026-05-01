@@ -7,8 +7,8 @@
 > single-threaded path (no `config_run__`). Thread-per-task is the only
 > mode the new runtime supports.
 >
-> **Revision note (2, current).** Two changes follow from the Phase 5
-> rewrite (runtime → C++) and the Phase 8 codegen extensions:
+> **Revision note (2).** Two changes follow from the Phase 5 rewrite
+> (runtime → C++) and the Phase 8 codegen extensions:
 >
 > 1. **No more C-linkage `strucpp_get_task_*` accessors.** The runtime
 >    walks `ConfigurationInstance*` via virtual dispatch; per-task data
@@ -19,6 +19,13 @@
 >    a placeholder. With Phase 8 adding `CPU_AFFINITY` to `TASK`
 >    declarations, affinity comes from the user program. When unset,
 >    `pthread_setaffinity_np` is **not** called and the kernel decides.
+>
+> **Revision note (3, current).** Phase 7 was reverted from "plugin
+> worker threads" to "anchor housekeeping on the fastest IEC task".
+> One small change here: each `PlcTaskCtx` gains an `is_fastest_task`
+> boolean. The thread function branches on it to run the housekeeping
+> window pre/post its body. Selection rule: lowest `interval_ns`,
+> tie-break by highest `priority`, then by declaration order.
 
 ## Goal
 
@@ -84,16 +91,24 @@ What it does **not** buy:
 
 ## Task indexing
 
-There is **no priority-sorted contract** anymore. Phase 7 (plugin worker
-threads) removed the "task 0 is special" assumption — IEC tasks no longer
-drive plugin hooks, and the watchdog tracks every task's heartbeat
-individually rather than anchoring on one. The runtime spawns task
-threads in the order STruC++ emits them in `ConfigurationInstance` (the
-declaration order from the `.st` file); SCHED_FIFO + the priority on
-each task's `sched_param` decides who actually runs.
+The runtime spawns task threads in the order STruC++ emits them in
+`ConfigurationInstance` (declaration order from the `.st` file). There is
+no priority-sorted contract; SCHED_FIFO + the priority on each task's
+`sched_param` decides who actually runs.
 
-If two tasks share a priority, the kernel round-robins between them
-within that priority band — same as any other SCHED_FIFO setup.
+**One task is marked as the "fastest task"** before threads are spawned,
+and that mark drives the housekeeping window in Phase 7. Selection:
+
+1. Smallest positive `interval_ns` wins.
+2. If multiple tasks tie on interval, the one with the highest priority
+   wins.
+3. If they also tie on priority, declaration order breaks the tie (first
+   one in `ConfigurationInstance` wins).
+
+If two tasks share a priority *and* an interval, the kernel
+round-robins between them within that priority band — same as any
+other SCHED_FIFO setup. The "fastest" mark goes to one of them
+deterministically per the rules above.
 
 ## Thread descriptor
 
@@ -106,9 +121,11 @@ within that priority band — same as any other SCHED_FIFO setup.
 #include <stdatomic.h>
 
 typedef struct {
-    size_t      idx;             /* matches strucpp_run_task argument */
+    size_t      idx;             /* index into plc_tasks[] */
     int64_t     interval_ns;
     int         priority;        /* IEC TASK priority, mapped 1..99 */
+    uint64_t    cpu_affinity_mask; /* 0 = no pinning, kernel decides */
+    bool        is_fastest_task; /* this thread runs the housekeeping window */
     pthread_t   thread;
     char        name[32];        /* "plc-task-<n>" for /proc visibility */
 
@@ -313,15 +330,24 @@ still runs, just without RT preemption. Operational guidance: deployments
 that need RT must grant the capability or use `rtprio` in
 `/etc/security/limits.conf`.
 
-## What this thread does NOT do
+## What this thread does
 
-- **No plugin cycle hooks.** Plugins run on their own worker threads
-  (Phase 7).
-- **No journal apply.** The journal drain happens at the start of each
-  task body inside the image-tables critical section — emitted by
-  STruC++ via `IMAGE_TABLES_LOCK_GUARD()` (Phase 8).
-- **No `updateTime`.** Time advancement is decoupled from any one task
-  thread; covered in Phase 7's coordination model.
+The thread function from this phase runs the **task body** and nothing
+else. **Phase 7** specializes the fastest-task thread to additionally
+wrap the body in a housekeeping window:
+
+```cpp
+// Phase 7 specialization — fastest task only
+if (ctx->is_fastest_task) {
+    plc_run_io_cycle_pre();   // journal_apply + plugin cycle_start
+}
+ext_strucpp_run_task(ctx->idx);
+if (ctx->is_fastest_task) {
+    plc_run_io_cycle_post();  // updateTime + plugin cycle_end + tick++
+}
+```
+
+Non-fastest tasks just run the body. See Phase 7 for the full wire-up.
 
 ## Files Created / Modified
 

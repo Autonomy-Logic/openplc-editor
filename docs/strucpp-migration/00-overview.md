@@ -85,7 +85,7 @@ Implementation follows this order -- code generation first, then the runtime tha
 |-------|-------|-------------|
 | 5 | [Runtime .so Interface](05-runtime-v4-so-interface.md) | Runtime sources become C++; `.so` exports a single C-linkage entry (`strucpp_get_config()`) plus the debug-PDU shims; runtime walks `ConfigurationInstance` via virtual dispatch; tiny static shim (~10 lines) lives in the runtime repo, **not** the editor; flat-index plugin compat removed (OPC UA paused pending Phase 9) |
 | 6 | [Thread-Per-Task Model](06-runtime-v4-thread-per-task.md) | One SCHED_FIFO thread per IEC task; priority from user program; CPU pinning **only** if user supplied a mask via Phase 8's `CPU_AFFINITY` extension; per-thread crash handlers; per-task heartbeats |
-| 7 | [Plugin Worker Threads](07-runtime-v4-plugin-and-io.md) | Each native plugin gets its own worker thread with priority + cycle interval + affinity from per-plugin config; IEC tasks call `journal_apply_and_clear()` themselves at the start of each body under the image-tables lock; no "task 0 is special" assumption anywhere |
+| 7 | [Housekeeping on the Fastest IEC Task](07-runtime-v4-plugin-and-io.md) | Anchor `journal_apply_and_clear()`, plugin `cycle_start` / `cycle_end`, `updateTime()`, and `tick__++` on the **fastest** IEC task's thread. No plugin worker threads. Single-task projects behave identically to the MatIEC era; multi-task projects piggyback housekeeping on the highest-cadence task. The runtime passes an `is_fastest_task` flag to each spawned task thread; the flagged thread runs housekeeping pre/post its body. |
 | 8 | [STruC++ Codegen Runtime Extensions](08-strucpp-codegen-runtime-extensions.md) | STruC++ side: `IMAGE_TABLES_LOCK_GUARD()` codegen macro for granular locking around located/global variable access; `CPU_AFFINITY` parameter on `TASK` declarations; runtime accessor for per-task affinity; sharedness analysis to skip the lock guard on tasks that touch no shared state |
 | 9 | [Plugin Migration to Hierarchical Debug API](09-plugin-hierarchical-debug-api.md) | Migrate OPC UA (and any other plugin that consumed the old flat-index `get_var_addr`/`get_var_count` API) onto the hierarchical `strucpp_debug_*` PDU surface, consuming the editor's `debug-map.json` for path↔(arr, elem) lookup |
 
@@ -97,7 +97,7 @@ Implementation follows this order -- code generation first, then the runtime tha
 > hierarchical addressing from day one, the intermediate flat layer became
 > dead weight, so Phase 7 was repurposed for plugin/I/O coordination.
 >
-> *Second revision (current).* During implementation review, four changes
+> *Second revision.* During implementation review, four changes
 > reshaped Phases 5–7 again and added Phases 8–9:
 >
 > 1. **Runtime → C++.** Originally Phase 5 shipped a fairly large
@@ -122,6 +122,28 @@ Implementation follows this order -- code generation first, then the runtime tha
 >    `CPU_AFFINITY` parameter on `TASK` declarations (Phase 8). When unset,
 >    the runtime makes no `pthread_setaffinity_np` call and the kernel
 >    decides.
+>
+> *Third revision (current).* The plugin-worker-threads idea from
+> revision 2 was unwound. It introduced a new abstraction (a worker
+> thread per plugin) and a new schedule (per-plugin cycle interval)
+> when neither was needed. The MatIEC-era runtime had a single PLC
+> thread that drove all housekeeping; the *minimum* drift from that is
+> "one thread per IEC task, with the fastest one playing the same role
+> the single thread used to". Two changes vs revision 2:
+>
+> 1. **Plugin worker threads removed.** Plugins keep their existing
+>    `cycle_start` / `cycle_end` callbacks. The runtime calls them on
+>    the fastest IEC task's thread, exactly the way the single-thread
+>    runtime called them on the PLC thread. No new pthreads, no new
+>    config schema, no new tick rate. Single-task projects look
+>    identical to the MatIEC era end-to-end.
+> 2. **Mutex consolidation.** `IMAGE_TABLES_LOCK_GUARD()` (Phase 8) now
+>    locks the **same mutex** the runtime already owns for the image
+>    tables (the existing `buffer_mutex`) — not a parallel one in
+>    strucpp's namespace. The .so receives a pointer to it via a tiny
+>    setter the runtime calls right after `dlopen`. Globals get a
+>    *separate* mutex (a single one for all globals as the first cut;
+>    per-resource splitting deferred until profiling justifies it).
 
 ### Rationale for Phase Order
 

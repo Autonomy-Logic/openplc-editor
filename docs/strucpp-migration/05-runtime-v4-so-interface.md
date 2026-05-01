@@ -75,12 +75,17 @@ configuration directly.
 
 ## What the .so Exports (the Whole Surface)
 
-Just three things, two of which are debug-side and already provided by
-`debug_dispatch.hpp`:
+Five entry points plus two read-only data symbols. Two of the entry
+points are debug PDU shims provided by `debug_dispatch.hpp`; one is the
+`Configuration` accessor the runtime walks; one is the locks setter the
+runtime calls right after `dlopen` (Phase 8 plumbing); one is the
+debug-PDU set/read pair.
 
 ```c
 /* From the runtime-side shim (one source file in openplc-runtime):     */
-extern strucpp::ConfigurationInstance* strucpp_get_config(void);  /* C linkage */
+extern strucpp::ConfigurationInstance* strucpp_get_config(void);
+extern void strucpp_set_locks(pthread_mutex_t* image_tables_mutex,
+                              pthread_mutex_t* global_vars_mutex);
 
 /* From debug_dispatch.hpp's STRUCPP_V4_DEBUG_EXPORTS_DEFINE block:     */
 extern uint8_t  strucpp_debug_array_count(void);
@@ -96,6 +101,13 @@ extern uint16_t strucpp_debug_read(uint8_t arr, uint16_t elem,
 extern unsigned long long common_ticktime__;     /* informational */
 extern const char        *plc_program_md5;       /* MD5 of program.st  */
 ```
+
+**Mutex ownership.** The runtime owns the image-tables mutex (the
+existing `buffer_mutex`) and a new globals mutex; both are recursive
+priority-inheriting `pthread_mutex_t`. The `.so` doesn't allocate
+either — it just stores the pointers the runtime hands it via
+`strucpp_set_locks` and exposes them through the lock guards in
+`iec_threading.hpp` (Phase 8). One mutex per resource, no duplicates.
 
 The debug PDU functions still exist as C-linkage shims because they need
 to resolve `debug_arrays[]` / `debug_array_counts[]` / `debug_array_count`
@@ -126,19 +138,35 @@ About 10 lines, identical for every project, compiled into every
 // runtime_v4_entry.cpp
 //
 // Static entry shim for STruC++-compiled OpenPLC programs on Linux.
-// The runtime dlopens the .so and dlsyms strucpp_get_config(); from
-// there it walks the ConfigurationInstance via virtual dispatch.
-// debug_dispatch.hpp's STRUCPP_V4_DEBUG_EXPORTS_DEFINE block exposes
-// the C-linkage debug PDU helpers.
+// The runtime dlopens the .so and dlsyms:
+//   - strucpp_get_config()  — for walking the configuration via vtable
+//   - strucpp_set_locks()   — to plumb the runtime-owned mutexes in
+//   - strucpp_debug_*       — the PDU helpers defined by debug_dispatch.hpp
+//
+// All other interactions are virtual dispatch through ConfigurationInstance*.
 
 #define STRUCPP_V4_DEBUG_EXPORTS_DEFINE
 #include "debug_dispatch.hpp"
+#include "iec_threading.hpp"  // declares strucpp::g_image_tables_mutex_ptr etc.
 #include "generated.hpp"
+
+#include <pthread.h>
+
+namespace strucpp {
+    pthread_mutex_t* g_image_tables_mutex_ptr = nullptr;
+    pthread_mutex_t* g_global_vars_mutex_ptr  = nullptr;
+}
 
 static strucpp::Configuration_CONFIG0 g_config;
 
 extern "C" strucpp::ConfigurationInstance* strucpp_get_config(void) {
     return &g_config;
+}
+
+extern "C" void strucpp_set_locks(pthread_mutex_t* image_tables_mutex,
+                                  pthread_mutex_t* global_vars_mutex) {
+    strucpp::g_image_tables_mutex_ptr = image_tables_mutex;
+    strucpp::g_global_vars_mutex_ptr  = global_vars_mutex;
 }
 ```
 
@@ -400,9 +428,10 @@ g++ -shared -fPIC -o "$BUILD_DIR/new_libplc.so" \
 ## Testing Strategy
 
 1. **Symbol presence**: `nm -gU build/new_libplc.so` lists exactly:
-   `strucpp_get_config`, `strucpp_debug_array_count`, `strucpp_debug_elem_count`,
-   `strucpp_debug_size`, `strucpp_debug_set`, `strucpp_debug_read`,
-   `common_ticktime__`, `plc_program_md5`. Nothing else of consequence.
+   `strucpp_get_config`, `strucpp_set_locks`, `strucpp_debug_array_count`,
+   `strucpp_debug_elem_count`, `strucpp_debug_size`, `strucpp_debug_set`,
+   `strucpp_debug_read`, `common_ticktime__`, `plc_program_md5`.
+   Nothing else of consequence.
 2. **Virtual-dispatch round-trip**: a small C++ harness `dlopen`s the .so,
    resolves `strucpp_get_config`, calls
    `cfg->get_resources()[0].tasks[0].programs[0]->run()`, and verifies the
