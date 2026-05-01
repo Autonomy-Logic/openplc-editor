@@ -1202,10 +1202,10 @@ void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
     mb_frame[2] = MB_DEBUG_SUCCESS;
     mb_frame[3] = (uint8_t)(lastElemIdx >> 8);
     mb_frame[4] = (uint8_t)(lastElemIdx & 0xFF);
-    mb_frame[5] = (uint8_t)((__tick >> 24) & 0xFF);
-    mb_frame[6] = (uint8_t)((__tick >> 16) & 0xFF);
-    mb_frame[7] = (uint8_t)((__tick >> 8)  & 0xFF);
-    mb_frame[8] = (uint8_t)(__tick & 0xFF);
+    mb_frame[5] = (uint8_t)((scan_counter >> 24) & 0xFF);
+    mb_frame[6] = (uint8_t)((scan_counter >> 16) & 0xFF);
+    mb_frame[7] = (uint8_t)((scan_counter >> 8)  & 0xFF);
+    mb_frame[8] = (uint8_t)(scan_counter & 0xFF);
     mb_frame[9]  = (uint8_t)(responseSize >> 8);
     mb_frame[10] = (uint8_t)(responseSize & 0xFF);
 }
@@ -1297,10 +1297,10 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
     mb_frame[2] = MB_DEBUG_SUCCESS;
     mb_frame[3] = (uint8_t)(lastReqIdx >> 8);
     mb_frame[4] = (uint8_t)(lastReqIdx & 0xFF);
-    mb_frame[5] = (uint8_t)((__tick >> 24) & 0xFF);
-    mb_frame[6] = (uint8_t)((__tick >> 16) & 0xFF);
-    mb_frame[7] = (uint8_t)((__tick >> 8)  & 0xFF);
-    mb_frame[8] = (uint8_t)(__tick & 0xFF);
+    mb_frame[5] = (uint8_t)((scan_counter >> 24) & 0xFF);
+    mb_frame[6] = (uint8_t)((scan_counter >> 16) & 0xFF);
+    mb_frame[7] = (uint8_t)((scan_counter >> 8)  & 0xFF);
+    mb_frame[8] = (uint8_t)(scan_counter & 0xFF);
     mb_frame[9]  = (uint8_t)(responseSize >> 8);
     mb_frame[10] = (uint8_t)(responseSize & 0xFF);
 }

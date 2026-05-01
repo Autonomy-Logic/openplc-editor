@@ -67,10 +67,10 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #include "Controllino.h"
 #endif
 
-// Scan-cycle tick counter defined by the Arduino sketch — reported in
+// Scan-cycle counter defined by the Arduino sketch — reported in
 // DEBUG_GET / DEBUG_GET_LIST responses so the editor can detect cycle
 // boundaries.
-extern uint32_t __tick;
+extern uint32_t scan_counter;
 
 // Status codes (match strucpp::debug::STATUS_* in debug_dispatch.hpp, kept
 // as macros here so the Modbus layer doesn't have to include the C++

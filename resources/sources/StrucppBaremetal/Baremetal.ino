@@ -72,12 +72,18 @@ strucpp::Configuration_CONFIG0 g_config;
 static strucpp::ProgramBase** all_programs = nullptr;
 static uint32_t* task_divisors = nullptr;
 static size_t total_programs = 0;
-unsigned long long common_ticktime__ = 20000000ULL; // default 20ms, overwritten by discoverTasks
+// Base tick interval in nanoseconds. Default 20 ms; discoverTasks() overrides
+// it with the GCD of declared task intervals.
+unsigned long long base_tick_ns = 20000000ULL;
 
 // ---------------------------------------------------------------------------
 // Scan cycle timing
 // ---------------------------------------------------------------------------
-uint32_t __tick = 0;
+// Scan counter — incremented once per cycle. Used by the round-robin
+// scheduler to decide which programs run this cycle (via task_divisors[])
+// and reported in DEBUG_GET / DEBUG_GET_LIST responses so the editor can
+// detect cycle boundaries.
+uint32_t scan_counter = 0;
 unsigned long scan_cycle;
 unsigned long last_run = 0;
 bool first_cycle = false;
@@ -208,7 +214,7 @@ void discoverTasks()
     }
 
     if (gcd_ns == 0) gcd_ns = 20000000ULL;
-    common_ticktime__ = gcd_ns;
+    base_tick_ns = gcd_ns;
 
     // Second pass: build flat arrays of programs and their divisors
     all_programs = new strucpp::ProgramBase*[prog_count];
@@ -234,11 +240,13 @@ void discoverTasks()
 }
 
 // ---------------------------------------------------------------------------
-// Time update
+// Advance the scan-cycle clock by one base tick. Called once per cycle from
+// plcCycleTask(). Without this, IEC TIME() returns 0 and TON/TOF/TP function
+// blocks never advance.
 // ---------------------------------------------------------------------------
-void updateTime()
+void advance_time()
 {
-    strucpp::__CURRENT_TIME_NS += (int64_t)common_ticktime__;
+    strucpp::__CURRENT_TIME_NS += (int64_t)base_tick_ns;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +331,7 @@ void setup()
         mapEmptyBuffers();
     #endif
 
-    setupCycleDelay(common_ticktime__);
+    setupCycleDelay(base_tick_ns);
 
     #ifdef USE_ARDUINO_SKETCH
         sketch_setup();
@@ -503,15 +511,15 @@ void plcCycleTask()
     // Run each program according to its task divisor
     for (size_t i = 0; i < total_programs; ++i)
     {
-        if (task_divisors[i] == 0 || (__tick % task_divisors[i]) == 0)
+        if (task_divisors[i] == 0 || (scan_counter % task_divisors[i]) == 0)
         {
             all_programs[i]->run();
         }
     }
-    __tick++;
+    scan_counter++;
 
     updateOutputBuffers();
-    updateTime();
+    advance_time();
 }
 
 // =============================================================================
