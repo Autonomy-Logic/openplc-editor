@@ -501,17 +501,6 @@ class CompilerModule {
     await writeFile(join(sourceTargetFolderPath, 'generated.cpp'), result.cppCode, { encoding: 'utf8' })
     await writeFile(join(sourceTargetFolderPath, 'generated.hpp'), result.headerCode, { encoding: 'utf8' })
 
-    // Project MD5 header — picked up by the v4 runtime shim
-    // (core/strucpp_runtime/runtime_v4_entry.cpp) via __has_include so
-    // strucpp_program_md5 reflects the program currently loaded. FC 0x45
-    // (DEBUG_GET_MD5) returns this so the editor can verify it's
-    // debugging the program it has the source for.
-    await writeFile(
-      join(sourceTargetFolderPath, 'strucpp_program_md5.h'),
-      `#pragma once\n#define STRUCPP_PLC_PROGRAM_MD5 "${md5Hash}"\n`,
-      { encoding: 'utf8' },
-    )
-
     // Phase 4 debugger artifacts (present starting with strucpp v0.3.0).
     // debugTableCpp is the per-project pointer table for generated_debug.cpp.
     // debugMap is the editor-consumed manifest (path -> (arrayIdx, elemIdx)).
@@ -1641,6 +1630,19 @@ class CompilerModule {
       // so users who only want the generated sources miss runtime configuration.
       if (isRuntimeV4) {
         try {
+          // defines.h next to generated.cpp — picked up by the v4 runtime
+          // shim (core/strucpp_runtime/runtime_v4_entry.cpp) via
+          // __has_include so strucpp_program_md5 reflects the program
+          // currently loaded. FC 0x45 (DEBUG_GET_MD5) returns this so the
+          // editor can verify it's debugging the matching source. Macro
+          // name matches the Arduino sketch's PROGRAM_MD5 convention.
+          if (buildMD5Hash) {
+            await writeFile(
+              join(sourceTargetFolderPath, 'defines.h'),
+              `#pragma once\n// Program MD5\n#define PROGRAM_MD5 "${buildMD5Hash}"\n`,
+              { encoding: 'utf8' },
+            )
+          }
           await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
