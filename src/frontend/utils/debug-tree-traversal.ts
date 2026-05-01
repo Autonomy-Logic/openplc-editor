@@ -335,6 +335,11 @@ function traverseNestedNode<T>(
           ),
         )
       } else if (baseType.definition === 'user-data-type') {
+        // Array of complex elements — could be FB instances or structs.
+        // The PLCVariableType.data.baseType union only allows
+        // 'base-type' | 'user-data-type' (see middleware/.../types.ts),
+        // so 'user-data-type' is the single entry point for both shapes;
+        // disambiguate by name lookup against the project's POUs.
         const childTypeDef = isFunctionBlock(baseType.value, projectPous) ? 'derived' : 'user-data-type'
         children.push(
           traverseNestedNode(
