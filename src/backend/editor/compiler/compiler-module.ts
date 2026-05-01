@@ -359,7 +359,8 @@ class CompilerModule {
     const filesToCopy: Promise<void>[] = []
 
     if (boardTarget !== 'openplc-compiler') {
-      // Arduino targets: copy Arduino support files and STruC++ runtime headers
+      // Arduino targets: headers go flat next to the sketch (Baremetal.ino
+      // includes "iec_var.hpp" etc. directly).
       filesToCopy.push(
         cp(staticArduinoFilesPath, sourceTargetFolderPath, { recursive: true }),
         this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
@@ -374,10 +375,12 @@ class CompilerModule {
         // StrucppBaremetal sketch not yet available -- Phase 3 will create it
       }
     } else {
-      // OpenPLC Runtime targets: copy STruC++ headers and C/C++ block templates
+      // OpenPLC Runtime v4 target: headers go under strucpp_runtime/include/
+      // — that's where the runtime's scripts/compile.sh expects them after
+      // extracting the upload zip into core/generated/.
       const cBlocksHeaderPath = join(this.sourceDirectoryPath, 'arduino', 'c_blocks.h')
       filesToCopy.push(
-        this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
+        this.copyStrucppRuntimeHeaders(join(sourceTargetFolderPath, 'strucpp_runtime', 'include')),
         cp(cBlocksHeaderPath, join(sourceTargetFolderPath, 'c_blocks.h')),
       )
     }
@@ -403,6 +406,9 @@ class CompilerModule {
         `STruC++ runtime headers not found at ${runtimeDir}. Run "npm run setup:binaries" to download them.`,
       )
     }
+    // Ensure the target directory exists. v4 passes a nested path
+    // (strucpp_runtime/include) that may not exist yet.
+    await fs.mkdir(targetDir, { recursive: true })
     const files = await readdir(runtimeDir)
     await Promise.all(files.map((file) => cp(join(runtimeDir, file), join(targetDir, file))))
   }
