@@ -121,9 +121,10 @@ export function buildActiveIndexSet(
 
   // -----------------------------------------------------------------------
   // 4. Expanded nested children
-  //    Walk all leaves whose compositeKey contains '.' (nested) and include
-  //    them if they have a watched/forced/graphed ancestor AND every node
-  //    in the hierarchy from that ancestor down is expanded.
+  //    Walk all leaves whose compositeKey is a child of some other variable
+  //    — either a struct/FB field (`.field`) or an array element (`[idx]`)
+  //    — and include them if they have a watched/forced/graphed ancestor
+  //    AND every node in the hierarchy from that ancestor down is expanded.
   // -----------------------------------------------------------------------
   for (const [, meta] of allLeaves) {
     const key = meta.compositeKey
@@ -131,7 +132,9 @@ export function buildActiveIndexSet(
     if (colonIdx === -1) continue
     const pouName = key.slice(0, colonIdx)
     const varName = key.slice(colonIdx + 1)
-    if (!varName.includes('.')) continue
+    // Only nested leaves (struct fields, FB fields, array elements) need
+    // ancestor-resolution; flat leaves are handled by the watched-key path.
+    if (!varName.includes('.') && !varName.includes('[')) continue
 
     if (shouldPollNestedVariable(varName, pouName, activeKeys, debugExpandedNodes, debugGraphList)) {
       activeKeys.add(key)
@@ -214,6 +217,26 @@ function resolveFbInstance(
  * - It has a watched/forced/graphed ancestor AND all nodes from that
  *   ancestor to this variable are expanded in the debugger panel
  */
+/**
+ * Yield the proper-prefix ancestor paths of a variable, treating both
+ * `.` (struct/FB field) and `[` (array element) as ancestor boundaries.
+ *
+ *   "MY_ARRAY[1]"      → ["MY_ARRAY"]
+ *   "FB.NESTED[2]"     → ["FB", "FB.NESTED"]
+ *   "FB.STRUCT.FIELD"  → ["FB", "FB.STRUCT"]
+ *
+ * The shallowest ancestor comes first; the variable itself is not yielded.
+ */
+function ancestorPaths(varName: string): string[] {
+  const result: string[] = []
+  for (let i = 1; i < varName.length; i++) {
+    if (varName[i] === '.' || varName[i] === '[') {
+      result.push(varName.slice(0, i))
+    }
+  }
+  return result
+}
+
 function shouldPollNestedVariable(
   varName: string,
   pouName: string,
@@ -226,15 +249,14 @@ function shouldPollNestedVariable(
   // Graph-listed → always poll
   if (debugGraphList.includes(compositeKey)) return true
 
-  const parts = varName.split('.')
-  /* istanbul ignore next -- defensive: caller already checks varName.includes('.') */
-  if (parts.length <= 1) return true
+  const ancestors = ancestorPaths(varName)
+  /* istanbul ignore next -- defensive: caller already checks for '.' or '[' */
+  if (ancestors.length === 0) return true
 
   // Find the deepest watched ancestor
   let watchedAncestorIndex = -1
-  for (let i = parts.length - 1; i >= 1; i--) {
-    const candidatePath = parts.slice(0, i).join('.')
-    if (watchedKeys.has(`${pouName}:${candidatePath}`)) {
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    if (watchedKeys.has(`${pouName}:${ancestors[i]}`)) {
       watchedAncestorIndex = i
       break
     }
@@ -242,10 +264,12 @@ function shouldPollNestedVariable(
 
   if (watchedAncestorIndex === -1) return false
 
-  // Check that all nodes from ancestor to this variable are expanded
-  for (let i = watchedAncestorIndex; i < parts.length; i++) {
-    const parentPath = parts.slice(0, i).join('.')
-    if (!(debugExpandedNodes.get(`${pouName}:${parentPath}`) ?? false)) {
+  // Check that every node from the watched ancestor down to (but not
+  // including) the leaf is expanded. For arrays, the array root is the
+  // only intermediate node; for struct/FB fields, every parent in the
+  // chain must be expanded.
+  for (let i = watchedAncestorIndex; i < ancestors.length; i++) {
+    if (!(debugExpandedNodes.get(`${pouName}:${ancestors[i]}`) ?? false)) {
       return false
     }
   }
