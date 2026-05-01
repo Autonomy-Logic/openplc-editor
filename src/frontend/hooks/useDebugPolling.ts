@@ -28,6 +28,7 @@ import type { DebugTreeNode } from '../../middleware/shared/ports/types'
 import { useDebugger } from '../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../store'
 import { buildActiveIndexSet } from '../utils/debug-polling-filter'
+import { isOpenPLCRuntimeV4Target } from '../utils/device'
 import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 
 /** Polling interval for simulator boards (Modbus RTU). */
@@ -35,10 +36,23 @@ const SIMULATOR_POLL_INTERVAL_MS = 50
 /** Polling interval for non-simulator boards. */
 const DEFAULT_POLL_INTERVAL_MS = 200
 
-/** Default batch size for variable polling. */
-const DEFAULT_BATCH_SIZE = 60
-/** Batch size for simulator (smaller due to RTU frame limits). */
+// Batch size is transport-dependent. The wire request packs 3 bytes per
+// variable (arr:u8 + elem:u16); the response packs raw type-sized values
+// after a small header. The right ceiling is set by the transport's
+// frame budget and the runtime's MAX_DEBUG_FRAME, not by an arbitrary
+// editor-side default — so each transport gets its own constant.
+//
+// Modbus RTU (simulator)  : 256-byte serial frame → ~20 vars per request.
+// Modbus TCP (Arduino)    : Arduino sketch's MAX_MB_FRAME caps it; 60 is
+//                           well within the headroom.
+// WebSocket (Runtime v4)  : Linux runtime's MAX_DEBUG_FRAME=4096; ~500
+//                           vars fits comfortably with room for value
+//                           bytes. Anything bigger is unusual and the
+//                           ERROR_OUT_OF_MEMORY fallback halves us back
+//                           down to a safe size.
 const RTU_BATCH_SIZE = 20
+const TCP_BATCH_SIZE = 60
+const WEBSOCKET_BATCH_SIZE = 500
 const MIN_BATCH_SIZE = 2
 
 interface LeafMeta {
@@ -98,8 +112,10 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const batchOffsetRef = useRef(0)
   const isPollingRef = useRef(false)
 
-  // Dynamic batch size — starts at max, halves on memory errors
-  const batchSizeRef = useRef(DEFAULT_BATCH_SIZE)
+  // Dynamic batch size — overwritten with the transport-specific
+  // ceiling on session start; halves on ERROR_OUT_OF_MEMORY and
+  // resets on the next session start.
+  const batchSizeRef = useRef(TCP_BATCH_SIZE)
 
   // Full leaf index→metadata map — computed once when debugger starts.
   const allLeavesRef = useRef<Map<number, LeafMeta> | null>(null)
@@ -209,7 +225,17 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       const changedNonBool = new Map<string, string>()
       let bufferOffset = 0
 
-      for (const index of batch) {
+      // Wire format note: result.lastIndex is the runtime's last_req_idx —
+      // a 0-based POSITION INTO THE REQUEST LIST, not a variable index.
+      // Iterate by position so the comparison and the offset advancement
+      // both interpret it correctly. Without this, batches with high
+      // variable IDs trip `index >= lastIndex` on the first entry and
+      // collapse the throughput to one variable per poll, which makes
+      // related variables visibly desync as the round-robin sweeps.
+      for (let pos = 0; pos < batch.length; pos++) {
+        if (result.lastIndex !== undefined && pos > result.lastIndex) break
+
+        const index = batch[pos]
         const meta = allLeaves.get(index)
         if (!meta) continue
 
@@ -234,12 +260,14 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
           ;(isBool ? changedBool : changedNonBool).set(meta.compositeKey, 'ERR')
           bufferOffset += typeSize
         }
-
-        itemsProcessed++
-
-        // Stop after the last variable the runtime was able to include
-        if (result.lastIndex !== undefined && index >= result.lastIndex) break
       }
+
+      // Advance the round-robin offset by positions the runtime touched
+      // (lastIndex + 1) rather than by entries we successfully parsed.
+      // Otherwise positions the runtime skipped (var_size == 0) would
+      // never advance the offset and we'd stick on them forever.
+      itemsProcessed =
+        result.lastIndex !== undefined ? Math.min(result.lastIndex + 1, batch.length) : batch.length
 
       // Only write to store when values actually changed
       if (changedBool.size > 0) workspaceActions.setDebugBoolValues(changedBool)
@@ -263,11 +291,25 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     return boardInfo?.compiler === 'simulator'
   })
 
+  // OpenPLC Runtime v4 uses WebSocket — much larger frame budget than
+  // the Modbus paths, so we can batch many more variables per request.
+  const isV4Board = useOpenPLCStore((state) =>
+    isOpenPLCRuntimeV4Target(state.deviceDefinitions.configuration.deviceBoard),
+  )
+
   // Set up polling interval when debugger becomes visible.
   useEffect(() => {
     if (isDebuggerVisible) {
+      // Pick the batch size for the active transport. Simulator → RTU,
+      // v4 → WebSocket, everything else → Modbus TCP.
+      const initialBatchSize = isSimulatorBoard
+        ? RTU_BATCH_SIZE
+        : isV4Board
+          ? WEBSOCKET_BATCH_SIZE
+          : TCP_BATCH_SIZE
+
       // Reset state on session start
-      batchSizeRef.current = isSimulatorBoard ? RTU_BATCH_SIZE : DEFAULT_BATCH_SIZE
+      batchSizeRef.current = initialBatchSize
       batchOffsetRef.current = 0
       lastResponseTimestampRef.current = 0
       activeIndexesRef.current = null
@@ -321,7 +363,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       visibleVarsCacheRef.current = null
       batchOffsetRef.current = 0
     }
-  }, [isDebuggerVisible, isSimulatorBoard, workspaceActions])
+  }, [isDebuggerVisible, isSimulatorBoard, isV4Board, workspaceActions])
 
   // Clean up on unmount
   useEffect(() => {
