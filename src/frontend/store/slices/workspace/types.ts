@@ -1,5 +1,6 @@
 import type {
   Architecture,
+  DebugConnectionType,
   DebugTreeNode,
   FbInstanceInfo,
   Platform,
@@ -91,6 +92,10 @@ export type WorkspaceState = {
     debugGraphList: string[]
     debugDataStale: boolean
     debugMd5Mismatch: { runtimeMd5: string; localMd5: string } | null
+    /** Active transport for the running debug session — drives the
+     *  per-poll batch size and any other transport-specific behaviour.
+     *  Null when no session is active. */
+    debugConnectionType: DebugConnectionType | null
     // Project loading state
     isProjectLoading: boolean
     projectLoadingMessage: string
@@ -152,6 +157,7 @@ export type WorkspaceActions = {
   setDebugGraphList: (list: string[]) => void
   setDebugDataStale: (stale: boolean) => void
   setDebugMd5Mismatch: (mismatch: { runtimeMd5: string; localMd5: string } | null) => void
+  setDebugConnectionType: (connectionType: DebugConnectionType | null) => void
   clearDebugState: () => void
   clearFbDebugContext: () => void
   removeDebugVariable: (compositeKey: string) => void

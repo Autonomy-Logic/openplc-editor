@@ -18,42 +18,58 @@
  *   since the editor is read-only during debug
  *
  * Polling intervals:
- * - Simulator board: 50ms  (Modbus RTU frame timing)
- * - Other boards:   200ms  (general purpose)
+ * - Modbus RTU / simulator: 50ms  (serial frame timing)
+ * - Modbus TCP / WebSocket: 200ms (general purpose)
  */
 
 import { useCallback, useEffect, useRef } from 'react'
 
-import type { DebugTreeNode } from '../../middleware/shared/ports/types'
+import type { DebugConnectionType, DebugTreeNode } from '../../middleware/shared/ports/types'
 import { useDebugger } from '../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../store'
 import { buildActiveIndexSet } from '../utils/debug-polling-filter'
-import { isOpenPLCRuntimeV4Target } from '../utils/device'
 import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 
-/** Polling interval for simulator boards (Modbus RTU). */
-const SIMULATOR_POLL_INTERVAL_MS = 50
-/** Polling interval for non-simulator boards. */
+/** Polling interval for transports with serial framing (RTU / simulator). */
+const RTU_POLL_INTERVAL_MS = 50
+/** Polling interval for higher-bandwidth transports (TCP / WebSocket). */
 const DEFAULT_POLL_INTERVAL_MS = 200
 
 // Batch size is transport-dependent. The wire request packs 3 bytes per
 // variable (arr:u8 + elem:u16); the response packs raw type-sized values
 // after a small header. The right ceiling is set by the transport's
-// frame budget and the runtime's MAX_DEBUG_FRAME, not by an arbitrary
-// editor-side default — so each transport gets its own constant.
+// frame budget and the runtime's MAX_DEBUG_FRAME — never the target
+// board, since the same board can run over RTU or TCP depending on the
+// user's communication preferences.
 //
-// Modbus RTU (simulator)  : 256-byte serial frame → ~20 vars per request.
-// Modbus TCP (Arduino)    : Arduino sketch's MAX_MB_FRAME caps it; 60 is
-//                           well within the headroom.
-// WebSocket (Runtime v4)  : Linux runtime's MAX_DEBUG_FRAME=4096; ~500
-//                           vars fits comfortably with room for value
-//                           bytes. Anything bigger is unusual and the
-//                           ERROR_OUT_OF_MEMORY fallback halves us back
-//                           down to a safe size.
+// Modbus RTU             : 256-byte serial frame → ~20 vars per request.
+// Modbus TCP             : Arduino sketch's MAX_MB_FRAME caps it; 60 is
+//                          well within the headroom.
+// WebSocket (Runtime v4) : Linux runtime's MAX_DEBUG_FRAME=4096; ~500
+//                          vars fits comfortably with room for value
+//                          bytes. Anything bigger is unusual and the
+//                          ERROR_OUT_OF_MEMORY fallback halves us back
+//                          down to a safe size.
+// Simulator              : virtual serial port mirrors the RTU framing,
+//                          so it shares the RTU ceiling.
 const RTU_BATCH_SIZE = 20
 const TCP_BATCH_SIZE = 60
 const WEBSOCKET_BATCH_SIZE = 500
 const MIN_BATCH_SIZE = 2
+
+function batchSizeForTransport(transport: DebugConnectionType | null): number {
+  switch (transport) {
+    case 'websocket':
+      return WEBSOCKET_BATCH_SIZE
+    case 'rtu':
+    case 'simulator':
+      return RTU_BATCH_SIZE
+    case 'tcp':
+    case null:
+    default:
+      return TCP_BATCH_SIZE
+  }
+}
 
 interface LeafMeta {
   compositeKey: string
@@ -284,38 +300,27 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const pollRef = useRef(pollVariables)
   pollRef.current = pollVariables
 
-  // Determine if current board is the simulator
-  const isSimulatorBoard = useOpenPLCStore((state) => {
-    const boardName = state.deviceDefinitions.configuration.deviceBoard
-    const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardName)
-    return boardInfo?.compiler === 'simulator'
-  })
-
-  // OpenPLC Runtime v4 uses WebSocket — much larger frame budget than
-  // the Modbus paths, so we can batch many more variables per request.
-  const isV4Board = useOpenPLCStore((state) =>
-    isOpenPLCRuntimeV4Target(state.deviceDefinitions.configuration.deviceBoard),
-  )
+  // The transport in use for the current debug session. This drives both
+  // the batch size and the poll interval — neither should be conditioned
+  // on board target since the same board can speak RTU, TCP, etc. The
+  // workspace activity bar sets this when the debug session connects.
+  const debugConnectionType = useOpenPLCStore((state) => state.workspace.debugConnectionType)
 
   // Set up polling interval when debugger becomes visible.
   useEffect(() => {
     if (isDebuggerVisible) {
-      // Pick the batch size for the active transport. Simulator → RTU,
-      // v4 → WebSocket, everything else → Modbus TCP.
-      const initialBatchSize = isSimulatorBoard
-        ? RTU_BATCH_SIZE
-        : isV4Board
-          ? WEBSOCKET_BATCH_SIZE
-          : TCP_BATCH_SIZE
-
       // Reset state on session start
-      batchSizeRef.current = initialBatchSize
+      batchSizeRef.current = batchSizeForTransport(debugConnectionType)
       batchOffsetRef.current = 0
       lastResponseTimestampRef.current = 0
       activeIndexesRef.current = null
       visibleVarsCacheRef.current = null
 
-      const pollIntervalMs = isSimulatorBoard ? SIMULATOR_POLL_INTERVAL_MS : DEFAULT_POLL_INTERVAL_MS
+      // RTU framing also covers the simulator's virtual serial port —
+      // both need the tighter cadence to keep up with toggling state.
+      const usesRtuFraming =
+        debugConnectionType === 'rtu' || debugConnectionType === 'simulator'
+      const pollIntervalMs = usesRtuFraming ? RTU_POLL_INTERVAL_MS : DEFAULT_POLL_INTERVAL_MS
 
       // Fire first poll immediately, then schedule at fixed rate
       // Skip tick if previous poll is still in progress (isPolling guard)
@@ -363,7 +368,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       visibleVarsCacheRef.current = null
       batchOffsetRef.current = 0
     }
-  }, [isDebuggerVisible, isSimulatorBoard, isV4Board, workspaceActions])
+  }, [isDebuggerVisible, debugConnectionType, workspaceActions])
 
   // Clean up on unmount
   useEffect(() => {

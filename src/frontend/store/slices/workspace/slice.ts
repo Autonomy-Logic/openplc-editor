@@ -53,6 +53,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugGraphList: [],
     debugDataStale: false,
     debugMd5Mismatch: null,
+    debugConnectionType: null,
     // Project loading state
     isProjectLoading: false,
     projectLoadingMessage: '',
@@ -169,6 +170,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugGraphList = []
           workspace.debugDataStale = false
           workspace.debugMd5Mismatch = null
+          workspace.debugConnectionType = null
           workspace.isPlcLogsVisible = false
           workspace.plcLogs = ''
           workspace.plcLogsLastId = null
@@ -372,6 +374,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setDebugConnectionType: (connectionType) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugConnectionType = connectionType
+        }),
+      )
+    },
     clearDebugState: () => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -391,6 +400,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugGraphList = []
           workspace.debugDataStale = false
           workspace.debugMd5Mismatch = null
+          workspace.debugConnectionType = null
         }),
       )
     },

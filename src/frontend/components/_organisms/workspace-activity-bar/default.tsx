@@ -351,6 +351,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (verifyResult.match) {
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
+        // Surface the active transport in the store so transport-specific
+        // pollers (useDebugPolling) can size their batches against the
+        // real frame budget rather than guessing from the board target.
+        useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(debugConfig.connectionType)
         await debugSession.connectAndStart(debugConfig)
         setIsDebuggerProcessing(false)
       } else {
