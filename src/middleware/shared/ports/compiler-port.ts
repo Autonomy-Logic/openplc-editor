@@ -1,7 +1,7 @@
 /**
  * CompilerPort — Abstracts the PLC compilation pipeline.
  *
- * Editor adapter: Delegates to main process via IPC (local binaries: xml2st, iec2c, arduino-cli).
+ * Editor adapter: Delegates to main process via IPC (local tools: xml2st, STruC++, arduino-cli).
  * Web adapter:    Delegates to remote API at compile.getedge.me (callGenerateSt, callCompileSt, etc.).
  *
  * The UI only knows "compile this project" and receives progress events.
