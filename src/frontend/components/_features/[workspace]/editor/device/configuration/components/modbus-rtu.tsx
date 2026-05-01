@@ -59,6 +59,7 @@ const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUE
     if (modbusRTU.rtuRS485ENPin) {
       setEnableRS485ENPin(true)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

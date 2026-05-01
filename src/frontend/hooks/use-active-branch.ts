@@ -15,15 +15,22 @@ function getBranchMap(): BranchMap {
 
 function setBranchMap(map: BranchMap): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
-  // Dispatch storage event so other tabs/components pick up the change
+  // Notify same-window subscribers (other components in this tab using
+  // useActiveBranch). Cross-tab sync is handled by the native `storage`
+  // event in `subscribe`, which fires on tabs other than the writer.
   window.dispatchEvent(new Event('active-branch-change'))
 }
 
 function subscribe(listener: () => void): () => void {
   const handleChange = () => listener()
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY) listener()
+  }
   window.addEventListener('active-branch-change', handleChange)
+  window.addEventListener('storage', handleStorage)
   return () => {
     window.removeEventListener('active-branch-change', handleChange)
+    window.removeEventListener('storage', handleStorage)
   }
 }
 

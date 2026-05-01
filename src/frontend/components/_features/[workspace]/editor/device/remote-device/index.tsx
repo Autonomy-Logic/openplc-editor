@@ -130,6 +130,7 @@ const SerialPortCombobox = ({
         setHighlightedIndex(currentIndex >= 0 ? currentIndex : -1)
       }, 0)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
   // Scroll highlighted option into view
@@ -654,7 +655,10 @@ const RemoteDeviceEditor = () => {
     }
   }, [remoteDevice])
 
-  const ioGroups = remoteDevice?.modbusTcpConfig?.ioGroups || []
+  const ioGroups = useMemo(
+    () => remoteDevice?.modbusTcpConfig?.ioGroups || [],
+    [remoteDevice?.modbusTcpConfig?.ioGroups],
+  )
 
   // Fetch serial ports from runtime when transport is RTU and connected
   const fetchSerialPorts = useCallback(async () => {
