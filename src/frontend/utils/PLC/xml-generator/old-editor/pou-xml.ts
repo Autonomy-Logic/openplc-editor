@@ -5,6 +5,8 @@ import { BaseXml } from '@root/middleware/shared/ports/xml-types/old-editor'
 import { InterfaceXML } from '@root/middleware/shared/ports/xml-types/old-editor/pous/interface/interface-diagram'
 import { VariableXML } from '@root/middleware/shared/ports/xml-types/old-editor/variable/variable-diagram'
 
+import { baseTypeTag } from '../base-type-tag'
+
 import { fbdToXml } from './language/fbd-xml'
 import { ilToXML } from './language/il-xml'
 import { ladderToXml } from './language/ladder-xml'
@@ -45,7 +47,7 @@ export const oldEditorParseInterface = (pou: PLCPou) => {
 
       const isBaseType = baseTypes.includes(returnType as (typeof baseTypes)[number])
       xml.returnType = isBaseType
-        ? { [returnType.trim().toUpperCase() === 'STRING' ? returnType.toLowerCase() : returnType.toUpperCase()]: '' }
+        ? { [baseTypeTag(returnType)]: '' }
         : { derived: { '@name': returnType } }
     }
 

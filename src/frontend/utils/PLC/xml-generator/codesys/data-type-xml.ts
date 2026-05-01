@@ -1,6 +1,8 @@
 import { PLCDataType } from '@root/middleware/shared/ports/open-plc-types'
 import { BaseXml } from '@root/middleware/shared/ports/xml-types/codesys'
 
+import { baseTypeTag } from '../base-type-tag'
+
 const parseDimensions = (dimensions: Array<{ dimension: string }>) => {
   return (
     dimensions?.map((dimension) => {
@@ -28,9 +30,7 @@ export const codeSysParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[
               baseType: {
                 [dataType.baseType.definition === 'user-data-type'
                   ? 'derived'
-                  : dataType.baseType.value === 'string'
-                    ? 'string'
-                    : dataType.baseType.value.toUpperCase()]:
+                  : baseTypeTag(dataType.baseType.value)]:
                   dataType.baseType.definition === 'user-data-type' ? { '@name': dataType.baseType.value } : '',
               },
             },
@@ -80,7 +80,7 @@ export const codeSysParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[
                     return {
                       '@name': variable.name,
                       type: {
-                        [variable.type.value === 'string' ? 'string' : variable.type.value.toUpperCase()]: '',
+                        [baseTypeTag(variable.type.value)]: '',
                       },
                       initialValue: variable.initialValue?.simpleValue.value
                         ? {
@@ -113,9 +113,7 @@ export const codeSysParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[
                           baseType: {
                             [variable.type.data!.baseType.definition === 'user-data-type'
                               ? 'derived'
-                              : variable.type.data!.baseType.value === 'string'
-                                ? 'string'
-                                : variable.type.data!.baseType.value.toUpperCase()]:
+                              : baseTypeTag(variable.type.data!.baseType.value)]:
                               variable.type.data!.baseType.definition === 'user-data-type'
                                 ? { '@name': variable.type.data!.baseType.value }
                                 : '',

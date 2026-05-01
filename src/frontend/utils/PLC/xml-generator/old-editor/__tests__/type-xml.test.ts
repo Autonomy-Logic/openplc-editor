@@ -14,6 +14,36 @@ describe('convertTypeToXml', () => {
     expect(result).toEqual({ string: '' })
   })
 
+  // Regression: project data canonicalizes base types to uppercase
+  // (baseTypes constant emits 'STRING'). The xml emitter must still
+  // produce <string> — xml2st rejects <STRING> outright.
+  it('converts uppercase STRING base-type to lowercase tag', () => {
+    const result = convertTypeToXml({ definition: 'base-type', value: 'STRING' })
+    expect(result).toEqual({ string: '' })
+  })
+
+  it('converts WSTRING base-type to lowercase tag (any input casing)', () => {
+    expect(convertTypeToXml({ definition: 'base-type', value: 'wstring' })).toEqual({ wstring: '' })
+    expect(convertTypeToXml({ definition: 'base-type', value: 'WSTRING' })).toEqual({ wstring: '' })
+  })
+
+  it('keeps uppercase STRING in array baseType', () => {
+    const result = convertTypeToXml({
+      definition: 'array',
+      value: '',
+      data: {
+        baseType: { definition: 'base-type', value: 'STRING' },
+        dimensions: [{ dimension: '1..3' }],
+      },
+    })
+    expect(result).toEqual({
+      array: {
+        dimension: [{ '@lower': '1', '@upper': '3' }],
+        baseType: { string: '' },
+      },
+    })
+  })
+
   it('converts a derived type', () => {
     const result = convertTypeToXml({ definition: 'derived', value: 'MyType' })
     expect(result).toEqual({ derived: { '@name': 'MyType' } })
