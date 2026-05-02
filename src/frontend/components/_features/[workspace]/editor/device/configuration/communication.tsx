@@ -45,6 +45,7 @@ const Communication = () => {
       }
     }
     updateModbusConfig()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceBoard, isRuntimeTarget])
 
   const handleEnableModbusRTU = () => {

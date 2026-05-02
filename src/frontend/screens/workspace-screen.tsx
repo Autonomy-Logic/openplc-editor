@@ -6,7 +6,6 @@ import { useShallow } from 'zustand/react/shallow'
 import { useCapabilities, useChatPanel, useDebugger, useDevice, useProject } from '../../middleware/shared/providers'
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
@@ -242,7 +241,6 @@ const WorkspaceScreen = () => {
   )
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleBranchSwitch = useCallback(
     async (branchName: string) => {
       if (!projectPath) return
@@ -675,10 +673,9 @@ const WorkspaceScreen = () => {
           </ResizablePanelGroup>
         </WorkspaceMainContent>
       </div>
-      {/* TODO: Re-enable branch status bar once branch switching is fully implemented */}
-      {/* {hasVersionControl && projectPath && (
+      {hasVersionControl && projectPath && (
         <BranchStatusBar projectId={projectPath} onBranchSwitch={handleBranchSwitch} />
-      )} */}
+      )}
     </div>
   )
 }
