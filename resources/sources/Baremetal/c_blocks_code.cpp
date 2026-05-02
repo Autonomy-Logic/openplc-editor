@@ -3,6 +3,12 @@
 
 #ifdef ARDUINO
 #include <Arduino.h>
+// Arduino.h defines min(a,b) and max(a,b) as 2-arg macros that collide
+// with std::min / std::max templates in <algorithm> (pulled in
+// transitively by iec_string.hpp below). Undef so the strucpp runtime
+// headers parse cleanly — standard Arduino+STL idiom.
+#undef min
+#undef max
 #endif
 
 // STruC++ runtime types — IEC_BOOL/IEC_INT/.../IEC_REAL all live under
