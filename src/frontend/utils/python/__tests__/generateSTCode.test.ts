@@ -57,17 +57,22 @@ describe('generateSTCode (python)', () => {
     expect(result).not.toMatch(/typedef\s+struct\s+\{\s*__strlen_t len[\s\S]*?\}\s+IEC_STRING\b/)
   })
 
-  it('generates shm_data_in_t / shm_data_out_t structs from interface variables', () => {
+  it('generates shm_data_in_t / shm_data_out_t structs with raw C types', () => {
     const result = generateSTCode({
       pouName: 'test',
       allVariables: [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')],
       processedPythonCode: '',
     })
 
+    // SHM is a packed binary protocol the Python runtime decodes via
+    // `struct.unpack`. Fields must be trivially-copyable C primitives;
+    // strucpp's IEC_INT (= IECVar<int16_t>) has a non-trivial copy
+    // assignment which would make memcpy(&data_out, …) UB and trigger
+    // -Wclass-memaccess.
     expect(result).toContain('shm_data_in_t')
-    expect(result).toContain('IEC_INT speed;')
+    expect(result).toContain('int16_t speed;')
     expect(result).toContain('shm_data_out_t')
-    expect(result).toContain('IEC_REAL result;')
+    expect(result).toContain('float result;')
   })
 
   it('uses shm_iec_string_t (not IEC_STRING) for STRING fields in the SHM struct', () => {
@@ -215,8 +220,8 @@ describe('generateSTCode (python)', () => {
       processedPythonCode: '',
     })
 
-    expect(result).toContain('IEC_INT x;')
-    expect(result).toContain('IEC_INT y;')
+    expect(result).toContain('int16_t x;')
+    expect(result).toContain('int16_t y;')
     expect(result).not.toContain('localVal')
   })
 })

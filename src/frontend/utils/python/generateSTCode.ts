@@ -24,19 +24,54 @@ const isStringVariable = (variable: PLCVariable): boolean => {
 const isStringStructField = (variable: PLCVariable): boolean => isStringVariable(variable)
 
 /**
- * Field type to emit for an SHM struct member. Strings use the
- * stub-local `shm_iec_string_t` typedef so the SHM layout matches the
- * Python runtime's struct.unpack expectations and never resolves to
- * strucpp's IECStringVar (which has a wildly different layout).
- * Everything else takes the strucpp IEC_T alias since the typedef-set
- * is in scope inside the {external} block.
+ * Raw C type used for an SHM struct field. SHM is a packed binary
+ * protocol the Python runtime decodes via `struct.unpack`, so each
+ * field has to be a trivially-copyable C primitive. The strucpp
+ * IEC_T aliases resolve to IECVar<T> (wrappers with a non-trivial
+ * copy assignment), so memcpy'ing into them is UB and gcc rightly
+ * fires `-Wclass-memaccess`. Map to the raw underlying type instead;
+ * the C-side stub bridges between IECVar (force-aware reads/writes
+ * on the IEC side) and these raw fields at the boundary.
  */
+const RAW_TYPE_BY_BASETYPE: Record<string, string> = {
+  bool: 'uint8_t',
+  sint: 'int8_t',
+  int: 'int16_t',
+  dint: 'int32_t',
+  lint: 'int64_t',
+  usint: 'uint8_t',
+  uint: 'uint16_t',
+  udint: 'uint32_t',
+  ulint: 'uint64_t',
+  byte: 'uint8_t',
+  word: 'uint16_t',
+  dword: 'uint32_t',
+  lword: 'uint64_t',
+  real: 'float',
+  lreal: 'double',
+  time: 'int64_t',
+  date: 'int64_t',
+  tod: 'int64_t',
+  dt: 'int64_t',
+}
+
 const shmFieldType = (variable: PLCVariable): string => {
   if (isStringStructField(variable)) return 'shm_iec_string_t'
-  if (isArrayVariable(variable) && variable.type.data?.baseType.value.toLowerCase() === 'string') {
-    return 'shm_iec_string_t'
+
+  if (variable.type.definition === 'array' && variable.type.data) {
+    const elemType = variable.type.data.baseType.value.toLowerCase()
+    if (elemType === 'string') return 'shm_iec_string_t'
+    return RAW_TYPE_BY_BASETYPE[elemType] ?? 'uint8_t'
   }
-  return getVariableIECType(variable)
+
+  if (variable.type.definition === 'base-type') {
+    return RAW_TYPE_BY_BASETYPE[variable.type.value.toLowerCase()] ?? 'uint8_t'
+  }
+
+  // Defensive fallback — non-base, non-array variables shouldn't appear
+  // in a Python POU's interface; emit a single byte to keep the struct
+  // layout deterministic.
+  return 'uint8_t'
 }
 
 const generateStructField = (variable: PLCVariable): string => {
@@ -168,6 +203,13 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
   // were dead weight. Keep only the SHM-local string layout under a
   // distinct name (`shm_iec_string_t`) so it can't shadow strucpp's
   // typedef.
+  //
+  // Python helper symbols (`getpid`, `pid_t`, `create_shm_name`,
+  // `python_block_loader`) are NOT declared here — they come from
+  // iec_python.h, which the runtime's scripts/compile.sh force-includes
+  // into the generated.cpp build (same toolchain trick MatIEC used).
+  // The stub references them by name only, identical in spirit to
+  // MatIEC-era stubs. STruC++ stays Python-unaware.
   const stCode = `(* Type definitions *)
 {external
     #define STR_LEN_TYPE int8_t
