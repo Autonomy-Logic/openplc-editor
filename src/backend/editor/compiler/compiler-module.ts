@@ -98,7 +98,11 @@ class CompilerModule {
   ]
 
   // Runtime API polling configuration (important-comment)
-  static readonly COMPILATION_STATUS_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes (important-comment)
+  // 20 minutes — large projects (50+ POUs) on a Pi 4 can take 10–15 min
+  // to compile generated.cpp + generated_debug.cpp at -O1, so 5 min was
+  // cutting off legitimate builds. The runtime side keeps emitting status
+  // while alive; this is just an absolute ceiling. (important-comment)
+  static readonly COMPILATION_STATUS_TIMEOUT_MS = 20 * 60 * 1000
   static readonly COMPILATION_STATUS_POLL_INTERVAL_MS = 1000 // 1 second (important-comment)
 
   constructor() {
@@ -1805,7 +1809,7 @@ class CompilerModule {
                       if (Date.now() - startTime > timeout) {
                         _mainProcessPort.postMessage({
                           logLevel: 'error',
-                          message: 'Compilation status polling timed out after 5 minutes.',
+                          message: 'Compilation status polling timed out after 20 minutes.',
                         })
                         shouldContinuePolling = false
                         continue
