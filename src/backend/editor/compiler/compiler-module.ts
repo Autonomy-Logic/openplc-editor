@@ -502,7 +502,23 @@ class CompilerModule {
       handleOutputData(`Warning at line ${warn.line}: ${warn.message}`, 'info')
     }
 
-    await writeFile(join(sourceTargetFolderPath, 'generated.cpp'), result.cppCode, { encoding: 'utf8' })
+    // STruC++ splits the implementation across one TU per POU plus a
+    // shared `configuration.cpp`. The runtime's Makefile picks up
+    // every `*.cpp` under core/generated/ via wildcard, so emitting
+    // more files just gives `make -j$(nproc)` more parallel work and
+    // lets ccache reuse .o files for POUs whose source didn't change.
+    // Falling back to `result.cppCode` keeps older strucpp builds (no
+    // cppFiles) working — the runtime build sees a single generated.cpp
+    // and compiles it serially, exactly as before.
+    if (result.cppFiles && result.cppFiles.length > 0) {
+      await Promise.all(
+        result.cppFiles.map((f) =>
+          writeFile(join(sourceTargetFolderPath, f.name), f.content, { encoding: 'utf8' }),
+        ),
+      )
+    } else {
+      await writeFile(join(sourceTargetFolderPath, 'generated.cpp'), result.cppCode, { encoding: 'utf8' })
+    }
     await writeFile(join(sourceTargetFolderPath, 'generated.hpp'), result.headerCode, { encoding: 'utf8' })
 
     // Phase 4 debugger artifacts (present starting with strucpp v0.3.0).
