@@ -1008,7 +1008,19 @@ class CompilerModule {
   }: CompileArduinoProgramArgs) {
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
-    let buildProjectFlags = ['compile', '-v']
+    // -j 0 — saturate every CPU core. arduino-cli's default is
+    // sequential compilation; with the codegen split (one TU per POU
+    // plus configuration.cpp + generated_debug.cpp) there are now
+    // many independent .cpp files in the library folder, so
+    // parallel compilation cuts wall-clock build time roughly
+    // proportional to core count. Per-file build caching is enabled
+    // by default — arduino-cli keys its cache on (sketch path,
+    // flags, board) under ~/<user-cache>/arduino/sketches/<hash>/
+    // and reuses .o files when their content hash matches. Together
+    // with the build-folder wipe at createBasicDirectories(), this
+    // gives the same edit-one-POU-rebuild-fast behaviour that the
+    // v4 runtime gets via ccache + make -j.
+    let buildProjectFlags = ['compile', '-v', '-j', '0']
 
     if (boardHalsContent['c_flags']) {
       buildProjectFlags = [
