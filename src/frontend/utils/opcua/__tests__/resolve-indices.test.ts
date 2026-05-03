@@ -1,11 +1,12 @@
 import type { OpcUaFieldConfig, OpcUaNodeConfig, OpcUaPermissions } from '@root/middleware/shared/ports/open-plc-types'
 
-import { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from '../resolve-indices'
+import {
+  OpcUaConfigError,
+  resolveArrayAddress,
+  resolveStructureAddresses,
+  resolveVariableAddress,
+} from '../resolve-indices'
 import type { DebugVariable, PLCInstanceInfo } from '../types'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const perm: OpcUaPermissions = { viewer: 'r', operator: 'rw', engineer: 'rw' }
 
@@ -30,12 +31,15 @@ const makeField = (overrides: Partial<OpcUaFieldConfig> = {}): OpcUaFieldConfig 
   ...overrides,
 })
 
-const dv = (name: string, type: string, index: number): DebugVariable => ({ name, type, index })
-const inst = (name: string, program: string): PLCInstanceInfo => ({ name, task: 'T0', program })
+const dv = (path: string, type: string, arr: number, elem: number, size = 2): DebugVariable => ({
+  path,
+  type,
+  arr,
+  elem,
+  size,
+})
 
-// ---------------------------------------------------------------------------
-// OpcUaConfigError
-// ---------------------------------------------------------------------------
+const inst = (name: string, program: string): PLCInstanceInfo => ({ name, task: 'T0', program })
 
 describe('OpcUaConfigError', () => {
   it('stores variableRef, expectedPath and is instanceof Error', () => {
@@ -48,101 +52,98 @@ describe('OpcUaConfigError', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// resolveVariableIndex
-// ---------------------------------------------------------------------------
-
-describe('resolveVariableIndex', () => {
+describe('resolveVariableAddress', () => {
   it('resolves a global variable (GVL)', () => {
     const node = makeNode({ pouName: 'GVL', variablePath: 'SPEED' })
-    expect(resolveVariableIndex(node, [dv('CONFIG0__SPEED', 'INT_ENUM', 5)], [])).toBe(5)
+    expect(resolveVariableAddress(node, [dv('SPEED', 'INT', 0, 5)], [])).toEqual({ arr: 0, elem: 5 })
   })
 
   it('resolves a global variable (CONFIG)', () => {
     const node = makeNode({ pouName: 'CONFIG', variablePath: 'TEMP' })
-    expect(resolveVariableIndex(node, [dv('CONFIG0__TEMP', 'REAL_ENUM', 2)], [])).toBe(2)
+    expect(resolveVariableAddress(node, [dv('TEMP', 'REAL', 1, 12)], [])).toEqual({ arr: 1, elem: 12 })
   })
 
-  it('resolves lowercase gvl via toUpperCase check', () => {
-    const node = makeNode({ pouName: 'gvl', variablePath: 'B' })
-    expect(resolveVariableIndex(node, [dv('CONFIG0__B', 'BOOL_ENUM', 0)], [])).toBe(0)
+  it('matches case-insensitively', () => {
+    const node = makeNode({ pouName: 'gvl', variablePath: 'b' })
+    expect(resolveVariableAddress(node, [dv('B', 'BOOL', 0, 7)], [])).toEqual({ arr: 0, elem: 7 })
   })
 
-  it('throws OpcUaConfigError when global variable not found (line 83)', () => {
+  it('throws when global variable not found', () => {
     const node = makeNode({ pouName: 'GVL', variablePath: 'MISSING' })
-    expect(() => resolveVariableIndex(node, [], [])).toThrow(OpcUaConfigError)
-    expect(() => resolveVariableIndex(node, [], [])).toThrow('Cannot resolve OPC-UA global variable index')
+    expect(() => resolveVariableAddress(node, [], [])).toThrow(OpcUaConfigError)
   })
 
-  it('resolves program variable via instance (FB-style match)', () => {
-    const node = makeNode({ pouName: 'MAIN', variablePath: 'COUNTER' })
+  it('resolves an instance variable', () => {
+    const node = makeNode({ pouName: 'MAIN', variablePath: 'MOTOR_SPEED' })
     expect(
-      resolveVariableIndex(node, [dv('RES0__INSTANCE0.COUNTER', 'INT_ENUM', 10)], [inst('INSTANCE0', 'MAIN')]),
-    ).toBe(10)
+      resolveVariableAddress(node, [dv('INSTANCE0.MOTOR_SPEED', 'INT', 0, 11)], [inst('INSTANCE0', 'MAIN')]),
+    ).toEqual({ arr: 0, elem: 11 })
   })
 
-  it('resolves program variable via struct-style fallback', () => {
-    const node = makeNode({ pouName: 'MAIN', variablePath: 'S.F' })
+  it('resolves a nested-path instance variable (struct/FB field)', () => {
+    const node = makeNode({ pouName: 'MAIN', variablePath: 'SENSOR.VALUE' })
     expect(
-      resolveVariableIndex(node, [dv('RES0__INSTANCE0.S.value.F', 'INT_ENUM', 42)], [inst('INSTANCE0', 'MAIN')]),
-    ).toBe(42)
+      resolveVariableAddress(node, [dv('INSTANCE0.SENSOR.VALUE', 'REAL', 0, 25)], [inst('INSTANCE0', 'MAIN')]),
+    ).toEqual({ arr: 0, elem: 25 })
   })
 
-  it('throws when instance not found for program', () => {
-    const node = makeNode({ pouName: 'NO_PROG', variablePath: 'X' })
-    expect(() => resolveVariableIndex(node, [], [])).toThrow(OpcUaConfigError)
-    expect(() => resolveVariableIndex(node, [], [])).toThrow('Cannot find instance for program')
+  it('preserves array brackets in path segments', () => {
+    const node = makeNode({ pouName: 'MAIN', variablePath: 'PROFILES[3]' })
+    expect(
+      resolveVariableAddress(node, [dv('INSTANCE0.PROFILES[3]', 'INT', 0, 30)], [inst('INSTANCE0', 'MAIN')]),
+    ).toEqual({ arr: 0, elem: 30 })
   })
 
-  it('throws when variable path not found after fallback', () => {
-    const node = makeNode({ pouName: 'MAIN', variablePath: 'MISSING' })
-    expect(() =>
-      resolveVariableIndex(node, [dv('RES0__INSTANCE0.OTHER', 'INT_ENUM', 0)], [inst('INSTANCE0', 'MAIN')]),
-    ).toThrow('Cannot resolve OPC-UA variable index')
+  it('throws when instance not found in resources', () => {
+    const node = makeNode({ pouName: 'UNKNOWN' })
+    expect(() => resolveVariableAddress(node, [], [])).toThrow('Cannot find instance for program')
+  })
+
+  it('throws when instance variable path does not match a leaf', () => {
+    const node = makeNode({ pouName: 'MAIN', variablePath: 'GHOST' })
+    expect(() => resolveVariableAddress(node, [], [inst('INSTANCE0', 'MAIN')])).toThrow(
+      'Cannot resolve OPC-UA variable address',
+    )
   })
 })
 
-// ---------------------------------------------------------------------------
-// resolveStructureIndices
-// ---------------------------------------------------------------------------
-
-describe('resolveStructureIndices', () => {
-  it('falls back to resolveVariableIndex when no fields (lines 225-226)', () => {
-    const node = makeNode({ nodeType: 'structure', variablePath: 'MY_FB', variableType: 'FB_T' })
-    const result = resolveStructureIndices(
+describe('resolveStructureAddresses', () => {
+  it('falls back to single-variable resolve when no fields are configured', () => {
+    const node = makeNode({ nodeType: 'structure', variablePath: 'STRUCT' })
+    const result = resolveStructureAddresses(
       node,
-      [dv('RES0__INSTANCE0.MY_FB', 'INT_ENUM', 7)],
+      [dv('INSTANCE0.STRUCT', 'INT', 0, 9)],
       [inst('INSTANCE0', 'MAIN')],
     )
     expect(result).toHaveLength(1)
-    expect(result[0]).toMatchObject({ name: 'MY_FB', datatype: 'FB_T', index: 7 })
+    expect(result[0]).toEqual({ name: 'STRUCT', datatype: 'INT', arr: 0, elem: 9, permissions: perm })
   })
 
-  it('throws when instance not found for program with fields (line 242)', () => {
+  it('throws when instance not found and fields are present', () => {
     const node = makeNode({ nodeType: 'structure', pouName: 'UNK', variablePath: 'S', fields: [makeField()] })
-    expect(() => resolveStructureIndices(node, [], [])).toThrow('Cannot find instance for program')
+    expect(() => resolveStructureAddresses(node, [], [])).toThrow('Cannot find instance for program')
   })
 
   it('resolves leaf fields for a structure', () => {
     const node = makeNode({
       nodeType: 'structure',
-      variablePath: 'MY_STRUCT',
+      variablePath: 'S',
       fields: [
-        makeField({ fieldPath: 'X', datatype: 'INT'}),
-        makeField({ fieldPath: 'Y', datatype: 'REAL'}),
+        makeField({ fieldPath: 'X', datatype: 'INT' }),
+        makeField({ fieldPath: 'Y', datatype: 'REAL' }),
       ],
     })
-    const result = resolveStructureIndices(
+    const result = resolveStructureAddresses(
       node,
-      [dv('RES0__INSTANCE0.MY_STRUCT.X', 'INT_ENUM', 3), dv('RES0__INSTANCE0.MY_STRUCT.Y', 'REAL_ENUM', 4)],
+      [dv('INSTANCE0.S.X', 'INT', 0, 3), dv('INSTANCE0.S.Y', 'REAL', 0, 4)],
       [inst('INSTANCE0', 'MAIN')],
     )
     expect(result).toHaveLength(2)
-    expect(result[0]).toMatchObject({ name: 'X', index: 3, datatype: 'INT' })
-    expect(result[1]).toMatchObject({ name: 'Y', index: 4, datatype: 'REAL' })
+    expect(result[0]).toMatchObject({ name: 'X', arr: 0, elem: 3, datatype: 'INT' })
+    expect(result[1]).toMatchObject({ name: 'Y', arr: 0, elem: 4, datatype: 'REAL' })
   })
 
-  it('resolves nested fields recursively (lines 153-159)', () => {
+  it('resolves nested fields recursively (FB inside FB)', () => {
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'MY_FB',
@@ -151,99 +152,45 @@ describe('resolveStructureIndices', () => {
           fieldPath: 'TON0',
           datatype: 'TON',
           fields: [
-            makeField({ fieldPath: 'IN', datatype: 'BOOL'}),
-            makeField({ fieldPath: 'ET', datatype: 'TIME'}),
+            makeField({ fieldPath: 'IN', datatype: 'BOOL' }),
+            makeField({ fieldPath: 'ET', datatype: 'TIME' }),
           ],
         }),
       ],
     })
-    const result = resolveStructureIndices(
+    const result = resolveStructureAddresses(
       node,
-      [dv('RES0__INSTANCE0.MY_FB.TON0.IN', 'BOOL_ENUM', 10), dv('RES0__INSTANCE0.MY_FB.TON0.ET', 'TIME_ENUM', 11)],
+      [dv('INSTANCE0.MY_FB.TON0.IN', 'BOOL', 0, 10), dv('INSTANCE0.MY_FB.TON0.ET', 'TIME', 0, 11)],
       [inst('INSTANCE0', 'MAIN')],
     )
     expect(result).toHaveLength(1)
-    expect(result[0].index).toBeNull()
+    expect(result[0].arr).toBeNull()
+    expect(result[0].elem).toBeNull()
     expect(result[0].fields).toHaveLength(2)
-    expect(result[0].fields![0]).toMatchObject({ name: 'IN', index: 10, datatype: 'BOOL' })
-    expect(result[0].fields![1]).toMatchObject({ name: 'ET', index: 11, datatype: 'TIME' })
+    expect(result[0].fields![0]).toMatchObject({ name: 'IN', arr: 0, elem: 10, datatype: 'BOOL' })
+    expect(result[0].fields![1]).toMatchObject({ name: 'ET', arr: 0, elem: 11, datatype: 'TIME' })
   })
 
-  it('defaults complex type datatype to UNKNOWN when no datatype set', () => {
-    const node = makeNode({
-      nodeType: 'structure',
-      variablePath: 'FB',
-      fields: [
-        makeField({
-          fieldPath: 'INNER',
-          // datatype intentionally missing
-          fields: [makeField({ fieldPath: 'L', datatype: 'BOOL'})],
-        }),
-      ],
-    })
-    const result = resolveStructureIndices(
-      node,
-      [dv('RES0__INSTANCE0.FB.INNER.L', 'BOOL_ENUM', 99)],
-      [inst('INSTANCE0', 'MAIN')],
-    )
-    expect(result[0].datatype).toBe('UNKNOWN')
-    expect(result[0].index).toBeNull()
-  })
-
-  it('resolves global structure fields (pouName = GVL) (lines 175-176)', () => {
-    const node = makeNode({
-      nodeType: 'structure',
-      pouName: 'GVL',
-      variablePath: 'GS',
-      fields: [makeField({ fieldPath: 'V', datatype: 'BOOL'})],
-    })
-    const result = resolveStructureIndices(node, [dv('CONFIG0__GS.V', 'BOOL_ENUM', 20)], [])
-    expect(result[0]).toMatchObject({ name: 'V', index: 20, datatype: 'BOOL' })
-  })
-
-  it('resolves CONFIG pouName structure fields (skips instance lookup)', () => {
-    const node = makeNode({
-      nodeType: 'structure',
-      pouName: 'CONFIG',
-      variablePath: 'CS',
-      fields: [makeField({ fieldPath: 'W', datatype: 'INT'})],
-    })
-    const result = resolveStructureIndices(node, [dv('CONFIG0__CS.W', 'INT_ENUM', 30)], [])
-    expect(result[0]).toMatchObject({ name: 'W', index: 30, datatype: 'INT' })
-  })
-
-  it('throws when a leaf field cannot be resolved (line 185)', () => {
+  it('throws when a field cannot be resolved', () => {
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'S',
-      fields: [makeField({ fieldPath: 'MISSING' })],
+      fields: [makeField({ fieldPath: 'GHOST', datatype: 'INT' })],
     })
-    expect(() => resolveStructureIndices(node, [], [inst('INSTANCE0', 'MAIN')])).toThrow(
-      'Cannot resolve OPC-UA structure/FB field index',
-    )
-  })
-
-  it('uses struct-style fallback for leaf field resolution', () => {
-    const node = makeNode({
-      nodeType: 'structure',
-      variablePath: 'S',
-      fields: [makeField({ fieldPath: 'A', datatype: 'DINT'})],
-    })
-    const result = resolveStructureIndices(
-      node,
-      [dv('RES0__INSTANCE0.S.value.A', 'DINT_ENUM', 55)],
-      [inst('INSTANCE0', 'MAIN')],
-    )
-    expect(result[0]).toMatchObject({ name: 'A', index: 55, datatype: 'DINT' })
+    expect(() => resolveStructureAddresses(node, [], [inst('INSTANCE0', 'MAIN')])).toThrow(OpcUaConfigError)
   })
 
   it('uses field datatype when debug entry has empty type string', () => {
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'S',
-      fields: [makeField({ fieldPath: 'B', datatype: 'REAL'})],
+      fields: [makeField({ fieldPath: 'B', datatype: 'REAL' })],
     })
-    const result = resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.B', '', 60)], [inst('INSTANCE0', 'MAIN')])
+    const result = resolveStructureAddresses(
+      node,
+      [dv('INSTANCE0.S.B', '', 0, 60)],
+      [inst('INSTANCE0', 'MAIN')],
+    )
     expect(result[0].datatype).toBe('REAL')
   })
 
@@ -251,78 +198,50 @@ describe('resolveStructureIndices', () => {
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'S',
-      fields: [makeField({ fieldPath: 'C'})],
+      fields: [makeField({ fieldPath: 'C' })],
     })
-    const result = resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.C', '', 61)], [inst('INSTANCE0', 'MAIN')])
+    const result = resolveStructureAddresses(
+      node,
+      [dv('INSTANCE0.S.C', '', 0, 61)],
+      [inst('INSTANCE0', 'MAIN')],
+    )
     expect(result[0].datatype).toBe('UNKNOWN')
   })
-})
 
-// ---------------------------------------------------------------------------
-// debugTypeToIecType (tested indirectly through field resolution)
-// ---------------------------------------------------------------------------
-
-describe('debugTypeToIecType (indirect)', () => {
-  const resolveLeaf = (debugType: string) => {
+  it('resolves global structure fields via plain path', () => {
     const node = makeNode({
       nodeType: 'structure',
-      variablePath: 'S',
-      fields: [makeField({ fieldPath: 'F'})],
+      pouName: 'GVL',
+      variablePath: 'GLOBAL_STRUCT',
+      fields: [makeField({ fieldPath: 'F', datatype: 'INT' })],
     })
-    return resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.F', debugType, 0)], [inst('INSTANCE0', 'MAIN')])[0]
-      .datatype
-  }
-
-  it('strips _ENUM suffix', () => {
-    expect(resolveLeaf('DINT_ENUM')).toBe('DINT')
-  })
-
-  it('strips _P_ENUM suffix (pointer type)', () => {
-    expect(resolveLeaf('INT_P_ENUM')).toBe('INT')
-  })
-
-  it('strips _O_ENUM suffix (output type)', () => {
-    expect(resolveLeaf('BOOL_O_ENUM')).toBe('BOOL')
-  })
-
-  it('returns original type when no known suffix', () => {
-    expect(resolveLeaf('CUSTOM')).toBe('CUSTOM')
+    const result = resolveStructureAddresses(node, [dv('GLOBAL_STRUCT.F', 'INT', 0, 80)], [])
+    expect(result[0]).toMatchObject({ name: 'F', arr: 0, elem: 80 })
   })
 })
 
-// ---------------------------------------------------------------------------
-// resolveArrayIndex
-// ---------------------------------------------------------------------------
-
-describe('resolveArrayIndex', () => {
-  it('resolves a global array (GVL)', () => {
-    const node = makeNode({ nodeType: 'array', pouName: 'GVL', variablePath: 'ARR', arrayLength: 10 })
-    expect(resolveArrayIndex(node, [dv('CONFIG0__ARR.value.table[0]', 'INT_ENUM', 100)], [])).toBe(100)
-  })
-
-  it('resolves a CONFIG array', () => {
-    const node = makeNode({ nodeType: 'array', pouName: 'CONFIG', variablePath: 'CA', arrayLength: 5 })
-    expect(resolveArrayIndex(node, [dv('CONFIG0__CA.value.table[0]', 'BOOL_ENUM', 50)], [])).toBe(50)
-  })
-
-  it('resolves a program array (line 281)', () => {
-    const node = makeNode({ nodeType: 'array', variablePath: 'SPEEDS', arrayLength: 3 })
+describe('resolveArrayAddress', () => {
+  it('resolves the first element of an instance array', () => {
+    const node = makeNode({ nodeType: 'array', variablePath: 'PROFILE', arrayLength: 5 })
     expect(
-      resolveArrayIndex(
-        node,
-        [dv('RES0__INSTANCE0.SPEEDS.value.table[0]', 'INT_ENUM', 200)],
-        [inst('INSTANCE0', 'MAIN')],
-      ),
-    ).toBe(200)
+      resolveArrayAddress(node, [dv('INSTANCE0.PROFILE[0]', 'INT', 0, 100)], [inst('INSTANCE0', 'MAIN')]),
+    ).toEqual({ arr: 0, elem: 100 })
   })
 
-  it('throws when instance not found for program array (line 287)', () => {
-    const node = makeNode({ nodeType: 'array', pouName: 'MISSING', variablePath: 'A', arrayLength: 5 })
-    expect(() => resolveArrayIndex(node, [], [])).toThrow('Cannot find instance for program')
+  it('resolves the first element of a global array', () => {
+    const node = makeNode({ nodeType: 'array', pouName: 'GVL', variablePath: 'TABLE', arrayLength: 4 })
+    expect(resolveArrayAddress(node, [dv('TABLE[0]', 'REAL', 1, 7)], [])).toEqual({ arr: 1, elem: 7 })
   })
 
-  it('throws when array first element not found (line 307)', () => {
-    const node = makeNode({ nodeType: 'array', variablePath: 'MISSING_ARR', arrayLength: 5 })
-    expect(() => resolveArrayIndex(node, [], [inst('INSTANCE0', 'MAIN')])).toThrow('Cannot resolve OPC-UA array index')
+  it('throws when instance not found', () => {
+    const node = makeNode({ nodeType: 'array', pouName: 'NOPE', variablePath: 'A' })
+    expect(() => resolveArrayAddress(node, [], [])).toThrow('Cannot find instance for program')
+  })
+
+  it('throws when array first element not in debug map', () => {
+    const node = makeNode({ nodeType: 'array', variablePath: 'GHOST_ARR' })
+    expect(() => resolveArrayAddress(node, [], [inst('INSTANCE0', 'MAIN')])).toThrow(
+      'Cannot resolve OPC-UA array address',
+    )
   })
 })

@@ -9,7 +9,12 @@ import type {
 } from '@root/middleware/shared/ports/open-plc-types'
 
 import { getErrorMessage } from '../get-error-message'
-import { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from './resolve-indices'
+import {
+  OpcUaConfigError,
+  resolveArrayAddress,
+  resolveStructureAddresses,
+  resolveVariableAddress,
+} from './resolve-indices'
 import type { DebugVariable, PLCInstanceInfo } from './types'
 
 /**
@@ -66,16 +71,19 @@ interface RuntimeVariable {
   display_name: string
   datatype: string
   description: string
-  index: number
+  arr: number
+  elem: number
   permissions: RuntimeVariablePermissions
 }
 
 interface RuntimeStructureField {
   name: string
   datatype: string
-  index: number | null // null for complex types that have nested fields
+  // null for complex types that have nested fields
+  arr: number | null
+  elem: number | null
   permissions: RuntimeVariablePermissions
-  fields?: RuntimeStructureField[] // Nested fields for complex types (FBs, structs)
+  fields?: RuntimeStructureField[]
 }
 
 interface RuntimeStructure {
@@ -92,7 +100,8 @@ interface RuntimeArray {
   display_name: string
   datatype: string
   length: number
-  index: number
+  arr: number
+  elem: number
   permissions: RuntimeVariablePermissions
 }
 
@@ -190,7 +199,7 @@ const resolveVariable = (
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
 ): RuntimeVariable => {
-  const index = resolveVariableIndex(node, debugVariables, instances)
+  const addr = resolveVariableAddress(node, debugVariables, instances)
 
   return {
     node_id: node.nodeId,
@@ -198,7 +207,8 @@ const resolveVariable = (
     display_name: node.displayName,
     datatype: node.variableType,
     description: node.description,
-    index,
+    arr: addr.arr,
+    elem: addr.elem,
     permissions: convertPermissions(node.permissions),
   }
 }
@@ -209,14 +219,16 @@ const resolveVariable = (
 const convertResolvedFieldToRuntime = (field: {
   name: string
   datatype: string
-  index: number | null
+  arr: number | null
+  elem: number | null
   permissions: { viewer: 'r' | 'w' | 'rw'; operator: 'r' | 'w' | 'rw'; engineer: 'r' | 'w' | 'rw' }
   fields?: (typeof field)[]
 }): RuntimeStructureField => {
   const runtimeField: RuntimeStructureField = {
     name: field.name,
     datatype: field.datatype,
-    index: field.index,
+    arr: field.arr,
+    elem: field.elem,
     permissions: convertPermissions(field.permissions),
   }
 
@@ -229,7 +241,7 @@ const convertResolvedFieldToRuntime = (field: {
 }
 
 /**
- * Resolve a structure and build runtime format with field indices.
+ * Resolve a structure and build runtime format with field addresses.
  * Supports nested fields for complex types (FBs within FBs, structs within structs).
  */
 const resolveStructure = (
@@ -237,7 +249,7 @@ const resolveStructure = (
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
 ): RuntimeStructure => {
-  const resolvedFields = resolveStructureIndices(node, debugVariables, instances)
+  const resolvedFields = resolveStructureAddresses(node, debugVariables, instances)
 
   return {
     node_id: node.nodeId,
@@ -265,7 +277,7 @@ const resolveArray = (
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
 ): RuntimeArray => {
-  const index = resolveArrayIndex(node, debugVariables, instances)
+  const addr = resolveArrayAddress(node, debugVariables, instances)
 
   // Get the element type - prefer explicit elementType, otherwise extract from variableType
   let datatype = node.elementType
@@ -280,7 +292,8 @@ const resolveArray = (
     display_name: node.displayName,
     datatype,
     length: node.arrayLength || 1,
-    index,
+    arr: addr.arr,
+    elem: addr.elem,
     permissions: convertPermissions(node.permissions),
   }
 }
@@ -347,56 +360,71 @@ const buildAddressSpace = (
 }
 
 /**
- * Parse the debug.c file content to extract debug variables
+ * Shape of debug-map.json as produced by STruC++
+ * (src/backend/debug-table-gen.ts → DebugMapV2). Re-declared here so
+ * the editor doesn't take a build dependency on strucpp's TS types.
  */
-export const parseDebugFile = (content: string): DebugVariable[] => {
-  const variables: DebugVariable[] = []
+interface DebugMapV2 {
+  version: 2
+  md5: string
+  typeTags: Record<string, number>
+  arrays: Array<{ index: number; count: number }>
+  leaves: Array<{
+    arrayIdx: number
+    elemIdx: number
+    path: string
+    type: string
+    size: number
+  }>
+}
 
-  // Find the debug_vars[] array
-  const debugVarsMatch = content.match(/debug_vars\[\]\s*=\s*\{([\s\S]*?)\};/)
-
-  if (!debugVarsMatch) {
-    console.warn('Could not find debug_vars[] array in debug.c')
+/**
+ * Parse debug-map.json content into the leaves array consumed by the
+ * resolver. Replaces the old MatIEC `parseDebugFile` which regex-
+ * scanned debug.c.
+ */
+export const parseDebugMap = (content: string): DebugVariable[] => {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    console.warn('debug-map.json is not valid JSON')
+    return []
+  }
+  // Minimal structural validation. A wrong shape almost always means
+  // the file is from a different strucpp version — fail loud.
+  if (!parsed || typeof parsed !== 'object') return []
+  const map = parsed as Partial<DebugMapV2>
+  if (map.version !== 2 || !Array.isArray(map.leaves)) {
+    console.warn(
+      `debug-map.json: unexpected version (${String(map.version)}). ` +
+        `OPC-UA expects DebugMapV2 — re-run strucpp.`,
+    )
     return []
   }
 
-  const arrayContent = debugVarsMatch[1]
-
-  // Parse each entry: { &(VARIABLE_PATH), TYPE }
-  const entryRegex = /\{\s*&\(([^)]+)\)\s*,\s*(\w+)\s*\}/g
-
-  let match
-  let index = 0
-
-  while ((match = entryRegex.exec(arrayContent)) !== null) {
-    const fullPath = match[1].trim()
-    const type = match[2].trim()
-
-    variables.push({
-      name: fullPath,
-      type,
-      index,
-    })
-
-    index++
-  }
-
-  return variables
+  return map.leaves.map((leaf) => ({
+    path: leaf.path,
+    type: leaf.type,
+    arr: leaf.arrayIdx,
+    elem: leaf.elemIdx,
+    size: leaf.size,
+  }))
 }
 
 /**
  * Generates the OPC-UA configuration JSON for the runtime plugin.
- * Converts camelCase properties to snake_case expected by the C plugin.
- * Resolves variable indices from the debug.c file.
+ * Converts camelCase properties to snake_case expected by the plugin.
+ * Resolves variable addresses from STruC++'s debug-map.json.
  *
  * @param servers - Array of configured PLC servers
- * @param debugFileContent - Content of the generated debug.c file
+ * @param debugMapContent - Content of the generated debug-map.json file
  * @param instances - Array of PLC instances from Resources configuration
  * @returns JSON string for opcua.json or null if no enabled OPC-UA server
  */
 export const generateOpcUaConfig = (
   servers: PLCServer[] | undefined,
-  debugFileContent: string,
+  debugMapContent: string,
   instances: PLCInstanceInfo[],
 ): string | null => {
   // 1. Find OPC-UA server configuration
@@ -412,14 +440,14 @@ export const generateOpcUaConfig = (
 
   const config = opcuaServer.opcuaServerConfig
 
-  // 2. Parse debug.c to get variable indices
-  const debugVariables = parseDebugFile(debugFileContent)
+  // 2. Parse debug-map.json to get variable addresses
+  const debugVariables = parseDebugMap(debugMapContent)
 
   if (debugVariables.length === 0 && config.addressSpace.nodes.length > 0) {
     throw new OpcUaConfigError(
-      'debug.c',
-      'debug_vars[]',
-      'Cannot resolve OPC-UA variable indices: debug.c appears to be empty or invalid.\n' +
+      'debug-map.json',
+      'leaves[]',
+      'Cannot resolve OPC-UA variable addresses: debug-map.json is empty or invalid.\n' +
         'This may happen if the PLC program compilation failed.',
     )
   }
@@ -447,7 +475,7 @@ export const generateOpcUaConfig = (
  */
 export const validateOpcUaConfig = (
   config: OpcUaServerConfig,
-  debugFileContent: string,
+  debugMapContent: string,
   instances: PLCInstanceInfo[],
 ): { valid: boolean; errors: string[] } => {
   const errors: string[] = []
@@ -465,23 +493,22 @@ export const validateOpcUaConfig = (
   }
 
   // Try to resolve all variables
-  const debugVariables = parseDebugFile(debugFileContent)
+  const debugVariables = parseDebugMap(debugMapContent)
 
   for (const node of config.addressSpace.nodes) {
     try {
       switch (node.nodeType) {
         case 'variable':
-          resolveVariableIndex(node, debugVariables, instances)
+          resolveVariableAddress(node, debugVariables, instances)
           break
         case 'structure':
-          resolveStructureIndices(node, debugVariables, instances)
+          resolveStructureAddresses(node, debugVariables, instances)
           break
         case 'array':
-          // Arrays with fields (complex element types) are validated like structures
           if (node.fields && node.fields.length > 0) {
-            resolveStructureIndices(node, debugVariables, instances)
+            resolveStructureAddresses(node, debugVariables, instances)
           } else {
-            resolveArrayIndex(node, debugVariables, instances)
+            resolveArrayAddress(node, debugVariables, instances)
           }
           break
       }

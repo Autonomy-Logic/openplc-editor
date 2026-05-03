@@ -1,22 +1,26 @@
 /**
- * MatIEC-format debug path helpers — OPC-UA module only.
+ * STruC++ debug-path helpers — OPC-UA module only.
  *
- * The OPC-UA integration still consumes the MatIEC-style `debug.c` format
- * (flat debug_vars[] array with `RES0__` / `CONFIG0__` prefixes and
- * `.value.` field shims). Keep these helpers local to the OPC-UA module so
- * the shared debugger path (which moved to STruC++'s cleaner convention in
- * debug-variable-finder) can evolve independently.
+ * STruC++ emits hierarchical leaf paths in debug-map.json under a single
+ * convention: `<INSTANCE_NAME>.<MEMBER>...`, all uppercase, with `[i]`
+ * for array elements and `.` for struct/FB members. There's no
+ * `RES0__` / `CONFIG0__` prefix and no `.value.` shim — the codegen
+ * walks fields uniformly regardless of FB vs struct, so callers no
+ * longer need a fallback.
+ *
+ * Globals (VAR_GLOBAL in the CONFIG block) live at the top level of
+ * the project model and are addressed by their plain name (no
+ * instance prefix). The editor distinguishes them via the pseudo-
+ * pouName "GVL" / "CONFIG" (the same convention used by the
+ * variable-tree builder).
  */
 
-export type { DebugVariableEntry } from '../debug-parser'
-import type { DebugVariableEntry } from '../debug-parser'
+import type { DebugVariable } from './types'
 
 export interface PLCInstanceMapping {
   name: string
   program: string
 }
-
-const isArrayIndex = (part: string): boolean => /^\[\d+\]$/.test(part)
 
 export function findInstanceName(
   pouName: string,
@@ -26,75 +30,47 @@ export function findInstanceName(
   return inst ? inst.name : null
 }
 
-export function buildDebugPath(
-  instanceName: string,
-  variablePath: string,
-  options: {
-    isStructureField?: boolean
-    isArrayElement?: boolean
-    arrayIndex?: number
-  } = {},
-): string {
-  const { isStructureField = false, isArrayElement = false, arrayIndex = 0 } = options
-  const pathParts = variablePath.split('.')
-  let debugPath = `RES0__${instanceName.toUpperCase()}`
-
-  if (isArrayElement && pathParts.length === 1) {
-    debugPath += `.${pathParts[0].toUpperCase()}.value.table[${arrayIndex}]`
-  } else if (isStructureField) {
-    debugPath += `.${pathParts[0].toUpperCase()}`
-    for (let i = 1; i < pathParts.length; i++) {
-      const part = pathParts[i]
-      if (isArrayIndex(part)) {
-        debugPath += `.value.table${part}`
-      } else {
-        debugPath += `.value.${part.toUpperCase()}`
-      }
-    }
-  } else {
-    for (const part of pathParts) {
-      if (isArrayIndex(part)) {
-        debugPath += `.value.table${part}`
-      } else {
-        debugPath += `.${part.toUpperCase()}`
-      }
-    }
-  }
-  return debugPath
+/**
+ * Build the leaf path for a per-instance variable.
+ * STruC++ walks variable paths uniformly (no FB/struct distinction),
+ * so this is a straightforward `<INSTANCE>.<PATH>` join with each
+ * dot-segment uppercased and array brackets passed through.
+ */
+export function buildDebugPath(instanceName: string, variablePath: string): string {
+  const parts = variablePath.split('.')
+  const upper = parts.map((p) => {
+    // Preserve trailing [N] on a segment but uppercase the name part.
+    const m = p.match(/^([^[]+)(\[\d+\])?$/)
+    if (!m) return p.toUpperCase()
+    return m[1].toUpperCase() + (m[2] ?? '')
+  })
+  return [instanceName.toUpperCase(), ...upper].join('.')
 }
 
+/**
+ * Build the leaf path for a global variable. STruC++'s leaves table
+ * keys globals by their bare name (uppercased) — no instance prefix.
+ */
 export function buildGlobalDebugPath(variablePath: string): string {
-  return `CONFIG0__${variablePath.toUpperCase()}`
+  const parts = variablePath.split('.')
+  return parts
+    .map((p) => {
+      const m = p.match(/^([^[]+)(\[\d+\])?$/)
+      if (!m) return p.toUpperCase()
+      return m[1].toUpperCase() + (m[2] ?? '')
+    })
+    .join('.')
 }
 
+/**
+ * Look up a leaf in debug-map.json's leaves[] by exact path match
+ * (case-insensitive — paths are uppercased by the codegen but caller
+ * input may not be). Returns null if not found.
+ */
 export function findDebugVariable(
-  debugVariables: DebugVariableEntry[],
+  debugVariables: DebugVariable[],
   expectedPath: string,
-): DebugVariableEntry | null {
+): DebugVariable | null {
   const upperPath = expectedPath.toUpperCase()
-  return debugVariables.find((dv) => dv.name.toUpperCase() === upperPath) || null
-}
-
-export interface DebugVariableFallbackResult {
-  match: DebugVariableEntry | null
-  matchedPath: string
-  usedStructureStyle: boolean
-}
-
-export function findDebugVariableWithFallback(
-  debugVariables: DebugVariableEntry[],
-  instanceName: string,
-  fieldPath: string,
-): DebugVariableFallbackResult {
-  const fbPath = buildDebugPath(instanceName, fieldPath, { isStructureField: false })
-  const fbMatch = findDebugVariable(debugVariables, fbPath)
-  if (fbMatch) {
-    return { match: fbMatch, matchedPath: fbPath, usedStructureStyle: false }
-  }
-  const structPath = buildDebugPath(instanceName, fieldPath, { isStructureField: true })
-  const structMatch = findDebugVariable(debugVariables, structPath)
-  if (structMatch) {
-    return { match: structMatch, matchedPath: structPath, usedStructureStyle: true }
-  }
-  return { match: null, matchedPath: fbPath, usedStructureStyle: false }
+  return debugVariables.find((dv) => dv.path.toUpperCase() === upperPath) ?? null
 }

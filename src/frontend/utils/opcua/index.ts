@@ -20,6 +20,12 @@ export type {
   RuntimeVariable,
   RuntimeVariablePermissions,
 } from './generate-opcua-config'
-export { generateOpcUaConfig, parseDebugFile, validateOpcUaConfig } from './generate-opcua-config'
-export { OpcUaConfigError, resolveArrayIndex, resolveStructureIndices, resolveVariableIndex } from './resolve-indices'
+export { generateOpcUaConfig, parseDebugMap, validateOpcUaConfig } from './generate-opcua-config'
+export {
+  type LeafAddress,
+  OpcUaConfigError,
+  resolveArrayAddress,
+  resolveStructureAddresses,
+  resolveVariableAddress,
+} from './resolve-indices'
 export type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'

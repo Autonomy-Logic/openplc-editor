@@ -3,29 +3,20 @@ import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/
 import {
   buildDebugPath,
   buildGlobalDebugPath,
-  type DebugVariableEntry,
   findDebugVariable,
-  findDebugVariableWithFallback,
   findInstanceName,
   type PLCInstanceMapping,
 } from './debug-paths'
 import type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'
 
 /**
- * Convert debug.c type enum to IEC type name.
- * debug.c uses types like "INT_ENUM", "BOOL_ENUM", "REAL_ENUM"
- * but the OPC-UA runtime expects "INT", "BOOL", "REAL".
+ * Address of a leaf in the STruC++ debugger Entry tables. Replaces
+ * the MatIEC-era flat `index: number` with the (arr, elem) tuple
+ * exposed by the new debug surface (debug_dispatch.hpp).
  */
-const debugTypeToIecType = (debugType: string): string => {
-  // Remove _P_ENUM or _O_ENUM suffix for pointer/output types (check before _ENUM)
-  if (debugType.endsWith('_P_ENUM') || debugType.endsWith('_O_ENUM')) {
-    return debugType.slice(0, -7)
-  }
-  // Remove _ENUM suffix if present
-  if (debugType.endsWith('_ENUM')) {
-    return debugType.slice(0, -5)
-  }
-  return debugType
+export interface LeafAddress {
+  arr: number
+  elem: number
 }
 
 /**
@@ -42,56 +33,42 @@ export class OpcUaConfigError extends Error {
   }
 }
 
-/**
- * Convert PLCInstanceInfo to PLCInstanceMapping for the shared utility
- */
 const toInstanceMapping = (instances: PLCInstanceInfo[]): PLCInstanceMapping[] =>
   instances.map((inst) => ({ name: inst.name, program: inst.program }))
 
 /**
- * Convert DebugVariable to DebugVariableEntry for the shared utility
- */
-const toDebugEntries = (debugVariables: DebugVariable[]): DebugVariableEntry[] =>
-  debugVariables.map((dv) => ({ name: dv.name, type: dv.type, index: dv.index }))
-
-/**
- * Resolve the index for a simple variable node.
+ * Resolve the address for a simple variable node.
  *
  * @param node - The OPC-UA node configuration
- * @param debugVariables - Parsed debug variables from debug.c
- * @param instances - Array of PLC instances from Resources configuration
- * @returns The resolved index
+ * @param debugVariables - Leaves parsed from debug-map.json
+ * @param instances - PLC instances from Resources
+ * @returns The (arr, elem) address into the debugger Entry tables
  * @throws OpcUaConfigError if the variable cannot be resolved
  */
-export const resolveVariableIndex = (
+export const resolveVariableAddress = (
   node: OpcUaNodeConfig,
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
-): number => {
-  const debugEntries = toDebugEntries(debugVariables)
+): LeafAddress => {
   const instanceMappings = toInstanceMapping(instances)
 
-  // Handle global variables
+  // Globals — VAR_GLOBAL declared at the configuration level. The
+  // editor flags them with the pseudo-pouName "GVL" / "CONFIG".
   if (node.pouName === 'GVL' || node.pouName === 'CONFIG' || node.pouName.toUpperCase() === 'GVL') {
     const debugPath = buildGlobalDebugPath(node.variablePath)
-    const match = findDebugVariable(debugEntries, debugPath)
-
-    if (match) {
-      return match.index
-    }
+    const match = findDebugVariable(debugVariables, debugPath)
+    if (match) return { arr: match.arr, elem: match.elem }
 
     throw new OpcUaConfigError(
       `${node.pouName}:${node.variablePath}`,
       debugPath,
-      `Cannot resolve OPC-UA global variable index.\n` +
+      `Cannot resolve OPC-UA global variable address.\n` +
         `  Variable: ${node.pouName}:${node.variablePath}\n` +
         `  Expected debug path: ${debugPath}`,
     )
   }
 
-  // Look up the instance name for this program
   const instanceName = findInstanceName(node.pouName, instanceMappings)
-
   if (!instanceName) {
     throw new OpcUaConfigError(
       node.pouName,
@@ -101,21 +78,16 @@ export const resolveVariableIndex = (
     )
   }
 
-  // Use shared fallback function - tries FB-style first, then struct-style
-  const result = findDebugVariableWithFallback(debugEntries, instanceName, node.variablePath)
-
-  if (result.match) {
-    return result.match.index
-  }
+  const debugPath = buildDebugPath(instanceName, node.variablePath)
+  const match = findDebugVariable(debugVariables, debugPath)
+  if (match) return { arr: match.arr, elem: match.elem }
 
   throw new OpcUaConfigError(
     `${node.pouName}:${node.variablePath}`,
-    result.matchedPath,
-    `Cannot resolve OPC-UA variable index.\n` +
+    debugPath,
+    `Cannot resolve OPC-UA variable address.\n` +
       `  Variable: ${node.pouName}:${node.variablePath}\n` +
-      `  Tried paths:\n` +
-      `    - FB style: ${buildDebugPath(instanceName, node.variablePath, { isStructureField: false })}\n` +
-      `    - Struct style: ${buildDebugPath(instanceName, node.variablePath, { isStructureField: true })}\n` +
+      `  Expected debug path: ${debugPath}\n` +
       `  This may happen if:\n` +
       `    - The PLC program was modified after configuring OPC-UA\n` +
       `    - The variable name is incorrect\n` +
@@ -126,112 +98,85 @@ export const resolveVariableIndex = (
 
 /**
  * Resolve a single field, recursively handling nested fields for complex types.
- *
- * @param field - The field configuration
- * @param parentPath - The full path to the parent (e.g., "IRRIGATION_MAIN_CONTROLLER0")
- * @param pouName - The POU name (e.g., "MAIN" or "GVL")
- * @param debugEntries - Converted debug variable entries
- * @param instanceName - Instance name (null for global variables)
- * @returns Resolved field with index and possibly nested fields
  */
 const resolveFieldRecursively = (
   field: OpcUaFieldConfig,
   parentPath: string,
   pouName: string,
-  debugEntries: DebugVariableEntry[],
+  debugVariables: DebugVariable[],
   instanceName: string | null,
 ): ResolvedField => {
-  // Build the full path for this field.
-  // Note: This code path only processes new hierarchical configs where field.fieldPath
-  // contains just the field name (e.g., "TON0", "IN"). Legacy flat configs don't have
-  // nested `fields` arrays, so they won't reach this recursive function.
   const fullFieldPath = `${parentPath}.${field.fieldPath}`
 
-  // If this field has nested fields, it's a complex type (FB or struct)
+  // Complex type — only its leaves have addresses; the parent's own
+  // (arr, elem) is meaningless.
   if (field.fields && field.fields.length > 0) {
-    // Recursively resolve nested fields
-    const nestedFields: ResolvedField[] = []
-    for (const nestedField of field.fields) {
-      nestedFields.push(resolveFieldRecursively(nestedField, fullFieldPath, pouName, debugEntries, instanceName))
-    }
-
-    // Complex types have null index - only leaf fields have indices
+    const nestedFields: ResolvedField[] = field.fields.map((nestedField) =>
+      resolveFieldRecursively(nestedField, fullFieldPath, pouName, debugVariables, instanceName),
+    )
     return {
       name: field.fieldPath,
       datatype: field.datatype || 'UNKNOWN',
-      index: null,
+      arr: null,
+      elem: null,
       permissions: field.permissions,
       fields: nestedFields,
     }
   }
 
-  // This is a leaf field - resolve its index
-  let match: DebugVariableEntry | null = null
-  let debugPath: string = ''
-
-  if (pouName === 'GVL' || pouName === 'CONFIG') {
-    // Global structure/FB field
-    debugPath = buildGlobalDebugPath(fullFieldPath)
-    match = findDebugVariable(debugEntries, debugPath)
-  } else {
-    // Use shared fallback function - tries FB-style first, then struct-style
-    const result = findDebugVariableWithFallback(debugEntries, instanceName!, fullFieldPath)
-    match = result.match
-    debugPath = result.matchedPath
-  }
+  // Leaf field — resolve its address.
+  const debugPath =
+    pouName === 'GVL' || pouName === 'CONFIG'
+      ? buildGlobalDebugPath(fullFieldPath)
+      : buildDebugPath(instanceName!, fullFieldPath)
+  const match = findDebugVariable(debugVariables, debugPath)
 
   if (!match) {
     throw new OpcUaConfigError(
       `${pouName}:${fullFieldPath}`,
       debugPath,
-      `Cannot resolve OPC-UA structure/FB field index.\n` +
+      `Cannot resolve OPC-UA structure/FB field address.\n` +
         `  Field path: ${fullFieldPath}\n` +
-        `  Tried paths:\n` +
-        `    - FB style: ${buildDebugPath(instanceName!, fullFieldPath, { isStructureField: false })}\n` +
-        `    - Struct style: ${buildDebugPath(instanceName!, fullFieldPath, { isStructureField: true })}`,
+        `  Expected debug path: ${debugPath}`,
     )
   }
 
   return {
     name: field.fieldPath,
-    datatype: match.type ? debugTypeToIecType(match.type) : field.datatype || 'UNKNOWN',
-    index: match.index,
+    datatype: match.type || field.datatype || 'UNKNOWN',
+    arr: match.arr,
+    elem: match.elem,
     permissions: field.permissions,
   }
 }
 
 /**
- * Resolve indices for all fields in a structure or function block instance.
+ * Resolve addresses for all fields in a structure or function block instance.
  * Supports nested fields for complex types (FBs within FBs, structs within structs).
- *
- * @param node - The OPC-UA node configuration for the structure/FB
- * @param debugVariables - Parsed debug variables from debug.c
- * @param instances - Array of PLC instances from Resources configuration
- * @returns Array of resolved fields with indices (may be hierarchical)
- * @throws OpcUaConfigError if any field cannot be resolved
  */
-export const resolveStructureIndices = (
+export const resolveStructureAddresses = (
   node: OpcUaNodeConfig,
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
 ): ResolvedField[] => {
-  const debugEntries = toDebugEntries(debugVariables)
   const instanceMappings = toInstanceMapping(instances)
 
+  // No field configs — fall back to resolving the structure variable
+  // itself as a single leaf (only meaningful for arrays of base types
+  // disguised as "structure"; otherwise the resolver throws).
   if (!node.fields || node.fields.length === 0) {
-    // If no field configs, try to resolve the structure variable itself
-    const index = resolveVariableIndex(node, debugVariables, instances)
+    const addr = resolveVariableAddress(node, debugVariables, instances)
     return [
       {
         name: node.variablePath,
         datatype: node.variableType,
-        index,
+        arr: addr.arr,
+        elem: addr.elem,
         permissions: node.permissions,
       },
     ]
   }
 
-  // Look up the instance name for this program
   let instanceName: string | null = null
   if (node.pouName !== 'GVL' && node.pouName !== 'CONFIG') {
     instanceName = findInstanceName(node.pouName, instanceMappings)
@@ -244,42 +189,30 @@ export const resolveStructureIndices = (
     }
   }
 
-  const resolvedFields: ResolvedField[] = []
-
-  for (const field of node.fields) {
-    resolvedFields.push(resolveFieldRecursively(field, node.variablePath, node.pouName, debugEntries, instanceName))
-  }
-
-  return resolvedFields
+  return node.fields.map((field) =>
+    resolveFieldRecursively(field, node.variablePath, node.pouName, debugVariables, instanceName),
+  )
 }
 
 /**
- * Resolve the starting index for an array.
- * Arrays are stored sequentially, so we only need the first element's index.
- *
- * @param node - The OPC-UA node configuration for the array
- * @param debugVariables - Parsed debug variables from debug.c
- * @param instances - Array of PLC instances from Resources configuration
- * @returns The index of the first array element
- * @throws OpcUaConfigError if the array cannot be resolved
+ * Resolve the starting address for an array. Returns the (arr, elem)
+ * of the first element; all subsequent elements live at
+ * (arr, elem + i) within the same debug array (STruC++ guarantees
+ * contiguity for arrays up to 8000 elements per
+ * src/backend/debug-table-gen.ts).
  */
-export const resolveArrayIndex = (
+export const resolveArrayAddress = (
   node: OpcUaNodeConfig,
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
-): number => {
-  const debugEntries = toDebugEntries(debugVariables)
+): LeafAddress => {
   const instanceMappings = toInstanceMapping(instances)
 
   let debugPath: string
-
   if (node.pouName === 'GVL' || node.pouName === 'CONFIG') {
-    // Global array - first element: CONFIG0__VAR.value.table[0]
-    debugPath = `${buildGlobalDebugPath(node.variablePath)}.value.table[0]`
+    debugPath = `${buildGlobalDebugPath(node.variablePath)}[0]`
   } else {
-    // Look up the instance name for this program
     const instanceName = findInstanceName(node.pouName, instanceMappings)
-
     if (!instanceName) {
       throw new OpcUaConfigError(
         node.pouName,
@@ -287,24 +220,16 @@ export const resolveArrayIndex = (
         `Cannot find instance for program "${node.pouName}" in Resources.`,
       )
     }
-
-    // Instance array - first element
-    debugPath = buildDebugPath(instanceName, node.variablePath, {
-      isArrayElement: true,
-      arrayIndex: 0,
-    })
+    debugPath = `${buildDebugPath(instanceName, node.variablePath)}[0]`
   }
 
-  const match = findDebugVariable(debugEntries, debugPath)
-
-  if (match) {
-    return match.index
-  }
+  const match = findDebugVariable(debugVariables, debugPath)
+  if (match) return { arr: match.arr, elem: match.elem }
 
   throw new OpcUaConfigError(
     `${node.pouName}:${node.variablePath}`,
     debugPath,
-    `Cannot resolve OPC-UA array index.\n` +
+    `Cannot resolve OPC-UA array address.\n` +
       `  Array: ${node.pouName}:${node.variablePath}\n` +
       `  Expected debug path: ${debugPath}\n` +
       `  Looking for first element [0] of the array.`,
