@@ -51,6 +51,7 @@ type CompileArduinoProgramArgs = {
   boardHalsContent: HalsFile[string]
   compilationPath: string
   handleOutputData: HandleOutputDataCallback
+  cleanBuild?: boolean
 }
 
 class CompilerModule {
@@ -1005,6 +1006,7 @@ class CompilerModule {
     boardHalsContent,
     compilationPath,
     handleOutputData,
+    cleanBuild,
   }: CompileArduinoProgramArgs) {
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
@@ -1020,7 +1022,15 @@ class CompilerModule {
     // with the build-folder wipe at createBasicDirectories(), this
     // gives the same edit-one-POU-rebuild-fast behaviour that the
     // v4 runtime gets via ccache + make -j.
+    //
+    // --clean — invalidate arduino-cli's per-file cache for the
+    // selected sketch, forcing every TU to be recompiled from
+    // scratch. Wired to the "Clean build and upload" UI option.
     let buildProjectFlags = ['compile', '-v', '-j', '0']
+    if (cleanBuild) {
+      buildProjectFlags.push('--clean')
+      handleOutputData('Clean build requested — arduino-cli cache will be invalidated.', 'info')
+    }
 
     if (boardHalsContent['c_flags']) {
       buildProjectFlags = [
@@ -1432,7 +1442,16 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting compilation process...' })
     // INFO: We assume the first argument is the project path,
     // INFO: the second argument is the board target, and the third argument is the project data.
-    const [projectPath, boardTarget, boardCore, compileOnly, projectData, runtimeIpAddress, runtimeJwtToken] = args as [
+    const [
+      projectPath,
+      boardTarget,
+      boardCore,
+      compileOnly,
+      projectData,
+      runtimeIpAddress,
+      runtimeJwtToken,
+      cleanBuild,
+    ] = args as [
       string,
       string,
       string | null,
@@ -1440,6 +1459,7 @@ class CompilerModule {
       PLCProjectData,
       string | null,
       string | null,
+      boolean | undefined,
     ]
 
     const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
@@ -1793,7 +1813,11 @@ class CompilerModule {
             {
               hostname: runtimeIpAddress,
               port: 8443,
-              path: '/api/upload-file',
+              // ?clean=1 tells the runtime to wipe build/ and ccache
+              // before compiling — wired to the "Clean build and
+              // upload" UI option. Older runtimes that don't know
+              // about the flag simply ignore it.
+              path: cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file',
               method: 'POST',
               headers: {
                 'Content-Type': `multipart/form-data; boundary=${boundary}`,
@@ -2072,6 +2096,7 @@ class CompilerModule {
         boardTarget,
         boardHalsContent: halsContent[boardTarget],
         compilationPath,
+        cleanBuild: cleanBuild ?? false,
         handleOutputData: (data, logLevel) => {
           _mainProcessPort.postMessage({ logLevel, message: data })
         },

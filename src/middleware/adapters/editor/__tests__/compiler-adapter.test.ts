@@ -203,7 +203,7 @@ describe('createEditorCompilerAdapter', () => {
 
       expect(window.bridge.getAvailableBoards).toHaveBeenCalled()
       expect(window.bridge.runCompileProgram).toHaveBeenCalledWith(
-        ['/path/to/project', 'Arduino Mega', 'arduino:avr:mega', true, expect.any(Object), null, null],
+        ['/path/to/project', 'Arduino Mega', 'arduino:avr:mega', true, expect.any(Object), null, null, false],
         expect.any(Function),
       )
       expect(result).toEqual({ success: true, message: 'Compilation complete', hexPath: undefined })

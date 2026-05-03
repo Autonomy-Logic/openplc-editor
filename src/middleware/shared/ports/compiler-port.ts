@@ -40,6 +40,7 @@ export interface CompileProgramArgs {
   projectPath: string
   communicationPort?: string
   compileOnly?: boolean
+  cleanBuild?: boolean
   isSimulator?: boolean
   runtimeIpAddress?: string | null
   runtimeJwtToken?: string | null

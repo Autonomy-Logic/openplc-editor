@@ -10,11 +10,11 @@ import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
-import { isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target } from '../../../utils/device'
+import { isArduinoTarget, isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target } from '../../../utils/device'
 import { getErrorMessage } from '../../../utils/get-error-message'
+import { type BuildOption,BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
-import { DownloadButton } from '../../_molecules/workspace-activity-bar/default/download'
 import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play'
 import { SearchButton } from '../../_molecules/workspace-activity-bar/default/search'
 import { ZoomButton } from '../../_molecules/workspace-activity-bar/default/zoom'
@@ -129,7 +129,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Build (Compile)
   // ---------------------------------------------------------------------------
 
-  const handleBuild = useCallback(async () => {
+  const handleBuild = useCallback(async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
     if (isCompiling) return
 
     if (editingState === 'unsaved') {
@@ -146,7 +146,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           projectData,
           boardTarget: deviceDefinitions.configuration.deviceBoard,
           projectPath: projectMeta.path,
-          compileOnly: deviceDefinitions.configuration.compileOnly,
+          compileOnly: overrides?.compileOnly ?? deviceDefinitions.configuration.compileOnly,
+          cleanBuild: overrides?.cleanBuild ?? false,
           isSimulator: isSimulatorBoard,
           runtimeIpAddress: deviceDefinitions.configuration.runtimeIpAddress || null,
           runtimeJwtToken: jwtToken || null,
@@ -595,13 +596,34 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       <TooltipSidebarWrapperButton tooltipContent='Open/Close Toolbox'>
         <ZoomButton {...zoom} />
       </TooltipSidebarWrapperButton>
-      <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to build and run' : 'Compile'}>
-        <DownloadButton
-          disabled={isCompiling || isSimulatorBoard}
-          className={cn((isCompiling || isSimulatorBoard) && disabledButtonClass)}
-          onClick={() => void handleBuild()}
-        />
-      </TooltipSidebarWrapperButton>
+      <BuildOptionsPopover
+        disabled={isCompiling || isSimulatorBoard}
+        triggerTooltip={
+          isSimulatorBoard ? 'Use Start to build and run' : isCompiling ? 'Compiling…' : 'Build options'
+        }
+        // Arduino targets always allow upload (arduino-cli connects via USB
+        // at upload time). Runtime v3/v4 targets must be connected first
+        // since the upload goes over the network to the on-device webserver.
+        uploadAvailable={(() => {
+          const arduino = isArduinoTarget(currentBoardInfo)
+          if (arduino) return true
+          return connectionStatus === 'connected'
+        })()}
+        uploadDisabledReason='must be connected to the device to upload'
+        onSelect={(option: BuildOption) => {
+          switch (option) {
+            case 'build-only':
+              void handleBuild({ compileOnly: true, cleanBuild: false })
+              break
+            case 'build-upload':
+              void handleBuild({ compileOnly: false, cleanBuild: false })
+              break
+            case 'clean-upload':
+              void handleBuild({ compileOnly: false, cleanBuild: true })
+              break
+          }
+        }}
+      />
       <TooltipSidebarWrapperButton
         tooltipContent={
           isSimulatorBoard
