@@ -63,27 +63,59 @@ export const isBaseType = (typeName: string): boolean => {
 }
 
 /**
+ * Variable classes that are reachable through the runtime debug surface.
+ *
+ * Mirrors STruC++'s debug-table-gen contract
+ * (strucpp/src/backend/debug-table-gen.ts):
+ *
+ *  - Library FBs: only their public interface
+ *    (input / output / inOut). Locals are implementation details
+ *    that stay inside the compiled .stlib archive — the debugger
+ *    treats library FBs as black boxes, so VAR / VAR_TEMP /
+ *    VAR_EXTERNAL members of TON, R_TRIG, CTU, etc. are NOT
+ *    enumerated in debug-map.json and cannot be polled or written.
+ *
+ *  - User-defined FBs: every persistent member
+ *    (input / output / inOut / local). Excludes temp (VAR_TEMP) and
+ *    external (VAR_EXTERNAL — those point at globals handled
+ *    separately) since neither survives across scan cycles.
+ *
+ * Used by both the debugger watch panel and the OPC-UA variable
+ * picker — keeps both views consistent with what the runtime can
+ * actually address.
+ */
+const LIBRARY_FB_INTERFACE_CLASSES: ReadonlySet<string> = new Set(['input', 'output', 'inOut'])
+const USER_FB_PERSISTENT_CLASSES: ReadonlySet<string> = new Set(['input', 'output', 'inOut', 'local'])
+
+/**
  * Find a function block definition by name.
  * Searches BOTH the built-in library AND project POUs.
- * Returns the variables array from the FB definition, or null if not found.
+ * Returns the variables array from the FB definition, filtered to
+ * match the debugger's variable-enumeration contract (see comment on
+ * LIBRARY_FB_INTERFACE_CLASSES). Returns null if not found.
  */
 export const findFunctionBlockVariables = (typeName: string, projectPous: PLCPou[]): PouVariable[] | null => {
   const typeNameUpper = typeName.toUpperCase()
 
-  // Check standard library FBs
+  // Check standard library FBs — interface only.
   const standardFB = StandardFunctionBlocks.pous.find(
     (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
   )
   if (standardFB) {
-    return standardFB.variables as PouVariable[]
+    return (standardFB.variables as PouVariable[]).filter((v) =>
+      v.class === undefined ? false : LIBRARY_FB_INTERFACE_CLASSES.has(v.class),
+    )
   }
 
-  // Check project POUs (user-defined FBs)
+  // Check project POUs (user-defined FBs) — interface + locals,
+  // dropping temp / external.
   const customFB = projectPous.find(
     (pou) => normalizeTypeString(pou.pouType) === 'functionblock' && pou.name.toUpperCase() === typeNameUpper,
   )
   if (customFB && customFB.pouType === 'function-block') {
-    return (customFB.interface?.variables ?? []) as PouVariable[]
+    return ((customFB.interface?.variables ?? []) as PouVariable[]).filter((v) =>
+      v.class === undefined ? true : USER_FB_PERSISTENT_CLASSES.has(v.class),
+    )
   }
 
   return null

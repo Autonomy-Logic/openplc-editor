@@ -121,6 +121,50 @@ describe('findFunctionBlockVariables', () => {
     }
     expect(findFunctionBlockVariables('MyProg', [prog])).toBeNull()
   })
+
+  // STruC++ debug-table-gen treats library FBs as black boxes — only
+  // their interface (input/output/inOut) ends up in debug-map.json,
+  // so the editor must not surface library FB locals to the debugger
+  // watch panel or the OPC-UA variable picker either. Same contract.
+  it('returns ONLY interface vars for a library FB (no locals)', () => {
+    // TON has class:'local' members STATE, PREV_IN, CURRENT_TIME,
+    // START_TIME — those must not appear.
+    const ton = findFunctionBlockVariables('TON', [])
+    expect(ton).not.toBeNull()
+    const names = ton!.map((v) => v.name.toUpperCase())
+    expect(names).toEqual(expect.arrayContaining(['IN', 'PT', 'Q', 'ET']))
+    expect(names).not.toContain('STATE')
+    expect(names).not.toContain('PREV_IN')
+    expect(names).not.toContain('CURRENT_TIME')
+    expect(names).not.toContain('START_TIME')
+    // Sanity: every returned var has class in {input, output, inOut}.
+    for (const v of ton!) {
+      expect(['input', 'output', 'inOut']).toContain(v.class)
+    }
+  })
+
+  it('keeps locals for user-defined FBs but drops temp/external', () => {
+    const customFB: PLCPou = {
+      name: 'MyFB',
+      pouType: 'function-block',
+      interface: {
+        variables: [
+          { name: 'IN', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+          { name: 'OUT', class: 'output', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+          { name: 'STATE', class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+          { name: 'TMP', class: 'temp', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+          { name: 'EXT_REF', class: 'external', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+        ],
+      },
+      body: { language: 'st', value: '' },
+    }
+    const vars = findFunctionBlockVariables('MyFB', [customFB])
+    expect(vars).not.toBeNull()
+    const names = vars!.map((v) => v.name)
+    expect(names).toEqual(['IN', 'OUT', 'STATE'])
+    expect(names).not.toContain('TMP')
+    expect(names).not.toContain('EXT_REF')
+  })
 })
 
 // ---------------------------------------------------------------------------
