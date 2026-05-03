@@ -1,12 +1,13 @@
 import type { OpcUaFieldConfig, OpcUaNodeConfig, OpcUaPermissions } from '@root/middleware/shared/ports/open-plc-types'
 
+import { type DebugVariableEntry, packDebugAddr } from '../../debug-parser'
 import {
   OpcUaConfigError,
   resolveArrayAddress,
   resolveStructureAddresses,
   resolveVariableAddress,
 } from '../resolve-indices'
-import type { DebugVariable, PLCInstanceInfo } from '../types'
+import type { PLCInstanceInfo } from '../types'
 
 const perm: OpcUaPermissions = { viewer: 'r', operator: 'rw', engineer: 'rw' }
 
@@ -31,12 +32,13 @@ const makeField = (overrides: Partial<OpcUaFieldConfig> = {}): OpcUaFieldConfig 
   ...overrides,
 })
 
-const dv = (path: string, type: string, arr: number, elem: number, size = 2): DebugVariable => ({
-  path,
-  type,
-  arr,
-  elem,
-  size,
+// Build a DebugVariableEntry the way debugMapToEntries does:
+// pack (arr, elem) into a single index, append `_ENUM` to the type
+// to match the debugger's tree-builder convention.
+const dv = (path: string, type: string, arr: number, elem: number): DebugVariableEntry => ({
+  name: path,
+  type: `${type}_ENUM`,
+  index: packDebugAddr({ arrayIdx: arr, elemIdx: elem }),
 })
 
 const inst = (name: string, program: string): PLCInstanceInfo => ({ name, task: 'T0', program })

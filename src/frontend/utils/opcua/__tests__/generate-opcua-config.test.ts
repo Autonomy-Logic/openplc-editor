@@ -103,15 +103,18 @@ const instances: PLCInstanceInfo[] = [{ name: 'INSTANCE0', task: 'TASK0', progra
 // ---------------------------------------------------------------------------
 
 describe('parseDebugMap', () => {
-  it('parses a valid v2 map into DebugVariable entries', () => {
+  it('parses a valid v2 map into DebugVariableEntry[] (debugger shape)', () => {
+    // OPC-UA piggybacks on the debugger's parser: leaves come back as
+    // `{ name, type: 'INT_ENUM', index: packed(arr, elem) }`.
     const map = debugMapJson([
       { path: 'INSTANCE0.X', type: 'INT', arr: 0, elem: 0 },
-      { path: 'INSTANCE0.Y', type: 'REAL', arr: 0, elem: 1, size: 4 },
+      { path: 'INSTANCE0.Y', type: 'REAL', arr: 1, elem: 5, size: 4 },
     ])
     const result = parseDebugMap(map)
     expect(result).toHaveLength(2)
-    expect(result[0]).toEqual({ path: 'INSTANCE0.X', type: 'INT', arr: 0, elem: 0, size: 2 })
-    expect(result[1]).toEqual({ path: 'INSTANCE0.Y', type: 'REAL', arr: 0, elem: 1, size: 4 })
+    expect(result[0]).toEqual({ name: 'INSTANCE0.X', type: 'INT_ENUM', index: 0 })
+    // (arr=1 << 16) | elem=5 = 0x10005 = 65541
+    expect(result[1]).toEqual({ name: 'INSTANCE0.Y', type: 'REAL_ENUM', index: 65541 })
   })
 
   it('returns empty array on malformed JSON', () => {

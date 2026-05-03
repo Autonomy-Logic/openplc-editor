@@ -8,6 +8,8 @@ import type {
   PLCServer,
 } from '@root/middleware/shared/ports/open-plc-types'
 
+import { type DebugVariableEntry, parseDebugMap as parseDebugMapJson } from '../debug-parser'
+import { debugMapToEntries } from '../debugger-session'
 import { getErrorMessage } from '../get-error-message'
 import {
   OpcUaConfigError,
@@ -15,7 +17,7 @@ import {
   resolveStructureAddresses,
   resolveVariableAddress,
 } from './resolve-indices'
-import type { DebugVariable, PLCInstanceInfo } from './types'
+import type { PLCInstanceInfo } from './types'
 
 /**
  * Runtime configuration interfaces
@@ -196,7 +198,7 @@ const convertPermissions = (permissions: OpcUaPermissions): RuntimeVariablePermi
  */
 const resolveVariable = (
   node: OpcUaNodeConfig,
-  debugVariables: DebugVariable[],
+  debugVariables: DebugVariableEntry[],
   instances: PLCInstanceInfo[],
 ): RuntimeVariable => {
   const addr = resolveVariableAddress(node, debugVariables, instances)
@@ -246,7 +248,7 @@ const convertResolvedFieldToRuntime = (field: {
  */
 const resolveStructure = (
   node: OpcUaNodeConfig,
-  debugVariables: DebugVariable[],
+  debugVariables: DebugVariableEntry[],
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
 ): RuntimeStructure | null => {
@@ -277,7 +279,7 @@ const extractArrayElementType = (arrayTypeStr: string): string => {
  */
 const resolveArray = (
   node: OpcUaNodeConfig,
-  debugVariables: DebugVariable[],
+  debugVariables: DebugVariableEntry[],
   instances: PLCInstanceInfo[],
 ): RuntimeArray => {
   const addr = resolveArrayAddress(node, debugVariables, instances)
@@ -306,7 +308,7 @@ const resolveArray = (
  */
 const buildAddressSpace = (
   config: OpcUaServerConfig,
-  debugVariables: DebugVariable[],
+  debugVariables: DebugVariableEntry[],
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
 ): RuntimeAddressSpace => {
@@ -373,56 +375,17 @@ const buildAddressSpace = (
 }
 
 /**
- * Shape of debug-map.json as produced by STruC++
- * (src/backend/debug-table-gen.ts → DebugMapV2). Re-declared here so
- * the editor doesn't take a build dependency on strucpp's TS types.
+ * Parse debug-map.json content into DebugVariableEntry[] — the same
+ * shape the debugger watch panel consumes. One source of truth for
+ * variable lookups, no OPC-UA-specific path conventions.
+ *
+ * Returns [] on malformed/missing input; caller distinguishes that
+ * from "valid but empty" via the `addressSpace.nodes.length` check.
  */
-interface DebugMapV2 {
-  version: 2
-  md5: string
-  typeTags: Record<string, number>
-  arrays: Array<{ index: number; count: number }>
-  leaves: Array<{
-    arrayIdx: number
-    elemIdx: number
-    path: string
-    type: string
-    size: number
-  }>
-}
-
-/**
- * Parse debug-map.json content into the leaves array consumed by the
- * resolver. Replaces the old MatIEC `parseDebugFile` which regex-
- * scanned debug.c.
- */
-export const parseDebugMap = (content: string): DebugVariable[] => {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(content)
-  } catch {
-    console.warn('debug-map.json is not valid JSON')
-    return []
-  }
-  // Minimal structural validation. A wrong shape almost always means
-  // the file is from a different strucpp version — fail loud.
-  if (!parsed || typeof parsed !== 'object') return []
-  const map = parsed as Partial<DebugMapV2>
-  if (map.version !== 2 || !Array.isArray(map.leaves)) {
-    console.warn(
-      `debug-map.json: unexpected version (${String(map.version)}). ` +
-        `OPC-UA expects DebugMapV2 — re-run strucpp.`,
-    )
-    return []
-  }
-
-  return map.leaves.map((leaf) => ({
-    path: leaf.path,
-    type: leaf.type,
-    arr: leaf.arrayIdx,
-    elem: leaf.elemIdx,
-    size: leaf.size,
-  }))
+export const parseDebugMap = (content: string): DebugVariableEntry[] => {
+  const map = parseDebugMapJson(content)
+  if (!map) return []
+  return debugMapToEntries(map)
 }
 
 /**

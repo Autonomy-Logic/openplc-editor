@@ -28,4 +28,7 @@ export {
   resolveStructureAddresses,
   resolveVariableAddress,
 } from './resolve-indices'
-export type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'
+export type { PLCInstanceInfo, ResolvedField } from './types'
+// Re-export the debugger's variable-entry shape so OPC-UA consumers
+// don't have to know about the cross-module structure.
+export type { DebugVariableEntry } from '../debug-parser'
