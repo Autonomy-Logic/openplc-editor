@@ -98,6 +98,24 @@ export const resolveVariableAddress = (
 
 /**
  * Resolve a single field, recursively handling nested fields for complex types.
+ *
+ * Returns null when the field path doesn't resolve in the debug map.
+ * That happens cleanly when:
+ *   - The variable is a library-FB internal (TON.STATE, R_TRIG.M, …) —
+ *     library FBs are black boxes for the runtime debugger, so their
+ *     locals never make it into debug-map.json. The address-space
+ *     editor (post pou-helpers fix) doesn't surface them anymore, but
+ *     projects saved before that fix still carry them and would
+ *     otherwise abort the build.
+ *   - The user changed/renamed/deleted a variable in the program but
+ *     left the OPC-UA mapping in place.
+ *
+ * Caller filters out the nulls and surfaces them as warnings in the
+ * compile log, so the user knows what got dropped without having to
+ * hand-edit JSON.
+ *
+ * The droppedPaths array (out-param) collects the paths that didn't
+ * resolve — caller logs one warning per entry.
  */
 const resolveFieldRecursively = (
   field: OpcUaFieldConfig,
@@ -105,15 +123,25 @@ const resolveFieldRecursively = (
   pouName: string,
   debugVariables: DebugVariable[],
   instanceName: string | null,
-): ResolvedField => {
+  droppedPaths: string[],
+): ResolvedField | null => {
   const fullFieldPath = `${parentPath}.${field.fieldPath}`
 
   // Complex type — only its leaves have addresses; the parent's own
-  // (arr, elem) is meaningless.
+  // (arr, elem) is meaningless. Recurse and filter nulls; if every
+  // child dropped the parent has nothing meaningful to expose either,
+  // so drop it too.
   if (field.fields && field.fields.length > 0) {
-    const nestedFields: ResolvedField[] = field.fields.map((nestedField) =>
-      resolveFieldRecursively(nestedField, fullFieldPath, pouName, debugVariables, instanceName),
-    )
+    const nestedFields = field.fields
+      .map((nestedField) =>
+        resolveFieldRecursively(nestedField, fullFieldPath, pouName, debugVariables, instanceName, droppedPaths),
+      )
+      .filter((f): f is ResolvedField => f !== null)
+
+    if (nestedFields.length === 0) {
+      return null
+    }
+
     return {
       name: field.fieldPath,
       datatype: field.datatype || 'UNKNOWN',
@@ -132,13 +160,8 @@ const resolveFieldRecursively = (
   const match = findDebugVariable(debugVariables, debugPath)
 
   if (!match) {
-    throw new OpcUaConfigError(
-      `${pouName}:${fullFieldPath}`,
-      debugPath,
-      `Cannot resolve OPC-UA structure/FB field address.\n` +
-        `  Field path: ${fullFieldPath}\n` +
-        `  Expected debug path: ${debugPath}`,
-    )
+    droppedPaths.push(`${pouName}:${fullFieldPath}`)
+    return null
   }
 
   return {
@@ -153,11 +176,19 @@ const resolveFieldRecursively = (
 /**
  * Resolve addresses for all fields in a structure or function block instance.
  * Supports nested fields for complex types (FBs within FBs, structs within structs).
+ *
+ * Field paths that don't resolve in the debug map (e.g. a stale
+ * library-FB internal carried over from before the pou-helpers
+ * filter, or a variable the user renamed without re-saving the
+ * OPC-UA config) are silently dropped and accumulated into the
+ * `droppedPaths` out-param so the build can warn about them without
+ * aborting the whole compilation.
  */
 export const resolveStructureAddresses = (
   node: OpcUaNodeConfig,
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
+  droppedPaths: string[] = [],
 ): ResolvedField[] => {
   const instanceMappings = toInstanceMapping(instances)
 
@@ -189,9 +220,18 @@ export const resolveStructureAddresses = (
     }
   }
 
-  return node.fields.map((field) =>
-    resolveFieldRecursively(field, node.variablePath, node.pouName, debugVariables, instanceName),
-  )
+  return node.fields
+    .map((field) =>
+      resolveFieldRecursively(
+        field,
+        node.variablePath,
+        node.pouName,
+        debugVariables,
+        instanceName,
+        droppedPaths,
+      ),
+    )
+    .filter((f): f is ResolvedField => f !== null)
 }
 
 /**

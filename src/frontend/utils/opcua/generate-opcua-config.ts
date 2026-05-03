@@ -248,9 +248,12 @@ const resolveStructure = (
   node: OpcUaNodeConfig,
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
-): RuntimeStructure => {
-  const resolvedFields = resolveStructureAddresses(node, debugVariables, instances)
-
+  droppedPaths: string[],
+): RuntimeStructure | null => {
+  const resolvedFields = resolveStructureAddresses(node, debugVariables, instances, droppedPaths)
+  if (resolvedFields.length === 0) {
+    return null
+  }
   return {
     node_id: node.nodeId,
     browse_name: node.browseName,
@@ -305,6 +308,7 @@ const buildAddressSpace = (
   config: OpcUaServerConfig,
   debugVariables: DebugVariable[],
   instances: PLCInstanceInfo[],
+  droppedPaths: string[],
 ): RuntimeAddressSpace => {
   const variables: RuntimeVariable[] = []
   const structures: RuntimeStructure[] = []
@@ -315,22 +319,31 @@ const buildAddressSpace = (
     try {
       switch (node.nodeType) {
         case 'variable':
+          // Top-level variables that don't resolve are still hard
+          // errors — that means the variable was renamed/deleted in
+          // the program. The user has to fix the OPC-UA config.
+          // (Field-level mismatches are handled gracefully by
+          // resolveStructureAddresses via droppedPaths.)
           variables.push(resolveVariable(node, debugVariables, instances))
           break
-        case 'structure':
+        case 'structure': {
           // Structures and FBs are handled the same way - resolve all leaf fields
-          structures.push(resolveStructure(node, debugVariables, instances))
+          const struct = resolveStructure(node, debugVariables, instances, droppedPaths)
+          if (struct) structures.push(struct)
           break
-        case 'array':
+        }
+        case 'array': {
           // Arrays with fields (complex element types) are treated like structures
-          // because each leaf variable needs individual index resolution
+          // because each leaf variable needs individual address resolution
           if (node.fields && node.fields.length > 0) {
-            structures.push(resolveStructure(node, debugVariables, instances))
+            const struct = resolveStructure(node, debugVariables, instances, droppedPaths)
+            if (struct) structures.push(struct)
           } else {
             // Simple arrays of base types
             arrays.push(resolveArray(node, debugVariables, instances))
           }
           break
+        }
       }
     } catch (error) {
       if (error instanceof OpcUaConfigError) {
@@ -417,15 +430,23 @@ export const parseDebugMap = (content: string): DebugVariable[] => {
  * Converts camelCase properties to snake_case expected by the plugin.
  * Resolves variable addresses from STruC++'s debug-map.json.
  *
+ * Field paths that don't resolve (e.g. stale library-FB internals
+ * left over from before the pou-helpers filter) are silently dropped
+ * and reported via `onWarn` rather than aborting the build, so the
+ * user sees a heads-up instead of a hard failure they have to fix
+ * by hand-editing JSON.
+ *
  * @param servers - Array of configured PLC servers
  * @param debugMapContent - Content of the generated debug-map.json file
  * @param instances - Array of PLC instances from Resources configuration
+ * @param onWarn - Optional sink for "dropped X" warnings
  * @returns JSON string for opcua.json or null if no enabled OPC-UA server
  */
 export const generateOpcUaConfig = (
   servers: PLCServer[] | undefined,
   debugMapContent: string,
   instances: PLCInstanceInfo[],
+  onWarn?: (message: string) => void,
 ): string | null => {
   // 1. Find OPC-UA server configuration
   if (!servers || servers.length === 0) {
@@ -452,7 +473,25 @@ export const generateOpcUaConfig = (
     )
   }
 
-  // 3. Build runtime configuration
+  // 3. Build runtime configuration. Field-level resolution failures
+  //    accumulate into droppedPaths instead of aborting; we surface
+  //    each one via onWarn so the user can clean up the OPC-UA config
+  //    later if they care.
+  const droppedPaths: string[] = []
+  const addressSpace = buildAddressSpace(config, debugVariables, instances, droppedPaths)
+  if (onWarn && droppedPaths.length > 0) {
+    onWarn(
+      `OPC-UA: dropped ${droppedPaths.length} unresolvable variable path(s) ` +
+        `from the runtime config — likely library-FB internals (TON.STATE, ` +
+        `R_TRIG.M, …) saved before the variable picker started filtering them, ` +
+        `or variables removed from the program. Re-save the OPC-UA config ` +
+        `through the editor to clean these up permanently.`,
+    )
+    for (const path of droppedPaths) {
+      onWarn(`  dropped: ${path}`)
+    }
+  }
+
   const runtimeConfig: RuntimeConfig = {
     name: 'opcua_server',
     protocol: 'OPC-UA',
@@ -461,7 +500,7 @@ export const generateOpcUaConfig = (
       security: buildSecurityConfig(config),
       users: buildUsersConfig(config),
       cycle_time_ms: config.cycleTimeMs,
-      address_space: buildAddressSpace(config, debugVariables, instances),
+      address_space: addressSpace,
     },
   }
 

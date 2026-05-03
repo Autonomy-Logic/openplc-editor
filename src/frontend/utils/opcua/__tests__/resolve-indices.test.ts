@@ -171,13 +171,51 @@ describe('resolveStructureAddresses', () => {
     expect(result[0].fields![1]).toMatchObject({ name: 'ET', arr: 0, elem: 11, datatype: 'TIME' })
   })
 
-  it('throws when a field cannot be resolved', () => {
+  it('drops fields that cannot be resolved and reports them via droppedPaths', () => {
+    // Mirrors how the build silently drops library-FB internals
+    // (TON.STATE etc.) saved before the pou-helpers filter.
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'S',
-      fields: [makeField({ fieldPath: 'GHOST', datatype: 'INT' })],
+      fields: [
+        makeField({ fieldPath: 'GHOST', datatype: 'INT' }),
+        makeField({ fieldPath: 'OK', datatype: 'INT' }),
+      ],
     })
-    expect(() => resolveStructureAddresses(node, [], [inst('INSTANCE0', 'MAIN')])).toThrow(OpcUaConfigError)
+    const dropped: string[] = []
+    const result = resolveStructureAddresses(
+      node,
+      [dv('INSTANCE0.S.OK', 'INT', 0, 5)],
+      [inst('INSTANCE0', 'MAIN')],
+      dropped,
+    )
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('OK')
+    expect(dropped).toEqual(['MAIN:S.GHOST'])
+  })
+
+  it('drops a complex field whose every leaf is unresolvable', () => {
+    // TON.STATE / PREV_IN / etc. case — parent FB has no resolvable
+    // children left, so it gets dropped too rather than emitting an
+    // empty struct.
+    const node = makeNode({
+      nodeType: 'structure',
+      variablePath: 'S',
+      fields: [
+        makeField({
+          fieldPath: 'TON0',
+          datatype: 'TON',
+          fields: [
+            makeField({ fieldPath: 'STATE', datatype: 'SINT' }),
+            makeField({ fieldPath: 'PREV_IN', datatype: 'BOOL' }),
+          ],
+        }),
+      ],
+    })
+    const dropped: string[] = []
+    const result = resolveStructureAddresses(node, [], [inst('INSTANCE0', 'MAIN')], dropped)
+    expect(result).toEqual([])
+    expect(dropped).toEqual(['MAIN:S.TON0.STATE', 'MAIN:S.TON0.PREV_IN'])
   })
 
   it('uses field datatype when debug entry has empty type string', () => {

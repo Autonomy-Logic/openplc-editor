@@ -1334,8 +1334,16 @@ class CompilerModule {
         program: inst.program,
       }))
 
-      // Generate the OPC-UA configuration
-      const opcuaJson: string | null = generateOpcUaConfig(projectData.servers, debugMapContent, instances)
+      // Generate the OPC-UA configuration. Field-level resolution
+      // failures (stale library-FB internals, renamed/deleted vars)
+      // surface as build warnings instead of aborting; the generator
+      // drops them and we forward each to the compile log.
+      const opcuaJson: string | null = generateOpcUaConfig(
+        projectData.servers,
+        debugMapContent,
+        instances,
+        (msg) => handleOutputData(msg, 'info'),
+      )
 
       if (opcuaJson) {
         // Ensure conf directory exists

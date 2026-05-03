@@ -548,13 +548,18 @@ describe('validateOpcUaConfig', () => {
     expect(result.errors.length).toBeGreaterThan(0)
   })
 
-  it('validates structure node resolution errors', () => {
+  // Field-level resolution misses no longer fail validation: the
+  // build silently drops unresolvable fields (e.g. stale library-FB
+  // internals saved before the pou-helpers filter) and warns. Top-
+  // level variable / simple-array misses still fail — those are the
+  // user-renamed-or-deleted-it cases.
+  it('field-level resolution misses are NOT validation errors (dropped at build with warning)', () => {
     const cfg = baseServerConfig()
     cfg.addressSpace.nodes = [
       makeNode({ nodeType: 'structure', variablePath: 'S', fields: [makeField({ fieldPath: 'GHOST' })] }),
     ]
     const result = validateOpcUaConfig(cfg, debugMapJson([]), instances)
-    expect(result.valid).toBe(false)
+    expect(result.valid).toBe(true)
   })
 
   it('validates simple array node resolution errors', () => {
@@ -564,7 +569,7 @@ describe('validateOpcUaConfig', () => {
     expect(result.valid).toBe(false)
   })
 
-  it('validates array with fields as structure', () => {
+  it('array-with-fields field-level miss is NOT a validation error', () => {
     const cfg = baseServerConfig()
     cfg.addressSpace.nodes = [
       makeNode({
@@ -574,7 +579,7 @@ describe('validateOpcUaConfig', () => {
       }),
     ]
     const result = validateOpcUaConfig(cfg, debugMapJson([]), instances)
-    expect(result.valid).toBe(false)
+    expect(result.valid).toBe(true)
   })
 
   it('validates structure node successfully', () => {
