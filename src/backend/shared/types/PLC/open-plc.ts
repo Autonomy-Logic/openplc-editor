@@ -470,17 +470,21 @@ interface OpcUaFieldConfig {
   displayName: string
   /** Data type of the field. Optional for backward compatibility with existing projects. */
   datatype?: string
-  initialValue: boolean | number | string
   permissions: OpcUaPermissions
   /** Nested fields for complex types (FB instances, nested structs). Undefined or empty for leaf fields. */
   fields?: OpcUaFieldConfig[]
 }
+// `initialValue` was removed in the OPC-UA STruC++ migration — the
+// plugin reads the program's actual value via debug_read at server
+// startup, so no per-variable default is configured anymore. The
+// schema accepts (and silently drops) unknown keys via Zod's default
+// passthrough behaviour, so projects saved before the removal still
+// load cleanly without a migration step.
 const OpcUaFieldConfigSchema: z.ZodType<OpcUaFieldConfig> = z.lazy(() =>
   z.object({
     fieldPath: z.string(),
     displayName: z.string(),
-    datatype: z.string().optional(), // Optional for backward compatibility
-    initialValue: z.union([z.boolean(), z.number(), z.string()]),
+    datatype: z.string().optional(),
     permissions: OpcUaPermissionsSchema,
     fields: z.array(OpcUaFieldConfigSchema).optional(),
   }),
@@ -496,7 +500,6 @@ const OpcUaNodeConfigSchema = z.object({
   browseName: z.string(),
   displayName: z.string(),
   description: z.string(),
-  initialValue: z.union([z.boolean(), z.number(), z.string()]),
   permissions: OpcUaPermissionsSchema,
   nodeType: z.enum(['variable', 'structure', 'array']),
   fields: z.array(OpcUaFieldConfigSchema).optional(),
