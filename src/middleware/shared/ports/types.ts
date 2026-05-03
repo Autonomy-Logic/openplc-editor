@@ -334,7 +334,6 @@ export interface OpcUaFieldConfig {
   fieldPath: string
   displayName: string
   datatype?: string
-  initialValue: boolean | number | string
   permissions: OpcUaPermissions
   fields?: OpcUaFieldConfig[]
 }
@@ -348,7 +347,6 @@ export interface OpcUaNodeConfig {
   browseName: string
   displayName: string
   description: string
-  initialValue: boolean | number | string
   permissions: OpcUaPermissions
   nodeType: 'variable' | 'structure' | 'array'
   fields?: OpcUaFieldConfig[]

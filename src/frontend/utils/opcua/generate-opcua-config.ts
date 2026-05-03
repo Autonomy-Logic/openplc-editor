@@ -65,7 +65,6 @@ interface RuntimeVariable {
   browse_name: string
   display_name: string
   datatype: string
-  initial_value: boolean | number | string
   description: string
   index: number
   permissions: RuntimeVariablePermissions
@@ -74,7 +73,6 @@ interface RuntimeVariable {
 interface RuntimeStructureField {
   name: string
   datatype: string
-  initial_value: boolean | number | string
   index: number | null // null for complex types that have nested fields
   permissions: RuntimeVariablePermissions
   fields?: RuntimeStructureField[] // Nested fields for complex types (FBs, structs)
@@ -94,7 +92,6 @@ interface RuntimeArray {
   display_name: string
   datatype: string
   length: number
-  initial_value: boolean | number | string
   index: number
   permissions: RuntimeVariablePermissions
 }
@@ -200,7 +197,6 @@ const resolveVariable = (
     browse_name: node.browseName,
     display_name: node.displayName,
     datatype: node.variableType,
-    initial_value: node.initialValue,
     description: node.description,
     index,
     permissions: convertPermissions(node.permissions),
@@ -213,7 +209,6 @@ const resolveVariable = (
 const convertResolvedFieldToRuntime = (field: {
   name: string
   datatype: string
-  initialValue: boolean | number | string
   index: number | null
   permissions: { viewer: 'r' | 'w' | 'rw'; operator: 'r' | 'w' | 'rw'; engineer: 'r' | 'w' | 'rw' }
   fields?: (typeof field)[]
@@ -221,7 +216,6 @@ const convertResolvedFieldToRuntime = (field: {
   const runtimeField: RuntimeStructureField = {
     name: field.name,
     datatype: field.datatype,
-    initial_value: field.initialValue,
     index: field.index,
     permissions: convertPermissions(field.permissions),
   }
@@ -286,7 +280,6 @@ const resolveArray = (
     display_name: node.displayName,
     datatype,
     length: node.arrayLength || 1,
-    initial_value: node.initialValue,
     index,
     permissions: convertPermissions(node.permissions),
   }

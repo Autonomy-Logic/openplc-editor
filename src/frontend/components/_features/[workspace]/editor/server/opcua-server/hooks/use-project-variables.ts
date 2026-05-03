@@ -33,7 +33,6 @@ export interface VariableTreeNode {
   isSelectable: boolean
   isExpanded?: boolean
   variableClass?: string
-  initialValue?: string | null
   arrayInfo?: {
     dimensions: string[]
     elementType: string
@@ -81,7 +80,6 @@ const buildVariableNode = (
   dataTypes: PLCDataType[],
   pous: PLCPou[],
   variableClass?: string,
-  initialValue?: PLCVariable['initialValue'],
   arrayData?: ArrayData,
 ): VariableTreeNode | null => {
   const variablePath = parentPath ? `${parentPath}.${name}` : name
@@ -93,7 +91,7 @@ const buildVariableNode = (
 
   // Handle arrays
   if (typeDefinition === 'array' && arrayData) {
-    return buildArrayNode(name, pouName, parentPath, dataTypes, pous, variableClass, initialValue, arrayData)
+    return buildArrayNode(name, pouName, parentPath, dataTypes, pous, variableClass, arrayData)
   }
 
   // Base type - this is a selectable leaf
@@ -107,7 +105,6 @@ const buildVariableNode = (
       variablePath,
       isSelectable: true,
       variableClass,
-      initialValue,
     }
   }
 
@@ -123,7 +120,6 @@ const buildVariableNode = (
       dataTypes,
       pous,
       variableClass,
-      initialValue,
     )
   }
 
@@ -149,7 +145,6 @@ const buildStructureNode = (
   dataTypes: PLCDataType[],
   pous: PLCPou[],
   variableClass?: string,
-  initialValue?: PLCVariable['initialValue'],
 ): VariableTreeNode => {
   const variablePath = parentPath ? `${parentPath}.${name}` : name
 
@@ -168,7 +163,6 @@ const buildStructureNode = (
         dataTypes,
         pous,
         undefined,
-        undefined,
         arrayData,
       )
     })
@@ -183,7 +177,6 @@ const buildStructureNode = (
     variablePath,
     isSelectable: true, // Selectable - will expand to leaf variables during index resolution
     variableClass,
-    initialValue,
     structureInfo: {
       structTypeName: structTypeName,
       fieldCount: children.length,
@@ -236,7 +229,6 @@ const buildFunctionBlockNode = (
         dataTypes,
         pous,
         fbVar.class,
-        undefined,
         arrayData,
       )
     })
@@ -265,7 +257,6 @@ const buildArrayNode = (
   dataTypes: PLCDataType[],
   pous: PLCPou[],
   variableClass?: string,
-  initialValue?: PLCVariable['initialValue'],
   arrayData?: ArrayData,
 ): VariableTreeNode => {
   const variablePath = parentPath ? `${parentPath}.${name}` : name
@@ -280,7 +271,6 @@ const buildArrayNode = (
       variablePath,
       isSelectable: true,
       variableClass,
-      initialValue,
     }
   }
 
@@ -310,7 +300,6 @@ const buildArrayNode = (
       variablePath,
       isSelectable: true,
       variableClass,
-      initialValue,
       arrayInfo,
     }
   }
@@ -348,7 +337,6 @@ const buildArrayNode = (
     variablePath,
     isSelectable: true, // Selectable - will expand to leaf variables during index resolution
     variableClass,
-    initialValue,
     arrayInfo,
     children,
   }
@@ -374,7 +362,6 @@ const buildVariableNodeFromPLC = (
     dataTypes,
     pous,
     variable.class,
-    variable.initialValue,
     variable.type.definition === 'array' ? variable.type.data : undefined,
   )
 }

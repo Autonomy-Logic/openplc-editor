@@ -1,3 +1,5 @@
+import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/ports/open-plc-types'
+
 import {
   buildDebugPath,
   buildGlobalDebugPath,
@@ -7,8 +9,6 @@ import {
   findInstanceName,
   type PLCInstanceMapping,
 } from './debug-paths'
-import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/ports/open-plc-types'
-
 import type { DebugVariable, PLCInstanceInfo, ResolvedField } from './types'
 
 /**
@@ -159,7 +159,6 @@ const resolveFieldRecursively = (
     return {
       name: field.fieldPath,
       datatype: field.datatype || 'UNKNOWN',
-      initialValue: field.initialValue,
       index: null,
       permissions: field.permissions,
       fields: nestedFields,
@@ -196,7 +195,6 @@ const resolveFieldRecursively = (
   return {
     name: field.fieldPath,
     datatype: match.type ? debugTypeToIecType(match.type) : field.datatype || 'UNKNOWN',
-    initialValue: field.initialValue,
     index: match.index,
     permissions: field.permissions,
   }
@@ -227,7 +225,6 @@ export const resolveStructureIndices = (
       {
         name: node.variablePath,
         datatype: node.variableType,
-        initialValue: node.initialValue,
         index,
         permissions: node.permissions,
       },

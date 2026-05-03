@@ -26,7 +26,6 @@ const makeNode = (overrides: Partial<OpcUaNodeConfig> = {}): OpcUaNodeConfig => 
   browseName: 'MY_VAR',
   displayName: 'My Variable',
   description: 'desc',
-  initialValue: 0,
   permissions: perm,
   nodeType: 'variable',
   ...overrides,
@@ -35,7 +34,6 @@ const makeNode = (overrides: Partial<OpcUaNodeConfig> = {}): OpcUaNodeConfig => 
 const makeField = (overrides: Partial<OpcUaFieldConfig> = {}): OpcUaFieldConfig => ({
   fieldPath: 'FIELD1',
   displayName: 'Field 1',
-  initialValue: 0,
   permissions: perm,
   ...overrides,
 })
@@ -269,8 +267,8 @@ describe('generateOpcUaConfig', () => {
         nodeType: 'structure',
         variablePath: 'SENSOR',
         fields: [
-          makeField({ fieldPath: 'X', datatype: 'INT', initialValue: 0 }),
-          makeField({ fieldPath: 'Y', datatype: 'REAL', initialValue: 1.5 }),
+          makeField({ fieldPath: 'X', datatype: 'INT'}),
+          makeField({ fieldPath: 'Y', datatype: 'REAL'}),
         ],
       }),
     ]
@@ -297,8 +295,7 @@ describe('generateOpcUaConfig', () => {
           makeField({
             fieldPath: 'INNER',
             datatype: 'TON',
-            initialValue: '',
-            fields: [makeField({ fieldPath: 'LEAF', datatype: 'BOOL', initialValue: false })],
+            fields: [makeField({ fieldPath: 'LEAF', datatype: 'BOOL'})],
           }),
         ],
       }),
@@ -404,7 +401,7 @@ describe('generateOpcUaConfig', () => {
       makeNode({
         nodeType: 'array',
         variablePath: 'FBA',
-        fields: [makeField({ fieldPath: 'EF', datatype: 'INT', initialValue: 0 })],
+        fields: [makeField({ fieldPath: 'EF', datatype: 'INT'})],
       }),
     ]
     const dc = debugContent([{ path: 'RES0__INSTANCE0.FBA.EF', type: 'INT_ENUM' }])
@@ -560,7 +557,7 @@ describe('validateOpcUaConfig', () => {
       makeNode({
         nodeType: 'structure',
         variablePath: 'S',
-        fields: [makeField({ fieldPath: 'F', datatype: 'INT', initialValue: 0 })],
+        fields: [makeField({ fieldPath: 'F', datatype: 'INT'})],
       }),
     ]
     const dc = debugContent([{ path: 'RES0__INSTANCE0.S.F', type: 'INT_ENUM' }])
@@ -582,7 +579,7 @@ describe('validateOpcUaConfig', () => {
       makeNode({
         nodeType: 'array',
         variablePath: 'FA',
-        fields: [makeField({ fieldPath: 'E', datatype: 'INT', initialValue: 0 })],
+        fields: [makeField({ fieldPath: 'E', datatype: 'INT'})],
       }),
     ]
     const dc = debugContent([{ path: 'RES0__INSTANCE0.FA.E', type: 'INT_ENUM' }])

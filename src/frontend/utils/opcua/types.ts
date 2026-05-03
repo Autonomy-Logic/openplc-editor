@@ -35,7 +35,6 @@ export interface DebugVariable {
 export interface ResolvedField {
   name: string
   datatype: string
-  initialValue: boolean | number | string
   /** Index in debug_vars array. Null for complex types that have nested fields. */
   index: number | null
   permissions: {

@@ -18,7 +18,6 @@ const makeNode = (overrides: Partial<OpcUaNodeConfig> = {}): OpcUaNodeConfig => 
   browseName: 'MY_VAR',
   displayName: 'My Variable',
   description: '',
-  initialValue: 0,
   permissions: perm,
   nodeType: 'variable',
   ...overrides,
@@ -27,7 +26,6 @@ const makeNode = (overrides: Partial<OpcUaNodeConfig> = {}): OpcUaNodeConfig => 
 const makeField = (overrides: Partial<OpcUaFieldConfig> = {}): OpcUaFieldConfig => ({
   fieldPath: 'FIELD1',
   displayName: 'Field 1',
-  initialValue: 0,
   permissions: perm,
   ...overrides,
 })
@@ -130,8 +128,8 @@ describe('resolveStructureIndices', () => {
       nodeType: 'structure',
       variablePath: 'MY_STRUCT',
       fields: [
-        makeField({ fieldPath: 'X', datatype: 'INT', initialValue: 0 }),
-        makeField({ fieldPath: 'Y', datatype: 'REAL', initialValue: 0 }),
+        makeField({ fieldPath: 'X', datatype: 'INT'}),
+        makeField({ fieldPath: 'Y', datatype: 'REAL'}),
       ],
     })
     const result = resolveStructureIndices(
@@ -152,10 +150,9 @@ describe('resolveStructureIndices', () => {
         makeField({
           fieldPath: 'TON0',
           datatype: 'TON',
-          initialValue: '',
           fields: [
-            makeField({ fieldPath: 'IN', datatype: 'BOOL', initialValue: false }),
-            makeField({ fieldPath: 'ET', datatype: 'TIME', initialValue: 0 }),
+            makeField({ fieldPath: 'IN', datatype: 'BOOL'}),
+            makeField({ fieldPath: 'ET', datatype: 'TIME'}),
           ],
         }),
       ],
@@ -179,9 +176,8 @@ describe('resolveStructureIndices', () => {
       fields: [
         makeField({
           fieldPath: 'INNER',
-          initialValue: '',
           // datatype intentionally missing
-          fields: [makeField({ fieldPath: 'L', datatype: 'BOOL', initialValue: false })],
+          fields: [makeField({ fieldPath: 'L', datatype: 'BOOL'})],
         }),
       ],
     })
@@ -199,7 +195,7 @@ describe('resolveStructureIndices', () => {
       nodeType: 'structure',
       pouName: 'GVL',
       variablePath: 'GS',
-      fields: [makeField({ fieldPath: 'V', datatype: 'BOOL', initialValue: false })],
+      fields: [makeField({ fieldPath: 'V', datatype: 'BOOL'})],
     })
     const result = resolveStructureIndices(node, [dv('CONFIG0__GS.V', 'BOOL_ENUM', 20)], [])
     expect(result[0]).toMatchObject({ name: 'V', index: 20, datatype: 'BOOL' })
@@ -210,7 +206,7 @@ describe('resolveStructureIndices', () => {
       nodeType: 'structure',
       pouName: 'CONFIG',
       variablePath: 'CS',
-      fields: [makeField({ fieldPath: 'W', datatype: 'INT', initialValue: 0 })],
+      fields: [makeField({ fieldPath: 'W', datatype: 'INT'})],
     })
     const result = resolveStructureIndices(node, [dv('CONFIG0__CS.W', 'INT_ENUM', 30)], [])
     expect(result[0]).toMatchObject({ name: 'W', index: 30, datatype: 'INT' })
@@ -231,7 +227,7 @@ describe('resolveStructureIndices', () => {
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'S',
-      fields: [makeField({ fieldPath: 'A', datatype: 'DINT', initialValue: 0 })],
+      fields: [makeField({ fieldPath: 'A', datatype: 'DINT'})],
     })
     const result = resolveStructureIndices(
       node,
@@ -245,7 +241,7 @@ describe('resolveStructureIndices', () => {
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'S',
-      fields: [makeField({ fieldPath: 'B', datatype: 'REAL', initialValue: 0 })],
+      fields: [makeField({ fieldPath: 'B', datatype: 'REAL'})],
     })
     const result = resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.B', '', 60)], [inst('INSTANCE0', 'MAIN')])
     expect(result[0].datatype).toBe('REAL')
@@ -255,7 +251,7 @@ describe('resolveStructureIndices', () => {
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'S',
-      fields: [makeField({ fieldPath: 'C', initialValue: 0 })],
+      fields: [makeField({ fieldPath: 'C'})],
     })
     const result = resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.C', '', 61)], [inst('INSTANCE0', 'MAIN')])
     expect(result[0].datatype).toBe('UNKNOWN')
@@ -271,7 +267,7 @@ describe('debugTypeToIecType (indirect)', () => {
     const node = makeNode({
       nodeType: 'structure',
       variablePath: 'S',
-      fields: [makeField({ fieldPath: 'F', initialValue: 0 })],
+      fields: [makeField({ fieldPath: 'F'})],
     })
     return resolveStructureIndices(node, [dv('RES0__INSTANCE0.S.F', debugType, 0)], [inst('INSTANCE0', 'MAIN')])[0]
       .datatype
