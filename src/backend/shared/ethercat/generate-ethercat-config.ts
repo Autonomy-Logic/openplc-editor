@@ -229,7 +229,7 @@ function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): R
         name: entry.name,
         comment: `Startup SDO: ${entry.objectName}`,
       }),
-  )
+    )
 }
 
 /**
