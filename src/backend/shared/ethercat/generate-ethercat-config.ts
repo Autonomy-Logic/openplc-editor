@@ -208,20 +208,27 @@ function buildChannels(
 
 /**
  * Converts SDOConfigurationEntry[] to RuntimeSdoConfig[] for the runtime plugin.
+ *
+ * Entries the operator left blank (empty value) are dropped: the ESI may
+ * declare an RW SDO without a vendor default expecting the operator to
+ * supply one.  If they did not, we must not silently send 0 -- the slave's
+ * own internal default applies instead.
  */
 function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): RuntimeSdoConfig[] {
   if (!entries || entries.length === 0) return []
 
-  return entries.map(
-    (entry): RuntimeSdoConfig => ({
-      index: entry.index,
-      subindex: entry.subIndex,
-      value: parseNumericValue(entry.value),
-      data_type: entry.dataType,
-      bit_length: entry.bitLength,
-      name: entry.name,
-      comment: `Startup SDO: ${entry.objectName}`,
-    }),
+  return entries
+    .filter((entry) => entry.value !== undefined && entry.value !== null && entry.value.trim() !== '')
+    .map(
+      (entry): RuntimeSdoConfig => ({
+        index: entry.index,
+        subindex: entry.subIndex,
+        value: parseNumericValue(entry.value),
+        data_type: entry.dataType,
+        bit_length: entry.bitLength,
+        name: entry.name,
+        comment: `Startup SDO: ${entry.objectName}`,
+      }),
   )
 }
 
