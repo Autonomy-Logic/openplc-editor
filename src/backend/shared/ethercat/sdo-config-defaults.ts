@@ -51,11 +51,7 @@ function isConfigurableRange(index: string): boolean {
  * Unknown types or invalid input fall through to the raw hex string so
  * the operator at least sees what came from the ESI rather than nothing.
  */
-function decodeEsiDefaultData(
-  hex: string | undefined,
-  dataType: string | undefined,
-  bitSize: number,
-): string {
+function decodeEsiDefaultData(hex: string | undefined, dataType: string | undefined, bitSize: number): string {
   if (!hex) return ''
   const clean = hex.replace(/\s+/g, '').replace(/^0x/i, '')
   if (clean.length === 0) return ''
@@ -77,7 +73,10 @@ function decodeEsiDefaultData(
   // Bitmask types: print as 0x... padded to the declared width.
   if (dt === 'BYTE' || dt === 'WORD' || dt === 'DWORD' || dt === 'LWORD') {
     const msbFirst = [...bytes].reverse()
-    const hexStr = msbFirst.map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+    const hexStr = msbFirst
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
     const expectedDigits = Math.max(1, Math.ceil(bitSize / 4))
     return '0x' + hexStr.padStart(expectedDigits, '0')
   }
@@ -138,8 +137,12 @@ export function extractDefaultSdoConfigurations(coeObjects: ESICoEObject[]): SDO
         const subIdx = parseInt(sub.subIndex, 10)
         if (subIdx === 0) continue
         if (sub.access !== 'RW') continue
-        if (sub.defaultValue === undefined || sub.defaultValue === null) continue
 
+        // Vendor may omit <DefaultValue>/<DefaultData> on RW entries that
+        // require explicit operator input (motor torque limits, IDs, etc).
+        // Surface them with an empty default so they are visible and
+        // configurable in the UI; the exporter skips entries the operator
+        // never fills in.
         const decoded = decodeEsiDefaultData(sub.defaultValue, sub.type, sub.bitSize)
         entries.push({
           index: obj.index,
@@ -154,7 +157,6 @@ export function extractDefaultSdoConfigurations(coeObjects: ESICoEObject[]): SDO
       }
     } else {
       if (obj.access !== 'RW') continue
-      if (obj.defaultValue === undefined || obj.defaultValue === null) continue
 
       const decoded = decodeEsiDefaultData(obj.defaultValue, obj.type, obj.bitSize)
       entries.push({
