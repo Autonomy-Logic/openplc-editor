@@ -90,7 +90,15 @@ export const useRuntimePolling = () => {
           typeof statusResult.status === 'string'
             ? statusResult.status.replace('STATUS:', '').replace('\n', '').trim()
             : statusResult.status
-        const validStatuses: PlcStatus[] = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'UNKNOWN']
+        const validStatuses: PlcStatus[] = [
+          'INIT',
+          'RUNNING',
+          'STOPPED',
+          'ERROR',
+          'EMPTY',
+          'TRANSITIONING',
+          'UNKNOWN',
+        ]
         const plcStatus: PlcStatus = validStatuses.includes(rawStatus as PlcStatus)
           ? (rawStatus as PlcStatus)
           : 'UNKNOWN'

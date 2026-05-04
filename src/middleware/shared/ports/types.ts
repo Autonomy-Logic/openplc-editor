@@ -516,7 +516,7 @@ export interface DeviceConfiguration {
 // Runtime
 // ---------------------------------------------------------------------------
 
-export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'UNKNOWN'
+export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TRANSITIONING' | 'UNKNOWN'
 
 export interface TimingStats {
   scan_count: number
