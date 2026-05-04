@@ -77,3 +77,18 @@ export function parseDebugMap(content: string): DebugMap | undefined {
     return undefined
   }
 }
+
+/**
+ * Build a uppercase-path → packed-DebugAddr lookup over every leaf in
+ * the map. The single source of truth for variable→address resolution
+ * across the editor — both the debugger watch panel and the OPC-UA
+ * config generator consume this map. Anything that needs to translate
+ * a STruC++ debug path to an (arr, elem) address goes through here.
+ */
+export function buildLeafPathMap(map: DebugMap): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const leaf of map.leaves) {
+    out.set(leaf.path.toUpperCase(), packDebugAddr(leaf))
+  }
+  return out
+}

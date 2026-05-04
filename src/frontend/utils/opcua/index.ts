@@ -20,7 +20,7 @@ export type {
   RuntimeVariable,
   RuntimeVariablePermissions,
 } from './generate-opcua-config'
-export { generateOpcUaConfig, parseDebugMap, validateOpcUaConfig } from './generate-opcua-config'
+export { generateOpcUaConfig, validateOpcUaConfig } from './generate-opcua-config'
 export {
   type LeafAddress,
   OpcUaConfigError,
@@ -29,6 +29,3 @@ export {
   resolveVariableAddress,
 } from './resolve-indices'
 export type { PLCInstanceInfo, ResolvedField } from './types'
-// Re-export the debugger's variable-entry shape so OPC-UA consumers
-// don't have to know about the cross-module structure.
-export type { DebugVariableEntry } from '../debug-parser'

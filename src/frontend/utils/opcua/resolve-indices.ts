@@ -1,44 +1,40 @@
 /**
  * OPC-UA address resolver — variables → (arr, elem) lookups.
  *
- * Reuses the debugger's shared path-matching utilities
- * (debug-variable-finder.ts) so the OPC-UA editor and the debugger
- * watch panel resolve variables identically. No OPC-UA-specific
- * path conventions, no duplicate buildDebugPath / findDebugVariable.
+ * Thin wrapper over the debugger's shared infrastructure:
  *
- * Output addresses are unpacked from the debugger's packed
- * `index: number` (arrayIdx<<16 | elemIdx) into explicit (arr, elem)
- * tuples — that's the shape the runtime's strucpp_debug_* C
- * functions take, and the shape the OPC-UA plugin's per-variable
- * config carries.
+ *   - debug-parser.ts: buildLeafPathMap(debugMap) — uppercase-path →
+ *     packed-DebugAddr lookup. The single source of truth for
+ *     "variable path → address" resolution. The debugger's watch
+ *     panel uses the exact same map.
+ *   - debug-variable-finder.ts: buildDebugPath / buildGlobalDebugPath /
+ *     findInstanceName — STruC++ path conventions.
+ *   - debug-parser.ts: unpackDebugAddr — split the packed
+ *     (arrayIdx<<16|elemIdx) integer back into explicit (arr, elem),
+ *     which is the shape the runtime's strucpp_debug_* C entry
+ *     points and the OPC-UA plugin's per-variable config consume.
+ *
+ * No OPC-UA-specific path construction, no parallel lookup table.
+ * If the debugger can find a variable, OPC-UA can; if it can't,
+ * neither can.
  */
 
 import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/ports/open-plc-types'
 
-import {
-  type DebugVariableEntry,
-  unpackDebugAddr,
-} from '../debug-parser'
+import { unpackDebugAddr } from '../debug-parser'
 import {
   buildDebugPath,
   buildGlobalDebugPath,
-  findDebugVariable,
   findInstanceName,
   type PLCInstanceMapping,
 } from '../debug-variable-finder'
 import type { PLCInstanceInfo, ResolvedField } from './types'
 
-/**
- * Address of a leaf in the STruC++ debugger Entry tables.
- */
 export interface LeafAddress {
   arr: number
   elem: number
 }
 
-/**
- * Custom error class for OPC-UA configuration errors.
- */
 export class OpcUaConfigError extends Error {
   constructor(
     public readonly variableRef: string,
@@ -54,23 +50,42 @@ const toInstanceMapping = (instances: PLCInstanceInfo[]): PLCInstanceMapping[] =
   instances.map((inst) => ({ name: inst.name, program: inst.program }))
 
 /**
- * Convert a debug variable's packed index into an explicit
- * { arr, elem } tuple — the shape the OPC-UA runtime config carries
- * per variable. Mirror image of debug-parser.packDebugAddr.
+ * Look up a STruC++ debug path in the shared leaf map and return the
+ * (arr, elem) address. Returns null on miss. Wraps unpackDebugAddr.
  */
-const addressOf = (entry: DebugVariableEntry): LeafAddress => {
-  const { arrayIdx, elemIdx } = unpackDebugAddr(entry.index)
+const lookup = (path: string, pathToAddr: Map<string, number>): LeafAddress | null => {
+  const packed = pathToAddr.get(path.toUpperCase())
+  if (packed === undefined) return null
+  const { arrayIdx, elemIdx } = unpackDebugAddr(packed)
   return { arr: arrayIdx, elem: elemIdx }
 }
 
 /**
- * The debugger emits type strings with a trailing `_ENUM` suffix
- * (e.g. "INT_ENUM") — strip it for OPC-UA where IEC type names like
- * "INT" / "BOOL" / "REAL" are expected.
+ * Build the full STruC++ debug path for a node — handling the
+ * GVL/CONFIG (global) vs instance-prefixed cases. Returns null if
+ * the program POU doesn't have an instance in Resources (the user
+ * has to fix that themselves; not a leaf-level miss).
  */
-const stripEnumSuffix = (type: string): string => {
-  if (type.endsWith('_ENUM')) return type.slice(0, -5)
-  return type
+const pathForNode = (
+  pouName: string,
+  variablePath: string,
+  instances: PLCInstanceInfo[],
+): { path: string } | { error: OpcUaConfigError } => {
+  if (pouName === 'GVL' || pouName === 'CONFIG' || pouName.toUpperCase() === 'GVL') {
+    return { path: buildGlobalDebugPath(variablePath) }
+  }
+  const instanceName = findInstanceName(pouName, toInstanceMapping(instances))
+  if (!instanceName) {
+    return {
+      error: new OpcUaConfigError(
+        pouName,
+        'unknown',
+        `Cannot find instance for program "${pouName}" in Resources.\n` +
+          `  Make sure the program is instantiated in the Resources configuration.`,
+      ),
+    }
+  }
+  return { path: buildDebugPath(instanceName, variablePath) }
 }
 
 /**
@@ -80,44 +95,21 @@ const stripEnumSuffix = (type: string): string => {
  */
 export const resolveVariableAddress = (
   node: OpcUaNodeConfig,
-  debugVariables: DebugVariableEntry[],
+  pathToAddr: Map<string, number>,
   instances: PLCInstanceInfo[],
 ): LeafAddress => {
-  const instanceMappings = toInstanceMapping(instances)
+  const result = pathForNode(node.pouName, node.variablePath, instances)
+  if ('error' in result) throw result.error
 
-  if (node.pouName === 'GVL' || node.pouName === 'CONFIG' || node.pouName.toUpperCase() === 'GVL') {
-    const debugPath = buildGlobalDebugPath(node.variablePath)
-    const match = findDebugVariable(debugVariables, debugPath)
-    if (match) return addressOf(match)
-    throw new OpcUaConfigError(
-      `${node.pouName}:${node.variablePath}`,
-      debugPath,
-      `Cannot resolve OPC-UA global variable address.\n` +
-        `  Variable: ${node.pouName}:${node.variablePath}\n` +
-        `  Expected debug path: ${debugPath}`,
-    )
-  }
-
-  const instanceName = findInstanceName(node.pouName, instanceMappings)
-  if (!instanceName) {
-    throw new OpcUaConfigError(
-      node.pouName,
-      'unknown',
-      `Cannot find instance for program "${node.pouName}" in Resources.\n` +
-        `  Make sure the program is instantiated in the Resources configuration.`,
-    )
-  }
-
-  const debugPath = buildDebugPath(instanceName, node.variablePath)
-  const match = findDebugVariable(debugVariables, debugPath)
-  if (match) return addressOf(match)
+  const addr = lookup(result.path, pathToAddr)
+  if (addr) return addr
 
   throw new OpcUaConfigError(
     `${node.pouName}:${node.variablePath}`,
-    debugPath,
+    result.path,
     `Cannot resolve OPC-UA variable address.\n` +
       `  Variable: ${node.pouName}:${node.variablePath}\n` +
-      `  Expected debug path: ${debugPath}\n` +
+      `  Expected debug path: ${result.path}\n` +
       `  This may happen if the program was modified after configuring OPC-UA.`,
   )
 }
@@ -136,7 +128,7 @@ const resolveFieldRecursively = (
   field: OpcUaFieldConfig,
   parentPath: string,
   pouName: string,
-  debugVariables: DebugVariableEntry[],
+  pathToAddr: Map<string, number>,
   instanceName: string | null,
   droppedPaths: string[],
 ): ResolvedField | null => {
@@ -148,13 +140,11 @@ const resolveFieldRecursively = (
   if (field.fields && field.fields.length > 0) {
     const nestedFields = field.fields
       .map((nestedField) =>
-        resolveFieldRecursively(nestedField, fullFieldPath, pouName, debugVariables, instanceName, droppedPaths),
+        resolveFieldRecursively(nestedField, fullFieldPath, pouName, pathToAddr, instanceName, droppedPaths),
       )
       .filter((f): f is ResolvedField => f !== null)
 
-    if (nestedFields.length === 0) {
-      return null
-    }
+    if (nestedFields.length === 0) return null
 
     return {
       name: field.fieldPath,
@@ -171,17 +161,15 @@ const resolveFieldRecursively = (
     pouName === 'GVL' || pouName === 'CONFIG'
       ? buildGlobalDebugPath(fullFieldPath)
       : buildDebugPath(instanceName!, fullFieldPath)
-  const match = findDebugVariable(debugVariables, debugPath)
-
-  if (!match) {
+  const addr = lookup(debugPath, pathToAddr)
+  if (!addr) {
     droppedPaths.push(`${pouName}:${fullFieldPath}`)
     return null
   }
 
-  const addr = addressOf(match)
   return {
     name: field.fieldPath,
-    datatype: stripEnumSuffix(match.type) || field.datatype || 'UNKNOWN',
+    datatype: field.datatype || 'UNKNOWN',
     arr: addr.arr,
     elem: addr.elem,
     permissions: field.permissions,
@@ -194,14 +182,12 @@ const resolveFieldRecursively = (
  */
 export const resolveStructureAddresses = (
   node: OpcUaNodeConfig,
-  debugVariables: DebugVariableEntry[],
+  pathToAddr: Map<string, number>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[] = [],
 ): ResolvedField[] => {
-  const instanceMappings = toInstanceMapping(instances)
-
   if (!node.fields || node.fields.length === 0) {
-    const addr = resolveVariableAddress(node, debugVariables, instances)
+    const addr = resolveVariableAddress(node, pathToAddr, instances)
     return [
       {
         name: node.variablePath,
@@ -215,7 +201,7 @@ export const resolveStructureAddresses = (
 
   let instanceName: string | null = null
   if (node.pouName !== 'GVL' && node.pouName !== 'CONFIG') {
-    instanceName = findInstanceName(node.pouName, instanceMappings)
+    instanceName = findInstanceName(node.pouName, toInstanceMapping(instances))
     if (!instanceName) {
       throw new OpcUaConfigError(
         node.pouName,
@@ -227,49 +213,9 @@ export const resolveStructureAddresses = (
 
   return node.fields
     .map((field) =>
-      resolveFieldRecursively(
-        field,
-        node.variablePath,
-        node.pouName,
-        debugVariables,
-        instanceName,
-        droppedPaths,
-      ),
+      resolveFieldRecursively(field, node.variablePath, node.pouName, pathToAddr, instanceName, droppedPaths),
     )
     .filter((f): f is ResolvedField => f !== null)
-}
-
-/**
- * Find the lowest-indexed array element among debug leaves whose
- * paths share a common prefix. STruC++ uses IEC indexing for array
- * elements (`ARRAY[1..10]` → leaves at `[1]..[10]`, `ARRAY[-5..5]` →
- * `[-5]..[5]`), so the resolver can't assume `[0]` is the base.
- *
- * Walks every leaf once. For an array with N elements this is N
- * comparisons against the prefix; cheap enough for any realistic
- * project (the editor's typical map has hundreds of leaves total).
- */
-const findArrayBase = (
-  debugVariables: DebugVariableEntry[],
-  prefix: string,
-): DebugVariableEntry | null => {
-  const upperPrefix = `${prefix.toUpperCase()}[`
-  let best: { entry: DebugVariableEntry; idx: number } | null = null
-  for (const entry of debugVariables) {
-    const name = entry.name.toUpperCase()
-    if (!name.startsWith(upperPrefix)) continue
-    const close = name.indexOf(']', upperPrefix.length)
-    if (close === -1) continue
-    const idxStr = name.slice(upperPrefix.length, close)
-    const idx = Number(idxStr)
-    if (!Number.isFinite(idx)) continue
-    // After the closing bracket there must be nothing further on the
-    // path — otherwise it's a sub-element of an array of structs/FBs
-    // and we don't want to match those as the "base".
-    if (close !== name.length - 1) continue
-    if (best === null || idx < best.idx) best = { entry, idx }
-  }
-  return best?.entry ?? null
 }
 
 /**
@@ -277,38 +223,43 @@ const findArrayBase = (
  * of the lowest-IEC-indexed element; subsequent elements live at
  * (arr, elem + i) within the same debug array (STruC++ guarantees
  * per-array contiguity).
+ *
+ * IEC arrays use arbitrary lower bounds (`ARRAY[1..N]`,
+ * `ARRAY[-5..5]`) and STruC++ emits the IEC index in debug-map paths
+ * — so the resolver scans the leaf map for the lowest-numbered
+ * element matching the array's prefix rather than assuming `[0]`.
  */
 export const resolveArrayAddress = (
   node: OpcUaNodeConfig,
-  debugVariables: DebugVariableEntry[],
+  pathToAddr: Map<string, number>,
   instances: PLCInstanceInfo[],
 ): LeafAddress => {
-  const instanceMappings = toInstanceMapping(instances)
+  const result = pathForNode(node.pouName, node.variablePath, instances)
+  if ('error' in result) throw result.error
 
-  let prefix: string
-  if (node.pouName === 'GVL' || node.pouName === 'CONFIG') {
-    prefix = buildGlobalDebugPath(node.variablePath)
-  } else {
-    const instanceName = findInstanceName(node.pouName, instanceMappings)
-    if (!instanceName) {
-      throw new OpcUaConfigError(
-        node.pouName,
-        'unknown',
-        `Cannot find instance for program "${node.pouName}" in Resources.`,
-      )
+  const upperPrefix = `${result.path.toUpperCase()}[`
+  let best: { addr: LeafAddress; idx: number } | null = null
+  for (const [path, packed] of pathToAddr) {
+    if (!path.startsWith(upperPrefix)) continue
+    const close = path.indexOf(']', upperPrefix.length)
+    // Reject array-of-struct sub-elements: `FOO[1].FIELD` matches
+    // the prefix but is not the array's own leaf.
+    if (close === -1 || close !== path.length - 1) continue
+    const idx = Number(path.slice(upperPrefix.length, close))
+    if (!Number.isFinite(idx)) continue
+    if (best === null || idx < best.idx) {
+      const { arrayIdx, elemIdx } = unpackDebugAddr(packed)
+      best = { addr: { arr: arrayIdx, elem: elemIdx }, idx }
     }
-    prefix = buildDebugPath(instanceName, node.variablePath)
   }
-
-  const match = findArrayBase(debugVariables, prefix)
-  if (match) return addressOf(match)
+  if (best) return best.addr
 
   throw new OpcUaConfigError(
     `${node.pouName}:${node.variablePath}`,
-    `${prefix}[*]`,
+    `${result.path}[*]`,
     `Cannot resolve OPC-UA array address.\n` +
       `  Array: ${node.pouName}:${node.variablePath}\n` +
-      `  Expected debug path: ${prefix}[<index>]\n` +
+      `  Expected debug path: ${result.path}[<index>]\n` +
       `  No array elements with that prefix found in debug-map.json.`,
   )
 }

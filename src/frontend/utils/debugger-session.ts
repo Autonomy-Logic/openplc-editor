@@ -15,7 +15,7 @@ import type {
   PLCVariable,
 } from '../../middleware/shared/ports/types'
 import type { DebugMap, DebugVariableEntry } from './debug-parser'
-import { packDebugAddr } from './debug-parser'
+import { buildLeafPathMap, packDebugAddr } from './debug-parser'
 import { buildDebugTree } from './debug-tree-builder'
 import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from './debug-variable-finder'
 
@@ -72,11 +72,9 @@ export function buildVariableIndexMap(
   const indexMap = new Map<string, number>()
   const warnings: string[] = []
 
-  // Build a path -> packed-address lookup (case-insensitive).
-  const pathToAddr = new Map<string, number>()
-  for (const leaf of map.leaves) {
-    pathToAddr.set(leaf.path.toUpperCase(), packDebugAddr(leaf))
-  }
+  // Single source of truth for path → packed-address (case-insensitive).
+  // Same lookup the OPC-UA resolver uses.
+  const pathToAddr = buildLeafPathMap(map)
 
   const instanceMappings: PLCInstanceMapping[] = instances.map((inst) => ({
     name: inst.name,

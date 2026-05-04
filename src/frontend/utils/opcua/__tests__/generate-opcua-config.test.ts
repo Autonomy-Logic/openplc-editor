@@ -6,7 +6,7 @@ import type {
   PLCServer,
 } from '@root/middleware/shared/ports/open-plc-types'
 
-import { generateOpcUaConfig, parseDebugMap, validateOpcUaConfig } from '../generate-opcua-config'
+import { generateOpcUaConfig, validateOpcUaConfig } from '../generate-opcua-config'
 import { OpcUaConfigError } from '../resolve-indices'
 import * as resolveIndices from '../resolve-indices'
 import type { PLCInstanceInfo } from '../types'
@@ -98,48 +98,12 @@ const debugMapJson = (
 
 const instances: PLCInstanceInfo[] = [{ name: 'INSTANCE0', task: 'TASK0', program: 'MAIN' }]
 
-// ---------------------------------------------------------------------------
-// parseDebugMap
-// ---------------------------------------------------------------------------
-
-describe('parseDebugMap', () => {
-  it('parses a valid v2 map into DebugVariableEntry[] (debugger shape)', () => {
-    // OPC-UA piggybacks on the debugger's parser: leaves come back as
-    // `{ name, type: 'INT_ENUM', index: packed(arr, elem) }`.
-    const map = debugMapJson([
-      { path: 'INSTANCE0.X', type: 'INT', arr: 0, elem: 0 },
-      { path: 'INSTANCE0.Y', type: 'REAL', arr: 1, elem: 5, size: 4 },
-    ])
-    const result = parseDebugMap(map)
-    expect(result).toHaveLength(2)
-    expect(result[0]).toEqual({ name: 'INSTANCE0.X', type: 'INT_ENUM', index: 0 })
-    // (arr=1 << 16) | elem=5 = 0x10005 = 65541
-    expect(result[1]).toEqual({ name: 'INSTANCE0.Y', type: 'REAL_ENUM', index: 65541 })
-  })
-
-  it('returns empty array on malformed JSON', () => {
-    expect(parseDebugMap('not json{')).toEqual([])
-  })
-
-  it('returns empty array on wrong version', () => {
-    const map = JSON.stringify({ version: 1, leaves: [] })
-    expect(parseDebugMap(map)).toEqual([])
-  })
-
-  it('returns empty array when leaves field is missing', () => {
-    const map = JSON.stringify({ version: 2, md5: 'x', typeTags: {}, arrays: [] })
-    expect(parseDebugMap(map)).toEqual([])
-  })
-
-  it('returns empty array when top-level is not an object', () => {
-    expect(parseDebugMap('null')).toEqual([])
-    expect(parseDebugMap('"oops"')).toEqual([])
-  })
-
-  it('returns empty array when leaves array is empty', () => {
-    expect(parseDebugMap(debugMapJson([]))).toEqual([])
-  })
-})
+// parseDebugMap was an OPC-UA-specific re-export. The underlying
+// JSON parser + leaf-path Map construction now live in debug-parser.ts
+// (parseDebugMap + buildLeafPathMap) — covered by the debugger's own
+// tests. The end-to-end behaviour (malformed JSON / wrong version
+// gracefully degrade to "no variables") is exercised by the
+// generateOpcUaConfig and validateOpcUaConfig flows below.
 
 // ---------------------------------------------------------------------------
 // generateOpcUaConfig
