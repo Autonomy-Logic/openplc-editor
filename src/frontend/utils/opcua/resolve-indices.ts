@@ -240,9 +240,43 @@ export const resolveStructureAddresses = (
 }
 
 /**
+ * Find the lowest-indexed array element among debug leaves whose
+ * paths share a common prefix. STruC++ uses IEC indexing for array
+ * elements (`ARRAY[1..10]` → leaves at `[1]..[10]`, `ARRAY[-5..5]` →
+ * `[-5]..[5]`), so the resolver can't assume `[0]` is the base.
+ *
+ * Walks every leaf once. For an array with N elements this is N
+ * comparisons against the prefix; cheap enough for any realistic
+ * project (the editor's typical map has hundreds of leaves total).
+ */
+const findArrayBase = (
+  debugVariables: DebugVariableEntry[],
+  prefix: string,
+): DebugVariableEntry | null => {
+  const upperPrefix = `${prefix.toUpperCase()}[`
+  let best: { entry: DebugVariableEntry; idx: number } | null = null
+  for (const entry of debugVariables) {
+    const name = entry.name.toUpperCase()
+    if (!name.startsWith(upperPrefix)) continue
+    const close = name.indexOf(']', upperPrefix.length)
+    if (close === -1) continue
+    const idxStr = name.slice(upperPrefix.length, close)
+    const idx = Number(idxStr)
+    if (!Number.isFinite(idx)) continue
+    // After the closing bracket there must be nothing further on the
+    // path — otherwise it's a sub-element of an array of structs/FBs
+    // and we don't want to match those as the "base".
+    if (close !== name.length - 1) continue
+    if (best === null || idx < best.idx) best = { entry, idx }
+  }
+  return best?.entry ?? null
+}
+
+/**
  * Resolve the starting address for an array. Returns the (arr, elem)
- * of element [0]; subsequent elements live at (arr, elem + i) within
- * the same debug array (STruC++ guarantees per-array contiguity).
+ * of the lowest-IEC-indexed element; subsequent elements live at
+ * (arr, elem + i) within the same debug array (STruC++ guarantees
+ * per-array contiguity).
  */
 export const resolveArrayAddress = (
   node: OpcUaNodeConfig,
@@ -251,9 +285,9 @@ export const resolveArrayAddress = (
 ): LeafAddress => {
   const instanceMappings = toInstanceMapping(instances)
 
-  let debugPath: string
+  let prefix: string
   if (node.pouName === 'GVL' || node.pouName === 'CONFIG') {
-    debugPath = buildGlobalDebugPath(node.variablePath) + '[0]'
+    prefix = buildGlobalDebugPath(node.variablePath)
   } else {
     const instanceName = findInstanceName(node.pouName, instanceMappings)
     if (!instanceName) {
@@ -263,18 +297,18 @@ export const resolveArrayAddress = (
         `Cannot find instance for program "${node.pouName}" in Resources.`,
       )
     }
-    debugPath = buildDebugPath(instanceName, node.variablePath) + '[0]'
+    prefix = buildDebugPath(instanceName, node.variablePath)
   }
 
-  const match = findDebugVariable(debugVariables, debugPath)
+  const match = findArrayBase(debugVariables, prefix)
   if (match) return addressOf(match)
 
   throw new OpcUaConfigError(
     `${node.pouName}:${node.variablePath}`,
-    debugPath,
+    `${prefix}[*]`,
     `Cannot resolve OPC-UA array address.\n` +
       `  Array: ${node.pouName}:${node.variablePath}\n` +
-      `  Expected debug path: ${debugPath}\n` +
-      `  Looking for first element [0] of the array.`,
+      `  Expected debug path: ${prefix}[<index>]\n` +
+      `  No array elements with that prefix found in debug-map.json.`,
   )
 }

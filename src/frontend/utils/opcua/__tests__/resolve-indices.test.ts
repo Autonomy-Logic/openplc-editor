@@ -284,4 +284,44 @@ describe('resolveArrayAddress', () => {
       'Cannot resolve OPC-UA array address',
     )
   })
+
+  // IEC arrays use arbitrary lower bounds (`ARRAY[1..N]`, `ARRAY[-5..5]`).
+  // STruC++ emits debug-map paths using the IEC index, not zero-based —
+  // so the resolver finds the lowest-indexed element among the leaves
+  // sharing the array's prefix, not a hardcoded `[0]`.
+  it('resolves an array starting at IEC index 1 (ARRAY[1..N])', () => {
+    const node = makeNode({ nodeType: 'array', variablePath: 'MY_ARRAY', arrayLength: 50 })
+    const leaves = [
+      dv('INSTANCE0.MY_ARRAY[1]', 'DINT', 0, 30),
+      dv('INSTANCE0.MY_ARRAY[2]', 'DINT', 0, 31),
+      dv('INSTANCE0.MY_ARRAY[3]', 'DINT', 0, 32),
+    ]
+    expect(resolveArrayAddress(node, leaves, [inst('INSTANCE0', 'MAIN')])).toEqual({ arr: 0, elem: 30 })
+  })
+
+  it('resolves an array with negative lower bound (ARRAY[-2..2])', () => {
+    const node = makeNode({ nodeType: 'array', variablePath: 'SIGNED_ARR', arrayLength: 5 })
+    // Note the order is intentionally not sorted — resolver must pick min.
+    const leaves = [
+      dv('INSTANCE0.SIGNED_ARR[1]', 'INT', 0, 13),
+      dv('INSTANCE0.SIGNED_ARR[-2]', 'INT', 0, 10),
+      dv('INSTANCE0.SIGNED_ARR[2]', 'INT', 0, 14),
+      dv('INSTANCE0.SIGNED_ARR[-1]', 'INT', 0, 11),
+      dv('INSTANCE0.SIGNED_ARR[0]', 'INT', 0, 12),
+    ]
+    expect(resolveArrayAddress(node, leaves, [inst('INSTANCE0', 'MAIN')])).toEqual({ arr: 0, elem: 10 })
+  })
+
+  it('does not match sub-elements of an array of structs as the array base', () => {
+    // For an ARRAY[1..3] OF SOME_STRUCT, leaves look like
+    // FOO[1].FIELD — those are NOT the array's own leaf base.
+    const node = makeNode({ nodeType: 'array', variablePath: 'STRUCT_ARR', arrayLength: 3 })
+    const leaves = [
+      dv('INSTANCE0.STRUCT_ARR[1].A', 'INT', 0, 50),
+      dv('INSTANCE0.STRUCT_ARR[1].B', 'INT', 0, 51),
+    ]
+    expect(() => resolveArrayAddress(node, leaves, [inst('INSTANCE0', 'MAIN')])).toThrow(
+      'Cannot resolve OPC-UA array address',
+    )
+  })
 })
