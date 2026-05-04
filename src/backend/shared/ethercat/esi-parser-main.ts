@@ -383,7 +383,11 @@ function parseCoEDictionary(deviceEl: Record<string, unknown>): ESICoEObject[] |
           if (pdoMappingStr) siPdoMapping = pdoMappingStr.toLowerCase() !== 'false' && pdoMappingStr !== '0'
         }
 
-        const siDefaultValue = getTextValue(si['DefaultValue']) || undefined
+        // ETG.2000 allows either <DefaultValue> (formatted text, often CODESYS-generated)
+        // or <DefaultData> (hex string of LE wire bytes, Beckhoff-generated).  Read both
+        // so vendor-mixed repositories don't drop SDO defaults silently.
+        const siDefaultValue =
+          getTextValue(si['DefaultValue']) || getTextValue(si['DefaultData']) || undefined
 
         subItems.push({
           subIdx: siSubIdx,
@@ -450,8 +454,9 @@ function parseCoEDictionary(deviceEl: Record<string, unknown>): ESICoEObject[] |
       }
     }
 
-    // Parse default value from object-level Info
-    let defaultValue = getTextValue(objEl['DefaultValue']) || undefined
+    // Parse default value from object-level Info (DefaultValue or DefaultData)
+    let defaultValue =
+      getTextValue(objEl['DefaultValue']) || getTextValue(objEl['DefaultData']) || undefined
 
     // Resolve DataType to build sub-items for complex objects
     const dtInfo = typeName ? dataTypeMap.get(typeName) : undefined
@@ -466,7 +471,11 @@ function parseCoEDictionary(deviceEl: Record<string, unknown>): ESICoEObject[] |
         for (const isi of infoSubItems) {
           const isiName = getTextValue(isi['Name'])
           const isiInfo = isi['Info'] as Record<string, unknown> | undefined
-          const isiDefaultValue = isiInfo ? getTextValue(isiInfo['DefaultValue']) || undefined : undefined
+          const isiDefaultValue = isiInfo
+            ? getTextValue(isiInfo['DefaultValue']) ||
+              getTextValue(isiInfo['DefaultData']) ||
+              undefined
+            : undefined
           if (isiName) {
             overrideMap.set(isiName, { defaultValue: isiDefaultValue })
           }
@@ -492,7 +501,10 @@ function parseCoEDictionary(deviceEl: Record<string, unknown>): ESICoEObject[] |
     if (!subItems && !defaultValue) {
       const infoEl = objEl['Info'] as Record<string, unknown> | undefined
       if (infoEl) {
-        defaultValue = getTextValue(infoEl['DefaultValue']) || undefined
+        defaultValue =
+          getTextValue(infoEl['DefaultValue']) ||
+          getTextValue(infoEl['DefaultData']) ||
+          undefined
       }
     }
 

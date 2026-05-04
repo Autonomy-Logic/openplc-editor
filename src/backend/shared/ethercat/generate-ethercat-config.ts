@@ -127,13 +127,22 @@ function hexToInt(hex: string): number {
 
 /**
  * Parses a user-entered value string into a numeric value.
- * Handles decimal ("100"), hex ("0xFF", "#xFF"), float ("3.14"), and negative ("-50").
+ * Handles:
+ *   - Decimal ("100"), hex ("0xFF", "#xFF"), float ("3.14"), negative ("-50")
+ *   - BOOL strings ("TRUE"/"FALSE", case-insensitive) -> 1/0.  Without this
+ *     branch the decoder's BOOL output collapses to 0 because Number("TRUE")
+ *     is NaN.
  * Returns 0 for empty or unparseable strings.
  */
 function parseNumericValue(str: string): number {
   if (!str || str.trim() === '') return 0
 
   const trimmed = str.trim()
+
+  // BOOL literals (decoder output for BOOL defaults uses these)
+  const lower = trimmed.toLowerCase()
+  if (lower === 'true') return 1
+  if (lower === 'false') return 0
 
   // Handle hex prefixes: "0x" / "0X" / "#x" / "#X"
   if (/^(0x|#x)/i.test(trimmed)) {
