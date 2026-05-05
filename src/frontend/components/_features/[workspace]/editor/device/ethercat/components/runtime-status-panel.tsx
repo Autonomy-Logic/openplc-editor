@@ -1,11 +1,11 @@
 import { cn } from '@root/frontend/utils/cn'
-import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import type {
   EtherCATMasterStatus,
   EtherCATPluginState,
   EtherCATRuntimeStatusResponse,
   EtherCATSlaveStatus,
 } from '@root/middleware/shared/ports/ethercat-types'
+import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const POLL_INTERVAL_MS = 2000
