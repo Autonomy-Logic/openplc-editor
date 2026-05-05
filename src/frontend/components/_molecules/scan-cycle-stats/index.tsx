@@ -64,9 +64,14 @@ const TaskStatsRow = ({ task }: { task: TaskTimingStats }) => (
  * the runtime reports — under STruC++ each task runs on its own thread and
  * is timed independently. Hides itself when no task has completed a full
  * cycle yet.
+ *
+ * Defensive against pre-strucpp runtimes that emit the old flat shape
+ * (no `tasks` array): connecting to one of those is functionally degraded
+ * but must not crash the editor.
  */
 export const ScanCycleStats = ({ timingStats }: ScanCycleStatsProps) => {
-  const activeTasks = timingStats.tasks.filter((t) => t.scan_count > 0)
+  const tasks = timingStats.tasks ?? []
+  const activeTasks = tasks.filter((t) => t.scan_count > 0)
   if (activeTasks.length === 0) return null
 
   return (

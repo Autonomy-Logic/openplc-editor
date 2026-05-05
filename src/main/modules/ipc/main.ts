@@ -416,10 +416,10 @@ class MainProcessBridge implements MainIpcModule {
       // Build the endpoint path with optional include_stats query parameter
       const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
 
-      // The runtime now reports per-task stats: timing_stats = { tasks: [...] }.
-      // Each task entry carries the same fields the editor used to consume
-      // from a flat object, plus a `name` discriminator so the renderer
-      // can label cards.
+      // strucpp+ runtimes report per-task stats: timing_stats = { tasks: [...] }.
+      // Pre-strucpp runtimes report a flat object: { scan_count, scan_time_min, ... }.
+      // Accept either shape and normalise to the new array form so the editor
+      // stays alive when pointed at an older PLC.
       type TaskStats = {
         name: string
         scan_count: number
@@ -434,22 +434,34 @@ class MainProcessBridge implements MainIpcModule {
         cycle_latency_avg: number | null
         overruns: number
       }
+      type TimingStatsResponse = { tasks: TaskStats[] } | (Omit<TaskStats, 'name'> & { tasks?: undefined })
       const result = await this.makeRuntimeApiRequest<{
         status: string
-        timing_stats?: { tasks: TaskStats[] }
+        timing_stats?: TimingStatsResponse
       }>(ipAddress, jwtToken, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
-          timing_stats?: { tasks: TaskStats[] }
+          timing_stats?: TimingStatsResponse
         }
         return response
       })
 
       if (result.success && result.data) {
+        const raw = result.data.timing_stats
+        let timingStats: { tasks: TaskStats[] } | undefined
+        if (raw && Array.isArray((raw as { tasks?: TaskStats[] }).tasks)) {
+          timingStats = raw as { tasks: TaskStats[] }
+        } else if (raw && typeof (raw as { scan_count?: number }).scan_count === 'number') {
+          // Legacy flat shape — wrap it so the renderer's array iteration works.
+          const flat = raw as Omit<TaskStats, 'name'>
+          timingStats = {
+            tasks: [{ name: 'plc', ...flat }],
+          }
+        }
         return {
           success: true,
           status: result.data.status,
-          timingStats: result.data.timing_stats,
+          timingStats,
         }
       } else {
         return { success: false, error: !result.success ? result.error : 'Unknown error' }

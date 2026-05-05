@@ -1,4 +1,3 @@
-import { cycleTimeUsToIecInterval, ethercatTaskName } from '@root/backend/shared/ethercat/ethercat-task-helpers'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -193,25 +192,15 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           slice.project = state
 
-          // Migration: ensure system tasks exist for all EtherCAT devices
-          const ethercatDevices = (slice.project.data.remoteDevices ?? []).filter((d) => d.protocol === 'ethercat')
-          for (const device of ethercatDevices) {
-            const existingTask = slice.project.data.configurations.resource.tasks.find(
-              (t) => t.isSystemTask && t.associatedDevice === device.name,
+          // Migration: drop legacy EtherCAT system tasks. The bus is now
+          // driven by a dedicated thread the runtime plugin spawns; the
+          // synthetic IEC task that used to be injected here was never
+          // really useful (no programs ran on it) and would now collide
+          // with the plugin's own thread. Strip on load.
+          slice.project.data.configurations.resource.tasks =
+            slice.project.data.configurations.resource.tasks.filter(
+              (t) => !(t.isSystemTask && t.associatedDevice),
             )
-            if (!existingTask) {
-              const cycleTimeUs = device.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000
-              const taskPriority = device.ethercatConfig?.masterConfig?.taskPriority ?? 1
-              slice.project.data.configurations.resource.tasks.unshift({
-                name: ethercatTaskName(device.name),
-                triggering: 'Cyclic' as const,
-                interval: cycleTimeUsToIecInterval(cycleTimeUs),
-                priority: taskPriority,
-                isSystemTask: true,
-                associatedDevice: device.name,
-              })
-            }
-          }
         }),
       )
     },
@@ -640,34 +629,26 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     setTasks: ({ tasks }) => {
       setState(
         produce((slice: ProjectSlice) => {
-          // Preserve system tasks (auto-created for EtherCAT devices)
-          const systemTasks = slice.project.data.configurations.resource.tasks.filter((t) => t.isSystemTask)
-          slice.project.data.configurations.resource.tasks = [...systemTasks, ...tasks.filter((t) => !t.isSystemTask)]
+          slice.project.data.configurations.resource.tasks = tasks
         }),
       )
       return ok()
     },
     updateTask: (dto) => {
-      let response = ok()
       setState(
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
-          if (tasks[dto.rowId]?.isSystemTask) {
-            response = { ok: false, title: 'System task', message: 'System tasks cannot be modified' }
-            return
-          }
           if (dto.rowId >= 0 && dto.rowId < tasks.length) {
             tasks[dto.rowId] = { ...tasks[dto.rowId], ...dto.data }
           }
         }),
       )
-      return response
+      return ok()
     },
     deleteTask: ({ rowId }) => {
       setState(
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
-          if (tasks[rowId]?.isSystemTask) return
           if (rowId >= 0 && rowId < tasks.length) tasks.splice(rowId, 1)
         }),
       )
@@ -677,7 +658,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
           if (rowId < 0 || rowId >= tasks.length) return
-          if (tasks[rowId].isSystemTask) return
           const [item] = tasks.splice(rowId, 1)
           tasks.splice(newIndex, 0, item)
         }),
@@ -1068,19 +1048,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
           slice.project.data.remoteDevices.push(device)
 
-          // Auto-create system task for EtherCAT devices
-          if (device.protocol === 'ethercat') {
-            const cycleTimeUs = device.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000
-            const taskPriority = device.ethercatConfig?.masterConfig?.taskPriority ?? 1
-            slice.project.data.configurations.resource.tasks.unshift({
-              name: ethercatTaskName(device.name),
-              triggering: 'Cyclic' as const,
-              interval: cycleTimeUsToIecInterval(cycleTimeUs),
-              priority: taskPriority,
-              isSystemTask: true,
-              associatedDevice: device.name,
-            })
-          }
+          // EtherCAT bus is driven by a dedicated thread inside the
+          // runtime plugin, not by an injected IEC task. Nothing to do
+          // here on add/rename/delete.
         }),
       )
       return ok()
@@ -1089,19 +1059,8 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.remoteDevices) return
-          const deviceToDelete = slice.project.data.remoteDevices.find((d) => d.name === name)
           slice.pendingDeletions.push(`devices/remote/${name}.json`)
           slice.project.data.remoteDevices = slice.project.data.remoteDevices.filter((d) => d.name !== name)
-
-          // Remove associated system task for EtherCAT devices
-          if (deviceToDelete?.protocol === 'ethercat') {
-            const taskIndex = slice.project.data.configurations.resource.tasks.findIndex(
-              (t) => t.isSystemTask && t.associatedDevice === name,
-            )
-            if (taskIndex !== -1) {
-              slice.project.data.configurations.resource.tasks.splice(taskIndex, 1)
-            }
-          }
         }),
       )
       return ok()
@@ -1119,17 +1078,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           // See `updatePouName` — queue old path so the version-control
           // badge doesn't over-count the rename.
           slice.pendingDeletions.push(`devices/remote/${name}.json`)
-
-          // Update associated system task name for EtherCAT devices
-          if (device.protocol === 'ethercat') {
-            const systemTask = slice.project.data.configurations.resource.tasks.find(
-              (t) => t.isSystemTask && t.associatedDevice === name,
-            )
-            if (systemTask) {
-              systemTask.name = ethercatTaskName(newName)
-              systemTask.associatedDevice = newName
-            }
-          }
 
           device.name = newName
         }),
@@ -1231,22 +1179,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             return
           }
           device.ethercatConfig = ethercatConfig
-
-          // Sync master config fields to the associated system task
-          const masterCfg = ethercatConfig.masterConfig
-          if (masterCfg) {
-            const systemTask = slice.project.data.configurations.resource.tasks.find(
-              (t) => t.isSystemTask && t.associatedDevice === deviceName,
-            )
-            if (systemTask) {
-              if (masterCfg.cycleTimeUs !== undefined) {
-                systemTask.interval = cycleTimeUsToIecInterval(masterCfg.cycleTimeUs)
-              }
-              if (masterCfg.taskPriority !== undefined) {
-                systemTask.priority = masterCfg.taskPriority
-              }
-            }
-          }
+          // Bus timing now lives entirely in masterConfig (cycleTimeUs +
+          // taskPriority); the runtime plugin's bus thread reads them
+          // directly. No IEC task needs syncing.
         }),
       )
       return response
