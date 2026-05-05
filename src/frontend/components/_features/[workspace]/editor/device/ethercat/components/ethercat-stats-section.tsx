@@ -1,5 +1,5 @@
 import { cn } from '@root/frontend/utils/cn'
-import type { EtherCATMasterStatus } from '@root/types/ethercat'
+import type { EtherCATMasterStatus } from '@root/middleware/shared/ports/ethercat-types'
 
 type EthercatStatsSectionProps = {
   masters: EtherCATMasterStatus[]

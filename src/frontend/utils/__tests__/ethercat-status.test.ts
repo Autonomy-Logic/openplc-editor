@@ -1,4 +1,4 @@
-import type { EtherCATMasterStatus, EtherCATRuntimeStatusResponse } from '@root/types/ethercat'
+import type { EtherCATMasterStatus, EtherCATRuntimeStatusResponse } from '@root/middleware/shared/ports/ethercat-types'
 
 import { normalizeEthercatStatus } from '../ethercat-status'
 

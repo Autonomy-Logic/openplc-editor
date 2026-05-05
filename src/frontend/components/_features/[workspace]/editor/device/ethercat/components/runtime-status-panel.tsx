@@ -5,7 +5,7 @@ import type {
   EtherCATPluginState,
   EtherCATRuntimeStatusResponse,
   EtherCATSlaveStatus,
-} from '@root/types/ethercat'
+} from '@root/middleware/shared/ports/ethercat-types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const POLL_INTERVAL_MS = 2000

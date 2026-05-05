@@ -15,7 +15,7 @@ import type {
   ScannedDeviceMatch,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
-import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
+import type { EtherCATDevice, NetworkInterface } from '@root/middleware/shared/ports/ethercat-types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 

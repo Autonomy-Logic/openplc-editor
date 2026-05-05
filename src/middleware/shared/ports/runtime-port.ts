@@ -47,7 +47,7 @@ import type {
   EtherCATValidateRequest,
   EtherCATValidateResponse,
   NetworkInterface,
-} from '@root/types/ethercat'
+} from './ethercat-types'
 
 import type { PlcStatus, RuntimeLogEntry, SerialPort, TimingStats, Unsubscribe } from './types'
 
@@ -177,9 +177,3 @@ export interface RuntimePort {
   /** Get EtherCAT runtime status (plugin state, slave status, cycle metrics). */
   getEthercatRuntimeStatus?(): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }>
 }
-
-// Re-export the EtherCAT runtime-status response type so adjacent layers
-// (e.g. the device store slice, which the architecture validator forbids
-// from importing types/ via relative paths) can pick it up through the
-// ports layer that already legitimately depends on it.
-export type { EtherCATRuntimeStatusResponse } from '@root/types/ethercat'

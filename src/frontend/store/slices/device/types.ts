@@ -1,4 +1,4 @@
-import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/runtime-port'
+import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/ethercat-types'
 import type {
   BoardInfo,
   CommunicationPort,

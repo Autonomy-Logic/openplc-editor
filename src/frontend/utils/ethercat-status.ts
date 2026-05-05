@@ -1,4 +1,4 @@
-import type { EtherCATMasterStatus, EtherCATRuntimeStatusResponse } from '@root/types/ethercat'
+import type { EtherCATMasterStatus, EtherCATRuntimeStatusResponse } from '@root/middleware/shared/ports/ethercat-types'
 
 /**
  * Return the masters array from a runtime status response, or an empty list
