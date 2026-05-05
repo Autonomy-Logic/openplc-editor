@@ -176,8 +176,7 @@ export const UserModal = ({
   //     disabled silently — no error is shown until the user types into the
   //     confirm field.
   const isSettingPassword = authType === 'password' && (!isEditing || password.length > 0)
-  const passwordsMismatchVisible =
-    isSettingPassword && confirmPassword.length > 0 && password !== confirmPassword
+  const passwordsMismatchVisible = isSettingPassword && confirmPassword.length > 0 && password !== confirmPassword
   const passwordsOk = !isSettingPassword || (confirmPassword.length > 0 && password === confirmPassword)
 
   const isValid = !usernameError && !passwordError && !certificateError && passwordsOk
@@ -271,9 +270,7 @@ export const UserModal = ({
                   className={inputStyles}
                 />
                 {usernameError && (
-                  <span className='font-caption text-cp-xs font-normal text-red-500'>
-                    {usernameError}
-                  </span>
+                  <span className='font-caption text-cp-xs font-normal text-red-500'>{usernameError}</span>
                 )}
               </div>
 
@@ -316,9 +313,7 @@ export const UserModal = ({
                   </button>
                 </div>
                 {passwordError && (
-                  <span className='font-caption text-cp-xs font-normal text-red-500'>
-                    {passwordError}
-                  </span>
+                  <span className='font-caption text-cp-xs font-normal text-red-500'>{passwordError}</span>
                 )}
               </div>
 
@@ -333,9 +328,7 @@ export const UserModal = ({
                   className={inputStyles}
                 />
                 {passwordsMismatchVisible && (
-                  <span className='font-caption text-cp-xs font-normal text-red-500'>
-                    Passwords do not match
-                  </span>
+                  <span className='font-caption text-cp-xs font-normal text-red-500'>Passwords do not match</span>
                 )}
               </div>
             </div>
@@ -382,9 +375,7 @@ export const UserModal = ({
                     Select from trusted certificates configured in the Certificates tab
                   </span>
                   {certificateError && (
-                    <span className='font-caption text-cp-xs font-normal text-red-500'>
-                      {certificateError}
-                    </span>
+                    <span className='font-caption text-cp-xs font-normal text-red-500'>{certificateError}</span>
                   )}
                 </div>
               )}

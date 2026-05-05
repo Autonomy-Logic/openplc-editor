@@ -135,8 +135,7 @@ export const SecurityProfilesTab = ({ config, serverName, onConfigChange }: Secu
             </thead>
             <tbody>
               {config.securityProfiles.map((profile) => {
-                const isLastEnabled =
-                  profile.enabled && config.securityProfiles.filter((p) => p.enabled).length <= 1
+                const isLastEnabled = profile.enabled && config.securityProfiles.filter((p) => p.enabled).length <= 1
                 return (
                   <tr key={profile.id} className='border-t border-neutral-200 dark:border-neutral-700'>
                     <td className='px-3 py-2'>

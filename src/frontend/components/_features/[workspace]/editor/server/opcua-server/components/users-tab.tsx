@@ -144,9 +144,7 @@ export const UsersTab = ({ config, serverName, onConfigChange }: UsersTabProps) 
                   <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
                     {user.type === 'password' ? 'Password' : 'Certificate'}
                   </td>
-                  <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
-                    {ROLE_LABELS[user.role]}
-                  </td>
+                  <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>{ROLE_LABELS[user.role]}</td>
                   <td className='px-3 py-2 text-right'>
                     <div className='flex justify-end gap-2'>
                       <button
