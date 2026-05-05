@@ -1,5 +1,5 @@
+import { Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 import { useOpenPLCStore } from '@root/frontend/store'
-import { cn } from '@root/frontend/utils/cn'
 import type { OpcUaServerConfig, OpcUaUser } from '@root/middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
 
@@ -11,28 +11,10 @@ interface UsersTabProps {
   onConfigChange: () => void
 }
 
-// Helper to get role display info
-const getRoleInfo = (role: OpcUaUser['role']): { label: string; description: string; color: string } => {
-  switch (role) {
-    case 'viewer':
-      return {
-        label: 'Viewer',
-        description: 'Read-only access',
-        color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-      }
-    case 'operator':
-      return {
-        label: 'Operator',
-        description: 'Read/Write per variable permissions',
-        color: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-      }
-    case 'engineer':
-      return {
-        label: 'Engineer',
-        description: 'Full access',
-        color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-      }
-  }
+const ROLE_LABELS: Record<OpcUaUser['role'], string> = {
+  viewer: 'Viewer',
+  operator: 'Operator',
+  engineer: 'Engineer',
 }
 
 // Helper to get user display name
@@ -129,80 +111,66 @@ export const UsersTab = ({ config, serverName, onConfigChange }: UsersTabProps) 
       <button
         type='button'
         onClick={handleAddUser}
-        className='flex h-[36px] w-fit items-center gap-2 rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+        className='flex w-fit items-center gap-2 rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark'
       >
-        <span className='text-lg leading-none'>+</span>
+        <PlusIcon className='h-4 w-4' />
         Add User
       </button>
 
-      {/* Users List */}
+      {/* Users Table */}
       {config.users.length === 0 ? (
-        <div className='rounded-lg border border-neutral-200 bg-neutral-50 p-6 text-center dark:border-neutral-800 dark:bg-neutral-900'>
-          <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-            No users configured. Add users for password or certificate authentication.
-          </p>
-        </div>
+        <p className='text-sm text-neutral-500 dark:text-neutral-400'>
+          No users configured. Add users for password or certificate authentication.
+        </p>
       ) : (
-        <div className='flex flex-col gap-3'>
-          {config.users.map((user) => {
-            const roleInfo = getRoleInfo(user.role)
-            return (
-              <div
-                key={user.id}
-                className='flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'
-              >
-                {/* Header row with icon, name, and actions */}
-                <div className='flex items-center justify-between'>
-                  <div className='flex items-center gap-3'>
-                    {/* User Icon */}
-                    <span className='text-lg'>{user.type === 'password' ? '👤' : '🔐'}</span>
-
-                    {/* User Name */}
-                    <span className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
-                      {getUserDisplayName(user)}
-                    </span>
-
-                    {/* Role Badge */}
-                    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', roleInfo.color)}>
-                      {roleInfo.label}
-                    </span>
-                  </div>
-
-                  {/* Actions */}
-                  <div className='flex items-center gap-2'>
-                    <button
-                      type='button'
-                      onClick={() => handleEditUser(user)}
-                      className='h-[28px] rounded-md border border-neutral-300 bg-white px-3 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type='button'
-                      onClick={() => handleDeleteUser(user.id)}
-                      className='h-[28px] rounded-md border border-neutral-300 bg-white px-3 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                {/* User Details */}
-                <div className='flex flex-col gap-1 pl-[36px]'>
-                  <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
-                    <span className='font-medium'>Type:</span>{' '}
-                    {user.type === 'password' ? 'Password Authentication' : 'Certificate Authentication'}
-                  </p>
-                  {user.type === 'certificate' && user.certificateId && (
-                    <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
-                      <span className='font-medium'>Certificate:</span> {user.certificateId}
-                    </p>
-                  )}
-                  <p className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>{roleInfo.description}</p>
-                </div>
-              </div>
-            )
-          })}
+        <div className='overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700'>
+          <table className='w-full'>
+            <thead className='bg-neutral-50 dark:bg-neutral-800'>
+              <tr>
+                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>Name</th>
+                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>Type</th>
+                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>Role</th>
+                <th className='px-3 py-2 text-right text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {config.users.map((user) => (
+                <tr key={user.id} className='border-t border-neutral-200 dark:border-neutral-700'>
+                  <td className='px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100'>
+                    {getUserDisplayName(user)}
+                  </td>
+                  <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
+                    {user.type === 'password' ? 'Password' : 'Certificate'}
+                  </td>
+                  <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
+                    {ROLE_LABELS[user.role]}
+                  </td>
+                  <td className='px-3 py-2 text-right'>
+                    <div className='flex justify-end gap-2'>
+                      <button
+                        type='button'
+                        onClick={() => handleEditUser(user)}
+                        className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
+                        title='Edit'
+                      >
+                        <Pencil1Icon className='h-4 w-4' />
+                      </button>
+                      <button
+                        type='button'
+                        onClick={() => handleDeleteUser(user.id)}
+                        className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
+                        title='Delete'
+                      >
+                        <TrashIcon className='h-4 w-4' />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

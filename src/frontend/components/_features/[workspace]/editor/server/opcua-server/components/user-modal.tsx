@@ -121,62 +121,66 @@ export const UserModal = ({
     )
   }, [trustedCertificates, usedCertificateIds, existingUser])
 
-  // Validation rules
-  const validationErrors = useMemo(() => {
-    const errors: string[] = []
+  // Per-field validation. Each error string surfaces inline under its
+  // corresponding input rather than in a bottom validation card — same
+  // pattern the password-mismatch label uses.
+  //
+  // The mismatch and "passwords-not-yet-confirmed" gates live in their
+  // own flags below since they have different visibility rules from
+  // the field-error pattern (mismatch is only shown once the user has
+  // typed in confirmPassword; missing confirmPassword silently
+  // disables Save without a label).
 
-    if (authType === 'password') {
-      // Username validation
-      if (!username.trim()) {
-        errors.push('Username is required')
-      } else if (username.length > 64) {
-        errors.push('Username must be 64 characters or less')
-      } else {
-        // Check for duplicate username (case insensitive), excluding current user when editing
-        const isDuplicate = existingUsernames.some(
-          (existingName) =>
-            existingName.toLowerCase() === username.trim().toLowerCase() &&
-            (!existingUser || existingUser.username?.toLowerCase() !== existingName.toLowerCase()),
-        )
-        if (isDuplicate) {
-          errors.push('A user with this username already exists')
-        }
-      }
+  const usernameError = useMemo<string | null>(() => {
+    if (authType !== 'password') return null
+    if (!username.trim()) return 'Username is required'
+    if (username.length > 64) return 'Username must be 64 characters or less'
+    const isDuplicate = existingUsernames.some(
+      (existingName) =>
+        existingName.toLowerCase() === username.trim().toLowerCase() &&
+        (!existingUser || existingUser.username?.toLowerCase() !== existingName.toLowerCase()),
+    )
+    if (isDuplicate) return 'A user with this username already exists'
+    return null
+  }, [authType, username, existingUsernames, existingUser])
 
-      // Password validation (only required for new users or when changing password)
-      if (!isEditing || password) {
-        if (!password) {
-          errors.push('Password is required')
-        } else if (password.length < 4) {
-          errors.push('Password must be at least 4 characters')
-        } else if (password !== confirmPassword) {
-          errors.push('Passwords do not match')
-        }
-      }
-    } else {
-      // Certificate validation
-      if (!certificateId) {
-        errors.push('Please select a certificate')
-      }
-      if (availableCertificates.length === 0 && !existingUser?.certificateId) {
-        errors.push('No trusted certificates available. Add certificates in the Certificates tab first.')
-      }
+  const passwordError = useMemo<string | null>(() => {
+    if (authType !== 'password') return null
+    // Editing path: an empty password means "keep existing" — not an error.
+    if (isEditing && !password) return null
+    if (!password) return 'Password is required'
+    if (password.length < 4) return 'Password must be at least 4 characters'
+    return null
+  }, [authType, password, isEditing])
+
+  const certificateError = useMemo<string | null>(() => {
+    if (authType !== 'certificate') return null
+    if (availableCertificates.length === 0 && !existingUser?.certificateId) {
+      // The certificate-auth section already renders this banner inline
+      // when there are no trusted certs. Skip surfacing it as a duplicate
+      // field error.
+      return null
     }
+    if (!certificateId) return 'Please select a certificate'
+    return null
+  }, [authType, certificateId, availableCertificates, existingUser])
 
-    return errors
-  }, [
-    authType,
-    username,
-    password,
-    confirmPassword,
-    certificateId,
-    existingUsernames,
-    existingUser,
-    isEditing,
-    availableCertificates,
-  ])
+  // Password mismatch handling has two flavours:
+  //   - `passwordsMismatchVisible`: drives the inline red label under the
+  //     Confirm Password input. Only true once the user has typed something
+  //     in confirmPassword, so the error doesn't flicker while they're still
+  //     filling out the form.
+  //   - `passwordsOk`: gates the Save button. Requires both fields to be
+  //     filled AND match when a password is being set (new user, or editing
+  //     user with non-empty password). Empty confirmPassword keeps Save
+  //     disabled silently — no error is shown until the user types into the
+  //     confirm field.
+  const isSettingPassword = authType === 'password' && (!isEditing || password.length > 0)
+  const passwordsMismatchVisible =
+    isSettingPassword && confirmPassword.length > 0 && password !== confirmPassword
+  const passwordsOk = !isSettingPassword || (confirmPassword.length > 0 && password === confirmPassword)
 
-  const isValid = validationErrors.length === 0
+  const isValid = !usernameError && !passwordError && !certificateError && passwordsOk
 
   // Handle save
   const handleSave = useCallback(async () => {
@@ -266,6 +270,11 @@ export const UserModal = ({
                   maxLength={64}
                   className={inputStyles}
                 />
+                {usernameError && (
+                  <span className='font-caption text-cp-xs font-normal text-red-500'>
+                    {usernameError}
+                  </span>
+                )}
               </div>
 
               {/* Password */}
@@ -306,6 +315,11 @@ export const UserModal = ({
                     )}
                   </button>
                 </div>
+                {passwordError && (
+                  <span className='font-caption text-cp-xs font-normal text-red-500'>
+                    {passwordError}
+                  </span>
+                )}
               </div>
 
               {/* Confirm Password */}
@@ -318,6 +332,11 @@ export const UserModal = ({
                   placeholder='••••••••'
                   className={inputStyles}
                 />
+                {passwordsMismatchVisible && (
+                  <span className='font-caption text-cp-xs font-normal text-red-500'>
+                    Passwords do not match
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -362,6 +381,11 @@ export const UserModal = ({
                   <span className='text-xs text-neutral-500 dark:text-neutral-400'>
                     Select from trusted certificates configured in the Certificates tab
                   </span>
+                  {certificateError && (
+                    <span className='font-caption text-cp-xs font-normal text-red-500'>
+                      {certificateError}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -415,19 +439,6 @@ export const UserModal = ({
               ))}
             </div>
           </div>
-
-          {/* Validation Errors */}
-          {validationErrors.length > 0 && (
-            <div className='rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900'>
-              <ul className='list-inside list-disc space-y-1'>
-                {validationErrors.map((error, index) => (
-                  <li key={index} className='text-xs text-neutral-700 dark:text-neutral-300'>
-                    {error}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
 
         <ModalFooter className='mt-4 flex justify-end gap-2'>
