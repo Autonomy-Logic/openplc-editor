@@ -32,8 +32,13 @@ const generateCBlocksHeader = (cppPous: CppPouData[]): string => {
     })
 
     headerContent += `} ${structName};\n`
-    headerContent += `void ${setupFunctionName}(${structName} *vars);\n`
-    headerContent += `void ${loopFunctionName}(${structName} *vars);\n\n`
+    // c_blocks_code.cpp defines these with `extern "C"` so the user's
+    // setup()/loop() bodies link unmangled. The header has to match —
+    // without `extern "C"` here, the per-POU call sites mangle the
+    // symbol and the dynamic loader fails with `undefined symbol:
+    // _Z<N><name>P<N><STRUCT>_VARS`.
+    headerContent += `extern "C" void ${setupFunctionName}(${structName} *vars);\n`
+    headerContent += `extern "C" void ${loopFunctionName}(${structName} *vars);\n\n`
   })
 
   headerContent += `#endif // C_BLOCKS_H\n`

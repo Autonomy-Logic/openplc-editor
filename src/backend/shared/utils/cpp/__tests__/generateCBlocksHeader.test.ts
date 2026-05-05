@@ -44,8 +44,8 @@ describe('generateCBlocksHeader', () => {
     expect(result).toContain('  strucpp::IEC_INT *SPEED;')
     expect(result).toContain('  strucpp::IEC_REAL *RESULT;')
     expect(result).toContain('} MYBLOCK_VARS;')
-    expect(result).toContain('void myblock_setup(MYBLOCK_VARS *vars);')
-    expect(result).toContain('void myblock_loop(MYBLOCK_VARS *vars);')
+    expect(result).toContain('extern "C" void myblock_setup(MYBLOCK_VARS *vars);')
+    expect(result).toContain('extern "C" void myblock_loop(MYBLOCK_VARS *vars);')
   })
 
   it('includes only input and output variables in the struct', () => {
@@ -88,8 +88,8 @@ describe('generateCBlocksHeader', () => {
 
     expect(result).toContain('typedef struct {')
     expect(result).toContain('} EMPTY_VARS;')
-    expect(result).toContain('void empty_setup(EMPTY_VARS *vars);')
-    expect(result).toContain('void empty_loop(EMPTY_VARS *vars);')
+    expect(result).toContain('extern "C" void empty_setup(EMPTY_VARS *vars);')
+    expect(result).toContain('extern "C" void empty_loop(EMPTY_VARS *vars);')
   })
 
   it('generates pointer members for array variables', () => {

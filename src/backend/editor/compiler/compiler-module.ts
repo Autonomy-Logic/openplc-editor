@@ -465,6 +465,7 @@ class CompilerModule {
   async handleCompileSTtoCpp(
     sourceTargetFolderPath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+    options: { hasCBlocks?: boolean } = {},
   ): Promise<{ md5Hash: string }> {
     const stFilePath = join(sourceTargetFolderPath, 'program.st')
     const stSource = await readFile(stFilePath, { encoding: 'utf8' })
@@ -497,6 +498,11 @@ class CompilerModule {
     const md5Hash = crypto.createHash('md5').update(stSource).digest('hex')
 
     const stFileName = 'program.st'
+    // When the project has C/C++ POUs, every per-POU TU may reference the
+    // user-defined `<NAME>_VARS` struct and `<name>_setup` / `<name>_loop`
+    // extern declarations. They live in c_blocks.h (generated immediately
+    // after this step), so plumb the include through.
+    const pouIncludes = options.hasCBlocks ? ['c_blocks.h'] : []
     const result = strucppCompile(stSource, {
       headerFileName: 'generated.hpp',
       fileName: stFileName,
@@ -504,6 +510,7 @@ class CompilerModule {
       lineMapping: true,
       libraryPaths,
       md5: md5Hash,
+      pouIncludes,
     })
 
     const diagSourceMap = strucppBuildSourceMap([{ fileName: stFileName, source: stSource }])
@@ -1621,9 +1628,14 @@ class CompilerModule {
 
     // Step 4: Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      const { md5Hash } = await this.handleCompileSTtoCpp(sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      const hasCBlocks = ((projectData as PLCProjectData & { originalCppPous?: unknown[] }).originalCppPous?.length ?? 0) > 0
+      const { md5Hash } = await this.handleCompileSTtoCpp(
+        sourceTargetFolderPath,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        { hasCBlocks },
+      )
       buildMD5Hash = md5Hash
     } catch (error) {
       _mainProcessPort.postMessage({
@@ -2282,9 +2294,14 @@ class CompilerModule {
 
     // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      await this.handleCompileSTtoCpp(sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      const hasCBlocks = ((projectData as PLCProjectData & { originalCppPous?: unknown[] }).originalCppPous?.length ?? 0) > 0
+      await this.handleCompileSTtoCpp(
+        sourceTargetFolderPath,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        { hasCBlocks },
+      )
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
