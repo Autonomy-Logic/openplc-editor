@@ -416,37 +416,31 @@ class MainProcessBridge implements MainIpcModule {
       // Build the endpoint path with optional include_stats query parameter
       const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
 
+      // The runtime now reports per-task stats: timing_stats = { tasks: [...] }.
+      // Each task entry carries the same fields the editor used to consume
+      // from a flat object, plus a `name` discriminator so the renderer
+      // can label cards.
+      type TaskStats = {
+        name: string
+        scan_count: number
+        scan_time_min: number | null
+        scan_time_max: number | null
+        scan_time_avg: number | null
+        cycle_time_min: number | null
+        cycle_time_max: number | null
+        cycle_time_avg: number | null
+        cycle_latency_min: number | null
+        cycle_latency_max: number | null
+        cycle_latency_avg: number | null
+        overruns: number
+      }
       const result = await this.makeRuntimeApiRequest<{
         status: string
-        timing_stats?: {
-          scan_count: number
-          scan_time_min: number | null
-          scan_time_max: number | null
-          scan_time_avg: number | null
-          cycle_time_min: number | null
-          cycle_time_max: number | null
-          cycle_time_avg: number | null
-          cycle_latency_min: number | null
-          cycle_latency_max: number | null
-          cycle_latency_avg: number | null
-          overruns: number
-        }
+        timing_stats?: { tasks: TaskStats[] }
       }>(ipAddress, jwtToken, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
-          timing_stats?: {
-            scan_count: number
-            scan_time_min: number | null
-            scan_time_max: number | null
-            scan_time_avg: number | null
-            cycle_time_min: number | null
-            cycle_time_max: number | null
-            cycle_time_avg: number | null
-            cycle_latency_min: number | null
-            cycle_latency_max: number | null
-            cycle_latency_avg: number | null
-            overruns: number
-          }
+          timing_stats?: { tasks: TaskStats[] }
         }
         return response
       })

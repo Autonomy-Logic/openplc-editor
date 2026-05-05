@@ -518,7 +518,14 @@ export interface DeviceConfiguration {
 
 export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TRANSITIONING' | 'UNKNOWN'
 
-export interface TimingStats {
+/**
+ * Per-task scan/cycle/latency stats from the runtime. Each IEC task
+ * runs on its own thread under STruC++, so stats are reported per
+ * task and the editor renders one block per entry. The `name` field
+ * matches the runtime's per-task name (currently `plc-task-<idx>`).
+ */
+export interface TaskTimingStats {
+  name: string
   scan_count: number
   scan_time_min: number | null
   scan_time_max: number | null
@@ -530,6 +537,15 @@ export interface TimingStats {
   cycle_latency_max: number | null
   cycle_latency_avg: number | null
   overruns: number
+}
+
+/**
+ * Container for runtime timing stats. The runtime emits one entry per
+ * IEC task; the editor renders them as a list. Pulled via the runtime's
+ * `/api/status?include_stats=true` endpoint.
+ */
+export interface TimingStats {
+  tasks: TaskTimingStats[]
 }
 
 export type RuntimeLogLevel = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR'

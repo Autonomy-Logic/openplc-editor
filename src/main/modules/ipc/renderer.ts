@@ -326,17 +326,20 @@ const rendererProcessBridge = {
     success: boolean
     status?: string
     timingStats?: {
-      scan_count: number
-      scan_time_min: number | null
-      scan_time_max: number | null
-      scan_time_avg: number | null
-      cycle_time_min: number | null
-      cycle_time_max: number | null
-      cycle_time_avg: number | null
-      cycle_latency_min: number | null
-      cycle_latency_max: number | null
-      cycle_latency_avg: number | null
-      overruns: number
+      tasks: Array<{
+        name: string
+        scan_count: number
+        scan_time_min: number | null
+        scan_time_max: number | null
+        scan_time_avg: number | null
+        cycle_time_min: number | null
+        cycle_time_max: number | null
+        cycle_time_avg: number | null
+        cycle_latency_min: number | null
+        cycle_latency_max: number | null
+        cycle_latency_avg: number | null
+        overruns: number
+      }>
     }
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken, includeStats),
