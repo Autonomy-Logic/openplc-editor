@@ -188,34 +188,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     // Project state
     // -----------------------------------------------------------------------
     setProject: (state) => {
-      // Migration: drop legacy EtherCAT system tasks. The bus is now
-      // driven by a dedicated thread the runtime plugin spawns; the
-      // synthetic IEC task that used to be injected here was never
-      // really useful (no programs ran on it) and would now collide
-      // with the plugin's own thread. Strip on load.
-      //
-      // Built as an immutable update before the produce() block because
-      // the input `state` may be deep-frozen (Immer auto-freeze, test
-      // fixtures); mutating an inner property through a draft of a
-      // frozen value throws.
-      const migrated = {
-        ...state,
-        data: {
-          ...state.data,
-          configurations: {
-            ...state.data.configurations,
-            resource: {
-              ...state.data.configurations.resource,
-              tasks: state.data.configurations.resource.tasks.filter(
-                (t) => !(t.isSystemTask && t.associatedDevice),
-              ),
-            },
-          },
-        },
-      }
       setState(
         produce((slice: ProjectSlice) => {
-          slice.project = migrated
+          slice.project = state
         }),
       )
     },
