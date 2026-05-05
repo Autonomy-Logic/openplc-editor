@@ -226,10 +226,7 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           produce(({ ai }: AISlice) => {
             // Defensive: drop any existing entry with the same id
             // before prepending so we never end up with duplicates.
-            ai.conversations = [
-              conversation,
-              ...ai.conversations.filter((c) => c.id !== conversation.id),
-            ]
+            ai.conversations = [conversation, ...ai.conversations.filter((c) => c.id !== conversation.id)]
           }),
         )
       },
@@ -258,9 +255,7 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.messages =
-              messages.length > MAX_CONVERSATION_MESSAGES
-                ? messages.slice(-MAX_CONVERSATION_MESSAGES)
-                : messages
+              messages.length > MAX_CONVERSATION_MESSAGES ? messages.slice(-MAX_CONVERSATION_MESSAGES) : messages
             ai.error = null
           }),
         )
