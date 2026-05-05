@@ -91,6 +91,16 @@ describe('isOpenPLCRuntimeV4Target', () => {
   it('returns false when no version is present', () => {
     expect(isOpenPLCRuntimeV4Target('Arduino Mega 2560')).toBe(false)
   })
+
+  it('returns true for a VPP board with openplc-compiler (runtime-v4 by construction)', () => {
+    const vppBoard = { compiler: 'openplc-compiler', vpp: { packageId: 'com.vendor.slm-rp4' } }
+    expect(isOpenPLCRuntimeV4Target('SLM-RP4', vppBoard)).toBe(true)
+  })
+
+  it('ignores VPP metadata when the compiler is not openplc-compiler', () => {
+    const vppArduinoBoard = { compiler: 'arduino-cli', vpp: { packageId: 'com.vendor.arduino-thing' } }
+    expect(isOpenPLCRuntimeV4Target('Arduino Thing', vppArduinoBoard)).toBe(false)
+  })
 })
 
 describe('validateRuntimeVersion', () => {

@@ -456,6 +456,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'devOrchestrators'
     | 'server'
     | 'remoteDevice'
+    | 'vendorScreen'
     | 'ethercatDevice'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
@@ -480,6 +481,7 @@ const LeafSources = {
   devOrchestrators: { LeafIcon: OrchestratorIcon },
   server: { LeafIcon: ServerIcon },
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
+  vendorScreen: { LeafIcon: ConfigIcon },
   ethercatDevice: { LeafIcon: DeviceTransferIcon },
 }
 const ProjectTreeLeaf = ({

@@ -235,6 +235,11 @@ export default class MenuBuilder {
           accelerator: 'Cmd+U',
           enabled: false,
         },
+        { type: 'separator' },
+        {
+          label: 'Board Package Manager...',
+          click: () => this.mainWindow.webContents.send('packages:open-manager'),
+        },
       ],
     }
 
@@ -500,6 +505,11 @@ export default class MenuBuilder {
             label: i18n.t('menu:file.submenu.updates'),
             enabled: false,
             accelerator: 'Ctrl+U',
+          },
+          { type: 'separator' },
+          {
+            label: 'Board Package Manager...',
+            click: () => this.mainWindow.webContents.send('packages:open-manager'),
           },
           { type: 'separator' },
           {

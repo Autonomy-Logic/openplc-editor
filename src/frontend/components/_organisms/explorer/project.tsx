@@ -30,6 +30,12 @@ const Project = () => {
     searchQuery,
   } = useOpenPLCStore()
 
+  // Get VPP vendor screens from the currently selected board
+  const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
+  const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
+  const currentBoardInfo = availableBoards.get(deviceBoard)
+  const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
+
   const handleCreateTab = ({ elementType, name, path, configuration: tabConfig }: TabsProps) => {
     const tabToBeCreated = { name, path, elementType, configuration: tabConfig }
     updateTabs(tabToBeCreated)
@@ -276,6 +282,23 @@ const Project = () => {
               />
             )}
           </ProjectTreeBranch>
+
+          {/* Vendor screens from VPP packages */}
+          {vendorScreens.map((screenName) => (
+            <ProjectTreeLeaf
+              key={`vendor-${screenName}`}
+              leafLang='vendorScreen'
+              leafType='vendor-screen'
+              label={screenName}
+              onClick={() =>
+                handleCreateTab({
+                  name: screenName,
+                  path: `/vendor-screen/${screenName}`,
+                  elementType: { type: 'vendor-screen', screenName },
+                })
+              }
+            />
+          ))}
 
           {/* Project Servers tree branch */}
           {capabilities.hasLocalSerialPorts && (

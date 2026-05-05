@@ -20,6 +20,7 @@ import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
+import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
@@ -60,6 +61,7 @@ export const editorPorts: PlatformPorts = {
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
+  packages: createEditorPackageAdapter(),
   esi: createEditorEsiAdapter(() => _projectPath),
   versionControl: createEditorVersionControlAdapter(),
   navigation: createEditorNavigationAdapter(),

@@ -1519,29 +1519,6 @@ describe('createSharedSlice', () => {
           deviceBoard: 'test-board',
           communicationPort: '',
           compileOnly: false,
-          communicationConfiguration: {
-            modbusRTU: {
-              rtuInterface: '',
-              rtuBaudRate: '',
-              rtuSlaveId: null,
-              rtuRS485ENPin: null,
-            },
-            modbusTCP: {
-              tcpInterface: '',
-              tcpMacAddress: null,
-              tcpStaticHostConfiguration: {
-                ipAddress: '',
-                dns: '',
-                gateway: '',
-                subnet: '',
-              },
-            },
-            communicationPreferences: {
-              enabledRTU: false,
-              enabledTCP: false,
-              enabledDHCP: false,
-            },
-          },
         }
         const data = {
           ...makeMinimalProjectResponse(),

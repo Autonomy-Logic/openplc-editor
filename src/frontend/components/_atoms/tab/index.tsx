@@ -1,3 +1,4 @@
+import type React from 'react'
 import { ComponentPropsWithoutRef, useCallback } from 'react'
 
 import { CloseIcon } from '../../../assets/icons/interface/Close'
@@ -30,7 +31,7 @@ type ITabProps = ComponentPropsWithoutRef<'div'> & {
   handleClickedTab: () => void
 }
 
-const TabIcons = {
+const TabIcons: Record<string, React.ReactNode> = {
   ld: <LDIcon className='h-4 w-4 flex-shrink-0' />,
   sfc: <SFCIcon className='h-4 w-4 flex-shrink-0' />,
   fbd: <FBDIcon className='h-4 w-4 flex-shrink-0' />,
@@ -47,6 +48,8 @@ const TabIcons = {
   orchestrators: <OrchestratorIcon className='h-4 w-4 flex-shrink-0' />,
   'remote-device': <RemoteDeviceIcon className='h-4 w-4 flex-shrink-0' />,
   server: <ServerIcon className='h-4 w-4 flex-shrink-0' />,
+  'vendor-screen': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
+  'package-manager': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   'ethercat-device': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
@@ -73,6 +76,8 @@ const Tab = (props: ITabProps) => {
     | 'orchestrators'
     | 'remote-device'
     | 'server'
+    | 'vendor-screen'
+    | 'package-manager'
     | 'ethercat-device' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
@@ -93,6 +98,12 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'server') {
     languageOrDerivation = 'server'
+  }
+  if (fileDerivation?.type === 'vendor-screen') {
+    languageOrDerivation = 'vendor-screen'
+  }
+  if (fileDerivation?.type === 'package-manager') {
+    languageOrDerivation = 'package-manager'
   }
   if (fileDerivation?.type === 'ethercat-device') {
     languageOrDerivation = 'ethercat-device'

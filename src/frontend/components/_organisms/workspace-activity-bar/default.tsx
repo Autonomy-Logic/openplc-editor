@@ -37,18 +37,6 @@ const showDebuggerMessage = (
   })
 }
 
-const showDebuggerIpInput = (title: string, message: string, defaultValue: string): Promise<string | null> => {
-  return new Promise((resolve) => {
-    useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
-      title,
-      message,
-      defaultValue,
-      onSubmit: (value: string) => resolve(value),
-      onCancel: () => resolve(null),
-    })
-  })
-}
-
 const disabledButtonClass = 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
 type DefaultWorkspaceActivityBarProps = {
@@ -426,7 +414,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleDebuggerClick = useCallback(async () => {
     if (isSimulatorBoard) return
 
-    const { workspace, project, deviceDefinitions: devDefs, consoleActions, deviceActions } = useOpenPLCStore.getState()
+    const { workspace, project, deviceDefinitions: devDefs, consoleActions } = useOpenPLCStore.getState()
 
     // Toggle off
     if (workspace.isDebuggerVisible) {
@@ -462,7 +450,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           setIsDebuggerProcessing(false)
           return
         }
-        if (isOpenPLCRuntimeV4Target(boardTarget)) {
+        if (isOpenPLCRuntimeV4Target(boardTarget, boardInfo)) {
           const token = rtConn.jwtToken || undefined
           if (!token) {
             await showDebuggerMessage(
@@ -482,66 +470,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           debugConfig = { connectionType: 'tcp', connectionParams: { ipAddress: runtimeIpAddress } }
         }
       } else {
-        // Embedded hardware — determine TCP or RTU
-        const { modbusTCP, modbusRTU, communicationPreferences } = devDefs.configuration.communicationConfiguration
-        if (!communicationPreferences.enabledRTU && !communicationPreferences.enabledTCP) {
-          await showDebuggerMessage('warning', 'Modbus Required', 'Modbus must be enabled for debugging.', ['OK'])
-          setIsDebuggerProcessing(false)
-          return
-        }
-
-        let useModbusTcp = communicationPreferences.enabledTCP
-        if (communicationPreferences.enabledRTU && communicationPreferences.enabledTCP) {
-          const resp = await showDebuggerMessage('question', 'Select Protocol', 'Which Modbus protocol?', [
-            'RTU (Serial)',
-            'TCP',
-          ])
-          useModbusTcp = resp === 1
-        }
-
-        if (useModbusTcp) {
-          let targetIp: string | undefined
-          if (communicationPreferences.enabledDHCP) {
-            const previousIp = useOpenPLCStore.getState().deviceDefinitions.temporaryDhcpIp || ''
-            const result = await showDebuggerIpInput('Target IP Address', 'Enter the target device IP:', previousIp)
-            if (!result) {
-              setIsDebuggerProcessing(false)
-              return
-            }
-            targetIp = result
-            deviceActions.setTemporaryDhcpIp(targetIp)
-          } else {
-            targetIp = modbusTCP.tcpStaticHostConfiguration.ipAddress || undefined
-            if (!targetIp) {
-              await showDebuggerMessage('error', 'Configuration Error', 'No IP configured for Modbus TCP.', ['OK'])
-              setIsDebuggerProcessing(false)
-              return
-            }
-          }
-          debugConfig = { connectionType: 'tcp', connectionParams: { ipAddress: targetIp } }
-        } else {
-          const rtuPort = devDefs.configuration.communicationPort
-          const rtuSlaveId = modbusRTU.rtuSlaveId ?? undefined
-          if (!rtuPort) {
-            await showDebuggerMessage('error', 'Configuration Error', 'No port selected for Modbus RTU.', ['OK'])
-            setIsDebuggerProcessing(false)
-            return
-          }
-          if (rtuSlaveId === undefined) {
-            await showDebuggerMessage('error', 'Configuration Error', 'No slave ID configured for Modbus RTU.', ['OK'])
-            setIsDebuggerProcessing(false)
-            return
-          }
-          consoleActions.addLog({
-            id: crypto.randomUUID(),
-            level: 'info',
-            message: `Using RTU: Port=${rtuPort}, Baud=${modbusRTU.rtuBaudRate}, SlaveID=${rtuSlaveId}`,
-          })
-          debugConfig = {
-            connectionType: 'rtu',
-            connectionParams: { port: rtuPort, baudRate: parseInt(modbusRTU.rtuBaudRate, 10), slaveId: rtuSlaveId },
-          }
-        }
+        // Non-runtime, non-simulator boards are expected to come back as
+        // VPP Arduino-family packages, each owning its own debug-connection
+        // surface. Refuse gracefully until that's wired in.
+        await showDebuggerMessage(
+          'warning',
+          'Debugging Not Available',
+          'Debugging for this target is not supported in the core editor. The selected board\'s VPP package must provide a debug adapter.',
+          ['OK'],
+        )
+        setIsDebuggerProcessing(false)
+        return
       }
 
       // Debug compilation

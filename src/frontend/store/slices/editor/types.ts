@@ -151,6 +151,19 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        type: 'plc-vendor-screen'
+        meta: {
+          name: string
+          screenName: string
+        }
+      }
+    | {
+        type: 'plc-package-manager'
+        meta: {
+          name: string
+        }
+      }
+    | {
         type: 'plc-ethercat-device'
         meta: {
           name: string

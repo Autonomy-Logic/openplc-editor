@@ -11,6 +11,7 @@ import type { DevicePort } from '../ports/device-port'
 import type { EsiPort } from '../ports/esi-port'
 import type { NavigationPort } from '../ports/navigation-port'
 import type { OrchestratorPort } from '../ports/orchestrator-port'
+import type { PackagePort } from '../ports/package-port'
 import type { PlatformCapabilities } from '../ports/platform-capabilities'
 import type { ProjectPort } from '../ports/project-port'
 import type { RuntimePort } from '../ports/runtime-port'
@@ -35,6 +36,7 @@ export interface PlatformPorts {
   versionControl: VersionControlPort
   navigation: NavigationPort
   capabilities: PlatformCapabilities
+  packages?: PackagePort
   esi?: EsiPort
   ai?: AIPort
 }

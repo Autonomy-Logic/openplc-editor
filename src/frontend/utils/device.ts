@@ -2,7 +2,7 @@
  * Minimal board info shape used by device utility functions.
  * Compatible with both BoardInfo from ports and store slice types.
  */
-type BoardLike = { compiler?: string } | undefined
+type BoardLike = { compiler?: string; vpp?: unknown } | undefined
 
 /**
  * Determines if a board is an Arduino target based on its compiler.
@@ -38,8 +38,18 @@ export function getExpectedRuntimeVersion(boardTarget: string): string | undefin
 
 /**
  * Determines if a board target is OpenPLC Runtime v4.
+ *
+ * Returns true for:
+ *   - The hardcoded "OpenPLC Runtime v4" board in hals.json
+ *   - Any VPP board whose manifest declared target.type = 'runtime-v4'
+ *     (mergeVppBoards sets compiler='openplc-compiler' only for those)
+ *
+ * The boardInfo argument is optional for backward compatibility with
+ * callers that only have the board name, but VPP boards require it —
+ * their board names (e.g., "SLM-RP4") don't contain the "v4" suffix.
  */
-export function isOpenPLCRuntimeV4Target(boardTarget: string): boolean {
+export function isOpenPLCRuntimeV4Target(boardTarget: string, boardInfo?: BoardLike): boolean {
+  if (boardInfo?.vpp && boardInfo.compiler === 'openplc-compiler') return true
   const version = getExpectedRuntimeVersion(boardTarget)
   return version === 'v4'
 }

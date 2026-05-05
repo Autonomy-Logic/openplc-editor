@@ -10,6 +10,7 @@ import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
+import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 
@@ -575,7 +576,12 @@ const OrchestratorsList = () => {
         </div>
       </DeviceEditorSlot>
 
-      {/* Right side panel - Scan Cycle + EtherCAT statistics */}
+      {/* Right side panel - Scan Cycle + EtherCAT + plugin-contributed
+       *  statistics. Mirrors the board screen's stats panel: same
+       *  components, same TimingStats shape, same plugin_stats fan-out.
+       *  Web builds (orchestrator-driven) and Electron builds (board-
+       *  screen-driven) thus render identical stats regardless of how
+       *  the user navigated to the device. */}
       {runtimeConnection.connectionStatus === 'connected' && (
         <div
           id='scan-cycle-stats-panel'
@@ -587,6 +593,7 @@ const OrchestratorsList = () => {
             jwtToken={runtimeConnection.jwtToken}
             isConnected={runtimeConnection.connectionStatus === 'connected'}
           />
+          <PluginStatsPanel pluginStats={runtimeConnection.timingStats?.plugin_stats} />
         </div>
       )}
     </div>

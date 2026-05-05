@@ -318,7 +318,7 @@ export class ModbusRtuClient {
       data.writeUInt16BE(numIndexes, 0)
 
       for (let i = 0; i < numIndexes; i++) {
-        const packed = variableIndexes[i]!
+        const packed = variableIndexes[i]
         const arr = (packed >>> 16) & 0xff
         const elem = packed & 0xffff
         data.writeUInt8(arr, 2 + i * 3)

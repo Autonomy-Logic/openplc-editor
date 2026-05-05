@@ -40,6 +40,8 @@ const testPorts: PlatformPorts = {
   window: createStubPort(),
   accelerator: createStubPort(),
   theme: createStubPort(),
+  versionControl: createStubPort(),
+  navigation: createStubPort(),
   capabilities: EDITOR_CAPABILITIES,
 }
 

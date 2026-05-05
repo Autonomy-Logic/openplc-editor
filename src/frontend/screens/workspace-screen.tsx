@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useCapabilities, useChatPanel, useDebugger, useDevice, useProject } from '../../middleware/shared/providers'
+import { useCapabilities, useChatPanel, useDebugger, useDevice, usePlatform, useProject } from '../../middleware/shared/providers'
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
@@ -13,10 +13,12 @@ import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[w
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
+import { PackageManagerEditor } from '../components/_features/[workspace]/editor/package-manager'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
 import { OpcUaServerEditor } from '../components/_features/[workspace]/editor/server/opcua-server'
 import { S7CommServerEditor } from '../components/_features/[workspace]/editor/server/s7comm-server'
+import { VendorScreenEditor } from '../components/_features/[workspace]/editor/vendor-screen'
 import { Search } from '../components/_features/[workspace]/search'
 import { SourceControlPanel } from '../components/_features/[workspace]/source-control'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
@@ -339,6 +341,41 @@ const WorkspaceScreen = () => {
     void loadAvailableBoards()
   }, [device, setAvailableOptions])
 
+  // Subscribe to VPP package events via the packages port
+  const packagesPort = usePlatform().packages
+  useEffect(() => {
+    if (!packagesPort) return
+
+    const unsubOpen = packagesPort.onOpenManager(() => {
+      const { tabsActions, editorActions } = useOpenPLCStore.getState()
+      const tab = {
+        name: 'Package Manager',
+        path: '/package-manager',
+        elementType: { type: 'package-manager' as const },
+      }
+      tabsActions.updateTabs(tab)
+      const existing = editorActions.getEditorFromEditors(tab.name)
+      if (!existing) {
+        const model = { type: 'plc-package-manager' as const, meta: { name: 'Package Manager' } }
+        editorActions.addModel(model)
+        editorActions.setEditor(model)
+      } else {
+        editorActions.setEditor(existing)
+      }
+    })
+
+    const unsubBoards = packagesPort.onBoardsUpdated(() => {
+      void device.getAvailableBoards().then((boardsMap) => {
+        setAvailableOptions({ availableBoards: boardsMap })
+      })
+    })
+
+    return () => {
+      unsubOpen()
+      unsubBoards()
+    }
+  }, [packagesPort, device, setAvailableOptions])
+
   return (
     <div className='flex h-full w-full flex-col overflow-hidden bg-brand-dark dark:bg-neutral-950'>
       <div className='flex min-h-0 flex-1 overflow-hidden'>
@@ -452,6 +489,8 @@ const WorkspaceScreen = () => {
                         )}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 's7comm' && <S7CommServerEditor />}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
+                        {editor['type'] === 'plc-vendor-screen' && <VendorScreenEditor />}
+                        {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-datatype' && (
                           <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
                             <DataTypeEditor dataTypeName={editor.meta.name} />{' '}

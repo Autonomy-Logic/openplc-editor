@@ -18,7 +18,7 @@ import type {
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
-import { app, nativeTheme, shell } from 'electron'
+import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingHttpHeaders, IncomingMessage } from 'http'
 import https from 'https'
@@ -28,6 +28,7 @@ import { platform } from 'process'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
+import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/utils'
 import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
@@ -61,6 +62,8 @@ class MainProcessBridge implements MainIpcModule {
   private fileWatchers: Map<string, { lastMtime: number }> = new Map()
   // avr8js ATmega2560 emulator instance for the built-in simulator
   private simulatorModule = new SimulatorModule()
+  // VPP package manager for board package operations
+  private packageManagerModule = new PackageManagerModule()
   // ESI repository service for EtherCAT device descriptions
   private esiService = new ESIService()
 
@@ -418,8 +421,14 @@ class MainProcessBridge implements MainIpcModule {
 
       // strucpp+ runtimes report per-task stats: timing_stats = { tasks: [...] }.
       // Pre-strucpp runtimes report a flat object: { scan_count, scan_time_min, ... }.
-      // Accept either shape and normalise to the new array form so the editor
-      // stays alive when pointed at an older PLC.
+      // Both shapes can carry an optional plugin_stats map populated by
+      // get_stats hooks on loaded native/VPP plugins. Accept either
+      // task-shape and forward plugin_stats verbatim so the renderer
+      // stays alive when pointed at an older PLC and gets new plugin
+      // metrics without IPC churn.
+      type PluginStatsField = { label: string; value: string | number | boolean; unit?: string }
+      type PluginStatsPayload = { label: string; fields: PluginStatsField[] }
+      type PluginStatsMap = Record<string, PluginStatsPayload>
       type TaskStats = {
         name: string
         scan_count: number
@@ -434,7 +443,10 @@ class MainProcessBridge implements MainIpcModule {
         cycle_latency_avg: number | null
         overruns: number
       }
-      type TimingStatsResponse = { tasks: TaskStats[] } | (Omit<TaskStats, 'name'> & { tasks?: undefined })
+      type TimingStatsResponse =
+        | { tasks: TaskStats[]; plugin_stats?: PluginStatsMap }
+        | (Omit<TaskStats, 'name'> & { tasks?: undefined; plugin_stats?: PluginStatsMap })
+
       const result = await this.makeRuntimeApiRequest<{
         status: string
         timing_stats?: TimingStatsResponse
@@ -448,14 +460,18 @@ class MainProcessBridge implements MainIpcModule {
 
       if (result.success && result.data) {
         const raw = result.data.timing_stats
-        let timingStats: { tasks: TaskStats[] } | undefined
+        let timingStats: { tasks: TaskStats[]; plugin_stats?: PluginStatsMap } | undefined
         if (raw && Array.isArray((raw as { tasks?: TaskStats[] }).tasks)) {
-          timingStats = raw as { tasks: TaskStats[] }
+          timingStats = raw as { tasks: TaskStats[]; plugin_stats?: PluginStatsMap }
         } else if (raw && typeof (raw as { scan_count?: number }).scan_count === 'number') {
-          // Legacy flat shape — wrap it so the renderer's array iteration works.
-          const flat = raw as Omit<TaskStats, 'name'>
+          // Legacy flat shape — wrap into a single-entry tasks array so
+          // the renderer can iterate uniformly. Forward plugin_stats
+          // verbatim if it was attached at the top level.
+          const flat = raw as Omit<TaskStats, 'name'> & { plugin_stats?: PluginStatsMap }
+          const { plugin_stats, ...flatStats } = flat
           timingStats = {
-            tasks: [{ name: 'plc', ...flat }],
+            tasks: [{ name: 'plc', ...flatStats }],
+            ...(plugin_stats ? { plugin_stats } : {}),
           }
         }
         return {
@@ -641,6 +657,12 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('hardware:get-available-boards', this.handleHardwareGetAvailableBoards)
     this.registerHandle('hardware:refresh-communication-ports', this.handleHardwareRefreshCommunicationPorts)
     this.registerHandle('hardware:refresh-available-boards', this.handleHardwareRefreshAvailableBoards)
+
+    // ===================== PACKAGE MANAGER =====================
+    this.registerHandle('packages:import-from-file', this.handlePackagesImportFromFile)
+    this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
+    this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
+    this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
 
     // ===================== UTILITIES =====================
     this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
@@ -966,9 +988,37 @@ class MainProcessBridge implements MainIpcModule {
   handleHardwareRefreshCommunicationPorts = async () => this.hardwareModule.getAvailableSerialPorts()
   handleHardwareRefreshAvailableBoards = async () => this.hardwareModule.getAvailableBoards()
 
+  // Package manager handlers
+  handlePackagesImportFromFile = async () => {
+    if (!this.mainWindow) return { success: false, error: 'No main window' }
+    const result = await dialog.showOpenDialog(this.mainWindow, {
+      title: 'Import Board Package',
+      filters: [{ name: 'VPP Package', extensions: ['vpp'] }],
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true }
+    }
+    const importResult = await this.packageManagerModule.importFromFile(result.filePaths[0])
+    if (importResult.success) {
+      this.mainWindow.webContents.send('packages:boards-updated')
+    }
+    return importResult
+  }
+  handlePackagesListInstalled = async () => this.packageManagerModule.listInstalled()
+  handlePackagesUninstall = async (_event: IpcMainInvokeEvent, packageId: string) => {
+    const result = this.packageManagerModule.uninstall(packageId)
+    if (result.success) {
+      this.mainWindow?.webContents.send('packages:boards-updated')
+    }
+    return result
+  }
+  handlePackagesGetManifest = async (_event: IpcMainInvokeEvent, packageId: string) =>
+    this.packageManagerModule.getInstalledPackageManifest(packageId)
+
   // Utility handlers
-  handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string) =>
-    this.hardwareModule.getBoardImagePreview(image)
+  handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
+    this.hardwareModule.getBoardImagePreview(image, packagePath)
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
   }

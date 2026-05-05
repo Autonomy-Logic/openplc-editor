@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../..
 import TableActions from '../../../../../_atoms/table-actions'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
+import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -124,11 +125,11 @@ const Board = memo(function () {
   useEffect(() => {
     const fetchPreviewImage = async () => {
       const boardInfos = availableBoards.get(deviceBoard)
-      const imagePath = await device.getPreviewImage(boardInfos?.preview || 'generic.png')
+      const imagePath = await device.getPreviewImage(boardInfos?.preview || 'generic.png', boardInfos?.vpp?.packagePath)
       setPreviewImage(imagePath)
     }
     void fetchPreviewImage()
-  }, [deviceBoard, device])
+  }, [deviceBoard, device, availableBoards])
 
   const refreshCommunicationPorts = useCallback(
     async (e: React.MouseEvent) => {
@@ -160,6 +161,25 @@ const Board = memo(function () {
 
   const handleSetDeviceBoard = useCallback(
     (board: string) => {
+      if (board === '__install_additional_boards__') {
+        const { tabsActions, editorActions } = useOpenPLCStore.getState()
+        const tab = {
+          name: 'Package Manager',
+          path: '/package-manager',
+          elementType: { type: 'package-manager' as const },
+        }
+        tabsActions.updateTabs(tab)
+        const existing = editorActions.getEditorFromEditors(tab.name)
+        if (!existing) {
+          const model = { type: 'plc-package-manager' as const, meta: { name: 'Package Manager' } }
+          editorActions.addModel(model)
+          editorActions.setEditor(model)
+        } else {
+          editorActions.setEditor(existing)
+        }
+        return
+      }
+
       const normalizedBoard = board.split('[')[0].trim()
 
       if (connectionStatus === 'connected' && normalizedBoard !== deviceBoard) {
@@ -187,7 +207,7 @@ const Board = memo(function () {
       }
 
       // Check if switching to a non-v4 target when servers or remote devices exist
-      const isTargetV4 = isOpenPLCRuntimeV4Target(normalizedBoard)
+      const isTargetV4 = isOpenPLCRuntimeV4Target(normalizedBoard, targetBoardInfo)
       const isTargetSimulator = isSimulatorTarget(targetBoardInfo)
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
@@ -320,25 +340,31 @@ const Board = memo(function () {
   }, [setIncludeTimingStatsInPolling])
 
   return (
-    <DeviceEditorSlot heading='Board Settings'>
-      {!isSimulatorTarget(currentBoardInfo) && (
-        <div id='compile-only-container' className='flex select-none items-center gap-2'>
-          <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
-            Compile Only
-          </Label>
-          <Checkbox
-            id='compile-only-checkbox'
-            className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
-            checked={compileOnly}
-            onCheckedChange={handleCompileOnly}
-          />
-        </div>
-      )}
-      <div id='board-selection-container' className='flex h-2/5 min-h-[325px] w-full justify-between'>
+    <DeviceEditorSlot>
+      <div
+        id='board-selection-container'
+        className='flex w-full flex-wrap items-start gap-8 lg:gap-16'
+      >
         <div
           id='board-preferences-container'
-          className='flex h-full w-1/2 max-w-[400px] flex-col items-start justify-start gap-3 overflow-hidden'
+          className='flex w-[360px] flex-shrink-0 flex-col items-start justify-start gap-3'
         >
+          <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
+            Board Settings
+          </h2>
+          {!isSimulatorTarget(currentBoardInfo) && (
+            <div id='compile-only-container' className='flex select-none items-center gap-2'>
+              <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
+                Compile Only
+              </Label>
+              <Checkbox
+                id='compile-only-checkbox'
+                className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
+                checked={compileOnly}
+                onCheckedChange={handleCompileOnly}
+              />
+            </div>
+          )}
           <div id='board-selector' className='flex w-full items-center justify-start gap-1 pr-5'>
             <Label id='device-selector-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Device
@@ -381,6 +407,19 @@ const Board = memo(function () {
                     </SelectItem>
                   )
                 })}
+                {capabilities.hasPackageManager && (
+                  <>
+                    <div className='my-1 border-t border-neutral-200 dark:border-neutral-700' />
+                    <SelectItem
+                      value='__install_additional_boards__'
+                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                    >
+                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-brand'>
+                        + Install additional boards...
+                      </span>
+                    </SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -510,15 +549,25 @@ const Board = memo(function () {
             </div>
           )}
         </div>
-        <div id='board-preview-container' className='flex h-full w-1/2 items-center justify-center pb-8'>
+        <div id='board-preview-container' className='flex flex-shrink-0 items-start'>
           <div className='h-[16rem] w-[20rem]'>
             <img src={previewImage} alt='Device preview' className='h-full w-full object-contain' />
           </div>
         </div>
       </div>
-      {!isSimulatorTarget(currentBoardInfo) && (
-        <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-      )}
+      {(() => {
+        // Only draw the divider when there's actually content below it:
+        // Runtime targets render stats only when connected (the stats
+        // section always shows the EtherCAT panel when connected, even
+        // before the first scan completes); pin mapping (future
+        // Arduino-family VPP path) always renders.
+        const isSim = isSimulatorTarget(currentBoardInfo)
+        const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
+        const showDivider = !isSim && (isRuntime ? connectionStatus === 'connected' : true)
+        return showDivider ? (
+          <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
+        ) : null
+      })()}
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
         connectionStatus === 'connected' && (
           <div className='flex w-full flex-col gap-6'>
@@ -528,6 +577,7 @@ const Board = memo(function () {
               jwtToken={jwtToken}
               isConnected={connectionStatus === 'connected'}
             />
+            <PluginStatsPanel pluginStats={timingStats?.plugin_stats} />
           </div>
         )
       ) : (

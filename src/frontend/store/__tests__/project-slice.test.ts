@@ -182,7 +182,6 @@ function makeOpcUaNode(id: string): OpcUaNodeConfig {
     browseName: id,
     displayName: id,
     description: '',
-    initialValue: 0,
     permissions: { viewer: 'r', operator: 'rw', engineer: 'rw' },
     nodeType: 'variable',
   }
@@ -2375,7 +2374,6 @@ describe('createProjectSlice', () => {
         browseName: 'v',
         displayName: 'v',
         description: '',
-        initialValue: false,
         permissions: { viewer: 'r', operator: 'rw', engineer: 'rw' },
         nodeType: 'variable',
       })

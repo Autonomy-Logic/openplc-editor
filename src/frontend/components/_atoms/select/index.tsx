@@ -55,7 +55,7 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
           side={side}
           {...res}
         >
-          <PrimitiveSelect.Viewport ref={viewportRef} className=' h-full w-full overflow-auto'>
+          <PrimitiveSelect.Viewport ref={viewportRef} className='oplc-select-viewport h-full w-full'>
             {children}
           </PrimitiveSelect.Viewport>
         </PrimitiveSelect.Content>

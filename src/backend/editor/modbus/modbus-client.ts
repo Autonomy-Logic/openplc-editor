@@ -191,7 +191,7 @@ export class ModbusTcpClient {
     request.writeUInt16BE(numIndexes, 8)
 
     for (let i = 0; i < numIndexes; i++) {
-      const packed = variableIndexes[i]!
+      const packed = variableIndexes[i]
       const arr = (packed >>> 16) & 0xff
       const elem = packed & 0xffff
       request.writeUInt8(arr, 10 + i * 3)

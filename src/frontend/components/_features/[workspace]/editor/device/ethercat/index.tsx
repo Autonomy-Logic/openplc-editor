@@ -1,9 +1,9 @@
 import * as Tabs from '@radix-ui/react-tabs'
-import { collectUsedIecAddresses } from '@root/backend/shared/ethercat/collect-used-iec-addresses'
 import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-config-defaults'
 import { getBestMatchQuality, matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
+import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type {
@@ -72,6 +72,7 @@ const EtherCATEditor = () => {
     sharedWorkspaceActions,
     editorActions,
   } = useOpenPLCStore()
+  const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const runtime = useRuntime()
   const esi = useEsi()
 
@@ -373,7 +374,7 @@ const EtherCATEditor = () => {
   const handleAddSelectedFromScan = useCallback(async () => {
     const newDevices: ConfiguredEtherCATDevice[] = []
     const existingPositions = new Set(configuredDevices.map((d) => d.position))
-    const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices)
+    const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices, vendorScreenData)
 
     for (const position of selectedScannedDevices) {
       // Skip devices already configured at this position
@@ -425,6 +426,8 @@ const EtherCATEditor = () => {
     syncDevicesToStore,
     projectPath,
     project.data.remoteDevices,
+    vendorScreenData,
+    esi,
   ])
 
   const handleRetryRepository = useCallback(() => {
@@ -438,7 +441,7 @@ const EtherCATEditor = () => {
       let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
       const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
       if (result.success && result.device) {
-        const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices)
+        const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices, vendorScreenData)
         enriched = enrichDeviceData(result.device, usedAddresses)
       }
 
@@ -465,7 +468,7 @@ const EtherCATEditor = () => {
       const { fileActions } = useOpenPLCStore.getState()
       fileActions.addFile({ name: newDevice.name, type: 'ethercat-device', filePath: deviceName })
     },
-    [configuredDevices, syncDevicesToStore, deviceName, project.data.remoteDevices],
+    [configuredDevices, syncDevicesToStore, deviceName, project.data.remoteDevices, vendorScreenData, esi],
   )
 
   const handleRemoveDevice = useCallback(

@@ -1,5 +1,5 @@
 import * as Tabs from '@radix-ui/react-tabs'
-import { collectUsedIecAddresses } from '@root/backend/shared/ethercat'
+import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
 import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configuration'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
@@ -48,6 +48,7 @@ const TabItem = ({ value, label, isActive }: { value: string; label: string; isA
  */
 const EtherCATDeviceEditor = () => {
   const { editor, project, projectActions, workspaceActions } = useOpenPLCStore()
+  const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const esi = useEsi()
 
   const busName = editor.type === 'plc-ethercat-device' ? editor.meta.busName : ''
@@ -83,8 +84,12 @@ const EtherCATDeviceEditor = () => {
     )
   }, [remoteDevice])
 
-  // Collect all IEC addresses used across all remote devices
-  const usedAddresses = useMemo(() => collectUsedIecAddresses(project.data.remoteDevices), [project.data.remoteDevices])
+  // Collect all IEC addresses claimed across remote devices and VPP
+  // vendor modules — all three share the Runtime v4 image table.
+  const usedAddresses = useMemo(
+    () => collectUsedIecAddresses(project.data.remoteDevices, vendorScreenData),
+    [project.data.remoteDevices, vendorScreenData],
+  )
 
   // Exclude the current device's own addresses from the "external" set
   const externalAddresses = useMemo(() => {

@@ -1,7 +1,7 @@
 import { exec, spawn } from 'node:child_process'
-import crypto from 'node:crypto'
+import crypto, { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
 import os from 'node:os'
@@ -30,6 +30,7 @@ import {
 import { generateModbusMasterConfig } from '@root/backend/shared/utils/modbus/generate-modbus-master-config'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import { parsePlcStatus } from '@root/backend/shared/utils/plc-status'
+import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
@@ -38,9 +39,10 @@ import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
+import type { PackageManifest } from '../package-manager'
+import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import type { ArduinoCoreControl, HalsFile } from './types'
-import { FormatMacAddress } from './utils/formatters'
 
 interface MethodsResult<T> {
   success: boolean
@@ -217,7 +219,22 @@ class CompilerModule {
       return halsFileContent[board]['compiler']
     }
 
-    // Board not found in hals.json or installed VPP packages
+    // Fallback: check installed VPP packages for the board
+    try {
+      const packageManager = new PackageManagerModule()
+      const installed = packageManager.listInstalled()
+      for (const pkg of installed) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+        for (const device of manifest.devices) {
+          if (device.name === board) {
+            return device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
+          }
+        }
+      }
+    } catch {
+      // ignore package manager errors
+    }
 
     throw new Error(`Board "${board}" not found in hals.json or installed VPP packages`)
   }
@@ -755,7 +772,6 @@ class CompilerModule {
 
     // === Directories and files paths ===
     const devicesDirectoryPath = join(projectPath, 'devices')
-    const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
     const devicesPinMappingFilePath = join(devicesDirectoryPath, 'pin-mapping.json')
 
     const buildTargetDirectoryPath = join(projectPath, 'build', boardTarget)
@@ -766,9 +782,6 @@ class CompilerModule {
 
     // === Files contents that we need ===
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
-    const {
-      communicationConfiguration: { modbusRTU, modbusTCP, communicationPreferences },
-    } = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
     const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
     const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
 
@@ -808,55 +821,26 @@ class CompilerModule {
     DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
     DEFINES_CONTENT += `\n\n`
 
-    // 3.2. Device Configuration
-    DEFINES_CONTENT += '//Comms Configuration\n'
+    // 3.2. Simulator communication defines
+    //
+    // Baremetal/Arduino-family targets used to emit a full //Comms
+    // Configuration block here, read from deviceConfigurationSchema's
+    // communicationConfiguration field. That schema is gone — Arduino
+    // targets will return as VPP packages and each package owns its
+    // own defines emission. The only target still emitting communication
+    // defines from the core compiler is the built-in simulator.
     if (boardRuntime === 'simulator') {
       // Simulator forces fixed Modbus RTU settings over emulated USART0.
       // On ATmega2560, Serial = USART0. avr8js bridges usart0.
+      DEFINES_CONTENT += '//Comms Configuration\n'
       DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
       DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial\n'
       DEFINES_CONTENT += '#define MBSERIAL_BAUD 115200\n'
       DEFINES_CONTENT += '#define MBSERIAL_SLAVE 1\n'
-    } else {
-      DEFINES_CONTENT += `#define MBSERIAL_IFACE ${modbusRTU.rtuInterface}\n`
-      DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
-      if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
-      if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
-    }
-    if (modbusTCP.tcpMacAddress !== null)
-      DEFINES_CONTENT += `#define MBTCP_MAC ${FormatMacAddress(modbusTCP.tcpMacAddress)}\n`
-    // OBS: This is giving us an empty string and this is being printed as a space
-    if (modbusTCP.tcpStaticHostConfiguration.ipAddress !== null)
-      DEFINES_CONTENT += `#define MBTCP_IP ${modbusTCP.tcpStaticHostConfiguration.ipAddress.replaceAll('.', ',')}\n`
-    if (modbusTCP.tcpStaticHostConfiguration.dns !== null)
-      DEFINES_CONTENT += `#define MBTCP_DNS ${modbusTCP.tcpStaticHostConfiguration.dns.replaceAll('.', ',')}\n`
-    if (modbusTCP.tcpStaticHostConfiguration.gateway !== null)
-      DEFINES_CONTENT += `#define MBTCP_GATEWAY ${modbusTCP.tcpStaticHostConfiguration.gateway.replaceAll('.', ',')}\n`
-    if (modbusTCP.tcpStaticHostConfiguration.subnet !== null)
-      DEFINES_CONTENT += `#define MBTCP_SUBNET ${modbusTCP.tcpStaticHostConfiguration.subnet.replaceAll('.', ',')}\n`
-
-    if (communicationPreferences.enabledRTU || boardRuntime === 'simulator') {
       DEFINES_CONTENT += '#define MBSERIAL\n'
       DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
+      DEFINES_CONTENT += `\n\n`
     }
-
-    if (communicationPreferences.enabledTCP) {
-      DEFINES_CONTENT += '#define MBTCP\n'
-      DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
-      if (modbusTCP.tcpInterface === 'Wi-Fi') {
-        if (modbusTCP.tcpWifiSSID !== null) {
-          DEFINES_CONTENT += `#define MBTCP_SSID "${modbusTCP.tcpWifiSSID}"\n`
-        }
-        if (modbusTCP.tcpWifiPassword !== null) {
-          DEFINES_CONTENT += `#define MBTCP_PWD "${modbusTCP.tcpWifiPassword}"\n`
-        }
-        DEFINES_CONTENT += '#define MBTCP_WIFI\n'
-      } else {
-        DEFINES_CONTENT += '#define MBTCP_ETHERNET\n'
-      }
-    }
-
-    DEFINES_CONTENT += `\n\n`
 
     // INFO: If null, only the define value
     // 3.3. IO Config defines
@@ -1453,6 +1437,191 @@ class CompilerModule {
   }
 
   /**
+   * Handle VPP runtime-v4 package integration for the uploaded program.
+   *
+   * When the selected board is from an installed VPP package, this handler:
+   *   1. Generates conf/<plugin_name>.json from the package's config_template.json
+   *      merged with vendor screen data (hal-config, module-configuration, io-mapping)
+   *   2. Copies the plugin source directory (containing the Makefile and .c/.h files)
+   *      into the source folder under vpp_plugin/
+   *   3. Computes a SHA-256 checksum over all plugin source files and writes it to
+   *      vpp_plugin/checksum.sha256 so the runtime's compile.sh can skip
+   *      recompilation when the source hasn't changed.
+   *
+   * For non-VPP boards or VPP boards without the necessary HAL metadata, the
+   * relevant sub-steps are skipped. A header log is always emitted so the
+   * user can see whether VPP handling kicked in at all.
+   */
+  async handleVendorPluginPackaging(
+    boardTarget: string,
+    normalizedProjectPath: string,
+    sourceTargetFolderPath: string,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    try {
+      const packageManager = new PackageManagerModule()
+      const installed = packageManager.listInstalled()
+
+      let matchingPackagePath: string | null = null
+      let matchingDevice: PackageManifest['devices'][number] | null = null
+
+      for (const pkg of installed) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+        const device = manifest.devices.find((d) => d.name === boardTarget)
+        if (device) {
+          matchingPackagePath = pkg.path
+          matchingDevice = device
+          break
+        }
+      }
+
+      if (!matchingDevice || !matchingPackagePath) {
+        handleOutputData(`Board "${boardTarget}" is not from a VPP package, skipping VPP packaging`, 'info')
+        return
+      }
+
+      if (matchingDevice.target.type !== 'runtime-v4') {
+        handleOutputData(
+          `VPP board "${boardTarget}" is not runtime-v4 (target=${matchingDevice.target.type}), skipping VPP packaging`,
+          'info',
+        )
+        return
+      }
+
+      handleOutputData(`Detected VPP runtime-v4 board: ${boardTarget}`, 'info')
+
+      // --- Step 1: Generate plugin config file ---
+      const configTemplateRelPath = matchingDevice.hal?.configTemplate
+      let pluginName = 'vendor_plugin'
+
+      if (configTemplateRelPath) {
+        const configTemplatePath = join(matchingPackagePath, configTemplateRelPath)
+        let configTemplate: Record<string, unknown> | null = null
+        try {
+          const templateRaw = await readFile(configTemplatePath, 'utf-8')
+          configTemplate = JSON.parse(templateRaw) as Record<string, unknown>
+        } catch (err) {
+          handleOutputData(
+            `Failed to read VPP config template at ${configTemplateRelPath}: ${getErrorMessage(err)}`,
+            'error',
+          )
+        }
+
+        if (configTemplate) {
+          // Read vendor screen data from the project's device configuration
+          const deviceConfigPath = join(normalizedProjectPath, 'devices', 'configuration.json')
+          let vendorScreenData: Record<string, unknown> = {}
+          try {
+            const deviceConfigRaw = await readFile(deviceConfigPath, 'utf-8')
+            const deviceConfig = JSON.parse(deviceConfigRaw) as { vendorScreenData?: Record<string, unknown> }
+            vendorScreenData = deviceConfig.vendorScreenData ?? {}
+          } catch {
+            // Device configuration may not exist yet — use empty vendor data
+          }
+
+          const modules = matchingDevice.moduleSystem?.modules ?? []
+          const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
+
+          pluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
+          const confFolderPath = join(sourceTargetFolderPath, 'conf')
+          await mkdir(confFolderPath, { recursive: true })
+          const configFilePath = join(confFolderPath, `${pluginName}.json`)
+          await writeFile(configFilePath, JSON.stringify(finalConfig, null, 2), 'utf-8')
+          handleOutputData(`Generated conf/${pluginName}.json for VPP plugin`, 'info')
+        }
+      } else {
+        handleOutputData('VPP board has no HAL configTemplate, skipping plugin config generation', 'info')
+      }
+
+      // --- Step 2: Copy plugin source + generate checksum ---
+      const pluginEntryRelPath = matchingDevice.hal?.pluginEntry
+      if (!pluginEntryRelPath) {
+        handleOutputData('VPP board has no HAL pluginEntry, skipping plugin source upload', 'info')
+        return
+      }
+
+      // The plugin source directory is the parent directory of pluginEntry
+      const pluginSourceDir = join(matchingPackagePath, path.dirname(pluginEntryRelPath))
+      let pluginSourceStat
+      try {
+        pluginSourceStat = await stat(pluginSourceDir)
+      } catch (err) {
+        handleOutputData(
+          `VPP plugin source directory not found at ${pluginEntryRelPath}: ${getErrorMessage(err)}`,
+          'error',
+        )
+        return
+      }
+
+      if (!pluginSourceStat.isDirectory()) {
+        handleOutputData(`VPP plugin source path is not a directory: ${pluginEntryRelPath}`, 'error')
+        return
+      }
+
+      const destPluginDir = join(sourceTargetFolderPath, 'vpp_plugin')
+      // Clean up any previous vpp_plugin directory from a prior build
+      try {
+        await fs.rm(destPluginDir, { recursive: true, force: true })
+      } catch {
+        // Ignore — may not exist yet
+      }
+
+      // Copy the plugin source, excluding files that are only useful in the editor
+      // (config_template.json is already turned into conf/<plugin>.json, and
+      // requirements.txt is for Python-style plugins that don't apply here).
+      const EXCLUDE_FILES = new Set(['config_template.json', 'requirements.txt'])
+      const copiedFiles: string[] = []
+      const collectAndCopy = async (sourceDir: string, destDir: string, relPath: string = ''): Promise<void> => {
+        const entries = await readdir(sourceDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (EXCLUDE_FILES.has(entry.name)) continue
+          const sourcePath = join(sourceDir, entry.name)
+          const destPath = join(destDir, entry.name)
+          const relFilePath = relPath ? `${relPath}/${entry.name}` : entry.name
+          if (entry.isDirectory()) {
+            await mkdir(destPath, { recursive: true })
+            await collectAndCopy(sourcePath, destPath, relFilePath)
+          } else if (entry.isFile()) {
+            await mkdir(destDir, { recursive: true })
+            const content = await readFile(sourcePath)
+            await writeFile(destPath, content as unknown as Uint8Array)
+            copiedFiles.push(relFilePath)
+          }
+        }
+      }
+
+      await mkdir(destPluginDir, { recursive: true })
+      await collectAndCopy(pluginSourceDir, destPluginDir)
+
+      if (copiedFiles.length === 0) {
+        handleOutputData('VPP plugin source directory contained no files to copy', 'info')
+        return
+      }
+
+      // Compute SHA-256 over all copied files (sorted for determinism)
+      // Format: "<sha256> <relative-path>\n" per file, then a final SHA-256 of that list
+      copiedFiles.sort()
+      const hash = createHash('sha256')
+      for (const relFile of copiedFiles) {
+        const fileContent = await readFile(join(destPluginDir, relFile))
+        const fileHash = createHash('sha256').update(fileContent as unknown as Uint8Array).digest('hex')
+        hash.update(`${fileHash}  ${relFile}\n`)
+      }
+      const combinedHash = hash.digest('hex')
+      await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
+
+      handleOutputData(
+        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}…)`,
+        'info',
+      )
+    } catch (error) {
+      const errorMessage = getErrorMessage(error)
+      handleOutputData(`Failed VPP plugin packaging: ${errorMessage}`, 'error')
+    }
+  }
+
+  /**
    * This will be the main entry point for the compiler module.
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
    */
@@ -1525,6 +1694,7 @@ class CompilerModule {
     // VPP boards with runtime-v4 target type use openplc-compiler and are also v4-capable
     const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
     const isRuntimeV4 = boardRuntime === 'openplc-compiler' && !isRuntimeV3
+
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
 
@@ -1755,6 +1925,15 @@ class CompilerModule {
           await this.handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
+          // VPP plugin config + source copy for boards whose target is runtime-v4
+          await this.handleVendorPluginPackaging(
+            boardTarget,
+            normalizedProjectPath,
+            sourceTargetFolderPath,
+            (data, logLevel) => {
+              _mainProcessPort.postMessage({ logLevel, message: data })
+            },
+          )
         } catch (error) {
           _mainProcessPort.postMessage({
             logLevel: 'error',
@@ -1889,20 +2068,20 @@ class CompilerModule {
                     })
                   }
 
-                  const pollCompilationStatus = async () => {
+                  const pollCompilationStatus = async (): Promise<'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'ERROR'> => {
                     let lastLogCount = 0
-                    let shouldContinuePolling = true
+                    let finalResult: 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'ERROR' | null = null
                     const startTime = Date.now()
                     const timeout = CompilerModule.COMPILATION_STATUS_TIMEOUT_MS
                     const pollInterval = CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS
 
-                    while (shouldContinuePolling) {
+                    while (finalResult === null) {
                       if (Date.now() - startTime > timeout) {
                         _mainProcessPort.postMessage({
                           logLevel: 'error',
                           message: 'Compilation status polling timed out after 20 minutes.',
                         })
-                        shouldContinuePolling = false
+                        finalResult = 'TIMEOUT'
                         continue
                       }
 
@@ -1922,7 +2101,7 @@ class CompilerModule {
                             logLevel: 'error',
                             message: `Error polling compilation status: ${result.error}`,
                           })
-                          shouldContinuePolling = false
+                          finalResult = 'ERROR'
                           continue
                         }
 
@@ -1945,26 +2124,92 @@ class CompilerModule {
                             logLevel: 'info',
                             message: `Compilation completed successfully (exit code: ${exit_code ?? 0}).`,
                           })
-                          shouldContinuePolling = false
+                          finalResult = 'SUCCESS'
                         } else if (status === 'FAILED') {
                           _mainProcessPort.postMessage({
                             logLevel: 'error',
                             message: `Compilation failed (exit code: ${exit_code ?? 1}).`,
                           })
-                          shouldContinuePolling = false
+                          finalResult = 'FAILED'
                         }
                       } catch (pollError) {
                         _mainProcessPort.postMessage({
                           logLevel: 'error',
                           message: `Error polling compilation status: ${pollError instanceof Error ? pollError.message : String(pollError)}`,
                         })
-                        shouldContinuePolling = false
+                        finalResult = 'ERROR'
                       }
                     }
+                    return finalResult
+                  }
+
+                  /**
+                   * Send START to the runtime after a successful build, retrying on
+                   * COMMAND:BUSY (the runtime returns BUSY while its STOP transition
+                   * thread is still finishing the unload — plugin cleanup, pthread_join,
+                   * etc.). Any non-BUSY error response (invalid program, compilation
+                   * error, etc.) stops the retry immediately.
+                   */
+                  const startPlcAfterBuildWithRetry = async (): Promise<void> => {
+                    const maxWaitMs = 5000
+                    const pollIntervalMs = 150
+                    const deadline = Date.now() + maxWaitMs
+
+                    while (Date.now() < deadline) {
+                      const result = await mainProcessBridge.makeRuntimeApiRequest<string>(
+                        runtimeIpAddress,
+                        runtimeJwtToken,
+                        '/api/start-plc',
+                        (data: string) => {
+                          const parsed = JSON.parse(data) as { status?: string }
+                          return (parsed.status ?? '').trim()
+                        },
+                      )
+
+                      if (!result.success) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'error',
+                          message: `Failed to start PLC: ${result.error}`,
+                        })
+                        return
+                      }
+
+                      const rawStatus = result.data ?? ''
+                      if (rawStatus.includes('START:OK') || rawStatus.includes('ALREADY_RUNNING')) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'info',
+                          message: 'PLC started.',
+                        })
+                        return
+                      }
+
+                      // Only BUSY is retryable — everything else is a real error from the runtime.
+                      if (!rawStatus.includes('BUSY')) {
+                        _mainProcessPort.postMessage({
+                          logLevel: 'error',
+                          message: `Failed to start PLC: ${rawStatus || 'unknown response'}`,
+                        })
+                        return
+                      }
+
+                      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+                    }
+
+                    _mainProcessPort.postMessage({
+                      logLevel: 'warning',
+                      message: `PLC did not start within ${maxWaitMs}ms — runtime remained busy. Press Play to retry.`,
+                    })
                   }
 
                   pollCompilationStatus()
-                    .then(async () => {
+                    .then(async (compileStatus) => {
+                      // Auto-start the PLC on successful build. The runtime no longer
+                      // restarts on its own after an upload, so the editor owns the
+                      // retry-on-BUSY policy and the error reporting.
+                      if (compileStatus === 'SUCCESS' && !compileOnly) {
+                        await startPlcAfterBuildWithRetry()
+                      }
+
                       if (runtimeIpAddress && runtimeJwtToken) {
                         try {
                           const statusResult = await mainProcessBridge.makeRuntimeApiRequest<string>(

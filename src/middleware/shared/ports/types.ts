@@ -455,6 +455,130 @@ export interface BoardInfo {
     defaultDin?: string[]
     defaultDout?: string[]
   }
+  vpp?: VppMetadata
+}
+
+// ---------------------------------------------------------------------------
+// VPP (Vendor Plugin Package)
+// ---------------------------------------------------------------------------
+
+export interface VppModuleDefinition {
+  id: string
+  name: string
+  image?: string
+  io: {
+    digitalInputs: number
+    digitalOutputs: number
+    analogInputs: number
+    analogOutputs: number
+  }
+  parameters?: Array<{
+    id: string
+    name: string
+    type: string
+    options?: string[]
+    default?: unknown
+    min?: number
+    max?: number
+  }>
+  addressMapping?: unknown
+}
+
+export interface VppMetadata {
+  packageId: string
+  deviceId: string
+  packagePath: string
+  screens: Record<string, unknown>
+  moduleSystem: {
+    enabled: boolean
+    maxSlots: number
+    modules: VppModuleDefinition[]
+  } | null
+}
+
+export interface PackageManifest {
+  formatVersion: string
+  package: {
+    id: string
+    name: string
+    version: string
+    vendor: {
+      name: string
+      url?: string
+      logo: string
+    }
+    description: string
+    license?: string
+    minEditorVersion?: string
+  }
+  devices: Array<{
+    id: string
+    name: string
+    category?: string
+    preview: string
+    target: {
+      type: string
+      platform?: string
+      core?: string
+    }
+    specs?: Record<string, string>
+    hal: {
+      type: string
+      pluginType?: string
+      pluginEntry?: string
+      configTemplate?: string
+      requirements?: string
+      source?: string
+    }
+    defaults?: {
+      runtimeIpAddress?: string
+      pins?: {
+        defaultDin?: string[]
+        defaultDout?: string[]
+        defaultAin?: string[]
+        defaultAout?: string[]
+      }
+    }
+    screens?: Record<string, string>
+    moduleSystem?: {
+      enabled: boolean
+      maxSlots: number
+      discoverySupported?: boolean
+      modules: VppModuleDefinition[]
+    }
+  }>
+}
+
+export interface InstalledPackage {
+  packageId: string
+  version: string
+  installedAt: string
+  path: string
+  devices: string[]
+}
+
+export interface ImportResult {
+  success: boolean
+  canceled?: boolean
+  packageId?: string
+  packageName?: string
+  devices?: string[]
+  error?: string
+}
+
+export interface IoMappingEntry {
+  slot: number
+  moduleId: string
+  moduleName: string
+  channelName: string
+  channelType: string
+  dataType: string
+  iecAddress: string
+  alias: string
+}
+
+export interface VendorIoMapping {
+  entries: IoMappingEntry[]
 }
 
 export interface CommunicationPort {
@@ -476,40 +600,12 @@ export interface DevicePin {
   name?: string
 }
 
-export interface ModbusRTUConfig {
-  rtuInterface: string
-  rtuBaudRate: string
-  rtuSlaveId: number | null
-  rtuRS485ENPin: string | null
-}
-
-export interface ModbusTCPConfig {
-  tcpInterface: string
-  tcpMacAddress: string | null
-  tcpWifiSSID?: string | null
-  tcpWifiPassword?: string | null
-  tcpStaticHostConfiguration: {
-    ipAddress: string
-    dns: string
-    gateway: string
-    subnet: string
-  }
-}
-
 export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
   runtimeIpAddress?: string
   compileOnly: boolean
-  communicationConfiguration: {
-    modbusRTU: ModbusRTUConfig
-    modbusTCP: ModbusTCPConfig
-    communicationPreferences: {
-      enabledRTU: boolean
-      enabledTCP: boolean
-      enabledDHCP: boolean
-    }
-  }
+  vendorScreenData?: Record<string, unknown>
 }
 
 // ---------------------------------------------------------------------------
@@ -541,12 +637,31 @@ export interface TaskTimingStats {
 }
 
 /**
+ * Plugin-contributed stat field. The runtime aggregates one of these
+ * for each metric a loaded plugin exports via its `get_stats` hook
+ * (e.g. EtherCAT cycle counters, VPP-package telemetry). The editor
+ * renders them grouped under the plugin's `label` without needing to
+ * know what the metric semantically represents.
+ */
+export interface PluginStatsField {
+  label: string
+  value: string | number | boolean
+  unit?: string
+}
+
+export interface PluginStatsPayload {
+  label: string
+  fields: PluginStatsField[]
+}
+
+/**
  * Container for runtime timing stats. The runtime emits one entry per
- * IEC task; the editor renders them as a list. Pulled via the runtime's
- * `/api/status?include_stats=true` endpoint.
+ * IEC task plus an optional opaque map of plugin-contributed stats.
+ * Pulled via the runtime's `/api/status?include_stats=true` endpoint.
  */
 export interface TimingStats {
   tasks: TaskTimingStats[]
+  plugin_stats?: Record<string, PluginStatsPayload>
 }
 
 export type RuntimeLogLevel = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR'

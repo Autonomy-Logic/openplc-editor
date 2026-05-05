@@ -35,8 +35,8 @@ export function createEditorDeviceAdapter(): DevicePort {
       return window.bridge.refreshCommunicationPorts()
     },
 
-    getPreviewImage(imageName: string): Promise<string> {
-      return window.bridge.getPreviewImage(imageName)
+    getPreviewImage(imageName: string, packagePath?: string): Promise<string> {
+      return window.bridge.getPreviewImage(imageName, packagePath)
     },
   }
 }

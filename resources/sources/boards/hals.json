@@ -34,6 +34,7 @@
       "-std=gnu++17"
     ]
   },
+<<<<<<< HEAD
   "Arduino Due (native USB port)": {
     "compiler": "arduino-cli",
     "core": "arduino:sam",
@@ -1508,6 +1509,8 @@
       "-std=gnu++17"
     ]
   },
+=======
+>>>>>>> origin/feat/vpp-package-support-v2
   "OpenPLC Runtime v3": {
     "compiler": "openplc-compiler",
     "preview": "generic.png",
@@ -1515,6 +1518,7 @@
       "-std=gnu++17"
     ]
   },
+<<<<<<< HEAD
   "P1AM-100": {
     "compiler": "arduino-cli",
     "core": "arduino:samd",
@@ -1812,5 +1816,10 @@
     "cxx_flags": [
       "-std=gnu++17"
     ]
+=======
+  "OpenPLC Runtime v4": {
+    "compiler": "openplc-compiler",
+    "preview": "generic.png"
+>>>>>>> origin/feat/vpp-package-support-v2
   }
 }
