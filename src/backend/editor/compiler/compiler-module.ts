@@ -12,6 +12,8 @@ import { promisify } from 'node:util'
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
 // incompatible with Jest's CJS transform. The actual import happens in handleCompileSTtoCpp().
 type StrucppCompile = typeof import('strucpp')['compile']
+type StrucppFormatDiagnostic = typeof import('strucpp')['formatDiagnostic']
+type StrucppBuildSourceMap = typeof import('strucpp')['buildSourceMap']
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
@@ -470,8 +472,16 @@ class CompilerModule {
     handleOutputData('Compiling Structured Text to C++ with STruC++...', 'info')
 
     // Lazy import to avoid ESM/CJS issues at module load time (Jest compatibility)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { compile: strucppCompile } = require('strucpp') as { compile: StrucppCompile }
+    const {
+      compile: strucppCompile,
+      formatDiagnostic: strucppFormatDiagnostic,
+      buildSourceMap: strucppBuildSourceMap,
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+    } = require('strucpp') as {
+      compile: StrucppCompile
+      formatDiagnostic: StrucppFormatDiagnostic
+      buildSourceMap: StrucppBuildSourceMap
+    }
 
     const libsDir = this.strucppLibsDir
     let libraryPaths: string[] = []
@@ -486,21 +496,25 @@ class CompilerModule {
     // can detect stale layouts without re-reading program.st).
     const md5Hash = crypto.createHash('md5').update(stSource).digest('hex')
 
+    const stFileName = 'program.st'
     const result = strucppCompile(stSource, {
       headerFileName: 'generated.hpp',
+      fileName: stFileName,
       debug: true,
       lineMapping: true,
       libraryPaths,
       md5: md5Hash,
     })
 
+    const diagSourceMap = strucppBuildSourceMap([{ fileName: stFileName, source: stSource }])
+
     if (!result.success) {
-      const msgs = result.errors.map((e) => `Line ${e.line}: ${e.message}`).join('\n')
-      throw new Error(`STruC++ compilation failed:\n${msgs}`)
+      const msgs = result.errors.map((e) => strucppFormatDiagnostic(e, diagSourceMap)).join('\n\n')
+      throw new Error(`STruC++ compilation failed:\n\n${msgs}`)
     }
 
     for (const warn of result.warnings) {
-      handleOutputData(`Warning at line ${warn.line}: ${warn.message}`, 'info')
+      handleOutputData(strucppFormatDiagnostic(warn, diagSourceMap), 'info')
     }
 
     // STruC++ splits the implementation across one TU per POU plus a

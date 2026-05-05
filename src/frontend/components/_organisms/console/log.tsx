@@ -93,7 +93,10 @@ const LogComponent = ({ level, message, tstamp, searchTerm, ...rest }: LogCompon
     <>
       {message && (
         <div className='group flex items-start gap-1'>
-          <p className={cn('flex-1 font-normal', classForMessage)} {...rest}>
+          <p
+            className={cn('flex-1 whitespace-pre-wrap font-mono font-normal', classForMessage)}
+            {...rest}
+          >
             {level && tstamp ? (
               <>
                 [<HighlightedText text={tstamp} searchTerm={searchTerm} />
