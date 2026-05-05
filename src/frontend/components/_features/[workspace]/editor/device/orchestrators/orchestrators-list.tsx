@@ -8,6 +8,7 @@ import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
+import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
@@ -574,13 +575,18 @@ const OrchestratorsList = () => {
         </div>
       </DeviceEditorSlot>
 
-      {/* Right side panel - Scan Cycle Statistics (per IEC task) */}
-      {runtimeConnection.connectionStatus === 'connected' && runtimeConnection.timingStats && (
+      {/* Right side panel - Scan Cycle + EtherCAT statistics */}
+      {runtimeConnection.connectionStatus === 'connected' && (
         <div
           id='scan-cycle-stats-panel'
-          className='flex h-full w-1/2 flex-col gap-4 overflow-y-auto overflow-x-hidden p-4 lg:px-8 lg:py-4'
+          className='flex h-full w-1/2 flex-col gap-6 overflow-y-auto overflow-x-hidden p-4 lg:px-8 lg:py-4'
         >
-          <ScanCycleStats timingStats={runtimeConnection.timingStats} />
+          {runtimeConnection.timingStats && <ScanCycleStats timingStats={runtimeConnection.timingStats} />}
+          <EtherCATStats
+            ipAddress={runtimeConnection.ipAddress}
+            jwtToken={runtimeConnection.jwtToken}
+            isConnected={runtimeConnection.connectionStatus === 'connected'}
+          />
         </div>
       )}
     </div>

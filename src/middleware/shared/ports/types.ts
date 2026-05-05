@@ -521,8 +521,9 @@ export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TR
 /**
  * Per-task scan/cycle/latency stats from the runtime. Each IEC task
  * runs on its own thread under STruC++, so stats are reported per
- * task and the editor renders one block per entry. The `name` field
- * matches the runtime's per-task name (currently `plc-task-<idx>`).
+ * task and the editor renders one row per entry. The `name` field
+ * is the IEC task name from the project (falls back to `plc-task-<idx>`
+ * when the compiled .so doesn't expose a name).
  */
 export interface TaskTimingStats {
   name: string

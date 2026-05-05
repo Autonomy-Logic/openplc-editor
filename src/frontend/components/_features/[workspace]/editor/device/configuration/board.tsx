@@ -21,6 +21,7 @@ import { Checkbox } from '../../../../../_atoms/checkbox'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
+import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
@@ -62,6 +63,7 @@ const Board = memo(function () {
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
+  const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
@@ -518,7 +520,16 @@ const Board = memo(function () {
         <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
       )}
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
-        connectionStatus === 'connected' && timingStats && <ScanCycleStats timingStats={timingStats} />
+        connectionStatus === 'connected' && (
+          <div className='flex w-full flex-col gap-6'>
+            {timingStats && <ScanCycleStats timingStats={timingStats} />}
+            <EtherCATStats
+              ipAddress={runtimeIpAddress || null}
+              jwtToken={jwtToken}
+              isConnected={connectionStatus === 'connected'}
+            />
+          </div>
+        )
       ) : (
         <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
           <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>
