@@ -661,9 +661,9 @@ const WorkspaceScreen = () => {
                 <ResizablePanel
                   id='chatPanel'
                   order={3}
-                  defaultSize={16}
-                  minSize={16}
-                  maxSize={25}
+                  defaultSize={30}
+                  minSize={20}
+                  maxSize={50}
                   className='relative flex h-full min-h-0 w-full'
                 >
                   <ChatPanel />
