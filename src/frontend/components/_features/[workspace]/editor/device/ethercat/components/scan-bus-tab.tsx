@@ -10,7 +10,7 @@ import type {
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
 } from '@root/middleware/shared/ports/esi-types'
-import type { EtherCATDevice, NetworkInterface } from '@root/types/ethercat'
+import type { EtherCATDevice, NetworkInterface } from '@root/middleware/shared/ports/ethercat-types'
 import { useState } from 'react'
 
 import { DeviceBrowserModal } from './device-browser-modal'
