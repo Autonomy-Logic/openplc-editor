@@ -1,8 +1,7 @@
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/frontend/components/_atoms/table'
 import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import type { EtherCATMasterStatus, EtherCATRuntimeStatusResponse } from '@root/types/ethercat'
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms/table'
 
 const POLL_INTERVAL_MS = 2000
 
@@ -105,41 +104,63 @@ export const EtherCATStats = ({ ipAddress, jwtToken, isConnected }: EtherCATStat
   const runtime = useRuntime()
   const [masters, setMasters] = useState<EtherCATMasterStatus[]>([])
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isMountedRef = useRef(true)
+
+  // Hand-rolled "set if changed" guard so a no-op clear (already empty)
+  // doesn't cause a re-render. Otherwise every poll on a disconnected
+  // component would create a fresh `[]` and bump React's render count
+  // for nothing.
+  const setMastersIfChanged = useCallback((next: EtherCATMasterStatus[]) => {
+    if (!isMountedRef.current) return
+    setMasters((prev) => {
+      if (prev === next) return prev
+      if (prev.length === 0 && next.length === 0) return prev
+      return next
+    })
+  }, [])
 
   const fetchStats = useCallback(async () => {
     if (!isConnected || !ipAddress || !jwtToken || !runtime.getEthercatRuntimeStatus) {
-      setMasters([])
+      setMastersIfChanged([])
       return
     }
     try {
       const result = await runtime.getEthercatRuntimeStatus()
+      // Bail if the component unmounted while the fetch was in flight —
+      // setState on an unmounted component is a leak (and a dev warning
+      // under React strict mode).
+      if (!isMountedRef.current) return
       if (result.success && result.data) {
-        setMasters(resolveMasters(result.data))
+        setMastersIfChanged(resolveMasters(result.data))
       } else {
         const message = result.error ?? ''
         if (isPluginNotActiveError(message)) {
-          setMasters([])
+          setMastersIfChanged([])
         }
       }
     } catch {
       // Quiet drop-in — leave previous state alone on transient errors.
     }
-  }, [isConnected, ipAddress, jwtToken, runtime])
+  }, [isConnected, ipAddress, jwtToken, runtime, setMastersIfChanged])
 
   useEffect(() => {
+    isMountedRef.current = true
     if (!isConnected) {
-      setMasters([])
-      return
+      setMastersIfChanged([])
+      return () => {
+        isMountedRef.current = false
+      }
     }
     void fetchStats()
     intervalRef.current = setInterval(() => void fetchStats(), POLL_INTERVAL_MS)
     return () => {
+      isMountedRef.current = false
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
     }
-  }, [isConnected, fetchStats])
+  }, [isConnected, fetchStats, setMastersIfChanged])
 
   const activeMasters = masters.filter((m) => m.metrics?.cycle_count > 0)
   if (activeMasters.length === 0) return null

@@ -1,6 +1,5 @@
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/frontend/components/_atoms/table'
 import type { TaskTimingStats, TimingStats } from '@root/middleware/shared/ports/types'
-
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms/table'
 
 interface ScanCycleStatsProps {
   /** Per-task timing stats from the runtime. Renders one row per task. */

@@ -1,6 +1,6 @@
 import { exec, spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
@@ -14,6 +14,49 @@ import { promisify } from 'node:util'
 type StrucppCompile = typeof import('strucpp')['compile']
 type StrucppFormatDiagnostic = typeof import('strucpp')['formatDiagnostic']
 type StrucppBuildSourceMap = typeof import('strucpp')['buildSourceMap']
+type StrucppGetVersion = typeof import('strucpp')['getVersion']
+
+interface StrucppModule {
+  compile: StrucppCompile
+  formatDiagnostic: StrucppFormatDiagnostic
+  buildSourceMap: StrucppBuildSourceMap
+  getVersion: StrucppGetVersion
+}
+
+/**
+ * Load the strucpp package via require, kept out of the static import
+ * graph because strucpp uses ESM features (top-level await, import.meta)
+ * that are incompatible with Jest's CJS transform — switching the
+ * editor's test runner to ESM is a separate undertaking. Single
+ * helper so the lint-disable lives in exactly one place.
+ */
+function loadStrucpp(): StrucppModule {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('strucpp') as StrucppModule
+}
+
+/**
+ * Project data with the optional C++ POU sidecar attached. The base
+ * PLCProjectData type doesn't carry C++ POUs because they're an
+ * editor-side editor-only artefact; we splice them in for the compile
+ * pipeline. Centralised here so the cast appears once instead of
+ * inline at every read site.
+ */
+type ProjectDataWithCppPous = import('@root/backend/shared/types/PLC/open-plc').PLCProjectData & {
+  originalCppPous?: CppPouDataCode[]
+}
+
+/**
+ * Post-build PLC start retry loop bounds. Why these numbers:
+ *   - 5000 ms total: longer than the slowest STOP transition observed
+ *     end-to-end (worst case ~3 s on a Pi 4 with EtherCAT teardown).
+ *   - 150 ms poll: tight enough to feel responsive, loose enough to
+ *     avoid hammering the runtime's unix socket.
+ * If the runtime ABI changes the STOP transition pattern (e.g. adds
+ * an explicit "ready for START" event), retire this loop.
+ */
+const POST_BUILD_START_TIMEOUT_MS = 5000
+const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
@@ -28,6 +71,7 @@ import {
   generateCBlocksHeader,
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
 import { generateModbusMasterConfig } from '@root/backend/shared/utils/modbus/generate-modbus-master-config'
+import { assertPathContained, validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import { parsePlcStatus } from '@root/backend/shared/utils/plc-status'
 import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
@@ -309,9 +353,7 @@ class CompilerModule {
 
   checkStrucppAvailability(): MethodsResult<string> {
     try {
-      // Lazy import — strucpp uses ESM features incompatible with Jest's CJS transform
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getVersion } = require('strucpp') as { getVersion: () => string }
+      const { getVersion } = loadStrucpp()
       return { success: true, data: getVersion() }
     } catch {
       throw new Error('STruC++ not available. Run "npm run setup:binaries" to install it.')
@@ -412,6 +454,8 @@ class CompilerModule {
   /**
    * Copy STruC++ C++ runtime headers to the target directory.
    * These headers are downloaded by scripts/download-binaries.ts from the STruC++ release.
+   * Single recursive copy so any future subdirectory under
+   * resources/strucpp/runtime/include/ propagates without code change.
    */
   private async copyStrucppRuntimeHeaders(targetDir: string): Promise<void> {
     const runtimeDir = this.strucppRuntimeDir
@@ -425,8 +469,32 @@ class CompilerModule {
     // Ensure the target directory exists. v4 passes a nested path
     // (strucpp_runtime/include) that may not exist yet.
     await fs.mkdir(targetDir, { recursive: true })
-    const files = await readdir(runtimeDir)
-    await Promise.all(files.map((file) => cp(join(runtimeDir, file), join(targetDir, file))))
+    await cp(runtimeDir, targetDir, { recursive: true })
+  }
+
+  /**
+   * Mirror the bundled avr-libstdcpp headers into a stable no-space
+   * cache path so arduino-cli's compiler.cpp.extra_flags substitution
+   * doesn't trip on a path containing spaces (common on macOS Electron
+   * userData paths).
+   *
+   * The cache key includes the editor version, so an upgrade that
+   * ships new headers self-invalidates. A presence check on a sentinel
+   * file (cstdint, which has shipped since the avr-libstdcpp v1) keeps
+   * the steady-state cost to a single existsSync per compile.
+   */
+  private async ensureAvrLibStdCppCache(): Promise<string> {
+    const sourceDir = join(this.sourceDirectoryPath, 'avr-libstdcpp', 'include')
+    const cacheDir = join(os.tmpdir(), `openplc-avr-libstdcpp-${electronApp.getVersion()}`, 'include')
+
+    const sentinel = join(cacheDir, 'cstdint')
+    if (existsSync(sentinel)) {
+      return cacheDir
+    }
+
+    await fs.mkdir(cacheDir, { recursive: true })
+    await cp(sourceDir, cacheDir, { recursive: true })
+    return cacheDir
   }
 
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
@@ -489,17 +557,11 @@ class CompilerModule {
 
     handleOutputData('Compiling Structured Text to C++ with STruC++...', 'info')
 
-    // Lazy import to avoid ESM/CJS issues at module load time (Jest compatibility)
     const {
       compile: strucppCompile,
       formatDiagnostic: strucppFormatDiagnostic,
       buildSourceMap: strucppBuildSourceMap,
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-    } = require('strucpp') as {
-      compile: StrucppCompile
-      formatDiagnostic: StrucppFormatDiagnostic
-      buildSourceMap: StrucppBuildSourceMap
-    }
+    } = loadStrucpp()
 
     const libsDir = this.strucppLibsDir
     let libraryPaths: string[] = []
@@ -946,7 +1008,7 @@ class CompilerModule {
   }
 
   async handleGenerateCBlocksHeader(
-    projectData: PLCProjectData & { originalCppPous?: CppPouDataCode[] },
+    projectData: ProjectDataWithCppPous,
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
@@ -974,7 +1036,7 @@ class CompilerModule {
   }
 
   async handleGenerateCBlocksCode(
-    projectData: PLCProjectData & { originalCppPous?: CppPouDataCode[] },
+    projectData: ProjectDataWithCppPous,
     compilationPath: string,
     boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1047,11 +1109,24 @@ class CompilerModule {
 
     if (boardHalsContent['cxx_flags']) {
       const cxxFlags = [...boardHalsContent['cxx_flags']]
-      // AVR toolchains don't ship the C++ standard library (no <type_traits>, <algorithm>, etc.).
-      // Add avr-libstdcpp headers so STruC++ runtime compiles on AVR targets.
-      const avrLibStdCppPath = join(this.sourceDirectoryPath, 'avr-libstdcpp', 'include')
+      // AVR toolchains don't ship the C++ standard library (no
+      // <type_traits>, <algorithm>, etc.). We bundle a freestanding-
+      // libstdc++ port at resources/sources/avr-libstdcpp/include and
+      // pass it via -I.
+      //
+      // The original path can sit anywhere — Electron's user-data dir
+      // on macOS is `~/Library/Application Support/<App>/` and many
+      // users have spaces in their home path. arduino-cli builds the
+      // compile invocation by token-substituting compiler.cpp.extra_flags
+      // into a recipe and processing the result; quoted paths with
+      // embedded spaces have been known to confuse the substitution and
+      // break AVR builds. Mirror the headers into a known no-space
+      // cache path on first compile to sidestep that whole class of
+      // breakage. Versioned cache key so the editor self-invalidates
+      // on upgrades that ship new headers.
       if (boardHalsContent['core']?.startsWith('arduino:avr')) {
-        cxxFlags.push(`-I "${avrLibStdCppPath}"`)
+        const avrLibStdCppPath = await this.ensureAvrLibStdCppCache()
+        cxxFlags.push(`-I${avrLibStdCppPath}`)
       }
       buildProjectFlags = [
         ...buildProjectFlags,
@@ -1523,10 +1598,18 @@ class CompilerModule {
           const modules = matchingDevice.moduleSystem?.modules ?? []
           const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
 
-          pluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
+          // configTemplate is supplied by the package author through
+          // their .vpp manifest. Without validation, plugin_name like
+          // "../../../etc/cron.d/runme" would be join-ed into a path
+          // outside confFolderPath and the editor would write user-
+          // controlled JSON to an arbitrary location.
+          const rawPluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
+          validatePathId(rawPluginName, 'configTemplate.plugin_name')
+          pluginName = rawPluginName
           const confFolderPath = join(sourceTargetFolderPath, 'conf')
           await mkdir(confFolderPath, { recursive: true })
           const configFilePath = join(confFolderPath, `${pluginName}.json`)
+          assertPathContained(confFolderPath, configFilePath, 'plugin config path')
           await writeFile(configFilePath, JSON.stringify(finalConfig, null, 2), 'utf-8')
           handleOutputData(`Generated conf/${pluginName}.json for VPP plugin`, 'info')
         }
@@ -1541,8 +1624,18 @@ class CompilerModule {
         return
       }
 
-      // The plugin source directory is the parent directory of pluginEntry
+      // The plugin source directory is the parent directory of pluginEntry.
+      // pluginEntryRelPath is supplied by the package manifest; without
+      // containment, an entry like `../../../etc` would resolve outside
+      // matchingPackagePath and the recursive-copy below would slurp
+      // arbitrary host files into the build's vpp_plugin directory.
       const pluginSourceDir = join(matchingPackagePath, path.dirname(pluginEntryRelPath))
+      try {
+        assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
+      } catch (err) {
+        handleOutputData(`Invalid VPP pluginEntry: ${getErrorMessage(err)}`, 'error')
+        return
+      }
       let pluginSourceStat
       try {
         pluginSourceStat = await stat(pluginSourceDir)
@@ -1570,12 +1663,25 @@ class CompilerModule {
       // Copy the plugin source, excluding files that are only useful in the editor
       // (config_template.json is already turned into conf/<plugin>.json, and
       // requirements.txt is for Python-style plugins that don't apply here).
+      // Symlinks are rejected unconditionally:
+      //   - they aren't useful inside a .vpp (the format ships a flat tree),
+      //   - a self-referential or parent-pointing symlink would make this
+      //     recursion unbounded, hanging the build,
+      //   - and a symlink to outside matchingPackagePath would let a
+      //     malicious package exfiltrate host files into the upload.
       const EXCLUDE_FILES = new Set(['config_template.json', 'requirements.txt'])
       const copiedFiles: string[] = []
       const collectAndCopy = async (sourceDir: string, destDir: string, relPath: string = ''): Promise<void> => {
         const entries = await readdir(sourceDir, { withFileTypes: true })
         for (const entry of entries) {
           if (EXCLUDE_FILES.has(entry.name)) continue
+          if (entry.isSymbolicLink()) {
+            handleOutputData(
+              `Skipping symlink in VPP plugin source: ${relPath ? `${relPath}/` : ''}${entry.name}`,
+              'info',
+            )
+            continue
+          }
           const sourcePath = join(sourceDir, entry.name)
           const destPath = join(destDir, entry.name)
           const relFilePath = relPath ? `${relPath}/${entry.name}` : entry.name
@@ -1612,7 +1718,7 @@ class CompilerModule {
       await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
 
       handleOutputData(
-        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}…)`,
+        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
       )
     } catch (error) {
@@ -1798,7 +1904,7 @@ class CompilerModule {
 
     // Step 4: Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      const hasCBlocks = ((projectData as PLCProjectData & { originalCppPous?: unknown[] }).originalCppPous?.length ?? 0) > 0
+      const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
       const { md5Hash } = await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel) => {
@@ -2151,8 +2257,8 @@ class CompilerModule {
                    * error, etc.) stops the retry immediately.
                    */
                   const startPlcAfterBuildWithRetry = async (): Promise<void> => {
-                    const maxWaitMs = 5000
-                    const pollIntervalMs = 150
+                    const maxWaitMs = POST_BUILD_START_TIMEOUT_MS
+                    const pollIntervalMs = POST_BUILD_START_POLL_INTERVAL_MS
                     const deadline = Date.now() + maxWaitMs
 
                     while (Date.now() < deadline) {
@@ -2539,7 +2645,7 @@ class CompilerModule {
 
     // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      const hasCBlocks = ((projectData as PLCProjectData & { originalCppPous?: unknown[] }).originalCppPous?.length ?? 0) > 0
+      const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
       await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel) => {

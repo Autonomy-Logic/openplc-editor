@@ -1,7 +1,12 @@
 import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
 import type { DebugVariableEntry } from '../debug-parser'
 import type { DebugNodeVisitor, TraversalContext } from '../debug-tree-traversal'
-import { traverseNestedType, traverseVariable } from '../debug-tree-traversal'
+import {
+  lookupEnumValues,
+  resolveLeafType,
+  traverseNestedType,
+  traverseVariable,
+} from '../debug-tree-traversal'
 
 // ---------------------------------------------------------------------------
 // Simple visitor that collects node info into a plain object
@@ -679,5 +684,97 @@ describe('traverseNestedType', () => {
     expect(result.kind).toBe('array')
     expect(result.children).toHaveLength(1)
     expect(result.children![0].kind).toBe('complex')
+  })
+})
+
+describe('resolveLeafType', () => {
+  it('returns the project type unchanged when no debug variable is provided', () => {
+    expect(resolveLeafType('INT', null)).toBe('INT')
+    expect(resolveLeafType('Irrigation_State', null)).toBe('Irrigation_State')
+  })
+
+  it('returns the project type when debug variable has no type', () => {
+    const debugVar: DebugVariableEntry = { name: 'x', type: '', index: 0 }
+    expect(resolveLeafType('REAL', debugVar)).toBe('REAL')
+  })
+
+  it('strips _ENUM suffix from MatIEC-shaped debug type', () => {
+    const debugVar: DebugVariableEntry = { name: 'x', type: 'INT_ENUM', index: 0 }
+    expect(resolveLeafType('Irrigation_State', debugVar)).toBe('INT')
+  })
+
+  it('strips _O_ENUM suffix (output enum)', () => {
+    const debugVar: DebugVariableEntry = { name: 'q', type: 'BOOL_O_ENUM', index: 0 }
+    expect(resolveLeafType('SomeEnum', debugVar)).toBe('BOOL')
+  })
+
+  it('strips _P_ENUM suffix (param enum)', () => {
+    const debugVar: DebugVariableEntry = { name: 'p', type: 'DINT_P_ENUM', index: 0 }
+    expect(resolveLeafType('OtherEnum', debugVar)).toBe('DINT')
+  })
+
+  it('only strips the _O_ENUM/_P_ENUM at the end, not in the middle', () => {
+    // Underscore-rich names like FOO_O_ENUM_BAR are not enum-suffixed and
+    // should pass through unchanged (the regex anchors with $).
+    const debugVar: DebugVariableEntry = { name: 'x', type: 'FOO_O_ENUM_BAR', index: 0 }
+    expect(resolveLeafType('whatever', debugVar)).toBe('FOO_O_ENUM_BAR')
+  })
+
+  it('returns the debug type as-is when it has no _ENUM suffix', () => {
+    const debugVar: DebugVariableEntry = { name: 'x', type: 'WORD', index: 0 }
+    expect(resolveLeafType('WORD', debugVar)).toBe('WORD')
+  })
+})
+
+describe('lookupEnumValues', () => {
+  const enumDataType: PLCDataType = {
+    name: 'TrafficLight',
+    derivation: 'enumerated',
+    values: [{ description: 'RED' }, { description: 'YELLOW' }, { description: 'GREEN' }],
+  }
+
+  const structDataType: PLCDataType = {
+    name: 'PointStruct',
+    derivation: 'structure',
+    variable: [],
+  }
+
+  it('returns the member descriptions in declaration order for an enum match', () => {
+    expect(lookupEnumValues('TrafficLight', [enumDataType])).toEqual(['RED', 'YELLOW', 'GREEN'])
+  })
+
+  it('matches case-insensitively', () => {
+    expect(lookupEnumValues('trafficlight', [enumDataType])).toEqual(['RED', 'YELLOW', 'GREEN'])
+    expect(lookupEnumValues('TRAFFICLIGHT', [enumDataType])).toEqual(['RED', 'YELLOW', 'GREEN'])
+  })
+
+  it('returns undefined when the named type is not enumerated', () => {
+    expect(lookupEnumValues('PointStruct', [structDataType])).toBeUndefined()
+  })
+
+  it('returns undefined when no data type matches the name', () => {
+    expect(lookupEnumValues('Unknown', [enumDataType])).toBeUndefined()
+  })
+
+  it('returns undefined for an empty data-types array', () => {
+    expect(lookupEnumValues('TrafficLight', [])).toBeUndefined()
+  })
+
+  it('finds the right enum among many data types', () => {
+    const otherEnum: PLCDataType = {
+      name: 'AnotherEnum',
+      derivation: 'enumerated',
+      values: [{ description: 'A' }, { description: 'B' }],
+    }
+    expect(lookupEnumValues('TrafficLight', [otherEnum, structDataType, enumDataType])).toEqual([
+      'RED',
+      'YELLOW',
+      'GREEN',
+    ])
+  })
+
+  it('returns an empty array when an enum has no members (degenerate but valid)', () => {
+    const empty: PLCDataType = { name: 'Empty', derivation: 'enumerated', values: [] }
+    expect(lookupEnumValues('Empty', [empty])).toEqual([])
   })
 })

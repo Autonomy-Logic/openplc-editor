@@ -463,6 +463,11 @@ export interface BoardInfo {
 export interface VppModuleDefinition {
   id: string
   name: string
+  /** Vendor-specific hardware id (e.g. board model number) used by the
+   *  module-discovery flow to match a detected device against this
+   *  definition. Optional — modules with no hwId can only be added
+   *  manually. */
+  hwId?: string
   image?: string
   io: {
     digitalInputs: number
@@ -542,6 +547,10 @@ export interface PackageManifest {
       enabled: boolean
       maxSlots: number
       discoverySupported?: boolean
+      /** Shell command the editor invokes to ask a connected device
+       *  to enumerate its modules. Returns lines parsed by the
+       *  module-system's discovery flow; format defined per package. */
+      discoveryCommand?: string
       modules: VppModuleDefinition[]
     }
   }>

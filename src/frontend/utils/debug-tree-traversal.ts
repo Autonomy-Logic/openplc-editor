@@ -23,8 +23,11 @@ import { findFunctionBlockVariables, findStructureVariables, normalizeTypeString
  * what the wire-format parser needs. The project's type may be a user-data
  * type name like "Irrigation_State" that the parser can't decode, so prefer
  * the debug-map type whenever a match exists.
+ *
+ * Exported for testing; callers in other modules should go through the
+ * visitor APIs defined below.
  */
-function resolveLeafType(projectType: string, debugVar: DebugVariableEntry | null): string {
+export function resolveLeafType(projectType: string, debugVar: DebugVariableEntry | null): string {
   if (!debugVar?.type) return projectType
   // DebugVariableEntry.type is suffixed with `_ENUM` (legacy MatIEC encoding).
   return debugVar.type.replace(/_(O|P)_ENUM$/, '').replace(/_ENUM$/, '')
@@ -34,8 +37,10 @@ function resolveLeafType(projectType: string, debugVar: DebugVariableEntry | nul
  * If `projectType` names an enumerated data type, return its member names
  * indexed by the underlying integer value. Returns undefined for any other
  * type so callers can attach the result unconditionally.
+ *
+ * Exported for testing.
  */
-function lookupEnumValues(projectType: string, dataTypes: PLCDataType[]): string[] | undefined {
+export function lookupEnumValues(projectType: string, dataTypes: PLCDataType[]): string[] | undefined {
   const target = projectType.toUpperCase()
   for (const dt of dataTypes) {
     if (dt.name.toUpperCase() !== target) continue

@@ -481,4 +481,119 @@ describe('encodeForceValue', () => {
     expect(() => encodeForceValue('5s', 'TIME')).toThrow(/not supported/)
     expect(() => encodeForceValue('"hello"', 'STRING')).toThrow(/not supported/)
   })
+
+  describe('out-of-range truncation', () => {
+    it('SINT/USINT/BYTE: values outside [0, 255] truncate to low byte', () => {
+      // 257 → 0x101 → keeps low byte (0x01).
+      expect(Array.from(encodeForceValue('257', 'SINT'))).toEqual([0x01])
+      expect(Array.from(encodeForceValue('256', 'BYTE'))).toEqual([0x00])
+      expect(Array.from(encodeForceValue('-1', 'SINT'))).toEqual([0xff])
+    })
+
+    it('INT/UINT/WORD: values outside 16-bit range truncate to low 2 bytes', () => {
+      // 65537 → 0x10001 → keeps low 2 bytes (0x01, 0x00).
+      expect(Array.from(encodeForceValue('65537', 'INT'))).toEqual([0x01, 0x00])
+      expect(Array.from(encodeForceValue('-1', 'UINT'))).toEqual([0xff, 0xff])
+    })
+
+    it('DINT/UDINT/DWORD: values outside 32-bit range truncate to low 4 bytes', () => {
+      // 2^32 + 5 → 0x100000005 → keeps low 4 bytes.
+      expect(Array.from(encodeForceValue(String(2 ** 32 + 5), 'DINT'))).toEqual([0x05, 0x00, 0x00, 0x00])
+    })
+  })
+
+  describe('LINT/ULINT/LWORD BigInt encoding', () => {
+    it('encodes a positive 64-bit value LE', () => {
+      // 0x0102030405060708 → bytes 08 07 06 05 04 03 02 01
+      expect(Array.from(encodeForceValue('72623859790382856', 'LINT'))).toEqual([
+        0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
+      ])
+    })
+
+    it('encodes -1 as all-ones (two-complement 64-bit)', () => {
+      expect(Array.from(encodeForceValue('-1', 'LINT'))).toEqual([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
+    })
+
+    it('rejects non-integer strings before BigInt() throws an obscure parse error', () => {
+      expect(() => encodeForceValue('not-a-number', 'LINT')).toThrow(/Invalid LINT value/)
+      expect(() => encodeForceValue('3.14', 'LINT')).toThrow(/Invalid LINT value/)
+    })
+
+    it('silently wraps values that overflow 64 bits (DataView.setBigInt64 wraps modulo 2^64)', () => {
+      // BigInt("18446744073709551616") = 2^64 parses fine and setBigInt64 wraps
+      // it modulo 2^64 → all zeros. This is a known wart worth pinning.
+      expect(Array.from(encodeForceValue('18446744073709551616', 'LINT'))).toEqual([0, 0, 0, 0, 0, 0, 0, 0])
+      // 2^64 + 1 wraps to 1 in the low byte (little-endian).
+      expect(Array.from(encodeForceValue('18446744073709551617', 'LINT'))).toEqual([1, 0, 0, 0, 0, 0, 0, 0])
+    })
+  })
+
+  describe('REAL/LREAL Infinity rejection', () => {
+    it('LREAL: Infinity rejected as non-finite', () => {
+      expect(() => encodeForceValue('Infinity', 'LREAL')).toThrow(/Invalid LREAL value/)
+      expect(() => encodeForceValue('-Infinity', 'LREAL')).toThrow(/Invalid LREAL value/)
+    })
+
+    it('LREAL: NaN rejected as non-finite', () => {
+      expect(() => encodeForceValue('NaN', 'LREAL')).toThrow(/Invalid LREAL value/)
+    })
+
+    it('REAL: Infinity rejected as non-finite', () => {
+      expect(() => encodeForceValue('Infinity', 'REAL')).toThrow(/Invalid REAL value/)
+    })
+
+    it('REAL: a finite-but-too-large value silently underflows/rounds (Float32 conversion)', () => {
+      // 1e40 is finite as Number but doesn't fit in Float32; it becomes
+      // Float32 Infinity inside DataView.setFloat32. We don't reject
+      // this — it's a known limitation of the writer. Pin the behavior.
+      const buf = encodeForceValue('1e40', 'REAL')
+      expect(buf).toHaveLength(4)
+    })
+
+    it('LREAL: encodes a finite value LE (8 bytes)', () => {
+      const buf = encodeForceValue('1.5', 'LREAL')
+      expect(buf).toHaveLength(8)
+      // Round-trip via DataView.getFloat64 to confirm the LE encoding stuck.
+      const view = new DataView(buf.buffer, buf.byteOffset, 8)
+      expect(view.getFloat64(0, true)).toBe(1.5)
+    })
+  })
+
+  describe('TIME / DATE / TOD / DT fall-through', () => {
+    it('rejects DT (date-and-time) with a clear message', () => {
+      expect(() => encodeForceValue('DT#2026-01-01-00:00:00', 'DT')).toThrow(/not supported/)
+    })
+
+    it('rejects TOD (time-of-day) with a clear message', () => {
+      expect(() => encodeForceValue('TOD#12:00:00', 'TOD')).toThrow(/not supported/)
+    })
+
+    it('rejects DATE with a clear message', () => {
+      expect(() => encodeForceValue('D#2026-01-01', 'DATE')).toThrow(/not supported/)
+    })
+
+    it('rejects unknown type names with the same default-clause message', () => {
+      expect(() => encodeForceValue('1', 'NOT_A_REAL_TYPE')).toThrow(/not supported/)
+    })
+  })
+
+  describe('integer parsing rejections + pinned warts', () => {
+    it('SINT: non-integer string rejected', () => {
+      expect(() => encodeForceValue('1.5', 'SINT')).toThrow(/Invalid SINT value/)
+      expect(() => encodeForceValue('abc', 'SINT')).toThrow(/Invalid SINT value/)
+    })
+
+    it('INT: hex literals ARE accepted because Number("0x10") yields an integer', () => {
+      // Pin this — if the rule changes (e.g. requiring decimal-only),
+      // the test needs updating.
+      expect(Array.from(encodeForceValue('0x10', 'INT'))).toEqual([0x10, 0x00])
+    })
+
+    it('DINT: empty string is treated as zero (Number("") === 0)', () => {
+      // Pin the behaviour. The empty-string case is a known wart but
+      // it's stable; rejecting it would be a separate behavioural
+      // decision not in the scope of this PR.
+      expect(Array.from(encodeForceValue('', 'DINT'))).toEqual([0x00, 0x00, 0x00, 0x00])
+    })
+  })
 })
