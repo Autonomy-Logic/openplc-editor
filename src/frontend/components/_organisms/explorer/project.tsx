@@ -278,27 +278,25 @@ const Project = () => {
           </ProjectTreeBranch>
 
           {/* Project Servers tree branch */}
-          {capabilities.hasLocalSerialPorts && (
-            <ProjectTreeBranch branchTarget='server'>
-              {[...(servers || [])]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((server) => (
-                  <ProjectTreeLeaf
-                    key={server.name}
-                    leafLang='server'
-                    leafType='server'
-                    label={searchQuery ? extractSearchQuery(server.name, searchQuery) : server.name}
-                    onClick={() =>
-                      handleCreateTab({
-                        name: server.name,
-                        path: `/servers/${server.name}`,
-                        elementType: { type: 'server', protocol: server.protocol },
-                      })
-                    }
-                  />
-                ))}
-            </ProjectTreeBranch>
-          )}
+          <ProjectTreeBranch branchTarget='server'>
+            {[...(servers || [])]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((server) => (
+                <ProjectTreeLeaf
+                  key={server.name}
+                  leafLang='server'
+                  leafType='server'
+                  label={searchQuery ? extractSearchQuery(server.name, searchQuery) : server.name}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: server.name,
+                      path: `/servers/${server.name}`,
+                      elementType: { type: 'server', protocol: server.protocol },
+                    })
+                  }
+                />
+              ))}
+          </ProjectTreeBranch>
 
           {/* Project Remote Devices tree branch */}
           <ProjectTreeBranch branchTarget='remote-device'>
