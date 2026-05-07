@@ -446,6 +446,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
       getState().versionControlActions.clearVersionControlState()
+      // Drop the active conversation pointer + its loaded messages so the
+      // chat doesn't bleed across project switches. The project-scoped
+      // conversation list is refetched separately on project_id change
+      // (see IndexPage's effect).
+      getState().aiActions.clearConversation()
     },
 
     handleOpenProjectResponse: (data) => {

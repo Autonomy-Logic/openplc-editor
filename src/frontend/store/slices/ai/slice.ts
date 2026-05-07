@@ -22,6 +22,9 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   isChatOpen: false,
   error: null,
   pendingDiffs: {},
+  conversationId: null,
+  conversations: [],
+  isLoadingConversation: false,
 }
 
 export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AISlice, [], [], AISlice> {
@@ -142,6 +145,10 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           produce(({ ai }: AISlice) => {
             ai.messages = []
             ai.error = null
+            // Drop the active conversation pointer so the next /ai/chat call
+            // is treated as a fresh conversation. The list itself stays —
+            // the user can still see prior conversations and resume one.
+            ai.conversationId = null
           }),
         )
       },
@@ -197,6 +204,66 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.pendingDiffs = {}
+          }),
+        )
+      },
+      setConversationId: (id) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.conversationId = id
+          }),
+        )
+      },
+      setConversations: (conversations) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.conversations = conversations
+          }),
+        )
+      },
+      prependConversation: (conversation) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            // Defensive: drop any existing entry with the same id
+            // before prepending so we never end up with duplicates.
+            ai.conversations = [conversation, ...ai.conversations.filter((c) => c.id !== conversation.id)]
+          }),
+        )
+      },
+      removeConversation: (id) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.conversations = ai.conversations.filter((c) => c.id !== id)
+            if (ai.conversationId === id) {
+              ai.conversationId = null
+              ai.messages = []
+            }
+          }),
+        )
+      },
+      updateConversationTitle: (id, title) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            const summary = ai.conversations.find((c) => c.id === id)
+            if (summary) {
+              summary.title = title
+            }
+          }),
+        )
+      },
+      replaceMessages: (messages) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.messages =
+              messages.length > MAX_CONVERSATION_MESSAGES ? messages.slice(-MAX_CONVERSATION_MESSAGES) : messages
+            ai.error = null
+          }),
+        )
+      },
+      setLoadingConversation: (loading) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.isLoadingConversation = loading
           }),
         )
       },
