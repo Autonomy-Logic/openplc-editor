@@ -313,23 +313,11 @@ export interface EtherCATMasterStatus {
 /**
  * Response from GET /api/discovery/ethercat/runtime-status
  *
- * The runtime returns a "masters" array for multi-master setups.
- * For backward compatibility with single-master, flat fields are
- * also included at root level when there is exactly one master.
+ * The runtime returns a "masters" array entry per configured EtherCAT bus.
  */
 export interface EtherCATRuntimeStatusResponse {
-  /** Per-master status array (always present in multi-master runtime) */
-  masters?: EtherCATMasterStatus[]
-  /** Current plugin state (backward compat: only when single master) */
-  plugin_state?: EtherCATPluginState
-  /** Number of configured slaves (backward compat) */
-  slave_count?: number
-  /** Expected working counter value (backward compat) */
-  expected_wkc?: number
-  /** Per-slave status array (backward compat) */
-  slaves?: EtherCATSlaveStatus[]
-  /** Cycle performance metrics (backward compat) */
-  metrics?: EtherCATCycleMetrics
+  /** Per-master status array (one entry per configured EtherCAT bus) */
+  masters: EtherCATMasterStatus[]
 }
 
 /**

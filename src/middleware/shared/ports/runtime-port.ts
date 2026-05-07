@@ -47,8 +47,7 @@ import type {
   EtherCATValidateRequest,
   EtherCATValidateResponse,
   NetworkInterface,
-} from '@root/types/ethercat'
-
+} from './ethercat-types'
 import type { PlcStatus, RuntimeLogEntry, SerialPort, TimingStats, Unsubscribe } from './types'
 
 export interface LoginParams {
