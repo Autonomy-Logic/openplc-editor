@@ -1,4 +1,4 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/frontend/components/_atoms/table'
+import { RangeCell, StatsTable, type StatsTableColumn } from '@root/frontend/components/_molecules/stats-table'
 import type { TaskTimingStats, TimingStats } from '@root/middleware/shared/ports/types'
 
 interface ScanCycleStatsProps {
@@ -6,34 +6,46 @@ interface ScanCycleStatsProps {
   timingStats: TimingStats
 }
 
-const formatRange = (min: number | null, max: number | null) =>
-  min !== null && max !== null ? `${min} / ${max}` : '—'
-
-const formatNumber = (value: number | null) => (value !== null ? value.toLocaleString() : '—')
-
-const RangeCell = ({ avg, min, max }: { avg: number | null; min: number | null; max: number | null }) => (
-  <div className='flex flex-col items-center justify-center leading-tight'>
-    <span className='text-neutral-900 dark:text-white'>{formatNumber(avg)}</span>
-    <span className='text-[10px] text-neutral-500 dark:text-neutral-400'>{formatRange(min, max)}</span>
-  </div>
-)
-
-const TaskRow = ({ task }: { task: TaskTimingStats }) => (
-  <TableRow>
-    <TableCell className='px-3 text-left font-mono'>{task.name}</TableCell>
-    <TableCell className='px-3'>{task.scan_count.toLocaleString()}</TableCell>
-    <TableCell className='px-3'>
+const columns: StatsTableColumn<TaskTimingStats>[] = [
+  {
+    key: 'task',
+    header: 'Task',
+    align: 'left',
+    className: 'font-mono',
+    render: (task) => task.name,
+  },
+  {
+    key: 'scan-count',
+    header: 'Scan Count',
+    render: (task) => task.scan_count.toLocaleString(),
+  },
+  {
+    key: 'scan-time',
+    header: 'Scan Time',
+    render: (task) => (
       <RangeCell avg={task.scan_time_avg} min={task.scan_time_min} max={task.scan_time_max} />
-    </TableCell>
-    <TableCell className='px-3'>
+    ),
+  },
+  {
+    key: 'cycle-time',
+    header: 'Cycle Time',
+    render: (task) => (
       <RangeCell avg={task.cycle_time_avg} min={task.cycle_time_min} max={task.cycle_time_max} />
-    </TableCell>
-    <TableCell className='px-3'>
+    ),
+  },
+  {
+    key: 'latency',
+    header: 'Latency',
+    render: (task) => (
       <RangeCell avg={task.cycle_latency_avg} min={task.cycle_latency_min} max={task.cycle_latency_max} />
-    </TableCell>
-    <TableCell className='px-3'>{task.overruns.toLocaleString()}</TableCell>
-  </TableRow>
-)
+    ),
+  },
+  {
+    key: 'overruns',
+    header: 'Overruns',
+    render: (task) => task.overruns.toLocaleString(),
+  },
+]
 
 /**
  * Per-task scan-cycle statistics. Renders one row per IEC task the runtime
@@ -50,30 +62,13 @@ export const ScanCycleStats = ({ timingStats }: ScanCycleStatsProps) => {
   if (activeTasks.length === 0) return null
 
   return (
-    <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-3'>
-      <h2 id='scan-cycle-stats-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
-        Scan Cycle Statistics
-      </h2>
-      <span className='select-none text-xs text-neutral-500 dark:text-neutral-400'>
-        Times in microseconds. Each cell shows a moving average with min / max below.
-      </span>
-      <Table context='scan-cycle' className='w-full'>
-        <TableHeader>
-          <TableRow>
-            <TableHead className='w-auto px-3 text-left'>Task</TableHead>
-            <TableHead className='w-auto px-3'>Scan Count</TableHead>
-            <TableHead className='w-auto px-3'>Scan Time</TableHead>
-            <TableHead className='w-auto px-3'>Cycle Time</TableHead>
-            <TableHead className='w-auto px-3'>Latency</TableHead>
-            <TableHead className='w-auto px-3'>Overruns</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {activeTasks.map((task) => (
-            <TaskRow key={task.name} task={task} />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <StatsTable
+      context='scan-cycle-stats'
+      title='Scan Cycle Statistics'
+      description='Times in microseconds. Each cell shows a moving average with min / max below.'
+      columns={columns}
+      rows={activeTasks}
+      rowKey={(task) => task.name}
+    />
   )
 }
