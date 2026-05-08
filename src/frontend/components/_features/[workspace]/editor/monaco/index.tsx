@@ -429,14 +429,24 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   useEffect(() => {
     if (!editorMounted) return
     const ed = editorRef.current
+    const monacoInst = monacoRef.current
     const target = editor.cursorPosition
-    if (!ed || !target) return
+    if (!ed || !monacoInst || !target) return
     const current = ed.getPosition()
     if (current && current.lineNumber === target.lineNumber && current.column === target.column) {
       return
     }
-    ed.setPosition({ lineNumber: target.lineNumber, column: target.column })
-    ed.revealPositionInCenter({ lineNumber: target.lineNumber, column: target.column })
+    // Select the entire target line so the user gets visible feedback
+    // (the same shape Search uses via `moveToMatch`).  The cursor
+    // lands at the start of the line as a side effect of `setSelection`,
+    // which is good enough for the click-to-error UX — when strucpp
+    // doesn't carry an end-column we'd rather show "this whole line
+    // is the problem" than land an invisible caret somewhere mid-line.
+    const model = ed.getModel()
+    const lineLength = model ? model.getLineMaxColumn(target.lineNumber) : target.column
+    const range = new monacoInst.Range(target.lineNumber, 1, target.lineNumber, lineLength)
+    ed.setSelection(range)
+    ed.revealRangeInCenter(range)
     ed.focus()
   }, [editor.cursorPosition, editorMounted])
 
@@ -988,8 +998,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     if (editor.cursorPosition) {
-      editorInstance.setPosition(editor.cursorPosition)
-      editorInstance.revealPositionInCenter(editor.cursorPosition)
+      // Select the whole line for visible feedback (matches the
+      // already-mounted reactive path above and Search's UX).
+      const monacoInst = monacoInstance
+      const model = editorInstance.getModel()
+      const lineLength = model ? model.getLineMaxColumn(editor.cursorPosition.lineNumber) : editor.cursorPosition.column
+      const range = new monacoInst.Range(editor.cursorPosition.lineNumber, 1, editor.cursorPosition.lineNumber, lineLength)
+      editorInstance.setSelection(range)
+      editorInstance.revealRangeInCenter(range)
     }
 
     if (editor.scrollPosition) {

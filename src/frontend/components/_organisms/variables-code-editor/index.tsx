@@ -1,5 +1,6 @@
 import Editor, { OnMount } from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
+import * as monaco from 'monaco-editor'
 import { useEffect, useRef, useState } from 'react'
 
 interface VariablesCodeEditorProps {
@@ -43,10 +44,11 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode, cursorPosi
     }
   }, [])
 
-  // Apply programmatic cursor jumps from the navigation hook.  Same
-  // shape as the Monaco body editor: equality guard prevents redundant
-  // reveal animations when the prop matches the editor's current
-  // position (e.g. caller passes the same nav twice).
+  // Apply programmatic cursor jumps from the navigation hook.  Selects
+  // the whole target line for visible feedback — same UX shape as
+  // Search and the body Monaco editor.  Equality guard prevents
+  // redundant reveal animations when the caller passes the same nav
+  // twice.
   useEffect(() => {
     if (!editorMounted || !cursorPosition) return
     const ed = editorRef.current
@@ -55,8 +57,11 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode, cursorPosi
     if (current && current.lineNumber === cursorPosition.lineNumber && current.column === cursorPosition.column) {
       return
     }
-    ed.setPosition(cursorPosition)
-    ed.revealPositionInCenter(cursorPosition)
+    const model = ed.getModel()
+    const lineLength = model ? model.getLineMaxColumn(cursorPosition.lineNumber) : cursorPosition.column
+    const range = new monaco.Range(cursorPosition.lineNumber, 1, cursorPosition.lineNumber, lineLength)
+    ed.setSelection(range)
+    ed.revealRangeInCenter(range)
     ed.focus()
   }, [cursorPosition, editorMounted])
 
