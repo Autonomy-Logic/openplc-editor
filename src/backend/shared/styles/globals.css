@@ -1,0 +1,281 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+::-webkit-scrollbar {
+  display: flex;
+  height: 0.25rem;
+  width: 0.25rem;
+  border-radius: 0.5rem;
+  background-color: rgb(221 226 232 / var(--tw-bg-opacity));
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 160ms;
+  @apply dark:bg-neutral-850;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 0.5rem;
+  background-color: var(--primary-medium);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 700ms;
+  @apply bg-opacity-30 hover:bg-brand-medium hover:bg-opacity-100;
+}
+
+::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+@keyframes ai-chat-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.ai-chat-typing-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ai-chat-pulse 1.2s infinite;
+}
+.ai-chat-typing-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.ai-chat-typing-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@layer base {
+  :root {
+    --primary-default: #0464fb;
+    --primary-light: #b4d0fe;
+    --primary-medium: #0350c9;
+    --primary-medium-dark: #023c97;
+    --primary-dark: #011e4b;
+    /* Fallback variables to set the height of the titlebar based on OS */
+    --oplc-title-bar-height: 2rem;
+    --fallback-darwin-title-bar-height: 1.75rem;
+    --radix-popper-transform-origin: 100% 0px;
+    /* Viewport height variable for proper mobile/tablet support */
+    --app-vh: 100vh;
+  }
+
+  /* Use small viewport height (svh) for stable sizing on mobile/tablet */
+  @supports (height: 100svh) {
+    :root {
+      --app-vh: 100svh;
+    }
+  }
+
+  /* Fallback to dynamic viewport height (dvh) if svh not supported */
+  @supports (height: 100dvh) and (not (height: 100svh)) {
+    :root {
+      --app-vh: 100dvh;
+    }
+  }
+
+  /* Prevent scrolling on tablets and mobile devices */
+  html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Prevent selection of UI elements except for user-typed text */
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Allow selection only in text input areas */
+  input,
+  textarea,
+  [contenteditable='true'] {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+  }
+
+  /* This can be useful to allocate the main container */
+
+  #folder-root p:hover ~ svg #folder-path {
+    fill: var(--primary-medium-dark);
+  }
+
+  button {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .box {
+    @apply border border-brand-light shadow-oplc dark:border-brand-medium-dark dark:shadow-oplc-dark;
+  }
+  /* Classes for the custom titlebar*/
+  .oplc-titlebar-container {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: var(--oplc-title-bar-height);
+  }
+
+  .oplc-titlebar-content {
+    position: absolute;
+    top: 0;
+    display: flex;
+    user-select: none;
+    height: 100%;
+    background-color: var(--primary-dark);
+    left: 0;
+    width: 100%;
+  }
+
+  .oplc-titlebar-drag-region {
+    app-region: drag;
+  }
+
+  .oplc-main-content {
+    position: absolute;
+    display: flex;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: var(--oplc-title-bar-height);
+    overflow: hidden;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    appearance: textfield;
+  }
+}
+
+@layer utilities {
+  .press-animated {
+    @apply border-[none] transition-[0.2s] duration-[all] active:scale-[0.90];
+  }
+
+  .no-drag-window {
+    -webkit-app-region: no-drag;
+  }
+}
+
+.sidebar-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  direction: rtl;
+}
+
+.sidebar-scroll > * {
+  direction: ltr;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+  background-color: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(180, 208, 254, 0.3);
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(180, 208, 254, 0.6);
+}
+
+.apexcharts-yaxis-label tspan,
+.apexcharts-xaxis-label tspan {
+  @apply fill-neutral-1000 !text-[10px] dark:fill-neutral-50;
+}
+
+@keyframes spin-refresh {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-refresh {
+  animation: spin-refresh 0.5s linear;
+}
+
+/* Monaco Editor z-index constraints to prevent sticky scroll from overlapping dialogs */
+/* Target only Monaco's overlay widgets without affecting layout containers */
+.oplc-monaco-wrapper .monaco-editor .sticky-widget {
+  z-index: 1 !important;
+}
+
+/* Ensure Monaco's other overlay widgets stay below dialogs but above editor content */
+.oplc-monaco-wrapper .monaco-editor .suggest-widget,
+.oplc-monaco-wrapper .monaco-editor .monaco-hover,
+.oplc-monaco-wrapper .monaco-editor .parameter-hints-widget {
+  z-index: 10 !important;
+}
+
+/* Debug inline value badges for ST/IL editors during debug sessions */
+.oplc-monaco-wrapper .debug-inline-value {
+  color: #ffffff;
+  background-color: #2e7d32;
+  padding: 0px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.dark .oplc-monaco-wrapper .debug-inline-value {
+  background-color: #388e3c;
+}
+
+/* Ensure Radix popper/select content sits well above Monaco */
+[data-radix-popper-content-wrapper],
+[data-radix-select-content],
+[role='listbox'] {
+  z-index: 1000 !important;
+}
+
+/* AI Diff Review decorations */
+.ai-diff-added {
+  background: rgba(34, 197, 94, 0.12) !important;
+}
+.dark .ai-diff-added {
+  background: rgba(34, 197, 94, 0.1) !important;
+}
+.ai-diff-added-gutter {
+  background: rgba(34, 197, 94, 0.3) !important;
+  border-left: 3px solid #22c55e !important;
+}
+.ai-diff-removed-zone {
+  background: rgba(239, 68, 68, 0.06);
+}
+.dark .ai-diff-removed-zone {
+  background: rgba(239, 68, 68, 0.08);
+}
