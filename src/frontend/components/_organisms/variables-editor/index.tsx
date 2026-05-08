@@ -178,6 +178,43 @@ const VariablesEditor = () => {
     }
   }, [tableData, editorVariables.display])
 
+  // Re-derive the local view state from the active editor whenever its
+  // identity changes (tab switch, programmatic navigation from a
+  // compile-error click, etc.).  Both `editorVariables` and
+  // `editorCode` are useState initialisers that run only on mount, so
+  // without this sync the panel keeps showing the previous POU's
+  // display mode and code after `setEditor(...)` swaps the model
+  // beneath us.  Driven off `editor.meta.name` so we don't re-fire on
+  // unrelated `editor` mutations (cursorPosition, etc.).
+  const editorVariableState =
+    editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.variable : null
+  const editorVariableDisplay = editorVariableState?.display
+
+  useEffect(() => {
+    if (!editorVariableState) return
+    if (editorVariableState.display === 'code') {
+      setEditorVariables({ display: 'code' })
+      const code = editorVariableState.code
+      const targetPou = pous.find((p) => p.name === editor.meta.name)
+      // Prefer the model's own stored code; fall back to a fresh
+      // generation from the new POU's variables so the panel shows
+      // *its* declarations, not whatever the previous POU last had.
+      setEditorCode(
+        typeof code === 'string' && code.length > 0
+          ? code
+          : generateIecVariablesToString(targetPou?.interface?.variables ?? []),
+      )
+    } else {
+      setEditorVariables({
+        display: 'table',
+        selectedRow: editorVariableState.selectedRow ?? ROWS_NOT_SELECTED.toString(),
+        classFilter: editorVariableState.classFilter ?? 'All',
+        description: editorVariableState.description ?? '',
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.meta.name, editorVariableDisplay])
+
   const containerRef = useRef<HTMLDivElement>(null)
   const latestCodeRef = useRef(editorCode)
   const latestDisplayRef = useRef(editorVariables.display)
