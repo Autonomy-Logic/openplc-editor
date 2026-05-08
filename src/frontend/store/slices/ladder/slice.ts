@@ -2,6 +2,7 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import {
   defaultCustomNodesStyles,
@@ -9,8 +10,38 @@ import {
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
-import { LadderFlowSlice, LadderFlowState } from './types'
+import { LadderFlowSlice, LadderFlowState, LadderFlowType } from './types'
 import { duplicateLadderRung } from './utils'
+
+/**
+ * Run an incoming flow through Zod so every `.default(...)` clause on the
+ * schema fires before the data lands in the store. Caller-side TypeScript
+ * types document the expected shape, but they can't catch drift coming from
+ * disk (legacy projects), from snapshot restore, or from unknown third-party
+ * producers. This is the slice's runtime safety net — making the slice the
+ * single trust boundary instead of relying on every caller to remember to
+ * normalize first.
+ *
+ * On parse failure, returns the flow as-is. The legacy `connectedVariables`
+ * migration in addLadderFlow still runs, so worst case is the editor sees
+ * the unparsed shape and may surface a runtime error downstream — which is
+ * still better than silently corrupting state.
+ */
+const parseFlowOrPassthrough = (flow: LadderFlowType): LadderFlowType => {
+  const result = zodLadderFlowSchema.safeParse({ name: flow.name, rungs: flow.rungs })
+  if (!result.success) {
+    console.warn(`Failed to parse ladder flow "${flow.name}":`, result.error.issues)
+    return flow
+  }
+  return {
+    name: result.data.name,
+    updated: flow.updated,
+    rungs: result.data.rungs.map((rung, i) => ({
+      ...rung,
+      selectedNodes: flow.rungs[i]?.selectedNodes ?? [],
+    })),
+  }
+}
 
 export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], LadderFlowSlice> = (setState) => ({
   ladderFlows: [],
@@ -19,7 +50,8 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
     clearLadderFlows: () => {
       setState({ ladderFlows: [] })
     },
-    addLadderFlow: (flow) => {
+    addLadderFlow: (rawFlow) => {
+      const flow = parseFlowOrPassthrough(rawFlow)
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           const flowIndex = ladderFlows.findIndex((f) => f.name === flow.name)
@@ -134,21 +166,23 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               },
             ],
             selectedNodes: [],
+            handleBranches: [],
           })
         }),
       )
     },
     setRungs: ({ editorName, rungs }) => {
+      const parsed = parseFlowOrPassthrough({ name: editorName, updated: true, rungs })
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
-          if (!Array.isArray(rungs)) return
+          if (!Array.isArray(parsed.rungs)) return
 
           // Validate each rung has required structure
           if (
-            !rungs.every(
+            !parsed.rungs.every(
               (rung) =>
                 rung.id &&
                 Array.isArray(rung.nodes) &&
@@ -159,7 +193,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           )
             return
 
-          flow.rungs = rungs
+          flow.rungs = parsed.rungs
           flow.updated = true
         }),
       )
@@ -437,6 +471,38 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
       )
     },
 
+    setHandleBranches({ editorName, handleBranches, rungId }) {
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          rung.handleBranches = handleBranches
+          flow.updated = true
+        }),
+      )
+    },
+
+    updateRungData({ editorName, rungId, nodes, edges, handleBranches }) {
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          rung.nodes = nodes
+          rung.edges = edges
+          if (handleBranches !== undefined) rung.handleBranches = handleBranches
+          flow.updated = true
+        }),
+      )
+    },
+
     /**
      * Control the flow viewport of the rung
      */
@@ -484,14 +550,17 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
      * Control the undo and redo actions
      */
     applyLadderFlowSnapshot: ({ editorName, snapshot }) => {
+      // Parse on entry so any drift in the snapshot (e.g. from a project version
+      // that didn't have `handleBranches`) is normalized before it reaches the store.
+      const parsedSnapshot = snapshot ? parseFlowOrPassthrough({ ...snapshot, name: editorName }) : null
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
-          if (snapshot) {
+          if (parsedSnapshot) {
             const flowIndex = ladderFlows.findIndex((ladderFlow) => ladderFlow.name === editorName)
-            const rungs = snapshot.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
+            const rungs = parsedSnapshot.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
             // Don't set updated: true — snapshot restore is managed by the undo/redo
             // handler which controls the saved flag directly.
-            const newFlow = { ...snapshot, name: editorName, rungs, updated: false }
+            const newFlow = { ...parsedSnapshot, name: editorName, rungs, updated: false }
 
             if (flowIndex === -1) {
               ladderFlows.push(newFlow)

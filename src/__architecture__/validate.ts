@@ -268,6 +268,8 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // Ladder slice types — re-exports RungLadderState narrowed to RungNode[]
+  'frontend/store/slices/ladder/types.ts': ['components'],
 }
 
 // ---------------------------------------------------------------------------

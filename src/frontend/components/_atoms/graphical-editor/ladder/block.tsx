@@ -10,6 +10,10 @@ import { checkVariableName } from '../../../../store/slices/project/validation/v
 import { cn } from '../../../../utils/cn'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import {
+  findInvalidatedBranches,
+  reconcileBranches,
+} from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
@@ -60,7 +64,7 @@ export const BlockNodeElement = <T extends object>({
     editorActions: { updateModelVariables },
     libraries,
     ladderFlows,
-    ladderFlowActions: { setNodes, setEdges },
+    ladderFlowActions,
     project: {
       data: { pous },
     },
@@ -176,6 +180,26 @@ export const BlockNodeElement = <T extends object>({
     })
     if (!pou || !rung || !node) return
 
+    /**
+     * Handle-branch reconciliation: a block-variant change can rename or
+     * retype handles in ways that orphan existing branches. If any branch
+     * on this block would be invalidated by the new variant, ask the user
+     * for confirmation before silently dropping them.
+     */
+    const invalidatedBranches = findInvalidatedBranches(rung, node.id, libraryBlock as BlockVariant)
+    if (invalidatedBranches.length > 0) {
+      const handleNames = invalidatedBranches.map((b) => `${b.handleId} (${b.direction})`).join(', ')
+      const confirmed = window.confirm(
+        `Changing this block to "${blockNameValue}" will drop ${invalidatedBranches.length} handle ` +
+          `branch${invalidatedBranches.length === 1 ? '' : 'es'} on the following pin${invalidatedBranches.length === 1 ? '' : 's'}: ${handleNames}.\n\n` +
+          `Continue?`,
+      )
+      if (!confirmed) {
+        setBlockNameValue(validBlockNameValue)
+        return
+      }
+    }
+
     if (libraryBlock && pou.pouType === 'function' && (libraryBlock as BlockVariant).type !== 'function') {
       setWrongName(true)
       toast({
@@ -284,11 +308,22 @@ export const BlockNodeElement = <T extends object>({
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
+    // Reconcile any handle branches on this block before layout runs:
+    //   - drop branches whose handle disappeared or stopped being BOOL
+    //   - remap surviving branches' references to the new block id
+    const reconciled = reconcileBranches(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      node.id,
+      newBlockNode.id,
+      libraryBlock as BlockVariant,
+    )
+
     const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
       {
         ...rung,
-        nodes: newNodes,
-        edges: newEdges,
+        nodes: reconciled.nodes,
+        edges: reconciled.edges,
+        handleBranches: reconciled.handleBranches,
       },
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
@@ -300,15 +335,12 @@ export const BlockNodeElement = <T extends object>({
       body: currentPou2?.body.value,
     })
 
-    setNodes({
+    ladderFlowActions.updateRungData({
       editorName: editor.meta.name,
       rungId: rung.id,
       nodes: variableNodes,
-    })
-    setEdges({
-      editorName: editor.meta.name,
-      rungId: rung.id,
       edges: variableEdges,
+      handleBranches: reconciled.handleBranches,
     })
 
     setWrongName(false)
@@ -353,7 +385,7 @@ export const BlockNodeElement = <T extends object>({
         <div
           key={index}
           className='absolute text-xs'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, left: 6 }}
+          style={{ top: (data.inputHandles[index]?.relPosition.y ?? 0) - 10, left: 6 }}
         >
           {connector}
         </div>
@@ -362,7 +394,7 @@ export const BlockNodeElement = <T extends object>({
         <div
           key={index}
           className='absolute text-xs'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, right: 6 }}
+          style={{ top: (data.outputHandles[index]?.relPosition.y ?? 0) - 10, right: 6 }}
         >
           {connector}
         </div>
@@ -841,7 +873,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
                 rungId: rung.id,
                 node: {
                   ...node,
-                  draggable: node.data.draggable as boolean,
+                  draggable: node.data.draggable,
                 },
               })
               return

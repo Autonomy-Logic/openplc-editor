@@ -9,6 +9,17 @@ type ConnectionOptions = {
   targetHandle?: string
 }
 
+type ConnectNodesOptions = ConnectionOptions & {
+  /**
+   * When provided, locate the existing source edge by matching its `sourceHandle`
+   * against this value, instead of inferring it from the source node's connectors.
+   * Used by callers that operate on edges leaving non-default handles — e.g.
+   * branch elements rooted at a rail's `branch_*` handle or at a function-block
+   * input handle.
+   */
+  sourceEdgeLookupHandle?: string
+}
+
 export const checkIfConnectedInParallel = (
   rung: RungLadderState,
   node: Node,
@@ -37,20 +48,21 @@ export const connectNodes = (
   sourceNodeId: string,
   targetNodeId: string,
   type: 'serial' | 'parallel',
-  options?: ConnectionOptions,
+  options?: ConnectNodesOptions,
 ): Edge[] => {
   // Find the source edge
   const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
   const sourceEdge = rung.edges.find((edge) => {
-    return (
-      edge.source === sourceNodeId &&
-      (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
-        ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
-        : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
-          ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
-            (sourceNode as ParallelNode).data.outputConnector?.id
-          : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id)
-    )
+    if (edge.source !== sourceNodeId) return false
+    if (options?.sourceEdgeLookupHandle !== undefined) {
+      return edge.sourceHandle === options.sourceEdgeLookupHandle
+    }
+    return type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
+      ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
+      : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
+        ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
+          (sourceNode as ParallelNode).data.outputConnector?.id
+        : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id
   })
 
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)

@@ -546,26 +546,69 @@ export const builderPlaceholderNode = ({
  * @param connector: 'left' | 'right' - The connector of the power rail node
  * @param handleX: number - The x coordinate of the handle based on the global position (inside the flow panel)
  * @param handleY: number - The y coordinate of the handle based on the global position (inside the flow panel)
+ * @param branchHandles: optional dynamic handles that anchor handle branches
+ *   on the rail. Each entry adds one extra source/target handle and may push
+ *   the rail's visual height down to encompass it.
  * @returns PowerRailNode
  */
-export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY }: PowerRailBuilderProps) => {
-  const handles = [
+export const buildPowerRailNode = ({
+  id,
+  posX,
+  posY,
+  connector,
+  handleX,
+  handleY,
+  branchHandles = [],
+}: PowerRailBuilderProps) => {
+  const primaryHandle = buildHandle({
+    id: `${connector === 'left' ? 'right' : 'left'}-rail`,
+    position: connector === 'left' ? Position.Left : Position.Right,
+    type: connector === 'left' ? 'target' : 'source',
+    isConnectable: false,
+    glbX: handleX,
+    glbY: handleY,
+    relX: DEFAULT_POWER_RAIL_CONNECTOR_X,
+    relY: DEFAULT_POWER_RAIL_CONNECTOR_Y,
+    style: {
+      top: DEFAULT_POWER_RAIL_CONNECTOR_Y,
+      left: connector === 'left' ? -DEFAULT_POWER_RAIL_WIDTH : undefined,
+      right: connector === 'right' ? -DEFAULT_POWER_RAIL_WIDTH : undefined,
+    },
+  })
+
+  // Branch handles attach at arbitrary Y offsets along the rail. Direction
+  // follows the branch's flow: input branches go rail→block (rail is source),
+  // output branches go block→rail (rail is target). Left rails only host
+  // input branches; right rails only host output branches.
+  const railSidedBranches = branchHandles.filter((bh) =>
+    connector === 'right' ? bh.direction === 'input' : bh.direction === 'output',
+  )
+  const dynamicHandles = railSidedBranches.map((bh) =>
     buildHandle({
-      id: `${connector === 'left' ? 'right' : 'left'}-rail`,
+      id: bh.id,
       position: connector === 'left' ? Position.Left : Position.Right,
-      type: connector === 'left' ? 'target' : 'source',
+      type: bh.direction === 'input' ? 'source' : 'target',
       isConnectable: false,
       glbX: handleX,
-      glbY: handleY,
+      glbY: posY + bh.y,
       relX: DEFAULT_POWER_RAIL_CONNECTOR_X,
-      relY: DEFAULT_POWER_RAIL_CONNECTOR_Y,
+      relY: bh.y,
       style: {
-        top: DEFAULT_POWER_RAIL_CONNECTOR_Y,
+        top: bh.y,
         left: connector === 'left' ? -DEFAULT_POWER_RAIL_WIDTH : undefined,
         right: connector === 'right' ? -DEFAULT_POWER_RAIL_WIDTH : undefined,
       },
     }),
-  ]
+  )
+
+  const handles = [primaryHandle, ...dynamicHandles]
+
+  // Stretch the rail to cover every handle's Y. Default height stays as-is
+  // when there are no branch handles.
+  const branchExtent = railSidedBranches.reduce((max, bh) => Math.max(max, bh.y), 0)
+  const height = Math.max(DEFAULT_POWER_RAIL_HEIGHT, branchExtent + DEFAULT_POWER_RAIL_CONNECTOR_Y)
+
+  const isLeftRail = connector === 'right'
 
   return {
     id,
@@ -573,12 +616,12 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
     position: { x: posX, y: posY },
     data: {
       handles,
-      inputHandles: connector === 'left' ? handles : [],
-      outputHandles: connector === 'right' ? handles : [],
-      inputConnector: connector === 'left' ? handles[0] : undefined,
-      outputConnector: connector === 'right' ? handles[0] : undefined,
+      inputHandles: isLeftRail ? [] : handles,
+      outputHandles: isLeftRail ? handles : [],
+      inputConnector: isLeftRail ? undefined : primaryHandle,
+      outputConnector: isLeftRail ? primaryHandle : undefined,
       numericId: generateNumericUUID(),
-      variant: connector === 'right' ? 'left' : 'right',
+      variant: isLeftRail ? 'left' : 'right',
       variable: { name: '' },
       executionOrder: 0,
       draggable: false,
@@ -586,10 +629,10 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
       deletable: false,
     },
     width: DEFAULT_POWER_RAIL_WIDTH,
-    height: DEFAULT_POWER_RAIL_HEIGHT,
+    height,
     measured: {
       width: DEFAULT_POWER_RAIL_WIDTH,
-      height: DEFAULT_POWER_RAIL_HEIGHT,
+      height,
     },
     draggable: false,
     selectable: false,

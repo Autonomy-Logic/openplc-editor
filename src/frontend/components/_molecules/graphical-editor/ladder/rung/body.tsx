@@ -510,15 +510,20 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }
     }
 
-    const { nodes, edges, newNode } = addNewElement(rungLocal, {
+    const { nodes, edges, handleBranches, newNode } = addNewElement(rungLocal, {
       elementType: newNodeType,
       blockVariant: pouLibrary,
     })
 
     captureAndPush(editor.meta.name)
 
-    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
-    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
+    ladderFlowActions.updateRungData({
+      editorName: editor.meta.name,
+      rungId: rungLocal.id,
+      nodes,
+      edges,
+      handleBranches,
+    })
 
     if (newNode)
       ladderFlowActions.setSelectedNodes({
@@ -541,12 +546,20 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Remove some nodes from the rung
    */
   const handleRemoveNode = (nodes: FlowNode[]) => {
-    const { nodes: newNodes, edges: newEdges } = removeElements({ ...rungLocal }, nodes)
+    const { nodes: newNodes, edges: newEdges, handleBranches: newHandleBranches } = removeElements(
+      { ...rungLocal },
+      nodes,
+    )
 
     captureAndPush(editor.meta.name)
 
-    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
-    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
+    ladderFlowActions.updateRungData({
+      editorName: editor.meta.name,
+      rungId: rungLocal.id,
+      nodes: newNodes,
+      edges: newEdges,
+      handleBranches: newHandleBranches,
+    })
     ladderFlowActions.setSelectedNodes({
       editorName: editor.meta.name,
       rungId: rungLocal.id,
@@ -657,8 +670,12 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     captureAndPush(editor.meta.name)
 
     setDragging(false)
-    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })
-    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
+    ladderFlowActions.updateRungData({
+      editorName: editor.meta.name,
+      rungId: rungLocal.id,
+      nodes: result.nodes,
+      edges: result.edges,
+    })
 
     if (pouRef) {
       syncNodesWithVariables(

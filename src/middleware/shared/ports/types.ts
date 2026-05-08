@@ -777,6 +777,19 @@ export type FBDRungState = {
 }
 
 /**
+ * Per-rung handle-branch index. Mirrors `zodHandleBranchSchema`. The
+ * structural truth lives in `nodes` / `edges`; this entry is a denormalized
+ * lookup of which contacts / coils hang off a given block handle.
+ */
+export type HandleBranch = {
+  blockId: string
+  handleId: string
+  direction: 'input' | 'output'
+  /** Serial spine only — parallel-path elements are reachable via edges. */
+  nodeIds: string[]
+}
+
+/**
  * Ladder rung data — nodes + edges + layout for one Ladder rung.
  * Used by both the store slice and the compiler adapter.
  */
@@ -788,6 +801,7 @@ export type RungLadderState = {
   selectedNodes: import('@xyflow/react').Node[]
   nodes: import('@xyflow/react').Node[]
   edges: import('@xyflow/react').Edge[]
+  handleBranches: HandleBranch[]
 }
 
 // ---------------------------------------------------------------------------

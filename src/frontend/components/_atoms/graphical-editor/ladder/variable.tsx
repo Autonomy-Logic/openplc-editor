@@ -110,96 +110,116 @@ const VariableElement = (block: VariableProps) => {
   }
 
   /**
-   * useEffect to sync variableValue with data.variable.name when it changes externally
-   * (e.g., from variable rename propagation or autocomplete selection).
-   * Only sync when autocomplete is closed to avoid overwriting user input while typing.
-   * Note: openAutocomplete is intentionally NOT in the dependency array to prevent a race
-   * condition where closing the autocomplete (before blur) would restore the old node value,
-   * overwriting the user's cleared input.
+   * Single source-of-truth sync for the variable input.
+   *
+   * Reads the variable node's current store value (not the prop, which may
+   * be stale during React's render cycle) and:
+   *   - drives `variableValue` (display) when the user isn't actively editing
+   *   - looks up the matching POU variable to validate the type
+   *   - repairs the stored value's casing if it has drifted
+   *
+   * `openAutocomplete` is intentionally absent from the dep array so that
+   * closing the autocomplete (before the blur submit) doesn't run this
+   * effect with a stale prop and clobber the user's pending edit.
    */
   useEffect(() => {
-    const name = data.variable?.name ?? ''
-    if (!openAutocomplete && name !== '') {
-      setVariableValue(name)
-    }
-  }, [data.variable?.name])
-
-  /**
-   * Update inputError state when the table of variables is updated
-   */
-  useEffect(() => {
-    const {
-      node: variableNode,
-      rung,
-      variables,
-    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { node: variableNode, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: data.variable?.name,
     })
     if (!rung || !variableNode) return
 
-    // Use the selected variable from getLadderPouVariablesRungNodeAndEdges which properly
-    // handles derived types for 'variable' node types (block pin variables)
-    const variable = variables.selected
+    const nodeVariableName = (variableNode as VariableNode).data.variable.name
 
-    if (!variable || !inputVariableRef) {
+    if (!nodeVariableName) {
       setIsAVariable(false)
-    } else {
-      const nodeVariableName = (variableNode as VariableNode).data.variable.name
-
-      const namesMatchCI = variable.name.toLowerCase() === nodeVariableName.toLowerCase()
-      const caseDiffers = variable.name !== nodeVariableName
-
-      if (!namesMatchCI || caseDiffers) {
-        updateNode({
-          editorName: editor.meta.name,
-          rungId: rung.id,
-          nodeId: variableNode.id,
-          node: {
-            ...variableNode,
-            data: {
-              ...variableNode.data,
-              variable: variable,
-            },
-          },
-        })
-        updateRelatedNode(rung, variableNode as VariableNode, variable)
-      }
-
-      const validation = validateVariableType(variable.type.value, data.block.variableType)
-      if (!validation.isValid && dataTypes.length > 0) {
-        const userDataTypes = dataTypes.map((dataType) => dataType.name)
-        validation.isValid = userDataTypes.includes(variable.type.value)
-        validation.error = undefined
-      }
-      // Only sync variableValue when not actively editing (autocomplete closed)
-      if (!openAutocomplete) {
-        setVariableValue(variable.name)
-      }
-      setInputError(!validation.isValid)
-      setIsAVariable(true)
+      setInputError(false)
+      return
     }
 
-    if (!rung) return
+    const pou = pous.find((p) => p.name === editor.meta.name)
+    const variable = (pou?.interface?.variables ?? []).find(
+      (v) => v.name.toLowerCase() === nodeVariableName.toLowerCase(),
+    )
 
-    const relatedBlock = rung.nodes.find((node) => node.id === data.block.id)
-    if (!relatedBlock) {
-      setInputError(true)
+    if (!variable) {
+      // Literal or orphan name — sync display, but leave validation as-is
+      // (handleSubmit already classified it).
+      if (!openAutocomplete) {
+        setVariableValue(nodeVariableName)
+      }
+      setIsAVariable(false)
       return
+    }
+
+    const caseDiffers = variable.name !== nodeVariableName
+    if (caseDiffers) {
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: variableNode.id,
+        node: {
+          ...variableNode,
+          data: { ...variableNode.data, variable },
+        },
+      })
+      updateRelatedNode(rung, variableNode as VariableNode, variable)
+    }
+
+    const validation = validateVariableType(variable.type.value, data.block.variableType)
+    if (!validation.isValid && dataTypes.length > 0) {
+      const userDataTypes = dataTypes.map((dataType) => dataType.name)
+      validation.isValid = userDataTypes.includes(variable.type.value)
+      validation.error = undefined
+    }
+
+    if (!openAutocomplete) {
+      setVariableValue(variable.name)
+    }
+    setInputError(!validation.isValid)
+    setIsAVariable(true)
+
+    if (!rung.nodes.find((node) => node.id === data.block.id)) {
+      setInputError(true)
     }
   }, [pous, data.variable?.name])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
-    const variableNameToSubmit = variableName || variableValue
+  const handleSubmitVariableValueOnTextareaBlur = (currentValue?: string) => {
+    const variableNameToSubmit = currentValue ?? variableValue
 
     const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
     const variableNode = node as VariableNode
+
+    // Allow clearing a variable from a block handle by submitting an empty name.
+    // Resets the variable node to an empty placeholder so the user can pick a
+    // different variable (or, with handle branches, place contacts/coils on
+    // the handle instead).
+    if (!variableNameToSubmit.trim()) {
+      const emptyVariable = { id: '', name: '' }
+      setVariableValue('')
+      setIsAVariable(false)
+      setInputError(false)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: variableNode.id,
+        node: {
+          ...variableNode,
+          data: {
+            ...variableNode.data,
+            variable: emptyVariable,
+          },
+        },
+      })
+      updateRelatedNode(rung, variableNode, emptyVariable as PLCVariable)
+      return
+    }
 
     // For variable nodes (block pins), allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types

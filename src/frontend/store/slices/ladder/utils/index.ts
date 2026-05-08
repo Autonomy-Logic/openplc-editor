@@ -1,6 +1,6 @@
 import { Edge, Node } from '@xyflow/react'
 
-import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import type { HandleBranch, PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { nodesBuilder } from '../../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type { LadderBlockConnectedVariables } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
 import type {
@@ -16,6 +16,27 @@ import { generateNumericUUID } from '../../../../utils/generate-uuid'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { RungLadderState } from '../types'
 
+/**
+ * Rail handles for handle branches use the id format
+ * `branch_${blockId}_${handleId}`. When a rung is duplicated and its blocks
+ * receive new ids, every reference to the old block id inside such a handle
+ * (or in an edge's `sourceHandle` / `targetHandle`) needs to be retargeted to
+ * the new block. Returns the input unchanged if it isn't a branch handle id.
+ */
+const remapBranchHandleId = (
+  handleId: string | null | undefined,
+  blockIdMap: Record<string, string>,
+): string | null | undefined => {
+  if (typeof handleId !== 'string' || !handleId.startsWith('branch_')) return handleId
+  for (const [oldBlockId, newBlockId] of Object.entries(blockIdMap)) {
+    const prefix = `branch_${oldBlockId}_`
+    if (handleId.startsWith(prefix)) {
+      return `branch_${newBlockId}_${handleId.slice(prefix.length)}`
+    }
+  }
+  return handleId
+}
+
 export const duplicateLadderRung = (editorName: string, rung: RungLadderState): RungLadderState => {
   const nodeMaps: { [key: string]: Node } = rung.nodes.reduce(
     (acc, node) => {
@@ -28,14 +49,23 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
     {} as { [key: string]: Node },
   )
 
+  const blockIdMap: Record<string, string> = {}
+  for (const node of rung.nodes) {
+    if (node.type === 'block') {
+      blockIdMap[node.id] = nodeMaps[node.id].id
+    }
+  }
+
   const edgeMaps: { [key: string]: Edge } = rung.edges.reduce(
     (acc, edge) => {
+      const newSourceHandle = remapBranchHandleId(edge.sourceHandle, blockIdMap) ?? edge.sourceHandle
+      const newTargetHandle = remapBranchHandleId(edge.targetHandle, blockIdMap) ?? edge.targetHandle
       acc[edge.id] = {
-        id: `e_${nodeMaps[edge.source].id}_${nodeMaps[edge.target].id}__${edge.sourceHandle}_${edge.targetHandle}`,
+        id: `e_${nodeMaps[edge.source].id}_${nodeMaps[edge.target].id}__${newSourceHandle}_${newTargetHandle}`,
         source: nodeMaps[edge.source].id,
         target: nodeMaps[edge.target].id,
-        sourceHandle: edge.sourceHandle,
-        targetHandle: edge.targetHandle,
+        sourceHandle: newSourceHandle,
+        targetHandle: newTargetHandle,
       }
       return acc
     },
@@ -49,80 +79,108 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
           id: nodeMaps[node.id].id,
           posX: node.position.x,
           posY: node.position.y,
-          handleX: (node as BlockNode<BlockVariant>).data.inputConnector?.glbPosition.x ?? 0,
-          handleY: (node as BlockNode<BlockVariant>).data.inputConnector?.glbPosition.y ?? 0,
-          variant: (node as BlockNode<BlockVariant>).data.variant,
-          executionControl: (node as BlockNode<BlockVariant>).data.executionControl,
+          handleX: node.data.inputConnector?.glbPosition.x ?? 0,
+          handleY: node.data.inputConnector?.glbPosition.y ?? 0,
+          variant: node.data.variant,
+          executionControl: node.data.executionControl,
         })
         return {
           ...newBlock,
           data: {
             ...newBlock.data,
-            variable:
-              (node as BlockNode<BlockVariant>).data.variant.type === 'function-block'
-                ? { name: '' }
-                : node.data.variable,
-            connectedVariables: normalizeConnectedVariables((node as BlockNode<BlockVariant>).data.connectedVariables),
+            variable: node.data.variant.type === 'function-block' ? { name: '' } : node.data.variable,
+            connectedVariables: normalizeConnectedVariables(node.data.connectedVariables),
           },
         } as BlockNode<BlockVariant>
       }
       case 'coil': {
+        const sourceCoil = node
         const newCoil = nodesBuilder.coil({
           id: nodeMaps[node.id].id,
           posX: node.position.x,
           posY: node.position.y,
-          handleX: (node as CoilNode).data.inputConnector?.glbPosition.x ?? 0,
-          handleY: (node as CoilNode).data.inputConnector?.glbPosition.y ?? 0,
-          variant: (node as CoilNode).data.variant,
+          handleX: sourceCoil.data.inputConnector?.glbPosition.x ?? 0,
+          handleY: sourceCoil.data.inputConnector?.glbPosition.y ?? 0,
+          variant: sourceCoil.data.variant,
         })
         return {
           ...newCoil,
           data: {
             ...newCoil.data,
-            variable: (node as CoilNode).data.variable,
+            variable: sourceCoil.data.variable,
+            branchContext: sourceCoil.data.branchContext
+              ? {
+                  ...sourceCoil.data.branchContext,
+                  blockId: blockIdMap[sourceCoil.data.branchContext.blockId] ?? sourceCoil.data.branchContext.blockId,
+                }
+              : undefined,
           },
         } as CoilNode
       }
       case 'contact': {
+        const sourceContact = node
         const newContact = nodesBuilder.contact({
           id: nodeMaps[node.id].id,
           posX: node.position.x,
           posY: node.position.y,
-          handleX: (node as ContactNode).data.inputConnector?.glbPosition.x ?? 0,
-          handleY: (node as ContactNode).data.inputConnector?.glbPosition.y ?? 0,
-          variant: (node as ContactNode).data.variant,
+          handleX: sourceContact.data.inputConnector?.glbPosition.x ?? 0,
+          handleY: sourceContact.data.inputConnector?.glbPosition.y ?? 0,
+          variant: sourceContact.data.variant,
         })
         return {
           ...newContact,
           data: {
             ...newContact.data,
-            variable: (node as ContactNode).data.variable,
+            variable: sourceContact.data.variable,
+            branchContext: sourceContact.data.branchContext
+              ? {
+                  ...sourceContact.data.branchContext,
+                  blockId:
+                    blockIdMap[sourceContact.data.branchContext.blockId] ?? sourceContact.data.branchContext.blockId,
+                }
+              : undefined,
           },
         } as ContactNode
       }
       case 'parallel': {
+        const sourceParallel = node
         return {
           ...node,
           id: nodeMaps[node.id].id,
           data: {
             ...node.data,
             numericId: generateNumericUUID(),
-            parallelCloseReference: (node as ParallelNode).data.parallelCloseReference
-              ? nodeMaps[(node as ParallelNode).data.parallelCloseReference ?? ''].id
+            parallelCloseReference: sourceParallel.data.parallelCloseReference
+              ? nodeMaps[sourceParallel.data.parallelCloseReference ?? ''].id
               : undefined,
-            parallelOpenReference: (node as ParallelNode).data.parallelOpenReference
-              ? nodeMaps[(node as ParallelNode).data.parallelOpenReference ?? ''].id
+            parallelOpenReference: sourceParallel.data.parallelOpenReference
+              ? nodeMaps[sourceParallel.data.parallelOpenReference ?? ''].id
+              : undefined,
+            branchContext: sourceParallel.data.branchContext
+              ? {
+                  ...sourceParallel.data.branchContext,
+                  blockId:
+                    blockIdMap[sourceParallel.data.branchContext.blockId] ?? sourceParallel.data.branchContext.blockId,
+                }
               : undefined,
           },
         } as ParallelNode
       }
       case 'powerRail': {
+        const sourceRail = node
+        const remapHandle = <T extends { id?: string | null }>(handle: T): T => ({
+          ...handle,
+          id: (remapBranchHandleId(handle.id, blockIdMap) ?? handle.id) as T['id'],
+        })
         return {
           ...node,
           id: nodeMaps[node.id].id,
           data: {
             ...node.data,
             numericId: generateNumericUUID(),
+            handles: sourceRail.data.handles.map(remapHandle),
+            inputHandles: sourceRail.data.inputHandles.map(remapHandle),
+            outputHandles: sourceRail.data.outputHandles.map(remapHandle),
           },
         } as PowerRailNode
       }
@@ -134,8 +192,8 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
             ...node.data,
             numericId: generateNumericUUID(),
             block: {
-              ...(node as VariableNode).data.block,
-              id: nodeMaps[(node as VariableNode).data.block.id]?.id ?? (node as VariableNode).data.block.id,
+              ...node.data.block,
+              id: nodeMaps[node.data.block.id]?.id ?? node.data.block.id,
             },
           },
         } as VariableNode
@@ -151,6 +209,14 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
     id: edgeMaps[edge.id].id,
     source: edgeMaps[edge.id].source,
     target: edgeMaps[edge.id].target,
+    sourceHandle: edgeMaps[edge.id].sourceHandle,
+    targetHandle: edgeMaps[edge.id].targetHandle,
+  }))
+
+  const newHandleBranches: HandleBranch[] = (rung.handleBranches ?? []).map((branch) => ({
+    ...branch,
+    blockId: blockIdMap[branch.blockId] ?? branch.blockId,
+    nodeIds: branch.nodeIds.map((nodeId) => nodeMaps[nodeId]?.id ?? nodeId),
   }))
 
   const newRung = {
@@ -161,6 +227,7 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
     selectedNodes: [],
     nodes: newNodes,
     edges: newEdges,
+    handleBranches: newHandleBranches,
   }
 
   return newRung

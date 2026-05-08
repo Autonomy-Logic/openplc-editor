@@ -5,6 +5,14 @@ import type { CustomHandleProps } from '../../../../../../../_atoms/graphical-ed
 import { BasicNodeData, ParallelNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
 
+// Horizontal padding inserted between adjacent same-type parallel brackets
+// (an outer OPEN and an inner OPEN, or an inner CLOSE and an outer CLOSE).
+// Matches a contact's gap so the inner bracket's vertical wire sits the same
+// distance from the outer's wire that a regular contact would — large enough
+// to read as deliberate separation, small enough that the nested structure
+// stays visually compact.
+export const NESTED_PARALLEL_CLEARANCE = 45
+
 /**
  * Get the previous element by searching with edge in the rung
  *
@@ -116,6 +124,12 @@ export const getElementPositionBasedOnPlaceholderElement = (
  * @param previousElement
  * @param newElement
  * @param type: 'serial' | 'parallel'
+ * @param prevIsAlreadyNested  When prev is itself a parallel of the same
+ *   sub-type as its own predecessor (e.g. OPEN→OPEN→OPEN), the chain has
+ *   already paid the bracket-clearance budget at its outermost boundary.
+ *   Pass `true` so this call collapses onto prev's X instead of stacking
+ *   another clearance — otherwise every "add parallel" wraps an extra
+ *   layer and the spine funnels rightward.
  *
  * @returns { posX, posY, handleX, handleY }
  */
@@ -123,6 +137,7 @@ export const getNodePositionBasedOnPreviousNode = (
   previousElement: Node,
   newElement: string | Node,
   type: 'serial' | 'parallel',
+  prevIsAlreadyNested: boolean = false,
 ): {
   posX: number
   posY: number
@@ -143,6 +158,24 @@ export const getNodePositionBasedOnPreviousNode = (
     previousElement.type === 'parallel' &&
     (typeof newElement === 'string' ? newElement === 'parallel' : newElement.type === 'parallel')
 
+  // Two parallels of the same sub-type (OPEN→OPEN or CLOSE→CLOSE) can only
+  // appear adjacent when one is nested inside the other. Without horizontal
+  // separation the inner bracket renders at the same X as the outer's
+  // vertical wire and the two wires overlap visually. Reserve a contact-
+  // sized gap AND advance past the previous bracket's width so the inner
+  // OPEN's left wire (or inner CLOSE's right wire) sits clearly inside the
+  // outer's span instead of on top of it.
+  const parallelsAreNested =
+    parallelNodeCheckingParallelNode &&
+    typeof newElement !== 'string' &&
+    (previousElement as ParallelNode).data.type === (newElement as ParallelNode).data.type
+
+  // If prev is already past a clearance boundary (its own predecessor was
+  // the same-type parallel), don't add another one. The visible separation
+  // belongs at the OUTERMOST bracket boundary; deeper levels collapse to
+  // the same X so a 3-deep nesting reads as one set of brackets, not three.
+  const collapseDeepNesting = parallelsAreNested && prevIsAlreadyNested
+
   let gap = 0
   if (parallelNodeCheckingParallelNode) {
     if (
@@ -152,6 +185,8 @@ export const getNodePositionBasedOnPreviousNode = (
         previousElement.id !== (newElement as ParallelNode).data.parallelCloseReference)
     ) {
       gap = 100
+    } else if (parallelsAreNested && !collapseDeepNesting) {
+      gap = NESTED_PARALLEL_CLEARANCE
     }
   } else {
     gap = previousElementStyle.gap + newNodeStyle.gap
@@ -159,13 +194,20 @@ export const getNodePositionBasedOnPreviousNode = (
 
   const offsetY = newNodeStyle.handle.y
 
+  // Nested parallels need the previous bracket's width added so the inner
+  // bracket sits past it instead of collapsing onto its X (the OPEN/CLOSE
+  // pair-collapse only applies when the two parallels are the same pair).
+  // When the chain is already past the outer clearance boundary, skip the
+  // width too so deeper levels share the same X as the first inner bracket.
+  const skipPrevWidth = parallelNodeCheckingParallelNode && (!parallelsAreNested || collapseDeepNesting)
+
   const position = {
-    posX: previousElement.position.x + (!parallelNodeCheckingParallelNode ? previousElement.width || 0 : 0) + gap,
+    posX: previousElement.position.x + (skipPrevWidth ? 0 : previousElement.width || 0) + gap,
     posY:
       previousElement.type === (typeof newElement === 'string' ? newElement : newElement.type)
         ? previousElement.position.y
         : previousElementOutputHandle.glbPosition.y - offsetY,
-    handleX: previousElement.position.x + (!parallelNodeCheckingParallelNode ? previousElement.width || 0 : 0) + gap,
+    handleX: previousElement.position.x + (skipPrevWidth ? 0 : previousElement.width || 0) + gap,
     handleY: previousElementOutputHandle.glbPosition.y,
   }
 
@@ -226,6 +268,12 @@ export const findDeepestParallelInsideParallel = (rung: RungLadderState, paralle
   return parallel as ParallelNode
 }
 
+// Vertical room reserved between a parallel's spine row and its parallel
+// path row. Mirrors the additive `verticalGap` used by `positionMainNodes`
+// when stacking the parallel path Y, so a nested parallel's content extent
+// rolls up correctly through its parents' height calculations.
+const PARALLEL_PATH_VERTICAL_GAP = 80
+
 /**
  * Find all parallels depth and nodes of those parallels
  *
@@ -234,7 +282,7 @@ export const findDeepestParallelInsideParallel = (rung: RungLadderState, paralle
  * @param depth - The depth of the parallel
  * @param parentNode - The parent node of the parallel
  *
- * @returns object: { [key: string]: { parent: ParallelNode | undefined, parallels: { open: ParallelNode, close: ParallelNode }, depth: number, height: number, highestNode: Node, nodes: { serial: Node[], parallel: Node[] } } }
+ * @returns object: { [key: string]: { parent: ParallelNode | undefined, parallels: { open: ParallelNode, close: ParallelNode }, depth: number, height: number, contentExtent: number, highestNode: Node, nodes: { serial: Node[], parallel: Node[] } } }
  */
 export const findAllParallelsDepthAndNodes = (
   rung: RungLadderState,
@@ -251,6 +299,11 @@ export const findAllParallelsDepthAndNodes = (
       }
       depth: number
       height: number
+      // Total vertical extent (spine + every parallel-path row, including
+      // nested parallels' content). Used by parents to roll this parallel's
+      // depth into their own height calc so a sibling-path block lands
+      // below the deepest nested element instead of overlapping it.
+      contentExtent: number
       highestNode: Node
       nodes: {
         serial: Node[]
@@ -266,6 +319,13 @@ export const findAllParallelsDepthAndNodes = (
   const serialNodes = nodesInsideParallel.serial
   let highestNode = serialNodes[0]
   let serialHeight = highestNode.height ?? 0
+  // Spine extent must also account for any nested parallel that lives in
+  // this spine — the nested OPEN's bracket sits on the spine row, but its
+  // own paths consume rows below. Without rolling that depth in here, the
+  // parent's parallel-path elements (e.g. a sibling block on a CLOSE-side
+  // path) land at the spine row + raw spine height and overlap the nested
+  // content.
+  let spineExtent = serialHeight
   for (const serialNode of serialNodes) {
     // If it is a parallel node, check if it is an open parallel
     // If it is, call the function recursively
@@ -274,12 +334,15 @@ export const findAllParallelsDepthAndNodes = (
       if (serialParallel.data.type === 'open') {
         const object = findAllParallelsDepthAndNodes(rung, serialParallel, depth, openParallel)
         objectParallel = { ...objectParallel, ...object }
+        const nestedExtent = object[serialParallel.id]?.contentExtent ?? 0
+        if (nestedExtent > spineExtent) spineExtent = nestedExtent
       }
     }
     if (serialHeight < (serialNode.height ?? 0)) {
       serialHeight = serialNode.height ?? 0
       highestNode = serialNode
     }
+    if (spineExtent < (serialNode.height ?? 0)) spineExtent = serialNode.height ?? 0
   }
 
   let deepestDepth = 0
@@ -299,10 +362,38 @@ export const findAllParallelsDepthAndNodes = (
     }
   }
 
+  // Path content extent: the parallel-path row contributes one row below
+  // the spine, plus whatever depth is contributed by any nested OPEN that
+  // lives on that path (e.g. when a contact on the path has been wrapped
+  // by a deeper parallel). Walk path elements; for nested OPENs read the
+  // already-computed contentExtent, for raw nodes use their own height.
+  let maxPathExtent = 0
+  for (const pathNode of parallelNodes) {
+    if (pathNode.type === 'parallel') {
+      const par = pathNode as ParallelNode
+      if (par.data.type === 'open') {
+        const nestedExtent = objectParallel[par.id]?.contentExtent ?? 0
+        if (nestedExtent > maxPathExtent) maxPathExtent = nestedExtent
+        continue
+      }
+    }
+    if ((pathNode.height ?? 0) > maxPathExtent) maxPathExtent = pathNode.height ?? 0
+  }
+
+  // contentExtent rolls spine + path stack + verticalGap so an outer parent
+  // can see this parallel's full vertical reach in one number.
+  const contentExtent =
+    parallelNodes.length > 0 ? spineExtent + PARALLEL_PATH_VERTICAL_GAP + maxPathExtent : spineExtent
+
   objectParallel[openParallel.id] = {
     parent: parentNode,
     depth,
-    height: serialHeight,
+    // `height` is consumed by `positionMainNodes` to place a parallel-path
+    // element at `highestNode.y + height + verticalGap`. Use the extended
+    // spine extent so nested-parallel content in the spine pushes the
+    // sibling-path Y past it instead of overlapping it.
+    height: spineExtent,
+    contentExtent,
     highestNode,
     parallels: {
       open: openParallel,
@@ -329,8 +420,8 @@ export const getDeepestNodesInsideParallels = (rung: RungLadderState): Node[] =>
   const nodes: Node[] = []
   parallels.forEach((parallel) => {
     const deepestParallel = findDeepestParallelInsideParallel(rung, parallel)
-    const { parallel: parallelNodes } = getNodesInsideParallel(rung, deepestParallel)
-    nodes.push(...parallelNodes)
+    const { serial, parallel: parallelNodes } = getNodesInsideParallel(rung, deepestParallel)
+    nodes.push(...serial, ...parallelNodes)
   })
   return nodes
 }

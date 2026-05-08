@@ -2,6 +2,11 @@ import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import { z } from 'zod'
 
 import { zodLadderFlowSchema, zodRungLadderStateSchema } from '../../../../middleware/shared/ports/flow-schemas'
+import type {
+  HandleBranch,
+  RungLadderState as PortRungLadderState,
+} from '../../../../middleware/shared/ports/types'
+import type { RungNode } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 
 type ZodLadderRungType = z.infer<typeof zodRungLadderStateSchema>
 type ZodLadderFlowType = z.infer<typeof zodLadderFlowSchema>
@@ -14,9 +19,17 @@ type ZodLadderFlowState = z.infer<typeof zodLadderFlowStateSchema>
 const zodLadderNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
 type ZodLadderNodeType = z.infer<typeof zodLadderNodeTypesSchema>
 
-import type { RungLadderState } from '../../../../middleware/shared/ports/types'
-
-export type { RungLadderState }
+/**
+ * Editor-narrowed view of `RungLadderState`. The cross-platform port type
+ * keeps `nodes` / `selectedNodes` as the generic `Node[]` from `@xyflow/react`
+ * (the compiler adapter doesn't care about the discriminated union); the
+ * frontend tightens both to the `RungNode` discriminated union so call sites
+ * narrow on `node.type` instead of casting.
+ */
+export type RungLadderState = Omit<PortRungLadderState, 'nodes' | 'selectedNodes'> & {
+  nodes: RungNode[]
+  selectedNodes: RungNode[]
+}
 
 /**
  * Types used at the slice
@@ -108,6 +121,43 @@ type LadderFlowActions = {
     editorName: string
   }) => void
   addEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
+
+  /**
+   * Replace the per-rung handle-branch index. The structural data (the
+   * branch nodes / edges themselves) lives in `nodes` / `edges`; this action
+   * only updates the denormalized lookup.
+   */
+  setHandleBranches: ({
+    handleBranches,
+    rungId,
+    editorName,
+  }: {
+    handleBranches: HandleBranch[]
+    rungId: string
+    editorName: string
+  }) => void
+
+  /**
+   * Atomic update of every per-rung field that an editor mutation touches —
+   * nodes, edges, and (optionally) handleBranches. Use this instead of a
+   * sequence of `setNodes` + `setEdges` + `setHandleBranches` calls when the
+   * three need to land as one store transition. The intermediate states from
+   * sequential setters can have ReactFlow render edges that reference
+   * not-yet-committed nodes, producing handle-not-found warnings.
+   */
+  updateRungData: ({
+    nodes,
+    edges,
+    handleBranches,
+    rungId,
+    editorName,
+  }: {
+    nodes: Node[]
+    edges: Edge[]
+    handleBranches?: HandleBranch[]
+    rungId: string
+    editorName: string
+  }) => void
 
   /**
    * Control the flow viewport of the rung

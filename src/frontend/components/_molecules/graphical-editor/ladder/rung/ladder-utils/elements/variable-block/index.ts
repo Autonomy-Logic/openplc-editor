@@ -8,6 +8,7 @@ import {
 } from '../../../../../../../_atoms/graphical-editor/ladder/node-builders'
 import { BlockNode, BlockVariant } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { buildEdge } from '../../edges'
+import { hasBranchOnHandle } from '../handle-branch'
 
 export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderState, block: Node) => {
   const variableElements: Node[] = []
@@ -27,6 +28,10 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
       : []
 
   inputHandles.forEach((inputHandle) => {
+    // Skip handles that host a branch — the contacts/coils on the branch
+    // replace the Variable node visually and semantically.
+    if (hasBranchOnHandle(rung, blockElement.id, inputHandle.id as string, 'input')) return
+
     const connectedVariable = (
       Array.isArray(blockElement.data.connectedVariables) ? blockElement.data.connectedVariables : []
     ).find((variable) => {
@@ -69,6 +74,8 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
   })
 
   outputHandles.forEach((outputHandle) => {
+    if (hasBranchOnHandle(rung, blockElement.id, outputHandle.id as string, 'output')) return
+
     const connectedVariable = (
       Array.isArray(blockElement.data.connectedVariables) ? blockElement.data.connectedVariables : []
     ).find((variable) => {
@@ -114,14 +121,13 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
 }
 
 export const removeVariableBlock = (rung: RungLadderState) => {
+  const variableNodeIds = new Set(rung.nodes.filter((node) => node.type === 'variable').map((node) => node.id))
   const newNodes = rung.nodes.filter((node) => node.type !== 'variable')
-  const newEdges = rung.edges.filter(
-    (edge) => !edge.source.toLowerCase().includes('variable') && !edge.target.toLowerCase().includes('variable'),
-  )
+  const newEdges = rung.edges.filter((edge) => !variableNodeIds.has(edge.source) && !variableNodeIds.has(edge.target))
   return { nodes: newNodes, edges: newEdges }
 }
 
-export const updateVariableBlockPosition = (rung: RungLadderState) => {
+export const updateVariableBlockPosition = (rung: RungLadderState, _defaultBounds?: [number, number]) => {
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
