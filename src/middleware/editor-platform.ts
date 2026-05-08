@@ -18,6 +18,7 @@ import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
+import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
@@ -65,5 +66,6 @@ export const editorPorts: PlatformPorts = {
   esi: createEditorEsiAdapter(() => _projectPath),
   versionControl: createEditorVersionControlAdapter(),
   navigation: createEditorNavigationAdapter(),
+  library: createEditorLibraryAdapter(),
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

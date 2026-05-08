@@ -42,6 +42,7 @@ const testPorts: PlatformPorts = {
   theme: createStubPort(),
   versionControl: createStubPort(),
   navigation: createStubPort(),
+  library: createStubPort(),
   capabilities: EDITOR_CAPABILITIES,
 }
 

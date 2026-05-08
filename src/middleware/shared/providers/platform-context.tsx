@@ -117,3 +117,7 @@ export function usePackages() {
 export function useEsi() {
   return usePlatform().esi
 }
+
+export function useLibrary() {
+  return usePlatform().library
+}

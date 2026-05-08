@@ -7,7 +7,7 @@
  */
 
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
+import { openPLCStoreBase } from '../store'
 import type { DebugVariableEntry } from './debug-parser'
 import {
   buildDebugPath,
@@ -119,11 +119,16 @@ interface ArrayTypeData {
 function isFunctionBlock(typeName: string, projectPous: PLCPou[]): boolean {
   const typeNameUpper = typeName.toUpperCase()
 
-  // Check standard library
-  const isStandard = StandardFunctionBlocks.pous.some(
-    (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
-  )
-  if (isStandard) return true
+  // Check every system library loaded from bundled .stlib archives
+  // (standard FBs, additional FBs, OSCAT, std-functions, plus any
+  // future user-installed library). FB names are globally unique
+  // across IEC libraries by convention, so first match wins.
+  for (const lib of openPLCStoreBase.getState().libraries.system) {
+    const matched = lib.pous.some(
+      (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
+    )
+    if (matched) return true
+  }
 
   // Check custom FBs
   return projectPous.some(

@@ -19,7 +19,7 @@ import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
-import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
+import { readdir, readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingHttpHeaders, IncomingMessage } from 'http'
 import https from 'https'
 import { join, resolve, sep } from 'path'
@@ -621,6 +621,7 @@ class MainProcessBridge implements MainIpcModule {
     // App and system handlers
     this.registerHandle('open-external-link', this.handleOpenExternalLink)
     this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
+    this.registerHandle('system-libraries:load-bundled', this.handleLoadBundledLibraries)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
@@ -897,6 +898,52 @@ class MainProcessBridge implements MainIpcModule {
       prefersDarkMode: nativeTheme.shouldUseDarkColors,
       isWindowMaximized: this.mainWindow?.isMaximized(),
     }
+  }
+
+  /**
+   * Load every bundled .stlib archive shipped with the app.
+   *
+   * The archives live alongside the strucpp compiler binaries under
+   * `<resources>/strucpp/libs/` — same dev-vs-packaged resolution
+   * Electron uses for any other resource (`process.resourcesPath`
+   * after packaging, the project root in dev). The .stlib files are
+   * synced into that directory by the strucpp build pipeline so they
+   * always travel with the strucpp version the compiler targets.
+   *
+   * Returns the parsed JSON contents in alphabetical filename order so
+   * the renderer-side library tree renders deterministically across
+   * platforms. Errors (missing dir, malformed JSON) propagate back to
+   * the renderer so a startup failure surfaces as a UI error rather
+   * than silently dropping libraries.
+   */
+  handleLoadBundledLibraries = async (): Promise<unknown[]> => {
+    const isDev = process.env.NODE_ENV === 'development'
+    const libsDir = isDev
+      ? join(process.cwd(), 'resources', 'strucpp', 'libs')
+      : join(process.resourcesPath, 'strucpp', 'libs')
+    const entries = await new Promise<string[]>((resolveDir, rejectDir) => {
+      readdir(libsDir, (err, names) => {
+        if (err) rejectDir(err)
+        else resolveDir(names)
+      })
+    })
+    const stlibs = entries.filter((f) => f.endsWith('.stlib')).sort()
+    const archives: unknown[] = []
+    for (const name of stlibs) {
+      const path = join(libsDir, name)
+      const contents = await new Promise<string>((resolveFile, rejectFile) => {
+        readFile(path, 'utf-8', (err, data) => {
+          if (err) rejectFile(err)
+          else resolveFile(data)
+        })
+      })
+      try {
+        archives.push(JSON.parse(contents))
+      } catch (err) {
+        throw new Error(`Failed to parse ${name}: ${getErrorMessage(err)}`)
+      }
+    }
+    return archives
   }
   handleStoreRetrieveRecent = async () => {
     const pathToUserDataFolder = join(app.getPath('userData'), 'User')

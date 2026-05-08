@@ -100,6 +100,14 @@ const rendererProcessBridge = {
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
+  /**
+   * Load all bundled .stlib archives. Returns parsed `StlibArchive`
+   * objects in alphabetical-filename order. Typed as `unknown[]` here
+   * so the IPC layer stays free of strucpp type imports — the
+   * LibraryPort consumer narrows to `StlibArchiveDTO[]`.
+   */
+  loadBundledLibraries: (): Promise<unknown[]> =>
+    ipcRenderer.invoke('system-libraries:load-bundled'),
   handleQuitApp: () => ipcRenderer.send('app:quit'),
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),
