@@ -53,6 +53,10 @@ export type AITelemetryEventName =
   | 'completion_timeout'
   | 'chat_message'
   | 'chat_rating'
+  | 'conversation_created'
+  | 'conversation_loaded'
+  | 'conversation_renamed'
+  | 'conversation_deleted'
 
 // ---------------------------------------------------------------------------
 // Port interface

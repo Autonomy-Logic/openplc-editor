@@ -139,7 +139,14 @@ export interface VarDiffEntry {
 }
 
 export interface GraphicalDiffResult {
-  flows: { original: FlowData | null; current: FlowData | null; height: number; width: number }[]
+  flows: {
+    original: FlowData | null
+    current: FlowData | null
+    originalHeight: number
+    currentHeight: number
+    originalWidth: number
+    currentWidth: number
+  }[]
   changedIndexes: number[]
   variableDiff: VarDiffEntry[]
   nodeDiffMaps: { original: Map<string, DiffStatus>; current: Map<string, DiffStatus> }

@@ -7,6 +7,7 @@ export {
   useCompiler,
   useDebugger,
   useDevice,
+  useNavigation,
   useOrchestrator,
   useProject,
   useRuntime,

@@ -1,10 +1,7 @@
 name: CI - Cross-Repo Sync
 
 on:
-  pull_request:
-    branches:
-      - main
-      - development
+  workflow_call:
 
 jobs:
   surface-sync:

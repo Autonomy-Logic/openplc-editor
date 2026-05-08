@@ -13,14 +13,8 @@
 export interface PlatformCapabilities {
   // --- Window & Chrome ---
 
-  /** True if the app has native window controls (minimize, maximize, close buttons in title bar). */
-  hasNativeWindowControls: boolean
-
-  /** True if the app has a native application menu (Electron menu bar). */
-  hasNativeMenu: boolean
-
-  /** True if the app has a native title bar with drag-to-move support (Electron frameless window). */
-  hasNativeTitleBar: boolean
+  /** True if the app is a native desktop application (Electron editor). */
+  isNativeApplication: boolean
 
   /** True if the app supports native file dialogs (open, save, pick directory). */
   hasNativeFileDialogs: boolean
@@ -87,6 +81,15 @@ export interface PlatformCapabilities {
    */
   hasDirectProgramUpload: boolean
 
+  // --- Packages ---
+
+  /** True if the app supports installing/managing VPP board packages. */
+
+  // --- EtherCAT ---
+
+  /** True if the app supports EtherCAT device configuration and ESI repository. */
+  hasEthercat: boolean
+
   // --- Environment ---
 
   /** True when running in a development build (Vite DEV / webpack development mode). */
@@ -98,9 +101,7 @@ export interface PlatformCapabilities {
 // ---------------------------------------------------------------------------
 
 export const EDITOR_CAPABILITIES: PlatformCapabilities = {
-  hasNativeWindowControls: true,
-  hasNativeMenu: true,
-  hasNativeTitleBar: true,
+  isNativeApplication: true,
   hasNativeFileDialogs: true,
   hasAuthentication: false,
   hasLocalSerialPorts: true,
@@ -117,13 +118,12 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: false,
   hasProxiedRuntimeConnection: false,
   hasDirectProgramUpload: false,
+  hasEthercat: true,
   isDevMode: false,
 }
 
 export const WEB_CAPABILITIES: PlatformCapabilities = {
-  hasNativeWindowControls: false,
-  hasNativeMenu: false,
-  hasNativeTitleBar: false,
+  isNativeApplication: false,
   hasNativeFileDialogs: false,
   hasAuthentication: true,
   hasLocalSerialPorts: false,
@@ -140,5 +140,6 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: true,
   hasProxiedRuntimeConnection: true,
   hasDirectProgramUpload: true,
+  hasEthercat: false,
   isDevMode: false,
 }
