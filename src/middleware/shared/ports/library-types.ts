@@ -54,6 +54,13 @@ export interface SystemLibraryPou {
 
 export interface SystemLibrary {
   name: string
+  /**
+   * Human-readable label rendered in the library tree as the root
+   * folder title (e.g. "Standard Function Blocks" instead of the
+   * kebab-case `iec-standard-fb` identifier). Falls back to `name`
+   * when the source .stlib doesn't ship one.
+   */
+  displayName?: string
   author: string
   version: string
   stPath: string

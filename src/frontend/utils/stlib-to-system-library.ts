@@ -157,7 +157,7 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
     })
   }
 
-  return {
+  const result: SystemLibrary = {
     name: m.name,
     author: '',
     version: m.version,
@@ -165,6 +165,8 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
     cPath: '',
     pous,
   }
+  if (m.displayName) result.displayName = m.displayName
+  return result
 }
 
 export function stlibsToSystemLibraries(

@@ -24,6 +24,8 @@
 export interface StlibArchiveDTO {
   manifest: {
     name: string
+    /** Optional human-readable label. Falls back to `name` when unset. */
+    displayName?: string
     version: string
     namespace: string
     description?: string
