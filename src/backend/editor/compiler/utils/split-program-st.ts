@@ -25,6 +25,16 @@ export interface KnownPou {
    *  match case-insensitively against xml2st output. */
   name: string
   kind: 'PROGRAM' | 'FUNCTION' | 'FUNCTION_BLOCK'
+  /**
+   * Source language for the POU.  Used to pick the right file
+   *  extension when emitting per-POU files: `.il` for Instruction
+   *  List, `.st` for everything else.  Strucpp's IL→ST transpiler
+   *  detects IL by content regardless of extension, so this is
+   *  documentation more than dispatch — but it makes on-disk
+   *  artefacts self-describing and matches what humans expect when
+   *  inspecting the build directory.
+   */
+  language?: 'il' | 'st' | 'ld' | 'fbd' | 'sfc' | 'python' | 'cpp'
 }
 
 export interface SplitProgramSt {
@@ -45,6 +55,7 @@ interface RangeMatch {
   kind: KnownPou['kind']
   startLine: number // 1-indexed
   endLine: number // 1-indexed
+  language?: KnownPou['language']
 }
 
 /**
@@ -162,6 +173,7 @@ export function splitProgramSt(source: string, knownPous: KnownPou[]): SplitProg
       kind: pou.kind,
       startLine: headerIdx + 1,
       endLine: endIdx + 1,
+      ...(pou.language ? { language: pou.language } : {}),
     })
   }
 
@@ -188,11 +200,15 @@ export function splitProgramSt(source: string, knownPous: KnownPou[]): SplitProg
   }
 
   // Build per-file content.  Each per-POU file ends with a newline so
-  // strucpp's parser sees a clean trailing line.
+  // strucpp's parser sees a clean trailing line.  IL POUs get a `.il`
+  // extension to match the language they actually contain — strucpp's
+  // detector keys off content rather than extension, so this is purely
+  // self-documenting (and helps anyone debugging the build dir).
   const files = new Map<string, string>()
   for (const r of sorted) {
     const content = lines.slice(r.startLine - 1, r.endLine).join('\n') + '\n'
-    files.set(`${r.name}.st`, content)
+    const ext = r.language === 'il' ? 'il' : 'st'
+    files.set(`${r.name}.${ext}`, content)
   }
 
   // Bucket generic blocks by keyword.  Multiple TYPE blocks (rare)

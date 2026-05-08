@@ -2003,6 +2003,7 @@ class CompilerModule {
             : p.type === 'function'
               ? ('FUNCTION' as const)
               : ('FUNCTION_BLOCK' as const),
+        language: p.data.language as KnownPou['language'],
       }))
       const { md5Hash } = await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
@@ -2753,6 +2754,7 @@ class CompilerModule {
             : p.type === 'function'
               ? ('FUNCTION' as const)
               : ('FUNCTION_BLOCK' as const),
+        language: p.data.language as KnownPou['language'],
       }))
       await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,

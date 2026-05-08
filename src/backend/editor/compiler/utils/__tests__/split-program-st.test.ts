@@ -180,6 +180,42 @@ describe('splitProgramSt', () => {
     })
   })
 
+  describe('language-aware extension', () => {
+    it('emits a `.il` file for an IL-language POU', () => {
+      const source =
+        'FUNCTION_BLOCK State_Display\n' +
+        '  VAR State : INT; Out : INT; END_VAR\n' +
+        '  LD State\n' +
+        '  ST Out\n' +
+        'END_FUNCTION_BLOCK\n'
+      const result = splitProgramSt(source, [
+        { name: 'State_Display', kind: 'FUNCTION_BLOCK', language: 'il' },
+      ])
+      expect(result).not.toBeNull()
+      expect(result!.files.has('State_Display.il')).toBe(true)
+      expect(result!.files.has('State_Display.st')).toBe(false)
+    })
+
+    it('emits `.st` for ST and graphical POUs (xml2st renders them as ST)', () => {
+      const source =
+        'PROGRAM Main_LD\n  VAR x : INT; END_VAR\n  x := 1;\nEND_PROGRAM\n' +
+        'PROGRAM Main_ST\n  VAR y : INT; END_VAR\n  y := 2;\nEND_PROGRAM\n'
+      const result = splitProgramSt(source, [
+        { name: 'Main_LD', kind: 'PROGRAM', language: 'ld' },
+        { name: 'Main_ST', kind: 'PROGRAM', language: 'st' },
+      ])
+      expect(result).not.toBeNull()
+      expect(result!.files.has('Main_LD.st')).toBe(true)
+      expect(result!.files.has('Main_ST.st')).toBe(true)
+    })
+
+    it('defaults to `.st` when language is unspecified', () => {
+      const source = 'PROGRAM Main\n  VAR x : INT; END_VAR\n  x := 0;\nEND_PROGRAM\n'
+      const result = splitProgramSt(source, [{ name: 'Main', kind: 'PROGRAM' }])
+      expect(result!.files.has('Main.st')).toBe(true)
+    })
+  })
+
   describe('FUNCTION POUs (with return type)', () => {
     it('splits FUNCTION declarations correctly', () => {
       const source =
