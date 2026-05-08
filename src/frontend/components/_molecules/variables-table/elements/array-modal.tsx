@@ -42,7 +42,9 @@ export const ArrayModal = ({
   } = useOpenPLCStore()
 
   const isNativeLanguage = language === 'python' || language === 'cpp'
-  const excludedNativeTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
+  // Same exclusion as `selectable-cell.tsx`: native-language POUs
+  // can't yet round-trip strucpp's chrono types.
+  const excludedNativeTypes = ['TIME', 'DATE', 'TOD', 'DT']
 
   const baseTypes = baseTypeSchema.options.filter((type) => {
     if (type.toUpperCase() === 'ARRAY') return false

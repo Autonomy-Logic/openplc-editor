@@ -96,7 +96,10 @@ const SelectableTypeCell = ({
   // Filter available types based on language
   const getAvailableTypes = () => {
     if (language === 'python' || language === 'cpp') {
-      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
+      // Native-language POUs (Python / C++) don't share strucpp's
+      // chrono-backed handling for IEC time types yet, so hide them
+      // from the type dropdown.
+      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT']
 
       // Only show Base Type for Python/C++ and filter out specific types
       const availableTypes = VariableTypes.filter((type) => type.definition === 'base-type').map((type) => ({

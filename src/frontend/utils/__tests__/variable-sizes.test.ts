@@ -605,8 +605,8 @@ describe('encodeForceValue', () => {
       expect(() => encodeForceValue('D#2026-01-01', 'DATE')).toThrow(/not supported/)
     })
 
-    it('rejects unknown type names with the same default-clause message', () => {
-      expect(() => encodeForceValue('1', 'NOT_A_REAL_TYPE')).toThrow(/not supported/)
+    it('rejects unknown type names by name (the registry has no entry to dispatch to)', () => {
+      expect(() => encodeForceValue('1', 'NOT_A_REAL_TYPE')).toThrow(/Unknown base type/)
     })
   })
 

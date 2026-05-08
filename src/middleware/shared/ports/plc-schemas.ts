@@ -8,33 +8,16 @@
  *   Editor: src/types/PLC/units/library.ts
  *   Web:    src/store/types/PLC/units/library.ts
  */
+import { BASE_TYPE_NAMES } from '@root/frontend/utils/iec-types-registry'
 import z from 'zod'
 
 /**
- * Base PLC types common to all libraries.
+ * Base PLC types common to all libraries — derived from strucpp's
+ * canonical `libs/iec-types.json`. The narrow `[string, ...string[]]`
+ * cast is what `z.enum` requires for non-empty literal lists; the
+ * registry guarantees the array has ≥ 1 entry.
  */
-const baseTypeSchema = z.enum([
-  'BOOL',
-  'SINT',
-  'INT',
-  'DINT',
-  'LINT',
-  'USINT',
-  'UINT',
-  'UDINT',
-  'ULINT',
-  'REAL',
-  'LREAL',
-  'TIME',
-  'DATE',
-  'TOD',
-  'DT',
-  'STRING',
-  'BYTE',
-  'WORD',
-  'DWORD',
-  'LWORD',
-])
+const baseTypeSchema = z.enum(BASE_TYPE_NAMES as unknown as [string, ...string[]])
 
 const genericTypeSchema = z.object({
   ANY: z.union([
