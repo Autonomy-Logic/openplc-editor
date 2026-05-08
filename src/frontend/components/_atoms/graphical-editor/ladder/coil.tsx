@@ -291,7 +291,7 @@ export const Coil = (block: CoilProps) => {
                 rungId: rung.id,
                 node: {
                   ...node,
-                  draggable: node.data.draggable as boolean,
+                  draggable: node.data.draggable,
                 },
               })
               return

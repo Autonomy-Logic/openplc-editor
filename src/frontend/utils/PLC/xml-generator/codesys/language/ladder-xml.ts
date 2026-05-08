@@ -76,7 +76,7 @@ const contactToXML = (
   const connections = findConnections(contact, rung, offsetY)
 
   const railConnection = connections.find((connection) => {
-    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node).data.variant === 'left')
     if (rail?.data.numericId === connection['@refLocalId']) {
       return true
     }
@@ -100,8 +100,8 @@ const contactToXML = (
         const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
         const formalParameter =
           connectionNode?.type === 'block'
-            ? (connectionNode as BlockNode<BlockVariant>).data.variant.type === 'function'
-              ? (connectionNode as BlockNode<BlockVariant>).data.variant.name
+            ? (connectionNode).data.variant.type === 'function'
+              ? (connectionNode).data.variant.name
               : connection['@formalParameter']
             : undefined
         return {
@@ -119,7 +119,7 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
   const connections = findConnections(coil, rung, offsetY)
 
   const railConnection = connections.find((connection) => {
-    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node).data.variant === 'left')
     if (rail?.data.numericId === connection['@refLocalId']) {
       return true
     }
@@ -144,8 +144,8 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
         const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
         const formalParameter =
           connectionNode?.type === 'block'
-            ? (connectionNode as BlockNode<BlockVariant>).data.variant.type === 'function'
-              ? (connectionNode as BlockNode<BlockVariant>).data.variant.name
+            ? (connectionNode).data.variant.type === 'function'
+              ? (connectionNode).data.variant.name
               : connection['@formalParameter']
             : undefined
         return {
@@ -169,7 +169,7 @@ const blockToXml = (
 
   // If the block is connected to a power rail, replace the refLocalId with the left rail id at connections
   const railConnection = connections.find((connection) => {
-    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node).data.variant === 'left')
     if (rail?.data.numericId === connection['@refLocalId']) {
       return true
     }
@@ -222,8 +222,8 @@ const blockToXml = (
     const variableNode = rung.nodes.find(
       (node) =>
         node.type === 'variable' &&
-        (node as VariableNode).data.block.id === block.id &&
-        (node as VariableNode).data.block.handleId === handle.id,
+        (node).data.block.id === block.id &&
+        (node).data.block.handleId === handle.id,
     ) as Node<BasicNodeData>
     if (!variableNode) return undefined
 
@@ -250,7 +250,7 @@ const blockToXml = (
         expression:
           handleIndex !== 0
             ? connectedNode && connectedNode.type === 'variable'
-              ? (connectedNode as VariableNode).data.variable.name
+              ? (connectedNode).data.variable.name
               : ''
             : undefined,
       },
@@ -359,30 +359,30 @@ const ladderToXml = (rungs: RungLadderState[]) => {
     nodes.forEach((node) => {
       switch (node.type) {
         case 'powerRail':
-          if ((node as PowerRailNode).data.variant === 'left' && ladderXML.body.LD.leftPowerRail.length === 0) {
-            ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node as PowerRailNode, offsetY))
-            leftRailId = (node as PowerRailNode).data.numericId
+          if ((node).data.variant === 'left' && ladderXML.body.LD.leftPowerRail.length === 0) {
+            ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node, offsetY))
+            leftRailId = (node).data.numericId
           } else {
             if (ladderXML.body.LD.rightPowerRail.length === 0) {
-              ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
+              ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node, rung, offsetY))
             }
           }
           break
         case 'contact':
-          ladderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY, leftRailId))
+          ladderXML.body.LD.contact.push(contactToXML(node, rung, offsetY, leftRailId))
           break
         case 'coil':
-          ladderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY, leftRailId))
+          ladderXML.body.LD.coil.push(coilToXml(node, rung, offsetY, leftRailId))
           break
         case 'block':
-          ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY, leftRailId))
+          ladderXML.body.LD.block.push(blockToXml(node, rung, offsetY, leftRailId))
           break
         case 'variable':
-          if ((node as VariableNode).data.variable.name === '') return
-          if ((node as VariableNode).data.variant === 'input')
-            ladderXML.body.LD.inVariable.push(inVariableToXML(node as VariableNode, offsetY))
-          if ((node as VariableNode).data.variant === 'output') {
-            const outVarXML = outVariableToXML(node as VariableNode, rung, offsetY)
+          if ((node).data.variable.name === '') return
+          if ((node).data.variant === 'input')
+            ladderXML.body.LD.inVariable.push(inVariableToXML(node, offsetY))
+          if ((node).data.variant === 'output') {
+            const outVarXML = outVariableToXML(node, rung, offsetY)
             if (outVarXML) ladderXML.body.LD.outVariable.push(outVarXML)
           }
           break

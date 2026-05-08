@@ -180,8 +180,8 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
     const variableNode = rung.nodes.find(
       (node) =>
         node.type === 'variable' &&
-        (node as VariableNode).data.block.id === block.id &&
-        (node as VariableNode).data.block.handleId === handle.id,
+        (node).data.block.id === block.id &&
+        (node).data.block.handleId === handle.id,
     ) as Node<BasicNodeData>
     if (!variableNode) return undefined
 
@@ -334,25 +334,25 @@ const ladderToXml = (rungs: RungLadderState[]) => {
     nodes.forEach((node) => {
       switch (node.type) {
         case 'powerRail':
-          if ((node as PowerRailNode).data.variant === 'left')
-            ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node as PowerRailNode, offsetY))
-          else ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
+          if ((node).data.variant === 'left')
+            ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node, offsetY))
+          else ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node, rung, offsetY))
           break
         case 'contact':
-          ladderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY))
+          ladderXML.body.LD.contact.push(contactToXML(node, rung, offsetY))
           break
         case 'coil':
-          ladderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY))
+          ladderXML.body.LD.coil.push(coilToXml(node, rung, offsetY))
           break
         case 'block':
-          ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY))
+          ladderXML.body.LD.block.push(blockToXml(node, rung, offsetY))
           break
         case 'variable':
-          if ((node as VariableNode).data.variable.name === '') return
-          if ((node as VariableNode).data.variant === 'input')
-            ladderXML.body.LD.inVariable.push(inVariableToXML(node as VariableNode, offsetY))
-          if ((node as VariableNode).data.variant === 'output')
-            ladderXML.body.LD.outVariable.push(outVariableToXML(node as VariableNode, rung, offsetY))
+          if ((node).data.variable.name === '') return
+          if ((node).data.variant === 'input')
+            ladderXML.body.LD.inVariable.push(inVariableToXML(node, offsetY))
+          if ((node).data.variant === 'output')
+            ladderXML.body.LD.outVariable.push(outVariableToXML(node, rung, offsetY))
           break
         default:
           break

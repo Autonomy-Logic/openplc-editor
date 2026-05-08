@@ -294,7 +294,7 @@ export const removeEmptyParallelConnections = (rung: RungLadderState): { nodes: 
 
   nodes.forEach((node) => {
     if (node.type === 'parallel') {
-      const parallelNode = node as ParallelNode
+      const parallelNode = node
       // check if it is an open parallel
       if (parallelNode.data.type === 'close') {
         const closeParallel = parallelNode

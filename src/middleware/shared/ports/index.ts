@@ -91,6 +91,8 @@ export type {
   DevicePin,
   // Debugger session
   FbInstanceInfo,
+  // Ladder branch index (denormalized lookup of contacts/coils on FB handles)
+  HandleBranch,
   // Console
   LogObject,
   Md5VerifyResult,
@@ -118,6 +120,8 @@ export type {
   RecentProject,
   // Result wrappers
   Result,
+  // Ladder rung shared shape
+  RungLadderState,
   RuntimeLogEntry,
   RuntimeLogLevel,
   SerialPort,

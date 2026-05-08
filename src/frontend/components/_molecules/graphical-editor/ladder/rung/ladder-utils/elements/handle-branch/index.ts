@@ -71,7 +71,7 @@ export const buildBranchRailId = (blockId: string, handleId: string, direction: 
 export const findBranchRail = (rung: RungLadderState, branch: HandleBranch): PowerRailNode | undefined => {
   const id = buildBranchRailId(branch.blockId, branch.handleId, branch.direction)
   const node = rung.nodes.find((n) => n.id === id)
-  return node?.type === 'powerRail' ? (node as PowerRailNode) : undefined
+  return node?.type === 'powerRail' ? (node) : undefined
 }
 
 export const hasBranchOnHandle = (
@@ -151,8 +151,8 @@ export const addRailBranchHandle = (
   const blockHandle =
     block && block.type === 'block'
       ? params.direction === 'input'
-        ? (block as BlockNode<BlockVariant>).data.inputHandles.find((h) => h.id === params.handleId)
-        : (block as BlockNode<BlockVariant>).data.outputHandles.find((h) => h.id === params.handleId)
+        ? (block).data.inputHandles.find((h) => h.id === params.handleId)
+        : (block).data.outputHandles.find((h) => h.id === params.handleId)
       : undefined
   if (!blockHandle) return { nodes: rung.nodes }
 
@@ -555,7 +555,7 @@ export const renderInBranchSplicePlaceholders = (rung: RungLadderState): Node[] 
       if (!node) return
 
       if (node.type === 'parallel') {
-        const ptype = (node as ParallelNode).data.type
+        const ptype = (node).data.type
         if (ptype === 'open') {
           const leftX = node.position.x - SIDE_GAP - DEFAULT_PLACEHOLDER_WIDTH / 2
           placeholders.push(buildSplicePlaceholder(branch, leftX, posY, handleY, idx, `${idx}_left`))
@@ -1144,17 +1144,17 @@ export const renderInBranchParallelPlaceholders = (rung: RungLadderState): Node[
     branch.nodeIds.forEach((id) => {
       const node = rung.nodes.find((n) => n.id === id)
       if (node?.type === 'parallel') {
-        const ptype = (node as ParallelNode).data.type
+        const ptype = (node).data.type
         if (ptype === 'open') {
           depth++
-          currentOpen = node as ParallelNode
+          currentOpen = node
         } else if (ptype === 'close') {
           depth--
           currentOpen = null
         }
       } else if (depth > 0 && (node?.type === 'contact' || node?.type === 'coil')) {
         insideParallel.add(node.id)
-        if (currentOpen) aboveContactByOpen.set((currentOpen as ParallelNode).id, node)
+        if (currentOpen) aboveContactByOpen.set((currentOpen).id, node)
       }
     })
 
@@ -1215,8 +1215,8 @@ export const renderInBranchParallelPlaceholders = (rung: RungLadderState): Node[
     branch.nodeIds.forEach((id, idx) => {
       const node = rung.nodes.find((n) => n.id === id)
       if (node?.type !== 'parallel') return
-      if ((node as ParallelNode).data.type !== 'open') return
-      const open = node as ParallelNode
+      if ((node).data.type !== 'open') return
+      const open = node
 
       const aboveContact = aboveContactByOpen.get(open.id)
       if (!aboveContact) return
@@ -1233,7 +1233,7 @@ export const renderInBranchParallelPlaceholders = (rung: RungLadderState): Node[
 
       // Bottom-most path = last start edge (highest pathIndex).
       const lastStartEdge = startEdges[startEdges.length - 1]
-      const bottomPath = walkParallelPath(rung, open, closeNode as ParallelNode, lastStartEdge)
+      const bottomPath = walkParallelPath(rung, open, closeNode, lastStartEdge)
       const aboveContactIdx = branch.nodeIds.indexOf(aboveContact.id)
       bottomPath.forEach((pNode, pIdx) => {
         if (pNode.type !== 'contact' && pNode.type !== 'coil') return
@@ -1300,13 +1300,13 @@ export const renderInBranchParallelPathPlaceholders = (rung: RungLadderState): N
     branch.nodeIds.forEach((id) => {
       const node = rung.nodes.find((n) => n.id === id)
       if (node?.type !== 'parallel') return
-      if ((node as ParallelNode).data.type !== 'open') return
-      const open = node as ParallelNode
+      if ((node).data.type !== 'open') return
+      const open = node
       const closeId = open.data.parallelCloseReference
       if (!closeId) return
       const closeNode = rung.nodes.find((n) => n.id === closeId)
       if (!closeNode || closeNode.type !== 'parallel') return
-      const close = closeNode as ParallelNode
+      const close = closeNode
 
       const parallelOutputId = open.data.parallelOutputConnector?.id
       if (!parallelOutputId) return
@@ -1839,7 +1839,7 @@ export const computeBranchSpanWidth = (rung: RungLadderState, branch: HandleBran
     )
     let maxPathWidth = 0
     for (const startEdge of startEdges) {
-      const pathNodes = walkParallelPath(rung, open, close as ParallelNode, startEdge)
+      const pathNodes = walkParallelPath(rung, open, close, startEdge)
       if (pathNodes.length === 0) continue
       const totalWidth =
         pathNodes.reduce((sum, n) => sum + (n.width ?? DEFAULT_CONTACT_BLOCK_WIDTH), 0) +
@@ -1861,7 +1861,7 @@ export const computeBranchSpanWidth = (rung: RungLadderState, branch: HandleBran
       const n = rung.nodes.find((n2) => n2.id === branch.nodeIds[j])
       if (!n) break
       if (n.type === 'parallel') {
-        const ptype = (n as ParallelNode).data.type
+        const ptype = (n).data.type
         if (ptype === 'close' && depth === 0) break
         if (ptype === 'open') depth++
         else if (ptype === 'close') depth--
@@ -2254,7 +2254,7 @@ export const calculateBranchElementPositions = (
     startEdges.forEach((startEdge) => {
       const close = rung.nodes.find((n) => n.id === closeId)
       if (!close || close.type !== 'parallel') return
-      const pathNodes = walkParallelPath(rung, open, close as ParallelNode, startEdge)
+      const pathNodes = walkParallelPath(rung, open, close, startEdge)
       if (pathNodes.length === 0) return
       // Path width = element widths + n*2*contact.gap. The 2*contact.gap
       // factor matches what the spine charges per element-pair (45 contact
@@ -2280,7 +2280,7 @@ export const calculateBranchElementPositions = (
       const n = rung.nodes.find((n2) => n2.id === branch.nodeIds[j])
       if (!n) break
       if (n.type === 'parallel') {
-        const ptype = (n as ParallelNode).data.type
+        const ptype = (n).data.type
         if (ptype === 'close' && depth === 0) break
         if (ptype === 'open') depth++
         else if (ptype === 'close') depth--

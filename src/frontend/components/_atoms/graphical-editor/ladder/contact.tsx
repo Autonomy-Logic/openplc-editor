@@ -289,7 +289,7 @@ export const Contact = (block: ContactProps) => {
                 rungId: rung.id,
                 node: {
                   ...node,
-                  draggable: node.data.draggable as boolean,
+                  draggable: node.data.draggable,
                 },
               })
               return
