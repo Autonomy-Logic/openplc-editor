@@ -79,3 +79,65 @@ export type LibraryState = {
     user: UserLibrary[]
   }
 }
+
+// ---------------------------------------------------------------------------
+// Library Manager wire types
+// ---------------------------------------------------------------------------
+
+/**
+ * One row in the system-wide library pool the manager surfaces.
+ * Mirrors the shape `PackageManagerModule` uses for hardware plugins,
+ * adapted to library identity.
+ *
+ * `bundled: true` marks libraries that ship with strucpp itself
+ * (everything in `<resources>/strucpp/libs/`) — they're the
+ * canonical, non-disableable IEC base set and grow whenever a future
+ * strucpp release bundles more.  User-installed libraries (.stlib or
+ * .lib/.library) all surface with `bundled: false`.
+ */
+export interface InstalledLibrary {
+  /** The strucpp manifest `name` — same identifier projects record
+   *  in `project.json`'s `libraries[]` and the value the system pool
+   *  is keyed on. */
+  name: string
+  version: string
+  bundled: boolean
+  /** ISO timestamp; empty string for bundled libs (which have no
+   *  meaningful "installed at" — they ship with the editor). */
+  installedAt: string
+  /** Source the user installed from.  `'stlib'` for direct archive
+   *  imports, `'codesys'` when the editor ran the .lib/.library
+   *  through strucpp's CODESYS importer.  `'bundled'` for the
+   *  always-on set. */
+  origin: 'stlib' | 'codesys' | 'bundled'
+  /** Optional human-readable label from the manifest.  Falls back
+   *  to `name` in the UI. */
+  displayName?: string
+  /** Optional manifest descriptions surfaced in the manager's
+   *  details panel.  Subset of the `.stlib` manifest — only the
+   *  fields the UI renders are pinned, so adding fields to the
+   *  archive doesn't ripple through every consumer. */
+  description?: string
+  author?: string
+}
+
+/**
+ * Result of a system-pool install attempt — both the .stlib and
+ * .lib/.library paths funnel through this shape so the renderer
+ * doesn't branch on origin.
+ */
+export type LibraryInstallResult =
+  | {
+      success: true
+      /** True when the user closed the file picker without choosing
+       *  a file.  The renderer treats this as a no-op (no toast, no
+       *  error). */
+      canceled?: false
+      /** The installed library's identifier — caller can immediately
+       *  pivot the manager UI to its details. */
+      name: string
+      version: string
+      origin: 'stlib' | 'codesys'
+    }
+  | { success: true; canceled: true }
+  | { success: false; error: string }

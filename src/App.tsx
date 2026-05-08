@@ -13,28 +13,36 @@ import { editorPorts, setProjectPath, setRuntimeIpAddress } from './middleware/e
 import { PlatformProvider } from './middleware/shared/providers'
 
 /**
- * Load every bundled .stlib library at startup and dispatch the parsed
- * `SystemLibrary` shape into the Zustand library slice.
+ * Load every installed library (bundled + user-installed) at startup
+ * and dispatch the parsed `SystemLibrary` shape into the Zustand
+ * library slice.
  *
- * Runs as a top-level promise so libraries hydrate as early as possible
- * — usually before the first render that consumes them, but the store
- * starts with an empty `libraries.system` array regardless and the
- * library tree just renders progressively as entries arrive. Errors
- * bubble up to the console / dev tools; we don't fall back to a
- * hardcoded set because the .stlib files are the canonical source of
- * truth for library content.
+ * Runs as a top-level promise so libraries hydrate as early as
+ * possible — usually before the first render that consumes them, but
+ * the store starts with an empty `libraries.system` array regardless
+ * and the library tree just renders progressively as entries arrive.
+ * Errors bubble up to the console / dev tools; we don't fall back to
+ * a hardcoded set because the .stlib files are the canonical source
+ * of truth for library content.
  */
-void editorPorts.library
-  .loadBundledLibraries()
-  .then((archives) => {
-    openPLCStoreBase
-      .getState()
-      .libraryActions.setSystemLibraries(stlibsToSystemLibraries(archives))
-  })
-  .catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error('Failed to load bundled .stlib libraries:', err)
-  })
+const hydrateLibraries = () => {
+  void editorPorts.library
+    .loadAll()
+    .then((archives) => {
+      openPLCStoreBase
+        .getState()
+        .libraryActions.setSystemLibraries(stlibsToSystemLibraries(archives))
+    })
+    .catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to load .stlib libraries:', err)
+    })
+}
+hydrateLibraries()
+// Reload the in-memory pool whenever the main process reports an
+// install/uninstall/CDN change.  Subscriber lives outside React to
+// catch events fired before any component mounts.
+editorPorts.library.onLibrariesChanged(() => hydrateLibraries())
 
 export default function App() {
   const {

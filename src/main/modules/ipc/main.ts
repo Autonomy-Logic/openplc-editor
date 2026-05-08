@@ -19,13 +19,14 @@ import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
-import { readdir, readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
+import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingHttpHeaders, IncomingMessage } from 'http'
 import https from 'https'
 import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
@@ -64,6 +65,8 @@ class MainProcessBridge implements MainIpcModule {
   private simulatorModule = new SimulatorModule()
   // VPP package manager for board package operations
   private packageManagerModule = new PackageManagerModule()
+  // System-wide IEC 61131-3 library pool (bundled + user-installed)
+  private libraryManagerModule = new LibraryManagerModule()
   // ESI repository service for EtherCAT device descriptions
   private esiService = new ESIService()
 
@@ -621,7 +624,10 @@ class MainProcessBridge implements MainIpcModule {
     // App and system handlers
     this.registerHandle('open-external-link', this.handleOpenExternalLink)
     this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
-    this.registerHandle('system-libraries:load-bundled', this.handleLoadBundledLibraries)
+    this.registerHandle('libraries:load-all', this.handleLibrariesLoadAll)
+    this.registerHandle('libraries:list-installed', this.handleLibrariesListInstalled)
+    this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
+    this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
@@ -916,34 +922,39 @@ class MainProcessBridge implements MainIpcModule {
    * the renderer so a startup failure surfaces as a UI error rather
    * than silently dropping libraries.
    */
-  handleLoadBundledLibraries = async (): Promise<unknown[]> => {
-    const isDev = process.env.NODE_ENV === 'development'
-    const libsDir = isDev
-      ? join(process.cwd(), 'resources', 'strucpp', 'libs')
-      : join(process.resourcesPath, 'strucpp', 'libs')
-    const entries = await new Promise<string[]>((resolveDir, rejectDir) => {
-      readdir(libsDir, (err, names) => {
-        if (err) rejectDir(err)
-        else resolveDir(names)
-      })
+  // Library manager handlers — system-wide IEC 61131-3 library pool
+  // (bundled strucpp libs + user-installed .stlib / CODESYS imports).
+  // Library identity is the strucpp manifest `name` shared with the
+  // project's `libraries[]` field.
+  handleLibrariesLoadAll = async (): Promise<unknown[]> =>
+    this.libraryManagerModule.loadAll()
+  handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
+  handleLibrariesInstallFromFile = async () => {
+    if (!this.mainWindow) return { success: false, error: 'No main window' }
+    const result = await dialog.showOpenDialog(this.mainWindow, {
+      title: 'Install Library',
+      filters: [
+        { name: 'Library files', extensions: ['stlib', 'lib', 'library'] },
+        { name: 'STruC++ archive', extensions: ['stlib'] },
+        { name: 'CODESYS library', extensions: ['lib', 'library'] },
+      ],
+      properties: ['openFile'],
     })
-    const stlibs = entries.filter((f) => f.endsWith('.stlib')).sort()
-    const archives: unknown[] = []
-    for (const name of stlibs) {
-      const path = join(libsDir, name)
-      const contents = await new Promise<string>((resolveFile, rejectFile) => {
-        readFile(path, 'utf-8', (err, data) => {
-          if (err) rejectFile(err)
-          else resolveFile(data)
-        })
-      })
-      try {
-        archives.push(JSON.parse(contents))
-      } catch (err) {
-        throw new Error(`Failed to parse ${name}: ${getErrorMessage(err)}`)
-      }
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: true, canceled: true }
     }
-    return archives
+    const installResult = await this.libraryManagerModule.installFromFile(result.filePaths[0])
+    if (installResult.success && !installResult.canceled) {
+      this.mainWindow.webContents.send('libraries:changed')
+    }
+    return installResult
+  }
+  handleLibrariesUninstall = async (_event: IpcMainInvokeEvent, name: string) => {
+    const result = this.libraryManagerModule.uninstall(name)
+    if (result.success) {
+      this.mainWindow?.webContents.send('libraries:changed')
+    }
+    return result
   }
   handleStoreRetrieveRecent = async () => {
     const pathToUserDataFolder = join(app.getPath('userData'), 'User')
