@@ -45,6 +45,10 @@ type ProjectFileSpec = {
 function buildProjectJsonContent(state: StoreState): string {
   const { project } = state
   const debugVariables = collectDebugVariables(project.data.configurations.resource.globalVariables, project.data.pous)
+  // Per-project library enablement, alphabetical-by-name for stable
+  // diffs.  Bundled / canonical strucpp libs are always-on regardless
+  // and intentionally don't appear here.
+  const libraries = [...(project.data.libraries ?? [])].sort((a, b) => a.name.localeCompare(b.name))
   return JSON.stringify(
     {
       meta: { name: project.meta.name, type: 'plc-project' },
@@ -52,6 +56,7 @@ function buildProjectJsonContent(state: StoreState): string {
         dataTypes: project.data.dataTypes,
         pous: [],
         configuration: project.data.configurations,
+        libraries,
         debugVariables,
       },
     },

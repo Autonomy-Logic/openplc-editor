@@ -408,6 +408,16 @@ export interface PLCRemoteDevice {
 // Project
 // ---------------------------------------------------------------------------
 
+export interface PLCProjectLibraryRef {
+  /** Strucpp manifest identifier — same value
+   *  `InstalledLibrary.name` carries.  Project ↔ system pool joins
+   *  go through this field. */
+  name: string
+  /** Informational on load (name-only match against the pool today);
+   *  the manager surfaces a soft warning when versions differ. */
+  version: string
+}
+
 export interface PLCProjectData {
   dataTypes: PLCDataType[]
   pous: PLCPou[]
@@ -420,6 +430,13 @@ export interface PLCProjectData {
   }
   servers?: PLCServer[]
   remoteDevices?: PLCRemoteDevice[]
+  /** Opt-in libraries the project pulls into compile + UI surfaces.
+   *  Bundled / canonical strucpp libraries are always-on regardless
+   *  of this list and do not appear here.  Optional on the wire so
+   *  legacy fixtures and projects without the field type-check; the
+   *  store's default state and the parsed-project loader both
+   *  surface the absent case as `[]`. */
+  libraries?: PLCProjectLibraryRef[]
   debugVariables?: {
     global?: string[]
     pous?: Record<string, string[]>

@@ -759,12 +759,44 @@ const PLCDebugVariablesSchema = z
 
 type PLCDebugVariables = z.infer<typeof PLCDebugVariablesSchema>
 
+/**
+ * One row of the project's per-project library enablement.  Records
+ * the subset of the system-wide library pool the project pulls into
+ * its compile + UI surfaces.
+ *
+ * `name` matches the strucpp manifest identifier used by
+ * LibraryManagerModule (the same value `InstalledLibrary.name`
+ * carries), so project ↔ system pool joins are O(1) on a Map.
+ *
+ * `version` is informational on load — name-only match against the
+ * pool is the contract today; a soft warning surfaces when the
+ * installed version differs.  Strict version pinning is a future
+ * feature.
+ *
+ * Bundled / canonical libraries (every .stlib strucpp ships) are
+ * always-on regardless of this field — they can't be disabled and
+ * do not need to be listed here.  Only opt-in libraries belong in
+ * this array.
+ */
+const PLCProjectLibraryRefSchema = z.object({
+  name: z.string(),
+  version: z.string(),
+})
+type PLCProjectLibraryRef = z.infer<typeof PLCProjectLibraryRefSchema>
+
 const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(PLCPouSchema).default([]),
   configuration: PLCConfigurationSchema,
   servers: z.array(PLCServerSchema).optional(),
   remoteDevices: z.array(PLCRemoteDeviceSchema).optional(),
+  /**
+   * Opt-in libraries enabled for this project.  Defaults to `[]`
+   * (legacy projects load with bundled-only — those are always-on
+   * regardless of this field).  Order is alphabetical-by-name on
+   * save for stable diffs.
+   */
+  libraries: z.array(PLCProjectLibraryRefSchema).default([]),
   debugVariables: PLCDebugVariablesSchema,
   deletedPous: z
     .array(
@@ -849,6 +881,7 @@ export {
   PLCPouSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCProjectLibraryRefSchema,
   PLCProjectMetaSchema,
   PLCProjectSchema,
   PLCRemoteDeviceProtocolSchema,
@@ -912,6 +945,7 @@ export type {
   PLCProgram,
   PLCProject,
   PLCProjectData,
+  PLCProjectLibraryRef,
   PLCProjectMeta,
   PLCRemoteDevice,
   PLCRemoteDeviceProtocol,

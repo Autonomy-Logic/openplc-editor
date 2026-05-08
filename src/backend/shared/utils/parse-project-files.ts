@@ -55,6 +55,10 @@ export interface ParsedProjectData {
     }
     servers?: PLCServer[]
     remoteDevices?: PLCRemoteDevice[]
+    /** Per-project library enablement.  Defaults to `[]` for legacy
+     *  projects that don't carry the field on disk — bundled libs
+     *  are always-on regardless. */
+    libraries: { name: string; version: string }[]
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
   }
   deviceConfiguration?: DeviceConfiguration
@@ -465,6 +469,11 @@ export function parseProjectFiles(
       configurations: configuration,
       servers: servers.length > 0 ? servers : ((data.servers as PLCServer[]) ?? []),
       remoteDevices: remoteDevices.length > 0 ? remoteDevices : ((data.remoteDevices as PLCRemoteDevice[]) ?? []),
+      // Migration: legacy projects (no `libraries` field on disk)
+      // load with an empty list — bundled / canonical strucpp libs
+      // are always-on regardless, so the project compiles without
+      // needing an explicit enablement record.
+      libraries: (data.libraries as ParsedProjectData['projectData']['libraries']) ?? [],
       debugVariables: data.debugVariables as ParsedProjectData['projectData']['debugVariables'],
     },
     deviceConfiguration,

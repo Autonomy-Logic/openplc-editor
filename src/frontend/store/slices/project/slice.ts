@@ -179,6 +179,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
       servers: [],
       remoteDevices: [],
+      libraries: [],
     },
   },
   pendingDeletions: [],
@@ -212,6 +213,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
               servers: [],
               remoteDevices: [],
+              libraries: [],
             },
           }
           slice.pendingDeletions = []
