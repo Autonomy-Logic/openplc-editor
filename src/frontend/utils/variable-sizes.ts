@@ -46,6 +46,72 @@ function readBigUInt64LE(data: Uint8Array, offset: number): bigint {
   return view.getBigUint64(0, true)
 }
 
+/**
+ * Pad an integer to a fixed-width zero-padded string. Tiny helper to
+ * keep the date/time formatters readable.
+ */
+function pad(n: number, width = 2): string {
+  return Math.trunc(Math.abs(n)).toString().padStart(width, '0')
+}
+
+/**
+ * Format a strucpp DT (int64 nanoseconds since the Unix epoch) as an
+ * IEC 61131-3 DATE_AND_TIME literal: `DT#YYYY-MM-DD-HH:MM:SS.mmm`.
+ *
+ * UTC is intentional here. The runtime stores DT in absolute time
+ * (`std::chrono::system_clock::time_since_epoch()`); rendering in the
+ * user's local timezone would silently shift the displayed value by
+ * whatever offset the host is in, masking off-by-an-hour bugs in user
+ * code. The ".mmm" tail keeps sub-second precision for FBs that read
+ * CURRENT_DT() multiple times within a scan.
+ */
+function formatDtValue(totalNs: bigint): string {
+  const NS_PER_MS = 1_000_000n
+  const ms = Number(totalNs / NS_PER_MS)
+  const subMs = Number((totalNs >= 0n ? totalNs : -totalNs) % NS_PER_MS)
+  const d = new Date(ms)
+  if (Number.isNaN(d.getTime())) return 'ERR'
+  const subMsTail = subMs > 0 ? `.${pad(Math.trunc(subMs / 1000), 6)}` : ''
+  return (
+    `DT#${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}` +
+    `-${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}` +
+    `.${pad(d.getUTCMilliseconds(), 3)}${subMsTail}`
+  )
+}
+
+/**
+ * Format a strucpp DATE (int64 nanoseconds since the Unix epoch, but
+ * semantically date-only) as `D#YYYY-MM-DD`.
+ */
+function formatDateValue(totalNs: bigint): string {
+  const ms = Number(totalNs / 1_000_000n)
+  const d = new Date(ms)
+  if (Number.isNaN(d.getTime())) return 'ERR'
+  return `D#${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+}
+
+/**
+ * Format a strucpp TOD / TIME_OF_DAY (int64 nanoseconds since
+ * midnight) as `TOD#HH:MM:SS.mmm`. Wraps around at 24h, since TOD has
+ * no calendar component.
+ */
+function formatTodValue(totalNs: bigint): string {
+  const NS_PER_DAY = 86_400_000_000_000n
+  let ns = totalNs % NS_PER_DAY
+  if (ns < 0n) ns += NS_PER_DAY
+  const NS_PER_HOUR = 3_600_000_000_000n
+  const NS_PER_MIN = 60_000_000_000n
+  const NS_PER_SEC = 1_000_000_000n
+  const NS_PER_MS = 1_000_000n
+  const h = Number(ns / NS_PER_HOUR)
+  ns = ns % NS_PER_HOUR
+  const m = Number(ns / NS_PER_MIN)
+  ns = ns % NS_PER_MIN
+  const s = Number(ns / NS_PER_SEC)
+  const subSecMs = Number((ns % NS_PER_SEC) / NS_PER_MS)
+  return `TOD#${pad(h)}:${pad(m)}:${pad(s)}.${pad(subSecMs, 3)}`
+}
+
 function formatTimeValue(seconds: number, nanoseconds: number): string {
   let sec = seconds
   let nsec = nanoseconds
@@ -135,6 +201,10 @@ export function getVariableSize(variable: PLCVariable): number {
       case 'string':
         return 127
 
+      case 'wstring':
+        // 1 length byte + 126 UTF-16 code units of 2 bytes each.
+        return 1 + 126 * 2
+
       default:
         console.warn(`Unknown base type: ${baseType}, defaulting to 4 bytes`)
         return 4
@@ -180,6 +250,10 @@ export function getTypeSizeByName(typeName: string): number {
 
     case 'STRING':
       return 127
+
+    case 'WSTRING':
+      // 1 length byte + 126 UTF-16 code units of 2 bytes each.
+      return 1 + 126 * 2
 
     default:
       return 4
@@ -227,12 +301,19 @@ export function parseVariableValue(
         return { value: formatTimeValue(Number(sec), Number(ns)), bytesRead: 8 }
       }
 
+      case 'dt':
+        // DT is int64 nanoseconds since Unix epoch — same wire shape
+        // as TIME, different semantics. Format to the IEC literal the
+        // user expects to see in the watch panel.
+        return { value: formatDtValue(readBigInt64LE(data, offset)), bytesRead: 8 }
+
       case 'date':
+        return { value: formatDateValue(readBigInt64LE(data, offset)), bytesRead: 8 }
+
       case 'tod':
-        // DATE/TOD are also int64 ns in STruC++ but represent absolute
-        // timestamps (epoch / midnight reference) rather than durations.
-        // Their formatters need different epoch handling — deferred.
-        return { value: '<TIME>', bytesRead: 8 }
+        // TOD is int64 nanoseconds since midnight (no calendar
+        // component). Wrap-around handled inside formatTodValue.
+        return { value: formatTodValue(readBigInt64LE(data, offset)), bytesRead: 8 }
 
       case 'udint':
       case 'dword':
@@ -246,7 +327,6 @@ export function parseVariableValue(
 
       case 'ulint':
       case 'lword':
-      case 'dt':
         return { value: readBigUInt64LE(data, offset).toString(), bytesRead: 8 }
 
       case 'lreal':
@@ -258,6 +338,21 @@ export function parseVariableValue(
         const decoder = new TextDecoder('utf-8')
         const str = decoder.decode(stringData)
         return { value: `"${str}"`, bytesRead: 127 }
+      }
+
+      case 'wstring': {
+        // WSTRING uses 16-bit chars; the leading byte is still a UTF-16
+        // code-unit count, followed by the units in little-endian order.
+        // Cap at 126 units so the wire payload matches strucpp's
+        // IECStringVar layout for wide strings.
+        const length = readUInt8(data, offset)
+        const units = Math.min(length, 126)
+        const buf = new Uint16Array(units)
+        for (let i = 0; i < units; i++) {
+          buf[i] = readUInt16LE(data, offset + 1 + i * 2)
+        }
+        const str = String.fromCharCode(...buf)
+        return { value: `"${str}"`, bytesRead: 1 + 126 * 2 }
       }
 
       default:

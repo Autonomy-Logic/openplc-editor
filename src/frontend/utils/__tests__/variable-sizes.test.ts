@@ -116,8 +116,12 @@ describe('getVariableSize', () => {
     expect(getVariableSize(makeBaseVar('v', typeName))).toBe(expected)
   })
 
+  it('returns 253 bytes for WSTRING (1 length + 126 UTF-16 units)', () => {
+    expect(getVariableSize(makeBaseVar('v', 'WSTRING'))).toBe(1 + 126 * 2)
+  })
+
   it('defaults to 4 for unknown base type', () => {
-    expect(getVariableSize(makeBaseVar('v', 'WSTRING'))).toBe(4)
+    expect(getVariableSize(makeBaseVar('v', 'TOTALLY_FAKE_TYPE'))).toBe(4)
   })
 
   it('defaults to 4 for non-base-type variable', () => {
@@ -151,6 +155,7 @@ describe('getTypeSizeByName', () => {
     ['LREAL', 8],
     ['DT', 8],
     ['STRING', 127],
+    ['WSTRING', 1 + 126 * 2],
   ])('returns correct size for %s', (typeName, expected) => {
     expect(getTypeSizeByName(typeName)).toBe(expected)
   })
@@ -161,7 +166,7 @@ describe('getTypeSizeByName', () => {
   })
 
   it('defaults to 4 for unknown type', () => {
-    expect(getTypeSizeByName('WSTRING')).toBe(4)
+    expect(getTypeSizeByName('TOTALLY_FAKE_TYPE')).toBe(4)
   })
 })
 
@@ -274,10 +279,15 @@ describe('parseVariableValue', () => {
     expect(result).toEqual({ value: '123456789', bytesRead: 8 })
   })
 
-  it('parses DT (as ULINT)', () => {
-    const data = bigUint64LE(42n)
-    const result = parseVariableValue(data, 0, makeBaseVar('d', 'DT'))
-    expect(result).toEqual({ value: '42', bytesRead: 8 })
+  it('parses DT as an IEC date-time literal in UTC', () => {
+    // 70_960_000_000 ns since the Unix epoch = 70.960 s past 1970-01-01.
+    // Mirrors the value the user reported when the previous version
+    // showed the raw nanosecond integer instead of a formatted date.
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, 70_960_000_000n)
+    const result = parseVariableValue(buf, 0, makeBaseVar('d', 'DT'))
+    expect(result.bytesRead).toBe(8)
+    expect(result.value).toMatch(/^DT#1970-01-01-00:01:10\.960/)
   })
 
   it('parses LREAL', () => {
@@ -311,8 +321,21 @@ describe('parseVariableValue', () => {
     }
   })
 
-  it('returns ??? for unknown base type', () => {
-    const result = parseVariableValue(u8(0, 0, 0, 0), 0, makeBaseVar('x', 'WSTRING'))
+  it('parses WSTRING — leading length byte + UTF-16 LE code units', () => {
+    // Build a 5-character "Hello" wire payload: length byte + 5 LE
+    // UTF-16 code units. Trailing bytes (out of declared length) are
+    // ignored by the parser.
+    const totalSize = 1 + 126 * 2
+    const buf = new Uint8Array(totalSize)
+    buf[0] = 5
+    const view = new DataView(buf.buffer)
+    'Hello'.split('').forEach((ch, i) => view.setUint16(1 + i * 2, ch.charCodeAt(0), true))
+    const result = parseVariableValue(buf, 0, makeBaseVar('w', 'WSTRING'))
+    expect(result).toEqual({ value: '"Hello"', bytesRead: totalSize })
+  })
+
+  it('returns ??? for non-base-type unknown', () => {
+    const result = parseVariableValue(u8(0, 0, 0, 0), 0, makeBaseVar('x', 'TOTALLY_FAKE_TYPE'))
     expect(result).toEqual({ value: '???', bytesRead: 4 })
   })
 
@@ -407,23 +430,33 @@ describe('parseVariableValue', () => {
     expect(result.value).toBe('1h1m')
   })
 
-  // DATE / TOD share the int64 ns wire format but represent absolute
-  // timestamps (epoch / midnight reference). Their formatters need
-  // different epoch handling and are deferred — until then the parser
-  // returns a placeholder so consumers don't misread a duration string
-  // as a date.
-  it('parses DATE as deferred placeholder', () => {
+  // DATE and TOD share the int64 nanoseconds wire format with TIME but
+  // represent absolute timestamps (epoch / midnight reference). The
+  // formatters render them as IEC literals matching the watch-panel
+  // convention TIME established (`T#3s800ms`).
+
+  it('parses DATE as an IEC date literal in UTC, dropping time-of-day', () => {
+    // 1970-01-02 00:00:00 UTC = 86_400_000_000_000 ns since epoch.
     const buf = new Uint8Array(8)
-    writeTimeNs(buf, 10n * 1_000_000_000n)
+    writeTimeNs(buf, 86_400_000_000_000n)
     const result = parseVariableValue(buf, 0, makeBaseVar('d', 'DATE'))
-    expect(result).toEqual({ value: '<TIME>', bytesRead: 8 })
+    expect(result).toEqual({ value: 'D#1970-01-02', bytesRead: 8 })
   })
 
-  it('parses TOD as deferred placeholder', () => {
+  it('parses TOD as nanoseconds-since-midnight, formatted HH:MM:SS.mmm', () => {
+    // 1 hour = 3_600 s = 3_600_000_000_000 ns
     const buf = new Uint8Array(8)
-    writeTimeNs(buf, 3_600n * 1_000_000_000n) // 1 hour
+    writeTimeNs(buf, 3_600n * 1_000_000_000n)
     const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TOD'))
-    expect(result).toEqual({ value: '<TIME>', bytesRead: 8 })
+    expect(result).toEqual({ value: 'TOD#01:00:00.000', bytesRead: 8 })
+  })
+
+  it('TOD wraps around at 24h', () => {
+    // 25 hours into the wire value should display as 01:00:00 the next day.
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, 25n * 3_600n * 1_000_000_000n)
+    const result = parseVariableValue(buf, 0, makeBaseVar('t', 'TOD'))
+    expect(result.value).toBe('TOD#01:00:00.000')
   })
 })
 
