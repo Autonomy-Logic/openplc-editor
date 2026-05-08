@@ -1,3 +1,4 @@
+import { ChevronDownIcon, ChevronRightIcon } from '@radix-ui/react-icons'
 import { cn } from '@root/frontend/utils/cn'
 import { useCallback, useState } from 'react'
 
@@ -10,60 +11,37 @@ interface VariableTreeProps {
   filter?: string
 }
 
-// Icons for different node types (using text abbreviations)
-const NodeIcon = ({ type }: { type: VariableTreeNode['type'] }) => {
-  switch (type) {
-    case 'program':
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-blue-100 text-[9px] font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-300'>
-          P
-        </span>
-      )
-    case 'function_block':
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-purple-100 text-[9px] font-bold text-purple-700 dark:bg-purple-900 dark:text-purple-300'>
-          FB
-        </span>
-      )
-    case 'global':
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-green-100 text-[9px] font-bold text-green-700 dark:bg-green-900 dark:text-green-300'>
-          G
-        </span>
-      )
-    case 'structure':
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-amber-100 text-[9px] font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300'>
-          S
-        </span>
-      )
-    case 'array':
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-cyan-100 text-[9px] font-bold text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300'>
-          []
-        </span>
-      )
-    case 'variable':
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-[9px] font-bold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300'>
-          V
-        </span>
-      )
-    default:
-      return null
-  }
+const NODE_TYPE_LABEL: Record<VariableTreeNode['type'], string | null> = {
+  program: 'P',
+  function_block: 'FB',
+  global: 'G',
+  structure: 'S',
+  array: '[]',
+  variable: 'V',
 }
 
-// Expand/collapse icon
-const ExpandIcon = ({ expanded, onClick }: { expanded: boolean; onClick: (e: React.MouseEvent) => void }) => (
-  <button
-    type='button'
-    onClick={onClick}
-    className='flex h-4 w-4 items-center justify-center text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
-  >
-    <span className='text-xs'>{expanded ? '▼' : '▶'}</span>
-  </button>
-)
+const NodeIcon = ({ type }: { type: VariableTreeNode['type'] }) => {
+  const label = NODE_TYPE_LABEL[type]
+  if (!label) return null
+  return (
+    <span className='flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-[9px] font-bold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300'>
+      {label}
+    </span>
+  )
+}
+
+const ExpandIcon = ({ expanded, onClick }: { expanded: boolean; onClick: (e: React.MouseEvent) => void }) => {
+  const Icon = expanded ? ChevronDownIcon : ChevronRightIcon
+  return (
+    <button
+      type='button'
+      onClick={onClick}
+      className='flex h-4 w-4 items-center justify-center text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
+    >
+      <Icon className='h-3.5 w-3.5' />
+    </button>
+  )
+}
 
 // Checkbox for selection
 const Checkbox = ({

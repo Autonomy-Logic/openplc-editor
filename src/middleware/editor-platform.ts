@@ -17,6 +17,8 @@ import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-ad
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
+import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
+import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
@@ -33,14 +35,15 @@ import type { PlatformPorts } from './shared/providers/types'
  * Set by the store/UI when the user configures or connects to a device.
  */
 let _runtimeIpAddress = ''
+let _projectPath = ''
 
 export function setRuntimeIpAddress(ip: string): void {
   _runtimeIpAddress = ip
 }
 
-// macOS has a native application menu bar; Windows and Linux do not
-// (the Electron menu is hidden on those platforms — see menu.ts buildDefaultTemplate).
-const isMac = navigator.platform.startsWith('Mac')
+export function setProjectPath(path: string): void {
+  _projectPath = path
+}
 
 /**
  * Editor platform ports — all port interfaces wired to Electron IPC bridge.
@@ -57,6 +60,8 @@ export const editorPorts: PlatformPorts = {
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
+  esi: createEditorEsiAdapter(() => _projectPath),
   versionControl: createEditorVersionControlAdapter(),
-  capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development', hasNativeMenu: isMac },
+  navigation: createEditorNavigationAdapter(),
+  capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

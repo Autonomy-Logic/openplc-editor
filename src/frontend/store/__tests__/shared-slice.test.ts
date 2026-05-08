@@ -15,6 +15,7 @@ import { createSearchSlice } from '../slices/search/slice'
 import { createSharedSlice } from '../slices/shared/slice'
 import type { SharedRootState } from '../slices/shared/types'
 import { createTabsSlice } from '../slices/tabs/slice'
+import { createVersionControlSlice } from '../slices/version-control/slice'
 import { createWorkspaceSlice } from '../slices/workspace/slice'
 
 function makeStore() {
@@ -32,6 +33,7 @@ function makeStore() {
     ...createFBDFlowSlice(...args),
     ...createLadderFlowSlice(...args),
     ...createHistorySlice(...args),
+    ...createVersionControlSlice(...args),
     ...createSharedSlice(...args),
   }))
 }
@@ -704,6 +706,41 @@ describe('createSharedSlice', () => {
 
         store.getState().remoteDeviceActions.delete('Device1')
         expect(store.getState().editor.meta.name).toBe('Device2')
+      })
+
+      it('cascades to EtherCAT children so their tabs, editors and files are removed', () => {
+        // Set up an EtherCAT bus with two configured slave devices.
+        store.getState().projectActions.createRemoteDevice({
+          data: { name: 'eth', protocol: 'ethercat' },
+        })
+        store.getState().projectActions.updateEthercatConfig('eth', {
+          masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, watchdogTimeoutCycles: 3 },
+          devices: [
+            { id: 'slave-1', name: 'EK1100' },
+            { id: 'slave-2', name: 'EL1008' },
+          ] as never,
+        })
+        // Register renderer-side state the UI would have created for each child.
+        for (const child of ['EK1100', 'EL1008']) {
+          store
+            .getState()
+            .editorActions.addModel({ type: 'plc-remote-device', meta: { name: child, protocol: 'ethercat' } })
+          store.getState().fileActions.addFile({ name: child, type: 'remote-device', filePath: child })
+          store.getState().tabsActions.updateTabs({
+            name: child,
+            elementType: { type: 'remote-device', protocol: 'ethercat' },
+          })
+        }
+
+        expect(store.getState().tabs.map((t) => t.name)).toEqual(expect.arrayContaining(['EK1100', 'EL1008']))
+
+        store.getState().remoteDeviceActions.delete('eth')
+
+        const state = store.getState()
+        expect(state.project.data.remoteDevices?.some((d) => d.name === 'eth')).toBe(false)
+        expect(state.files['EK1100']).toBeUndefined()
+        expect(state.files['EL1008']).toBeUndefined()
+        expect(state.tabs.some((t) => t.name === 'EK1100' || t.name === 'EL1008')).toBe(false)
       })
     })
 

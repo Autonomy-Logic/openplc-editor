@@ -57,6 +57,8 @@ export type {
 export type { CompilerPort } from './compiler-port'
 export type { DebuggerPort } from './debugger-port'
 export type { DevicePort } from './device-port'
+export type { NavigationPort, NavigationSearch } from './navigation-port'
+export { buildNavigationUrl } from './navigation-port'
 export type { OrchestratorPort } from './orchestrator-port'
 export type { ProjectPort } from './project-port'
 export type { RuntimePort } from './runtime-port'

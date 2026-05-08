@@ -70,6 +70,7 @@ export const GenericComboboxCell = ({
         inputRef.current?.focus()
       }, 0)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectIsOpen, inputValue])
 
   const isButtonDisabled =
@@ -106,7 +107,7 @@ export const GenericComboboxCell = ({
         }
         return result
       },
-    [selectValues],
+    [],
   )
 
   // Helper to filter options/groups recursively (moved out for reuse)
@@ -134,7 +135,9 @@ export const GenericComboboxCell = ({
   }
 
   // Flatten filtered options for navigation
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const filteredOptions = useMemo(() => filterOptions(selectValues, inputValue), [selectValues, inputValue])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const flatFilteredOptions = useMemo(() => flattenOptions(filteredOptions), [filteredOptions])
 
   // Reset highlight only when dropdown is first opened
@@ -142,6 +145,7 @@ export const GenericComboboxCell = ({
     if (selectIsOpen) {
       setHighlightedIndex(flatFilteredOptions.findIndex((opt) => opt.value === value))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectIsOpen])
 
   // Scroll highlighted option into view

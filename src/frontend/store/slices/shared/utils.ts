@@ -159,6 +159,13 @@ export function createEditorObjectForRemoteDevice(
   }
 }
 
+export function createEditorObjectForEtherCATDevice(name: string, busName: string, deviceId: string): EditorModel {
+  return {
+    type: 'plc-ethercat-device',
+    meta: { name, busName, deviceId },
+  }
+}
+
 export function createTabObject(
   name: string,
   pouType: 'program' | 'function' | 'function-block',

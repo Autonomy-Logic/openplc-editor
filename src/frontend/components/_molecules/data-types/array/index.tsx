@@ -75,6 +75,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   useEffect(() => {
     setInitialValueData(data.initialValue || '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
