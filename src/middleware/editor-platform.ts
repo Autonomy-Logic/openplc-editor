@@ -17,6 +17,8 @@ import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-ad
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
+import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
+import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
@@ -33,9 +35,14 @@ import type { PlatformPorts } from './shared/providers/types'
  * Set by the store/UI when the user configures or connects to a device.
  */
 let _runtimeIpAddress = ''
+let _projectPath = ''
 
 export function setRuntimeIpAddress(ip: string): void {
   _runtimeIpAddress = ip
+}
+
+export function setProjectPath(path: string): void {
+  _projectPath = path
 }
 
 /**
@@ -53,6 +60,8 @@ export const editorPorts: PlatformPorts = {
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
+  esi: createEditorEsiAdapter(() => _projectPath),
   versionControl: createEditorVersionControlAdapter(),
+  navigation: createEditorNavigationAdapter(),
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

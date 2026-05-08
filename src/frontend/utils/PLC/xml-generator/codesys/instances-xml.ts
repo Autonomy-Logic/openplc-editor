@@ -5,7 +5,9 @@ import { PouInstance, TaskXML } from '@root/middleware/shared/ports/xml-types/co
 export const codeSysInstanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => {
   const { instances, tasks, globalVariables } = configuration.resource
 
-  tasks.forEach((task) => {
+  const sortedTasks = [...tasks].sort((a, b) => a.priority - b.priority)
+
+  sortedTasks.forEach((task) => {
     const i: PouInstance[] =
       instances
         .filter((i) => i.task === task.name)
