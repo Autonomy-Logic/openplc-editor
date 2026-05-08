@@ -269,6 +269,27 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
+    setEditorCursor: (name, cursorPosition) =>
+      setState(
+        produce((state: EditorState) => {
+          // Update the model in the editors array so a future tab
+          // switch / re-mount picks up the new position.
+          const index = state.editors.findIndex((e) => e.meta.name === name)
+          if (index !== -1) {
+            state.editors[index].cursorPosition = cursorPosition
+          }
+          // Update the active editor too if it's the one we're
+          // navigating into — this is what triggers the Monaco
+          // reactive useEffect that selects the line.  Immer treats
+          // `state.editor` and `state.editors[index]` as separate
+          // drafts even when the underlying object started identical,
+          // so writing to both is required.
+          if (state.editor.meta.name === name && state.editor.type !== 'available') {
+            state.editor.cursorPosition = cursorPosition
+          }
+        }),
+      ),
+
     saveEditorViewState: ({ prevEditorName, cursorPosition, scrollPosition, fbdPosition }) =>
       setState(
         produce((state: EditorState) => {

@@ -20,7 +20,7 @@ const setSelectedTab = jest.fn()
 const addModel = jest.fn()
 const setEditor = jest.fn()
 const getEditorFromEditors = jest.fn(() => null)
-const saveEditorViewState = jest.fn()
+const setEditorCursor = jest.fn()
 const updateModelVariablesForName = jest.fn()
 
 const samplePou = (overrides?: { name?: string; pouType?: 'program' | 'function-block' | 'function'; language?: string }) => ({
@@ -40,7 +40,7 @@ jest.mock('../../store', () => ({
         addModel,
         setEditor,
         getEditorFromEditors,
-        saveEditorViewState,
+        setEditorCursor,
         updateModelVariablesForName,
       },
     }),
@@ -83,9 +83,10 @@ describe('useNavigateToCompileError', () => {
       elementType: { type: 'function-block', language: 'st' },
     })
     expect(setSelectedTab).toHaveBeenCalledWith('MANUAL_OVERRIDE')
-    expect(saveEditorViewState).toHaveBeenCalledWith({
-      prevEditorName: 'MANUAL_OVERRIDE',
-      cursorPosition: { lineNumber: 7, column: 5, offset: 0 },
+    expect(setEditorCursor).toHaveBeenCalledWith('MANUAL_OVERRIDE', {
+      lineNumber: 7,
+      column: 5,
+      offset: 0,
     })
     expect(updateModelVariablesForName).not.toHaveBeenCalled()
   })
@@ -94,9 +95,10 @@ describe('useNavigateToCompileError', () => {
     const { result } = renderHook(() => useNavigateToCompileError())
     result.current(baseError({ section: 'body', line: 12 }))
 
-    expect(saveEditorViewState).toHaveBeenCalledWith({
-      prevEditorName: 'MANUAL_OVERRIDE',
-      cursorPosition: { lineNumber: 12, column: 1, offset: 0 },
+    expect(setEditorCursor).toHaveBeenCalledWith('MANUAL_OVERRIDE', {
+      lineNumber: 12,
+      column: 1,
+      offset: 0,
     })
   })
 
@@ -105,9 +107,10 @@ describe('useNavigateToCompileError', () => {
     result.current(baseError({ section: 'var-block', line: 4, column: 3, variableName: 'ASD' }))
 
     expect(updateModelVariablesForName).toHaveBeenCalledWith('MANUAL_OVERRIDE', { display: 'code' })
-    expect(saveEditorViewState).toHaveBeenCalledWith({
-      prevEditorName: 'MANUAL_OVERRIDE',
-      cursorPosition: { lineNumber: 4, column: 3, offset: 0 },
+    expect(setEditorCursor).toHaveBeenCalledWith('MANUAL_OVERRIDE', {
+      lineNumber: 4,
+      column: 3,
+      offset: 0,
     })
   })
 
@@ -118,7 +121,7 @@ describe('useNavigateToCompileError', () => {
 
     expect(updateTabs).toHaveBeenCalledTimes(1)
     expect(setSelectedTab).toHaveBeenCalledWith('MANUAL_OVERRIDE')
-    expect(saveEditorViewState).not.toHaveBeenCalled()
+    expect(setEditorCursor).not.toHaveBeenCalled()
     expect(updateModelVariablesForName).not.toHaveBeenCalled()
   })
 
@@ -128,7 +131,7 @@ describe('useNavigateToCompileError', () => {
     result.current(baseError({ section: 'body', bodyLine: 5 }))
 
     expect(updateTabs).toHaveBeenCalledTimes(1)
-    expect(saveEditorViewState).not.toHaveBeenCalled()
+    expect(setEditorCursor).not.toHaveBeenCalled()
   })
 
   it('opens the tab without cursor for interface-section errors', () => {
@@ -136,7 +139,7 @@ describe('useNavigateToCompileError', () => {
     result.current(baseError({ section: 'interface' }))
 
     expect(updateTabs).toHaveBeenCalledTimes(1)
-    expect(saveEditorViewState).not.toHaveBeenCalled()
+    expect(setEditorCursor).not.toHaveBeenCalled()
     expect(updateModelVariablesForName).not.toHaveBeenCalled()
   })
 
@@ -147,7 +150,7 @@ describe('useNavigateToCompileError', () => {
 
     expect(updateTabs).not.toHaveBeenCalled()
     expect(setSelectedTab).not.toHaveBeenCalled()
-    expect(saveEditorViewState).not.toHaveBeenCalled()
+    expect(setEditorCursor).not.toHaveBeenCalled()
   })
 
   it('is a no-op when the error has no pouName (synthetic / non-POU diagnostic)', () => {

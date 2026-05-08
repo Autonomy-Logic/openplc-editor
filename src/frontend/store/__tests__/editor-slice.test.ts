@@ -530,6 +530,56 @@ describe('editor slice', () => {
     })
   })
 
+  describe('setEditorCursor', () => {
+    it('writes the cursor to the editors-array entry AND the active editor', () => {
+      // The active-editor write is what makes the Monaco reactive
+      // useEffect fire — without it the line-highlight on click-to-
+      // error would silently no-op for the already-active POU.
+      const { editorActions: a } = store.getState()
+      const txt = makeTextual('M')
+      a.addModel(txt)
+      a.setEditor(txt)
+      a.setEditorCursor('M', { lineNumber: 7, column: 5, offset: 0 })
+
+      expect(store.getState().editors.find((e) => e.meta.name === 'M')?.cursorPosition).toEqual({
+        lineNumber: 7,
+        column: 5,
+        offset: 0,
+      })
+      expect(store.getState().editor.cursorPosition).toEqual({
+        lineNumber: 7,
+        column: 5,
+        offset: 0,
+      })
+    })
+
+    it('updates only the editors-array entry when navigating into a non-active editor', () => {
+      // Open M as active, then navigate into N (which is in the array
+      // but not active).  The active editor's cursor should NOT change
+      // — only N's stored cursor is touched.
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('M'))
+      a.addModel(makeTextual('N'))
+      a.setEditor(makeTextual('M'))
+      a.setEditorCursor('N', { lineNumber: 4, column: 1, offset: 0 })
+
+      expect(store.getState().editors.find((e) => e.meta.name === 'N')?.cursorPosition).toEqual({
+        lineNumber: 4,
+        column: 1,
+        offset: 0,
+      })
+      expect(store.getState().editor.meta.name).toBe('M')
+      expect(store.getState().editor.cursorPosition).toBeUndefined()
+    })
+
+    it('is a no-op when the editor is not in the array', () => {
+      const { editorActions: a } = store.getState()
+      a.setEditorCursor('Missing', { lineNumber: 1, column: 1, offset: 0 })
+      expect(store.getState().editors).toEqual([])
+      expect(store.getState().editor.type).toBe('available')
+    })
+  })
+
   describe('getEditorFromEditors', () => {
     it('returns current editor, array editor, or null', () => {
       const { editorActions: a } = store.getState()

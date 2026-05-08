@@ -54,7 +54,7 @@ export function useNavigateToCompileError(): (err: StructuredCompileError) => vo
   const addModel = useOpenPLCStore((s) => s.editorActions.addModel)
   const setEditor = useOpenPLCStore((s) => s.editorActions.setEditor)
   const getEditorFromEditors = useOpenPLCStore((s) => s.editorActions.getEditorFromEditors)
-  const saveEditorViewState = useOpenPLCStore((s) => s.editorActions.saveEditorViewState)
+  const setEditorCursor = useOpenPLCStore((s) => s.editorActions.setEditorCursor)
   const updateModelVariablesForName = useOpenPLCStore((s) => s.editorActions.updateModelVariablesForName)
 
   return useCallback(
@@ -98,38 +98,30 @@ export function useNavigateToCompileError(): (err: StructuredCompileError) => vo
 
       // Textual body errors: place the cursor at bodyLine if we have
       // it, otherwise fall back to error.line as a best effort.
-      // saveEditorViewState lives on the editor model so the next
-      // mount of MonacoEditor (or the reactive cursor effect) picks
-      // it up.
+      // setEditorCursor writes to BOTH the editors-array entry and
+      // the active editor draft so the Monaco reactive useEffect
+      // (which watches `editor.cursorPosition`) actually fires.
       if (err.section === 'body') {
         const lineNumber = err.bodyLine ?? err.line
         if (lineNumber > 0) {
-          saveEditorViewState({
-            prevEditorName: pou.name,
-            cursorPosition: {
-              lineNumber,
-              column: Math.max(1, err.column),
-              offset: 0,
-            },
+          setEditorCursor(pou.name, {
+            lineNumber,
+            column: Math.max(1, err.column),
+            offset: 0,
           })
         }
         return
       }
 
       // Var-block errors: switch the variables panel to text mode and
-      // route the cursor through it.  We pass `code` undefined so the
-      // panel keeps whatever it currently has (the editor's text view
-      // is regenerated from the variables list when display flips).
+      // route the cursor through it.
       if (err.section === 'var-block') {
         updateModelVariablesForName(pou.name, { display: 'code' })
         if (err.line > 0) {
-          saveEditorViewState({
-            prevEditorName: pou.name,
-            cursorPosition: {
-              lineNumber: err.line,
-              column: Math.max(1, err.column),
-              offset: 0,
-            },
+          setEditorCursor(pou.name, {
+            lineNumber: err.line,
+            column: Math.max(1, err.column),
+            offset: 0,
           })
         }
         return
@@ -137,6 +129,6 @@ export function useNavigateToCompileError(): (err: StructuredCompileError) => vo
 
       // section === 'interface' or unset — opening the tab is enough.
     },
-    [pous, updateTabs, setSelectedTab, addModel, setEditor, getEditorFromEditors, saveEditorViewState, updateModelVariablesForName],
+    [pous, updateTabs, setSelectedTab, addModel, setEditor, getEditorFromEditors, setEditorCursor, updateModelVariablesForName],
   )
 }
