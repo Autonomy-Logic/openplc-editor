@@ -17,12 +17,14 @@ import {
   isSimulatorTarget,
   validateRuntimeVersion,
 } from '../../../../../../utils/device'
+import { normalizeEthercatStatus } from '../../../../../../utils/ethercat-status'
 import { Checkbox } from '../../../../../_atoms/checkbox'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { EthercatStatsSection } from '../ethercat/components/ethercat-stats-section'
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
@@ -66,6 +68,10 @@ const Board = memo(function () {
   const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
   const setIncludeTimingStatsInPolling = useOpenPLCStore(
     (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
+  )
+  const ethercatStatus = useOpenPLCStore((state) => state.runtimeConnection.ethercatStatus)
+  const setIncludeEthercatStatsInPolling = useOpenPLCStore(
+    (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
   )
 
   const [isPressed, setIsPressed] = useState(false)
@@ -316,6 +322,17 @@ const Board = memo(function () {
     }
   }, [setIncludeTimingStatsInPolling])
 
+  // Only runtime targets expose the EtherCAT endpoint; skip the poll otherwise.
+  useEffect(() => {
+    if (!isOpenPLCRuntimeTarget(currentBoardInfo)) return
+    setIncludeEthercatStatsInPolling(true)
+    return () => {
+      setIncludeEthercatStatsInPolling(false)
+    }
+  }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
+
+  const ethercatMasters = useMemo(() => normalizeEthercatStatus(ethercatStatus), [ethercatStatus])
+
   return (
     <DeviceEditorSlot heading='Board Settings'>
       {!isSimulatorTarget(currentBoardInfo) && (
@@ -517,64 +534,67 @@ const Board = memo(function () {
         <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
       )}
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
-        connectionStatus === 'connected' &&
-        timingStats &&
-        timingStats.scan_count > 0 && (
-          <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-4'>
-            <h2
-              id='scan-cycle-stats-title'
-              className='select-none text-lg font-medium text-neutral-950 dark:text-white'
-            >
-              Scan Cycle Statistics
-            </h2>
-            <div id='scan-cycle-stats-cards' className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'>
-              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Count</span>
-                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                  {timingStats.scan_count.toLocaleString()}
-                </span>
-              </div>
-              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Overruns</span>
-                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>{timingStats.overruns}</span>
-              </div>
-              {timingStats.scan_time_avg !== null && (
+        <>
+          {connectionStatus === 'connected' && timingStats && timingStats.scan_count > 0 && (
+            <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-4'>
+              <h2
+                id='scan-cycle-stats-title'
+                className='select-none text-lg font-medium text-neutral-950 dark:text-white'
+              >
+                Scan Cycle Statistics
+              </h2>
+              <div id='scan-cycle-stats-cards' className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'>
                 <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Time (avg)</span>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Count</span>
                   <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {timingStats.scan_time_avg} <span className='text-sm font-normal'>us</span>
+                    {timingStats.scan_count.toLocaleString()}
                   </span>
-                  {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
-                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                      min: {timingStats.scan_time_min} / max: {timingStats.scan_time_max}
+                </div>
+                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Overruns</span>
+                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>{timingStats.overruns}</span>
+                </div>
+                {timingStats.scan_time_avg !== null && (
+                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Time (avg)</span>
+                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                      {timingStats.scan_time_avg} <span className='text-sm font-normal'>us</span>
                     </span>
-                  )}
-                </div>
-              )}
-              {timingStats.cycle_time_avg !== null && (
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {timingStats.cycle_time_avg} <span className='text-sm font-normal'>us</span>
-                  </span>
-                  {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
-                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                      min: {timingStats.cycle_time_min} / max: {timingStats.cycle_time_max}
+                    {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                        min: {timingStats.scan_time_min} / max: {timingStats.scan_time_max}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {timingStats.cycle_time_avg !== null && (
+                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
+                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                      {timingStats.cycle_time_avg} <span className='text-sm font-normal'>us</span>
                     </span>
-                  )}
-                </div>
-              )}
-              {timingStats.cycle_latency_avg !== null && (
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Latency (avg)</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {timingStats.cycle_latency_avg} <span className='text-sm font-normal'>us</span>
-                  </span>
-                </div>
-              )}
+                    {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                        min: {timingStats.cycle_time_min} / max: {timingStats.cycle_time_max}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {timingStats.cycle_latency_avg !== null && (
+                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Latency (avg)</span>
+                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
+                      {timingStats.cycle_latency_avg} <span className='text-sm font-normal'>us</span>
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )
+          )}
+          {connectionStatus === 'connected' && (
+            <EthercatStatsSection masters={ethercatMasters} className='flex w-full flex-col gap-4' withSectionId />
+          )}
+        </>
       ) : (
         <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
           <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>

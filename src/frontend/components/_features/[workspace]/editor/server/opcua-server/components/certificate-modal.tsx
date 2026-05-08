@@ -226,10 +226,10 @@ MIIEpDCCAowCCQC7...
 
           {/* Validation Errors */}
           {validationErrors.length > 0 && (
-            <div className='rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950'>
+            <div className='rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900'>
               <ul className='list-inside list-disc space-y-1'>
                 {validationErrors.map((error, index) => (
-                  <li key={index} className='text-xs text-red-600 dark:text-red-400'>
+                  <li key={index} className='text-xs text-neutral-700 dark:text-neutral-300'>
                     {error}
                   </li>
                 ))}

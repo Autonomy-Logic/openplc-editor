@@ -714,6 +714,8 @@ export interface AIFeatureConfig {
   isFeatureEnabled: boolean
   /** Whether the user has previously consented to AI usage */
   hasUserConsented: boolean
+  /** User preference: whether inline ghost-text completions are active in editors */
+  inlineCompletionsEnabled: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -722,12 +724,41 @@ export interface AIFeatureConfig {
 
 export type ChatMessageRole = 'user' | 'assistant'
 
+/**
+ * Anthropic-compatible content block. Persisted on the backend as JSONB.
+ * On the wire from `/ai/chat`, mirrors what we re-send to Anthropic
+ * across iterations of the agentic loop. Plain user text is normalized
+ * to `[{ type: 'text', text: '...' }]` so readers don't need to branch
+ * on string vs array.
+ */
+export type AIChatContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: unknown }
+  | {
+      type: 'tool_result'
+      tool_use_id: string
+      content: string
+      is_error?: boolean
+    }
+
 export type ChatMessage = {
   id: string
   role: ChatMessageRole
-  content: string
+  /**
+   * Plain string for legacy text-only turns; block array for restored
+   * conversations from the backend (so `tool_use` / `tool_result` blocks
+   * survive a reload). Renderers handle either form.
+   */
+  content: string | AIChatContentBlock[]
   timestamp: number
   rating?: 'up' | 'down'
+  /**
+   * Set when the message was loaded from the backend as part of a
+   * persisted conversation; absent for in-progress local-only turns.
+   * Used by the chat panel to know which conversation the message
+   * belongs to when multiple are open across tabs.
+   */
+  conversationId?: string
 }
 
 // ---------------------------------------------------------------------------

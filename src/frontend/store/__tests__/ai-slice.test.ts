@@ -39,7 +39,6 @@ describe('createAISlice', () => {
       expect(ai.isEnabled).toBe(false)
       expect(ai.isLoading).toBe(false)
       expect(ai.hasConsented).toBe(false)
-      expect(ai.model).toBe('haiku')
       expect(ai.creditsUsed).toBe(0)
       expect(ai.creditsTotal).toBe(500)
       expect(ai.tier).toBe('free')
@@ -49,6 +48,24 @@ describe('createAISlice', () => {
       expect(ai.isAgenticLoopRunning).toBe(false)
       expect(ai.isChatOpen).toBe(false)
       expect(ai.error).toBeNull()
+      expect(ai.preferences).toEqual({ inlineCompletionsEnabled: true })
+      expect(ai.pendingDiffs).toEqual({})
+      expect(ai.conversationId).toBeNull()
+      expect(ai.conversations).toEqual([])
+      expect(ai.isLoadingConversation).toBe(false)
+    })
+  })
+
+  describe('setPreference', () => {
+    it('toggles inlineCompletionsEnabled off', () => {
+      store.getState().aiActions.setPreference('inlineCompletionsEnabled', false)
+      expect(store.getState().ai.preferences.inlineCompletionsEnabled).toBe(false)
+    })
+
+    it('toggles inlineCompletionsEnabled back on', () => {
+      store.getState().aiActions.setPreference('inlineCompletionsEnabled', false)
+      store.getState().aiActions.setPreference('inlineCompletionsEnabled', true)
+      expect(store.getState().ai.preferences.inlineCompletionsEnabled).toBe(true)
     })
   })
 
@@ -92,19 +109,6 @@ describe('createAISlice', () => {
       store.getState().aiActions.setAIConsented(true)
       store.getState().aiActions.setAIConsented(false)
       expect(store.getState().ai.hasConsented).toBe(false)
-    })
-  })
-
-  describe('setAIModel', () => {
-    it('changes the model to sonnet', () => {
-      store.getState().aiActions.setAIModel('sonnet')
-      expect(store.getState().ai.model).toBe('sonnet')
-    })
-
-    it('changes the model back to haiku', () => {
-      store.getState().aiActions.setAIModel('sonnet')
-      store.getState().aiActions.setAIModel('haiku')
-      expect(store.getState().ai.model).toBe('haiku')
     })
   })
 
@@ -280,21 +284,24 @@ describe('createAISlice', () => {
   })
 
   describe('clearConversation', () => {
-    it('clears all messages and the error', () => {
+    it('clears messages, error, and the active conversation id', () => {
       store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
       store.getState().aiActions.addMessage(makeMessage({ id: 'msg-2' }))
       store.getState().aiActions.setAIError('some error')
+      store.getState().aiActions.setConversationId('conv-1')
 
       store.getState().aiActions.clearConversation()
 
       expect(store.getState().ai.messages).toHaveLength(0)
       expect(store.getState().ai.error).toBeNull()
+      expect(store.getState().ai.conversationId).toBeNull()
     })
 
     it('is a no-op on empty state (no error)', () => {
       store.getState().aiActions.clearConversation()
       expect(store.getState().ai.messages).toHaveLength(0)
       expect(store.getState().ai.error).toBeNull()
+      expect(store.getState().ai.conversationId).toBeNull()
     })
   })
 
@@ -327,6 +334,251 @@ describe('createAISlice', () => {
       expect(store.getState().ai.isChatOpen).toBe(false)
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Pending diff review (per-POU)
+  // ---------------------------------------------------------------------------
+
+  describe('pendingDiffs', () => {
+    const sampleEntry = {
+      oldBody: 'OLD',
+      newBody: 'NEW',
+      hunks: [{ id: 'h1', type: 'added' as const, startLine: 1, endLine: 1, newLines: ['NEW'], oldLines: [] }],
+      acceptedHunks: ['h1'],
+    }
+
+    it('defaults to empty object', () => {
+      expect(store.getState().ai.pendingDiffs).toEqual({})
+    })
+
+    it('setPendingDiff writes an entry keyed by POU name', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      expect(store.getState().ai.pendingDiffs.main).toEqual(sampleEntry)
+    })
+
+    it('supports multiple POUs simultaneously', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      store.getState().aiActions.setPendingDiff('helper', { ...sampleEntry, oldBody: 'OLD2' })
+      expect(Object.keys(store.getState().ai.pendingDiffs)).toEqual(['main', 'helper'])
+    })
+
+    it('updatePendingDiffAcceptedHunks updates only the acceptedHunks of an existing entry', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      store.getState().aiActions.updatePendingDiffAcceptedHunks('main', [])
+      expect(store.getState().ai.pendingDiffs.main.acceptedHunks).toEqual([])
+      expect(store.getState().ai.pendingDiffs.main.newBody).toBe('NEW')
+    })
+
+    it('updatePendingDiffAcceptedHunks is a no-op for missing POU', () => {
+      store.getState().aiActions.updatePendingDiffAcceptedHunks('nope', ['x'])
+      expect(store.getState().ai.pendingDiffs.nope).toBeUndefined()
+    })
+
+    it('updatePendingDiff replaces newBody + hunks + acceptedHunks atomically', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      const freshHunks = [
+        { id: 'h2', type: 'modified' as const, startLine: 2, endLine: 2, newLines: ['X'], oldLines: ['Y'] },
+      ]
+      store
+        .getState()
+        .aiActions.updatePendingDiff('main', { newBody: 'NEWER', hunks: freshHunks, acceptedHunks: ['h2'] })
+      const entry = store.getState().ai.pendingDiffs.main
+      expect(entry.newBody).toBe('NEWER')
+      expect(entry.hunks).toEqual(freshHunks)
+      expect(entry.acceptedHunks).toEqual(['h2'])
+      // Old body preserved
+      expect(entry.oldBody).toBe('OLD')
+    })
+
+    it('updatePendingDiff is a no-op for missing POU', () => {
+      store.getState().aiActions.updatePendingDiff('nope', { newBody: 'x', hunks: [], acceptedHunks: [] })
+      expect(store.getState().ai.pendingDiffs.nope).toBeUndefined()
+    })
+
+    it('clearPendingDiff removes a specific POU entry', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      store.getState().aiActions.setPendingDiff('helper', sampleEntry)
+      store.getState().aiActions.clearPendingDiff('main')
+      expect(store.getState().ai.pendingDiffs.main).toBeUndefined()
+      expect(store.getState().ai.pendingDiffs.helper).toBeDefined()
+    })
+
+    it('clearAllPendingDiffs resets to empty', () => {
+      store.getState().aiActions.setPendingDiff('main', sampleEntry)
+      store.getState().aiActions.setPendingDiff('helper', sampleEntry)
+      store.getState().aiActions.clearAllPendingDiffs()
+      expect(store.getState().ai.pendingDiffs).toEqual({})
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Conversation management (DOPE-2)
+  // ---------------------------------------------------------------------------
+
+  describe('conversation management', () => {
+    const summaryA = {
+      id: 'conv-a',
+      title: 'Refactor motor control',
+      lastModel: 'sonnet' as const,
+      createdAt: '2026-05-04T10:00:00Z',
+      updatedAt: '2026-05-04T11:00:00Z',
+    }
+    const summaryB = {
+      id: 'conv-b',
+      title: 'Add timer',
+      lastModel: 'sonnet' as const,
+      createdAt: '2026-05-04T09:00:00Z',
+      updatedAt: '2026-05-04T09:30:00Z',
+    }
+
+    describe('setConversationId', () => {
+      it('sets the active conversation id', () => {
+        store.getState().aiActions.setConversationId('conv-a')
+        expect(store.getState().ai.conversationId).toBe('conv-a')
+      })
+
+      it('clears the active conversation id when set to null', () => {
+        store.getState().aiActions.setConversationId('conv-a')
+        store.getState().aiActions.setConversationId(null)
+        expect(store.getState().ai.conversationId).toBeNull()
+      })
+    })
+
+    describe('setConversations', () => {
+      it('replaces the conversations list', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        expect(store.getState().ai.conversations).toEqual([summaryA, summaryB])
+      })
+
+      it('replaces with an empty list', () => {
+        store.getState().aiActions.setConversations([summaryA])
+        store.getState().aiActions.setConversations([])
+        expect(store.getState().ai.conversations).toEqual([])
+      })
+    })
+
+    describe('prependConversation', () => {
+      it('inserts a new conversation at the top', () => {
+        store.getState().aiActions.setConversations([summaryB])
+        store.getState().aiActions.prependConversation(summaryA)
+        expect(store.getState().ai.conversations.map((c) => c.id)).toEqual(['conv-a', 'conv-b'])
+      })
+
+      it('drops a duplicate id before prepending (no double rows)', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        store.getState().aiActions.prependConversation({ ...summaryA, title: 'Renamed' })
+        const ids = store.getState().ai.conversations.map((c) => c.id)
+        expect(ids).toEqual(['conv-a', 'conv-b'])
+        expect(store.getState().ai.conversations[0].title).toBe('Renamed')
+      })
+    })
+
+    describe('removeConversation', () => {
+      it('drops a conversation from the list', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        store.getState().aiActions.removeConversation('conv-a')
+        expect(store.getState().ai.conversations).toEqual([summaryB])
+      })
+
+      it('clears messages + active id when removing the active conversation', () => {
+        store.getState().aiActions.setConversations([summaryA])
+        store.getState().aiActions.setConversationId('conv-a')
+        store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+
+        store.getState().aiActions.removeConversation('conv-a')
+
+        expect(store.getState().ai.conversations).toEqual([])
+        expect(store.getState().ai.conversationId).toBeNull()
+        expect(store.getState().ai.messages).toHaveLength(0)
+      })
+
+      it('keeps messages + active id when removing a different conversation', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        store.getState().aiActions.setConversationId('conv-a')
+        store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+
+        store.getState().aiActions.removeConversation('conv-b')
+
+        expect(store.getState().ai.conversationId).toBe('conv-a')
+        expect(store.getState().ai.messages).toHaveLength(1)
+      })
+
+      it('is a no-op for unknown ids', () => {
+        store.getState().aiActions.setConversations([summaryA])
+        store.getState().aiActions.removeConversation('does-not-exist')
+        expect(store.getState().ai.conversations).toEqual([summaryA])
+      })
+    })
+
+    describe('updateConversationTitle', () => {
+      it('updates the title of an existing summary', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        store.getState().aiActions.updateConversationTitle('conv-a', 'New title')
+        expect(store.getState().ai.conversations[0].title).toBe('New title')
+        expect(store.getState().ai.conversations[1].title).toBe(summaryB.title)
+      })
+
+      it('is a no-op for unknown ids', () => {
+        store.getState().aiActions.setConversations([summaryA])
+        store.getState().aiActions.updateConversationTitle('nope', 'x')
+        expect(store.getState().ai.conversations[0].title).toBe(summaryA.title)
+      })
+    })
+
+    describe('replaceMessages', () => {
+      it('replaces the messages list wholesale', () => {
+        store.getState().aiActions.addMessage(makeMessage({ id: 'old-1' }))
+        const replacement = [
+          makeMessage({ id: 'new-1', role: 'user', content: 'one' }),
+          makeMessage({ id: 'new-2', role: 'assistant', content: 'two' }),
+        ]
+        store.getState().aiActions.replaceMessages(replacement)
+
+        expect(store.getState().ai.messages.map((m) => m.id)).toEqual(['new-1', 'new-2'])
+      })
+
+      it('clears the error', () => {
+        store.getState().aiActions.setAIError('boom')
+        store.getState().aiActions.replaceMessages([])
+        expect(store.getState().ai.error).toBeNull()
+      })
+
+      it('caps at MAX_CONVERSATION_MESSAGES, keeping the most recent', () => {
+        const many: ChatMessage[] = []
+        for (let i = 0; i < MAX_CONVERSATION_MESSAGES + 7; i++) {
+          many.push(makeMessage({ id: `m-${i}`, content: `Message ${i}` }))
+        }
+        store.getState().aiActions.replaceMessages(many)
+
+        const messages = store.getState().ai.messages
+        expect(messages).toHaveLength(MAX_CONVERSATION_MESSAGES)
+        expect(messages[0].id).toBe('m-7')
+        expect(messages[MAX_CONVERSATION_MESSAGES - 1].id).toBe(`m-${MAX_CONVERSATION_MESSAGES + 6}`)
+      })
+    })
+
+    describe('setLoadingConversation', () => {
+      it('toggles the isLoadingConversation flag', () => {
+        store.getState().aiActions.setLoadingConversation(true)
+        expect(store.getState().ai.isLoadingConversation).toBe(true)
+        store.getState().aiActions.setLoadingConversation(false)
+        expect(store.getState().ai.isLoadingConversation).toBe(false)
+      })
+    })
+  })
+
+  describe('updateMessageContent with block array', () => {
+    it('replaces a streamed text content with a block array (used at agentic-loop iteration boundary)', () => {
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1', role: 'assistant', content: 'streamed text' }))
+      const blocks = [
+        { type: 'text' as const, text: 'streamed text' },
+        { type: 'tool_use' as const, id: 'toolu_1', name: 'create_pou', input: { name: 'Foo' } },
+      ]
+      store.getState().aiActions.updateMessageContent('msg-1', blocks)
+
+      expect(store.getState().ai.messages[0].content).toEqual(blocks)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -342,16 +594,26 @@ describe('createAISliceFactory', () => {
   })
 
   it('overrides isEnabled and hasConsented from config', () => {
-    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }))
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true, inlineCompletionsEnabled: true }),
+    )
     const { ai } = store.getState()
     expect(ai.isEnabled).toBe(true)
     expect(ai.hasConsented).toBe(true)
   })
 
+  it('hydrates inlineCompletionsEnabled preference from config', () => {
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true, inlineCompletionsEnabled: false }),
+    )
+    expect(store.getState().ai.preferences.inlineCompletionsEnabled).toBe(false)
+  })
+
   it('preserves other default values when config is provided', () => {
-    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false }))
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false, inlineCompletionsEnabled: true }),
+    )
     const { ai } = store.getState()
-    expect(ai.model).toBe('haiku')
     expect(ai.creditsUsed).toBe(0)
     expect(ai.creditsTotal).toBe(500)
     expect(ai.tier).toBe('free')
@@ -364,7 +626,9 @@ describe('createAISliceFactory', () => {
   })
 
   it('creates functional actions when config is provided', () => {
-    const store = createStore<AISlice>()(createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true }))
+    const store = createStore<AISlice>()(
+      createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: true, inlineCompletionsEnabled: true }),
+    )
     store.getState().aiActions.setAIEnabled(false)
     expect(store.getState().ai.isEnabled).toBe(false)
   })

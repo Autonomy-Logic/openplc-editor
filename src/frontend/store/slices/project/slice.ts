@@ -337,7 +337,16 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           const pou = slice.project.data.pous.find((p) => p.name === oldName)
-          if (pou) pou.name = newName
+          if (pou) {
+            // Queue the OLD path for deletion. The next save serializes the
+            // POU under its new path; without this, the old file lingers in
+            // S3 (orphan-cleanup catches it) but the version-control badge
+            // wouldn't see the deletion event and would over-count by 1.
+            const folder = getFolderFromPouType(pou.pouType)
+            const ext = getExtensionFromLanguage(pou.body.language)
+            slice.pendingDeletions.push(`pous/${folder}/${oldName}${ext}`)
+            pou.name = newName
+          }
         }),
       )
     },
@@ -495,24 +504,36 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }
       }
 
+      let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
           const variables =
             scope === 'local' && associatedPou
               ? slice.project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables
               : slice.project.data.configurations.resource.globalVariables
-          if (!variables) return
+          if (!variables) {
+            response = fail('Variable container not found')
+            return
+          }
 
           if (variableName) {
             const idx = variables.findIndex((v) => v.name.toLowerCase() === variableName.toLowerCase())
-            if (idx !== -1) variables.splice(idx, 1)
+            if (idx === -1) {
+              response = fail(`Variable "${variableName}" not found`, 'Variable not found')
+              return
+            }
+            variables.splice(idx, 1)
             return
           }
           const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
-          if (found) variables.splice(found.index, 1)
+          if (!found) {
+            response = fail('Variable not found')
+            return
+          }
+          variables.splice(found.index, 1)
         }),
       )
-      return ok()
+      return response
     },
     rearrangeVariables: ({ scope, associatedPou, rowId, variableId, newIndex }) => {
       setState(
@@ -753,7 +774,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           const server = slice.project.data.servers?.find((s) => s.name === name)
-          if (server) server.name = newName
+          if (server) {
+            // See `updatePouName` — queue old path so the version-control
+            // badge doesn't over-count the rename.
+            slice.pendingDeletions.push(`devices/servers/${name}.json`)
+            server.name = newName
+          }
         }),
       )
       return ok()
@@ -1089,6 +1115,10 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
           if (!device) return
+
+          // See `updatePouName` — queue old path so the version-control
+          // badge doesn't over-count the rename.
+          slice.pendingDeletions.push(`devices/remote/${name}.json`)
 
           // Update associated system task name for EtherCAT devices
           if (device.protocol === 'ethercat') {

@@ -782,13 +782,13 @@ describe('createProjectSlice', () => {
       expect(store.getState().project.data.pous[0].interface?.variables).toHaveLength(1)
     })
 
-    it('returns ok even when variables array not available', () => {
+    it('returns fail when variables array not available', () => {
       const result = store.getState().projectActions.deleteVariable({
         scope: 'local',
         associatedPou: 'Missing',
         variableId: 'x',
       })
-      expect(result.ok).toBe(true)
+      expect(result.ok).toBe(false)
     })
   })
 
@@ -2173,14 +2173,14 @@ describe('createProjectSlice', () => {
   // -------------------------------------------------------------------------
 
   describe('defensive guards for missing configs', () => {
-    it('deleteVariable by rowId/variableId when variable not found', () => {
+    it('deleteVariable by rowId/variableId when variable not found returns fail', () => {
       seedPou(store, makePou('MyProg', 'program'))
       const result = store.getState().projectActions.deleteVariable({
         scope: 'local',
         associatedPou: 'MyProg',
         rowId: 99,
       })
-      expect(result.ok).toBe(true)
+      expect(result.ok).toBe(false)
     })
 
     it('rearrangeStructureVariables when item at rowId does not exist', () => {
@@ -2552,13 +2552,13 @@ describe('createProjectSlice', () => {
       expect(store.getState().project.data.pous[0].interface?.variables[0].class).toBe('input')
     })
 
-    it('deleteVariable for global scope when variableName not found skips external check', () => {
+    it('deleteVariable for global scope when variableName not found returns fail', () => {
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('exists', 'global') })
       const result = store.getState().projectActions.deleteVariable({
         scope: 'global',
         variableName: 'doesNotExist',
       })
-      expect(result.ok).toBe(true)
+      expect(result.ok).toBe(false)
       // The existing variable should still be there
       expect(store.getState().project.data.configurations.resource.globalVariables).toHaveLength(1)
     })

@@ -27,6 +27,33 @@
   background-color: transparent;
 }
 
+@keyframes ai-chat-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.ai-chat-typing-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ai-chat-pulse 1.2s infinite;
+}
+.ai-chat-typing-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.ai-chat-typing-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
 @layer base {
   :root {
     --primary-default: #0464fb;

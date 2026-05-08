@@ -98,6 +98,10 @@ export function useVersionControl() {
   return usePlatform().versionControl
 }
 
+export function useNavigation() {
+  return usePlatform().navigation
+}
+
 export function useCapabilities() {
   return usePlatform().capabilities
 }
