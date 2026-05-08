@@ -34,6 +34,7 @@ export type WorkspaceProjectTreeLeafType =
   | 'resource'
   | 'server'
   | 'remote-device'
+  | 'ethercat-device'
   | null
 
 // ---------------------------------------------------------------------------

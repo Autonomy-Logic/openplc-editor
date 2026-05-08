@@ -57,6 +57,7 @@ const DimensionsTable = ({
         ),
       }),
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [name, selectedRow],
   )
 

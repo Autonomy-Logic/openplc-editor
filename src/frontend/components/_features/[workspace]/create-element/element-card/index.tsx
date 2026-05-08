@@ -62,7 +62,7 @@ const ServerProtocolSources = [
 const RemoteDeviceProtocolSources = [
   { value: 'modbus-tcp', label: 'Modbus', disabled: false },
   { value: 'ethernet-ip', label: 'EtherNet/IP', disabled: true },
-  { value: 'ethercat', label: 'EtherCAT', disabled: true },
+  { value: 'ethercat', label: 'EtherCAT', disabled: false },
   { value: 'profinet', label: 'PROFINET', disabled: true },
 ] as const
 
