@@ -280,10 +280,88 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'remote-device' })
     },
 
-    delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteRemoteDevice(n)),
+    delete: (name) => {
+      // Cascade: purge EtherCAT children first so their tabs, editor
+      // models, and file entries are cleaned up before the bus vanishes
+      // from the tree. Without this step the children survive the
+      // parent delete as orphan state.
+      const state = getState()
+      const bus = state.project.data.remoteDevices?.find((d) => d.name === name)
+      const children = bus?.protocol === 'ethercat' ? (bus.ethercatConfig?.devices ?? []) : []
+      // Snapshot ids — ethercatDeviceActions.delete mutates the same
+      // array via updateEthercatConfig, so iterating the live array
+      // would skip every second child.
+      for (const childId of children.map((d) => d.id)) {
+        state.ethercatDeviceActions.delete(name, childId)
+      }
+      return deleteElement(getState(), name, (n) => getState().projectActions.deleteRemoteDevice(n))
+    },
 
     rename: (oldName, newName) =>
       renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateRemoteDeviceName(o, n)),
+  },
+
+  ethercatDeviceActions: {
+    delete: (busName, deviceId) => {
+      const state = getState()
+      const remoteDevice = state.project.data.remoteDevices?.find((d) => d.name === busName)
+      if (!remoteDevice) return { ok: false, message: 'Bus not found' }
+
+      const device = remoteDevice.ethercatConfig?.devices?.find((d) => d.id === deviceId)
+      if (!device) return { ok: false, message: 'EtherCAT device not found' }
+
+      const deviceName = device.name
+      state.projectActions.updateEthercatConfig(busName, {
+        masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
+          networkInterface: 'eth0',
+          cycleTimeUs: 1000,
+          watchdogTimeoutCycles: 3,
+        },
+        devices: (remoteDevice.ethercatConfig?.devices ?? []).filter((d) => d.id !== deviceId),
+      })
+      state.editorActions.removeModel(deviceName)
+      state.tabsActions.removeTab(deviceName)
+      // EtherCAT children are registered in the file slice on project
+      // load (see register files for save-state tracking). Drop the
+      // entry here so it doesn't linger when the child is removed
+      // directly or via a bus cascade.
+      state.fileActions.removeFile({ name: deviceName })
+
+      const currentEditor = state.editor
+      if (currentEditor.type !== 'available' && currentEditor.meta.name === deviceName) {
+        state.editorActions.clearEditor()
+      }
+
+      return { ok: true }
+    },
+
+    rename: (busName, deviceId, newName) => {
+      const state = getState()
+      const remoteDevice = state.project.data.remoteDevices?.find((d) => d.name === busName)
+      if (!remoteDevice) return { ok: false, message: 'Bus not found' }
+
+      const devices = remoteDevice.ethercatConfig?.devices ?? []
+      const device = devices.find((d) => d.id === deviceId)
+      if (!device) return { ok: false, message: 'EtherCAT device not found' }
+
+      const oldName = device.name
+      const updatedDevices = devices.map((d) => (d.id === deviceId ? { ...d, name: newName } : d))
+      state.projectActions.updateEthercatConfig(busName, {
+        masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
+          networkInterface: 'eth0',
+          cycleTimeUs: 1000,
+          watchdogTimeoutCycles: 3,
+        },
+        devices: updatedDevices,
+      })
+      state.editorActions.updateEditorName(oldName, newName)
+      state.tabsActions.updateTabName(oldName, newName)
+      // Rekey the file slice entry so save-state tracking follows the rename
+      // instead of orphaning the old name when the slave is first-class.
+      state.fileActions.updateFile({ name: oldName, newName })
+
+      return { ok: true }
+    },
   },
 
   sharedWorkspaceActions: {
@@ -368,6 +446,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
       getState().versionControlActions.clearVersionControlState()
+      // Drop the active conversation pointer + its loaded messages so the
+      // chat doesn't bleed across project switches. The project-scoped
+      // conversation list is refetched separately on project_id change
+      // (see IndexPage's effect).
+      getState().aiActions.clearConversation()
     },
 
     handleOpenProjectResponse: (data) => {
@@ -547,6 +630,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (remoteDevices) {
         remoteDevices.forEach((d) => {
           files[d.name] = { type: 'remote-device', filePath: d.name, saved: true }
+          // Register file entries for EtherCAT slave devices (children of the bus).
+          // Keyed by slave.name to match how the rest of the file registry, tabs,
+          // and editor models identify slaves. Rename flows in
+          // `ethercatDeviceActions.rename` call `fileActions.updateFile({ name, newName })`
+          // to rekey this entry so it never orphans.
+          if (d.protocol === 'ethercat' && d.ethercatConfig?.devices) {
+            for (const slave of d.ethercatConfig.devices) {
+              files[slave.name] = { type: 'ethercat-device', filePath: d.name, saved: true }
+            }
+          }
         })
       }
       files['Resource'] = { type: 'resource', filePath: 'Resource', saved: true }

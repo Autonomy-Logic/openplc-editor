@@ -5,6 +5,7 @@ import type {
   PLCVariable,
   ProjectMeta,
 } from '../../../../middleware/shared/ports/types'
+import type { AISlice } from '../ai'
 import type { ConsoleSlice } from '../console'
 import type { DeviceSlice } from '../device'
 import type { EditorSlice } from '../editor'
@@ -24,7 +25,8 @@ import type { WorkspaceSlice } from '../workspace'
 // Root state type for shared slice (it orchestrates across all slices)
 // ---------------------------------------------------------------------------
 
-export type SharedRootState = ProjectSlice &
+export type SharedRootState = AISlice &
+  ProjectSlice &
   FileSlice &
   EditorSlice &
   TabsSlice &
@@ -107,6 +109,11 @@ export type RemoteDeviceActions = {
   rename: (oldName: string, newName: string) => SharedResponse
 }
 
+export type EtherCATDeviceActions = {
+  delete: (busName: string, deviceId: string) => SharedResponse
+  rename: (busName: string, deviceId: string, newName: string) => SharedResponse
+}
+
 export type SnapshotActions = {
   pushToHistory: (pouName: string, snapshot: PouHistorySnapshot) => void
   markSaved: (pouName: string) => void
@@ -151,6 +158,7 @@ export type SharedSlice = {
   datatypeActions: DatatypeActions
   serverActions: ServerActions
   remoteDeviceActions: RemoteDeviceActions
+  ethercatDeviceActions: EtherCATDeviceActions
   snapshotActions: SnapshotActions
   sharedWorkspaceActions: SharedWorkspaceActions
 }

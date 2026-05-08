@@ -6,10 +6,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { useCapabilities, useChatPanel, useDebugger, useDevice, useProject } from '../../middleware/shared/providers'
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
+import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
@@ -241,7 +241,6 @@ const WorkspaceScreen = () => {
   )
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleBranchSwitch = useCallback(
     async (branchName: string) => {
       if (!projectPath) return
@@ -396,18 +395,18 @@ const WorkspaceScreen = () => {
             ) : (
               <Explorer collapse={explorerPanelRef} defaultSize={leftPanelSize} />
             )}
+            <ResizableHandle
+              id='workspaceHandle'
+              hitAreaMargins={{ coarse: 12, fine: 3 }}
+              className='z-[99] my-[2px] w-[4px] py-2 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700 data-[resize-handle-state="hover"]:dark:bg-neutral-700'
+            />
             <ResizablePanel
               id='workspacePanel'
               order={2}
-              defaultSize={84}
-              className='relative flex h-full min-h-0 w-[400px]'
+              defaultSize={68}
+              minSize={50}
+              className='flex h-full min-h-0 overflow-hidden'
             >
-              <ResizableHandle
-                id='workspaceHandle'
-                hitAreaMargins={{ coarse: 12, fine: 3 }}
-                className='absolute bottom-0 top-0 z-[99] my-[2px] w-[4px] py-2 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700'
-              />
-
               <div
                 id='workspaceContentPanel'
                 className='flex h-full min-h-0 flex-1 grow flex-col gap-2 overflow-hidden'
@@ -445,7 +444,15 @@ const WorkspaceScreen = () => {
                       <>
                         {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                         {editor['type'] === 'plc-device' && <DeviceEditor />}
-                        {editor['type'] === 'plc-remote-device' && <RemoteDeviceEditor />}
+                        {editor['type'] === 'plc-remote-device' && editor.meta.protocol === 'ethercat' && (
+                          <EtherCATEditor />
+                        )}
+                        {editor['type'] === 'plc-remote-device' && editor.meta.protocol !== 'ethercat' && (
+                          <RemoteDeviceEditor />
+                        )}
+                        {editor['type'] === 'plc-ethercat-device' && (
+                          <EtherCATDeviceEditor key={editor.meta.deviceId} />
+                        )}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 'modbus-tcp' && (
                           <ModbusServerEditor />
                         )}
@@ -654,9 +661,10 @@ const WorkspaceScreen = () => {
                 <ResizablePanel
                   id='chatPanel'
                   order={3}
-                  defaultSize={16}
-                  maxSize={25}
-                  className='min-w-xs relative flex h-full min-h-0 w-full'
+                  defaultSize={30}
+                  minSize={20}
+                  maxSize={50}
+                  className='relative flex h-full min-h-0 w-full'
                 >
                   <ChatPanel />
                 </ResizablePanel>
@@ -665,10 +673,9 @@ const WorkspaceScreen = () => {
           </ResizablePanelGroup>
         </WorkspaceMainContent>
       </div>
-      {/* TODO: Re-enable branch status bar once branch switching is fully implemented */}
-      {/* {hasVersionControl && projectPath && (
+      {hasVersionControl && projectPath && (
         <BranchStatusBar projectId={projectPath} onBranchSwitch={handleBranchSwitch} />
-      )} */}
+      )}
     </div>
   )
 }

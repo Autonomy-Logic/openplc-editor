@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { OrchestratorInfo } from '../../../../../../../middleware/shared/ports/orchestrator-port'
 import { useOrchestrator, useRuntime } from '../../../../../../../middleware/shared/providers'
@@ -7,15 +7,17 @@ import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
+import { normalizeEthercatStatus } from '../../../../../../utils/ethercat-status'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { EthercatStatsSection } from '../ethercat/components/ethercat-stats-section'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
 
 const SIMULATOR_BOARD_NAME = 'OpenPLC Simulator'
-const RUNTIME_BOARD_NAME = 'OpenPLC Runtime v3'
+const RUNTIME_BOARD_NAME = 'OpenPLC Runtime v4'
 
 /**
  * Returns the appropriate status badge styling based on status value
@@ -301,6 +303,21 @@ const OrchestratorsList = () => {
       deviceActions.setIncludeTimingStatsInPolling(false)
     }
   }, [deviceActions])
+
+  // Same pattern for EtherCAT runtime status. Only fetched while this screen
+  // is mounted, so non-EtherCAT setups don't pay for the extra round-trip on
+  // every poll.
+  useEffect(() => {
+    deviceActions.setIncludeEthercatStatsInPolling(true)
+    return () => {
+      deviceActions.setIncludeEthercatStatsInPolling(false)
+    }
+  }, [deviceActions])
+
+  const ethercatMasters = useMemo(
+    () => normalizeEthercatStatus(runtimeConnection.ethercatStatus),
+    [runtimeConnection.ethercatStatus],
+  )
 
   // Handle device switch confirmation
   const handleConfirmDeviceSwitch = useCallback(async () => {
@@ -642,6 +659,11 @@ const OrchestratorsList = () => {
                 </div>
               )}
             </div>
+
+            <EthercatStatsSection
+              masters={ethercatMasters}
+              cardsClassName='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'
+            />
           </div>
         )}
     </div>
