@@ -15,12 +15,50 @@ type StrucppCompile = typeof import('strucpp')['compile']
 type StrucppFormatDiagnostic = typeof import('strucpp')['formatDiagnostic']
 type StrucppBuildSourceMap = typeof import('strucpp')['buildSourceMap']
 type StrucppGetVersion = typeof import('strucpp')['getVersion']
+type StrucppCompileError = import('strucpp').CompileError
+type StrucppSourceMap = ReturnType<typeof import('strucpp')['buildSourceMap']>
 
 interface StrucppModule {
   compile: StrucppCompile
   formatDiagnostic: StrucppFormatDiagnostic
   buildSourceMap: StrucppBuildSourceMap
   getVersion: StrucppGetVersion
+}
+
+import { type KnownPou, splitProgramSt } from './utils/split-program-st'
+
+/**
+ * Wrap strucpp's plain (file:line:col) diagnostic with the POU/section
+ * context the new error fields carry, so the editor's console shows
+ * something the user can act on:
+ *
+ *     [Manual_Override / body line 7] Cannot assign WSTRING to BOOL
+ *
+ * For var-block errors with a known variable name, surface that
+ * instead of the raw line number — the variables-table view doesn't
+ * always show line numbers (table mode), and a name is more
+ * actionable. Falls back to plain formatDiagnostic when none of the
+ * new fields are populated (e.g. errors in synthetic _types.st /
+ * _config.st sections, or before the splitter ran).
+ */
+function formatErrorWithPouContext(
+  err: StrucppCompileError,
+  formatDiagnostic: StrucppFormatDiagnostic,
+  sourceMap: StrucppSourceMap,
+): string {
+  const base = formatDiagnostic(err, sourceMap)
+  if (!err.pouName) return base
+  let prefix: string
+  if (err.section === 'body' && err.bodyLine !== undefined) {
+    prefix = `[${err.pouName} / body line ${err.bodyLine}]`
+  } else if (err.section === 'var-block') {
+    prefix = err.variableName
+      ? `[${err.pouName} / variable ${err.variableName}]`
+      : `[${err.pouName} / variables, line ${err.line}]`
+  } else {
+    prefix = `[${err.pouName}]`
+  }
+  return `${prefix}\n${base}`
 }
 
 /**
@@ -550,7 +588,7 @@ class CompilerModule {
   async handleCompileSTtoCpp(
     sourceTargetFolderPath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
-    options: { hasCBlocks?: boolean } = {},
+    options: { hasCBlocks?: boolean; pous?: KnownPou[] } = {},
   ): Promise<{ md5Hash: string }> {
     const stFilePath = join(sourceTargetFolderPath, 'program.st')
     const stSource = await readFile(stFilePath, { encoding: 'utf8' })
@@ -576,31 +614,80 @@ class CompilerModule {
     // can detect stale layouts without re-reading program.st).
     const md5Hash = crypto.createHash('md5').update(stSource).digest('hex')
 
+    // Try to split program.st into per-POU files so strucpp errors come
+    // back with `error.file === '<PouName>.st'` and the new
+    // pouName/section/bodyLine fields populated. Failure is non-fatal:
+    // we fall back to monolithic compilation, which is exactly today's
+    // behaviour — the build never breaks because of the splitter.
+    const split = options.pous && options.pous.length > 0 ? splitProgramSt(stSource, options.pous) : null
+    if (options.pous && options.pous.length > 0 && !split) {
+      handleOutputData(
+        'ST splitter could not segment program.st; falling back to monolithic compilation. ' +
+          'Error line numbers may not match the editor view.',
+        'info',
+      )
+    }
+
+    // Persist the offset table next to the build artefacts even though
+    // nothing reads it yet — handy for future iec2c-error remapping on
+    // Runtime v3 and trivial to produce.
+    if (split) {
+      const offsets: Record<string, { kind: string; startLine: number; endLine: number }> = {}
+      for (const [name, off] of split.pouOffsets) offsets[name] = off
+      await writeFile(
+        join(sourceTargetFolderPath, 'program.st.map.json'),
+        JSON.stringify({ pouOffsets: offsets }, null, 2),
+        { encoding: 'utf8' },
+      )
+    }
+
     const stFileName = 'program.st'
     // When the project has C/C++ POUs, every per-POU TU may reference the
     // user-defined `<NAME>_VARS` struct and `<name>_setup` / `<name>_loop`
     // extern declarations. They live in c_blocks.h (generated immediately
     // after this step), so plumb the include through.
     const pouIncludes = options.hasCBlocks ? ['c_blocks.h'] : []
-    const result = strucppCompile(stSource, {
+
+    let primaryFileName = stFileName
+    let primarySource = stSource
+    let additionalSources: { fileName: string; source: string }[] | undefined
+    if (split) {
+      const entries = [...split.files.entries()]
+      // Take the first as primary; rest go through additionalSources.
+      // Order doesn't affect compilation correctness — strucpp merges
+      // every parsed unit before semantic analysis.
+      const [firstName, firstSource] = entries[0]
+      primaryFileName = firstName
+      primarySource = firstSource
+      additionalSources = entries.slice(1).map(([fileName, source]) => ({ fileName, source }))
+    }
+
+    const result = strucppCompile(primarySource, {
       headerFileName: 'generated.hpp',
-      fileName: stFileName,
+      fileName: primaryFileName,
       debug: true,
       lineMapping: true,
       libraryPaths,
       md5: md5Hash,
       pouIncludes,
+      ...(additionalSources ? { additionalSources } : {}),
     })
 
-    const diagSourceMap = strucppBuildSourceMap([{ fileName: stFileName, source: stSource }])
+    // Source map covers every file we fed strucpp, so formatDiagnostic
+    // can pull the offending source line whichever per-POU file the
+    // error came from.
+    const diagFiles = split
+      ? [...split.files.entries()].map(([fileName, source]) => ({ fileName, source }))
+      : [{ fileName: stFileName, source: stSource }]
+    const diagSourceMap = strucppBuildSourceMap(diagFiles)
 
     if (!result.success) {
-      const msgs = result.errors.map((e) => strucppFormatDiagnostic(e, diagSourceMap)).join('\n\n')
+      const msgs = result.errors.map((e) => formatErrorWithPouContext(e, strucppFormatDiagnostic, diagSourceMap)).join('\n\n')
       throw new Error(`STruC++ compilation failed:\n\n${msgs}`)
     }
 
     for (const warn of result.warnings) {
-      handleOutputData(strucppFormatDiagnostic(warn, diagSourceMap), 'info')
+      handleOutputData(formatErrorWithPouContext(warn, strucppFormatDiagnostic, diagSourceMap), 'info')
     }
 
     // STruC++ splits the implementation across one TU per POU plus a
@@ -1905,12 +1992,24 @@ class CompilerModule {
     // Step 4: Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
       const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
+      // Hand the POU list to handleCompileSTtoCpp so the splitter can
+      // segment program.st into per-POU files and surface errors with
+      // POU-relative location data.
+      const knownPous: KnownPou[] = projectData.pous.map((p) => ({
+        name: p.data.name,
+        kind:
+          p.type === 'program'
+            ? ('PROGRAM' as const)
+            : p.type === 'function'
+              ? ('FUNCTION' as const)
+              : ('FUNCTION_BLOCK' as const),
+      }))
       const { md5Hash } = await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel) => {
           _mainProcessPort.postMessage({ logLevel, message: data })
         },
-        { hasCBlocks },
+        { hasCBlocks, pous: knownPous },
       )
       buildMD5Hash = md5Hash
     } catch (error) {
@@ -2646,12 +2745,21 @@ class CompilerModule {
     // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
       const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
+      const knownPous: KnownPou[] = projectData.pous.map((p) => ({
+        name: p.data.name,
+        kind:
+          p.type === 'program'
+            ? ('PROGRAM' as const)
+            : p.type === 'function'
+              ? ('FUNCTION' as const)
+              : ('FUNCTION_BLOCK' as const),
+      }))
       await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel) => {
           _mainProcessPort.postMessage({ logLevel, message: data })
         },
-        { hasCBlocks },
+        { hasCBlocks, pous: knownPous },
       )
     } catch (error) {
       _mainProcessPort.postMessage({
