@@ -1,6 +1,7 @@
 import { debounce } from 'lodash'
 import { memo, useEffect, useMemo, useRef } from 'react'
 
+import { useNavigateToCompileError } from '../../../hooks/use-navigate-to-compile-error'
 import { useOpenPLCStore } from '../../../store'
 import formatTimestamp from '../../../utils/format-timestamp'
 import { LogComponent } from './log'
@@ -8,6 +9,7 @@ import { LogComponent } from './log'
 const Console = memo(() => {
   const logs = useOpenPLCStore((state) => state.logs)
   const filters = useOpenPLCStore((state) => state.filters)
+  const navigateToCompileError = useNavigateToCompileError()
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const userScrolledRef = useRef(false)
@@ -84,6 +86,8 @@ const Console = memo(() => {
             message={log.message}
             tstamp={formatTimestamp(log.tstamp ?? new Date(), filters.timestampFormat)}
             searchTerm={filters.searchTerm}
+            compileError={log.compileError}
+            onCompileErrorClick={navigateToCompileError}
           />
         ))}
       <div ref={bottomLogRef} id='bottom-log' />

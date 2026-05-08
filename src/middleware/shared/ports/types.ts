@@ -741,6 +741,34 @@ export interface CompileProgressEvent {
   level?: string
   firmwarePath?: string
   plcStatus?: string
+  /**
+   * Structured strucpp diagnostic for click-to-open in the console.
+   * Set on the per-error events emitted during a failed strucpp
+   * compile; absent for plain progress messages.  Consumers that
+   * don't care about navigation can ignore it.
+   */
+  compileError?: StructuredCompileError
+}
+
+/**
+ * Subset of strucpp's `CompileError` carried over IPC.  Kept narrow
+ * on purpose — only the fields the editor's console / navigation
+ * actually consume travel across the bridge, to avoid coupling the
+ * IPC shape to every internal strucpp detail.
+ */
+export interface StructuredCompileError {
+  message: string
+  line: number
+  column: number
+  endLine?: number
+  endColumn?: number
+  file?: string
+  severity: 'error' | 'warning' | 'info'
+  pouName?: string
+  pouKind?: 'PROGRAM' | 'FUNCTION' | 'FUNCTION_BLOCK'
+  section?: 'interface' | 'var-block' | 'body'
+  bodyLine?: number
+  variableName?: string
 }
 
 export interface CompileResult {
@@ -822,6 +850,13 @@ export interface LogObject {
   level?: 'debug' | 'info' | 'warning' | 'error'
   message: string
   tstamp?: Date
+  /**
+   * Optional structured strucpp diagnostic that originated this log.
+   * When set, the console renders the bracketed POU prefix as a
+   * clickable button that opens the right tab/section. Plain
+   * progress / informational logs leave this undefined.
+   */
+  compileError?: StructuredCompileError
 }
 
 // ---------------------------------------------------------------------------

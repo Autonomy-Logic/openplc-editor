@@ -18,10 +18,16 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
-/** Data posted through the MessagePort by the compiler module. */
+/** Data posted through the MessagePort by the compiler module.
+ *  `compileError` carries strucpp's structured `CompileError` (pouName,
+ *  section, bodyLine, …) when the message is one of the per-error log
+ *  entries emitted by the strucpp compile failure path — the renderer
+ *  uses it to attach a click-to-open handler to the rendered line.
+ *  Absent for plain progress messages. */
 type CompilerPortMessage = {
   message?: string
   logLevel?: string
+  compileError?: import('strucpp').CompileError
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean

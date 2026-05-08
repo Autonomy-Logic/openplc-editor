@@ -594,7 +594,11 @@ class CompilerModule {
 
   async handleCompileSTtoCpp(
     sourceTargetFolderPath: string,
-    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+    handleOutputData: (
+      chunk: Buffer | string,
+      logLevel?: 'info' | 'error',
+      compileError?: StrucppCompileError,
+    ) => void,
     options: { hasCBlocks?: boolean; pous?: KnownPou[] } = {},
   ): Promise<{ md5Hash: string }> {
     const stFilePath = join(sourceTargetFolderPath, 'program.st')
@@ -689,12 +693,29 @@ class CompilerModule {
     const diagSourceMap = strucppBuildSourceMap(diagFiles)
 
     if (!result.success) {
-      const msgs = result.errors.map((e) => formatErrorWithPouContext(e, strucppFormatDiagnostic, diagSourceMap)).join('\n\n')
-      throw new Error(`STruC++ compilation failed:\n\n${msgs}`)
+      // Emit one structured log entry per error so the renderer's
+      // console can attach a click-to-open handler to each one.  The
+      // formatted text is what the user sees; the third argument
+      // carries the raw `CompileError` (pouName / section / bodyLine
+      // / variableName / …) for navigation.  We then throw a short
+      // marker so the outer catch posts only the high-level
+      // "STruC++ compilation failed" line — without re-dumping every
+      // error blob a second time through the catch's plain-message
+      // path.
+      handleOutputData('STruC++ compilation failed:', 'error')
+      for (const err of result.errors) {
+        const formatted = formatErrorWithPouContext(err, strucppFormatDiagnostic, diagSourceMap)
+        handleOutputData(formatted, 'error', err)
+      }
+      throw new Error('STruC++ compilation failed')
     }
 
     for (const warn of result.warnings) {
-      handleOutputData(formatErrorWithPouContext(warn, strucppFormatDiagnostic, diagSourceMap), 'info')
+      handleOutputData(
+        formatErrorWithPouContext(warn, strucppFormatDiagnostic, diagSourceMap),
+        'info',
+        warn,
+      )
     }
 
     // STruC++ splits the implementation across one TU per POU plus a
@@ -2014,8 +2035,12 @@ class CompilerModule {
       }))
       const { md5Hash } = await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
-        (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
+        (data, logLevel, compileError) => {
+          _mainProcessPort.postMessage({
+            logLevel,
+            message: data,
+            ...(compileError ? { compileError } : {}),
+          })
         },
         { hasCBlocks, pous: knownPous },
       )
@@ -2765,8 +2790,12 @@ class CompilerModule {
       }))
       await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
-        (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
+        (data, logLevel, compileError) => {
+          _mainProcessPort.postMessage({
+            logLevel,
+            message: data,
+            ...(compileError ? { compileError } : {}),
+          })
         },
         { hasCBlocks, pous: knownPous },
       )

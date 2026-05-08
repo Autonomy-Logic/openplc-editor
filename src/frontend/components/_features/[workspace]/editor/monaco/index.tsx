@@ -413,6 +413,33 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
   }, [isDebuggerVisible])
 
+  // Apply programmatic cursor jumps (e.g. clicking a compile error in
+  // the console) to an already-mounted editor.  The onMount path
+  // handles the initial position; without this effect, navigating to
+  // an error in the POU that's currently active would silently no-op
+  // because the editor instance is already up.
+  //
+  // The user's own cursor movements don't feed back here — the
+  // editor's onCursorPositionChanged event isn't wired to update
+  // `editor.cursorPosition` (that only happens on tab switch via the
+  // subscribeToTabSwitch above), so applying the prop value is safe
+  // and won't loop.  The position-equality guard avoids redundant
+  // reveal animations when the prop happens to match where the
+  // editor already is.
+  useEffect(() => {
+    if (!editorMounted) return
+    const ed = editorRef.current
+    const target = editor.cursorPosition
+    if (!ed || !target) return
+    const current = ed.getPosition()
+    if (current && current.lineNumber === target.lineNumber && current.column === target.column) {
+      return
+    }
+    ed.setPosition({ lineNumber: target.lineNumber, column: target.column })
+    ed.revealPositionInCenter({ lineNumber: target.lineNumber, column: target.column })
+    ed.focus()
+  }, [editor.cursorPosition, editorMounted])
+
   // -----------------------------------------------------------------------
   // Debug variable inline values (editor-only debugger feature)
   // -----------------------------------------------------------------------

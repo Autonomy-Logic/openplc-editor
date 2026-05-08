@@ -1233,7 +1233,16 @@ const VariablesEditor = () => {
             className='mb-1 h-full overflow-y-auto'
             style={{ scrollbarGutter: 'stable' }}
           >
-            <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
+            <VariablesCodeEditor
+              code={editorCode}
+              onCodeChange={setEditorCode}
+              shouldUseDarkMode={shouldUseDarkMode}
+              cursorPosition={
+                editor.cursorPosition
+                  ? { lineNumber: editor.cursorPosition.lineNumber, column: editor.cursorPosition.column }
+                  : undefined
+              }
+            />
 
             {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}
           </div>

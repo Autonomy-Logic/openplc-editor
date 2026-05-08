@@ -73,8 +73,18 @@ function makeInstance(name: string, program: string, task = 'Task0'): PLCInstanc
 
 /** Simple log collector — NOT jest.fn(), just a plain function with a captured array. */
 function createLogCollector() {
-  const entries: { id: string; level: string; message: string }[] = []
-  const log = (entry: { id: string; level: 'error' | 'debug' | 'info' | 'warning'; message: string }) => {
+  const entries: {
+    id: string
+    level: string
+    message: string
+    compileError?: import('../../../middleware/shared/ports/types').StructuredCompileError
+  }[] = []
+  const log = (entry: {
+    id: string
+    level: 'error' | 'debug' | 'info' | 'warning'
+    message: string
+    compileError?: import('../../../middleware/shared/ports/types').StructuredCompileError
+  }) => {
     entries.push(entry)
   }
   return { entries, log }
@@ -138,6 +148,53 @@ describe('logCompilerEvent', () => {
     expect(entries[0].id).toBeTruthy()
     expect(entries[1].id).toBeTruthy()
     expect(entries[0].id).not.toBe(entries[1].id)
+  })
+
+  describe('with compileError attached (structured strucpp diagnostic)', () => {
+    const sampleErr = {
+      message: 'Cannot assign WSTRING to BOOL',
+      line: 9,
+      column: 10,
+      severity: 'error' as const,
+      pouName: 'MANUAL_OVERRIDE',
+      pouKind: 'FUNCTION_BLOCK' as const,
+      section: 'body' as const,
+      bodyLine: 7,
+    }
+
+    it('emits a single multi-line entry instead of splitting on newlines', () => {
+      const { entries, log } = createLogCollector()
+      const multiLine =
+        '[MANUAL_OVERRIDE / body line 7]\n' +
+        'Manual_Override.st:7:10: error: Cannot assign WSTRING to BOOL\n' +
+        '   7 |   asd := "hello world";\n' +
+        '     |          ^'
+      logCompilerEvent({ message: multiLine, level: 'error', compileError: sampleErr }, log)
+
+      expect(entries).toHaveLength(1)
+      expect(entries[0].message).toContain('[MANUAL_OVERRIDE / body line 7]')
+      expect(entries[0].message).toContain('asd := "hello world"')
+    })
+
+    it('forwards the compileError onto the log entry for click-to-open', () => {
+      const { entries, log } = createLogCollector()
+      logCompilerEvent({ message: '[X]\nrest', level: 'error', compileError: sampleErr }, log)
+
+      expect(entries[0].compileError).toBe(sampleErr)
+    })
+
+    it('still uses the supplied level', () => {
+      const { entries, log } = createLogCollector()
+      logCompilerEvent({ message: '[X]\nrest', level: 'error', compileError: sampleErr }, log)
+
+      expect(entries[0].level).toBe('error')
+    })
+
+    it('returns early when message is undefined even with compileError set', () => {
+      const { entries, log } = createLogCollector()
+      logCompilerEvent({ compileError: sampleErr }, log)
+      expect(entries).toHaveLength(0)
+    })
   })
 })
 
