@@ -46,7 +46,14 @@ function formatErrorWithPouContext(
   formatDiagnostic: StrucppFormatDiagnostic,
   sourceMap: StrucppSourceMap,
 ): string {
-  const base = formatDiagnostic(err, sourceMap)
+  // `preferBodyLine: true` makes strucpp's gcc-style formatter render
+  // body errors with the body-relative line in both the header column
+  // and the snippet gutter, matching the Monaco body view the user
+  // sees and the bracketed `[POU / body line N]` prefix we render
+  // alongside.  Var-block errors and non-POU errors are unaffected.
+  // CLI and vscode-extension callers don't pass this flag, so their
+  // long-standing absolute-file-line output is preserved.
+  const base = formatDiagnostic(err, sourceMap, { preferBodyLine: true })
   if (!err.pouName) return base
   let prefix: string
   if (err.section === 'body' && err.bodyLine !== undefined) {
