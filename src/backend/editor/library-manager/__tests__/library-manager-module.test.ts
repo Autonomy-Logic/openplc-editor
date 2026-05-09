@@ -296,6 +296,59 @@ describe('LibraryManagerModule', () => {
     })
   })
 
+  describe('resolveEnabledLibraryDirs', () => {
+    it('always returns the bundled directory when it exists', () => {
+      writeBundled(makeArchive('iec-standard-fb'))
+      const mod = makeModule()
+      const result = mod.resolveEnabledLibraryDirs([])
+      expect(result.dirs).toEqual([bundledDir])
+      expect(result.missing).toEqual([])
+    })
+
+    it('omits the bundled directory when the strucpp libs dir is absent', () => {
+      const mod = makeModule()
+      const result = mod.resolveEnabledLibraryDirs([])
+      expect(result.dirs).toEqual([])
+    })
+
+    it('appends per-library directories for installed user libs', async () => {
+      writeBundled(makeArchive('iec-standard-fb'))
+      const mod = makeModule()
+      const tmp = join(testRoot, 'oscat.stlib')
+      writeFileSync(tmp, JSON.stringify(makeArchive('oscat-basic')), 'utf-8')
+      await mod.installFromFile(tmp)
+
+      const result = mod.resolveEnabledLibraryDirs(['oscat-basic'])
+      expect(result.dirs).toEqual([bundledDir, join(librariesDir, 'oscat-basic')])
+      expect(result.missing).toEqual([])
+    })
+
+    it('does not include user libs that are installed but not enabled', async () => {
+      const mod = makeModule()
+      const tmp = join(testRoot, 'oscat.stlib')
+      writeFileSync(tmp, JSON.stringify(makeArchive('oscat-basic')), 'utf-8')
+      await mod.installFromFile(tmp)
+
+      const result = mod.resolveEnabledLibraryDirs([])
+      // Bundled dir doesn't exist in this test harness.
+      expect(result.dirs).toEqual([])
+    })
+
+    it('reports enabled libraries that have no archive on disk', async () => {
+      const mod = makeModule()
+      const tmp = join(testRoot, 'foo.stlib')
+      writeFileSync(tmp, JSON.stringify(makeArchive('foo')), 'utf-8')
+      await mod.installFromFile(tmp)
+      // Wipe the archive but keep the registry entry — pre-compile
+      // gate should detect this as missing.
+      rmSync(join(librariesDir, 'foo', 'foo.stlib'))
+
+      const result = mod.resolveEnabledLibraryDirs(['foo', 'phantom'])
+      expect(result.dirs).toEqual([])
+      expect(result.missing).toEqual(['foo', 'phantom'])
+    })
+  })
+
   describe('registry resilience', () => {
     it('treats a missing registry.json as an empty registry', () => {
       const mod = makeModule()
