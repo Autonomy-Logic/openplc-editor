@@ -158,6 +158,44 @@ export class LibraryManagerModule {
   }
 
   /**
+   * Resolve enabled libraries to the directory list strucpp's
+   * `libraryPaths` option expects.  Each directory is a root that
+   * `strucpp.discoverStlibs` walks for `.stlib` files.
+   *
+   * Returns:
+   *   - bundled directory always (it carries the full canonical set
+   *     in one folder; bundled libs are always-on).
+   *   - per-library directories for `enabledNames` that resolve to a
+   *     registered user library on disk.  Each user lib is its own
+   *     `{userData}/libraries/<name>/` so we can include only the
+   *     enabled subset without exposing disabled ones.
+   *
+   * `missing` lists enabled names that have no archive on disk —
+   * the caller surfaces this as a pre-compile error so the user gets
+   * a clear "open the Library Manager" message instead of strucpp's
+   * per-symbol "function not found" cascade.
+   */
+  resolveEnabledLibraryDirs(enabledNames: string[]): { dirs: string[]; missing: string[] } {
+    const dirs: string[] = []
+    if (existsSync(this.bundledDir)) {
+      dirs.push(this.bundledDir)
+    }
+    const registry = this.readRegistry()
+    const missing: string[] = []
+    for (const name of enabledNames) {
+      const entry = registry.libraries[name]
+      if (entry && existsSync(entry.stlibPath)) {
+        // Each user library lives under its own folder; pass that
+        // (not the librariesDir root) so disabled libs stay out.
+        dirs.push(join(this.librariesDir, name))
+      } else {
+        missing.push(name)
+      }
+    }
+    return { dirs, missing }
+  }
+
+  /**
    * Return every installed archive's parsed contents — bundled then
    * user-installed alphabetical.  Used by the renderer to hydrate
    * the in-memory library state at startup and after install/uninstall

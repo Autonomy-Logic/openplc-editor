@@ -599,7 +599,26 @@ class CompilerModule {
       logLevel?: 'info' | 'error',
       compileError?: StrucppCompileError,
     ) => void,
-    options: { hasCBlocks?: boolean; pous?: KnownPou[] } = {},
+    options: {
+      hasCBlocks?: boolean
+      pous?: KnownPou[]
+      /**
+       * Directories `strucpp.libraryPaths` should scan for `.stlib`
+       * archives.  When supplied, fully overrides the default
+       * "scan strucppLibsDir" behaviour — pass the bundled directory
+       * plus any project-enabled user-installed directories.  When
+       * omitted, the legacy "scan only strucppLibsDir" path keeps
+       * working (bundled-only).
+       */
+      libraryDirs?: string[]
+      /**
+       * Names of libraries the project enables but the system pool
+       * doesn't currently have on disk.  Surfaced as a pre-compile
+       * error so the user gets a clear "open the Library Manager"
+       * message instead of strucpp's per-symbol cascade.
+       */
+      missingLibraries?: string[]
+    } = {},
   ): Promise<{ md5Hash: string }> {
     const stFilePath = join(sourceTargetFolderPath, 'program.st')
     const stSource = await readFile(stFilePath, { encoding: 'utf8' })
@@ -612,13 +631,35 @@ class CompilerModule {
       buildSourceMap: strucppBuildSourceMap,
     } = loadStrucpp()
 
-    const libsDir = this.strucppLibsDir
+    // Pre-compile gate: every library the project enables must be
+    // resolvable on disk before strucpp runs, otherwise the
+    // user gets a confusing "function 'X' not found" error per
+    // missing symbol instead of a clear "library 'Y' is enabled but
+    // not installed" message.
+    if (options.missingLibraries && options.missingLibraries.length > 0) {
+      const list = options.missingLibraries.join(', ')
+      throw new Error(
+        `Cannot compile: project enables libraries that are not installed (${list}). ` +
+          `Open the Library Manager to install or remove them.`,
+      )
+    }
+
+    // When the caller supplied a project-scoped directory list (the
+    // editor path goes through this), use it as-is — bundled +
+    // project-enabled subset only.  Fallback path (no list) scans
+    // the strucpp resources dir directly so direct API consumers
+    // and old call sites keep working with bundled-only behaviour.
     let libraryPaths: string[] = []
-    try {
-      await fs.access(libsDir)
-      libraryPaths = [libsDir]
-    } catch {
-      // No libs directory available, compile without libraries
+    if (options.libraryDirs && options.libraryDirs.length > 0) {
+      libraryPaths = options.libraryDirs
+    } else {
+      const libsDir = this.strucppLibsDir
+      try {
+        await fs.access(libsDir)
+        libraryPaths = [libsDir]
+      } catch {
+        // No libs directory available, compile without libraries
+      }
     }
 
     // Precompute MD5 so STruC++ can embed it into debugMap (so the editor
@@ -1857,6 +1898,15 @@ class CompilerModule {
         endpoint: string,
         responseParser?: (data: string) => T,
       ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+      /**
+       * Resolve a list of project-enabled library names to the disk
+       * directories `strucpp.libraryPaths` should scan.  Bundled
+       * libraries are always-on and live in a single shared dir;
+       * each enabled user library gets its own folder.  Missing
+       * names (enabled but not installed) come back so the caller
+       * can abort with a clear error before strucpp runs.
+       */
+      resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
     },
   ): Promise<void> {
     // Start the main process port to communicate with the renderer process.
@@ -2033,6 +2083,13 @@ class CompilerModule {
               : ('FUNCTION_BLOCK' as const),
         language: p.data.language as KnownPou['language'],
       }))
+      // Resolve project-enabled libraries to disk directories.
+      // Bundled libs are always-on; missing names (enabled but not
+      // installed) abort the compile early in handleCompileSTtoCpp
+      // with a clear "open the Library Manager" message.
+      const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
+      const { dirs: libraryDirs, missing: missingLibraries } =
+        mainProcessBridge.resolveLibraryDirs(enabledLibraryNames)
       const { md5Hash } = await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel, compileError) => {
@@ -2042,7 +2099,7 @@ class CompilerModule {
             ...(compileError ? { compileError } : {}),
           })
         },
-        { hasCBlocks, pous: knownPous },
+        { hasCBlocks, pous: knownPous, libraryDirs, missingLibraries },
       )
       buildMD5Hash = md5Hash
     } catch (error) {
@@ -2688,6 +2745,9 @@ class CompilerModule {
   async compileForDebugger(
     args: Array<string | null | PLCProjectData>,
     _mainProcessPort: MessagePortMain,
+    mainProcessBridge: {
+      resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
+    },
   ): Promise<void> {
     _mainProcessPort.start()
 
@@ -2788,6 +2848,9 @@ class CompilerModule {
               : ('FUNCTION_BLOCK' as const),
         language: p.data.language as KnownPou['language'],
       }))
+      const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
+      const { dirs: libraryDirs, missing: missingLibraries } =
+        mainProcessBridge.resolveLibraryDirs(enabledLibraryNames)
       await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel, compileError) => {
@@ -2797,7 +2860,7 @@ class CompilerModule {
             ...(compileError ? { compileError } : {}),
           })
         },
-        { hasCBlocks, pous: knownPous },
+        { hasCBlocks, pous: knownPous, libraryDirs, missingLibraries },
       )
     } catch (error) {
       _mainProcessPort.postMessage({

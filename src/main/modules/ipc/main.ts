@@ -992,8 +992,19 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileForDebugger(args, mainProcessPort)
+    void this.compilerModule.compileForDebugger(args, mainProcessPort, this)
   }
+
+  /**
+   * Bridge method consumed by the compiler module.  Walks the
+   * library manager's registry to turn `project.libraries` names
+   * into the disk directories strucpp's `libraryPaths` should scan,
+   * always including bundled libraries.  Bridge owns the library
+   * manager instance, so the compiler module doesn't need its own
+   * reference.
+   */
+  resolveLibraryDirs = (enabledNames: string[]): { dirs: string[]; missing: string[] } =>
+    this.libraryManagerModule.resolveEnabledLibraryDirs(enabledNames)
 
   // TODO: These handlers are outdated and should be removed.
   // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
