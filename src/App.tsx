@@ -26,15 +26,18 @@ import { PlatformProvider } from './middleware/shared/providers'
  * of truth for library content.
  */
 const hydrateLibraries = () => {
-  void editorPorts.library
-    .loadAll()
-    .then((archives) => {
-      openPLCStoreBase
-        .getState()
-        .libraryActions.setSystemLibraries(stlibsToSystemLibraries(archives))
+  // Two parallel calls: archives carry the full POU lists for the
+  // tree builder, listInstalled carries the bundled flag (the
+  // archive shape doesn't).  Both feed the same slice so the tree
+  // and the manager stay in sync.
+  Promise.all([editorPorts.library.loadAll(), editorPorts.library.listInstalled()])
+    .then(([archives, installed]) => {
+      const actions = openPLCStoreBase.getState().libraryActions
+      actions.setSystemLibraries(stlibsToSystemLibraries(archives))
+      actions.setBundledLibraryNames(installed.filter((l) => l.bundled).map((l) => l.name))
     })
     .catch((err) => {
-      // eslint-disable-next-line no-console
+       
       console.error('Failed to load .stlib libraries:', err)
     })
 }

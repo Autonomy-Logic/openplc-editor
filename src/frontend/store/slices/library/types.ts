@@ -60,6 +60,13 @@ export type LibraryActions = {
    * `project.libraries` field.
    */
   setProjectLibraries: (refs: LibraryProjectRef[]) => void
+  /**
+   * Record which names in the system pool are bundled / canonical.
+   * Called by the app's library hydration after `listInstalled()` —
+   * the bundled flag isn't carried by `SystemLibrary` itself, so the
+   * slice has to be told separately.
+   */
+  setBundledLibraryNames: (names: string[]) => void
 }
 
 export type LibrarySliceExtra = {
@@ -67,6 +74,11 @@ export type LibrarySliceExtra = {
    *  Bundled libraries are always-on and intentionally not tracked
    *  here. */
   enabledLibraries: string[]
+  /** Names of bundled / canonical libraries that ship with strucpp.
+   *  Always-on regardless of the project's enablement; surfaced to
+   *  consumers that need to scope the visible pool to "bundled +
+   *  enabled" (left-panel library tree, block pickers). */
+  bundledLibraryNames: string[]
   /** Project-referenced libraries the system pool currently can't
    *  resolve.  Drives the missing-libraries modal post-project-open. */
   missingLibraries: MissingLibrary[]

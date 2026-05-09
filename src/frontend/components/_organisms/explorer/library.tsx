@@ -3,8 +3,10 @@ import { ReactNode, useEffect, useRef, useState } from 'react'
 import type { SystemLibrary, UserLibrary } from '../../../../middleware/shared/ports/library-types'
 import { BookIcon } from '../../../assets/icons/interface/Book'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
+import { ConfigIcon } from '../../../assets/icons/interface/Config'
 import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { useOpenPLCStore } from '../../../store'
+import { CreateLibraryManagerEditor } from '../../../store/slices/tabs/utils'
 import { buildLibraryTree, type LibraryTreeNode } from '../../../utils/library-tree'
 import { InputWithRef } from '../../_atoms/input'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules/library-tree'
@@ -42,6 +44,29 @@ const Library = ({
   const {
     editor: { type, meta },
   } = useOpenPLCStore()
+  const updateTabs = useOpenPLCStore((s) => s.tabsActions.updateTabs)
+  const setSelectedTab = useOpenPLCStore((s) => s.tabsActions.setSelectedTab)
+  const addModel = useOpenPLCStore((s) => s.editorActions.addModel)
+  const setEditor = useOpenPLCStore((s) => s.editorActions.setEditor)
+  const getEditorFromEditors = useOpenPLCStore((s) => s.editorActions.getEditorFromEditors)
+
+  /**
+   * Open the Library Manager tab.  Same idiom the explorer's Project
+   * tree uses for opening data-types / POUs / etc.: updateTabs +
+   * addModel + setEditor + setSelectedTab.  Idempotent — re-opening
+   * an already-open Library Manager tab just re-selects it.
+   */
+  const handleOpenManager = () => {
+    const tabName = 'Library Manager'
+    updateTabs({ name: tabName, elementType: { type: 'library-manager' } })
+    let model = getEditorFromEditors(tabName)
+    if (!model) {
+      model = CreateLibraryManagerEditor(tabName)
+      addModel(model)
+    }
+    setEditor(model)
+    setSelectedTab(tabName)
+  }
 
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [shouldRenderInput, setShouldRenderInput] = useState(false)
@@ -198,6 +223,19 @@ const Library = ({
             </LibraryFolder>
           </LibraryRoot>
         )}
+
+        {/* Trailing "Manage libraries…" affordance — mirrors the
+            "Install additional boards…" pattern in the device-config
+            dropdown.  Drops the user into the Library Manager tab to
+            install / enable libraries without leaving the explorer. */}
+        <button
+          type='button'
+          onClick={handleOpenManager}
+          className='mx-2 mt-2 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left font-caption text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850'
+        >
+          <ConfigIcon size='sm' className='h-3 w-3' />
+          Manage libraries…
+        </button>
       </div>
     </div>
   )

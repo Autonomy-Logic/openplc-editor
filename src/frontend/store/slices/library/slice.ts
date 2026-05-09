@@ -42,6 +42,7 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
       user: [],
     },
     enabledLibraries: [],
+    bundledLibraryNames: [],
     missingLibraries: [],
     libraryActions: {
       setSystemLibraries: (libraries) => {
@@ -133,6 +134,13 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
             mutateProjectRefs(state, () => refs.map((r) => ({ name: r.name, version: r.version })))
             state.enabledLibraries = computeEnabled(state.libraries.system, refs)
             state.missingLibraries = computeMissing(state.libraries.system, refs)
+          }),
+        )
+      },
+      setBundledLibraryNames: (names) => {
+        setState(
+          produce((state: LibrarySlice) => {
+            state.bundledLibraryNames = names
           }),
         )
       },

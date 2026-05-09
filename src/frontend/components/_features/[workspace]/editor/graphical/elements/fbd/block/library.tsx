@@ -21,10 +21,19 @@ export const ModalBlockLibrary = ({
     },
     libraries: { system, user },
   } = useOpenPLCStore()
+  // Scope the visible system pool to bundled (canonical) +
+  // project-enabled libraries — same gate the explorer's library
+  // tree uses, so the picker shows exactly what the project can
+  // actually reference.
+  const enabledLibraryNames = useOpenPLCStore((s) => s.enabledLibraries)
+  const bundledLibraryNames = useOpenPLCStore((s) => s.bundledLibraryNames)
 
   const [filterText, setFilterText] = useState('')
 
-  const systemLibraries = system.filter((library) =>
+  const visiblePool = system.filter(
+    (library) => bundledLibraryNames.includes(library.name) || enabledLibraryNames.includes(library.name),
+  )
+  const systemLibraries = visiblePool.filter((library) =>
     pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
