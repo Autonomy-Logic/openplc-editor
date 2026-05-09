@@ -122,6 +122,11 @@ const CreatePackageManagerEditor = (name = 'Package Manager'): EditorModel => ({
   meta: { name },
 })
 
+const CreateLibraryManagerEditor = (name = 'Library Manager'): EditorModel => ({
+  type: 'plc-library-manager',
+  meta: { name },
+})
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -147,6 +152,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateVendorScreenEditor(name, elementType.screenName)
     case 'package-manager':
       return CreatePackageManagerEditor(name)
+    case 'library-manager':
+      return CreateLibraryManagerEditor(name)
   }
 }
 
@@ -155,6 +162,7 @@ export {
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
   CreateEtherCATDeviceEditor,
+  CreateLibraryManagerEditor,
   CreatePackageManagerEditor,
   CreatePLCGraphicalObject,
   CreatePLCTextualObject,

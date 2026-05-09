@@ -37,6 +37,7 @@ export type WorkspaceProjectTreeLeafType =
   | 'remote-device'
   | 'vendor-screen'
   | 'package-manager'
+  | 'library-manager'
   | 'ethercat-device'
   | null
 
