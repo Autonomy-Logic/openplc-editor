@@ -494,6 +494,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       }))
       getState().libraryActions.setProjectLibraries(projectLibraryRefs)
 
+      // If the project references libraries the system pool can't
+      // currently resolve, surface the missing-libraries modal so
+      // the user can route through the Library Manager.  Project
+      // load itself is non-blocking — compile will fail later with
+      // a clear error if they don't install the missing pieces.
+      if (getState().missingLibraries.length > 0) {
+        getState().modalActions.openModal('missing-libraries')
+      }
+
       // Reclassify ALL POUs' variables with full context.
       // The text parser can't determine type definitions accurately since it doesn't have
       // the full project context. Re-parse with pous, dataTypes, and libraries to correctly
