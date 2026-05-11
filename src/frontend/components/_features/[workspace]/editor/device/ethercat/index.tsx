@@ -3,6 +3,7 @@ import { collectUsedIecAddresses } from '@root/backend/shared/ethercat/collect-u
 import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-config-defaults'
 import { matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
+import { collectAllSlaveNames, generateUniqueSlaveName } from '@root/backend/shared/ethercat/unique-slave-name'
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -379,6 +380,9 @@ const EtherCATEditor = () => {
     const unmatched: ScannedDeviceMatch['device'][] = []
     const existingPositions = new Set(configuredDevices.map((d) => d.position))
     const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices)
+    // Names already taken across every master — extended as we add each
+    // device so the batch can't collide with itself either.
+    const takenNames = collectAllSlaveNames(project.data.remoteDevices)
 
     for (const position of selectedScannedDevices) {
       // Skip devices already configured at this position
@@ -406,10 +410,17 @@ const EtherCATEditor = () => {
         for (const m of enriched.channelMappings ?? []) usedAddresses.add(m.iecLocation)
       }
 
+      // Prefer the short product code from <Type> (e.g. "EL1809") over the
+      // long localized name from <Name LcId="1033"> — the long form is
+      // verbose and identical for any two units of the same model.
+      const baseName = bestMatch.esiDevice.type.name || bestMatch.esiDevice.name || match.device.name
+      const uniqueName = generateUniqueSlaveName(baseName, takenNames)
+      takenNames.add(uniqueName)
+
       newDevices.push({
         id: uuidv4(),
         position: match.device.position,
-        name: bestMatch.esiDevice.name || match.device.name,
+        name: uniqueName,
         esiDeviceRef: {
           repositoryItemId: bestMatch.repositoryItemId,
           deviceIndex: bestMatch.deviceIndex,
@@ -473,10 +484,14 @@ const EtherCATEditor = () => {
       const nextPosition =
         configuredDevices.length > 0 ? Math.max(...configuredDevices.map((d) => d.position ?? 0)) + 1 : 1
 
+      // Prefer the short product code from <Type> over the long localized name.
+      const baseName = device.type.name || device.name
+      const uniqueName = generateUniqueSlaveName(baseName, collectAllSlaveNames(project.data.remoteDevices))
+
       const newDevice: ConfiguredEtherCATDevice = {
         id: uuidv4(),
         position: nextPosition,
-        name: device.name,
+        name: uniqueName,
         esiDeviceRef: ref,
         vendorId: repoItem.vendor.id,
         productCode: device.type.productCode,

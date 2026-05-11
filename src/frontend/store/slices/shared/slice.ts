@@ -1,6 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { collectAllSlaveNames } from '../../../../backend/shared/ethercat/unique-slave-name'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
@@ -345,6 +346,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!device) return { ok: false, message: 'EtherCAT device not found' }
 
       const oldName = device.name
+      // Reject if another slave (any master) already owns the target name.
+      // Same-name rename is a no-op the UI short-circuits before us, but we
+      // still allow it here so the action stays idempotent.
+      if (newName !== oldName && collectAllSlaveNames(state.project.data.remoteDevices).has(newName)) {
+        return { ok: false, message: `An EtherCAT slave named "${newName}" already exists in this project` }
+      }
       const updatedDevices = devices.map((d) => (d.id === deviceId ? { ...d, name: newName } : d))
       state.projectActions.updateEthercatConfig(busName, {
         masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
