@@ -371,7 +371,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       nodes: rung.nodes.map((node) => ({
         ...node,
         data: { ...node.data, hasDivergence: nodeDivergences.includes(`${rung.id}:${node.id}`) },
-      })),
+      })) as RungLadderState['nodes'],
     })
     updateReactFlowPanelExtent(rung)
   }, [rung.nodes])
@@ -439,7 +439,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
         // Remove placeholders
         const nodes = removePlaceholderElements(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
+        setRungLocal((rung) => ({ ...rung, nodes }) as typeof rung)
       }
     }
 
@@ -500,7 +500,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       if (!pouLibrary) {
         const nodes = removePlaceholderElements(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
+        setRungLocal((rung) => ({ ...rung, nodes }) as typeof rung)
         toast({
           title: 'Can not add block',
           description: `The block type ${blockType} does not exist in the library`,
@@ -546,10 +546,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Remove some nodes from the rung
    */
   const handleRemoveNode = (nodes: FlowNode[]) => {
-    const { nodes: newNodes, edges: newEdges, handleBranches: newHandleBranches } = removeElements(
-      { ...rungLocal },
-      nodes,
-    )
+    const {
+      nodes: newNodes,
+      edges: newEdges,
+      handleBranches: newHandleBranches,
+    } = removeElements({ ...rungLocal }, nodes)
 
     captureAndPush(editor.meta.name)
 
@@ -735,11 +736,14 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         }
       })
 
-      setRungLocal((rung) => ({
-        ...rung,
-        nodes: applyNodeChanges(changes, rungLocal.nodes),
-        selectedNodes: selectedNodes,
-      }))
+      setRungLocal(
+        (rung) =>
+          ({
+            ...rung,
+            nodes: applyNodeChanges(changes, rungLocal.nodes),
+            selectedNodes: selectedNodes,
+          }) as typeof rung,
+      )
     },
     [rungLocal, rung, dragging],
   )
@@ -773,7 +777,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       if (isFirstDragEnter) {
         const copyRungLocal = { ...rungLocal }
         const nodes = renderPlaceholderElements(copyRungLocal)
-        setRungLocal((rung) => ({ ...rung, nodes }))
+        setRungLocal((rung) => ({ ...rung, nodes }) as typeof rung)
       }
     },
     [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, dragging, isDebuggerActive],
@@ -815,7 +819,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       // If it is, remove the placeholder elements`
       const nodes = removePlaceholderElements(rungLocal.nodes)
-      setRungLocal((rung) => ({ ...rung, nodes }))
+      setRungLocal((rung) => ({ ...rung, nodes }) as typeof rung)
     },
     [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, dragging, isDebuggerActive],
   )

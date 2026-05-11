@@ -76,7 +76,7 @@ const contactToXML = (
   const connections = findConnections(contact, rung, offsetY)
 
   const railConnection = connections.find((connection) => {
-    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node).data.variant === 'left')
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && node.data.variant === 'left')
     if (rail?.data.numericId === connection['@refLocalId']) {
       return true
     }
@@ -100,8 +100,8 @@ const contactToXML = (
         const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
         const formalParameter =
           connectionNode?.type === 'block'
-            ? (connectionNode).data.variant.type === 'function'
-              ? (connectionNode).data.variant.name
+            ? connectionNode.data.variant.type === 'function'
+              ? connectionNode.data.variant.name
               : connection['@formalParameter']
             : undefined
         return {
@@ -119,7 +119,7 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
   const connections = findConnections(coil, rung, offsetY)
 
   const railConnection = connections.find((connection) => {
-    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node).data.variant === 'left')
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && node.data.variant === 'left')
     if (rail?.data.numericId === connection['@refLocalId']) {
       return true
     }
@@ -144,8 +144,8 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
         const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
         const formalParameter =
           connectionNode?.type === 'block'
-            ? (connectionNode).data.variant.type === 'function'
-              ? (connectionNode).data.variant.name
+            ? connectionNode.data.variant.type === 'function'
+              ? connectionNode.data.variant.name
               : connection['@formalParameter']
             : undefined
         return {
@@ -169,7 +169,7 @@ const blockToXml = (
 
   // If the block is connected to a power rail, replace the refLocalId with the left rail id at connections
   const railConnection = connections.find((connection) => {
-    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node).data.variant === 'left')
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && node.data.variant === 'left')
     if (rail?.data.numericId === connection['@refLocalId']) {
       return true
     }
@@ -220,10 +220,7 @@ const blockToXml = (
 
     // Check if the handle is connected to an existing variable node
     const variableNode = rung.nodes.find(
-      (node) =>
-        node.type === 'variable' &&
-        (node).data.block.id === block.id &&
-        (node).data.block.handleId === handle.id,
+      (node) => node.type === 'variable' && node.data.block.id === block.id && node.data.block.handleId === handle.id,
     ) as Node<BasicNodeData>
     if (!variableNode) return undefined
 
@@ -250,7 +247,7 @@ const blockToXml = (
         expression:
           handleIndex !== 0
             ? connectedNode && connectedNode.type === 'variable'
-              ? (connectedNode).data.variable.name
+              ? connectedNode.data.variable.name
               : ''
             : undefined,
       },
@@ -359,9 +356,9 @@ const ladderToXml = (rungs: RungLadderState[]) => {
     nodes.forEach((node) => {
       switch (node.type) {
         case 'powerRail':
-          if ((node).data.variant === 'left' && ladderXML.body.LD.leftPowerRail.length === 0) {
+          if (node.data.variant === 'left' && ladderXML.body.LD.leftPowerRail.length === 0) {
             ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node, offsetY))
-            leftRailId = (node).data.numericId
+            leftRailId = node.data.numericId
           } else {
             if (ladderXML.body.LD.rightPowerRail.length === 0) {
               ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node, rung, offsetY))
@@ -378,10 +375,9 @@ const ladderToXml = (rungs: RungLadderState[]) => {
           ladderXML.body.LD.block.push(blockToXml(node, rung, offsetY, leftRailId))
           break
         case 'variable':
-          if ((node).data.variable.name === '') return
-          if ((node).data.variant === 'input')
-            ladderXML.body.LD.inVariable.push(inVariableToXML(node, offsetY))
-          if ((node).data.variant === 'output') {
+          if (node.data.variable.name === '') return
+          if (node.data.variant === 'input') ladderXML.body.LD.inVariable.push(inVariableToXML(node, offsetY))
+          if (node.data.variant === 'output') {
             const outVarXML = outVariableToXML(node, rung, offsetY)
             if (outVarXML) ladderXML.body.LD.outVariable.push(outVarXML)
           }

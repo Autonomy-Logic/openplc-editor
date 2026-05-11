@@ -37,8 +37,8 @@ export const onElementDragStart = (rung: RungLadderState, draggedNode: Node) => 
   const nodeIndex = rung.nodes.findIndex((n) => n.id === draggedNode.id)
   if (nodeIndex === -1) return rung
 
-  let newNodes = [...rung.nodes]
-  newNodes.splice(nodeIndex, 0, copycatNode)
+  let newNodes: RungLadderState['nodes'] = [...rung.nodes]
+  newNodes.splice(nodeIndex, 0, copycatNode as RungLadderState['nodes'][number])
 
   /**
    * Find the edges that are connected to the dragged node
@@ -56,7 +56,7 @@ export const onElementDragStart = (rung: RungLadderState, draggedNode: Node) => 
   /**
    * Render the placeholder nodes
    */
-  newNodes = renderPlaceholderElements({ ...rung, nodes: newNodes, edges: newEdges })
+  newNodes = renderPlaceholderElements({ ...rung, nodes: newNodes, edges: newEdges }) as RungLadderState['nodes']
 
   return { nodes: newNodes, edges: newEdges }
 }
@@ -145,8 +145,12 @@ const prepareDropContext = (rung: RungLadderState, draggedNode: Node): DropConte
  */
 const handleRestoreDrop = (ctx: DropContext): DropResult => {
   const { rung, copycatNode, draggedNode } = ctx
-  const nodes = [...rung.nodes]
-  nodes[nodes.indexOf(copycatNode)] = { ...draggedNode, id: draggedNode.id, dragging: false }
+  const nodes: RungLadderState['nodes'] = [...rung.nodes]
+  nodes[nodes.indexOf(copycatNode as RungLadderState['nodes'][number])] = {
+    ...draggedNode,
+    id: draggedNode.id,
+    dragging: false,
+  } as RungLadderState['nodes'][number]
 
   const edges = rung.edges.map((edge) => {
     if (edge.source === copycatNode.id) {
@@ -160,7 +164,7 @@ const handleRestoreDrop = (ctx: DropContext): DropResult => {
 
   const restoredNodes = removePlaceholderElements(nodes)
   const layoutResult = updateDiagramElementsPosition(
-    { ...rung, nodes: restoredNodes, edges },
+    { ...rung, nodes: restoredNodes, edges } as RungLadderState,
     rung.defaultBounds as [number, number],
   )
   return { ...layoutResult, handleBranches: rung.handleBranches }
@@ -180,7 +184,7 @@ const handleParallelDrop = (ctx: DropContext): DropResult => {
     },
     draggedNode,
   )
-  return removeElement({ ...rung, nodes: parallelNodes, edges: parallelEdges }, copycatNode)
+  return removeElement({ ...rung, nodes: parallelNodes, edges: parallelEdges } as RungLadderState, copycatNode)
 }
 
 /**
@@ -197,7 +201,7 @@ const handleSerialDrop = (ctx: DropContext): DropResult => {
     },
     draggedNode,
   )
-  return removeElement({ ...rung, nodes: serialNodes, edges: serialEdges }, copycatNode)
+  return removeElement({ ...rung, nodes: serialNodes, edges: serialEdges } as RungLadderState, copycatNode)
 }
 
 /**

@@ -53,8 +53,8 @@ export const getPreviousElementsByEdge = (
      */
     if (
       isNodeOfType(node, 'parallel') &&
-      (node as ParallelNode).data.type === 'close' &&
-      e.targetHandle === (node as ParallelNode).data.parallelInputConnector?.id
+      node.data.type === 'close' &&
+      e.targetHandle === node.data.parallelInputConnector?.id
     ) {
       lastNodes.nodes.parallel.push({ ...n })
       return
@@ -232,7 +232,7 @@ export const findParallelsInRung = (rung: RungLadderState): ParallelNode[] => {
   let isAnotherParallel = true
   let parallel: ParallelNode | undefined = undefined
   rung.nodes.forEach((node) => {
-    if (isAnotherParallel && node.type === 'parallel' && (node).data.type === 'open') {
+    if (isAnotherParallel && node.type === 'parallel' && node.data.type === 'open') {
       parallels.push(node)
       parallel = node
       isAnotherParallel = false
@@ -240,7 +240,7 @@ export const findParallelsInRung = (rung: RungLadderState): ParallelNode[] => {
     if (
       !isAnotherParallel &&
       node.type === 'parallel' &&
-      (node).data.type === 'close' &&
+      node.data.type === 'close' &&
       parallel?.data.parallelCloseReference === node.id
     ) {
       isAnotherParallel = true
@@ -261,7 +261,7 @@ export const findDeepestParallelInsideParallel = (rung: RungLadderState, paralle
   const parallelIndex = rung.nodes.findIndex((node) => node.id === parallel.id)
   for (let i = parallelIndex; i < rung.nodes.length; i++) {
     const node = rung.nodes[i]
-    if (node.type === 'parallel' && (node).data.type === 'close') {
+    if (node.type === 'parallel' && node.data.type === 'close') {
       return node
     }
   }
@@ -434,9 +434,7 @@ export const getDeepestNodesInsideParallels = (rung: RungLadderState): Node[] =>
  * @returns Node[]
  */
 export const getNodesInsideAllParallels = (rung: RungLadderState): Node[] => {
-  const closeParallels = rung.nodes.filter(
-    (node) => node.type === 'parallel' && (node).data.type === 'close',
-  )
+  const closeParallels = rung.nodes.filter((node) => node.type === 'parallel' && node.data.type === 'close')
   const nodes: Node[] = []
   closeParallels.forEach((closeParallel) => {
     const { serial, parallel: parallelNodes } = getNodesInsideParallel(rung, closeParallel)

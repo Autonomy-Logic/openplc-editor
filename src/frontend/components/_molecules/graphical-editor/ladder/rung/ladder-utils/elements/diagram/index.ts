@@ -159,10 +159,7 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
      * The narrow on `node.type` lets TypeScript discriminate the union to
      * just the three node types that can carry `branchContext`.
      */
-    if (
-      (node.type === 'contact' || node.type === 'coil' || node.type === 'parallel') &&
-      node.data.branchContext
-    ) {
+    if ((node.type === 'contact' || node.type === 'coil' || node.type === 'parallel') && node.data.branchContext) {
       newNodes.push(node)
       continue
     }
@@ -177,7 +174,10 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
     /**
      * Find the previous nodes and edges of the current node
      */
-    const { nodes: previousNodes, edges: previousEdges } = getPreviousElementsByEdge({ ...rung, nodes: newNodes }, node)
+    const { nodes: previousNodes, edges: previousEdges } = getPreviousElementsByEdge(
+      { ...rung, nodes: newNodes } as RungLadderState,
+      node,
+    )
     if (!previousNodes || !previousEdges) return null
 
     /**
@@ -190,10 +190,10 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
      * spine 49px-per-level rightward.
      */
     const isSameTypeParallelOf = (n: Node | undefined, sub: 'open' | 'close'): boolean =>
-      !!n && isNodeOfType(n, 'parallel') && (n as ParallelNode).data.type === sub
+      !!n && isNodeOfType(n, 'parallel') && n.data.type === sub
     const prevIsAlreadyNestedFor = (prev: Node): boolean => {
       if (!isNodeOfType(prev, 'parallel')) return false
-      const prevSubType = (prev as ParallelNode).data.type
+      const prevSubType = prev.data.type
       const prevPrevEdges = rung.edges.filter((e) => e.target === prev.id)
       for (const e of prevPrevEdges) {
         const prevPrev = newNodes.find((n) => n.id === e.source)
@@ -210,8 +210,8 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
       const prevAlreadyNested = prevIsAlreadyNestedFor(previousNode)
       if (
         isNodeOfType(previousNode, 'parallel') &&
-        (previousNode as ParallelNode).data.type === 'open' &&
-        previousEdges[0].sourceHandle === (previousNode as ParallelNode).data.parallelOutputConnector?.id
+        previousNode.data.type === 'open' &&
+        previousEdges[0].sourceHandle === previousNode.data.parallelOutputConnector?.id
       ) {
         newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'parallel', prevAlreadyNested)
       } else {
@@ -267,19 +267,14 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
           // room (the verticalGap on its own only inserts a small margin
           // past the FB body).
           const baseVerticalGap = getDefaultNodeStyle({ node: objectParallel.highestNode }).verticalGap
-          const highestNodeHasBranch = rung.handleBranches.some(
-            (b) => b.blockId === objectParallel.highestNode.id,
-          )
+          const highestNodeHasBranch = rung.handleBranches.some((b) => b.blockId === objectParallel.highestNode.id)
           const verticalGap = baseVerticalGap + (highestNodeHasBranch ? 80 : 0)
           const newPosY =
             objectParallel.highestNode.position.y +
             objectParallel.height +
             verticalGap -
             getDefaultNodeStyle({ node }).handle.y
-          const newHandleY =
-            objectParallel.highestNode.position.y +
-            objectParallel.height +
-            verticalGap
+          const newHandleY = objectParallel.highestNode.position.y + objectParallel.height + verticalGap
           newNodePosition = {
             ...newNodePosition,
             posY: newPosY,
@@ -315,7 +310,7 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
 
         const owningOpenStale = findOwningOpenForNode(parallelsDepth, node.id)
         const owningOpen = owningOpenStale
-          ? newNodes.find((n) => n.id === owningOpenStale.id) ?? owningOpenStale
+          ? (newNodes.find((n) => n.id === owningOpenStale.id) ?? owningOpenStale)
           : undefined
         if (owningOpen) {
           const openRight = owningOpen.position.x + (owningOpen.width ?? 0)
@@ -404,7 +399,7 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
       }
       newNodes.push(newNode)
     } else {
-      const parallelNode = node as ParallelNode
+      const parallelNode = node
       const newParallelNode: ParallelNode = {
         ...parallelNode,
         position: { x: newNodePosition.posX, y: newNodePosition.posY },
@@ -506,22 +501,19 @@ const layoutPasses: LayoutPass[] = [
  *
  * @returns The new nodes
  */
-export const updateDiagramElementsPosition = (
-  rung: RungLadderState,
-  defaultBounds: [number, number],
-): LayoutResult => {
+export const updateDiagramElementsPosition = (rung: RungLadderState, defaultBounds: [number, number]): LayoutResult => {
   // Pre-pass: grow each branched block's height to enclose its branch's
   // vertical extent (rail + parallel paths). `positionMainNodes` reads
   // `node.height` to decide where parallel sibling paths land on Y, so this
   // has to run BEFORE main-rung positioning.
   const inflated = inflateBlockHeightsForBranches(rung)
-  const rungWithInflatedHeights = { ...rung, nodes: inflated.nodes }
+  const rungWithInflatedHeights = { ...rung, nodes: inflated.nodes } as RungLadderState
 
   const positioned = positionMainNodes(rungWithInflatedHeights)
   if (!positioned) return { nodes: rung.nodes, edges: rung.edges }
 
   return layoutPasses.reduce<LayoutResult>(
-    (acc, pass) => pass({ ...rung, ...acc }, defaultBounds),
+    (acc, pass) => pass({ ...rung, ...acc } as RungLadderState, defaultBounds),
     positioned,
   )
 }

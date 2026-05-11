@@ -128,7 +128,7 @@ export const removeVariableBlock = (rung: RungLadderState) => {
 }
 
 export const updateVariableBlockPosition = (rung: RungLadderState, _defaultBounds?: [number, number]) => {
-  let newNodes = [...rung.nodes]
+  let newNodes: Node[] = [...rung.nodes]
   let newEdges = [...rung.edges]
 
   const { nodes: removedVariableNodes, edges: removedVariableEdges } = removeVariableBlock(rung)
@@ -143,7 +143,7 @@ export const updateVariableBlockPosition = (rung: RungLadderState, _defaultBound
         ...rung,
         nodes: newNodes,
         edges: newEdges,
-      },
+      } as RungLadderState,
       blockElement,
     )
     newNodes = nodes

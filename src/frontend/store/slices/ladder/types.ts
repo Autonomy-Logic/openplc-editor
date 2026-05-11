@@ -2,10 +2,7 @@ import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import { z } from 'zod'
 
 import { zodLadderFlowSchema, zodRungLadderStateSchema } from '../../../../middleware/shared/ports/flow-schemas'
-import type {
-  HandleBranch,
-  RungLadderState as PortRungLadderState,
-} from '../../../../middleware/shared/ports/types'
+import type { HandleBranch, RungLadderState as PortRungLadderState } from '../../../../middleware/shared/ports/types'
 import type { RungNode } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 
 type ZodLadderRungType = z.infer<typeof zodRungLadderStateSchema>

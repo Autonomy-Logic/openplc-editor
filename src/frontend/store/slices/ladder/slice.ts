@@ -10,7 +10,7 @@ import {
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
-import { LadderFlowSlice, LadderFlowState, LadderFlowType } from './types'
+import { LadderFlowSlice, LadderFlowState, LadderFlowType, RungLadderState } from './types'
 import { duplicateLadderRung } from './utils'
 
 /**
@@ -39,7 +39,7 @@ const parseFlowOrPassthrough = (flow: LadderFlowType): LadderFlowType => {
     rungs: result.data.rungs.map((rung, i) => ({
       ...rung,
       selectedNodes: flow.rungs[i]?.selectedNodes ?? [],
-    })),
+    })) as RungLadderState[],
   }
 }
 
@@ -154,7 +154,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
             defaultBounds,
             reactFlowViewport:
               reactFlowViewport && reactFlowViewport > defaultBounds ? reactFlowViewport : defaultBounds,
-            nodes: [...railNodes],
+            nodes: [...railNodes] as RungLadderState['nodes'],
             edges: [
               {
                 id: `e_${railNodes[0].id}_${railNodes[1].id}`,
@@ -252,7 +252,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          rung.nodes = applyNodeChanges(changes, rung.nodes)
+          rung.nodes = applyNodeChanges(changes, rung.nodes) as RungLadderState['nodes']
         }),
       )
     },
@@ -292,7 +292,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          rung.nodes = nodes
+          rung.nodes = nodes as RungLadderState['nodes']
           flow.updated = true
         }),
       )
@@ -309,7 +309,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const nodeIndex = rung.nodes.findIndex((n) => n.id === nodeId)
           if (nodeIndex === -1) return
 
-          rung.nodes[nodeIndex] = node
+          rung.nodes[nodeIndex] = node as RungLadderState['nodes'][number]
           flow.updated = true
         }),
       )
@@ -323,7 +323,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          rung.nodes.push(node)
+          rung.nodes.push(node as RungLadderState['nodes'][number])
           rung.nodes = rung.nodes.map((n) => {
             if (n.id === node.id) {
               return {
@@ -351,7 +351,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (!rung) return
 
           const { nodes: newNodes, edges: newEdges } = removeElements(rung, nodes)
-          rung.nodes = newNodes
+          rung.nodes = newNodes as RungLadderState['nodes']
           rung.edges = newEdges
           flow.updated = true
         }),
@@ -368,7 +368,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
 
           const selectedNodes = nodes
           if (!rung.selectedNodes) rung.selectedNodes = []
-          rung.selectedNodes = selectedNodes
+          rung.selectedNodes = selectedNodes as RungLadderState['selectedNodes']
 
           if (selectedNodes.length > 1) {
             rung.nodes = rung.nodes.map((node) => {
@@ -495,7 +495,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          rung.nodes = nodes
+          rung.nodes = nodes as RungLadderState['nodes']
           rung.edges = edges
           if (handleBranches !== undefined) rung.handleBranches = handleBranches
           flow.updated = true

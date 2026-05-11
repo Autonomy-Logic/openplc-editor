@@ -25,7 +25,7 @@ export const getFBDPouVariablesRungNodeAndEdges = (
     source: LadderFlowType['rungs'][0]['edges'] | undefined
     target: LadderFlowType['rungs'][0]['edges'] | undefined
   }
-  node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
+  node: FBDFlowType['rung']['nodes'][0] | undefined
 } => {
   const pou = pous.find((pou) => pou.name === editor.meta.name)
   const rung = fbdFlows.find((flow) => flow.name === editor.meta.name)?.rung

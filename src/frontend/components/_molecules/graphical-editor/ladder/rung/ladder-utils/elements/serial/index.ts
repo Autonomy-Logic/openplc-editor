@@ -3,7 +3,7 @@ import { newGraphicalEditorNodeID } from '@root/frontend/utils/new-graphical-edi
 import type { Edge, Node } from '@xyflow/react'
 
 import { checkIfElementIsNode } from '../../../../../../../_atoms/graphical-editor/ladder/node-builders'
-import { ParallelNode, PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import { PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { connectNodes } from '../../edges'
 import { buildGenericNode, isNodeOfType } from '../../nodes'
 import { removePlaceholderElements } from '../placeholder'
@@ -17,7 +17,7 @@ export const appendSerialConnection = <T>(
   },
   node: Node | { elementType: string; blockVariant?: T },
 ): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
-  let newNodes = [...rung.nodes]
+  let newNodes: Node[] = [...rung.nodes]
   let newEdges = [...rung.edges]
 
   /**
@@ -49,7 +49,7 @@ export const appendSerialConnection = <T>(
    */
   const relatedNode = placeholder.selected.data.relatedNode as Node
   const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdge(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     relatedNode,
   )
   if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
@@ -58,7 +58,7 @@ export const appendSerialConnection = <T>(
    * Get the previous node
    */
   let previousNode = getPreviousElement(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     newNodes.findIndex((n) => n.id === newElement.id),
   )
 
@@ -73,17 +73,26 @@ export const appendSerialConnection = <T>(
     relatedNodePreviousNodes.serial.length > 0 &&
     // Check if the node is a open parallel node
     isNodeOfType(relatedNodePreviousNodes.serial[0], 'parallel') &&
-    (relatedNodePreviousNodes.serial[0] as ParallelNode).data.type === 'open' &&
+    relatedNodePreviousNodes.serial[0].data.type === 'open' &&
     // If it is, check if the new element is being added to the left
     placeholder.selected.data.position === 'left' &&
     // If it is, check if the new element is being added to the parallel output connector
-    relatedNodePreviousEdges[0].sourceHandle ===
-      (relatedNodePreviousNodes.serial[0] as ParallelNode).data.parallelOutputConnector?.id
+    relatedNodePreviousEdges[0].sourceHandle === relatedNodePreviousNodes.serial[0].data.parallelOutputConnector?.id
   ) {
     previousNode = relatedNodePreviousNodes.serial[0]
-    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, previousNode.id, newElement.id, 'parallel')
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
+      previousNode.id,
+      newElement.id,
+      'parallel',
+    )
   } else {
-    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, previousNode.id, newElement.id, 'serial')
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
+      previousNode.id,
+      newElement.id,
+      'serial',
+    )
   }
 
   return { nodes: newNodes, edges: newEdges, newNode: newElement }

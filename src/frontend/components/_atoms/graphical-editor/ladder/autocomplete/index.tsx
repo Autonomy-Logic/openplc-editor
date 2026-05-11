@@ -12,7 +12,14 @@ import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { getVariableRestrictionType } from '../../utils'
 import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
-import { BasicNodeData, BlockNodeData, BlockVariant, LadderBlockConnectedVariables, VariableNode } from '../utils/types'
+import {
+  BasicNodeData,
+  BlockNodeData,
+  BlockVariant,
+  isRungNodeOfType,
+  LadderBlockConnectedVariables,
+  VariableNode,
+} from '../utils/types'
 
 type VariablesBlockAutoCompleteProps = ComponentPropsWithRef<'div'> & {
   block: unknown
@@ -121,11 +128,14 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         },
       })
 
-      // Check if the variable is connected to a block
-      if ((variableNode as VariableNode).data.block === undefined) return
+      // Variable node's `block` link is the back-reference to the FB-input
+      // contact-style usage; if absent, this variable isn't attached to a block
+      // handle, so there's no block connectedVariables list to update.
+      if (!isRungNodeOfType(variableNode, 'variable')) return
+      const variableData = variableNode.data
+      if (variableData.block === undefined) return
 
-      // Get the block that is connected to the variable
-      const relatedBlock = rung.nodes.find((node) => node.id === (variableNode as VariableNode).data.block.id)
+      const relatedBlock = rung.nodes.find((node) => node.id === variableData.block.id)
       if (!relatedBlock) return
 
       const existingConnected = Array.isArray((relatedBlock.data as BlockNodeData<BlockVariant>).connectedVariables)
@@ -133,15 +143,14 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         : []
       const connectedVariables: LadderBlockConnectedVariables = [
         ...existingConnected.filter(
-          (v) =>
-            v.type !== variableNode.data.variant || v.handleId !== (variableNode as VariableNode).data.block.handleId,
+          (v) => v.type !== variableData.variant || v.handleId !== variableData.block.handleId,
         ),
         {
-          handleId: (variableNode as VariableNode).data.block.handleId,
+          handleId: variableData.block.handleId,
           handleTableId: (relatedBlock.data as BlockNodeData<BlockVariant>).variant.variables.find(
-            (v) => v.name === (variableNode as VariableNode).data.block.handleId,
+            (v) => v.name === variableData.block.handleId,
           )?.id,
-          type: (variableNode as VariableNode).data.variant,
+          type: variableData.variant,
           variable: variable,
         },
       ]

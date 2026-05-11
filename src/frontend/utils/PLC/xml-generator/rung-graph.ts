@@ -1,7 +1,4 @@
-import type {
-  BasicNodeData,
-  ParallelNode,
-} from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
+import type { BasicNodeData, ParallelNode } from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
 import type { RungLadderState } from '@root/frontend/store/slices'
 import type { Node } from '@xyflow/react'
 
@@ -46,7 +43,7 @@ export const findNodeBasedOnParallelOpen = (
     nodes: Node<BasicNodeData>[]
     parallels: ParallelNode[]
   } = { nodes: [], parallels: [] },
-) => {
+): { nodes: Node<BasicNodeData>[]; parallels: ParallelNode[] } => {
   const { nodes: rungNodes, edges: rungEdges } = rung
 
   const edgeToParallelNode = rungEdges.find((edge) => edge.target === parallelNode.id)?.source
@@ -74,7 +71,7 @@ export const findNodesBasedOnParallelClose = (
     nodes: Node<BasicNodeData>[]
     parallels: ParallelNode[]
   } = { nodes: [], parallels: [] },
-) => {
+): { nodes: Node<BasicNodeData>[]; parallels: ParallelNode[] } => {
   const { nodes: rungNodes, edges: rungEdges } = rung
 
   const edgesToParallelNode = rungEdges.filter((edge) => edge.target === parallelNode.id)

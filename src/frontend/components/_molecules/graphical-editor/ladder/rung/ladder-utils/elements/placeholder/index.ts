@@ -39,10 +39,7 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
     // left / right / parallel placeholders for them would let the user drop
     // a main-rail-style parallel onto a branch — Phase 4 handles that case
     // explicitly via `startParallelInBranch`; until then, suppress.
-    if (
-      (node.type === 'contact' || node.type === 'coil' || node.type === 'parallel') &&
-      node.data.branchContext
-    ) {
+    if ((node.type === 'contact' || node.type === 'coil' || node.type === 'parallel') && node.data.branchContext) {
       placeholderNodes.push(node)
       return
     }

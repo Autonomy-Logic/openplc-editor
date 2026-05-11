@@ -37,7 +37,7 @@ export const startParallelConnection = <T>(
   placeholder: { index: number; selected: PlaceholderNode },
   node: Node | { elementType: string; blockVariant?: T },
 ): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
-  let newNodes = [...rung.nodes]
+  let newNodes: Node[] = [...rung.nodes]
   let newEdges = [...rung.edges]
 
   /**
@@ -148,7 +148,7 @@ export const startParallelConnection = <T>(
    */
   const relatedNode = placeholder.selected.data.relatedNode as Node
   const { nodes: relatedElementPreviousElements, edges: relatedElementPreviousEdges } = getPreviousElementsByEdge(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     relatedNode,
   )
   if (!relatedElementPreviousElements || !relatedElementPreviousEdges) return { nodes: newNodes, edges: newEdges }
@@ -159,7 +159,7 @@ export const startParallelConnection = <T>(
   // first insert the new element
   newNodes.splice(placeholder.index, 1, openParallelElement, newAboveElement, newElement, closeParallelElement)
   // then remove the old above node
-  newNodes = removeNode({ ...rung, nodes: newNodes }, aboveElement.id)
+  newNodes = removeNode({ ...rung, nodes: newNodes } as RungLadderState, aboveElement.id)
   // finally remove the placeholder nodes
   newNodes = removePlaceholderElements(newNodes)
 
@@ -183,13 +183,13 @@ export const startParallelConnection = <T>(
 
     return (
       isNodeOfType(firstElement, 'parallel') &&
-      (firstElement as ParallelNode).data?.type === 'open' &&
-      firstEdge.sourceHandle === (firstElement as ParallelNode).data?.parallelOutputConnector?.id
+      firstElement.data?.type === 'open' &&
+      firstEdge.sourceHandle === firstElement.data?.parallelOutputConnector?.id
     )
   })()
 
   newEdges = connectNodes(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     aboveElementTargetEdges[0].source,
     openParallelElement.id,
     isPreviousConnectionParallel ? 'parallel' : 'serial',
@@ -201,7 +201,7 @@ export const startParallelConnection = <T>(
     },
   )
   newEdges = connectNodes(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     openParallelElement.id,
     newAboveElement.id,
     'serial',
@@ -211,7 +211,7 @@ export const startParallelConnection = <T>(
     },
   )
   newEdges = connectNodes(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     newAboveElement.id,
     closeParallelElement.id,
     'serial',
@@ -233,13 +233,13 @@ export const startParallelConnection = <T>(
 
     return (
       isNodeOfType(targetNode, 'parallel') &&
-      (targetNode as ParallelNode).data?.type === 'close' &&
-      targetEdge.targetHandle === (targetNode as ParallelNode).data?.parallelInputConnector?.id
+      targetNode.data?.type === 'close' &&
+      targetEdge.targetHandle === targetNode.data?.parallelInputConnector?.id
     )
   })()
 
   newEdges = connectNodes(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     closeParallelElement.id,
     aboveElementSourceEdges[0].target,
     'serial',
@@ -253,7 +253,7 @@ export const startParallelConnection = <T>(
 
   // parallel connections
   newEdges = connectNodes(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     openParallelElement.id,
     newElement.id,
     'parallel',
@@ -263,7 +263,7 @@ export const startParallelConnection = <T>(
     },
   )
   newEdges = connectNodes(
-    { ...rung, nodes: newNodes, edges: newEdges },
+    { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
     newElement.id,
     closeParallelElement.id,
     'parallel',
@@ -289,7 +289,7 @@ export const startParallelConnection = <T>(
 export const removeEmptyParallelConnections = (rung: RungLadderState): { nodes: Node[]; edges: Edge[] } => {
   const { nodes, edges } = rung
 
-  let newNodes = [...nodes]
+  let newNodes: Node[] = [...nodes]
   let newEdges = [...edges]
 
   nodes.forEach((node) => {
@@ -304,7 +304,7 @@ export const removeEmptyParallelConnections = (rung: RungLadderState): { nodes: 
          * Get the nodes inside the parallel connection
          */
         const { serial: serialNodes, parallel: parallelNodes } = getNodesInsideParallel(
-          { ...rung, nodes: newNodes, edges: newEdges },
+          { ...rung, nodes: newNodes, edges: newEdges } as RungLadderState,
           closeParallel,
         )
 
@@ -349,8 +349,8 @@ export const removeEmptyParallelConnections = (rung: RungLadderState): { nodes: 
           newEdges = removeEdge(newEdges, openParallelTarget.id)
           newEdges = removeEdge(newEdges, closeParallelSource.id)
 
-          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
-          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes } as RungLadderState, closeParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes } as RungLadderState, openParallel.id)
 
           return { nodes: newNodes, edges: newEdges }
         }
@@ -409,8 +409,8 @@ export const removeEmptyParallelConnections = (rung: RungLadderState): { nodes: 
           newEdges = removeEdge(newEdges, openParallelTarget.id)
           newEdges = removeEdge(newEdges, closeParallelSource.id)
 
-          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
-          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes } as RungLadderState, closeParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes } as RungLadderState, openParallel.id)
         }
       }
     }

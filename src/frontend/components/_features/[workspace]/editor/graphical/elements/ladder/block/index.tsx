@@ -181,7 +181,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           executionOrder: Number(formState.executionOrder),
           variable: selectedNode.data.variable,
         },
-      })
+      } as BlockNode<object>)
 
       const newNodeDataVariant = newNode.data.variant as LadderBlockVariant
       const formName: string = newNodeDataVariant.name
@@ -346,7 +346,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     setNode({
       ...newNode,
       data: { ...newNode.data, variable: selectedNode.data.variable },
-    })
+    } as BlockNode<object>)
   }
 
   const handleClearForm = () => {
@@ -411,10 +411,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       }
     }
 
-    let newNodes = [...rung.nodes]
+    let newNodes: typeof rung.nodes = [...rung.nodes]
     let newEdges = [...rung.edges]
 
-    newNodes = newNodes.map((n) => (n.id === node.id ? newNode : n))
+    newNodes = newNodes.map((n) => (n.id === node.id ? newNode : n)) as typeof newNodes
 
     edges.source?.forEach((edge) => {
       const newEdge = {

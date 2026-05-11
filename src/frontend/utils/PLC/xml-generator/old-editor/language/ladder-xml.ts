@@ -178,10 +178,7 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
 
     // Check if the handle is connected to an existing variable node
     const variableNode = rung.nodes.find(
-      (node) =>
-        node.type === 'variable' &&
-        (node).data.block.id === block.id &&
-        (node).data.block.handleId === handle.id,
+      (node) => node.type === 'variable' && node.data.block.id === block.id && node.data.block.handleId === handle.id,
     ) as Node<BasicNodeData>
     if (!variableNode) return undefined
 
@@ -334,8 +331,7 @@ const ladderToXml = (rungs: RungLadderState[]) => {
     nodes.forEach((node) => {
       switch (node.type) {
         case 'powerRail':
-          if ((node).data.variant === 'left')
-            ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node, offsetY))
+          if (node.data.variant === 'left') ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node, offsetY))
           else ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node, rung, offsetY))
           break
         case 'contact':
@@ -348,11 +344,9 @@ const ladderToXml = (rungs: RungLadderState[]) => {
           ladderXML.body.LD.block.push(blockToXml(node, rung, offsetY))
           break
         case 'variable':
-          if ((node).data.variable.name === '') return
-          if ((node).data.variant === 'input')
-            ladderXML.body.LD.inVariable.push(inVariableToXML(node, offsetY))
-          if ((node).data.variant === 'output')
-            ladderXML.body.LD.outVariable.push(outVariableToXML(node, rung, offsetY))
+          if (node.data.variable.name === '') return
+          if (node.data.variant === 'input') ladderXML.body.LD.inVariable.push(inVariableToXML(node, offsetY))
+          if (node.data.variant === 'output') ladderXML.body.LD.outVariable.push(outVariableToXML(node, rung, offsetY))
           break
         default:
           break

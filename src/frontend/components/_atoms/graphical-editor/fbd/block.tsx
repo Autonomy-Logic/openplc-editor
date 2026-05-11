@@ -558,7 +558,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const libPou = pous.find((pou) => pou.name === libMatch.name)
     if (!libPou) return
 
-    const blockVariant = node.data.variant as BlockVariant
+    const blockVariant = (node.data as BlockNodeData<BlockVariant>).variant
     const newNodeVariables = (libPou.interface?.variables ?? []).map((variable) => {
       let newType
       switch (variable.type.definition) {
@@ -632,10 +632,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     const newNode = { ...updatedNewNode }
 
-    const originalNodeInputs = (node.data.variant as BlockVariant).variables.filter(
+    const originalNodeInputs = (node.data as BlockNodeData<BlockVariant>).variant.variables.filter(
       (variable) => variable.class === 'input' || variable.class === 'inOut',
     )
-    const originalNodeSources = (node.data.variant as BlockVariant).variables.filter(
+    const originalNodeSources = (node.data as BlockNodeData<BlockVariant>).variant.variables.filter(
       (variable) => variable.class === 'output' || variable.class === 'inOut',
     )
 

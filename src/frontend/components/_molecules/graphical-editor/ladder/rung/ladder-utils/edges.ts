@@ -1,7 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 
 import type { RungLadderState } from '../../../../../../store/slices/ladder'
-import type { BasicNodeData, ParallelNode } from '../../../../../_atoms/graphical-editor/ladder/utils/types'
+import type { BasicNodeData } from '../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { isNodeOfType } from './nodes'
 
 type ConnectionOptions = {
@@ -25,7 +25,8 @@ export const checkIfConnectedInParallel = (
   node: Node,
 ): { parentNode: Node; connectedInParallel: boolean } => {
   const connectedInParallel = rung.edges.filter((edge) => edge.target === node.id)
-  const sourceNode = rung.nodes.find((node) => node.id === connectedInParallel[0].source) as Node
+  const sourceNode = rung.nodes.find((node) => node.id === connectedInParallel[0].source)
+  if (!sourceNode) return { parentNode: node, connectedInParallel: false }
   return { parentNode: sourceNode, connectedInParallel: isNodeOfType(sourceNode, 'parallel') }
 }
 
@@ -51,18 +52,22 @@ export const connectNodes = (
   options?: ConnectNodesOptions,
 ): Edge[] => {
   // Find the source edge
-  const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
+  const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId)
   const sourceEdge = rung.edges.find((edge) => {
     if (edge.source !== sourceNodeId) return false
     if (options?.sourceEdgeLookupHandle !== undefined) {
       return edge.sourceHandle === options.sourceEdgeLookupHandle
     }
-    return type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
-      ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
-      : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
-        ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
-          (sourceNode as ParallelNode).data.outputConnector?.id
-        : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id
+    if (!sourceNode) return false
+    if (isNodeOfType(sourceNode, 'parallel')) {
+      if (type === 'parallel') {
+        return edge.sourceHandle === sourceNode.data.parallelOutputConnector?.id
+      }
+      if (sourceNode.data.type === 'close') {
+        return edge.sourceHandle === sourceNode.data.parallelOutputConnector?.id || sourceNode.data.outputConnector?.id
+      }
+    }
+    return edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id
   })
 
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
@@ -82,8 +87,8 @@ export const connectNodes = (
 
     // If source node is a parallel and the operation type is serial, lets check if we need to update the source handle
     let newSourceHandle = sourceEdge.sourceHandle ?? undefined
-    if (type === 'serial' && isNodeOfType(sourceNode, 'parallel')) {
-      newSourceHandle = (sourceNode as ParallelNode).data.outputConnector?.id
+    if (type === 'serial' && sourceNode && isNodeOfType(sourceNode, 'parallel')) {
+      newSourceHandle = sourceNode.data.outputConnector?.id
     }
 
     // Update the target of the source edge
@@ -101,9 +106,9 @@ export const connectNodes = (
     if (
       sourceEdgeNodeTarget &&
       isNodeOfType(sourceEdgeNodeTarget, 'parallel') &&
-      (sourceEdgeNodeTarget as ParallelNode).data.type === 'open'
+      sourceEdgeNodeTarget.data.type === 'open'
     ) {
-      const newTargetHandle = (sourceEdgeNodeTarget as ParallelNode).data.inputConnector?.id
+      const newTargetHandle = sourceEdgeNodeTarget.data.inputConnector?.id
 
       edges.push(
         buildEdge(targetNodeId, sourceEdge.target, {

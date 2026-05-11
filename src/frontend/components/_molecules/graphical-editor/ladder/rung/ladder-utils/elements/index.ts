@@ -2,7 +2,11 @@ import type { RungLadderState } from '@root/frontend/store/slices'
 import type { HandleBranch } from '@root/middleware/shared/ports/types'
 import type { Edge, Node } from '@xyflow/react'
 
-import type { BasicNodeData, PlaceholderNode } from '../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import type {
+  BasicNodeData,
+  PlaceholderNode,
+  RungNode,
+} from '../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { toast } from '../../../../../../_features/[app]/toast/use-toast'
 import { disconnectNodes } from '../edges'
 import { isNodeOfType, removeNode } from '../nodes'
@@ -78,9 +82,7 @@ export const addNewElement = <T>(
     }
 
     const isParallelInBranch = selectedPlaceholder.type === 'parallelPlaceholder'
-    const aboveElementId = isParallelInBranch
-      ? ((selectedPlaceholder).data.relatedNode?.id ?? '')
-      : ''
+    const aboveElementId = isParallelInBranch ? (selectedPlaceholder.data.relatedNode?.id ?? '') : ''
 
     // If the parallel-placeholder's spine element is already wrapped by an
     // OPEN/CLOSE pair, add another OR-path to that existing parallel
@@ -92,10 +94,7 @@ export const addNewElement = <T>(
     // target) don't count — a spine element sitting AFTER a CLOSE is on
     // the spine, not inside the parallel.
     const branch = getBranch(rung, branchTarget.blockId, branchTarget.handleId, branchTarget.direction)
-    const existingParallel =
-      isParallelInBranch && branch
-        ? branch.nodeIds.findIndex((id) => id === aboveElementId)
-        : -1
+    const existingParallel = isParallelInBranch && branch ? branch.nodeIds.findIndex((id) => id === aboveElementId) : -1
     let isInsideExistingParallel = false
     if (existingParallel !== -1 && branch) {
       let depth = 0
@@ -158,7 +157,7 @@ export const addNewElement = <T>(
         nodes: result.nodes,
         edges: result.edges,
         handleBranches: result.handleBranches,
-      },
+      } as RungLadderState,
       rung.defaultBounds as [number, number],
     )
 
@@ -184,14 +183,14 @@ export const addNewElement = <T>(
       rung,
       {
         index: parseInt(selectedPlaceholderIndex),
-        selected: selectedPlaceholder as PlaceholderNode,
+        selected: selectedPlaceholder,
       },
       newNode,
     )
-    newNodes = parallelNodes
+    newNodes = parallelNodes as RungLadderState['nodes']
     newEdges = parallelEdges
     newNodeData = parellelNewNode
-  } else {
+  } else if (isNodeOfType(selectedPlaceholder, 'placeholder')) {
     const {
       nodes: serialNodes,
       edges: serialEdges,
@@ -200,13 +199,15 @@ export const addNewElement = <T>(
       rung,
       {
         index: parseInt(selectedPlaceholderIndex),
-        selected: selectedPlaceholder as PlaceholderNode,
+        selected: selectedPlaceholder,
       },
       newNode,
     )
-    newNodes = serialNodes
+    newNodes = serialNodes as RungLadderState['nodes']
     newEdges = serialEdges
     newNodeData = serialNewNode
+  } else {
+    return { nodes: removePlaceholderElements(rung.nodes), edges: rung.edges, handleBranches: rung.handleBranches }
   }
 
   /**
@@ -217,11 +218,11 @@ export const addNewElement = <T>(
       ...rung,
       nodes: newNodes,
       edges: newEdges,
-    },
+    } as RungLadderState,
     rung.defaultBounds as [number, number],
   )
 
-  newNodes = updatedDiagramNodes
+  newNodes = updatedDiagramNodes as RungLadderState['nodes']
   newEdges = updatedDiagramEdges
 
   /**
@@ -252,15 +253,20 @@ export const removeElement = (
       nodes: removed.nodes,
       edges: removed.edges,
       handleBranches: removed.handleBranches,
-    })
+    } as RungLadderState)
     const reconciledHandleBranches = reconcileAllBranchNodeIds({
       ...rung,
       nodes: collapsed.nodes,
       edges: collapsed.edges,
       handleBranches: removed.handleBranches,
-    })
+    } as RungLadderState)
     const layoutResult = updateDiagramElementsPosition(
-      { ...rung, nodes: collapsed.nodes, edges: collapsed.edges, handleBranches: reconciledHandleBranches },
+      {
+        ...rung,
+        nodes: collapsed.nodes,
+        edges: collapsed.edges,
+        handleBranches: reconciledHandleBranches,
+      } as RungLadderState,
       rung.defaultBounds as [number, number],
     )
     return { nodes: layoutResult.nodes, edges: layoutResult.edges, handleBranches: reconciledHandleBranches }
@@ -276,7 +282,7 @@ export const removeElement = (
   let workingEdgesIn = rung.edges
   if (element.type === 'block') {
     const branchResult = removeAllBranchesForBlock(rung, element.id)
-    workingNodesIn = branchResult.nodes
+    workingNodesIn = branchResult.nodes as RungLadderState['nodes']
     workingEdgesIn = branchResult.edges
     workingHandleBranches = branchResult.handleBranches
   }
@@ -311,8 +317,8 @@ export const removeElement = (
     ...workingRung,
     nodes: newNodes,
     edges: newEdges,
-  })
-  newNodes = checkedParallelNodes
+  } as RungLadderState)
+  newNodes = checkedParallelNodes as RungNode[]
   newEdges = checkedParallelEdges
 
   /**
@@ -323,10 +329,10 @@ export const removeElement = (
       ...workingRung,
       nodes: newNodes,
       edges: newEdges,
-    },
+    } as RungLadderState,
     rung.defaultBounds as [number, number],
   )
-  newNodes = updatedDiagramNodes
+  newNodes = updatedDiagramNodes as RungNode[]
   newEdges = updatedDiagramEdges
 
   /**
@@ -345,7 +351,7 @@ export const removeElements = (
   let workingRung: RungLadderState = { ...rung }
   for (const node of nodesToRemove) {
     const { nodes, edges, handleBranches } = removeElement(workingRung, node)
-    workingRung = { ...workingRung, nodes, edges, handleBranches }
+    workingRung = { ...workingRung, nodes, edges, handleBranches } as RungLadderState
   }
 
   return { nodes: workingRung.nodes, edges: workingRung.edges, handleBranches: workingRung.handleBranches }

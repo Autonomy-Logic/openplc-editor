@@ -232,3 +232,28 @@ export type RungNode =
   | PlaceholderNode
   | PowerRailNode
   | VariableNode
+
+/**
+ * Type predicate that narrows a generic `Node` (or a `RungNode`) to a specific
+ * `RungNode` union member by its `type` discriminator. Lets callers do
+ * `if (isRungNodeOfType(node, 'block')) { node.data.variant ... }` without an
+ * `as BlockNode<...>` cast.
+ *
+ * Implemented as overloads (one per union member) instead of a single generic
+ * `Extract<RungNode, {type: T}>` — TS's narrowing on the latter occasionally
+ * collapses to `never` when chained with other refinements; the explicit
+ * overload form is more robust.
+ */
+export function isRungNodeOfType(node: Node | RungNode, nodeType: 'block'): node is BlockNode<BlockVariant>
+export function isRungNodeOfType(node: Node | RungNode, nodeType: 'coil'): node is CoilNode
+export function isRungNodeOfType(node: Node | RungNode, nodeType: 'contact'): node is ContactNode
+export function isRungNodeOfType(node: Node | RungNode, nodeType: 'parallel'): node is ParallelNode
+export function isRungNodeOfType(
+  node: Node | RungNode,
+  nodeType: 'placeholder' | 'parallelPlaceholder',
+): node is PlaceholderNode
+export function isRungNodeOfType(node: Node | RungNode, nodeType: 'powerRail'): node is PowerRailNode
+export function isRungNodeOfType(node: Node | RungNode, nodeType: 'variable'): node is VariableNode
+export function isRungNodeOfType(node: Node | RungNode, nodeType: string): boolean {
+  return node.type === nodeType
+}

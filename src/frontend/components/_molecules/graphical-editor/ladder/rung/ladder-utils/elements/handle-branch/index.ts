@@ -23,6 +23,7 @@ import {
 import type {
   BlockNode,
   BlockVariant,
+  BranchContext,
   CoilNode,
   ContactNode,
   HandleBranch,
@@ -71,7 +72,7 @@ export const buildBranchRailId = (blockId: string, handleId: string, direction: 
 export const findBranchRail = (rung: RungLadderState, branch: HandleBranch): PowerRailNode | undefined => {
   const id = buildBranchRailId(branch.blockId, branch.handleId, branch.direction)
   const node = rung.nodes.find((n) => n.id === id)
-  return node?.type === 'powerRail' ? (node) : undefined
+  return node?.type === 'powerRail' ? node : undefined
 }
 
 export const hasBranchOnHandle = (
@@ -151,8 +152,8 @@ export const addRailBranchHandle = (
   const blockHandle =
     block && block.type === 'block'
       ? params.direction === 'input'
-        ? (block).data.inputHandles.find((h) => h.id === params.handleId)
-        : (block).data.outputHandles.find((h) => h.id === params.handleId)
+        ? block.data.inputHandles.find((h) => h.id === params.handleId)
+        : block.data.outputHandles.find((h) => h.id === params.handleId)
       : undefined
   if (!blockHandle) return { nodes: rung.nodes }
 
@@ -160,10 +161,7 @@ export const addRailBranchHandle = (
   if (rung.nodes.some((n) => n.id === branchRailId)) return { nodes: rung.nodes }
 
   // Position 200px from the block edge initially; reflowed by layout.
-  const initialX =
-    params.direction === 'input'
-      ? blockHandle.glbPosition.x - 200
-      : blockHandle.glbPosition.x + 200
+  const initialX = params.direction === 'input' ? blockHandle.glbPosition.x - 200 : blockHandle.glbPosition.x + 200
   const railY = params.y - DEFAULT_POWER_RAIL_HEIGHT / 2
   // For input branches the local rail acts as a SOURCE feeding the branch
   // element — same role the LEFT main rail plays. We pass connector='right'
@@ -193,11 +191,7 @@ export const addRailBranchHandle = (
  * Reverse of `addRailBranchHandle`. Removes the standalone branch rail node
  * entirely.
  */
-export const removeRailBranchHandle = (
-  rung: RungLadderState,
-  blockId: string,
-  handleId: string,
-): { nodes: Node[] } => {
+export const removeRailBranchHandle = (rung: RungLadderState, blockId: string, handleId: string): { nodes: Node[] } => {
   // Branch direction is encoded in the rail's id; we don't have it here,
   // so try both possibilities.
   const inputId = buildBranchRailId(blockId, handleId, 'input')
@@ -323,9 +317,9 @@ export const replaceVariableWithBranch = (
   const variableNode = rung.nodes.find(
     (n) =>
       n.type === 'variable' &&
-      (n).data.block.id === params.blockId &&
-      (n).data.block.handleId === params.handleId &&
-      (n).data.variant === params.direction,
+      n.data.block.id === params.blockId &&
+      n.data.block.handleId === params.handleId &&
+      n.data.variant === params.direction,
   ) as VariableNode | undefined
 
   let workingNodes = variableNode ? rung.nodes.filter((n) => n.id !== variableNode.id) : [...rung.nodes]
@@ -343,7 +337,7 @@ export const replaceVariableWithBranch = (
       y: blockHandle.glbPosition.y,
     },
   )
-  workingNodes = railResult.nodes
+  workingNodes = railResult.nodes as typeof workingNodes
 
   // Build the new branch element. Wire it to the branch rail (the standalone
   // local rail piece we just created near the FB), NOT the main rail.
@@ -372,16 +366,14 @@ export const replaceVariableWithBranch = (
       handleId: params.handleId,
       direction: params.direction,
     },
-  }
+  } as typeof newElement.data
 
-  workingNodes = [...workingNodes, newElement]
+  workingNodes = [...workingNodes, newElement] as typeof workingNodes
 
   // Wire the two edges that connect the new element to the rail and the block.
   const railBranchHandleId = buildRailBranchHandleId(params.blockId, params.handleId)
-  const elementInputId =
-    ((newElement as ContactNode | CoilNode).data.inputConnector?.id) ?? 'input'
-  const elementOutputId =
-    ((newElement as ContactNode | CoilNode).data.outputConnector?.id) ?? 'output'
+  const elementInputId = (newElement as ContactNode | CoilNode).data.inputConnector?.id ?? 'input'
+  const elementOutputId = (newElement as ContactNode | CoilNode).data.outputConnector?.id ?? 'output'
 
   const newEdges =
     params.direction === 'input'
@@ -463,8 +455,8 @@ const resolveSpineElement = (rung: RungLadderState, nodeId: string | undefined):
   const node = rung.nodes.find((n) => n.id === nodeId)
   if (!node) return undefined
   if (node.type !== 'contact' && node.type !== 'coil' && node.type !== 'parallel') return undefined
-  const inputHandleId = (node.data.inputConnector?.id) ?? 'input'
-  const outputHandleId = (node.data.outputConnector?.id) ?? 'output'
+  const inputHandleId = node.data.inputConnector?.id ?? 'input'
+  const outputHandleId = node.data.outputConnector?.id ?? 'output'
   return { kind: 'element', nodeId: node.id, inputHandleId, outputHandleId }
 }
 
@@ -474,11 +466,7 @@ const resolveSpineElement = (rung: RungLadderState, nodeId: string | undefined):
  *   - nodeIds.length          → the boundary on the "after" side
  *   - -1                       → the boundary on the "before" side
  */
-const resolveAnchorAtIndex = (
-  rung: RungLadderState,
-  branch: HandleBranch,
-  index: number,
-): SpineAnchor | undefined => {
+const resolveAnchorAtIndex = (rung: RungLadderState, branch: HandleBranch, index: number): SpineAnchor | undefined => {
   if (index === -1) return resolveBranchEndpoint(rung, branch, 'before')
   if (index === branch.nodeIds.length) return resolveBranchEndpoint(rung, branch, 'after')
   return resolveSpineElement(rung, branch.nodeIds[index])
@@ -555,7 +543,7 @@ export const renderInBranchSplicePlaceholders = (rung: RungLadderState): Node[] 
       if (!node) return
 
       if (node.type === 'parallel') {
-        const ptype = (node).data.type
+        const ptype = node.data.type
         if (ptype === 'open') {
           const leftX = node.position.x - SIDE_GAP - DEFAULT_PLACEHOLDER_WIDTH / 2
           placeholders.push(buildSplicePlaceholder(branch, leftX, posY, handleY, idx, `${idx}_left`))
@@ -571,15 +559,11 @@ export const renderInBranchSplicePlaceholders = (rung: RungLadderState): Node[] 
       // Left placeholder: routes to insertIndex = idx (insert before this
       // node in the spine).
       const leftX = node.position.x - SIDE_GAP - DEFAULT_PLACEHOLDER_WIDTH / 2
-      placeholders.push(
-        buildSplicePlaceholder(branch, leftX, posY, handleY, idx, `${idx}_left`),
-      )
+      placeholders.push(buildSplicePlaceholder(branch, leftX, posY, handleY, idx, `${idx}_left`))
 
       // Right placeholder: routes to insertIndex = idx + 1 (insert after).
       const rightX = node.position.x + (node.width ?? 0) + SIDE_GAP - DEFAULT_PLACEHOLDER_WIDTH / 2
-      placeholders.push(
-        buildSplicePlaceholder(branch, rightX, posY, handleY, idx + 1, `${idx}_right`),
-      )
+      placeholders.push(buildSplicePlaceholder(branch, rightX, posY, handleY, idx + 1, `${idx}_right`))
     })
   })
 
@@ -684,10 +668,10 @@ export const insertIntoBranch = (
       handleId: params.handleId,
       direction: params.direction,
     },
-  }
+  } as typeof newElement.data
 
-  const newElementInputId = (newElement.data.inputConnector?.id) ?? 'input'
-  const newElementOutputId = (newElement.data.outputConnector?.id) ?? 'output'
+  const newElementInputId = newElement.data.inputConnector?.id ?? 'input'
+  const newElementOutputId = newElement.data.outputConnector?.id ?? 'output'
 
   // Remove the edge between the two surrounding anchors (it spans the gap
   // we're about to splice into).
@@ -749,8 +733,8 @@ export const branchParallelPathCount = (rung: RungLadderState, branch: HandleBra
   for (const id of branch.nodeIds) {
     const node = rung.nodes.find((n) => n.id === id)
     if (node?.type !== 'parallel') continue
-    if ((node).data.type !== 'open') continue
-    const parallelOutputId = (node).data.parallelOutputConnector?.id
+    if (node.data.type !== 'open') continue
+    const parallelOutputId = node.data.parallelOutputConnector?.id
     if (!parallelOutputId) continue
     const paths = rung.edges.filter((e) => e.source === node.id && e.sourceHandle === parallelOutputId).length
     if (paths > maxPaths) maxPaths = paths
@@ -777,7 +761,7 @@ const getEnclosingParallelPair = (
   for (let i = idx - 1; i >= 0; i--) {
     const n = rung.nodes.find((node) => node.id === branch.nodeIds[i])
     if (n?.type !== 'parallel') continue
-    const ptype = (n).data.type
+    const ptype = n.data.type
     if (ptype === 'close') depth++
     else if (ptype === 'open') {
       if (depth === 0) {
@@ -836,8 +820,7 @@ export const addPathToBranchParallel = (
     direction: params.direction,
   }
 
-  const aboveX =
-    rung.nodes.find((n) => n.id === params.spineNodeId)?.position.x ?? blockHandle.glbPosition.x
+  const aboveX = rung.nodes.find((n) => n.id === params.spineNodeId)?.position.x ?? blockHandle.glbPosition.x
   const handleY = blockHandle.glbPosition.y
 
   const newElement = buildGenericNode({
@@ -848,9 +831,9 @@ export const addPathToBranchParallel = (
     handleX: aboveX,
     handleY: handleY + DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
   })
-  newElement.data = { ...newElement.data, branchContext }
-  const inId = (newElement.data.inputConnector?.id) ?? 'input'
-  const outId = (newElement.data.outputConnector?.id) ?? 'output'
+  newElement.data = { ...newElement.data, branchContext } as typeof newElement.data
+  const inId = newElement.data.inputConnector?.id ?? 'input'
+  const outId = newElement.data.outputConnector?.id ?? 'output'
 
   const newEdges = [
     ...rung.edges,
@@ -977,9 +960,9 @@ export const startParallelInBranch = (
   newElement.data = {
     ...newElement.data,
     branchContext,
-  }
-  const newElementInputId = (newElement.data.inputConnector?.id) ?? 'input'
-  const newElementOutputId = (newElement.data.outputConnector?.id) ?? 'output'
+  } as typeof newElement.data
+  const newElementInputId = newElement.data.inputConnector?.id ?? 'input'
+  const newElementOutputId = newElement.data.outputConnector?.id ?? 'output'
 
   // Drop the existing predecessor → aboveElement and aboveElement → successor
   // edges; they're going to be rerouted through OPEN and CLOSE.
@@ -1069,10 +1052,7 @@ const anchorInputHandleForSpineNode = (node: Node): string | undefined => {
  * collapses an OPEN/CLOSE pair — the topology survives but `nodeIds` may
  * still reference the now-removed OPEN/CLOSE ids.
  */
-export const reconcileBranchNodeIds = (
-  rung: RungLadderState,
-  branch: HandleBranch,
-): HandleBranch => {
+export const reconcileBranchNodeIds = (rung: RungLadderState, branch: HandleBranch): HandleBranch => {
   // Pick the starting node (branch rail for input branches, block for output).
   const rail = findBranchRail(rung, branch)
   if (!rail) return branch
@@ -1093,9 +1073,7 @@ export const reconcileBranchNodeIds = (
 
   // Cap iterations defensively in case of an unexpected cycle.
   for (let safety = 0; safety < 1000; safety++) {
-    const outgoing = rung.edges.find(
-      (e) => e.source === currentNodeId && e.sourceHandle === currentSourceHandle,
-    )
+    const outgoing = rung.edges.find((e) => e.source === currentNodeId && e.sourceHandle === currentSourceHandle)
     if (!outgoing) break
     if (outgoing.target === endNodeId) break
     if (visited.has(outgoing.target)) break
@@ -1144,7 +1122,7 @@ export const renderInBranchParallelPlaceholders = (rung: RungLadderState): Node[
     branch.nodeIds.forEach((id) => {
       const node = rung.nodes.find((n) => n.id === id)
       if (node?.type === 'parallel') {
-        const ptype = (node).data.type
+        const ptype = node.data.type
         if (ptype === 'open') {
           depth++
           currentOpen = node
@@ -1154,16 +1132,11 @@ export const renderInBranchParallelPlaceholders = (rung: RungLadderState): Node[
         }
       } else if (depth > 0 && (node?.type === 'contact' || node?.type === 'coil')) {
         insideParallel.add(node.id)
-        if (currentOpen) aboveContactByOpen.set((currentOpen).id, node)
+        if (currentOpen) aboveContactByOpen.set(currentOpen.id, node)
       }
     })
 
-    const emitBottom = (
-      anchorNode: Node,
-      relatedNode: Node,
-      insertIndex: number,
-      suffix: string,
-    ) => {
+    const emitBottom = (anchorNode: Node, relatedNode: Node, insertIndex: number, suffix: string) => {
       const width = anchorNode.width ?? DEFAULT_CONTACT_BLOCK_WIDTH
       const posX = anchorNode.position.x + width / 2 - DEFAULT_PLACEHOLDER_WIDTH / 2
       const posY = anchorNode.position.y + (anchorNode.height ?? DEFAULT_CONTACT_BLOCK_HEIGHT) + 10
@@ -1215,7 +1188,7 @@ export const renderInBranchParallelPlaceholders = (rung: RungLadderState): Node[
     branch.nodeIds.forEach((id, idx) => {
       const node = rung.nodes.find((n) => n.id === id)
       if (node?.type !== 'parallel') return
-      if ((node).data.type !== 'open') return
+      if (node.data.type !== 'open') return
       const open = node
 
       const aboveContact = aboveContactByOpen.get(open.id)
@@ -1226,9 +1199,7 @@ export const renderInBranchParallelPlaceholders = (rung: RungLadderState): Node[
 
       const parallelOutputId = open.data.parallelOutputConnector?.id
       if (!parallelOutputId) return
-      const startEdges = rung.edges.filter(
-        (e) => e.source === open.id && e.sourceHandle === parallelOutputId,
-      )
+      const startEdges = rung.edges.filter((e) => e.source === open.id && e.sourceHandle === parallelOutputId)
       if (startEdges.length === 0) return
 
       // Bottom-most path = last start edge (highest pathIndex).
@@ -1256,12 +1227,7 @@ export const renderInBranchParallelPlaceholders = (rung: RungLadderState): Node[
  * edges and ends when the next edge targets CLOSE on its parallel-input
  * handle.
  */
-const walkParallelPath = (
-  rung: RungLadderState,
-  _open: ParallelNode,
-  close: ParallelNode,
-  startEdge: Edge,
-): Node[] => {
+const walkParallelPath = (rung: RungLadderState, _open: ParallelNode, close: ParallelNode, startEdge: Edge): Node[] => {
   const path: Node[] = []
   let currentEdge: Edge | undefined = startEdge
   const visited = new Set<string>()
@@ -1300,7 +1266,7 @@ export const renderInBranchParallelPathPlaceholders = (rung: RungLadderState): N
     branch.nodeIds.forEach((id) => {
       const node = rung.nodes.find((n) => n.id === id)
       if (node?.type !== 'parallel') return
-      if ((node).data.type !== 'open') return
+      if (node.data.type !== 'open') return
       const open = node
       const closeId = open.data.parallelCloseReference
       if (!closeId) return
@@ -1322,8 +1288,7 @@ export const renderInBranchParallelPathPlaceholders = (rung: RungLadderState): N
         pathNodes.forEach((pNode, idx) => {
           if (pNode.type !== 'contact' && pNode.type !== 'coil') return
 
-          const handleY =
-            pNode.position.y + (pNode.height ?? DEFAULT_CONTACT_BLOCK_HEIGHT) / 2
+          const handleY = pNode.position.y + (pNode.height ?? DEFAULT_CONTACT_BLOCK_HEIGHT) / 2
           const posY = handleY - DEFAULT_PLACEHOLDER_HEIGHT / 2
 
           // Left placeholder: predecessor is OPEN if idx === 0, else previous path node.
@@ -1335,19 +1300,9 @@ export const renderInBranchParallelPathPlaceholders = (rung: RungLadderState): N
 
           // Right placeholder: successor is CLOSE if idx is last, else next path node.
           const rightSucc = idx === pathNodes.length - 1 ? (close as Node) : pathNodes[idx + 1]
-          const rightX =
-            pNode.position.x + (pNode.width ?? 0) + SIDE_GAP - DEFAULT_PLACEHOLDER_WIDTH / 2
+          const rightX = pNode.position.x + (pNode.width ?? 0) + SIDE_GAP - DEFAULT_PLACEHOLDER_WIDTH / 2
           placeholders.push(
-            buildPathSplicePlaceholder(
-              branch,
-              open.id,
-              pNode.id,
-              rightSucc.id,
-              rightX,
-              posY,
-              handleY,
-              `${idx}_right`,
-            ),
+            buildPathSplicePlaceholder(branch, open.id, pNode.id, rightSucc.id, rightX, posY, handleY, `${idx}_right`),
           )
         })
       })
@@ -1444,9 +1399,9 @@ export const insertIntoBranchParallelPath = (
     handleX: midX - DEFAULT_CONTACT_BLOCK_WIDTH / 2,
     handleY: refY,
   })
-  newElement.data = { ...newElement.data, branchContext }
-  const inId = (newElement.data.inputConnector?.id) ?? 'input'
-  const outId = (newElement.data.outputConnector?.id) ?? 'output'
+  newElement.data = { ...newElement.data, branchContext } as typeof newElement.data
+  const inId = newElement.data.inputConnector?.id ?? 'input'
+  const outId = newElement.data.outputConnector?.id ?? 'output'
 
   const newEdges = rung.edges.filter((e) => e.id !== oldEdge.id)
   newEdges.push(
@@ -1509,7 +1464,7 @@ export const removeBranchElement = (
   if (element.type !== 'contact' && element.type !== 'coil' && element.type !== 'parallel') {
     return { nodes: rung.nodes, edges: rung.edges, handleBranches: rung.handleBranches }
   }
-  const ctx = element.data.branchContext
+  const ctx = element.data.branchContext as BranchContext | undefined
   if (!ctx) return { nodes: rung.nodes, edges: rung.edges, handleBranches: rung.handleBranches }
 
   const branch = getBranch(rung, ctx.blockId, ctx.handleId, ctx.direction)
@@ -1627,7 +1582,7 @@ export const reconcileBranches = (
     for (let i = idsCopy.length - 1; i >= 0; i--) {
       const elementNode = working.nodes.find((n) => n.id === idsCopy[i])
       if (!elementNode) continue
-      working = removeBranchElement({ ...rung, ...working }, elementNode)
+      working = removeBranchElement({ ...rung, ...working } as RungLadderState, elementNode)
     }
   }
 
@@ -1647,13 +1602,14 @@ export const reconcileBranches = (
         ...h,
         id: (remapHandleId(h.id) ?? h.id) as T['id'],
       })
+      const railData = node.data as PowerRailNode['data']
       return {
         ...node,
         data: {
           ...node.data,
-          handles: node.data.handles.map(remapHandle),
-          inputHandles: node.data.inputHandles.map(remapHandle),
-          outputHandles: node.data.outputHandles.map(remapHandle),
+          handles: railData.handles.map(remapHandle),
+          inputHandles: railData.inputHandles.map(remapHandle),
+          outputHandles: railData.outputHandles.map(remapHandle),
         },
       }
     }
@@ -1661,13 +1617,14 @@ export const reconcileBranches = (
     if (
       (node.type === 'contact' || node.type === 'coil' || node.type === 'parallel') &&
       node.data.branchContext &&
-      node.data.branchContext.blockId === oldBlockId
+      (node.data.branchContext as BranchContext).blockId === oldBlockId
     ) {
+      const ctx = node.data.branchContext as BranchContext
       return {
         ...node,
         data: {
           ...node.data,
-          branchContext: { ...node.data.branchContext, blockId: newBlockId },
+          branchContext: { ...ctx, blockId: newBlockId },
         },
       }
     }
@@ -1733,11 +1690,8 @@ const BRANCH_PARALLEL_PATH_HEIGHT = 100
 // need slot growth to fit between handles; only the block's overall
 // vertical extent has to enclose them, which the bottom-margin growth
 // handles directly.
-const slotHeightForHandleIndex = (
-  _rung: RungLadderState,
-  _block: BlockNode<BlockVariant>,
-  _index: number,
-): number => DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+const slotHeightForHandleIndex = (_rung: RungLadderState, _block: BlockNode<BlockVariant>, _index: number): number =>
+  DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
 
 // Re-derive the natural relY for an input/output handle from its index in
 // the inputHandles / outputHandles array. The natural value composes per-
@@ -1767,8 +1721,7 @@ const styleGap = (node: Node | undefined): number => {
 // handle on the FB's left edge — a long wire there reads as wasted space.
 const BRANCH_BLOCK_SIDE_GAP = 25
 
-const branchGapFromBlock = (firstElement: Node | undefined): number =>
-  BRANCH_BLOCK_SIDE_GAP + styleGap(firstElement)
+const branchGapFromBlock = (firstElement: Node | undefined): number => BRANCH_BLOCK_SIDE_GAP + styleGap(firstElement)
 // Extra horizontal gap inserted between adjacent parallel pairs in the
 // spine (a CLOSE immediately followed by an OPEN). Parallel-style gap is
 // 0, so without this two consecutive parallel structures would touch each
@@ -1801,14 +1754,12 @@ const branchGapBetween = (a: Node | undefined, b: Node | undefined): number => {
 export const computeBranchSpanWidth = (rung: RungLadderState, branch: HandleBranch): number => {
   const branchElements = branch.nodeIds
     .map((id) => rung.nodes.find((n) => n.id === id))
-    .filter((n): n is Node => n !== undefined)
+    .filter((n): n is RungLadderState['nodes'][number] => n !== undefined)
   if (branchElements.length === 0) return 0
 
   // Block-side first element; rail-side last element. Direction-dependent.
-  const firstNode =
-    branch.direction === 'input' ? branchElements[branchElements.length - 1] : branchElements[0]
-  const lastNode =
-    branch.direction === 'input' ? branchElements[0] : branchElements[branchElements.length - 1]
+  const firstNode = branch.direction === 'input' ? branchElements[branchElements.length - 1] : branchElements[0]
+  const lastNode = branch.direction === 'input' ? branchElements[0] : branchElements[branchElements.length - 1]
 
   let span = branchGapFromBlock(firstNode)
   for (let i = 0; i < branchElements.length; i++) {
@@ -1827,16 +1778,14 @@ export const computeBranchSpanWidth = (rung: RungLadderState, branch: HandleBran
   // branch width, not just the un-stretched spine.
   for (let idx = 0; idx < branchElements.length; idx++) {
     const node = branchElements[idx]
-    if (node.type !== 'parallel' || (node as ParallelNode).data.type !== 'open') continue
-    const open = node as ParallelNode
+    if (node.type !== 'parallel' || node.data.type !== 'open') continue
+    const open = node
     const closeId = open.data.parallelCloseReference
     const parallelOutputId = open.data.parallelOutputConnector?.id
     if (!closeId || !parallelOutputId) continue
     const close = rung.nodes.find((n) => n.id === closeId)
     if (!close || close.type !== 'parallel') continue
-    const startEdges = rung.edges.filter(
-      (e) => e.source === open.id && e.sourceHandle === parallelOutputId,
-    )
+    const startEdges = rung.edges.filter((e) => e.source === open.id && e.sourceHandle === parallelOutputId)
     let maxPathWidth = 0
     for (const startEdge of startEdges) {
       const pathNodes = walkParallelPath(rung, open, close, startEdge)
@@ -1861,7 +1810,7 @@ export const computeBranchSpanWidth = (rung: RungLadderState, branch: HandleBran
       const n = rung.nodes.find((n2) => n2.id === branch.nodeIds[j])
       if (!n) break
       if (n.type === 'parallel') {
-        const ptype = (n).data.type
+        const ptype = n.data.type
         if (ptype === 'close' && depth === 0) break
         if (ptype === 'open') depth++
         else if (ptype === 'close') depth--
@@ -1893,11 +1842,7 @@ const BRANCH_WIRE_WRAP_BUFFER = 10
  * successor (output) far enough that the branch's local rail AND any wire
  * routed to/from the block clear each other on the main rung.
  */
-export const maxBranchSpanWidth = (
-  rung: RungLadderState,
-  blockId: string,
-  direction: 'input' | 'output',
-): number => {
+export const maxBranchSpanWidth = (rung: RungLadderState, blockId: string, direction: 'input' | 'output'): number => {
   let max = 0
   for (const branch of rung.handleBranches) {
     if (branch.blockId !== blockId) continue
@@ -1919,13 +1864,8 @@ export const maxBranchSpanWidth = (
  *
  * Returns `[branchLeft, branchRight]` in absolute coordinates.
  */
-const computeCompactBranchXRange = (
-  rung: RungLadderState,
-  branch: HandleBranch,
-): [number, number] | undefined => {
-  const block = rung.nodes.find(
-    (n): n is BlockNode<BlockVariant> => n.id === branch.blockId && n.type === 'block',
-  )
+const computeCompactBranchXRange = (rung: RungLadderState, branch: HandleBranch): [number, number] | undefined => {
+  const block = rung.nodes.find((n): n is BlockNode<BlockVariant> => n.id === branch.blockId && n.type === 'block')
   if (!block) return undefined
 
   const span = computeBranchSpanWidth(rung, branch)
@@ -2008,7 +1948,7 @@ export const inflateBlockHeightsForBranches = (rung: RungLadderState): { nodes: 
     return {
       ...node,
       height: requiredHeight,
-      measured: { width: node.measured?.width ?? (node.width ?? 0), height: requiredHeight },
+      measured: { width: node.measured?.width ?? node.width ?? 0, height: requiredHeight },
     }
   })
 
@@ -2040,9 +1980,7 @@ export const applyDynamicBlockHandleOffsets = (rung: RungLadderState): { nodes: 
   const blockShifts = new Map<string, { firstAffectedNaturalRelY: number; shift: number }>()
 
   for (const branch of rung.handleBranches) {
-    const block = rung.nodes.find(
-      (n): n is BlockNode<BlockVariant> => n.id === branch.blockId && n.type === 'block',
-    )
+    const block = rung.nodes.find((n): n is BlockNode<BlockVariant> => n.id === branch.blockId && n.type === 'block')
     if (!block) continue
 
     const handlesArr = branch.direction === 'input' ? block.data.inputHandles : block.data.outputHandles
@@ -2071,8 +2009,7 @@ export const applyDynamicBlockHandleOffsets = (rung: RungLadderState): { nodes: 
     // span. Without this, a branched handle's natural Y can sit so close
     // to the main wire that the rail visually touches it.
     const BRANCH_MIN_TOP_PADDING = 30
-    let obstacleBottom =
-      naturalHandleY - RAIL_HALF - BRANCH_OBSTACLE_CLEARANCE + BRANCH_MIN_TOP_PADDING
+    let obstacleBottom = naturalHandleY - RAIL_HALF - BRANCH_OBSTACLE_CLEARANCE + BRANCH_MIN_TOP_PADDING
     for (const other of rung.nodes) {
       if (other.id === block.id) continue
       if (!isObstacleCandidate(other)) continue
@@ -2112,19 +2049,25 @@ export const applyDynamicBlockHandleOffsets = (rung: RungLadderState): { nodes: 
 
     const entry = blockShifts.get(node.id)
 
-    const rewriteHandlesArray = <T extends { relPosition: { x: number; y: number }; glbPosition: { x: number; y: number }; style?: Record<string, number | string | undefined> }>(
+    const rewriteHandlesArray = <
+      T extends {
+        id?: string | null
+        relPosition: { x: number; y: number }
+        glbPosition: { x: number; y: number }
+        style?: unknown
+      },
+    >(
       arr: readonly T[],
     ): T[] =>
       arr.map((h, index) => {
         const naturalRelY = naturalRelYForIndex(rung, node, index)
-        const shifted =
-          entry && naturalRelY >= entry.firstAffectedNaturalRelY ? naturalRelY + entry.shift : naturalRelY
+        const shifted = entry && naturalRelY >= entry.firstAffectedNaturalRelY ? naturalRelY + entry.shift : naturalRelY
         return {
           ...h,
           glbPosition: { x: h.glbPosition.x, y: node.position.y + shifted },
           relPosition: { x: h.relPosition.x, y: shifted },
-          style: { ...(h.style ?? {}), top: shifted },
-        }
+          style: { ...((h.style ?? {}) as Record<string, unknown>), top: shifted },
+        } as T
       })
 
     const newInputHandles = rewriteHandlesArray(node.data.inputHandles)
@@ -2159,9 +2102,7 @@ export const applyDynamicBlockHandleOffsets = (rung: RungLadderState): { nodes: 
       const railBottom = handleRelY + DEFAULT_POWER_RAIL_HEIGHT / 2
       const paths = branchParallelPathCount(rung, branch)
       const pathsBottom =
-        paths > 0
-          ? handleRelY + paths * BRANCH_PARALLEL_PATH_HEIGHT + DEFAULT_CONTACT_BLOCK_HEIGHT / 2
-          : 0
+        paths > 0 ? handleRelY + paths * BRANCH_PARALLEL_PATH_HEIGHT + DEFAULT_CONTACT_BLOCK_HEIGHT / 2 : 0
       const branchBottom = Math.max(railBottom, pathsBottom)
       if (branchBottom > maxBranchBottomRelY) maxBranchBottomRelY = branchBottom
     }
@@ -2173,7 +2114,7 @@ export const applyDynamicBlockHandleOffsets = (rung: RungLadderState): { nodes: 
     return {
       ...node,
       height: newHeight,
-      measured: { width: node.measured?.width ?? (node.width ?? 0), height: newHeight },
+      measured: { width: node.measured?.width ?? node.width ?? 0, height: newHeight },
       data: {
         ...node.data,
         handles: newHandles,
@@ -2228,7 +2169,7 @@ export const calculateBranchElementPositions = (
 
   const branchElements = branch.nodeIds
     .map((id) => rung.nodes.find((n) => n.id === id))
-    .filter((n): n is Node => n !== undefined)
+    .filter((n): n is RungLadderState['nodes'][number] => n !== undefined)
   if (branchElements.length === 0) return positions
 
   const blockHandleX = blockHandle.glbPosition.x
@@ -2280,7 +2221,7 @@ export const calculateBranchElementPositions = (
       const n = rung.nodes.find((n2) => n2.id === branch.nodeIds[j])
       if (!n) break
       if (n.type === 'parallel') {
-        const ptype = (n).data.type
+        const ptype = n.data.type
         if (ptype === 'close' && depth === 0) break
         if (ptype === 'open') depth++
         else if (ptype === 'close') depth--
@@ -2289,7 +2230,7 @@ export const calculateBranchElementPositions = (
         naturalInterior += branchGapBetween(open, n)
         firstInside = false
       }
-      naturalInterior += (n.width ?? DEFAULT_CONTACT_BLOCK_WIDTH)
+      naturalInterior += n.width ?? DEFAULT_CONTACT_BLOCK_WIDTH
       const next = rung.nodes.find((n2) => n2.id === branch.nodeIds[j + 1])
       if (next) naturalInterior += branchGapBetween(n, next)
     }
@@ -2308,7 +2249,7 @@ export const calculateBranchElementPositions = (
   const halfExtraPerEdge = new Map<number, number>()
   branchElements.forEach((node, idx) => {
     if (node.type !== 'parallel') return
-    if ((node as ParallelNode).data.type !== 'open') return
+    if (node.data.type !== 'open') return
     const extra = spineSpanFor(idx, node)
     if (extra <= 0) return
     const half = extra / 2
@@ -2319,7 +2260,7 @@ export const calculateBranchElementPositions = (
     for (let j = idx + 1; j < branchElements.length; j++) {
       const n = branchElements[j]
       if (n.type === 'parallel') {
-        const ptype = (n as ParallelNode).data.type
+        const ptype = n.data.type
         if (ptype === 'open') depth++
         else if (ptype === 'close') {
           depth--
@@ -2378,7 +2319,8 @@ export const calculateBranchElementPositions = (
       // Edge index between node (i) and next (i+1) is i.
       const extraGap = halfExtraPerEdge.get(i) ?? 0
       leftEdge = leftEdge + width + branchGapBetween(node, next) + extraGap
-      if (i === branchElements.length - 1) rightmostElementRight = leftEdge - extraGap - branchGapBetween(node, next) + width
+      if (i === branchElements.length - 1)
+        rightmostElementRight = leftEdge - extraGap - branchGapBetween(node, next) + width
     }
   }
 
@@ -2414,7 +2356,7 @@ export const calculateBranchElementPositions = (
   for (let i = 0; i < branch.nodeIds.length; i++) {
     const node = rung.nodes.find((n) => n.id === branch.nodeIds[i])
     if (!node || node.type !== 'parallel') continue
-    if ((node).data.type !== 'open') continue
+    if (node.data.type !== 'open') continue
     const open = node
 
     const closeId = open.data.parallelCloseReference
@@ -2438,9 +2380,7 @@ export const calculateBranchElementPositions = (
         ? Math.min(openPos.posX, closePos.posX) + (open.width ?? 4)
         : Math.min(openPos.posX, closePos.posX) + (close.width ?? 4)
     const rightBoundary =
-      branch.direction === 'input'
-        ? Math.max(openPos.posX, closePos.posX)
-        : Math.max(openPos.posX, closePos.posX)
+      branch.direction === 'input' ? Math.max(openPos.posX, closePos.posX) : Math.max(openPos.posX, closePos.posX)
 
     startEdges.forEach((startEdge, pathIndex) => {
       const pathNodes = walkParallelPath(rung, open, close, startEdge)
@@ -2576,7 +2516,14 @@ export const updateRailForBranches = (rung: RungLadderState): { nodes: Node[]; e
 
   if (targetYs.size === 0) return { nodes: rung.nodes, edges: rung.edges }
 
-  const syncHandle = <T extends { id?: string | null; glbPosition: { x: number; y: number }; relPosition: { x: number; y: number }; style?: Record<string, number | string | undefined> }>(
+  const syncHandle = <
+    T extends {
+      id?: string | null
+      glbPosition: { x: number; y: number }
+      relPosition: { x: number; y: number }
+      style?: unknown
+    },
+  >(
     handle: T,
     railY: number,
   ): T => {
@@ -2587,8 +2534,8 @@ export const updateRailForBranches = (rung: RungLadderState): { nodes: Node[]; e
       ...handle,
       glbPosition: { x: handle.glbPosition.x, y: targetY },
       relPosition: { x: handle.relPosition.x, y: yRel },
-      style: { ...(handle.style ?? {}), top: yRel },
-    }
+      style: { ...((handle.style ?? {}) as Record<string, unknown>), top: yRel },
+    } as T
   }
 
   const newNodes = rung.nodes.map((node) => {
@@ -2648,7 +2595,7 @@ export const removeAllBranchesForBlock = (
       const nodeId = idsCopy[i]
       const elementNode = workingRung.nodes.find((n) => n.id === nodeId)
       if (!elementNode) continue
-      const result = removeBranchElement({ ...rung, ...workingRung }, elementNode)
+      const result = removeBranchElement({ ...rung, ...workingRung } as RungLadderState, elementNode)
       workingRung = result
     }
   }

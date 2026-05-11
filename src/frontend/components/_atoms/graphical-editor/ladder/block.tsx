@@ -266,7 +266,7 @@ export const BlockNodeElement = <T extends object>({
       }
     }
 
-    let newNodes = [...rung.nodes]
+    let newNodes: typeof rung.nodes = [...rung.nodes]
     let newEdges = [...rung.edges]
 
     /**
@@ -287,7 +287,7 @@ export const BlockNodeElement = <T extends object>({
       variable: variable ?? { name: '' },
     }
 
-    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
+    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n)) as typeof newNodes
 
     edges.source?.forEach((edge) => {
       const newEdge = {
@@ -312,7 +312,7 @@ export const BlockNodeElement = <T extends object>({
     //   - drop branches whose handle disappeared or stopped being BOOL
     //   - remap surviving branches' references to the new block id
     const reconciled = reconcileBranches(
-      { ...rung, nodes: newNodes, edges: newEdges },
+      { ...rung, nodes: newNodes, edges: newEdges } as typeof rung,
       node.id,
       newBlockNode.id,
       libraryBlock as BlockVariant,
@@ -324,7 +324,7 @@ export const BlockNodeElement = <T extends object>({
         nodes: reconciled.nodes,
         edges: reconciled.edges,
         handleBranches: reconciled.handleBranches,
-      },
+      } as typeof rung,
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
 
@@ -651,7 +651,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const libPou = pous.find((pou) => pou.name === libMatch.name)
     if (!libPou) return
 
-    const blockVariant = node.data.variant as BlockVariant
+    const blockVariant = (node.data as BlockNodeData<BlockVariant>).variant
     const newNodeVariables = (libPou.interface?.variables ?? []).map((variable) => {
       let newType
       switch (variable.type.definition) {
@@ -749,10 +749,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     const newBlockNode = { ...updatedNewNode }
 
-    let newNodes = [...rung.nodes]
+    let newNodes: typeof rung.nodes = [...rung.nodes]
     let newEdges = [...rung.edges]
 
-    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
+    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n)) as typeof newNodes
 
     edges.source?.forEach((edge) => {
       const newEdge = {
@@ -778,7 +778,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         ...rung,
         nodes: newNodes,
         edges: newEdges,
-      },
+      } as typeof rung,
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
 
