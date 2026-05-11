@@ -3,11 +3,11 @@ import { collectUsedIecAddresses } from '@root/backend/shared/ethercat/collect-u
 import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-config-defaults'
 import { matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
-import { collectAllSlaveNames, generateUniqueSlaveName } from '@root/backend/shared/ethercat/unique-slave-name'
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
+import { collectAllSlaveNames, generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
 import type {
   ConfiguredEtherCATDevice,
   ESIDeviceRef,

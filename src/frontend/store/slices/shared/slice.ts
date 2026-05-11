@@ -1,12 +1,12 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { collectAllSlaveNames } from '../../../../backend/shared/ethercat/unique-slave-name'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { toast } from '../../../utils/toast'
+import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { HistorySnapshot } from '../history'
