@@ -18,9 +18,7 @@ describe('collectAllSlaveNames', () => {
   })
 
   it('collects names from a single master', () => {
-    const result = collectAllSlaveNames([
-      { ethercatConfig: { devices: [{ name: 'EL1809' }, { name: 'EL2008' }] } },
-    ])
+    const result = collectAllSlaveNames([{ ethercatConfig: { devices: [{ name: 'EL1809' }, { name: 'EL2008' }] } }])
     expect(result).toEqual(new Set(['EL1809', 'EL2008']))
   })
 
