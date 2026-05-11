@@ -43,6 +43,7 @@ interface IpcProjectData {
   configuration: PLCProjectData['configurations']
   servers?: PLCProjectData['servers']
   remoteDevices?: PLCProjectData['remoteDevices']
+  libraries?: PLCProjectData['libraries']
   originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
 }
 
@@ -68,6 +69,7 @@ function toIpcProjectData(data: PLCProjectData & { originalCppPous?: unknown[] }
     configuration: data.configurations,
     servers: data.servers,
     remoteDevices: data.remoteDevices,
+    libraries: data.libraries,
     ...(data.originalCppPous ? { originalCppPous: data.originalCppPous as IpcProjectData['originalCppPous'] } : {}),
   }
 }
