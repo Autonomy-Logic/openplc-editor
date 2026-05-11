@@ -1,28 +1,29 @@
-// Baremetal.ino -- OpenPLC Arduino runtime for STruC++ generated code.
+// Baremetal.ino -- OpenPLC Arduino runtime entry sketch.
 //
-// This is a STATIC sketch -- the same code for every project. It dynamically
-// discovers the project structure from STruC++ runtime types at setup() time:
-// - Walks locatedVars[] to bind I/O to openplc.h buffer pointers
-// - Walks Configuration → Resource → Task to discover programs and intervals
-// - Computes GCD of task intervals for the scan cycle base tick
-// - Schedules programs round-robin with per-task divisors
+// This is a STATIC sketch -- the same code for every project. It hosts the
+// I/O buffers, Modbus glue, and the scan-cycle scheduler. Every strucpp
+// type, every PLC POU instance, and every library body lives in the
+// arduino library at src/ (compiled as separate translation units that
+// never see Arduino.h). The sketch only talks to that library through the
+// thin C-linkage surface in arduino_runtime_glue.h.
+//
+// Why the separation: arduino-cli auto-prepends <Arduino.h> to every .ino
+// translation unit. Arduino.h defines macros named DEFAULT / HIGH / LOW /
+// PI / B0..B7 / INPUT / OUTPUT and others that collide with struct member
+// names emitted by strucpp's library bodies (most visibly OSCAT's
+// CONSTANTS_LANGUAGE.DEFAULT). Keeping every strucpp class body out of
+// the .ino's TU removes the entire class of collisions in one move.
 
 // Arduino.h defines min/max/abs/round as function-like macros that break
-// C++ standard library templates (<algorithm>, <limits>, etc). Undefine them
-// before including anything. TIMER* macros are left intact so user C/C++
-// function blocks can reference them directly.
+// C++ standard library templates (<algorithm>, <limits>, etc).
 #undef min
 #undef max
 #undef abs
 #undef round
 
-// Include openplc.h FIRST (defines IEC_BOOL etc. as plain typedefs)
 #include "openplc.h"
 #include "defines.h"
-
-// STruC++ headers define IEC_BOOL etc. inside namespace strucpp.
-// Avoid "using namespace strucpp" globally to prevent ambiguity with openplc.h types.
-#include "generated.hpp"
+#include "arduino_runtime_glue.h"
 
 #ifdef MODBUS_ENABLED
 #include "ModbusSlave.h"
@@ -46,7 +47,9 @@ void operator delete(void* ptr, unsigned int)
 }
 
 // ---------------------------------------------------------------------------
-// I/O Buffer definitions (declared extern in openplc.h, must be defined here)
+// I/O Buffer definitions (declared extern in openplc.h, must be defined
+// here so they have external linkage. The glue's runtime_bind_located_vars
+// reads/writes these slots.)
 // ---------------------------------------------------------------------------
 IEC_BOOL *bool_input[MAX_DIGITAL_INPUT/8][8] = {};
 IEC_BOOL *bool_output[MAX_DIGITAL_OUTPUT/8][8] = {};
@@ -59,31 +62,8 @@ IEC_ULINT *lint_memory[MAX_MEMORY_LWORD] = {};
 #endif
 
 // ---------------------------------------------------------------------------
-// STruC++ Configuration instance (always CONFIG0 in OpenPLC).
-// NOT static — the debugger's generated_debug.cpp references this global
-// via compile-time address-of expressions (extern declaration) so it must
-// have external linkage.
-// ---------------------------------------------------------------------------
-strucpp::Configuration_CONFIG0 g_config;
-
-// ---------------------------------------------------------------------------
-// Task scheduling state (populated by discoverTasks)
-// ---------------------------------------------------------------------------
-static strucpp::ProgramBase** all_programs = nullptr;
-static uint32_t* task_divisors = nullptr;
-static size_t total_programs = 0;
-// Base tick interval in nanoseconds. Default 20 ms; discoverTasks() overrides
-// it with the GCD of declared task intervals.
-unsigned long long base_tick_ns = 20000000ULL;
-
-// ---------------------------------------------------------------------------
 // Scan cycle timing
 // ---------------------------------------------------------------------------
-// Scan counter — incremented once per cycle. Used by the round-robin
-// scheduler to decide which programs run this cycle (via task_divisors[])
-// and reported in DEBUG_GET / DEBUG_GET_LIST responses so the editor can
-// detect cycle boundaries.
-uint32_t scan_counter = 0;
 unsigned long scan_cycle;
 unsigned long last_run = 0;
 bool first_cycle = false;
@@ -101,153 +81,6 @@ extern uint8_t pinMask_DIN[];
 extern uint8_t pinMask_AIN[];
 extern uint8_t pinMask_DOUT[];
 extern uint8_t pinMask_AOUT[];
-
-// ---------------------------------------------------------------------------
-// GCD utility
-// ---------------------------------------------------------------------------
-static uint64_t gcd(uint64_t a, uint64_t b)
-{
-    while (b)
-    {
-        uint64_t t = b;
-        b = a % b;
-        a = t;
-    }
-    return a;
-}
-
-// ---------------------------------------------------------------------------
-// I/O Binding: walk locatedVars[] and bind to openplc.h buffer pointers
-// ---------------------------------------------------------------------------
-void bindLocatedVars()
-{
-    using namespace strucpp;
-    for (uint32_t i = 0; i < locatedVarsCount; ++i)
-    {
-        LocatedVar& lv = locatedVars[i];
-        if (!lv.pointer) continue;
-
-        switch (lv.area)
-        {
-        case LocatedArea::Input:
-            switch (lv.size)
-            {
-            case LocatedSize::Bit:
-                bool_input[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
-                break;
-            case LocatedSize::Word:
-                int_input[lv.byte_index] = (::IEC_UINT*)lv.pointer;
-                break;
-#if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-            case LocatedSize::DWord:
-                // dint_input not available on all boards
-                break;
-            case LocatedSize::LWord:
-                // lint_input not available on all boards
-                break;
-#endif
-            default: break;
-            }
-            break;
-
-        case LocatedArea::Output:
-            switch (lv.size)
-            {
-            case LocatedSize::Bit:
-                bool_output[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
-                break;
-            case LocatedSize::Word:
-                int_output[lv.byte_index] = (::IEC_UINT*)lv.pointer;
-                break;
-#if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-            case LocatedSize::DWord:
-                // dint_output not available on all boards
-                break;
-            case LocatedSize::LWord:
-                // lint_output not available on all boards
-                break;
-#endif
-            default: break;
-            }
-            break;
-
-        case LocatedArea::Memory:
-#if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-            switch (lv.size)
-            {
-            case LocatedSize::Word:
-                int_memory[lv.byte_index] = (::IEC_UINT*)lv.pointer;
-                break;
-            case LocatedSize::DWord:
-                dint_memory[lv.byte_index] = (::IEC_UDINT*)lv.pointer;
-                break;
-            case LocatedSize::LWord:
-                lint_memory[lv.byte_index] = (::IEC_ULINT*)lv.pointer;
-                break;
-            default: break;
-            }
-#endif
-            break;
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Task Discovery: walk Configuration → Resource → Task to find programs
-// ---------------------------------------------------------------------------
-void discoverTasks()
-{
-    // First pass: count programs and compute GCD of intervals
-    uint64_t gcd_ns = 0;
-    size_t prog_count = 0;
-
-    auto* resources = g_config.get_resources();
-    for (size_t r = 0; r < g_config.get_resource_count(); ++r)
-    {
-        for (size_t t = 0; t < resources[r].task_count; ++t)
-        {
-            auto& task = resources[r].tasks[t];
-            prog_count += task.program_count;
-            uint64_t interval = task.interval_ns > 0 ? task.interval_ns : 20000000ULL;
-            gcd_ns = (gcd_ns == 0) ? interval : gcd(gcd_ns, interval);
-        }
-    }
-
-    if (gcd_ns == 0) gcd_ns = 20000000ULL;
-    base_tick_ns = gcd_ns;
-
-    // Second pass: build flat arrays of programs and their divisors
-    all_programs = new strucpp::ProgramBase*[prog_count];
-    task_divisors = new uint32_t[prog_count];
-    total_programs = prog_count;
-
-    size_t idx = 0;
-    for (size_t r = 0; r < g_config.get_resource_count(); ++r)
-    {
-        for (size_t t = 0; t < resources[r].task_count; ++t)
-        {
-            auto& task = resources[r].tasks[t];
-            uint64_t interval = task.interval_ns > 0 ? task.interval_ns : gcd_ns;
-            uint32_t divisor = (uint32_t)(interval / gcd_ns);
-            for (size_t p = 0; p < task.program_count; ++p)
-            {
-                all_programs[idx] = task.programs[p];
-                task_divisors[idx] = divisor;
-                idx++;
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Advance the scan-cycle clock by one base tick. Called once per cycle from
-// plcCycleTask(). Without this, IEC TIME() returns 0 and TON/TOF/TP function
-// blocks never advance.
-// ---------------------------------------------------------------------------
-void advance_time()
-{
-    strucpp::__CURRENT_TIME_NS += (int64_t)base_tick_ns;
-}
 
 // ---------------------------------------------------------------------------
 // Scan cycle delay setup
@@ -271,10 +104,10 @@ void setup()
     #endif
 
     // Bind located variables to I/O buffer pointers
-    bindLocatedVars();
+    runtime_bind_located_vars();
 
     // Discover tasks and compute scheduling
-    discoverTasks();
+    runtime_discover_tasks();
 
     // Initialize hardware (HAL -- unchanged)
     hardwareInit();
@@ -339,7 +172,7 @@ void setup()
 }
 
 // =============================================================================
-// MAP EMPTY BUFFERS (for Modbus -- identical to current Baremetal.ino)
+// MAP EMPTY BUFFERS (for Modbus)
 // =============================================================================
 #ifdef MODBUS_ENABLED
 void mapEmptyBuffers()
@@ -400,7 +233,7 @@ void mapEmptyBuffers()
 }
 
 // =============================================================================
-// MODBUS TASK (identical to current Baremetal.ino)
+// MODBUS TASK
 // =============================================================================
 void modbusTask()
 {
@@ -502,32 +335,11 @@ void modbusTask()
 #endif
 
 // =============================================================================
-// PLC CYCLE TASK
-// =============================================================================
-void plcCycleTask()
-{
-    updateInputBuffers();
-
-    // Run each program according to its task divisor
-    for (size_t i = 0; i < total_programs; ++i)
-    {
-        if (task_divisors[i] == 0 || (scan_counter % task_divisors[i]) == 0)
-        {
-            all_programs[i]->run();
-        }
-    }
-    scan_counter++;
-
-    updateOutputBuffers();
-    advance_time();
-}
-
-// =============================================================================
 // SCHEDULER
 // =============================================================================
 void scheduler()
 {
-    plcCycleTask();
+    runtime_plc_cycle();
 
     #ifdef USE_ARDUINO_SKETCH
         sketch_loop();

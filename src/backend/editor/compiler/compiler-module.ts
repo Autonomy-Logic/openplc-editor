@@ -472,6 +472,15 @@ class CompilerModule {
     if (boardTarget !== 'openplc-compiler') {
       // Arduino targets: headers go flat next to the sketch (Baremetal.ino
       // includes "iec_var.hpp" etc. directly).
+      //
+      // resources/sources/arduino/ also ships arduino_runtime_glue.{cpp,h}.
+      // The glue owns g_config and every helper that touches strucpp types,
+      // isolating them in a library translation unit that arduino-cli
+      // compiles WITHOUT the <Arduino.h> prelude. The .ino sketch therefore
+      // never has Arduino.h's macros (DEFAULT/HIGH/LOW/PI/B0..B7/…) and
+      // strucpp library struct member names in the same TU — eliminating
+      // the collisions that previously broke any project including OSCAT
+      // blocks.
       filesToCopy.push(
         cp(staticArduinoFilesPath, sourceTargetFolderPath, { recursive: true }),
         this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
@@ -516,6 +525,7 @@ class CompilerModule {
     await fs.mkdir(targetDir, { recursive: true })
     await cp(runtimeDir, targetDir, { recursive: true })
   }
+
 
   /**
    * Mirror the bundled avr-libstdcpp headers into a stable no-space
