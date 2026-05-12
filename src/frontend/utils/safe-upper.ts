@@ -30,18 +30,30 @@
  * unless `needle` is also empty, in which case every row matches —
  * which is the desired "show all" behaviour while the user hasn't
  * typed a filter yet.
+ *
+ * Logs a warning when called with anything that isn't a string so
+ * the malformed input source is discoverable instead of silently
+ * coerced.
  */
 export function safeUpper(value: unknown): string {
-  return typeof value === 'string' ? value.toUpperCase() : ''
+  if (typeof value === 'string') return value.toUpperCase()
+  console.warn('[safeUpper] expected string, got', typeof value, value)
+  return ''
 }
 
 /**
  * Type-narrowing predicate: keeps only entries whose `name` is a
  * non-empty string.  Use with `.filter()` before mapping `name` →
  * `name.toUpperCase()` so the deref is always safe.
+ *
+ * Logs a warning for every entry it filters out so the malformed
+ * record is visible in the devtools console — useful for spotting
+ * legacy / corrupted project data without crashing the renderer.
  */
 export function hasStringName<T extends { name?: unknown }>(
   entry: T,
 ): entry is T & { name: string } {
-  return typeof entry.name === 'string' && entry.name.length > 0
+  if (typeof entry.name === 'string' && entry.name.length > 0) return true
+  console.warn('[hasStringName] dropping entry without a usable name', entry)
+  return false
 }
