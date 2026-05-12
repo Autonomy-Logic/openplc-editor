@@ -3,7 +3,6 @@ import { ReactNode, useEffect, useRef, useState } from 'react'
 import type { SystemLibrary, UserLibrary } from '../../../../middleware/shared/ports/library-types'
 import { BookIcon } from '../../../assets/icons/interface/Book'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
-import { ConfigIcon } from '../../../assets/icons/interface/Config'
 import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { useOpenPLCStore } from '../../../store'
 import { CreateLibraryManagerEditor } from '../../../store/slices/tabs/utils'
@@ -225,16 +224,17 @@ const Library = ({
         )}
 
         {/* Trailing "Manage libraries…" affordance — mirrors the
-            "Install additional boards…" pattern in the device-config
+            "+ Install additional boards…" pattern in the device-config
             dropdown.  Drops the user into the Library Manager tab to
-            install / enable libraries without leaving the explorer. */}
+            install / enable libraries without leaving the explorer.
+            Visual treatment matches that affordance: a literal "+"
+            glyph in brand colour rather than a stand-alone icon. */}
         <button
           type='button'
           onClick={handleOpenManager}
-          className='mx-2 mt-2 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left font-caption text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850'
+          className='mx-2 mt-2 flex items-center gap-1 rounded-md px-2 py-1.5 text-left font-caption text-xs font-medium text-brand hover:bg-neutral-100 dark:hover:bg-neutral-850'
         >
-          <ConfigIcon size='sm' className='h-3 w-3' />
-          Manage libraries…
+          + Manage libraries…
         </button>
       </div>
     </div>

@@ -166,10 +166,11 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                 key={lib.name}
                 type='button'
                 onClick={() => setSelectedName(lib.name)}
+                aria-selected={selectedName === lib.name}
                 className={`flex w-full items-center justify-between border-b border-neutral-100 px-3 py-2 text-left last:border-b-0 dark:border-neutral-800 ${
                   selectedName === lib.name
-                    ? 'bg-brand/10 dark:bg-brand/20'
-                    : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
+                    ? 'bg-brand/20 font-medium shadow-[inset_3px_0_0_var(--primary-default)] dark:bg-brand/30'
+                    : 'hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 }`}
               >
                 <div className='flex flex-col gap-0.5'>

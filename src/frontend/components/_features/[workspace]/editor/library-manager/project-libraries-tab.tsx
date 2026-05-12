@@ -1,48 +1,54 @@
 /**
- * Project Libraries tab — the per-project enablement view.
+ * Project Libraries tab — per-project enablement, dual-card layout.
  *
- * Shows three sections:
+ * Two side-by-side cards:
  *
- *   - **Bundled** — canonical / non-disableable libraries that ship
- *     with strucpp.  Read-only; no checkbox.
+ *   - **Left:** Available system libraries.  A search input filters
+ *     the list; each row has an inline "+" affordance that pulls the
+ *     library into the project.  Bundled libraries don't appear here
+ *     — they're always-on and live on the right.
  *
- *   - **Enabled** — opt-in libraries the project is using.  Each
- *     row has a remove button.
+ *   - **Right:** Project libraries.  Bundled libraries appear in a
+ *     subdued, non-removable group at the top.  Opt-in libraries the
+ *     project enables follow, each with an inline "−" affordance to
+ *     pull them back out.  A missing-libraries callout sits above
+ *     the list when `project.libraries` references libraries not
+ *     present in the system pool.
  *
- *   - **Available to add** — opt-in libraries in the system pool
- *     the project hasn't opted into.  Each row has an add button.
- *
- * Below the list, missing libraries (in `project.libraries` but not
- * in the system pool) get a callout pointing back at the System
- * Libraries tab.  Right pane mirrors the System Libraries tab's
- * details for whichever row is selected.
+ * The dual-card transfer shape mirrors the EtherCAT module-selection
+ * UX so users move between the two managers without relearning the
+ * surface.  No right-pane "details view" — selecting a library in
+ * either card has no side effect; the cards exist purely to manage
+ * project enablement.  Details remain available on the System
+ * Libraries tab.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
+import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
 import { useOpenPLCStore } from '@root/frontend/store'
-import { buildLibraryTree, type LibraryTreeNode } from '@root/frontend/utils/library-tree'
-import type { InstalledLibrary, SystemLibrary } from '@root/middleware/shared/ports/library-types'
+import type { InstalledLibrary } from '@root/middleware/shared/ports/library-types'
 
 interface ProjectLibrariesTabProps {
   installed: InstalledLibrary[]
 }
 
 const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
-  const systemPool = useOpenPLCStore((s) => s.libraries.system)
   const enabledNames = useOpenPLCStore((s) => s.enabledLibraries)
   const missingLibraries = useOpenPLCStore((s) => s.missingLibraries)
   const enableLibrary = useOpenPLCStore((s) => s.libraryActions.enableLibrary)
   const disableLibrary = useOpenPLCStore((s) => s.libraryActions.disableLibrary)
 
-  const [selectedName, setSelectedName] = useState<string | null>(null)
+  const [availableFilter, setAvailableFilter] = useState('')
 
-  // Partition the catalogue into bundled / enabled / available.
-  // Enabled is a derived view from the slice — driven by the
-  // project's durable `libraries` field — so the UI reflects the
-  // exact state the project will save.
+  // Partition the catalogue.  Bundled libraries are always-on so they
+  // belong to the project group only (and as a locked row).  Opt-in
+  // libraries split between "available" (not yet enabled) and
+  // "enabled in this project".  We compute against `enabledNames`
+  // rather than `project.libraries` directly so the UI reflects the
+  // exact list the next save will write.
   const { bundled, enabled, available } = useMemo(() => {
     const bundled: InstalledLibrary[] = []
     const enabled: InstalledLibrary[] = []
@@ -56,23 +62,54 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
     return { bundled, enabled, available }
   }, [installed, enabledNames])
 
-  // Auto-select the first enabled row (or first bundled, or first
-  // available) so the details pane has something to render.
-  useEffect(() => {
-    if (selectedName && installed.some((l) => l.name === selectedName)) return
-    const first = enabled[0] ?? bundled[0] ?? available[0]
-    setSelectedName(first?.name ?? null)
-  }, [installed, selectedName, enabled, bundled, available])
-
-  const selectedRow = selectedName ? installed.find((l) => l.name === selectedName) : null
-  const selectedArchive = selectedName ? systemPool.find((l) => l.name === selectedName) : null
+  const filteredAvailable = useMemo(() => {
+    const q = availableFilter.trim().toLowerCase()
+    if (!q) return available
+    return available.filter(
+      (lib) =>
+        lib.name.toLowerCase().includes(q) ||
+        (lib.displayName ?? '').toLowerCase().includes(q) ||
+        (lib.description ?? '').toLowerCase().includes(q),
+    )
+  }, [available, availableFilter])
 
   return (
-    <div className='flex min-h-0 flex-1 overflow-hidden'>
-      {/* Left pane — sectioned project view */}
-      <div className='flex w-1/2 min-w-[325px] flex-col gap-4 overflow-y-auto pr-4'>
+    <div className='flex min-h-0 flex-1 gap-4 overflow-hidden'>
+      {/* Left card — available system libraries */}
+      <Card title='Available Libraries' subtitle='Pick a library to add to this project.'>
+        <SearchBar value={availableFilter} onChange={setAvailableFilter} />
+        <ListBody>
+          {available.length === 0 ? (
+            <EmptyState>
+              Every installed library is already in this project. Install more on the System Libraries tab.
+            </EmptyState>
+          ) : filteredAvailable.length === 0 ? (
+            <EmptyState>No libraries match &ldquo;{availableFilter}&rdquo;.</EmptyState>
+          ) : (
+            filteredAvailable.map((lib) => (
+              <LibraryRow
+                key={lib.name}
+                lib={lib}
+                action='add'
+                onAction={() => enableLibrary(lib.name)}
+                actionTitle='Add to project'
+              />
+            ))
+          )}
+        </ListBody>
+      </Card>
+
+      {/* Right card — project libraries */}
+      <Card
+        title='Project Libraries'
+        subtitle={
+          enabled.length + bundled.length === 0
+            ? 'No libraries enabled yet.'
+            : `${bundled.length} bundled, ${enabled.length} added.`
+        }
+      >
         {missingLibraries.length > 0 && (
-          <div className='rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs dark:border-yellow-700 dark:bg-yellow-950/40'>
+          <div className='shrink-0 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs dark:border-yellow-700 dark:bg-yellow-950/40'>
             <span className='font-medium text-yellow-800 dark:text-yellow-200'>Missing libraries:</span>
             <ul className='mt-1 list-inside list-disc text-yellow-700 dark:text-yellow-300'>
               {missingLibraries.map((m) => (
@@ -87,212 +124,139 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
             </p>
           </div>
         )}
-
-        <Section
-          title='Bundled with STruC++'
-          subtitle='Always-on; cannot be disabled.'
-          rows={bundled}
-          selectedName={selectedName}
-          onSelect={setSelectedName}
-        />
-
-        <Section
-          title={`Enabled in this project (${enabled.length})`}
-          subtitle={enabled.length === 0 ? 'No opt-in libraries enabled.' : undefined}
-          rows={enabled}
-          selectedName={selectedName}
-          onSelect={setSelectedName}
-          actionIcon='remove'
-          onAction={(name) => disableLibrary(name)}
-          actionTitle='Remove from project'
-        />
-
-        <Section
-          title={`Available to add (${available.length})`}
-          subtitle={
-            available.length === 0
-              ? 'Every installed library is already enabled. Install more on the System Libraries tab.'
-              : undefined
-          }
-          rows={available}
-          selectedName={selectedName}
-          onSelect={setSelectedName}
-          actionIcon='add'
-          onAction={(name) => enableLibrary(name)}
-          actionTitle='Enable in project'
-        />
-      </div>
-
-      <div className='h-full w-[1px] bg-brand-light' />
-
-      {/* Right pane — details */}
-      <div className='flex w-1/2 min-w-[325px] flex-col gap-4 overflow-y-auto pl-4'>
-        {selectedRow ? (
-          <>
-            <div className='flex items-center justify-between'>
-              <h3 className='select-none text-base font-medium text-neutral-950 dark:text-white'>
-                {selectedRow.displayName ?? selectedRow.name}
-              </h3>
-              {selectedRow.bundled && (
-                <span className='rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:text-brand-light'>
-                  bundled
-                </span>
-              )}
-            </div>
-            <div className='flex flex-col gap-3'>
-              <DetailRow label='Identifier' value={selectedRow.name} />
-              <DetailRow label='Version' value={selectedRow.version} />
-              <DetailRow
-                label='Status in project'
-                value={
-                  selectedRow.bundled
-                    ? 'Always available (bundled)'
-                    : enabledNames.includes(selectedRow.name)
-                      ? 'Enabled'
-                      : 'Available — not yet enabled'
-                }
-              />
-              {selectedRow.description && <DetailRow label='Description' value={selectedRow.description} />}
-            </div>
-            {selectedArchive && <PouTreePreview library={selectedArchive} />}
-          </>
-        ) : (
-          <div className='flex h-full items-center justify-center text-sm text-neutral-500 dark:text-neutral-400'>
-            Select a library to view details
-          </div>
-        )}
-      </div>
+        <ListBody>
+          {bundled.length === 0 && enabled.length === 0 ? (
+            <EmptyState>
+              Pick a library from the left to add it to this project.
+            </EmptyState>
+          ) : (
+            <>
+              {bundled.map((lib) => (
+                <LibraryRow key={lib.name} lib={lib} action='locked' actionTitle='Bundled — always available' />
+              ))}
+              {enabled.map((lib) => (
+                <LibraryRow
+                  key={lib.name}
+                  lib={lib}
+                  action='remove'
+                  onAction={() => disableLibrary(lib.name)}
+                  actionTitle='Remove from project'
+                />
+              ))}
+            </>
+          )}
+        </ListBody>
+      </Card>
     </div>
   )
 }
 
-interface SectionProps {
+// ─────────────────────────────────────────────────────────────────────────────
+// Subcomponents
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Card({
+  title,
+  subtitle,
+  children,
+}: {
   title: string
   subtitle?: string
-  rows: InstalledLibrary[]
-  selectedName: string | null
-  onSelect: (name: string) => void
-  actionIcon?: 'add' | 'remove'
-  onAction?: (name: string) => void
-  actionTitle?: string
-}
-
-function Section({ title, subtitle, rows, selectedName, onSelect, actionIcon, onAction, actionTitle }: SectionProps) {
-  if (rows.length === 0 && !subtitle) return null
+  children: React.ReactNode
+}) {
   return (
-    <div className='flex flex-col gap-2'>
-      <h4 className='select-none text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400'>
-        {title}
-      </h4>
-      {rows.length === 0 ? (
-        <span className='text-[11px] italic text-neutral-500 dark:text-neutral-400'>{subtitle}</span>
-      ) : (
-        <div className='flex flex-col overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700'>
-          {rows.map((lib) => (
-            <div
-              key={lib.name}
-              className={`group flex items-center justify-between border-b border-neutral-100 px-3 py-2 last:border-b-0 dark:border-neutral-800 ${
-                selectedName === lib.name
-                  ? 'bg-brand/10 dark:bg-brand/20'
-                  : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
-              }`}
-            >
-              <button type='button' onClick={() => onSelect(lib.name)} className='flex flex-1 flex-col gap-0.5 text-left'>
-                <span className='font-caption text-cp-sm font-medium text-neutral-950 dark:text-white'>
-                  {lib.displayName ?? lib.name}
-                </span>
-                <span className='text-[11px] text-neutral-500 dark:text-neutral-400'>v{lib.version}</span>
-              </button>
-              {actionIcon === 'add' && onAction && (
-                <button
-                  type='button'
-                  aria-label={actionTitle ?? 'Enable'}
-                  title={actionTitle ?? 'Enable'}
-                  onClick={() => onAction(lib.name)}
-                  className='rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
-                >
-                  <PlusIcon className='!stroke-brand' />
-                </button>
-              )}
-              {actionIcon === 'remove' && onAction && (
-                <button
-                  type='button'
-                  aria-label={actionTitle ?? 'Remove'}
-                  title={actionTitle ?? 'Remove'}
-                  onClick={() => onAction(lib.name)}
-                  className='rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
-                >
-                  <MinusIcon className='!stroke-brand' />
-                </button>
-              )}
-              {!actionIcon && (
-                <span
-                  title='Always-on'
-                  className='select-none rounded-md px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:text-brand-light'
-                >
-                  ✓
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className='flex flex-col gap-0.5'>
-      <span className='text-xs font-medium text-neutral-500 dark:text-neutral-400'>{label}</span>
-      <span className='break-words font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>{value}</span>
-    </div>
-  )
-}
-
-function PouTreePreview({ library }: { library: SystemLibrary }) {
-  const tree = buildLibraryTree(library)
-  const totalPous = library.pous.length
-  return (
-    <div className='flex flex-col gap-2'>
-      <span className='text-xs font-medium text-neutral-500 dark:text-neutral-400'>
-        Contents ({totalPous} {totalPous === 1 ? 'POU' : 'POUs'})
-      </span>
-      <div className='flex flex-col gap-0.5 rounded-md border border-neutral-200 p-2 dark:border-neutral-700'>
-        {tree.children.length === 0 ? (
-          <span className='px-2 py-1 text-[11px] italic text-neutral-500 dark:text-neutral-400'>(empty)</span>
-        ) : (
-          tree.children.map((child, idx) => <TreeNodeView key={idx} node={child} depth={0} />)
+    <div className='flex min-h-0 w-1/2 min-w-[280px] flex-1 flex-col overflow-hidden rounded-md border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950'>
+      <div className='shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-neutral-700'>
+        <h3 className='select-none font-caption text-sm font-semibold text-neutral-950 dark:text-white'>{title}</h3>
+        {subtitle && (
+          <p className='mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400'>{subtitle}</p>
         )}
       </div>
+      <div className='flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3'>{children}</div>
     </div>
   )
 }
 
-function TreeNodeView({ node, depth }: { node: LibraryTreeNode; depth: number }) {
-  if (node.kind === 'folder') {
-    return (
-      <div className='flex flex-col gap-0.5'>
-        <span
-          className='font-caption text-cp-sm font-medium text-neutral-700 dark:text-neutral-300'
-          style={{ paddingLeft: `${depth * 12}px` }}
-        >
-          {node.label}/
-        </span>
-        {node.children.map((child, idx) => (
-          <TreeNodeView key={idx} node={child} depth={depth + 1} />
-        ))}
-      </div>
-    )
-  }
+function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <span
-      className='font-caption text-[11px] text-neutral-600 dark:text-neutral-400'
-      style={{ paddingLeft: `${depth * 12}px` }}
-    >
-      {node.pou.name}
-      <span className='ml-1 text-neutral-400 dark:text-neutral-500'>· {node.pou.type}</span>
-    </span>
+    <div className='flex shrink-0 items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 dark:border-neutral-700 dark:bg-neutral-900'>
+      <MagnifierIcon className='h-4 w-4 shrink-0' />
+      <input
+        type='text'
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder='Search libraries…'
+        className='w-full bg-transparent font-caption text-xs text-neutral-950 placeholder:text-neutral-400 focus:outline-none dark:text-white dark:placeholder:text-neutral-500'
+      />
+    </div>
+  )
+}
+
+function ListBody({ children }: { children: React.ReactNode }) {
+  return <div className='flex min-h-0 flex-1 flex-col overflow-y-auto'>{children}</div>
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return (
+    <div className='flex flex-1 items-center justify-center px-3 py-6 text-center text-[11px] italic text-neutral-500 dark:text-neutral-400'>
+      {children}
+    </div>
+  )
+}
+
+function LibraryRow({
+  lib,
+  action,
+  onAction,
+  actionTitle,
+}: {
+  lib: InstalledLibrary
+  action: 'add' | 'remove' | 'locked'
+  onAction?: () => void
+  actionTitle?: string
+}) {
+  return (
+    <div className='group flex items-center justify-between gap-2 border-b border-neutral-100 px-2 py-2 last:border-b-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900'>
+      <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+        <span className='truncate font-caption text-cp-sm font-medium text-neutral-950 dark:text-white'>
+          {lib.displayName ?? lib.name}
+        </span>
+        <span className='truncate text-[11px] text-neutral-500 dark:text-neutral-400'>
+          v{lib.version}
+          {lib.bundled ? ' · bundled' : lib.origin === 'codesys' ? ' · CODESYS' : ''}
+        </span>
+      </div>
+      {action === 'add' && (
+        <button
+          type='button'
+          aria-label={actionTitle ?? 'Add to project'}
+          title={actionTitle ?? 'Add to project'}
+          onClick={onAction}
+          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+        >
+          <PlusIcon className='!stroke-brand' />
+        </button>
+      )}
+      {action === 'remove' && (
+        <button
+          type='button'
+          aria-label={actionTitle ?? 'Remove from project'}
+          title={actionTitle ?? 'Remove from project'}
+          onClick={onAction}
+          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+        >
+          <MinusIcon className='!stroke-brand' />
+        </button>
+      )}
+      {action === 'locked' && (
+        <span
+          title={actionTitle ?? 'Bundled — always available'}
+          className='shrink-0 select-none rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:text-brand-light'
+        >
+          always on
+        </span>
+      )}
+    </div>
   )
 }
 
