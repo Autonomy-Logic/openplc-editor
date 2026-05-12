@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { baseTypeSchema } from '../../../../../middleware/shared/ports'
 import { useOpenPLCStore } from '../../../../store'
 import { arrayValidation } from '../../../../store/slices/workspace/utils/variables'
+import { hasStringName } from '../../../../utils/safe-upper'
 import { DimensionsModal } from '../../../_atoms/dimensions-modal'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 
@@ -38,21 +39,30 @@ export const GlobalArrayModal = ({
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
-  const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
+  const baseTypes = baseTypeSchema.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
 
-  const userDataTypes = dataTypes.map((type) => type.name).filter((typeName) => typeName.toUpperCase() !== 'ARRAY')
+  const userDataTypes = dataTypes
+    .filter(hasStringName)
+    .map((type) => type.name)
+    .filter((typeName) => typeName.toUpperCase() !== 'ARRAY')
 
   const systemFunctionBlocks = sliceLibraries.system.flatMap((lib) =>
-    lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+    (lib.pous ?? [])
+      .filter((pou) => pou?.type === 'function-block')
+      .filter(hasStringName)
+      .map((pou) => pou.name.toUpperCase()),
   )
 
-  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
-    'pous' in userLib && Array.isArray(userLib.pous)
-      ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
-      : (userLib as UserLibFunctionBlock).type === 'function-block'
-        ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
-        : [],
-  )
+  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) => {
+    if ('pous' in userLib && Array.isArray(userLib.pous)) {
+      return userLib.pous
+        .filter((pou) => pou?.type === 'function-block')
+        .filter(hasStringName)
+        .map((pou) => pou.name.toUpperCase())
+    }
+    const fb = userLib as UserLibFunctionBlock
+    return fb.type === 'function-block' && typeof fb.name === 'string' ? [fb.name.toUpperCase()] : []
+  })
 
   const VariableTypes = [
     { definition: 'base-type', values: baseTypes },

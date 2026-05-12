@@ -46,19 +46,39 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
     missingLibraries: [],
     libraryActions: {
       setSystemLibraries: (libraries) => {
+        // Strip malformed POU entries at the source — keep only
+        // entries with a non-empty string `name`.  Render-path
+        // consumers (variables-table / global-variables-table /
+        // structure / array selectable cells) assume every pou has
+        // a usable name and `pou.name.toUpperCase()` crashes
+        // otherwise.  Doing it here means every consumer is safe
+        // by construction; no per-component defensive code.
+        const sanitized = libraries.map((lib) => ({
+          ...lib,
+          pous: (lib.pous ?? []).filter(
+            (pou) => typeof pou?.name === 'string' && pou.name.length > 0,
+          ),
+        }))
         setState(
           produce((state: LibrarySlice) => {
-            state.libraries.system = libraries
+            state.libraries.system = sanitized
             // System pool changed — refresh the derived diff against
             // the project's current durable list.  Empty when the
             // project slice isn't wired (slim test harness).
             const refs = readProjectRefs()
-            state.enabledLibraries = computeEnabled(libraries, refs)
-            state.missingLibraries = computeMissing(libraries, refs)
+            state.enabledLibraries = computeEnabled(sanitized, refs)
+            state.missingLibraries = computeMissing(sanitized, refs)
           }),
         )
       },
       addLibrary: (libraryName, libraryType) => {
+        // Drop malformed input at the source — render paths that
+        // later iterate `libraries.user` (variables / global / array
+        // / structure selectable cells) assume every entry has a
+        // non-empty string name and crash otherwise with `Cannot
+        // read properties of undefined (reading 'toUpperCase')`.
+        if (typeof libraryName !== 'string' || libraryName.length === 0) return
+        if (typeof libraryType !== 'string' || libraryType.length === 0) return
         setState(
           produce(({ libraries: { user: userLibraries } }: LibrarySlice) => {
             const libraryAlreadyExists = userLibraries.some((library) => library.name === libraryName)

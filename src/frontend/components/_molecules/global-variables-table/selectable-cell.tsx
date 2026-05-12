@@ -10,6 +10,7 @@ import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
 import { useOpenPLCStore } from '../../../store'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
+import { hasStringName, safeUpper } from '../../../utils/safe-upper'
 import { propagateVariableTypeChange } from '../../../utils/variable-references'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
@@ -61,27 +62,31 @@ const SelectableTypeCell = ({
       definition: 'base-type',
       values: baseTypeSchema.options,
     },
-    { definition: 'user-data-type', values: dataTypes.map((dataType) => dataType.name) },
+    { definition: 'user-data-type', values: dataTypes.filter(hasStringName).map((dataType) => dataType.name) },
   ]
 
   const LibraryTypes = [
     {
       definition: 'system',
       values: sliceLibraries.system.flatMap((library) =>
-        library.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+        (library.pous ?? [])
+          .filter((pou) => pou?.type === 'function-block')
+          .filter(hasStringName)
+          .map((pou) => pou.name.toUpperCase()),
       ),
     },
     {
       definition: 'user',
-      values: sliceLibraries.user.flatMap((userLibrary) =>
-        'pous' in userLibrary && Array.isArray((userLibrary as { pous: { type: string; name: string }[] }).pous)
-          ? (userLibrary as { pous: { type: string; name: string }[] }).pous
-              .filter((pou) => pou.type === 'function-block')
-              .map((pou) => pou.name.toUpperCase())
-          : userLibrary.type === 'function-block'
-            ? [userLibrary.name.toUpperCase()]
-            : [],
-      ),
+      values: sliceLibraries.user.filter(hasStringName).flatMap((userLibrary) => {
+        const pous = (userLibrary as { pous?: { type?: string; name?: string }[] }).pous
+        if (Array.isArray(pous)) {
+          return pous
+            .filter((pou) => pou?.type === 'function-block')
+            .filter(hasStringName)
+            .map((pou) => pou.name.toUpperCase())
+        }
+        return userLibrary.type === 'function-block' ? [userLibrary.name.toUpperCase()] : []
+      }),
     },
   ]
 
@@ -105,22 +110,22 @@ const SelectableTypeCell = ({
 
   const filteredBaseTypes =
     VariableTypes.find((v) => v.definition === 'base-type')?.values.filter((val) =>
-      val.toUpperCase().includes(variableFilters['base-type'].toUpperCase()),
+      safeUpper(val).includes(safeUpper(variableFilters['base-type'])),
     ) || []
 
   const filteredUserDataTypes =
     VariableTypes.find((v) => v.definition === 'user-data-type')?.values.filter((val) =>
-      val.toUpperCase().includes(variableFilters['user-data-type'].toUpperCase()),
+      safeUpper(val).includes(safeUpper(variableFilters['user-data-type'])),
     ) || []
 
   const filteredSystemLibraries =
     LibraryTypes.find((l) => l.definition === 'system')?.values.filter((val) =>
-      val.toUpperCase().includes(libraryFilter.toUpperCase()),
+      safeUpper(val).includes(safeUpper(libraryFilter)),
     ) || []
 
   const filteredUserLibraries =
     LibraryTypes.find((l) => l.definition === 'user')?.values.filter((val) =>
-      val.toUpperCase().includes(libraryFilter.toUpperCase()),
+      safeUpper(val).includes(safeUpper(libraryFilter)),
     ) || []
 
   const currentVariable = table.options.data[index]
