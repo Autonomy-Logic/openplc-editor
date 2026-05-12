@@ -449,7 +449,7 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       )
       if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
-      // data-type, resource: live in project.json
+      // data-type, resource, library-manager: live in project.json
       const spec = specs[0]
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), spec.content)
@@ -465,8 +465,20 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       })
     }
 
-    // Mark only this file as saved
-    updateFile({ name: fileName, saved: true, isNew: false })
+    // Mark only this file as saved.  For the Library Manager file we
+    // also snapshot the now-saved enabled-library set into `cleanState`
+    // so the next change-vs-baseline check (in the LibraryManagerEditor
+    // dirty-tracking effect) sees a fresh baseline.  Without this, the
+    // tab would re-mark itself unsaved immediately after a successful
+    // save because the editor's clean state would still point at the
+    // pre-save library list.
+    if (file.type === 'library-manager') {
+      const enabled = state.enabledLibraries ?? []
+      const cleanState = JSON.stringify([...enabled].sort())
+      updateFile({ name: fileName, saved: true, isNew: false, cleanState })
+    } else {
+      updateFile({ name: fileName, saved: true, isNew: false })
+    }
     markSaved(fileName)
 
     // Reset graphical flow state: clear selections (prevents spurious dirty on reopen

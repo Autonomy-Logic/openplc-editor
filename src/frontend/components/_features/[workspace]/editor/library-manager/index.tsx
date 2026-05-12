@@ -22,6 +22,7 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import { useCallback, useEffect, useState } from 'react'
 
+import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type { InstalledLibrary } from '@root/middleware/shared/ports/library-types'
 import { useLibrary } from '@root/middleware/shared/providers/platform-context'
@@ -29,18 +30,29 @@ import { useLibrary } from '@root/middleware/shared/providers/platform-context'
 import { ProjectLibrariesTab } from './project-libraries-tab'
 import { SystemLibrariesTab } from './system-libraries-tab'
 
+/** Canonical fileSlice name for the Library Manager tab. Used to
+ *  register the dirty-tracking file entry and routed through the
+ *  save-changes-file modal + executeSaveFile when the user toggles
+ *  project libraries. */
+const LIBRARY_MANAGER_FILE_NAME = 'Library Manager'
+
+/** Stable serialization of the enabled-library list. Sorted so a
+ *  set-equal mutation order (enable A then B vs. B then A) produces
+ *  the same string and the dirty-vs-clean compare doesn't flap. */
+function serializeEnabledLibs(names: string[]): string {
+  return JSON.stringify([...names].sort())
+}
+
 type ManagerTab = 'system' | 'project'
 
 const TabItem = ({
   value,
   label,
   isActive,
-  badge,
 }: {
   value: string
   label: string
   isActive: boolean
-  badge?: React.ReactNode
 }) => (
   <Tabs.Trigger
     value={value}
@@ -54,7 +66,6 @@ const TabItem = ({
     )}
   >
     {label}
-    {badge}
   </Tabs.Trigger>
 )
 
@@ -62,6 +73,10 @@ const LibraryManagerEditor = () => {
   const library = useLibrary()
   const [activeTab, setActiveTab] = useState<ManagerTab>('system')
   const [installed, setInstalled] = useState<InstalledLibrary[]>([])
+  const enabledLibraries = useOpenPLCStore((s) => s.enabledLibraries)
+  const addFile = useOpenPLCStore((s) => s.fileActions.addFile)
+  const updateFile = useOpenPLCStore((s) => s.fileActions.updateFile)
+  const getFile = useOpenPLCStore((s) => s.fileActions.getFile)
 
   /**
    * Refresh the system pool catalogue.  Single source of truth for
@@ -89,6 +104,40 @@ const LibraryManagerEditor = () => {
     })
   }, [library, refreshInstalled])
 
+  // Register a fileSlice entry for this tab on mount so the save
+  // pipeline (Ctrl+S, the save-changes-file modal on close) has a
+  // file to look up.  cleanState captures the enabled-library list as
+  // it stood when the tab opened — subsequent toggles are compared
+  // against it to decide whether the tab should display the `*`
+  // unsaved indicator.  addFile is a no-op when the entry already
+  // exists (re-opening the tab keeps the prior cleanState).
+  useEffect(() => {
+    addFile({
+      name: LIBRARY_MANAGER_FILE_NAME,
+      type: 'library-manager',
+      filePath: '',
+      cleanState: serializeEnabledLibs(enabledLibraries),
+    })
+    // Intentionally only on mount — adding `enabledLibraries` would
+    // reset cleanState on every change, defeating dirty-tracking.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Dirty-tracking: compare the live enabled-library list against the
+  // cleanState snapshot stored in the file entry.  Equal → saved=true;
+  // different → saved=false.  Updating cleanState on a successful save
+  // happens in `executeSaveFile`; here we only observe changes.
+  useEffect(() => {
+    const file = getFile({ name: LIBRARY_MANAGER_FILE_NAME }).file
+    if (!file) return
+    const current = serializeEnabledLibs(enabledLibraries)
+    const clean = typeof file.cleanState === 'string' ? file.cleanState : current
+    const isClean = current === clean
+    if (file.saved !== isClean) {
+      updateFile({ name: LIBRARY_MANAGER_FILE_NAME, saved: isClean })
+    }
+  }, [enabledLibraries, getFile, updateFile])
+
   if (!library) {
     return (
       <div className='flex h-full items-center justify-center text-sm text-neutral-500 dark:text-neutral-400'>
@@ -112,18 +161,7 @@ const LibraryManagerEditor = () => {
         className='flex min-h-0 flex-1 flex-col overflow-hidden'
       >
         <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>
-          <TabItem
-            value='system'
-            label='System Libraries'
-            isActive={activeTab === 'system'}
-            badge={
-              installed.length > 0 ? (
-                <span className='ml-1 rounded-full bg-neutral-200 px-1.5 py-0.5 text-[10px] dark:bg-neutral-700'>
-                  {installed.length}
-                </span>
-              ) : undefined
-            }
-          />
+          <TabItem value='system' label='System Libraries' isActive={activeTab === 'system'} />
           <TabItem value='project' label='Project Libraries' isActive={activeTab === 'project'} />
         </Tabs.List>
 
