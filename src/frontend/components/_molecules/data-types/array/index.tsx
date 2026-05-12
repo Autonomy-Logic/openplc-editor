@@ -105,6 +105,13 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     } as PLCArrayDatatype)
   }
 
+  // `updateDatatype` is a full replace — never pass a partial object,
+  // or the rest of the datatype (`name`, `derivation`, `baseType`, …)
+  // gets stripped and downstream selectors lose the entry.
+  const writeDimensions = (newRows: PLCArrayDatatype['dimensions']) => {
+    updateDatatype(data.name, { ...data, dimensions: newRows })
+  }
+
   const addNewRow = () => {
     setTableData((prevRows) => {
       const isFirst = prevRows.length === 0
@@ -115,7 +122,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       }
 
       setArrayTable({ selectedRow: newRows.length - 1 })
-      updateDatatype(data.name, { dimensions: newRows } as PLCArrayDatatype)
+      writeDimensions(newRows)
       return newRows
     })
   }
@@ -130,12 +137,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
         setArrayTable({ selectedRow: newFocusIndex })
 
-        newRows.forEach(() => {
-          const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
-          }
-          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
-        })
+        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
         prevRows = newRows
       }
       return prevRows
@@ -155,12 +157,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow - 1
         setArrayTable({ selectedRow: newFocusIndex })
 
-        newRows.forEach(() => {
-          const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
-          }
-          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
-        })
+        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
         prevRows = newRows
       }
       return prevRows
@@ -180,12 +177,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow + 1
         setArrayTable({ selectedRow: newFocusIndex })
 
-        newRows.forEach(() => {
-          const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
-          }
-          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
-        })
+        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
         prevRows = newRows
       }
       return prevRows
