@@ -7,10 +7,11 @@ import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
 
 // Horizontal padding inserted between adjacent same-type parallel brackets
 // when the inner parallel has a non-trivial serial spine (i.e. a real
-// parallel-of-parallel structure, not just a multi-branch wrapper). Makes
-// the inner OPEN/CLOSE wires visibly distinct from the outer ones so the
-// nested structure reads as nested.
-export const NESTED_PARALLEL_CLEARANCE = 45
+// parallel-of-parallel structure, not just a multi-branch wrapper). Sized
+// to fit the in-between placeholder (10px wide) plus its left/right gap
+// (15px each) with breathing room, so the placeholder reads as deliberately
+// placed between the outer and inner OPEN/CLOSE wires.
+export const NESTED_PARALLEL_CLEARANCE = 90
 
 /**
  * Get the previous element by searching with edge in the rung
