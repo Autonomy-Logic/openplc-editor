@@ -118,6 +118,10 @@ export type DeviceActions = {
   setIncludeTimingStatsInPolling: (include: boolean) => void
   clearRuntimeConnection: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
+  /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
+   *  `snapshot[k]` when present, else by deleting the key.  Used by
+   *  the vendor-screen tab's "Don't save" revert. */
+  restoreVendorScreenSlice: (ownedKeys: string[], snapshot: Record<string, unknown>) => void
 }
 
 // ---------------------------------------------------------------------------

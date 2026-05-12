@@ -9,6 +9,7 @@ export type FileSliceType =
   | 'remote-device'
   | 'ethercat-device'
   | 'library-manager'
+  | 'vendor-screen'
   | null
 
 export type FileSliceData = {
