@@ -180,42 +180,19 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
     )
     if (!previousNodes || !previousEdges) return null
 
-    /**
-     * Detect whether `prevNode` (the immediate predecessor we'll feed into
-     * `getNodePositionBasedOnPreviousNode`) is itself the inner side of a
-     * same-type parallel chain — i.e. its own predecessor on the spine is
-     * another parallel of the same sub-type. When `node` is also a same-
-     * type parallel, the call collapses onto prev's X instead of stacking
-     * another clearance, so a 3-deep "add parallel" doesn't funnel the
-     * spine 49px-per-level rightward.
-     */
-    const isSameTypeParallelOf = (n: Node | undefined, sub: 'open' | 'close'): boolean =>
-      !!n && isNodeOfType(n, 'parallel') && n.data.type === sub
-    const prevIsAlreadyNestedFor = (prev: Node): boolean => {
-      if (!isNodeOfType(prev, 'parallel')) return false
-      const prevSubType = prev.data.type
-      const prevPrevEdges = rung.edges.filter((e) => e.target === prev.id)
-      for (const e of prevPrevEdges) {
-        const prevPrev = newNodes.find((n) => n.id === e.source)
-        if (isSameTypeParallelOf(prevPrev, prevSubType)) return true
-      }
-      return false
-    }
-
     if (previousNodes.all.length === 1) {
       /**
        * Nodes that only have one edge connecting to them
        */
       const previousNode = previousNodes.all[0]
-      const prevAlreadyNested = prevIsAlreadyNestedFor(previousNode)
       if (
         isNodeOfType(previousNode, 'parallel') &&
         previousNode.data.type === 'open' &&
         previousEdges[0].sourceHandle === previousNode.data.parallelOutputConnector?.id
       ) {
-        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'parallel', prevAlreadyNested)
+        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'parallel')
       } else {
-        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial', prevAlreadyNested)
+        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial')
       }
     } else {
       /**
@@ -234,8 +211,7 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
       let acc = newNodePosition
       for (let j = 0; j < previousNodes.all.length; j++) {
         const previousNode = previousNodes.all[j]
-        const prevAlreadyNested = prevIsAlreadyNestedFor(previousNode)
-        const position = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial', prevAlreadyNested)
+        const position = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial')
         acc = {
           posX: Math.max(acc.posX, position.posX),
           posY: Math.max(acc.posY, position.posY),

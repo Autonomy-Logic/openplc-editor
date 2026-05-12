@@ -5,14 +5,6 @@ import type { CustomHandleProps } from '../../../../../../../_atoms/graphical-ed
 import { BasicNodeData, ParallelNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
 
-// Horizontal padding inserted between adjacent same-type parallel brackets
-// (an outer OPEN and an inner OPEN, or an inner CLOSE and an outer CLOSE).
-// Matches a contact's gap so the inner bracket's vertical wire sits the same
-// distance from the outer's wire that a regular contact would — large enough
-// to read as deliberate separation, small enough that the nested structure
-// stays visually compact.
-export const NESTED_PARALLEL_CLEARANCE = 45
-
 /**
  * Get the previous element by searching with edge in the rung
  *
@@ -124,12 +116,6 @@ export const getElementPositionBasedOnPlaceholderElement = (
  * @param previousElement
  * @param newElement
  * @param type: 'serial' | 'parallel'
- * @param prevIsAlreadyNested  When prev is itself a parallel of the same
- *   sub-type as its own predecessor (e.g. OPEN→OPEN→OPEN), the chain has
- *   already paid the bracket-clearance budget at its outermost boundary.
- *   Pass `true` so this call collapses onto prev's X instead of stacking
- *   another clearance — otherwise every "add parallel" wraps an extra
- *   layer and the spine funnels rightward.
  *
  * @returns { posX, posY, handleX, handleY }
  */
@@ -137,7 +123,6 @@ export const getNodePositionBasedOnPreviousNode = (
   previousElement: Node,
   newElement: string | Node,
   type: 'serial' | 'parallel',
-  prevIsAlreadyNested: boolean = false,
 ): {
   posX: number
   posY: number
@@ -158,24 +143,12 @@ export const getNodePositionBasedOnPreviousNode = (
     previousElement.type === 'parallel' &&
     (typeof newElement === 'string' ? newElement === 'parallel' : newElement.type === 'parallel')
 
-  // Two parallels of the same sub-type (OPEN→OPEN or CLOSE→CLOSE) can only
-  // appear adjacent when one is nested inside the other. Without horizontal
-  // separation the inner bracket renders at the same X as the outer's
-  // vertical wire and the two wires overlap visually. Reserve a contact-
-  // sized gap AND advance past the previous bracket's width so the inner
-  // OPEN's left wire (or inner CLOSE's right wire) sits clearly inside the
-  // outer's span instead of on top of it.
-  const parallelsAreNested =
-    parallelNodeCheckingParallelNode &&
-    typeof newElement !== 'string' &&
-    (previousElement as ParallelNode).data.type === (newElement as ParallelNode).data.type
-
-  // If prev is already past a clearance boundary (its own predecessor was
-  // the same-type parallel), don't add another one. The visible separation
-  // belongs at the OUTERMOST bracket boundary; deeper levels collapse to
-  // the same X so a 3-deep nesting reads as one set of brackets, not three.
-  const collapseDeepNesting = parallelsAreNested && prevIsAlreadyNested
-
+  // Same-type nested parallels (OPEN→OPEN or CLOSE→CLOSE) collapse onto a
+  // single X via skipPrevWidth + gap=0 below, so all OPEN brackets in a
+  // multi-branch parallel share the leftmost X and all CLOSE brackets share
+  // the rightmost X. Visible result: one OPEN/CLOSE pair with N parallel
+  // paths between them, instead of a staircase that pushes the spine wire
+  // long.
   let gap = 0
   if (parallelNodeCheckingParallelNode) {
     if (
@@ -185,8 +158,6 @@ export const getNodePositionBasedOnPreviousNode = (
         previousElement.id !== (newElement as ParallelNode).data.parallelCloseReference)
     ) {
       gap = 100
-    } else if (parallelsAreNested && !collapseDeepNesting) {
-      gap = NESTED_PARALLEL_CLEARANCE
     }
   } else {
     gap = previousElementStyle.gap + newNodeStyle.gap
@@ -194,12 +165,10 @@ export const getNodePositionBasedOnPreviousNode = (
 
   const offsetY = newNodeStyle.handle.y
 
-  // Nested parallels need the previous bracket's width added so the inner
-  // bracket sits past it instead of collapsing onto its X (the OPEN/CLOSE
-  // pair-collapse only applies when the two parallels are the same pair).
-  // When the chain is already past the outer clearance boundary, skip the
-  // width too so deeper levels share the same X as the first inner bracket.
-  const skipPrevWidth = parallelNodeCheckingParallelNode && (!parallelsAreNested || collapseDeepNesting)
+  // Skip prev's width for any parallel→parallel adjacency so brackets
+  // collapse: same-type nests overlap exactly, and paired OPEN→CLOSE
+  // (empty parallel) doesn't get pushed past the OPEN's width.
+  const skipPrevWidth = parallelNodeCheckingParallelNode
 
   const position = {
     posX: previousElement.position.x + (skipPrevWidth ? 0 : previousElement.width || 0) + gap,
