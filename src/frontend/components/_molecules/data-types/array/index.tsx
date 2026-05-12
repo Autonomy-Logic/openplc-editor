@@ -34,22 +34,30 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const { captureAndPush } = usePouSnapshot()
 
-  const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
+  const baseTypes = baseTypeSchema.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
+  // Filter to defined string names before deref'ing `.toUpperCase()` —
+  // a malformed data-type / library entry (missing or null `name`)
+  // would otherwise crash the whole editor on every render.
   const userDataTypes = dataTypes
     .map((type) => type.name)
+    .filter((name): name is string => typeof name === 'string' && name.length > 0)
     .filter((name) => name !== editor.meta.name && name.toUpperCase() !== 'ARRAY')
 
   const systemFunctionBlocks = sliceLibraries.system.flatMap((lib) =>
-    lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+    (lib.pous ?? [])
+      .filter((pou) => pou?.type === 'function-block' && typeof pou.name === 'string')
+      .map((pou) => pou.name.toUpperCase()),
   )
 
-  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
-    'pous' in userLib && Array.isArray(userLib.pous)
-      ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
-      : (userLib as UserLibFunctionBlock).type === 'function-block'
-        ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
-        : [],
-  )
+  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) => {
+    if ('pous' in userLib && Array.isArray(userLib.pous)) {
+      return userLib.pous
+        .filter((pou) => pou?.type === 'function-block' && typeof pou.name === 'string')
+        .map((pou) => pou.name.toUpperCase())
+    }
+    const fb = userLib as UserLibFunctionBlock
+    return fb.type === 'function-block' && typeof fb.name === 'string' ? [fb.name.toUpperCase()] : []
+  })
 
   const VariableTypes = [
     { definition: 'base-type', values: baseTypes },
