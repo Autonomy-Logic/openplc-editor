@@ -66,7 +66,13 @@ export function createDatatypeObject(data: DatatypeProps): PLCDataType {
         name: data.name,
         derivation: 'array',
         baseType: { definition: 'base-type', value: 'BOOL' },
-        initialValue: 'false',
+        // Empty stays empty.  The codegen treats `''` as "no
+        // initial value" (falsy → no `:= ...` clause emitted),
+        // which is what we want for a freshly-created array — the
+        // previous `'false'` seed survived a base-type change to
+        // e.g. REAL and made the compiler emit
+        // `ARRAY [...] OF REAL := false;` (invalid syntax).
+        initialValue: '',
         dimensions: [],
       }
     case 'enumerated':
