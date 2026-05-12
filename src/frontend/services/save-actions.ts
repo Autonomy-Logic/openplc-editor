@@ -466,15 +466,16 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
     }
 
     // Mark only this file as saved.  For the Library Manager file we
-    // also snapshot the now-saved enabled-library set into `cleanState`
-    // so the next change-vs-baseline check (in the LibraryManagerEditor
-    // dirty-tracking effect) sees a fresh baseline.  Without this, the
-    // tab would re-mark itself unsaved immediately after a successful
-    // save because the editor's clean state would still point at the
-    // pre-save library list.
+    // also snapshot the now-saved project library refs into
+    // `cleanState` (full {name, version} tuples, sorted by name) so
+    // the next dirty check in the LibraryManagerEditor sees a fresh
+    // baseline.  The same serialised shape is what "Don't save"
+    // restores via setProjectLibraries — see `reloadFileFromDisk`.
     if (file.type === 'library-manager') {
-      const enabled = state.enabledLibraries ?? []
-      const cleanState = JSON.stringify([...enabled].sort())
+      const refs = state.project.data.libraries ?? []
+      const cleanState = JSON.stringify(
+        [...refs].sort((a, b) => a.name.localeCompare(b.name)).map((r) => ({ name: r.name, version: r.version })),
+      )
       updateFile({ name: fileName, saved: true, isNew: false, cleanState })
     } else {
       updateFile({ name: fileName, saved: true, isNew: false })
@@ -602,4 +603,83 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
   } catch {
     return { success: false }
   }
+}
+
+/**
+ * Reload the Library Manager file's in-memory state from its
+ * `cleanState` snapshot.
+ *
+ * "Don't save" needs an actual revert path for the Library Manager.
+ * Project library mutations (enable / disable from the manager UI)
+ * write straight into `state.project.data.libraries` via the library
+ * slice's `enableLibrary` / `disableLibrary` actions — they're not
+ * staged anywhere.  Without this revert, clicking "Don't save"
+ * leaves the in-memory project mutated, and the next save of any
+ * file (the project.json branch in `executeSaveFile` is shared by
+ * data-type / resource / library-manager) would persist those
+ * library changes the user explicitly discarded.
+ *
+ * The serialised `cleanState` is the snapshot the LibraryManagerEditor
+ * captured on tab mount (or on the last successful save) — full
+ * `{name, version}` refs, so a `setProjectLibraries(parsedRefs)`
+ * call restores both the durable list and the derived
+ * `enabledLibraries` view in one shot.
+ */
+function reloadLibraryManagerFromCleanState(fileName: string): { success: boolean } {
+  const state = openPLCStoreBase.getState()
+  const file = state.fileActions.getFile({ name: fileName }).file
+  if (!file || file.type !== 'library-manager') return { success: false }
+  const cleanState = typeof file.cleanState === 'string' ? file.cleanState : '[]'
+  try {
+    const parsed = JSON.parse(cleanState) as unknown
+    if (!Array.isArray(parsed)) return { success: false }
+    // Defensive shape check — cleanState was written by the editor,
+    // but a future migration could change the format and we'd rather
+    // refuse than corrupt the project's library list.
+    const refs: { name: string; version: string }[] = []
+    for (const r of parsed) {
+      if (
+        typeof r === 'object' &&
+        r !== null &&
+        typeof (r as { name?: unknown }).name === 'string' &&
+        typeof (r as { version?: unknown }).version === 'string'
+      ) {
+        refs.push({ name: (r as { name: string }).name, version: (r as { version: string }).version })
+      }
+    }
+    state.libraryActions.setProjectLibraries(refs)
+    return { success: true }
+  } catch {
+    return { success: false }
+  }
+}
+
+/**
+ * Generic "discard in-memory changes for this file" dispatcher.  The
+ * save-changes modal's "Don't save" path uses this so the modal
+ * itself doesn't need to know about every file type that supports
+ * revert.  Returns `{success: true}` whenever the revert ran (or
+ * was a no-op for a file type that doesn't need one); `false`
+ * means the revert was *meant* to happen but failed (logged
+ * upstream).
+ */
+export async function reloadFileFromDisk(
+  fileName: string,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
+  const state = openPLCStoreBase.getState()
+  const file = state.fileActions.getFile({ name: fileName }).file
+  if (!file) {
+    // File entry vanished — nothing to revert.  Treat as success so
+    // the modal continues to close the tab.
+    return { success: true }
+  }
+  if (file.type === 'library-manager') {
+    return reloadLibraryManagerFromCleanState(fileName)
+  }
+  // Everything else routes through the POU-specific reload.  Non-POU
+  // file types that need a revert path should add a branch above
+  // (mirroring the library-manager case) rather than overloading
+  // reloadPouFromDisk.
+  return reloadPouFromDisk(fileName, projectPort)
 }

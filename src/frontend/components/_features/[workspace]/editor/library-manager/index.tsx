@@ -20,12 +20,11 @@
  */
 
 import * as Tabs from '@radix-ui/react-tabs'
-import { useCallback, useEffect, useState } from 'react'
-
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type { InstalledLibrary } from '@root/middleware/shared/ports/library-types'
 import { useLibrary } from '@root/middleware/shared/providers/platform-context'
+import { useCallback, useEffect, useState } from 'react'
 
 import { ProjectLibrariesTab } from './project-libraries-tab'
 import { SystemLibrariesTab } from './system-libraries-tab'
@@ -36,11 +35,17 @@ import { SystemLibrariesTab } from './system-libraries-tab'
  *  project libraries. */
 const LIBRARY_MANAGER_FILE_NAME = 'Library Manager'
 
-/** Stable serialization of the enabled-library list. Sorted so a
- *  set-equal mutation order (enable A then B vs. B then A) produces
- *  the same string and the dirty-vs-clean compare doesn't flap. */
-function serializeEnabledLibs(names: string[]): string {
-  return JSON.stringify([...names].sort())
+/** Stable serialization of the project's library refs (full
+ *  {name, version} tuples, not just names).  Sorted by name so a
+ *  set-equal mutation order produces the same string and the
+ *  dirty-vs-clean compare doesn't flap.  Storing the full refs (not
+ *  just names) is what lets "Don't save" later revert to the exact
+ *  pre-edit state via `setProjectLibraries(parsedRefs)` — see
+ *  `reloadFileFromDisk` in save-actions.ts. */
+function serializeProjectLibraries(refs: { name: string; version: string }[]): string {
+  return JSON.stringify(
+    [...refs].sort((a, b) => a.name.localeCompare(b.name)).map((r) => ({ name: r.name, version: r.version })),
+  )
 }
 
 type ManagerTab = 'system' | 'project'
@@ -73,7 +78,12 @@ const LibraryManagerEditor = () => {
   const library = useLibrary()
   const [activeTab, setActiveTab] = useState<ManagerTab>('system')
   const [installed, setInstalled] = useState<InstalledLibrary[]>([])
-  const enabledLibraries = useOpenPLCStore((s) => s.enabledLibraries)
+  /** Durable per-project library list (full refs).  Watch this rather
+   *  than the derived `enabledLibraries` (which is just the name
+   *  subset that's also in the system pool) — `enabledLibraries`
+   *  can't round-trip a "Don't save" revert because version info is
+   *  lost. */
+  const projectLibraries = useOpenPLCStore((s) => s.project.data.libraries ?? [])
   const addFile = useOpenPLCStore((s) => s.fileActions.addFile)
   const updateFile = useOpenPLCStore((s) => s.fileActions.updateFile)
   const getFile = useOpenPLCStore((s) => s.fileActions.getFile)
@@ -106,37 +116,38 @@ const LibraryManagerEditor = () => {
 
   // Register a fileSlice entry for this tab on mount so the save
   // pipeline (Ctrl+S, the save-changes-file modal on close) has a
-  // file to look up.  cleanState captures the enabled-library list as
-  // it stood when the tab opened — subsequent toggles are compared
-  // against it to decide whether the tab should display the `*`
-  // unsaved indicator.  addFile is a no-op when the entry already
-  // exists (re-opening the tab keeps the prior cleanState).
+  // file to look up.  cleanState captures the project library list
+  // (full {name, version} refs) as it stood when the tab opened —
+  // subsequent toggles are compared against it for the dirty flag,
+  // and "Don't save" restores it verbatim via setProjectLibraries.
+  // addFile is a no-op when the entry already exists (re-opening
+  // the tab keeps the prior cleanState).
   useEffect(() => {
     addFile({
       name: LIBRARY_MANAGER_FILE_NAME,
       type: 'library-manager',
       filePath: '',
-      cleanState: serializeEnabledLibs(enabledLibraries),
+      cleanState: serializeProjectLibraries(projectLibraries),
     })
-    // Intentionally only on mount — adding `enabledLibraries` would
+    // Intentionally only on mount — adding `projectLibraries` would
     // reset cleanState on every change, defeating dirty-tracking.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Dirty-tracking: compare the live enabled-library list against the
+  // Dirty-tracking: compare the live project-library list against the
   // cleanState snapshot stored in the file entry.  Equal → saved=true;
   // different → saved=false.  Updating cleanState on a successful save
   // happens in `executeSaveFile`; here we only observe changes.
   useEffect(() => {
     const file = getFile({ name: LIBRARY_MANAGER_FILE_NAME }).file
     if (!file) return
-    const current = serializeEnabledLibs(enabledLibraries)
+    const current = serializeProjectLibraries(projectLibraries)
     const clean = typeof file.cleanState === 'string' ? file.cleanState : current
     const isClean = current === clean
     if (file.saved !== isClean) {
       updateFile({ name: LIBRARY_MANAGER_FILE_NAME, saved: isClean })
     }
-  }, [enabledLibraries, getFile, updateFile])
+  }, [projectLibraries, getFile, updateFile])
 
   if (!library) {
     return (
