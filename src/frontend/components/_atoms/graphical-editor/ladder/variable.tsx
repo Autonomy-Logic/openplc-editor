@@ -344,7 +344,14 @@ const VariableElement = (block: VariableProps) => {
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState)
+    await forceDebugVariable(
+      debugger_,
+      compositeKey,
+      debugIndex,
+      valueBuffer,
+      forcedValueForState,
+      variableType,
+    )
 
     setForceValueModalOpen(false)
     setForceValue('')

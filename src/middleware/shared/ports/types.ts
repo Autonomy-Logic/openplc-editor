@@ -732,6 +732,10 @@ export interface Md5VerifyResult {
   success: boolean
   match?: boolean
   targetMd5?: string
+  /** Target byte order, detected from the runtime's MD5 response
+   *  trailer.  Renderer-side debug components feed this into the
+   *  swap layer at read / write boundaries.  Omitted on failure. */
+  targetEndian?: 'le' | 'be'
   error?: string
 }
 

@@ -210,7 +210,7 @@ const WorkspaceScreen = () => {
   const handleForceVariable = useCallback(
     async (
       compositeKey: string,
-      _variableType: string,
+      variableType: string,
       value?: boolean,
       valueBuffer?: Uint8Array,
       lookupKey?: string,
@@ -225,7 +225,17 @@ const WorkspaceScreen = () => {
         await releaseDebugVariable(debuggerPort, compositeKey, variableIndex)
       } else {
         const buffer = valueBuffer ?? new Uint8Array([value ? 1 : 0])
-        await forceDebugVariable(debuggerPort, compositeKey, variableIndex, buffer, value ?? true)
+        // Pass variableType so the wire-endianness swap inside the
+        // service knows whether to skip swapping (BOOL one-byte
+        // paths, STRING / WSTRING) — see services/debug-force-variable.
+        await forceDebugVariable(
+          debuggerPort,
+          compositeKey,
+          variableIndex,
+          buffer,
+          value ?? true,
+          variableType,
+        )
       }
     },
     [debugVariableIndexes, debuggerPort],

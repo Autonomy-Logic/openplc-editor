@@ -254,21 +254,41 @@ describe('ModbusRtuClient', () => {
   // getMd5Hash
   // -----------------------------------------------------------------------
   describe('getMd5Hash', () => {
-    it('returns MD5 hash on successful response', async () => {
+    it('returns MD5 hash and detects LE byte order from sentinel trailer', async () => {
       await connectClient()
 
       const md5 = 'abc123def456'
       const md5Bytes = new TextEncoder().encode(md5)
-      // Phase 4: response payload is [STATUS, md5_ascii..., endian_echo_hi, endian_echo_lo]
+      // Response payload: [STATUS, md5_ascii..., sentinel_hi, sentinel_lo].
+      // Runtime writes 0xDEAD via native uint16_t → LE target emits
+      // [0xAD, 0xDE]; BE target emits [0xDE, 0xAD].  Simulator emulates
+      // AVR (LE), so the trailer is [0xAD, 0xDE].
       const payload = new Uint8Array(1 + md5Bytes.length + 2)
       payload[0] = ModbusDebugResponse.SUCCESS
       payload.set(md5Bytes, 1)
-      payload[1 + md5Bytes.length] = 0xde     // endian echo
+      payload[1 + md5Bytes.length] = 0xad
+      payload[1 + md5Bytes.length + 1] = 0xde
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_MD5, payload))
+
+      const result = await client.getMd5Hash()
+      expect(result).toEqual({ md5, targetEndian: 'le' })
+    })
+
+    it('detects BE byte order from a swapped sentinel', async () => {
+      await connectClient()
+
+      const md5 = 'abc123def456'
+      const md5Bytes = new TextEncoder().encode(md5)
+      const payload = new Uint8Array(1 + md5Bytes.length + 2)
+      payload[0] = ModbusDebugResponse.SUCCESS
+      payload.set(md5Bytes, 1)
+      // BE target stores 0xDEAD natively → bytes [0xDE, 0xAD].
+      payload[1 + md5Bytes.length] = 0xde
       payload[1 + md5Bytes.length + 1] = 0xad
       autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_MD5, payload))
 
       const result = await client.getMd5Hash()
-      expect(result).toBe(md5)
+      expect(result).toEqual({ md5, targetEndian: 'be' })
     })
 
     it('throws on function code mismatch after retries', async () => {

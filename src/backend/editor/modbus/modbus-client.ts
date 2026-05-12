@@ -1,3 +1,5 @@
+import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { Socket } from 'net'
 
@@ -110,7 +112,7 @@ export class ModbusTcpClient {
     })
   }
 
-  async getMd5Hash(): Promise<string> {
+  async getMd5Hash(): Promise<Md5ProbeResult> {
     if (!this.socket) {
       throw new Error('Not connected to target')
     }
@@ -153,12 +155,16 @@ export class ModbusTcpClient {
       throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
     }
 
-    // Phase 4 response trailer echoes the endianness probe (2 bytes) at
-    // the end so the editor can detect target byte order. Strip it off
-    // before parsing the MD5 ASCII.
+    // Response trailer is a 2-byte runtime-driven sentinel: the
+    // runtime stores the literal 0xDEAD through a native uint16_t,
+    // so the bytes reflect target byte order.
+    const trailerHi = data.readUInt8(data.length - 2)
+    const trailerLo = data.readUInt8(data.length - 1)
+    const targetEndian = detectTargetEndian(trailerHi, trailerLo)
+
     const md5Region = data.slice(9, data.length - 2)
-    const md5String = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
-    return md5String
+    const md5 = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
+    return { md5, targetEndian }
   }
 
   async getVariablesList(variableIndexes: number[]): Promise<{

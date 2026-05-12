@@ -1,3 +1,6 @@
+import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { detectTargetEndian } from '@root/frontend/utils/endian'
+
 import { ModbusDebugResponse, ModbusFunctionCode } from './types'
 
 export interface SerialPortLike {
@@ -262,7 +265,7 @@ export class ModbusRtuClient {
     })
   }
 
-  async getMd5Hash(): Promise<string> {
+  async getMd5Hash(): Promise<Md5ProbeResult> {
     const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
     const endiannessCheck = 0xdead
 
@@ -297,11 +300,16 @@ export class ModbusRtuClient {
           throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
         }
 
-        // Phase 4: strip the 2-byte endianness echo trailer before decoding
-        // the MD5 ASCII.
+        // Response trailer is a 2-byte runtime-driven sentinel: the
+        // runtime stores the literal 0xDEAD through a native
+        // uint16_t, so the bytes reflect target byte order.
+        const trailerHi = readUint8(response, response.length - 2)
+        const trailerLo = readUint8(response, response.length - 1)
+        const targetEndian = detectTargetEndian(trailerHi, trailerLo)
+
         const md5Bytes = response.slice(9, response.length - 2)
-        const md5String = new TextDecoder().decode(md5Bytes).replace(/\0+$/, '').trim()
-        return md5String
+        const md5 = new TextDecoder().decode(md5Bytes).replace(/\0+$/, '').trim()
+        return { md5, targetEndian }
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
         if (attempt < MD5_REQUEST_MAX_RETRIES) {

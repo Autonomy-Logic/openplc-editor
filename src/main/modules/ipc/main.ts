@@ -1124,7 +1124,13 @@ class MainProcessBridge implements MainIpcModule {
       jwtToken?: string
     },
     expectedMd5: string,
-  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
+  ): Promise<{
+    success: boolean
+    match?: boolean
+    targetMd5?: string
+    targetEndian?: 'le' | 'be'
+    error?: string
+  }> => {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
     let wsClient: WebSocketDebugClient | null = null
     try {
@@ -1138,14 +1144,14 @@ class MainProcessBridge implements MainIpcModule {
           serialPort: virtualPort,
         })
         await client.connect()
-        const targetMd5 = await client.getMd5Hash()
+        const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
         // Keep the client for subsequent debug operations
         this.debuggerModbusClient = client
         this.debuggerConnectionType = 'simulator'
 
-        return { success: true, match, targetMd5 }
+        return { success: true, match, targetMd5, targetEndian }
       } else if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
@@ -1162,7 +1168,7 @@ class MainProcessBridge implements MainIpcModule {
           wsClient = this.debuggerWebSocketClient
         }
 
-        const targetMd5 = await wsClient.getMd5Hash()
+        const { md5: targetMd5, targetEndian } = await wsClient.getMd5Hash()
 
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1173,7 +1179,7 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerConnectionType = 'websocket'
         }
 
-        return { success: true, match, targetMd5 }
+        return { success: true, match, targetMd5, targetEndian }
       } else if (connectionType === 'tcp') {
         if (!connectionParams.ipAddress) {
           return { success: false, error: 'IP address is required for TCP connection' }
@@ -1194,9 +1200,9 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerConnectionType === 'rtu' &&
           this.debuggerRtuPort === connectionParams.port
         ) {
-          const targetMd5 = await this.debuggerModbusClient.getMd5Hash()
+          const { md5: targetMd5, targetEndian } = await this.debuggerModbusClient.getMd5Hash()
           const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-          return { success: true, match, targetMd5 }
+          return { success: true, match, targetMd5, targetEndian }
         }
 
         client = new ModbusRtuClient({
@@ -1208,7 +1214,7 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       await client.connect()
-      const targetMd5 = await client.getMd5Hash()
+      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
 
       const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1222,7 +1228,7 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerRtuSlaveId = connectionParams.slaveId!
       }
 
-      return { success: true, match, targetMd5 }
+      return { success: true, match, targetMd5, targetEndian }
     } catch (error) {
       client?.disconnect()
       wsClient?.disconnect()
@@ -1432,11 +1438,11 @@ class MainProcessBridge implements MainIpcModule {
         })
         await this.debuggerModbusClient.connect()
 
-        // Trigger endianness detection on the emulated runtime.
-        // getMd5Hash sends 0xDEAD which the runtime uses to detect byte order
-        // and call set_endianness(). Without this, the default SAME_ENDIANNESS
-        // causes multi-byte values to be stored with swapped bytes on the
-        // little-endian AVR emulator.
+        // MD5 fetch warms the connection and exercises the
+        // runtime's endianness-sentinel path.  Endianness detection
+        // itself is handled at the editor's verify-MD5 step (see
+        // handleDebuggerVerifyMd5) where the result feeds the swap
+        // layer; here we just need the connection live.
         await this.debuggerModbusClient.getMd5Hash()
       } else if (connectionType === 'websocket') {
         if (this.debuggerModbusClient) {

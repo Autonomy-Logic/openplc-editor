@@ -28,6 +28,7 @@ import type { DebugConnectionType, DebugTreeNode } from '../../middleware/shared
 import { useDebugger } from '../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../store'
 import { buildActiveIndexSet } from '../utils/debug-polling-filter'
+import { applySwapToVariableBytes } from '../utils/endian'
 import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 
 /** Polling interval for transports with serial framing (RTU / simulator). */
@@ -236,7 +237,11 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
     if (result.data && result.data.length > 0) {
       const responseBuffer = new Uint8Array(result.data)
-      const { debugBoolValues: currentBool, debugNonBoolValues: currentNonBool } = openPLCStoreBase.getState().workspace
+      const {
+        debugBoolValues: currentBool,
+        debugNonBoolValues: currentNonBool,
+        debugTargetEndian,
+      } = openPLCStoreBase.getState().workspace
       const changedBool = new Map<string, string>()
       const changedNonBool = new Map<string, string>()
       let bufferOffset = 0
@@ -259,6 +264,12 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         if (bufferOffset + typeSize > responseBuffer.length) break
 
         const isBool = meta.type === 'BOOL'
+
+        // Wire bytes arrive in the target's native byte order; the
+        // internal codec below (parseValueByTypeName → DataView.getFloat32
+        // with littleEndian=true) is LE-only.  Normalise here when
+        // talking to a BE target.  No-op on LE (the common case).
+        applySwapToVariableBytes(responseBuffer, bufferOffset, typeSize, meta.type, debugTargetEndian)
 
         try {
           const { value, bytesRead } = parseValueByTypeName(responseBuffer, bufferOffset, meta.type)
