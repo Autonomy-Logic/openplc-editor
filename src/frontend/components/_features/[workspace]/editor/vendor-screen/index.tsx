@@ -1,32 +1,8 @@
 import { useOpenPLCStore } from '@root/frontend/store'
+import { collectScreenPersistenceKeys } from '@root/frontend/utils/vpp/persistence-keys'
 import { useEffect, useMemo } from 'react'
 
 import { VendorScreenRenderer } from '../device/configuration/vendor-screen'
-
-/**
- * Collect the set of `vendorScreenData` keys this screen owns.
- * Each section declares an explicit `persistence` key, falling back
- * to `section.id` when omitted (matches the per-layout convention
- * used by form / module-slots / io-table layouts).
- *
- * The dirty-tracking / save / revert paths key off this set so a
- * vendor-screen tab only watches the slice of `vendorScreenData` it
- * actually writes — two screens that touch disjoint keys won't
- * cross-trigger each other's dirty flag.
- */
-function collectPersistenceKeys(screenDefinition: unknown): string[] {
-  if (!screenDefinition || typeof screenDefinition !== 'object') return []
-  const sections = (screenDefinition as { sections?: unknown }).sections
-  if (!Array.isArray(sections)) return []
-  const out: string[] = []
-  for (const s of sections) {
-    if (typeof s !== 'object' || s === null) continue
-    const sec = s as { id?: unknown; persistence?: unknown }
-    const key = typeof sec.persistence === 'string' ? sec.persistence : typeof sec.id === 'string' ? sec.id : null
-    if (key !== null) out.push(key)
-  }
-  return out
-}
 
 /**
  * Stable serialisation of the slice of `vendorScreenData` this screen
@@ -61,7 +37,7 @@ const VendorScreenEditor = () => {
   const screenDefinition = boardInfo?.vpp?.screens?.[screenName] ?? null
   const moduleSystem = boardInfo?.vpp?.moduleSystem ?? null
 
-  const ownedKeys = useMemo(() => collectPersistenceKeys(screenDefinition), [screenDefinition])
+  const ownedKeys = useMemo(() => collectScreenPersistenceKeys(screenDefinition), [screenDefinition])
 
   // Register the file entry for this tab on mount so Ctrl+S, File →
   // Save, and the save-changes-file modal on close find it.

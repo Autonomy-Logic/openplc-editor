@@ -24,6 +24,7 @@ import { serializePouToText } from '../utils/PLC/pou-text-serializer'
 import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
 import { pickContentForSave } from '../utils/version-control-content'
+import { collectScreenPersistenceKeys } from '../utils/vpp/persistence-keys'
 
 /** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
 const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')
@@ -684,11 +685,12 @@ async function saveLibraryManagerOnly(
 }
 
 /**
- * Resolve the `vendorScreenData` keys this screen tab owns.  Walks
- * the screen definition's `sections` and pulls `persistence ||
- * id` for each.  Empty array when the screen / board is no longer
- * available (e.g. board changed since the tab opened) — callers
- * fall through to a no-op in that case.
+ * Resolve the `vendorScreenData` keys this screen tab owns.  Looks
+ * up the screen definition from the current board's VPP catalogue
+ * and delegates to the canonical helper in the renderer module so
+ * the contract lives in exactly one place.  Empty array when the
+ * screen / board is no longer available (e.g. board changed since
+ * the tab opened) — callers fall through to a no-op.
  */
 function vendorScreenOwnedKeysFor(
   state: ReturnType<typeof openPLCStoreBase.getState>,
@@ -697,17 +699,7 @@ function vendorScreenOwnedKeysFor(
   const boardId = state.deviceDefinitions.configuration.deviceBoard
   const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardId)
   const screen = boardInfo?.vpp?.screens?.[screenName]
-  if (!screen || typeof screen !== 'object') return []
-  const sections = (screen as { sections?: unknown }).sections
-  if (!Array.isArray(sections)) return []
-  const out: string[] = []
-  for (const s of sections) {
-    if (typeof s !== 'object' || s === null) continue
-    const sec = s as { id?: unknown; persistence?: unknown }
-    const key = typeof sec.persistence === 'string' ? sec.persistence : typeof sec.id === 'string' ? sec.id : null
-    if (key !== null) out.push(key)
-  }
-  return out
+  return collectScreenPersistenceKeys(screen)
 }
 
 function serializeVendorScreenSlice(
