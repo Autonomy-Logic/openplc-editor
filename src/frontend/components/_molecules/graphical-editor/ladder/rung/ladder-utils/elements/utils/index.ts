@@ -6,11 +6,10 @@ import { BasicNodeData, ParallelNode } from '../../../../../../../_atoms/graphic
 import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
 
 // Horizontal padding inserted between adjacent same-type parallel brackets
-// when the inner parallel has a non-trivial serial spine (i.e. a real
-// parallel-of-parallel structure, not just a multi-branch wrapper). Sized
-// to fit the in-between placeholder (10px wide) plus its left/right gap
-// (15px each) with breathing room, so the placeholder reads as deliberately
-// placed between the outer and inner OPEN/CLOSE wires.
+// (OPEN→OPEN or CLOSE→CLOSE). Sized to fit the in-between placeholder
+// (10px wide) plus its left/right gap (15px each) with breathing room, so
+// the placeholder reads as deliberately placed between the outer and inner
+// bracket wires.
 export const NESTED_PARALLEL_CLEARANCE = 90
 
 /**
@@ -124,11 +123,6 @@ export const getElementPositionBasedOnPlaceholderElement = (
  * @param previousElement
  * @param newElement
  * @param type: 'serial' | 'parallel'
- * @param collapseSameTypeBrackets  When prev and new are same-type parallel
- *   brackets (OPEN→OPEN or CLOSE→CLOSE), pass `true` to overlap them at the
- *   same X (multi-branch case: inner parallel is a wrapper around a single
- *   spine element). Pass `false` to staircase by NESTED_PARALLEL_CLEARANCE
- *   so the inner brackets read as distinct nested structure.
  *
  * @returns { posX, posY, handleX, handleY }
  */
@@ -136,7 +130,6 @@ export const getNodePositionBasedOnPreviousNode = (
   previousElement: Node,
   newElement: string | Node,
   type: 'serial' | 'parallel',
-  collapseSameTypeBrackets: boolean = false,
 ): {
   posX: number
   posY: number
@@ -171,7 +164,7 @@ export const getNodePositionBasedOnPreviousNode = (
         previousElement.id !== (newElement as ParallelNode).data.parallelCloseReference)
     ) {
       gap = 100
-    } else if (parallelsAreSameType && !collapseSameTypeBrackets) {
+    } else if (parallelsAreSameType) {
       gap = NESTED_PARALLEL_CLEARANCE
     }
   } else {
@@ -180,13 +173,11 @@ export const getNodePositionBasedOnPreviousNode = (
 
   const offsetY = newNodeStyle.handle.y
 
-  // Skip prev's width when:
-  //  - parallel→parallel, different sub-types (paired OPEN→CLOSE), or
-  //  - parallel→parallel same-type AND collapsing (multi-branch case).
-  // For same-type staircase (real nesting), keep prev's width so the inner
-  // bracket sits past the outer's wire instead of overlapping it.
-  const skipPrevWidth =
-    parallelNodeCheckingParallelNode && (!parallelsAreSameType || collapseSameTypeBrackets)
+  // Skip prev's width when parallel→parallel and different sub-types (the
+  // paired OPEN→CLOSE empty-parallel case). For same-type staircase
+  // (nested), keep prev's width so the inner bracket sits past the outer's
+  // wire instead of overlapping it.
+  const skipPrevWidth = parallelNodeCheckingParallelNode && !parallelsAreSameType
 
   const position = {
     posX: previousElement.position.x + (skipPrevWidth ? 0 : previousElement.width || 0) + gap,

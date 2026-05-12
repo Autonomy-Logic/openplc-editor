@@ -19,6 +19,7 @@ import {
   getNodePositionBasedOnPreviousNode,
   getNodesInsideParallel,
   getPreviousElementsByEdge,
+  NESTED_PARALLEL_CLEARANCE,
 } from '../utils'
 import { updateVariableBlockPosition } from '../variable-block'
 
@@ -126,24 +127,39 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
   const parallelsDepth = parallels.map((parallel) => findAllParallelsDepthAndNodes(rung, parallel))
 
   /**
-   * Same-type parallel brackets (OPEN→OPEN, CLOSE→CLOSE) belong to nested
-   * parallels. The inner pair is `node` for OPEN→OPEN and `previousNode`
-   * for CLOSE→CLOSE. When the inner pair's serial spine is a single
-   * element, the nesting is just a multi-branch wrapper — collapse the
-   * brackets onto the same X so all branches read as siblings. Otherwise,
-   * the nesting is a genuine parallel-of-parallel and the brackets must
-   * stay visually distinct (handled by `getNodePositionBasedOnPreviousNode`
-   * applying NESTED_PARALLEL_CLEARANCE when this flag is false).
+   * For a parallel that wraps a multi-branch nested chain (every nested
+   * parallel inside has a single-element spine), compute the total X
+   * advance required so the OUTER spine element lands in the SAME column
+   * as the innermost spine. Without this, the spine contact sits flush
+   * against the outer OPEN while sibling branches in the nested parallels
+   * are pushed right by the bracket staircase — visually misaligning
+   * branches that the user intends as siblings.
+   *
+   * Walks parallel-output edges through nested same-type OPENs as long as
+   * each carries a single-element spine. Each level contributes one
+   * parallel-bracket width + NESTED_PARALLEL_CLEARANCE (the X advance the
+   * staircase introduced for that bracket pair).
    */
-  const shouldCollapseAgainst = (prev: Node, current: Node): boolean => {
-    if (!isNodeOfType(prev, 'parallel') || !isNodeOfType(current, 'parallel')) return false
-    if (prev.data.type !== current.data.type) return false
-    const innerBracket = current.data.type === 'open' ? current : prev
-    const closeId =
-      innerBracket.data.type === 'open' ? innerBracket.data.parallelCloseReference : innerBracket.id
-    const innerClose = rung.nodes.find((n) => n.id === closeId)
-    if (!innerClose) return false
-    return getNodesInsideParallel(rung, innerClose).serial.length === 1
+  const computeMultiBranchSpineAdvance = (openParallelNode: Node): number => {
+    let advance = 0
+    let cur: Node = openParallelNode
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (!isNodeOfType(cur, 'parallel') || cur.data.type !== 'open') break
+      const curId = cur.id
+      const curParallelOutId = cur.data.parallelOutputConnector?.id
+      const curWidth = cur.width ?? 0
+      const parallelEdge = rung.edges.find((e) => e.source === curId && e.sourceHandle === curParallelOutId)
+      if (!parallelEdge) break
+      const next = rung.nodes.find((n) => n.id === parallelEdge.target)
+      if (!next || !isNodeOfType(next, 'parallel') || next.data.type !== 'open') break
+      const innerClose = rung.nodes.find((n) => n.id === next.data.parallelCloseReference)
+      if (!innerClose) break
+      if (getNodesInsideParallel(rung, innerClose).serial.length !== 1) break
+      advance += curWidth + NESTED_PARALLEL_CLEARANCE
+      cur = next
+    }
+    return advance
   }
 
   /**
@@ -207,15 +223,38 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
        * Nodes that only have one edge connecting to them
        */
       const previousNode = previousNodes.all[0]
-      const collapse = shouldCollapseAgainst(previousNode, node)
-      if (
+      const onParallelOutput =
         isNodeOfType(previousNode, 'parallel') &&
         previousNode.data.type === 'open' &&
         previousEdges[0].sourceHandle === previousNode.data.parallelOutputConnector?.id
+      newNodePosition = getNodePositionBasedOnPreviousNode(
+        previousNode,
+        node,
+        onParallelOutput ? 'parallel' : 'serial',
+      )
+
+      /**
+       * Spine-alignment: when this `node` is the spine of an OUTER parallel
+       * whose parallel-path is a chain of multi-branch nested parallels,
+       * shift its X to match the deepest inner spine so all branch
+       * "siblings" align in the same column (image #73 layout). Skipped
+       * when `node` is itself a same-type nested OPEN — those are the
+       * staircase brackets we're aligning AGAINST, not aligning.
+       */
+      if (
+        !onParallelOutput &&
+        isNodeOfType(previousNode, 'parallel') &&
+        previousNode.data.type === 'open' &&
+        !(isNodeOfType(node, 'parallel') && node.data.type === 'open')
       ) {
-        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'parallel', collapse)
-      } else {
-        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial', collapse)
+        const advance = computeMultiBranchSpineAdvance(previousNode)
+        if (advance > 0) {
+          newNodePosition = {
+            ...newNodePosition,
+            posX: newNodePosition.posX + advance,
+            handleX: newNodePosition.handleX + advance,
+          }
+        }
       }
     } else {
       /**
@@ -234,8 +273,7 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
       let acc = newNodePosition
       for (let j = 0; j < previousNodes.all.length; j++) {
         const previousNode = previousNodes.all[j]
-        const collapse = shouldCollapseAgainst(previousNode, node)
-        const position = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial', collapse)
+        const position = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial')
         acc = {
           posX: Math.max(acc.posX, position.posX),
           posY: Math.max(acc.posY, position.posY),
