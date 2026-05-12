@@ -120,7 +120,7 @@ export const codeSysParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[
                           },
                         },
                       },
-                      initialValue: variable.initialValue
+                      initialValue: variable.initialValue?.simpleValue.value
                         ? {
                             simpleValue: {
                               '@value': variable.initialValue.simpleValue.value,
@@ -134,7 +134,7 @@ export const codeSysParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[
                       type: {
                         derived: { '@name': variable.type.value },
                       },
-                      initialValue: variable.initialValue
+                      initialValue: variable.initialValue?.simpleValue.value
                         ? {
                             simpleValue: {
                               '@value': variable.initialValue.simpleValue.value,

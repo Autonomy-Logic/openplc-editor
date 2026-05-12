@@ -372,6 +372,59 @@ describe('codeSysParseDataTypesToXML', () => {
       const vars = structVars(result)
       expect(vars[0].initialValue).toBeUndefined()
     })
+
+    // Regression: struct creation seeds new variables with an
+    // `initialValue: { simpleValue: { value: '' } }` wrapper instead
+    // of `undefined`.  The XML emitter must treat the empty inner
+    // value the same as absence — otherwise it emits
+    // `<simpleValue value=""/>` which xml2st turns into a stray `:= `
+    // in the ST output, breaking compilation.
+    it('omits initialValue for an array struct variable whose inner value is empty', () => {
+      const xml = makeBaseXml()
+      const dataTypes: PLCDataType[] = [
+        {
+          name: 'StructWithEmptyArrInit',
+          derivation: 'structure',
+          variable: [
+            {
+              name: 'data',
+              type: {
+                definition: 'array',
+                value: '',
+                data: {
+                  baseType: { definition: 'base-type', value: 'REAL' },
+                  dimensions: [{ dimension: '0..7' }],
+                },
+              },
+              initialValue: { simpleValue: { value: '' } },
+            },
+          ],
+        },
+      ]
+      const result = codeSysParseDataTypesToXML(xml, dataTypes)
+      const vars = structVars(result)
+      expect(vars[0].initialValue).toBeUndefined()
+    })
+
+    it('omits initialValue for a derived struct variable whose inner value is empty', () => {
+      const xml = makeBaseXml()
+      const dataTypes: PLCDataType[] = [
+        {
+          name: 'StructWithEmptyDerivedInit',
+          derivation: 'structure',
+          variable: [
+            {
+              name: 'ref',
+              type: { definition: 'derived', value: 'Other' },
+              initialValue: { simpleValue: { value: '' } },
+            },
+          ],
+        },
+      ]
+      const result = codeSysParseDataTypesToXML(xml, dataTypes)
+      const vars = structVars(result)
+      expect(vars[0].initialValue).toBeUndefined()
+    })
   })
 
   it('returns the xml object', () => {
