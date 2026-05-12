@@ -1,6 +1,6 @@
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
@@ -34,7 +34,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const { captureAndPush } = usePouSnapshot()
 
-  const baseTypes = baseTypeSchema.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
+  const baseTypes = baseTypeEnum.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
   // Filter to defined string names before deref'ing `.toUpperCase()` —
   // a malformed data-type / library entry (missing or null `name`)
   // would otherwise crash the whole editor on every render.

@@ -1,4 +1,4 @@
-import { baseTypeSchema } from '@root/middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '@root/middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCStructureVariable } from '@root/middleware/shared/ports/types'
 import { useEffect, useState } from 'react'
 
@@ -37,7 +37,7 @@ export const ArrayModal = ({
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
-  const baseTypes = baseTypeSchema.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
+  const baseTypes = baseTypeEnum.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
 
   const userDataTypes = dataTypes
     .filter(hasStringName)

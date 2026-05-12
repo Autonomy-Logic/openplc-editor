@@ -4,7 +4,7 @@ import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
@@ -704,7 +704,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         const dotAccessMatch = textUntilPosition.match(/(\w+)\.$/)
         if (dotAccessMatch) {
           const variableName = dotAccessMatch[1]
-          const primitiveTypes: string[] = baseTypeSchema.options
+          const primitiveTypes: string[] = baseTypeEnum.options
           const allVariables = [...pouVariables, ...(globalVariables ?? [])]
           const variable = allVariables.find((v) => v.name === variableName)
           if (variable && primitiveTypes.includes(variable.type.value)) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../../middleware/shared/ports/plc-schemas'
 import { useOpenPLCStore } from '../../../../store'
 import { arrayValidation } from '../../../../store/slices/project/validation/variables'
 import { hasStringName } from '../../../../utils/safe-upper'
@@ -44,7 +44,7 @@ export const ArrayModal = ({
   // can't yet round-trip strucpp's chrono types.
   const excludedNativeTypes = ['TIME', 'DATE', 'TOD', 'DT']
 
-  const baseTypes = baseTypeSchema.options.filter((type) => {
+  const baseTypes = baseTypeEnum.options.filter((type) => {
     if (typeof type !== 'string') return false
     if (type.toUpperCase() === 'ARRAY') return false
     if (isNativeLanguage && excludedNativeTypes.includes(type.toUpperCase())) return false

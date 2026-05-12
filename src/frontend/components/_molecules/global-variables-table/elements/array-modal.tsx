@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../../middleware/shared/ports'
+import { baseTypeEnum } from '../../../../../middleware/shared/ports'
 import { useOpenPLCStore } from '../../../../store'
 import { arrayValidation } from '../../../../store/slices/workspace/utils/variables'
 import { hasStringName } from '../../../../utils/safe-upper'
@@ -39,7 +39,7 @@ export const GlobalArrayModal = ({
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
-  const baseTypes = baseTypeSchema.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
+  const baseTypes = baseTypeEnum.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
 
   const userDataTypes = dataTypes
     .filter(hasStringName)

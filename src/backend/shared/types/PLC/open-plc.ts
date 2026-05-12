@@ -1,29 +1,19 @@
 import { z } from 'zod'
 
 import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
-
-const baseTypeSchema = z.enum([
-  'bool',
-  'sint',
-  'int',
-  'dint',
-  'lint',
-  'usint',
-  'uint',
-  'udint',
-  'ulint',
-  'real',
-  'lreal',
-  'time',
-  'date',
-  'tod',
-  'dt',
-  'string',
-  'byte',
-  'word',
-  'dword',
-  'lword',
-])
+// One source of truth for the IEC base-type list: the canonical
+// schema lives in `middleware/shared/ports/plc-schemas` and is
+// derived from strucpp's `iec-types.json`.  It accepts any case on
+// input and normalises to the canonical uppercase form, which is
+// what makes load / save round-trips case-insensitive (legacy
+// `'real'` files keep loading, modern `'REAL'` files too).
+//
+// Re-importing here — rather than redefining the list — guarantees
+// the save / load schemas stay in sync with the runtime UI's idea
+// of "what's an IEC base type."  The previous local lowercase enum
+// drifted from the runtime uppercase one and caused projects to
+// fail validation on open.
+import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
 
 type BaseType = z.infer<typeof baseTypeSchema>
 

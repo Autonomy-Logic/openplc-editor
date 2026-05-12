@@ -3,7 +3,7 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
@@ -63,7 +63,7 @@ const SelectableTypeCell = ({
   const VariableTypes = [
     {
       definition: 'base-type',
-      values: baseTypeSchema.options,
+      values: baseTypeEnum.options,
     },
     {
       definition: 'user-data-type',

@@ -3,7 +3,7 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCStructureVariable } from '../../../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
 import { useOpenPLCStore } from '../../../../../store'
@@ -30,7 +30,7 @@ const SelectableTypeCell = ({
   } = useOpenPLCStore()
 
   const VariableTypes = [
-    { definition: 'base-type', values: baseTypeSchema.options },
+    { definition: 'base-type', values: baseTypeEnum.options },
     { definition: 'user-data-type', values: dataTypes.filter(hasStringName).map((dataType) => dataType.name) },
   ]
 
