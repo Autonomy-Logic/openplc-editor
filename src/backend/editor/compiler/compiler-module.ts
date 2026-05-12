@@ -1309,6 +1309,22 @@ class CompilerModule {
       ]
     }
 
+    // `upload.maximum_data_size` controls arduino-cli's post-link
+    // size check, not the linker memory map (that's `ld_flags`).
+    // For boards like the simulator that target a stock Arduino
+    // platform but emulate more RAM than the canonical SoC, we
+    // need to override both — otherwise the link succeeds but
+    // arduino-cli rejects the binary with "data section exceeds
+    // available space in board" because boards.txt still reports
+    // 8192 bytes for atmega2560.
+    if (typeof boardHalsContent['max_data_size'] === 'number') {
+      buildProjectFlags = [
+        ...buildProjectFlags,
+        '--build-property',
+        `upload.maximum_data_size=${boardHalsContent['max_data_size']}`,
+      ]
+    }
+
     buildProjectFlags = [
       ...buildProjectFlags,
       '--library',
