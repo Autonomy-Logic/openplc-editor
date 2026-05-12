@@ -17,6 +17,7 @@ import {
   findAllParallelsDepthAndNodes,
   findParallelsInRung,
   getNodePositionBasedOnPreviousNode,
+  getNodesInsideParallel,
   getPreviousElementsByEdge,
 } from '../utils'
 import { updateVariableBlockPosition } from '../variable-block'
@@ -125,6 +126,27 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
   const parallelsDepth = parallels.map((parallel) => findAllParallelsDepthAndNodes(rung, parallel))
 
   /**
+   * Same-type parallel brackets (OPEN→OPEN, CLOSE→CLOSE) belong to nested
+   * parallels. The inner pair is `node` for OPEN→OPEN and `previousNode`
+   * for CLOSE→CLOSE. When the inner pair's serial spine is a single
+   * element, the nesting is just a multi-branch wrapper — collapse the
+   * brackets onto the same X so all branches read as siblings. Otherwise,
+   * the nesting is a genuine parallel-of-parallel and the brackets must
+   * stay visually distinct (handled by `getNodePositionBasedOnPreviousNode`
+   * applying NESTED_PARALLEL_CLEARANCE when this flag is false).
+   */
+  const shouldCollapseAgainst = (prev: Node, current: Node): boolean => {
+    if (!isNodeOfType(prev, 'parallel') || !isNodeOfType(current, 'parallel')) return false
+    if (prev.data.type !== current.data.type) return false
+    const innerBracket = current.data.type === 'open' ? current : prev
+    const closeId =
+      innerBracket.data.type === 'open' ? innerBracket.data.parallelCloseReference : innerBracket.id
+    const innerClose = rung.nodes.find((n) => n.id === closeId)
+    if (!innerClose) return false
+    return getNodesInsideParallel(rung, innerClose).serial.length === 1
+  }
+
+  /**
    * Iterate over the nodes and update their position
    */
   for (let i = 0; i < nodes.length; i++) {
@@ -185,14 +207,15 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
        * Nodes that only have one edge connecting to them
        */
       const previousNode = previousNodes.all[0]
+      const collapse = shouldCollapseAgainst(previousNode, node)
       if (
         isNodeOfType(previousNode, 'parallel') &&
         previousNode.data.type === 'open' &&
         previousEdges[0].sourceHandle === previousNode.data.parallelOutputConnector?.id
       ) {
-        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'parallel')
+        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'parallel', collapse)
       } else {
-        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial')
+        newNodePosition = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial', collapse)
       }
     } else {
       /**
@@ -211,7 +234,8 @@ const positionMainNodes = (rung: RungLadderState): { nodes: Node[]; edges: Edge[
       let acc = newNodePosition
       for (let j = 0; j < previousNodes.all.length; j++) {
         const previousNode = previousNodes.all[j]
-        const position = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial')
+        const collapse = shouldCollapseAgainst(previousNode, node)
+        const position = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial', collapse)
         acc = {
           posX: Math.max(acc.posX, position.posX),
           posY: Math.max(acc.posY, position.posY),
