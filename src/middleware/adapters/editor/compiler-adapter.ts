@@ -296,21 +296,35 @@ export function createEditorCompilerAdapter(): CompilerPort {
         let finalResult: CompileLibraryResult | undefined
         let hasError = false
         let lastError = ''
+        // The renderer-side bridge invokes the callback twice on a
+        // normal close: once for the backend's `{closePort: true,
+        // libraryBuildResult}` message, then again for the
+        // MessagePort's `'close'` event listener (which also pushes
+        // `{closePort: true}`).  Guard against the second invocation
+        // so we don't log the build result twice and don't resolve
+        // the promise twice.
+        let settled = false
 
         window.bridge.runCompileLibrary(
           [args.projectPath, ipcData as never, args.cleanBuild ?? false],
           (data: Record<string, unknown>) => {
+            if (settled) return
+
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult
             }
 
             if (data.closePort) {
-              onProgress({
-                stage: finalResult?.success ? 'done' : 'error',
-                message: finalResult?.success
-                  ? `Library built: ${finalResult.stlibPath ?? ''}`
-                  : finalResult?.error ?? lastError ?? 'Library build failed.',
-              })
+              settled = true
+              // No `message` here: the backend already posted
+              // "Library built successfully: <path>" before sending
+              // closePort, and the renderer's `handleBuildLibrary`
+              // surfaces a warning if `result.verification?.success`
+              // is false.  Forwarding another message would double-
+              // print the success line.  We still emit a stage-only
+              // event so any subscriber that watches stage transitions
+              // (build-button spinner, etc.) sees the transition.
+              onProgress({ stage: finalResult?.success ? 'done' : 'error', message: '' })
               resolve(
                 finalResult ?? {
                   success: false,
