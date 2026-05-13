@@ -207,7 +207,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Build Library (.stlib)
   // ---------------------------------------------------------------------------
 
-  const handleBuildLibrary = useCallback(async () => {
+  const handleBuildLibrary = useCallback(async (overrides?: { cleanBuild?: boolean }) => {
     if (isCompiling) return
 
     // Library projects can have a dirty `library.json` tab; save flushes
@@ -228,11 +228,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
 
     setIsCompiling(true)
-    addLog({ id: crypto.randomUUID(), level: 'info', message: 'Library build started' })
+    addLog({
+      id: crypto.randomUUID(),
+      level: 'info',
+      message: overrides?.cleanBuild ? 'Library build started (clean)' : 'Library build started',
+    })
 
     try {
       const result = await compiler.compileLibrary(
-        { projectData, projectPath: projectMeta.path },
+        { projectData, projectPath: projectMeta.path, cleanBuild: overrides?.cleanBuild ?? false },
         (event) => {
           if (!event.message) return
           addLog({
@@ -688,20 +692,27 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         </>
       )}
       {/* Library-build affordance: shown only for library projects.
-          Single action — "Build Library" — produces a `.stlib`
-          archive at `<projectPath>/build/<name>.stlib`.  Upload is
-          intentionally not offered: libraries don't run on a
-          target, they ship to a consumer project. */}
+          Two options surface via the `libraryMode` popover:
+            - "Build"       → fast build (verification short-
+              circuited by MD5 cache hit, when warm).
+            - "Clean build" → skip verification cache and force a
+              fresh avr-gcc verify against the simulator target. */}
       {projectCaps.hasLibraryBuild && (
         <TooltipSidebarWrapperButton tooltipContent={isCompiling ? 'Building library…' : 'Build Library'}>
           <BuildOptionsPopover
             disabled={isCompiling}
             triggerTooltip={isCompiling ? 'Building library…' : 'Build Library'}
+            libraryMode={true}
             uploadAvailable={false}
             uploadDisabledReason='library builds do not upload'
             onSelect={(option: BuildOption) => {
-              if (option === 'build-only') {
-                void handleBuildLibrary()
+              switch (option) {
+                case 'build-only':
+                  void handleBuildLibrary({ cleanBuild: false })
+                  break
+                case 'clean-upload':
+                  void handleBuildLibrary({ cleanBuild: true })
+                  break
               }
             }}
           />

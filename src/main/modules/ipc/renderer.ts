@@ -216,10 +216,11 @@ const rendererProcessBridge = {
 
   /** Build the open Library Project into a `.stlib` archive.  Same
    *  MessageChannel pattern as `runCompileProgram` — args carry the
-   *  project path + in-memory project data, callback receives a
+   *  project path, in-memory project data, and the `cleanBuild`
+   *  flag (skips the verification cache); callback receives a
    *  stream of log messages and a final `libraryBuildResult`. */
   runCompileLibrary: (
-    compileArgs: Array<string | PLCProjectData>,
+    compileArgs: Array<string | PLCProjectData | boolean>,
     callback: (args: CompilerPortMessage) => void,
   ) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()

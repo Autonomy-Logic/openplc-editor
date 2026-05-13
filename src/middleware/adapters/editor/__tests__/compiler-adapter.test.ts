@@ -509,7 +509,7 @@ describe('createEditorCompilerAdapter', () => {
       const result = await promise
 
       expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
-        ['/lib/project', expect.objectContaining({ pous: expect.any(Array) })],
+        ['/lib/project', expect.objectContaining({ pous: expect.any(Array) }), false],
         expect.any(Function),
       )
       expect(result).toEqual({
@@ -596,6 +596,23 @@ describe('createEditorCompilerAdapter', () => {
       await promise
       expect(progressEvents[0].stage).toBe('xml')
       expect(progressEvents[0].level).toBe('info')
+    })
+
+    it('propagates the cleanBuild flag through to the bridge', async () => {
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project', cleanBuild: true },
+        () => {},
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
+      libraryCallback!({ closePort: true })
+      await promise
+
+      expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
+        ['/lib/project', expect.any(Object), true],
+        expect.any(Function),
+      )
     })
 
     it('defaults non-error log levels to info when logLevel is missing', async () => {

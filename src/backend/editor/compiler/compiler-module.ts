@@ -16,6 +16,7 @@ type StrucppCompileError = import('strucpp').CompileError
 type StrucppSourceMap = ReturnType<typeof import('strucpp')['buildSourceMap']>
 
 import {
+  composeVerificationProject,
   libraryBuildFromTranspiledSt,
   prepareXmlForLibraryBuild,
 } from '@root/backend/shared/library/build-pipeline'
@@ -107,7 +108,7 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
 import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
-import { app as electronApp, dialog } from 'electron'
+import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
@@ -2960,17 +2961,26 @@ class CompilerModule {
    *   5. Write the archive (same `JSON.stringify(archive, null, 2)`
    *      shape `library-manager-module` persists user-installed
    *      archives with) to `<projectPath>/build/<name>.stlib`.
-   *
-   * The verification step (Phase 8 — running the synthetic project
-   * through avr-gcc on the simulator target to surface generated
-   * C++ compile errors) is a no-op here.  `composeVerificationProject`
-   * gets called for its side-effect of validating the stub shape,
-   * but its result is unused until Phase 8 wires the actual
-   * verification compile.
+   *   6. (Phase 8) Run an end-to-end avr-gcc verification compile
+   *      against the OpenPLC Simulator target, gated by an MD5
+   *      cache keyed off the produced program.st.  Verification
+   *      failures surface as warnings on `result.verification`,
+   *      never as build errors — a legitimate user target may have
+   *      more memory than the AVR simulator.  `cleanBuild` skips
+   *      the cache and forces a re-verification.
    */
   async compileLibrary(
-    args: Array<string | PLCProjectData>,
+    args: Array<string | PLCProjectData | boolean>,
     _mainProcessPort: MessagePortMain,
+    mainProcessBridge: {
+      makeRuntimeApiRequest: <T = void>(
+        ipAddress: string,
+        jwtToken: string,
+        endpoint: string,
+        responseParser?: (data: string) => T,
+      ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+      resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
+    },
   ): Promise<void> {
     _mainProcessPort.start()
 
@@ -2982,7 +2992,7 @@ class CompilerModule {
       setTimeout(() => _mainProcessPort.close(), 25)
     }
 
-    const [projectPath, projectData] = args as [string, PLCProjectData]
+    const [projectPath, projectData, cleanBuild = false] = args as [string, PLCProjectData, boolean | undefined]
     const normalizedProjectPath = projectPath.replace('project.json', '')
 
     post('Starting library build...')
@@ -3094,15 +3104,171 @@ class CompilerModule {
       return
     }
 
-    // Phase 8 wires verification here: `composeVerificationProject`
-    // produces the stubbed PLCProject the existing program-build
-    // path can consume against the simulator target.  A failure
-    // there surfaces as a warning on `result.verification`, not as
-    // a build error — a legitimate user target may have more
-    // memory than the AVR simulator.
+    // Phase 8: end-to-end C++ verification against the OpenPLC
+    // Simulator target.  Runs the same program-build pipeline used
+    // for normal projects (strucpp ST→C++ → arduino-cli on
+    // bundled avr-gcc), so the editor never depends on a host
+    // compiler being installed.
+    //
+    // Result is advisory: a failure surfaces as a warning, not a
+    // build error, because a legitimate user target may have more
+    // memory than the AVR simulator (the very thing the simulator
+    // imposes on us is the tight AVR memory budget that real
+    // industrial targets often don't share).
+    //
+    // The MD5 cache short-circuits the slow compile when the
+    // already-verified program.st hasn't changed.  `cleanBuild`
+    // skips the cache and forces a re-verification.
+    const programStMd5 = crypto.createHash('md5').update(programSt).digest('hex')
+    const verifyCachePath = join(libraryBuildDir, '.verify-cache.json')
+    let cachedVerification: import('@root/middleware/shared/ports/types').CompileLibraryResult['verification']
+    if (!cleanBuild) {
+      try {
+        const raw = await readFile(verifyCachePath, { encoding: 'utf8' })
+        const parsed = JSON.parse(raw) as { md5?: string; success?: boolean; message?: string }
+        if (parsed && parsed.md5 === programStMd5 && typeof parsed.success === 'boolean') {
+          cachedVerification = { success: parsed.success, message: parsed.message }
+        }
+      } catch {
+        // Missing or malformed cache — fall through to fresh
+        // verification.  Never fail the build over the cache.
+      }
+    }
+
+    let verification: import('@root/middleware/shared/ports/types').CompileLibraryResult['verification']
+    if (cachedVerification) {
+      verification = cachedVerification
+      post(
+        `Skipping verification (cached: ${cachedVerification.success ? 'pass' : 'fail'}). ` +
+          'Use "Clean build" to force re-verification.',
+      )
+    } else {
+      const verifyProject = composeVerificationProject({
+        meta: { name: manifest.name, type: 'plc-library' },
+        data: projectData as unknown as import('@root/backend/shared/types/PLC/open-plc').PLCProjectData,
+      })
+      post('Verifying with OpenPLC Simulator (avr-gcc)...')
+      try {
+        verification = await this.runVerificationCompile(
+          normalizedProjectPath,
+          verifyProject.data,
+          mainProcessBridge,
+          (message, logLevel) =>
+            _mainProcessPort.postMessage({
+              logLevel: logLevel === 'error' ? 'warning' : logLevel,
+              message: `[verify] ${message}`,
+            }),
+        )
+        try {
+          await writeFile(
+            verifyCachePath,
+            JSON.stringify({ md5: programStMd5, ...verification }, null, 2),
+            'utf-8',
+          )
+        } catch (cacheErr) {
+          post(`Could not write verification cache: ${getErrorMessage(cacheErr)}`, 'warning')
+        }
+      } catch (err) {
+        verification = { success: false, message: getErrorMessage(err) }
+      }
+      if (verification.success) {
+        post('Verification passed.')
+      } else {
+        post(
+          `Verification reported issues (warning only — your .stlib is still ready): ${verification.message ?? 'see log'}`,
+          'warning',
+        )
+      }
+    }
 
     post(`Library built successfully: ${stlibPath}`)
-    finish({ success: true, stlibPath, libraryName: manifest.name })
+    finish({ success: true, stlibPath, libraryName: manifest.name, verification })
+  }
+
+  /**
+   * Run an end-to-end verification compile of a synthetic Library
+   * Project against the OpenPLC Simulator target.  Reuses the full
+   * `compileProgram` pipeline (strucpp → arduino-cli → bundled
+   * avr-gcc) by feeding it a private `MessageChannelMain` — so the
+   * renderer never sees the verification's per-step log spam, only
+   * the summary the caller forwards via `forwardLog`.
+   *
+   * Resolves with `{success, message?}` once the inner pipeline
+   * closes its port.  Failure is reported as `success: false` plus
+   * the last error string the pipeline emitted — never throws,
+   * matching the caller's "verification is advisory" contract.
+   */
+  private async runVerificationCompile(
+    projectPath: string,
+    verifyData: PLCProjectData,
+    bridge: {
+      makeRuntimeApiRequest: <T = void>(
+        ipAddress: string,
+        jwtToken: string,
+        endpoint: string,
+        responseParser?: (data: string) => T,
+      ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+      resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
+    },
+    forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
+  ): Promise<{ success: boolean; message?: string }> {
+    return new Promise((resolve) => {
+      const channel = new MessageChannelMain()
+      let hasError = false
+      let lastError = ''
+      let settled = false
+
+      const settle = (result: { success: boolean; message?: string }) => {
+        if (settled) return
+        settled = true
+        try {
+          channel.port1.close()
+        } catch {
+          // Already closed — fine.
+        }
+        resolve(result)
+      }
+
+      channel.port1.on('message', (event) => {
+        const data = event.data as {
+          message?: string | Buffer
+          logLevel?: 'info' | 'warning' | 'error'
+          closePort?: boolean
+        }
+        if (data.message) {
+          const text = typeof data.message === 'string' ? data.message : data.message.toString()
+          if (data.logLevel === 'error') {
+            hasError = true
+            lastError = text
+          }
+          forwardLog(text, data.logLevel)
+        }
+        if (data.closePort) {
+          settle(hasError ? { success: false, message: lastError } : { success: true })
+        }
+      })
+      channel.port1.start()
+
+      // Simulator target uses the bundled avr-gcc via arduino-cli;
+      // compileOnly=true so we don't try to upload the hex.  The
+      // boolean slots (compileOnly / cleanBuild) are runtime values
+      // the inner `compileProgram` re-casts off `args as [...]`,
+      // so the outer cast is needed to silence the strict arg type
+      // (which only admits `string | null | PLCProjectData`).
+      const compileArgs = [
+        projectPath,
+        'OpenPLC Simulator',
+        'arduino:avr:mega',
+        true,
+        verifyData,
+        null,
+        null,
+        true,
+      ] as unknown as Array<string | null | PLCProjectData>
+      void this.compileProgram(compileArgs, channel.port2, bridge).catch((err) =>
+        settle({ success: false, message: getErrorMessage(err) }),
+      )
+    })
   }
 }
 export { CompilerModule }

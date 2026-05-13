@@ -996,9 +996,9 @@ class MainProcessBridge implements MainIpcModule {
     void this.compilerModule.compileForDebugger(args, mainProcessPort, this)
   }
 
-  handleRunCompileLibrary = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
+  handleRunCompileLibrary = (event: IpcMainEvent, args: Array<string | PLCProjectData | boolean>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileLibrary(args, mainProcessPort)
+    void this.compilerModule.compileLibrary(args, mainProcessPort, this)
   }
 
   /**

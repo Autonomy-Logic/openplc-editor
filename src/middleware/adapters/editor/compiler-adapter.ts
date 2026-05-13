@@ -275,7 +275,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         let lastError = ''
 
         window.bridge.runCompileLibrary(
-          [args.projectPath, ipcData as never],
+          [args.projectPath, ipcData as never, args.cleanBuild ?? false],
           (data: Record<string, unknown>) => {
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult

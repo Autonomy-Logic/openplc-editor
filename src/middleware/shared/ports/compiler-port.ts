@@ -70,6 +70,17 @@ export interface ExportXmlArgs {
 export interface CompileLibraryArgs {
   projectData: PLCProjectData
   projectPath: string
+  /**
+   * Skip the verification-result cache for this run.  The MD5 cache
+   * normally short-circuits the slow simulator-target verification
+   * when the program.st coming out of xml2st hasn't changed since
+   * the last successful (or failed) verify; `cleanBuild: true`
+   * forces a fresh compile.
+   *
+   * Pure UX gate — the artefact build itself is always fresh; only
+   * the verification step is cached.
+   */
+  cleanBuild?: boolean
 }
 
 export interface CompilerPort {
