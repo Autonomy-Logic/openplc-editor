@@ -210,13 +210,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleBuildLibrary = useCallback(async (overrides?: { cleanBuild?: boolean }) => {
     if (isCompiling) return
 
-    // Library projects can have a dirty `library.json` tab; save flushes
-    // the manifest surgically (Phase 5) so the backend reads the latest
-    // content from disk in Stage 0 of the build.
-    if (editingState === 'unsaved') {
-      const saved = await executeSave()
-      if (!saved) return
-    }
+    // Always save before building.  The manifest tab and any POU
+    // bodies may have edits the workspace-level `editingState`
+    // doesn't track (each editor manages its own dirty flag against
+    // its file-slice entry), and the build pipeline reads everything
+    // off disk — `library.json`, `pous/**`, and the rest — so a
+    // stale on-disk copy would compile from the previous session's
+    // content.  `executeSaveProject` is the same full-project save
+    // the PLC build invokes; it walks every file the project owns
+    // and flushes the in-memory buffer to disk before the build
+    // starts.
+    const saved = await executeSave()
+    if (!saved) return
 
     if (!compiler.compileLibrary) {
       addLog({
@@ -268,7 +273,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } finally {
       setIsCompiling(false)
     }
-  }, [compiler, projectData, projectMeta, addLog, isCompiling, editingState, executeSave])
+  }, [compiler, projectData, projectMeta, addLog, isCompiling, executeSave])
 
   // ---------------------------------------------------------------------------
   // PLC control (Start/Stop for runtime targets)
