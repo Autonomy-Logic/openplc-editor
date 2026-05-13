@@ -5,15 +5,35 @@ import { SubmitHandler, useForm } from 'react-hook-form'
 
 import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers/platform-context'
 import { PathIcon } from '../../../../../assets/icons/interface/Path'
+import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
+import { useToast } from '../../../[app]/toast/use-toast'
 import { NewProjectStore } from '../store'
 
-const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) => {
+interface Step2Props {
+  onNext: () => void
+  onPrev: () => void
+  /** Library projects make Step 2 the final step (no Step 3 for
+   *  language / cycle time).  When true the form submits the project
+   *  creation directly instead of advancing. */
+  isFinalStep?: boolean
+  /** Called on successful project creation when this is the final
+   *  step.  Mirrors Step 3's `onFinish`. */
+  onFinish?: () => void
+  /** Called to dismiss the modal — same hook Step 3 uses. */
+  onClose?: () => void
+}
+
+const Step2 = ({ onNext, onPrev, isFinalStep = false, onFinish, onClose }: Step2Props) => {
   const { register, handleSubmit, setValue, watch } = useForm<{ name: string; path: string }>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
   const projectData = NewProjectStore((state) => state.formData)
   const capabilities = useCapabilities()
   const project = useProject()
+  const { toast } = useToast()
+  const {
+    sharedWorkspaceActions: { handleOpenProjectResponse },
+  } = useOpenPLCStore()
   const [path, setPath] = useState('')
   const [pathErrorMessage, setPathErrorMessage] = useState('')
 
@@ -24,10 +44,53 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
     if (projectData.path) setValue('path', projectData.path)
   }, [projectData, setValue])
 
-  const handleFormSubmit: SubmitHandler<{ name: string; path: string }> = (data) => {
+  const handleFormSubmit: SubmitHandler<{ name: string; path: string }> = async (data) => {
     const allData = { ...projectData, name: data.name, path: data.path }
     handleUpdateForm(allData)
-    onNext()
+
+    // PLC projects advance to Step 3 (language + cycle time).
+    // Library projects finalise creation here — they don't have a
+    // main program or a cyclic task, so the third step would be
+    // irrelevant.
+    if (!isFinalStep) {
+      onNext()
+      return
+    }
+
+    try {
+      const result = await project.createProject({
+        name: allData.name,
+        type: allData.type as 'plc-project' | 'plc-library',
+        path: allData.path,
+        // Language + cycle time are placeholders for the library
+        // path.  Backend's library branch ignores them and the
+        // resulting project has no POU at all; we still pass ST /
+        // 20 ms so any consumer that reads the IPC payload sees a
+        // safe-looking default rather than empty strings.
+        language: 'st',
+        time: 'T#20ms',
+      })
+
+      if (!result.success || !result.data) {
+        toast({
+          title: 'Cannot create a project!',
+          description: result.error?.description ?? 'Failed to create the project.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      handleOpenProjectResponse(result.data)
+    } catch (_error) {
+      toast({
+        title: 'Cannot create a project!',
+        description: 'Failed to create the project.',
+        variant: 'fail',
+      })
+    } finally {
+      onClose?.()
+      onFinish?.()
+    }
   }
 
   const handlePathPicker = async () => {
@@ -57,10 +120,16 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
         <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500 dark:bg-neutral-950'>
           2
         </div>
-        <div className='h-[2px] w-12 bg-gray-500'></div>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
-          3
-        </div>
+        {/* Step 3 only renders for PLC projects.  Library projects
+            stop at Step 2 — see `isFinalStep`. */}
+        {!isFinalStep && (
+          <>
+            <div className='h-[2px] w-12 bg-gray-500'></div>
+            <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+              3
+            </div>
+          </>
+        )}
       </div>
 
       <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
@@ -128,7 +197,7 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
             disabled={!isFormValid}
             className={`h-8 w-52 rounded-lg bg-brand text-white ${!isFormValid ? 'cursor-not-allowed opacity-50' : ''}`}
           >
-            Next
+            {isFinalStep ? 'Create Library' : 'Next'}
           </button>
         </div>
       </form>
