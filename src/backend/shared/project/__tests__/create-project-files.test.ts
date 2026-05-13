@@ -44,7 +44,7 @@ describe('toSnakeCaseNamespace', () => {
 })
 
 describe('buildLibraryManifestTemplate', () => {
-  it('emits a strucpp-compatible manifest skeleton', () => {
+  it('emits a strucpp-compatible metadata-only manifest skeleton', () => {
     const raw = buildLibraryManifestTemplate('My Sensor Lib')
     const parsed = JSON.parse(raw)
     expect(parsed).toEqual({
@@ -53,11 +53,20 @@ describe('buildLibraryManifestTemplate', () => {
       version: '0.1.0',
       namespace: 'my_sensor_lib',
       description: '',
-      functions: [],
-      functionBlocks: [],
-      types: [],
-      headers: [],
     })
+  })
+
+  it('omits the auto-computed symbol arrays', () => {
+    // functions / functionBlocks / types / headers are produced by
+    // strucpp at build time — surfacing them as empty arrays in the
+    // template would invite drift between the editor view and the
+    // user-edited manifest.
+    const raw = buildLibraryManifestTemplate('My Sensor Lib')
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    expect(parsed).not.toHaveProperty('functions')
+    expect(parsed).not.toHaveProperty('functionBlocks')
+    expect(parsed).not.toHaveProperty('types')
+    expect(parsed).not.toHaveProperty('headers')
   })
 
   it('is JSON-formatted with a trailing newline', () => {
@@ -122,11 +131,23 @@ describe('buildProjectFileContent', () => {
       expect(built.libraryManifest).toBeDefined()
       const manifest = JSON.parse(built.libraryManifest as string) as Record<string, unknown>
       expect(manifest.name).toBe('Sensor Tools')
+      expect(manifest.displayName).toBe('Sensor Tools')
       expect(manifest.namespace).toBe('sensor_tools')
       expect(manifest.version).toBe('0.1.0')
-      expect(manifest.functions).toEqual([])
-      expect(manifest.functionBlocks).toEqual([])
-      expect(manifest.types).toEqual([])
+      expect(manifest.description).toBe('')
+    })
+
+    it('does not seed the auto-computed symbol arrays in the template', () => {
+      // `functions`, `functionBlocks`, `types`, `headers` are
+      // populated by strucpp at build time from the project's
+      // POUs / data types — surfacing them as empty arrays in the
+      // user-editable manifest would invite manual maintenance of
+      // a list the editor already owns.
+      const manifest = JSON.parse(built.libraryManifest as string) as Record<string, unknown>
+      expect(manifest).not.toHaveProperty('functions')
+      expect(manifest).not.toHaveProperty('functionBlocks')
+      expect(manifest).not.toHaveProperty('types')
+      expect(manifest).not.toHaveProperty('headers')
     })
   })
 })

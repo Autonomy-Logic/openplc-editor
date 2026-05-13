@@ -1021,6 +1021,19 @@ class MainProcessBridge implements MainIpcModule {
   resolveLibraryDirs = (enabledNames: string[]): { dirs: string[]; missing: string[] } =>
     this.libraryManagerModule.resolveEnabledLibraryDirs(enabledNames)
 
+  /**
+   * Bridge method consumed by the Library Project build pipeline.
+   * Returns the parsed `.stlib` archives for every enabled library
+   * — bundled + the user-installed subset — so strucpp's
+   * `compileStlib` can resolve cross-library symbol references when
+   * the library under build depends on another archive (e.g. an
+   * OSCAT-using utility library).  `missing` mirrors the same
+   * shape `resolveLibraryDirs` returns so callers fail with the
+   * same diagnostic.
+   */
+  loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
+    this.libraryManagerModule.loadEnabledArchives(enabledNames)
+
   // TODO: These handlers are outdated and should be removed.
   // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
   //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined

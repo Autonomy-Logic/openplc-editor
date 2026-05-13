@@ -145,6 +145,40 @@ export class LibraryManagerModule {
    * a clear "open the Library Manager" message instead of strucpp's
    * per-symbol "function not found" cascade.
    */
+  /**
+   * Load the full parsed archives for every enabled library — both
+   * bundled and user-installed.  Used by the Library Project build
+   * pipeline to pass `dependencies` into strucpp's `compileStlib` so
+   * a user library that references external symbols (e.g. an OSCAT
+   * function) resolves them at compile time.
+   *
+   * Bundled libraries are always-on and included unconditionally;
+   * user libraries are filtered by `enabledNames`.  `missing` lists
+   * enabled names that have no archive on disk — same shape
+   * `resolveEnabledLibraryDirs` returns, so the caller can surface
+   * a single "install or remove" error before strucpp runs.
+   */
+  loadEnabledArchives(enabledNames: string[]): { archives: StlibArchiveDTO[]; missing: string[] } {
+    const archives: StlibArchiveDTO[] = []
+    for (const archive of this.readBundledArchives()) archives.push(archive)
+    const registry = this.readRegistry()
+    const missing: string[] = []
+    for (const name of enabledNames) {
+      const entry = registry.libraries[name]
+      if (!entry) {
+        missing.push(name)
+        continue
+      }
+      const archive = this.readUserArchive(name, entry.stlibPath)
+      if (!archive) {
+        missing.push(name)
+        continue
+      }
+      archives.push(archive)
+    }
+    return { archives, missing }
+  }
+
   resolveEnabledLibraryDirs(enabledNames: string[]): { dirs: string[]; missing: string[] } {
     const dirs: string[] = []
     if (existsSync(this.bundledDir)) {

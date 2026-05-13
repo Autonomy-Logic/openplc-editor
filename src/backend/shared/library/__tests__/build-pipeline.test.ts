@@ -435,17 +435,19 @@ describe('libraryBuildFromTranspiledSt', () => {
     expect(opts).toEqual({ name: 'demo_lib', version: '1.0.0', namespace: 'demo_lib' })
   })
 
-  it('infers category tags from the splitter filename convention', () => {
+  it('drops `_config.st` so strucpp does not error on the stub configuration', () => {
+    // The stub program (which the splitter recognises and the
+    // pipeline drops) is referenced by xml2st's emitted
+    // CONFIGURATION block.  Leaving `_config.st` in the strucpp
+    // inputs makes strucpp emit "Unknown program type 'MAIN'"
+    // diagnostics because the stub source isn't there anymore.
+    // Verify the pipeline strips the config slice up front.
     const compileStlib = jest.fn().mockReturnValue({ success: true, archive: {} })
     __setStrucppRuntimeForTests(
       makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
     )
 
     const programSt =
-      'TYPE\n  Color : (RED, GREEN);\nEND_TYPE\n' +
-      '\n' +
-      'VAR_GLOBAL\n  G : INT;\nEND_VAR\n' +
-      '\n' +
       'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
       '\n' +
       'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n' +
@@ -466,6 +468,37 @@ describe('libraryBuildFromTranspiledSt', () => {
       manifest,
     )
 
+    const sources = compileStlib.mock.calls[0][0] as Array<{ fileName: string }>
+    const filenames = sources.map((s) => s.fileName)
+    expect(filenames).not.toContain('_config.st')
+    expect(filenames).not.toContain(STUB.STUB_SPLIT_FILENAME)
+    expect(filenames).toContain('Tank.st')
+  })
+
+  it('infers category tags from the splitter filename convention', () => {
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: {} })
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    const programSt =
+      'TYPE\n  Color : (RED, GREEN);\nEND_TYPE\n' +
+      '\n' +
+      'VAR_GLOBAL\n  G : INT;\nEND_VAR\n' +
+      '\n' +
+      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
+      '\n' +
+      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
+
+    libraryBuildFromTranspiledSt(
+      programSt,
+      [
+        { name: 'Tank', kind: 'FUNCTION_BLOCK' },
+        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
+      ],
+      manifest,
+    )
+
     const sources = compileStlib.mock.calls[0][0] as Array<{
       fileName: string
       category?: string
@@ -474,9 +507,109 @@ describe('libraryBuildFromTranspiledSt', () => {
     expect(byName).toEqual({
       '_types.st': 'data-type',
       '_globals.st': 'globals',
-      '_config.st': 'config',
       'Tank.st': undefined,
     })
+  })
+
+  it('decorates the archive with description / displayName / per-POU docs / dependencies', () => {
+    const archive = {
+      manifest: {
+        name: 'demo_lib',
+        version: '1.0.0',
+        namespace: 'demo_lib',
+        functions: [{ name: 'Add2' }],
+        functionBlocks: [{ name: 'Tank' }],
+        types: [{ name: 'Color' }],
+      },
+      dependencies: [],
+    }
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive })
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    const programSt =
+      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
+      '\n' +
+      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
+
+    libraryBuildFromTranspiledSt(
+      programSt,
+      [
+        { name: 'Tank', kind: 'FUNCTION_BLOCK' },
+        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
+      ],
+      {
+        name: 'demo_lib',
+        version: '1.0.0',
+        namespace: 'demo_lib',
+        extra: { description: 'a demo lib', displayName: 'Demo Library' },
+      },
+      {
+        pouDocs: { Tank: 'controls a tank', Add2: 'adds two ints', Color: 'colour enum' },
+        dependencyRefs: [{ name: 'oscat', version: '3.3.0' }],
+      },
+    )
+
+    expect(archive.manifest).toMatchObject({
+      description: 'a demo lib',
+      displayName: 'Demo Library',
+      functions: [{ name: 'Add2', documentation: 'adds two ints' }],
+      functionBlocks: [{ name: 'Tank', documentation: 'controls a tank' }],
+      types: [{ name: 'Color', documentation: 'colour enum' }],
+    })
+    expect(archive.dependencies).toEqual([{ name: 'oscat', version: '3.3.0' }])
+  })
+
+  it('matches POU docs case-insensitively (xml2st upper-cases identifiers)', () => {
+    const archive = {
+      manifest: {
+        name: 'demo_lib',
+        functions: [],
+        functionBlocks: [{ name: 'TANK' }],
+        types: [],
+      },
+      dependencies: [],
+    }
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive })
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    libraryBuildFromTranspiledSt(
+      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
+        'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n',
+      [
+        { name: 'Tank', kind: 'FUNCTION_BLOCK' },
+        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
+      ],
+      manifest,
+      { pouDocs: { Tank: 'tank doc' } },
+    )
+
+    expect(archive.manifest.functionBlocks[0]).toMatchObject({ documentation: 'tank doc' })
+  })
+
+  it('forwards dependencyArchives to strucpp compileStlib when supplied', () => {
+    const fakeDepArchive = { manifest: { name: 'oscat' } }
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: { manifest: { functions: [] } } })
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    libraryBuildFromTranspiledSt(
+      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
+        'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n',
+      [
+        { name: 'Tank', kind: 'FUNCTION_BLOCK' },
+        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
+      ],
+      manifest,
+      { dependencyArchives: [fakeDepArchive] },
+    )
+
+    const opts = compileStlib.mock.calls[0][1] as { dependencies?: unknown[] }
+    expect(opts.dependencies).toEqual([fakeDepArchive])
   })
 
   it('forwards compile errors verbatim and propagates success=false', () => {

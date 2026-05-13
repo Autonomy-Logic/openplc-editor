@@ -71,9 +71,18 @@ export function toSnakeCaseNamespace(name: string): string {
 
 /**
  * Build the manifest template a freshly-created library project
- * ships with.  Auto-fills the namespace from the project name; leaves
- * every symbol array empty.  Authored content is JSON so the editor
- * opens it in Monaco.
+ * ships with.  Auto-fills the namespace from the project name and
+ * leaves the description blank for the user to fill in.
+ *
+ * Intentionally NOT in the template: `functions`, `functionBlocks`,
+ * `types`, `headers`.  Those fields are populated by strucpp at
+ * build time by walking the project's POUs / data types; surfacing
+ * them in the user-editable manifest invites manual maintenance of
+ * a list that's authoritatively derived from the editor view.  Per-
+ * POU help text comes from each POU's `documentation` field on the
+ * editor side — the build pipeline copies it onto the manifest
+ * entries strucpp emits, so the manifest's symbol arrays stay
+ * out-of-band.
  */
 export function buildLibraryManifestTemplate(name: string): string {
   return (
@@ -84,10 +93,6 @@ export function buildLibraryManifestTemplate(name: string): string {
         version: '0.1.0',
         namespace: toSnakeCaseNamespace(name),
         description: '',
-        functions: [],
-        functionBlocks: [],
-        types: [],
-        headers: [],
       },
       null,
       2,

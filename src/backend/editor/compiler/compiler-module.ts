@@ -2980,6 +2980,7 @@ class CompilerModule {
         responseParser?: (data: string) => T,
       ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
       resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
+      loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
     },
   ): Promise<void> {
     _mainProcessPort.start()
@@ -3075,7 +3076,51 @@ class CompilerModule {
       return
     }
 
-    const stage2 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest)
+    // Gather auxiliary data the build pipeline stamps onto the
+    // produced archive:
+    //   - per-POU "Description" text from the editor view, so
+    //     consumers see the same help text in hover tooltips that
+    //     the author wrote on the editor side.  Data types
+    //     contribute too — their `name` is the join key.
+    //   - dependency archives for every library the project
+    //     enables.  Loaded once here and passed to compileStlib so
+    //     cross-archive symbol references resolve.  Missing names
+    //     fail the build with a clear "open the Library Manager"
+    //     message, same convention `compileProgram` uses.
+    const pouDocs: Record<string, string> = {}
+    for (const pou of projectData.pous) {
+      if (pou.data.documentation && pou.data.documentation.length > 0) {
+        pouDocs[pou.data.name] = pou.data.documentation
+      }
+    }
+    for (const dt of projectData.dataTypes ?? []) {
+      const doc = (dt as { documentation?: string }).documentation
+      if (typeof doc === 'string' && doc.length > 0) {
+        pouDocs[(dt as { name: string }).name] = doc
+      }
+    }
+    const enabledLibraryRefs = (projectData.libraries ?? []).map((ref) => ({
+      name: ref.name,
+      version: ref.version,
+    }))
+    const { archives: depArchives, missing: missingDeps } = mainProcessBridge.loadEnabledArchives(
+      enabledLibraryRefs.map((r) => r.name),
+    )
+    if (missingDeps.length > 0) {
+      const list = missingDeps.join(', ')
+      const msg =
+        `Library build aborted: enabled libraries are not installed (${list}). ` +
+        `Open the Library Manager to install or remove them.`
+      post(msg, 'error')
+      finish({ success: false, error: msg, libraryName: manifest.name })
+      return
+    }
+
+    const stage2 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
+      pouDocs,
+      dependencyArchives: depArchives,
+      dependencyRefs: enabledLibraryRefs,
+    })
     if (!stage2.success) {
       for (const err of stage2.errors) {
         const where = err.file ? `[${err.file}${err.line ? `:${err.line}` : ''}] ` : ''

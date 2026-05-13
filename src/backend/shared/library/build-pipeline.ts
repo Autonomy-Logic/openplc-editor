@@ -266,6 +266,34 @@ export interface LibraryBuildResult {
 }
 
 /**
+ * Auxiliary inputs the Electron caller supplies alongside the
+ * transpiled ST.  All optional — the build still produces a valid
+ * `.stlib` without them, just without the bells:
+ *
+ *   - `pouDocs` — POU name (case-insensitive) → user-authored
+ *     documentation text.  Pulled from each POU's editor
+ *     "Description" field and stamped onto the corresponding
+ *     `manifest.functions[]` / `functionBlocks[]` / `types[]` entry
+ *     so authors don't have to duplicate help text in `library.json`.
+ *
+ *   - `dependencyArchives` — full strucpp archives of every library
+ *     the project enables, loaded from disk by the Electron bridge.
+ *     Passed to `compileStlib` so cross-library symbol resolution
+ *     works (a library that uses an OSCAT FB needs OSCAT's archive
+ *     visible during compile).  Opaque shape — strucpp owns it.
+ *
+ *   - `dependencyRefs` — `{name, version}` tuples mirroring the
+ *     project's `libraries` field.  Written verbatim onto the
+ *     archive's `dependencies` array so consumers can resolve
+ *     transitive deps without re-reading every archive on disk.
+ */
+export interface LibraryBuildAux {
+  pouDocs?: Record<string, string>
+  dependencyArchives?: unknown[]
+  dependencyRefs?: Array<{ name: string; version: string }>
+}
+
+/**
  * Stage 2.  Given xml2st's monolithic `program.st`, the POU
  * inventory from Stage 1, and the parsed manifest: split program.st
  * per-POU, drop the stub, hand the remaining sources to strucpp's
@@ -274,11 +302,17 @@ export interface LibraryBuildResult {
  * Failure modes return `{success: false, errors}` rather than
  * throwing — same convention compileStlib uses, so editor consumers
  * funnel through one diagnostic pipeline.
+ *
+ * `aux` carries opt-in metadata the resulting archive's manifest is
+ * post-processed with — description, displayName, per-POU docs,
+ * dependency list.  Omitted entirely for unit tests that don't care
+ * about manifest decoration.
  */
 export function libraryBuildFromTranspiledSt(
   programSt: string,
   knownPous: KnownPou[],
   manifest: LibraryBuildManifest,
+  aux?: LibraryBuildAux,
 ): LibraryBuildResult {
   const split = splitProgramSt(programSt, knownPous)
   if (!split) {
@@ -288,14 +322,20 @@ export function libraryBuildFromTranspiledSt(
     }
   }
 
-  // Build the strucpp input list.  Convention from
-  // `frontend/utils/PLC/split-program-st` consumers: keep the
-  // `_types.st` / `_globals.st` aux files (they carry shared type
-  // declarations the POUs reference); drop the stub program's own
-  // .st file (the library doesn't ship the stub).
+  // Build the strucpp input list.  Drop the stub program's `.st`
+  // file (the library doesn't ship the stub) and drop `_config.st`
+  // (xml2st's CONFIGURATION block references the stub program,
+  // which we've just removed — leaving it in causes strucpp to
+  // emit "Unknown program type 'MAIN'" diagnostics).  Libraries
+  // don't carry configurations anyway — they ship POUs + types
+  // for consumer projects to instantiate.
+  //
+  // Keep `_types.st` and `_globals.st`: they may carry user-defined
+  // types and library-internal globals the POUs reference.
   const sources: CompileStlibSource[] = []
   for (const [fileName, source] of split.files.entries()) {
     if (fileName === STUB_SPLIT_FILENAME) continue
+    if (fileName === '_config.st') continue
     sources.push({
       fileName,
       source,
@@ -309,7 +349,7 @@ export function libraryBuildFromTranspiledSt(
   // user has added any symbols).  Refuse with a clear message
   // rather than producing an empty .stlib that strucpp would
   // accept silently.
-  const hasRealSources = sources.some((s) => s.fileName !== '_globals.st' && s.fileName !== '_config.st')
+  const hasRealSources = sources.some((s) => s.fileName !== '_globals.st')
   if (!hasRealSources) {
     return {
       success: false,
@@ -326,7 +366,20 @@ export function libraryBuildFromTranspiledSt(
     name: manifest.name,
     version: manifest.version,
     namespace: manifest.namespace,
+    ...(aux?.dependencyArchives && aux.dependencyArchives.length > 0
+      ? { dependencies: aux.dependencyArchives as never }
+      : {}),
   })
+
+  // Post-process the resulting archive with metadata strucpp's
+  // `compileStlib` doesn't accept as an option — description,
+  // displayName, per-POU documentation, and the dependency list.
+  // The archive is JSON-serialised verbatim to disk, so mutating
+  // it here is the cleanest place to inject editor-side metadata
+  // without introducing a second strucpp pass.
+  if (compileRes.success && compileRes.archive) {
+    decorateArchive(compileRes.archive, manifest, aux)
+  }
 
   return {
     success: compileRes.success,
@@ -336,15 +389,76 @@ export function libraryBuildFromTranspiledSt(
 }
 
 /**
+ * Stamp editor-side metadata onto a strucpp-produced `.stlib`
+ * archive in place.  Same shape strucpp's archive writer expects,
+ * just with the optional fields filled in:
+ *
+ *   - `manifest.description` / `manifest.displayName` from the
+ *     user's `library.json` (`extra`).
+ *   - `manifest.functions[i].documentation` / functionBlocks /
+ *     types from the editor's POU "Description" fields, matched
+ *     case-insensitively by name.
+ *   - `dependencies` from the project's enabled-libraries list.
+ */
+function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: LibraryBuildAux | undefined): void {
+  const arch = archive as {
+    manifest?: {
+      description?: string
+      displayName?: string
+      functions?: Array<{ name: string; documentation?: string }>
+      functionBlocks?: Array<{ name: string; documentation?: string }>
+      types?: Array<{ name: string; documentation?: string }>
+    }
+    dependencies?: Array<{ name: string; version: string }>
+  }
+  if (!arch.manifest) return
+
+  const extra = manifest.extra
+  if (typeof extra.description === 'string' && extra.description.length > 0) {
+    arch.manifest.description = extra.description
+  }
+  if (typeof extra.displayName === 'string' && extra.displayName.length > 0) {
+    arch.manifest.displayName = extra.displayName
+  }
+
+  if (aux?.pouDocs) {
+    // Strucpp upper-cases POU names in the emitted manifest;
+    // editor-side names preserve the user's casing.  Normalise both
+    // sides to lowercase for the join.
+    const docsByLower = new Map<string, string>()
+    for (const [name, doc] of Object.entries(aux.pouDocs)) {
+      if (doc && doc.length > 0) docsByLower.set(name.toLowerCase(), doc)
+    }
+    const lookup = (name: string): string | undefined => docsByLower.get(name.toLowerCase())
+    for (const entry of arch.manifest.functions ?? []) {
+      const doc = lookup(entry.name)
+      if (doc) entry.documentation = doc
+    }
+    for (const entry of arch.manifest.functionBlocks ?? []) {
+      const doc = lookup(entry.name)
+      if (doc) entry.documentation = doc
+    }
+    for (const entry of arch.manifest.types ?? []) {
+      const doc = lookup(entry.name)
+      if (doc) entry.documentation = doc
+    }
+  }
+
+  if (aux?.dependencyRefs && aux.dependencyRefs.length > 0) {
+    arch.dependencies = aux.dependencyRefs.map((ref) => ({ name: ref.name, version: ref.version }))
+  }
+}
+
+/**
  * Tag each split filename with the category strucpp uses for
  * grouping.  Inferred from the splitter's naming convention — see
- * `_types.st` / `_globals.st` / `_config.st` in
- * `split-program-st.ts`.
+ * `_types.st` / `_globals.st` in `split-program-st.ts`.  `_config.st`
+ * is filtered out upstream (libraries don't carry configurations),
+ * so it never reaches this helper and intentionally has no case.
  */
 function inferCategory(fileName: string): string | undefined {
   if (fileName === '_types.st') return 'data-type'
   if (fileName === '_globals.st') return 'globals'
-  if (fileName === '_config.st') return 'config'
   // POU files are tagged by their suffix-less name; strucpp uses
   // this to group functions vs function-blocks in the manifest, but
   // accepts `undefined` and falls back to detecting from the body.
