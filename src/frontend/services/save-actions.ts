@@ -317,8 +317,13 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
     const serverFiles: RawProjectFile[] = []
     const remoteDeviceFiles: RawProjectFile[] = []
     let projectJson = ''
-    let deviceConfig = ''
-    let pinMapping = ''
+    // `deviceConfig` / `pinMapping` stay `undefined` when the
+    // iterator doesn't yield them (library projects intentionally
+    // skip the device files).  Passing an empty string used to
+    // truncate the on-disk copy to 0 bytes on every save — the
+    // backend now skips writes for `undefined` instead.
+    let deviceConfig: string | undefined
+    let pinMapping: string | undefined
 
     for (const spec of iterateProjectFiles(state)) {
       const content = pickContentForSave(spec.path, spec.content, state.versionControl)
@@ -347,8 +352,8 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
     const files: WriteProjectFiles = {
       projectPath: project.meta.path,
       projectJson,
-      deviceConfig,
-      pinMapping,
+      ...(deviceConfig !== undefined ? { deviceConfig } : {}),
+      ...(pinMapping !== undefined ? { pinMapping } : {}),
       pouFiles,
       serverFiles,
       remoteDeviceFiles,
@@ -363,8 +368,8 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
       // case correctly without round-tripping to /changes).
       const savedRecords = [
         { path: 'project.json', content: projectJson },
-        { path: 'devices/configuration.json', content: deviceConfig },
-        { path: 'devices/pin-mapping.json', content: pinMapping },
+        ...(deviceConfig !== undefined ? [{ path: 'devices/configuration.json', content: deviceConfig }] : []),
+        ...(pinMapping !== undefined ? [{ path: 'devices/pin-mapping.json', content: pinMapping }] : []),
         ...pouFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...serverFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...remoteDeviceFiles.map((f) => ({ path: f.relativePath, content: f.content })),

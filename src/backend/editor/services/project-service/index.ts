@@ -365,8 +365,13 @@ class ProjectService {
   async writeProjectFiles(files: {
     projectPath: string
     projectJson: string
-    deviceConfig: string
-    pinMapping: string
+    /** Library projects don't own `devices/configuration.json`; the
+     *  renderer sends `undefined` for those, and we skip the write
+     *  here instead of truncating the on-disk copy to an empty
+     *  string. */
+    deviceConfig?: string
+    /** Same optional-on-libraries semantics as `deviceConfig`. */
+    pinMapping?: string
     pouFiles: Array<{ relativePath: string; content: string }>
     serverFiles: Array<{ relativePath: string; content: string }>
     remoteDeviceFiles: Array<{ relativePath: string; content: string }>
@@ -393,12 +398,20 @@ class ProjectService {
         ),
       )
 
-      // Write config files
-      await Promise.all([
+      // Write config files.  `deviceConfig` / `pinMapping` are
+      // optional — library projects don't own them, so the renderer
+      // sends `undefined` and we leave the on-disk copies untouched
+      // rather than overwriting them with an empty string.
+      const writes: Promise<void>[] = [
         promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8'),
-        promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'),
-        promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'),
-      ])
+      ]
+      if (deviceConfig !== undefined) {
+        writes.push(promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'))
+      }
+      if (pinMapping !== undefined) {
+        writes.push(promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'))
+      }
+      await Promise.all(writes)
 
       // Write POU files
       for (const file of pouFiles) {

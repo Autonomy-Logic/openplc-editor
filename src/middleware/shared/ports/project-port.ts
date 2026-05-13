@@ -71,10 +71,14 @@ export interface WriteProjectFiles {
   projectPath: string
   /** Pre-serialized project.json content */
   projectJson: string
-  /** Pre-serialized devices/configuration.json content */
-  deviceConfig: string
-  /** Pre-serialized devices/pin-mapping.json content */
-  pinMapping: string
+  /** Pre-serialized devices/configuration.json content.  `undefined`
+   *  for project types that don't own this file (library projects);
+   *  the backend skips the write rather than truncating the on-disk
+   *  copy to an empty string. */
+  deviceConfig?: string
+  /** Pre-serialized devices/pin-mapping.json content.  Same
+   *  optional-on-libraries semantics as `deviceConfig`. */
+  pinMapping?: string
   /** POU files with pre-serialized IEC text content */
   pouFiles: RawProjectFile[]
   /** Server config files with pre-serialized JSON content */
