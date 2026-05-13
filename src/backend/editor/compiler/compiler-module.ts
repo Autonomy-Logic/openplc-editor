@@ -314,6 +314,23 @@ class CompilerModule {
     )
   }
 
+  /**
+   * Resolve a board target to the arduino-cli core ID
+   * (`arduino-cli core install` target — e.g. `arduino:avr`).
+   *
+   * Single source of truth: reads from `resources/sources/boards/
+   * hals.json`, the same file the renderer's
+   * `bridge.getAvailableBoards()` exposes via `boardInfo.core`.
+   * Used internally by the library-project verification path so a
+   * future hals.json edit (rename, new board, version bump)
+   * propagates to verification automatically — without any code
+   * change here.
+   */
+  async #getBoardCore(board: string): Promise<string | null> {
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    return halsFileContent[board]?.['core'] ?? null
+  }
+
   async #getBoardRuntime(board: string) {
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
     if (halsFileContent[board]) {
@@ -3222,15 +3239,17 @@ class CompilerModule {
       })
       post('Verifying with OpenPLC Simulator (avr-gcc)...')
       try {
+        // The verification pipeline is chatty — strucpp + arduino-cli
+        // together emit dozens of progress lines that bury the
+        // user's actual library-build outcome.  Swallow them
+        // internally; on failure the captured first error surfaces
+        // in the summary warning below.  Build artefacts under
+        // `build/OpenPLC Simulator/` remain on disk for any deeper
+        // diagnostic the user wants to chase.
         verification = await this.runVerificationCompile(
           normalizedProjectPath,
           verifyProject.data,
           mainProcessBridge,
-          (message, logLevel) =>
-            _mainProcessPort.postMessage({
-              logLevel: logLevel === 'error' ? 'warning' : logLevel,
-              message: `[verify] ${message}`,
-            }),
         )
         try {
           await writeFile(
@@ -3262,14 +3281,21 @@ class CompilerModule {
    * Run an end-to-end verification compile of a synthetic Library
    * Project against the OpenPLC Simulator target.  Reuses the full
    * `compileProgram` pipeline (strucpp → arduino-cli → bundled
-   * avr-gcc) by feeding it a private `MessageChannelMain` — so the
-   * renderer never sees the verification's per-step log spam, only
-   * the summary the caller forwards via `forwardLog`.
+   * avr-gcc) by feeding it a private `MessageChannelMain` — verifies
+   * the same way the program build does, against the same binaries,
+   * with zero code duplication.
    *
-   * Resolves with `{success, message?}` once the inner pipeline
-   * closes its port.  Failure is reported as `success: false` plus
-   * the last error string the pipeline emitted — never throws,
-   * matching the caller's "verification is advisory" contract.
+   * Verification is advisory: the `.stlib` is already on disk by the
+   * time we get here, so the renderer doesn't need a play-by-play of
+   * strucpp's and arduino-cli's chatter.  We absorb the stream
+   * silently, keep the first error message (most actionable; later
+   * errors are usually cascades), and return a summary.
+   *
+   * Resolves with `{success, message?}` either when the inner
+   * pipeline posts `closePort: true` (happy path) or when its port
+   * closes without one (the many error paths in `compileProgram`).
+   * Never throws — matches the caller's "verification is advisory"
+   * contract.
    */
   private async runVerificationCompile(
     projectPath: string,
@@ -3283,12 +3309,19 @@ class CompilerModule {
       ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
       resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
     },
-    forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
   ): Promise<{ success: boolean; message?: string }> {
+    // Look up the simulator board's core ID from `hals.json` —
+    // single source of truth shared with the renderer-side
+    // `boardInfo.core` lookup.  Falls back to a sensible default
+    // only if hals.json has been mangled; the resulting compile
+    // would fail at `core install` and surface as a verification
+    // warning, which is the documented advisory behaviour.
+    const SIMULATOR_BOARD = 'OpenPLC Simulator'
+    const boardCore = (await this.#getBoardCore(SIMULATOR_BOARD)) ?? 'arduino:avr'
+
     return new Promise((resolve) => {
       const channel = new MessageChannelMain()
-      let hasError = false
-      let lastError = ''
+      let firstError: string | null = null
       let settled = false
 
       const settle = (result: { success: boolean; message?: string }) => {
@@ -3308,16 +3341,18 @@ class CompilerModule {
           logLevel?: 'info' | 'warning' | 'error'
           closePort?: boolean
         }
-        if (data.message !== undefined) {
-          const text = decodePortMessage(data.message)
-          if (data.logLevel === 'error') {
-            hasError = true
-            lastError = text
-          }
-          forwardLog(text, data.logLevel)
+        if (data.logLevel === 'error' && data.message !== undefined && firstError === null) {
+          // Keep only the first error — by the time arduino-cli or
+          // strucpp emits a second one it's usually a cascade of the
+          // first.  Use `decodePortMessage` so a Node `Buffer`
+          // payload (which arrives here as a `Uint8Array` after
+          // structured clone) renders as readable text in the
+          // summary, not the comma-separated number list `.toString()`
+          // gives back.
+          firstError = decodePortMessage(data.message)
         }
         if (data.closePort) {
-          settle(hasError ? { success: false, message: lastError } : { success: true })
+          settle(firstError ? { success: false, message: firstError } : { success: true })
         }
       })
       // `compileProgram` posts intermediate `closePort: true` messages
@@ -3327,27 +3362,18 @@ class CompilerModule {
       // leave the outer library build hanging on an unresolved promise
       // — same convention the renderer-side adapter uses.
       channel.port1.on('close', () => {
-        settle(hasError ? { success: false, message: lastError } : { success: true })
+        settle(firstError ? { success: false, message: firstError } : { success: true })
       })
       channel.port1.start()
 
-      // Simulator target uses the bundled avr-gcc via arduino-cli;
-      // compileOnly=true so we don't try to upload the hex.  The
-      // board core is `arduino:avr` (the core ID arduino-cli installs)
-      // NOT `arduino:avr:mega` (the FQBN, used by arduino-cli compile
-      // — never by the `core install` step compileProgram runs first).
-      // Confirmed against `resources/sources/boards/hals.json`'s
-      // `"OpenPLC Simulator".core` entry, which is what the program
-      // build flow reads from `boardInfo.core` on the renderer side.
-      //
       // The boolean slots (compileOnly / cleanBuild) are runtime
       // values the inner `compileProgram` re-casts off `args as [...]`,
       // so the outer cast is needed to silence the strict arg type
       // (which only admits `string | null | PLCProjectData`).
       const compileArgs = [
         projectPath,
-        'OpenPLC Simulator',
-        'arduino:avr',
+        SIMULATOR_BOARD,
+        boardCore,
         true,
         verifyData,
         null,
