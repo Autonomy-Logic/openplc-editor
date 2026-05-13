@@ -115,6 +115,26 @@ const Project = () => {
       {/* Data display */}
       <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
         <ProjectTreeRoot label={name}>
+          {/* Library Project manifest leaf — single fixed entry at
+              the top of the tree, opens `library.json` in a Monaco
+              JSON editor.  Cannot be deleted or renamed (the file
+              is mandatory for `.stlib` builds).  Only rendered for
+              library projects. */}
+          {projectCaps.hasLibraryManifest && (
+            <ProjectTreeLeaf
+              leafLang='libraryManifest'
+              leafType='library-manifest'
+              label='Manifest'
+              onClick={() =>
+                handleCreateTab({
+                  name: 'library.json',
+                  path: '/library.json',
+                  elementType: { type: 'library-manifest' },
+                })
+              }
+            />
+          )}
+
           {/* Project Functions tree branch */}
           <ProjectTreeBranch branchTarget='function'>
             {pous

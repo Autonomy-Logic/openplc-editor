@@ -127,6 +127,16 @@ const CreateLibraryManagerEditor = (name = 'Library Manager'): EditorModel => ({
   meta: { name },
 })
 
+/** Canonical tab name + factory for the Library Project's manifest
+ *  editor.  The tab name is also the file-slice key the dirty
+ *  tracker + save flow look up under. */
+const LIBRARY_MANIFEST_TAB_NAME = 'library.json'
+
+const CreateLibraryManifestEditor = (name = LIBRARY_MANIFEST_TAB_NAME): EditorModel => ({
+  type: 'plc-library-manifest',
+  meta: { name },
+})
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -154,6 +164,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreatePackageManagerEditor(name)
     case 'library-manager':
       return CreateLibraryManagerEditor(name)
+    case 'library-manifest':
+      return CreateLibraryManifestEditor(name)
   }
 }
 
@@ -163,6 +175,7 @@ export {
   CreateEditorObjectFromTab,
   CreateEtherCATDeviceEditor,
   CreateLibraryManagerEditor,
+  CreateLibraryManifestEditor,
   CreatePackageManagerEditor,
   CreatePLCGraphicalObject,
   CreatePLCTextualObject,
@@ -170,4 +183,5 @@ export {
   CreateResourceEditor,
   CreateServerEditor,
   CreateVendorScreenEditor,
+  LIBRARY_MANIFEST_TAB_NAME,
 }

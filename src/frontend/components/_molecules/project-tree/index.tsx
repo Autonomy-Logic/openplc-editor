@@ -458,6 +458,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'remoteDevice'
     | 'vendorScreen'
     | 'ethercatDevice'
+    | 'libraryManifest'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
   busName?: string
@@ -483,6 +484,10 @@ const LeafSources = {
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
   vendorScreen: { LeafIcon: ConfigIcon },
   ethercatDevice: { LeafIcon: DeviceTransferIcon },
+  // Library manifest reuses the Config icon — same visual idiom as
+  // a vendor screen (configuration-style file).  No dedicated icon
+  // is justified for a single tab.
+  libraryManifest: { LeafIcon: ConfigIcon },
 }
 const ProjectTreeLeaf = ({
   leafLang,

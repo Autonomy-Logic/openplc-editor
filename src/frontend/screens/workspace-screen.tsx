@@ -14,6 +14,7 @@ import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[w
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { LibraryManagerEditor } from '../components/_features/[workspace]/editor/library-manager'
+import { LibraryManifestEditor } from '../components/_features/[workspace]/editor/library-manifest'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
 import { PackageManagerEditor } from '../components/_features/[workspace]/editor/package-manager'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
@@ -520,6 +521,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-vendor-screen' && <VendorScreenEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
+                        {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
                         {editor['type'] === 'plc-datatype' && (
                           <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
                             <DataTypeEditor dataTypeName={editor.meta.name} />{' '}

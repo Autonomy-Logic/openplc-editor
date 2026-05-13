@@ -661,21 +661,43 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
       getState().fileActions.setFiles({ files })
 
-      // Open the main POU tab (if present)
-      const mainPou = pous.find((p) => p.name === 'main' && p.pouType === 'program')
-      if (mainPou) {
-        const language = mainPou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+      // Open the default tab for the project type:
+      //   - Library projects: the manifest (`library.json`) — it's
+      //     mandatory for the build and there's no main POU to fall
+      //     back to.
+      //   - PLC projects: the `main` program if present (existing
+      //     behaviour).
+      if (data.meta.type === 'plc-library') {
         const tabToBeCreated: TabsProps = {
-          name: mainPou.name,
-          path: `/data/pous/program/${mainPou.name}`,
-          elementType: { type: 'program', language },
+          name: 'library.json',
+          path: '/library.json',
+          elementType: { type: 'library-manifest' },
         }
         const model = CreateEditorObjectFromTab(tabToBeCreated)
         getState().editorActions.addModel(model)
         getState().editorActions.setEditor(model)
         getState().tabsActions.updateTabs(tabToBeCreated)
-        getState().tabsActions.setSelectedTab(mainPou.name)
-        getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
+        getState().tabsActions.setSelectedTab('library.json')
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: 'Manifest',
+          type: 'library-manifest',
+        })
+      } else {
+        const mainPou = pous.find((p) => p.name === 'main' && p.pouType === 'program')
+        if (mainPou) {
+          const language = mainPou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+          const tabToBeCreated: TabsProps = {
+            name: mainPou.name,
+            path: `/data/pous/program/${mainPou.name}`,
+            elementType: { type: 'program', language },
+          }
+          const model = CreateEditorObjectFromTab(tabToBeCreated)
+          getState().editorActions.addModel(model)
+          getState().editorActions.setEditor(model)
+          getState().tabsActions.updateTabs(tabToBeCreated)
+          getState().tabsActions.setSelectedTab(mainPou.name)
+          getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
+        }
       }
 
       // For POUs with unparseable variables (variablesText present, variables empty),
