@@ -4,40 +4,10 @@ import { basename, extname, join } from 'path'
 
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
+import { importCodesysLibrary as sharedImportCodesys } from '../../shared/library/codesys-import'
+import { compileStlib as sharedCompileStlib } from '../../shared/library/compile-stlib'
 import { assertPathContained, validatePathId } from '../../shared/utils/path-safety'
 import type { LibraryRegistry } from './types'
-
-/**
- * Strucpp's CODESYS importer + .stlib compiler.  Loaded lazily because
- * strucpp uses ESM features (import.meta) that don't survive Jest's
- * CJS transform; the actual import only happens when an install
- * call needs it.  Same shape as `loadStrucpp()` in the compiler module.
- */
-type StrucppImportModule = {
-  importCodesysLibrary: (path: string) => {
-    success: boolean
-    sources?: { fileName: string; source: string; category?: string }[]
-    globalConstants?: Record<string, number>
-    errors?: string[]
-  }
-  compileStlib: (
-    sources: { fileName: string; source: string; category?: string }[],
-    options: {
-      name: string
-      version: string
-      namespace: string
-      noSource?: boolean
-      builtin?: boolean
-      globalConstants?: Record<string, number>
-    },
-  ) => { success: boolean; archive?: unknown; errors?: { message: string; line?: number; file?: string }[] }
-  loadStlibFromFile: (path: string) => unknown
-}
-
-function loadStrucpp(): StrucppImportModule {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('strucpp') as StrucppImportModule
-}
 
 /**
  * System-wide library pool.
@@ -259,8 +229,7 @@ export class LibraryManagerModule {
   }
 
   private async installFromCodesys(filePath: string): Promise<LibraryInstallResult> {
-    const strucpp = loadStrucpp()
-    const importResult = strucpp.importCodesysLibrary(filePath)
+    const importResult = sharedImportCodesys(filePath)
     if (!importResult.success || !importResult.sources) {
       const errs = (importResult.errors ?? ['unknown error']).join('; ')
       return { success: false, error: `CODESYS import failed: ${errs}` }
@@ -275,7 +244,7 @@ export class LibraryManagerModule {
     let identifier = baseName.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[.-]+/, '')
     if (!identifier) identifier = 'imported-library'
 
-    const compileResult = strucpp.compileStlib(importResult.sources, {
+    const compileResult = sharedCompileStlib(importResult.sources, {
       name: identifier,
       version: '1.0.0',
       namespace: identifier.replace(/[^A-Za-z0-9_]/g, '_'),

@@ -10,22 +10,13 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
-// incompatible with Jest's CJS transform. The actual import happens in handleCompileSTtoCpp().
-type StrucppCompile = typeof import('strucpp')['compile']
+// incompatible with Jest's CJS transform — see `backend/shared/library/strucpp-runtime`.
 type StrucppFormatDiagnostic = typeof import('strucpp')['formatDiagnostic']
-type StrucppBuildSourceMap = typeof import('strucpp')['buildSourceMap']
-type StrucppGetVersion = typeof import('strucpp')['getVersion']
 type StrucppCompileError = import('strucpp').CompileError
 type StrucppSourceMap = ReturnType<typeof import('strucpp')['buildSourceMap']>
 
-interface StrucppModule {
-  compile: StrucppCompile
-  formatDiagnostic: StrucppFormatDiagnostic
-  buildSourceMap: StrucppBuildSourceMap
-  getVersion: StrucppGetVersion
-}
-
-import { type KnownPou, splitProgramSt } from './utils/split-program-st'
+import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
+import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
 
 /**
  * Wrap strucpp's plain (file:line:col) diagnostic with the POU/section
@@ -66,18 +57,6 @@ function formatErrorWithPouContext(
     prefix = `[${err.pouName}]`
   }
   return `${prefix}\n${base}`
-}
-
-/**
- * Load the strucpp package via require, kept out of the static import
- * graph because strucpp uses ESM features (top-level await, import.meta)
- * that are incompatible with Jest's CJS transform — switching the
- * editor's test runner to ESM is a separate undertaking. Single
- * helper so the lint-disable lives in exactly one place.
- */
-function loadStrucpp(): StrucppModule {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('strucpp') as StrucppModule
 }
 
 /**
