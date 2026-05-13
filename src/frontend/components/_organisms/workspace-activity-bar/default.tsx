@@ -698,25 +698,28 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             - "Clean build" → skip verification cache and force a
               fresh avr-gcc verify against the simulator target. */}
       {projectCaps.hasLibraryBuild && (
-        <TooltipSidebarWrapperButton tooltipContent={isCompiling ? 'Building library…' : 'Build Library'}>
-          <BuildOptionsPopover
-            disabled={isCompiling}
-            triggerTooltip={isCompiling ? 'Building library…' : 'Build Library'}
-            libraryMode={true}
-            uploadAvailable={false}
-            uploadDisabledReason='library builds do not upload'
-            onSelect={(option: BuildOption) => {
-              switch (option) {
-                case 'build-only':
-                  void handleBuildLibrary({ cleanBuild: false })
-                  break
-                case 'clean-upload':
-                  void handleBuildLibrary({ cleanBuild: true })
-                  break
-              }
-            }}
-          />
-        </TooltipSidebarWrapperButton>
+        // No outer `TooltipSidebarWrapperButton`: `BuildOptionsPopover`
+        // already renders its own Radix tooltip via `triggerTooltip`,
+        // and the wrapper's tooltip persisted on top of the popover
+        // contents once the menu opened (PLC build button doesn't wrap
+        // either — same idiom here for consistency).
+        <BuildOptionsPopover
+          disabled={isCompiling}
+          triggerTooltip={isCompiling ? 'Building library…' : 'Build Library'}
+          libraryMode={true}
+          uploadAvailable={false}
+          uploadDisabledReason='library builds do not upload'
+          onSelect={(option: BuildOption) => {
+            switch (option) {
+              case 'build-only':
+                void handleBuildLibrary({ cleanBuild: false })
+                break
+              case 'clean-upload':
+                void handleBuildLibrary({ cleanBuild: true })
+                break
+            }
+          }}
+        />
       )}
       <TooltipSidebarWrapperButton tooltipContent='AI Chat'>
         <ChatButton />
