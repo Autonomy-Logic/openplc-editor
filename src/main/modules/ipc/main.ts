@@ -733,6 +733,15 @@ class MainProcessBridge implements MainIpcModule {
   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
     this.stopSimulatorAndNotify()
     const response = await this.projectService.createProject(data)
+    // Mirror `handleProjectOpen`: a freshly-created project is the
+    // active project from this point on, so any sandboxed file IPC
+    // that gates on `validateFilePath` (file:read-content, watcher
+    // start/stop) has a project root to compare against.  Skipping
+    // this left newly-created library projects unable to read their
+    // own `library.json` on first mount of the manifest tab.
+    if (response.success && response.data?.meta.path) {
+      this.currentProjectPath = response.data.meta.path
+    }
     return response
   }
   handleProjectOpen = async () => {

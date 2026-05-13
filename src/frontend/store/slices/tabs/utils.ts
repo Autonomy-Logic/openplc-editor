@@ -128,9 +128,11 @@ const CreateLibraryManagerEditor = (name = 'Library Manager'): EditorModel => ({
 })
 
 /** Canonical tab name + factory for the Library Project's manifest
- *  editor.  The tab name is also the file-slice key the dirty
- *  tracker + save flow look up under. */
-const LIBRARY_MANIFEST_TAB_NAME = 'library.json'
+ *  editor.  Display label (also the file-slice key the dirty
+ *  tracker + save flow look up under); intentionally NOT the on-
+ *  disk filename — the file is `library.json` and the save flow
+ *  joins it against `project.meta.path` independently. */
+const LIBRARY_MANIFEST_TAB_NAME = 'Manifest'
 
 const CreateLibraryManifestEditor = (name = LIBRARY_MANIFEST_TAB_NAME): EditorModel => ({
   type: 'plc-library-manifest',

@@ -6,7 +6,7 @@ import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
 import type { TabsProps } from '../../../store/slices/tabs'
-import { CreateEditorObjectFromTab } from '../../../store/slices/tabs/utils'
+import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 import {
   ProjectTreeBranch,
@@ -124,10 +124,10 @@ const Project = () => {
             <ProjectTreeLeaf
               leafLang='libraryManifest'
               leafType='library-manifest'
-              label='Manifest'
+              label={LIBRARY_MANIFEST_TAB_NAME}
               onClick={() =>
                 handleCreateTab({
-                  name: 'library.json',
+                  name: LIBRARY_MANIFEST_TAB_NAME,
                   path: '/library.json',
                   elementType: { type: 'library-manifest' },
                 })

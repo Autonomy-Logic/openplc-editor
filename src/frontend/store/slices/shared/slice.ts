@@ -11,7 +11,12 @@ import type { FileSliceDataObject } from '../file'
 import type { HistorySnapshot } from '../history'
 import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
-import { CreateEditorObjectFromTab, CreateRemoteDeviceEditor, CreateServerEditor } from '../tabs/utils'
+import {
+  CreateEditorObjectFromTab,
+  CreateRemoteDeviceEditor,
+  CreateServerEditor,
+  LIBRARY_MANIFEST_TAB_NAME,
+} from '../tabs/utils'
 import type { SharedRootState, SharedSlice } from './types'
 import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
 
@@ -669,7 +674,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       //     behaviour).
       if (data.meta.type === 'plc-library') {
         const tabToBeCreated: TabsProps = {
-          name: 'library.json',
+          name: LIBRARY_MANIFEST_TAB_NAME,
           path: '/library.json',
           elementType: { type: 'library-manifest' },
         }
@@ -677,9 +682,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().editorActions.addModel(model)
         getState().editorActions.setEditor(model)
         getState().tabsActions.updateTabs(tabToBeCreated)
-        getState().tabsActions.setSelectedTab('library.json')
+        getState().tabsActions.setSelectedTab(LIBRARY_MANIFEST_TAB_NAME)
         getState().workspaceActions.setSelectedProjectTreeLeaf({
-          label: 'Manifest',
+          label: LIBRARY_MANIFEST_TAB_NAME,
           type: 'library-manifest',
         })
       } else {
