@@ -3198,17 +3198,30 @@ class CompilerModule {
       })
       post('Verifying with OpenPLC Simulator (avr-gcc)...')
       try {
-        // The verification pipeline is chatty — strucpp + arduino-cli
-        // together emit dozens of progress lines that bury the
-        // user's actual library-build outcome.  Swallow them
-        // internally; on failure the captured first error surfaces
-        // in the summary warning below.  Build artefacts under
-        // `build/OpenPLC Simulator/` remain on disk for any deeper
-        // diagnostic the user wants to chase.
+        // Stream the inner pipeline's output through the renderer
+        // port with a `[verify]` prefix so the user sees the same
+        // strucpp + arduino-cli progress they'd see on a normal
+        // simulator build.  Critical for two reasons:
+        //   - avr-gcc compile can take 10+ seconds on a library
+        //     with a lot of C++; a silent console looks frozen.
+        //   - When verification fails, the user needs the actual
+        //     compile diagnostic, not just the summary line.
+        // The success line at the bottom of compileLibrary still
+        // comes after this stream — `.stlib` generation is the
+        // last step regardless of verification outcome.
         verification = await this.runVerificationCompile(
           normalizedProjectPath,
           verifyProject.data,
           mainProcessBridge,
+          (message, logLevel) =>
+            // Demote inner errors to warnings on the way out.
+            // The library's own `.stlib` will still be produced,
+            // so an `[verify]` line being level=error in the
+            // console would falsely suggest the build failed.
+            _mainProcessPort.postMessage({
+              logLevel: logLevel === 'error' ? 'warning' : (logLevel ?? 'info'),
+              message: `[verify] ${message}`,
+            }),
         )
         try {
           await writeFile(
@@ -3301,11 +3314,15 @@ class CompilerModule {
    * the same way the program build does, against the same binaries,
    * with zero code duplication.
    *
-   * Verification is advisory: the `.stlib` is already on disk by the
-   * time we get here, so the renderer doesn't need a play-by-play of
-   * strucpp's and arduino-cli's chatter.  We absorb the stream
-   * silently, keep the first error message (most actionable; later
-   * errors are usually cascades), and return a summary.
+   * `forwardLog` is the caller's drain for the inner pipeline's
+   * message stream.  Streaming the strucpp / arduino-cli output is
+   * the difference between "blank console for 30 seconds while
+   * arduino-cli compiles" and "user sees progress" — and crucially
+   * the difference between "the .stlib generated but verification
+   * failed silently" and "the user knows which C++ line tripped
+   * avr-gcc".  We do keep the first error message internally so the
+   * summary line at the end of the build is succinct, but every log
+   * line still flows through.
    *
    * Resolves with `{success, message?}` either when the inner
    * pipeline posts `closePort: true` (happy path) or when its port
@@ -3325,6 +3342,7 @@ class CompilerModule {
       ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
       resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
     },
+    forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
   ): Promise<{ success: boolean; message?: string }> {
     // Look up the simulator board's core ID from `hals.json` —
     // single source of truth shared with the renderer-side
@@ -3357,15 +3375,26 @@ class CompilerModule {
           logLevel?: 'info' | 'warning' | 'error'
           closePort?: boolean
         }
-        if (data.logLevel === 'error' && data.message !== undefined && firstError === null) {
-          // Keep only the first error — by the time arduino-cli or
-          // strucpp emits a second one it's usually a cascade of the
-          // first.  Use `decodePortMessage` so a Node `Buffer`
-          // payload (which arrives here as a `Uint8Array` after
-          // structured clone) renders as readable text in the
-          // summary, not the comma-separated number list `.toString()`
-          // gives back.
-          firstError = decodePortMessage(data.message)
+        if (data.message !== undefined) {
+          // `decodePortMessage` returns readable text from the
+          // `Uint8Array` Node `Buffer` payloads survive structured
+          // clone as.  Without it, `.toString()` on a Uint8Array
+          // would render comma-separated byte numbers in the
+          // console.
+          const text = decodePortMessage(data.message)
+          // Forward every line — the caller decides how to render
+          // them (PLC-build path would prepend `[verify]`).  Even
+          // info-level messages matter here: avr-gcc compile can
+          // take 10+ seconds on a large library and the user needs
+          // to see progress.
+          forwardLog(text, data.logLevel)
+          // Keep only the FIRST error string for the summary.  Once
+          // arduino-cli or strucpp errors, the cascade usually
+          // continues with knock-on failures; the first one names
+          // the underlying cause.
+          if (data.logLevel === 'error' && firstError === null) {
+            firstError = text
+          }
         }
         if (data.closePort) {
           settle(firstError ? { success: false, message: firstError } : { success: true })
