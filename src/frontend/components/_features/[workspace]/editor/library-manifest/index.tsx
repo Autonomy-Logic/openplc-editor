@@ -37,9 +37,12 @@ import { useProject } from '@root/middleware/shared/providers'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { applyThemeNow, ensureOpenplcThemes } from '../monaco/theme-utils'
+
 const LibraryManifestEditor = () => {
   const projectPort = useProject()
   const projectPath = useOpenPLCStore((s) => s.project.meta.path)
+  const shouldUseDarkMode = useOpenPLCStore((s) => s.workspace.systemConfigs.shouldUseDarkMode)
   const addFile = useOpenPLCStore((s) => s.fileActions.addFile)
   const updateFile = useOpenPLCStore((s) => s.fileActions.updateFile)
   const getFile = useOpenPLCStore((s) => s.fileActions.getFile)
@@ -50,6 +53,7 @@ const LibraryManifestEditor = () => {
   const setBuffer = useOpenPLCStore((s) => s.workspaceActions.setLibraryManifestBuffer)
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const monacoRef = useRef<typeof monaco | null>(null)
   const [content, setContent] = useState<string>('')
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -133,12 +137,30 @@ const LibraryManifestEditor = () => {
     setContent(value ?? '')
   }, [])
 
+  // Register the OpenPLC light/dark themes on the same Monaco instance
+  // the rest of the app uses.  `ensureOpenplcThemes` is idempotent so a
+  // second mount (tab close/reopen) is a no-op.  The theme has to land
+  // before `setTheme` runs on the editor instance, hence `beforeMount`.
+  const handleBeforeMount = useCallback((monacoInstance: typeof monaco) => {
+    monacoRef.current = monacoInstance
+    ensureOpenplcThemes(monacoInstance)
+  }, [])
+
   const handleEditorMount = useCallback(
     (editor: monaco.editor.IStandaloneCodeEditor) => {
       editorRef.current = editor
     },
     [],
   )
+
+  // Re-apply the OpenPLC theme whenever the app's dark-mode toggle
+  // flips.  `applyThemeNow` is global on the Monaco namespace, so a
+  // single call updates every model — including this manifest tab.
+  useEffect(() => {
+    const monacoInstance = monacoRef.current
+    if (!monacoInstance) return
+    applyThemeNow(monacoInstance, shouldUseDarkMode)
+  }, [shouldUseDarkMode])
 
   if (loadError) {
     return (
@@ -161,8 +183,10 @@ const LibraryManifestEditor = () => {
       <PrimitiveEditor
         height='100%'
         language='json'
+        theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
         value={content}
         onChange={handleChange}
+        beforeMount={handleBeforeMount}
         onMount={handleEditorMount}
         options={{
           minimap: { enabled: false },
