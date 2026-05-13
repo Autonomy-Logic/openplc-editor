@@ -5,39 +5,41 @@
  * `meta.type === 'plc-library'`).
  *
  * Architecturally identical to the textual POU editors (ST / IL /
- * Python / C++): one in-store value, one update action, one
- * `handleFileAndWorkspaceSavedState` call per Monaco edit, one
- * iterator yield in the save pipeline.  The manifest just happens
- * to be JSON instead of an IEC language, and its file lives at
- * `<projectPath>/library.json` instead of `pous/<type>/<name>.<ext>`.
+ * Python / C++) — see `editor/monaco/index.tsx`'s `handleWriteInPou`
+ * and the surrounding model-sync effect.  Same three pieces:
  *
- *   - Content source: `project.data.libraryManifest` (set on
- *     project open by `parseProjectFiles`, seeded on create by
- *     `buildProjectFileContent`).
- *   - Edits: `projectActions.updateLibraryManifest(value)` +
- *     `handleFileAndWorkspaceSavedState(LIBRARY_MANIFEST_TAB_NAME)`.
- *   - Save: standard `executeSaveProject` pipeline serialises the
- *     in-store value to `library.json` via the `'library-manifest'`
- *     spec category — no dedicated save path.
- *   - Dirty: file-slice `cleanState` snapshots the in-store value
- *     when the tab mounts; the existing
- *     `handleFileAndWorkspaceSavedState` helper flips the file's
- *     `saved` flag and bubbles to `workspace.editingState`.
+ *   - **Local state for the Monaco model value** (`localText`).
+ *     Monaco's `value` prop is driven from this, NOT from the store
+ *     directly — re-rendering Monaco with a new `value` prop while
+ *     the editor is being disposed has been observed to leave
+ *     internal services (WordHighlighter etc.) with pending
+ *     Delayer tasks that throw "Canceled" on teardown.
+ *   - **Store → local sync via `model.setValue()`** wrapped in
+ *     `isSyncingModelRef.current = true` so the resulting
+ *     `onChange` doesn't get mis-classified as a user edit and
+ *     re-mark the file dirty.  Drives the "Don't save" revert and
+ *     any other external store update (e.g. a future project
+ *     reload).
+ *   - **Local → store sync via `onChange`**, gated on
+ *     `isSyncingModelRef` so programmatic updates round-trip
+ *     cleanly.  On every user edit:
+ *     `handleFileAndWorkspaceSavedState(LIBRARY_MANIFEST_TAB_NAME)`
+ *     + `projectActions.updateLibraryManifest(value)` — exactly
+ *     the same shape as `handleWriteInPou`'s
+ *     `handleFileAndWorkspaceSavedState(name)` + `updatePou(...)`.
  *
- * What's intentionally not here:
- *
- *   - Manifest schema validation.  The build pipeline rejects
- *     malformed manifests at build time with clear errors.
- *   - Tab close affordance.  The user can close + re-open from the
- *     project tree; persistence + the store-driven model mean the
- *     editor re-mounts with the same content.
+ * Save flow / dirty tracking / "Don't save" revert are entirely
+ * shared with every other tab: the file-slice entry, the
+ * `iterateProjectFiles` yield, and the `reloadLibraryManifestFromCleanState`
+ * revert all source from `project.data.libraryManifest` exactly
+ * like POU tabs source from `project.data.pous[i].body.value`.
  */
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { LIBRARY_MANIFEST_TAB_NAME } from '@root/frontend/store/slices/tabs/utils'
 import * as monaco from 'monaco-editor'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { applyThemeNow, ensureOpenplcThemes } from '../monaco/theme-utils'
 
@@ -52,14 +54,16 @@ const LibraryManifestEditor = () => {
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<typeof monaco | null>(null)
+  /** True while we're imperatively setting the model value from the
+   *  store (e.g. "Don't save" revert).  Suppresses the resulting
+   *  onChange from being treated as a user edit. */
+  const isSyncingModelRef = useRef(false)
+  const [localText, setLocalText] = useState(manifestContent)
 
   // Register the file-slice entry on mount with `cleanState`
-  // snapshotting the current in-store content.  Mirrors the POU
-  // editor pattern: the file slice owns the dirty-vs-clean compare,
-  // the manifest tab is just one more entry in that registry.
-  // `addFile` is a no-op when the entry already exists, so a
-  // re-mount keeps the prior cleanState — the user's in-flight
-  // edits survive a tab switch.
+  // snapshotting the current in-store content.  `addFile` is a
+  // no-op when the entry already exists, so a re-mount keeps the
+  // prior cleanState — in-flight edits survive a tab switch.
   useEffect(() => {
     addFile({
       name: LIBRARY_MANIFEST_TAB_NAME,
@@ -73,9 +77,37 @@ const LibraryManifestEditor = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Sync the Monaco model when the store value changes from outside
+  // the editor (the "Don't save" revert is the main case today; a
+  // future project reload would also hit this path).  Imperative
+  // `model.setValue` + `isSyncingModelRef` guard mirror the POU
+  // editor — see `editor/monaco/index.tsx` around `handleEditorDidMount`.
+  useEffect(() => {
+    const editorInstance = editorRef.current
+    if (!editorInstance) {
+      // Editor not yet mounted; the `value` prop fallback +
+      // `localText` initial state cover the first paint.
+      setLocalText(manifestContent)
+      return
+    }
+    const model = editorInstance.getModel()
+    if (!model) return
+    if (model.getValue() === manifestContent) return
+    isSyncingModelRef.current = true
+    model.setValue(manifestContent)
+    isSyncingModelRef.current = false
+    setLocalText(manifestContent)
+  }, [manifestContent])
+
   const handleChange = useCallback(
     (value: string | undefined) => {
       if (value === undefined) return
+      setLocalText(value)
+      // Skip the store update when the change came from our own
+      // `model.setValue` above (a store-driven sync, not a user
+      // edit).  Without this guard, the revert path would
+      // re-flag the file dirty immediately after restoring it.
+      if (isSyncingModelRef.current) return
       // Same two-step every textual POU editor uses — see
       // `handleWriteInPou` in `editor/monaco/index.tsx`:
       //   1. Mark file dirty + bubble to workspace.editingState.
@@ -113,7 +145,7 @@ const LibraryManifestEditor = () => {
         height='100%'
         language='json'
         theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
-        value={manifestContent}
+        value={localText}
         onChange={handleChange}
         beforeMount={handleBeforeMount}
         onMount={handleEditorMount}
@@ -125,6 +157,12 @@ const LibraryManifestEditor = () => {
           formatOnType: true,
           renderWhitespace: 'selection',
           scrollBeyondLastLine: false,
+          // Disable the word-occurrences highlighter.  Its debounced
+          // Delayer has been observed to throw "Canceled" on editor
+          // teardown (e.g. closing the tab right after a "Don't
+          // save" revert).  The manifest is JSON — there's nothing
+          // meaningful to highlight occurrences of anyway.
+          occurrencesHighlight: 'off',
         }}
       />
     </div>
