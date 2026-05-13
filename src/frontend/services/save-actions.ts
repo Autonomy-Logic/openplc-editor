@@ -83,40 +83,58 @@ function buildPouSpec(pou: PLCPou, state: StoreState): ProjectFileSpec {
  * canonical serialized content for each. Used by `buildAllProjectFileContents*`
  * for snapshots and previews, and by `executeSaveProject` to build the
  * platform write payload.
+ *
+ * Library projects yield a restricted set:
+ *
+ *   - POU files (functions / function blocks — libraries have no
+ *     programs but the loop is identical for whichever POUs the
+ *     project carries).
+ *   - The library manifest (`library.json` at the project root).
+ *   - A lean `project.json` (no resource / server / remote-device
+ *     because those don't exist for a library; the `data.libraries`
+ *     and `data.dataTypes` fields are still emitted via the same
+ *     serialiser the PLC path uses).
+ *
+ * Configuration / pin-mapping / server / remote-device files are
+ * skipped entirely for libraries — there are no runtime targets to
+ * configure.  The PLC project path emits everything as before.
  */
 function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
   const { project, deviceDefinitions } = state
+  const isLibrary = project.meta.type === 'plc-library'
 
   for (const pou of project.data.pous) {
     yield buildPouSpec(pou, state)
   }
 
-  for (const s of project.data.servers ?? []) {
-    yield {
-      path: `devices/servers/${s.name}.json`,
-      content: JSON.stringify(s, null, 2),
-      category: 'server',
+  if (!isLibrary) {
+    for (const s of project.data.servers ?? []) {
+      yield {
+        path: `devices/servers/${s.name}.json`,
+        content: JSON.stringify(s, null, 2),
+        category: 'server',
+      }
     }
-  }
 
-  for (const d of project.data.remoteDevices ?? []) {
-    yield {
-      path: `devices/remote/${d.name}.json`,
-      content: JSON.stringify(d, null, 2),
-      category: 'remote-device',
+    for (const d of project.data.remoteDevices ?? []) {
+      yield {
+        path: `devices/remote/${d.name}.json`,
+        content: JSON.stringify(d, null, 2),
+        category: 'remote-device',
+      }
     }
-  }
 
-  yield {
-    path: 'devices/configuration.json',
-    content: JSON.stringify(deviceDefinitions.configuration, null, 2),
-    category: 'device-config',
-  }
+    yield {
+      path: 'devices/configuration.json',
+      content: JSON.stringify(deviceDefinitions.configuration, null, 2),
+      category: 'device-config',
+    }
 
-  yield {
-    path: 'devices/pin-mapping.json',
-    content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
-    category: 'pin-mapping',
+    yield {
+      path: 'devices/pin-mapping.json',
+      content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+      category: 'pin-mapping',
+    }
   }
 
   yield {
@@ -124,6 +142,14 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
     content: buildProjectJsonContent(state),
     category: 'project-json',
   }
+
+  // The library manifest is owned by its own Monaco tab — its dirty
+  // tracking and surgical save go through that tab's file-slice
+  // entry, NOT through this generator.  We don't yield it here:
+  // including it would risk an "overwrite library.json with whatever
+  // the in-memory tab buffer holds" race during full-project saves.
+  // Single-file saves (Ctrl+S on the manifest tab) write it via the
+  // dedicated `'library-manifest'` branch in executeSaveFile.
 }
 
 /**
@@ -187,6 +213,18 @@ function serializeProjectFile(
         category: 'remote-device',
       },
     ]
+  }
+
+  if (file.type === 'library-manifest') {
+    // The manifest's authoritative content is the live editor
+    // buffer (`workspace.libraryManifestBuffer`).  `executeSaveFile`
+    // reads that directly via `saveLibraryManifestOnly`; this spec
+    // exists only so the version-control snapshot bookkeeping
+    // records the same content.  Falls back to '' if the tab
+    // hasn't mounted — same defensive shape the surgical save
+    // helper uses.
+    const buffer = state.workspace.libraryManifestBuffer ?? ''
+    return [{ path: 'library.json', content: buffer, category: 'project-json' }]
   }
 
   // data-type, resource: live in project.json
@@ -467,6 +505,15 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       // here.
       const res = await saveVendorScreenOnly(projectPath, projectPort, state, fileName)
       if (!res.success) return fail(res.error ?? 'Save failed')
+    } else if (file.type === 'library-manifest') {
+      // Surgical save: write the manifest tab's current buffer
+      // verbatim to `library.json` at the project root.  The Monaco
+      // editor on the renderer side owns the buffer state and tracks
+      // dirty via its file-slice `cleanState` snapshot — we just
+      // serialise the file path here.  No project.json or
+      // configuration.json side-effects.
+      const res = await saveLibraryManifestOnly(projectPath, projectPort, fileName)
+      if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
       // data-type, resource: live in project.json (legacy whole-file
       // write).  These editors don't yet have a surgical save path —
@@ -502,6 +549,12 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
     } else if (file.type === 'vendor-screen') {
       const ownedKeys = vendorScreenOwnedKeysFor(state, fileName)
       const cleanState = serializeVendorScreenSlice(state, ownedKeys)
+      updateFile({ name: fileName, saved: true, isNew: false, cleanState })
+    } else if (file.type === 'library-manifest') {
+      // Snapshot the just-saved buffer as the new cleanState so the
+      // dirty effect in `LibraryManifestEditor` doesn't immediately
+      // re-mark the file unsaved on the next render.
+      const cleanState = state.workspace.libraryManifestBuffer ?? ''
       updateFile({ name: fileName, saved: true, isNew: false, cleanState })
     } else {
       updateFile({ name: fileName, saved: true, isNew: false })
@@ -775,6 +828,65 @@ async function saveVendorScreenOnly(
 }
 
 /**
+ * Surgical save for the Library Project's manifest tab.  Writes
+ * the live buffer (which the Monaco editor mirrors into the
+ * workspace slice on every edit) verbatim to `library.json` at
+ * the project root.  Does not touch project.json or any other
+ * file — saving the manifest never carries unrelated unsaved
+ * project-level state to disk.
+ *
+ * No on-disk merge: the manifest is a standalone JSON file with
+ * no shared fields, so a buffer-out replacement is the right
+ * thing.  Build-time validation against strucpp's manifest
+ * contract happens in Phase 6 — surfaced as a build error, not
+ * a save error.
+ */
+async function saveLibraryManifestOnly(
+  projectPath: string,
+  projectPort: ProjectPort,
+  fileName: string,
+): Promise<{ success: boolean; error?: string }> {
+  const state = openPLCStoreBase.getState()
+  const buffer = state.workspace.libraryManifestBuffer
+  if (typeof buffer !== 'string') {
+    // No live buffer means the manifest tab never mounted in this
+    // session — saving with no buffer would silently truncate
+    // `library.json` to '', which would brick the next build.
+    // Refuse instead.
+    return {
+      success: false,
+      error: 'Library manifest editor not mounted; open the Manifest tab before saving.',
+    }
+  }
+  const file = state.fileActions.getFile({ name: fileName }).file
+  const target = file?.filePath || joinPath(projectPath, 'library.json')
+  return projectPort.saveFile(target, buffer)
+}
+
+/**
+ * Reload the manifest tab's in-memory buffer + cleanState from
+ * disk.  Used by the save-changes-on-close modal's "Don't save"
+ * path: re-reads `library.json`, refreshes the buffer, and
+ * refreshes the file-slice's cleanState so the dirty flag goes
+ * back to clean.  Mirrors `reloadLibraryManagerFromCleanState`
+ * and `reloadVendorScreenFromCleanState`.
+ */
+async function reloadLibraryManifestFromDisk(
+  fileName: string,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
+  const state = openPLCStoreBase.getState()
+  const file = state.fileActions.getFile({ name: fileName }).file
+  if (!file || file.type !== 'library-manifest') return { success: false }
+  const path = file.filePath || joinPath(state.project.meta.path, 'library.json')
+  const res = await projectPort.readFileContent(path)
+  if (!res.success || typeof res.content !== 'string') return { success: false }
+  state.workspaceActions.setLibraryManifestBuffer(res.content)
+  state.fileActions.updateFile({ name: fileName, saved: true, cleanState: res.content })
+  return { success: true }
+}
+
+/**
  * Reload a vendor-screen tab's in-memory state from its `cleanState`
  * snapshot.  Mirrors `reloadLibraryManagerFromCleanState` — parses
  * the serialised owned-slice and writes it back via the device
@@ -878,6 +990,9 @@ export async function reloadFileFromDisk(
   }
   if (file.type === 'vendor-screen') {
     return reloadVendorScreenFromCleanState(fileName)
+  }
+  if (file.type === 'library-manifest') {
+    return reloadLibraryManifestFromDisk(fileName, projectPort)
   }
   // Everything else routes through the POU-specific reload.  Non-POU
   // file types that need a revert path should add a branch above

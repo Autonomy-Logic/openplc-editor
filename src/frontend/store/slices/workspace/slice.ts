@@ -55,6 +55,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugMd5Mismatch: null,
     debugConnectionType: null,
     debugTargetEndian: 'le',
+    libraryManifestBuffer: null,
     // Project loading state
     isProjectLoading: false,
     projectLoadingMessage: '',
@@ -387,6 +388,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.debugTargetEndian = endian
+        }),
+      )
+    },
+    setLibraryManifestBuffer: (buffer) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.libraryManifestBuffer = buffer
         }),
       )
     },

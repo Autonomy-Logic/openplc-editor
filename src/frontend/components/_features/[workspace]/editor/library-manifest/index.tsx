@@ -43,6 +43,11 @@ const LibraryManifestEditor = () => {
   const addFile = useOpenPLCStore((s) => s.fileActions.addFile)
   const updateFile = useOpenPLCStore((s) => s.fileActions.updateFile)
   const getFile = useOpenPLCStore((s) => s.fileActions.getFile)
+  // The save flow (`executeSaveFile`) reads the live manifest buffer
+  // from this store field so the surgical save doesn't have to reach
+  // into the editor's React state.  Same pattern POU body / vendor-
+  // screen data use to round-trip through the store.
+  const setBuffer = useOpenPLCStore((s) => s.workspaceActions.setLibraryManifestBuffer)
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const [content, setContent] = useState<string>('')
@@ -101,6 +106,12 @@ const LibraryManifestEditor = () => {
    */
   useEffect(() => {
     if (!loaded) return
+    // Publish the live content to the store so the save flow can
+    // read it via a synchronous selector — surgical save in
+    // `executeSaveFile` doesn't have access to this component's
+    // React state.
+    setBuffer(content)
+
     const file = getFile({ name: LIBRARY_MANIFEST_TAB_NAME }).file
     if (!file) return
     const clean = typeof file.cleanState === 'string' ? file.cleanState : content
@@ -108,7 +119,15 @@ const LibraryManifestEditor = () => {
     if (file.saved !== isClean) {
       updateFile({ name: LIBRARY_MANIFEST_TAB_NAME, saved: isClean })
     }
-  }, [content, loaded, getFile, updateFile])
+  }, [content, loaded, getFile, updateFile, setBuffer])
+
+  // Clear the store buffer when the tab unmounts so a stale value
+  // doesn't survive a project close + library reopen cycle.
+  useEffect(() => {
+    return () => {
+      setBuffer(null)
+    }
+  }, [setBuffer])
 
   const handleChange = useCallback((value: string | undefined) => {
     setContent(value ?? '')
