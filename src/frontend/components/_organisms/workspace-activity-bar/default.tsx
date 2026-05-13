@@ -6,8 +6,9 @@ import { useCompiler, useDebugger, useProject, useRuntime, useSimulator } from '
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
-import { executeSaveProject } from '../../../services/save-actions'
+import { executeSaveFile, executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
+import { LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
@@ -222,6 +223,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     // starts.
     const saved = await executeSave()
     if (!saved) return
+
+    // `executeSaveProject`'s iterator intentionally skips
+    // `library.json` — the manifest is owned by its tab's surgical
+    // save (see the comment in `iterateProjectFiles`).  We trigger
+    // that save explicitly here when the manifest tab has been
+    // mounted and has an in-flight buffer; otherwise the build
+    // would compile from the stale on-disk copy and produce a
+    // `.stlib` with the previous version.  Skipped when the tab
+    // hasn't been mounted this session (buffer is `null`) — there
+    // are no pending manifest edits in that case.
+    const manifestBuffer = useOpenPLCStore.getState().workspace.libraryManifestBuffer
+    if (manifestBuffer !== null) {
+      const manifestSave = await executeSaveFile(LIBRARY_MANIFEST_TAB_NAME, projectPort)
+      if (!manifestSave.success) return
+    }
 
     if (!compiler.compileLibrary) {
       addLog({
