@@ -150,7 +150,7 @@ const LogComponent = ({ level, message, tstamp, searchTerm, compileError, onComp
       {message && (
         <div className='group flex items-start gap-1'>
           <p
-            className={cn('flex-1 whitespace-pre-wrap font-mono font-normal', classForMessage)}
+            className={cn('flex-1 whitespace-pre-wrap break-words font-mono font-normal', classForMessage)}
             {...rest}
           >
             {level && tstamp ? (

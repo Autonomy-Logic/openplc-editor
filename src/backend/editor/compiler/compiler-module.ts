@@ -123,6 +123,34 @@ interface MethodsResult<T> {
 }
 type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'error') => void
 
+/**
+ * Decode a `MessagePortMain` payload back to a string, handling the
+ * forms a Node `Buffer` survives V8's structured clone as:
+ *
+ *   - `string` — passthrough.
+ *   - `Uint8Array` / `ArrayBuffer` — typed-array decode (this is the
+ *     shape Buffers ride as when the channel stays inside the main
+ *     process; `.toString()` on a Uint8Array returns the comma-
+ *     separated number list and was the cause of the `[verify]
+ *     67,111,109,…` console flood).
+ *   - `{ type: 'Buffer', data: number[] }` — Electron's IPC
+ *     serialisation form, same shape `decodeMessage` in the
+ *     `compiler-adapter` already handles.
+ *   - anything else — `String(...)` fallback.
+ */
+function decodePortMessage(raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (raw instanceof Uint8Array) return new TextDecoder().decode(raw)
+  if (raw instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(raw))
+  if (raw && typeof raw === 'object' && 'type' in raw) {
+    const obj = raw as Record<string, unknown>
+    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+      return new TextDecoder().decode(new Uint8Array(obj.data as number[]))
+    }
+  }
+  return String(raw)
+}
+
 type CompileArduinoProgramArgs = {
   boardTarget: string
   boardHalsContent: HalsFile[string]
@@ -3276,12 +3304,12 @@ class CompilerModule {
 
       channel.port1.on('message', (event) => {
         const data = event.data as {
-          message?: string | Buffer
+          message?: unknown
           logLevel?: 'info' | 'warning' | 'error'
           closePort?: boolean
         }
-        if (data.message) {
-          const text = typeof data.message === 'string' ? data.message : data.message.toString()
+        if (data.message !== undefined) {
+          const text = decodePortMessage(data.message)
           if (data.logLevel === 'error') {
             hasError = true
             lastError = text
@@ -3292,18 +3320,34 @@ class CompilerModule {
           settle(hasError ? { success: false, message: lastError } : { success: true })
         }
       })
+      // `compileProgram` posts intermediate `closePort: true` messages
+      // on its happy path but jumps straight to `port.close()` on its
+      // many error paths, without an explicit close message.  Listen
+      // for the port's 'close' event so an inner-pipeline error can't
+      // leave the outer library build hanging on an unresolved promise
+      // — same convention the renderer-side adapter uses.
+      channel.port1.on('close', () => {
+        settle(hasError ? { success: false, message: lastError } : { success: true })
+      })
       channel.port1.start()
 
       // Simulator target uses the bundled avr-gcc via arduino-cli;
       // compileOnly=true so we don't try to upload the hex.  The
-      // boolean slots (compileOnly / cleanBuild) are runtime values
-      // the inner `compileProgram` re-casts off `args as [...]`,
+      // board core is `arduino:avr` (the core ID arduino-cli installs)
+      // NOT `arduino:avr:mega` (the FQBN, used by arduino-cli compile
+      // — never by the `core install` step compileProgram runs first).
+      // Confirmed against `resources/sources/boards/hals.json`'s
+      // `"OpenPLC Simulator".core` entry, which is what the program
+      // build flow reads from `boardInfo.core` on the renderer side.
+      //
+      // The boolean slots (compileOnly / cleanBuild) are runtime
+      // values the inner `compileProgram` re-casts off `args as [...]`,
       // so the outer cast is needed to silence the strict arg type
       // (which only admits `string | null | PLCProjectData`).
       const compileArgs = [
         projectPath,
         'OpenPLC Simulator',
-        'arduino:avr:mega',
+        'arduino:avr',
         true,
         verifyData,
         null,
