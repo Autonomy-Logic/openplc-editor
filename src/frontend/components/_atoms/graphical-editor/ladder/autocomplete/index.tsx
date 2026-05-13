@@ -163,6 +163,29 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
 
     const submitAddVariable = ({ variableName }: { variableName: string }) => {
       if (!variableName.trim()) {
+        // For variable nodes on block handles, clearing the name resets the variable
+        // so that a branch (contacts/coils) can be placed on the handle instead.
+        if (blockType === 'variable') {
+          const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+            nodeId: (block as Node<BasicNodeData>).id,
+          })
+          if (rung && variableNode) {
+            updateNode({
+              editorName: editor.meta.name,
+              rungId: rung.id,
+              nodeId: variableNode.id,
+              node: {
+                ...variableNode,
+                data: {
+                  ...variableNode.data,
+                  variable: { id: '', name: '' },
+                },
+              },
+            })
+          }
+          return
+        }
+
         toast({
           title: 'Invalid variable name',
           description: 'Variable name cannot be empty',
