@@ -267,7 +267,30 @@ export function createEditorCompilerAdapter(): CompilerPort {
       args: CompileLibraryArgs,
       onProgress: (event: CompileProgressEvent) => void,
     ): Promise<CompileLibraryResult> {
-      const ipcData = toIpcProjectData(args.projectData)
+      // Run the SAME `preprocessPous` step the program build runs.
+      // The library build pipeline reuses `compileProgram` verbatim
+      // for its simulator-target verification step (see
+      // `runVerificationCompile` in the backend), so the input
+      // projectData has to land in the same preprocessed shape
+      // — otherwise a C++ POU in a library would behave differently
+      // here than in a PLC project built for the simulator.
+      // `isSimulator: true` because the verification step always
+      // targets the simulator regardless of whatever board the user
+      // currently has selected.
+      const { projectData: processedData, validationFailed } = preprocessPous(
+        args.projectData,
+        true,
+        (level, message) => {
+          onProgress({ stage: 'st', message, level })
+        },
+      )
+      if (validationFailed) {
+        return {
+          success: false,
+          error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+        }
+      }
+      const ipcData = toIpcProjectData(processedData)
 
       return new Promise<CompileLibraryResult>((resolve) => {
         let finalResult: CompileLibraryResult | undefined

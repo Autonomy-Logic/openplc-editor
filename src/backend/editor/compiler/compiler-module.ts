@@ -3121,29 +3121,11 @@ class CompilerModule {
       return
     }
 
-    // Gather auxiliary data the build pipeline stamps onto the
-    // produced archive:
-    //   - per-POU "Description" text from the editor view, so
-    //     consumers see the same help text in hover tooltips that
-    //     the author wrote on the editor side.  Data types
-    //     contribute too — their `name` is the join key.
-    //   - dependency archives for every library the project
-    //     enables.  Loaded once here and passed to compileStlib so
-    //     cross-archive symbol references resolve.  Missing names
-    //     fail the build with a clear "open the Library Manager"
-    //     message, same convention `compileProgram` uses.
-    const pouDocs: Record<string, string> = {}
-    for (const pou of projectData.pous) {
-      if (pou.data.documentation && pou.data.documentation.length > 0) {
-        pouDocs[pou.data.name] = pou.data.documentation
-      }
-    }
-    for (const dt of projectData.dataTypes ?? []) {
-      const doc = (dt as { documentation?: string }).documentation
-      if (typeof doc === 'string' && doc.length > 0) {
-        pouDocs[(dt as { name: string }).name] = doc
-      }
-    }
+    // Resolve project-enabled libraries up front — these archives feed
+    // both verification (so the simulator compile sees the same symbols
+    // a real user would) and `compileStlib` below.  Missing names fail
+    // the build with the same "open the Library Manager" message
+    // `compileProgram` uses, before either heavy step runs.
     const enabledLibraryRefs = (projectData.libraries ?? []).map((ref) => ({
       name: ref.name,
       version: ref.version,
@@ -3161,50 +3143,19 @@ class CompilerModule {
       return
     }
 
-    const stage2 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
-      pouDocs,
-      dependencyArchives: depArchives,
-      dependencyRefs: enabledLibraryRefs,
-    })
-    if (!stage2.success) {
-      for (const err of stage2.errors) {
-        const where = err.file ? `[${err.file}${err.line ? `:${err.line}` : ''}] ` : ''
-        post(`${where}${err.message}`, 'error')
-      }
-      finish({
-        success: false,
-        error: stage2.errors[0]?.message ?? 'Library compilation failed.',
-        libraryName: manifest.name,
-      })
-      return
-    }
-
-    // Stage 4: serialise the archive to disk.  Same JSON shape the
-    // library-manager-module persists user-installed archives with,
-    // so a future "build then install" round-trip uses the identical
-    // on-disk format.
-    const stlibPath = join(normalizedProjectPath, 'build', `${manifest.name}.stlib`)
-    try {
-      await mkdir(join(normalizedProjectPath, 'build'), { recursive: true })
-      await writeFile(stlibPath, JSON.stringify(stage2.archive, null, 2) + '\n', 'utf-8')
-    } catch (error) {
-      const msg = `Could not write ${manifest.name}.stlib: ${getErrorMessage(error)}`
-      post(msg, 'error')
-      finish({ success: false, error: msg })
-      return
-    }
-
-    // Phase 8: end-to-end C++ verification against the OpenPLC
-    // Simulator target.  Runs the same program-build pipeline used
-    // for normal projects (strucpp ST→C++ → arduino-cli on
-    // bundled avr-gcc), so the editor never depends on a host
-    // compiler being installed.
+    // Stage 3: end-to-end C++ verification against the OpenPLC
+    // Simulator target — same strucpp → arduino-cli → bundled avr-gcc
+    // pipeline the program build uses, so the editor never depends on
+    // a host compiler.  Runs BEFORE the `.stlib` write so the artefact
+    // generation is unconditionally the last step: whatever the
+    // verification outcome, the user always sees a fresh `.stlib` on
+    // disk when "Library built successfully" lands.
     //
-    // Result is advisory: a failure surfaces as a warning, not a
-    // build error, because a legitimate user target may have more
-    // memory than the AVR simulator (the very thing the simulator
-    // imposes on us is the tight AVR memory budget that real
-    // industrial targets often don't share).
+    // Verification is advisory: a failure surfaces as a warning, not
+    // a build error.  A legitimate user target may have more memory
+    // than the AVR simulator, and the tight AVR memory budget the
+    // simulator imposes is exactly the constraint many real
+    // industrial targets don't share.
     //
     // The MD5 cache short-circuits the slow compile when the
     // already-verified program.st hasn't changed.  `cleanBuild`
@@ -3267,10 +3218,67 @@ class CompilerModule {
         post('Verification passed.')
       } else {
         post(
-          `Verification reported issues (warning only — your .stlib is still ready): ${verification.message ?? 'see log'}`,
+          `Verification reported issues (warning only — .stlib will still be generated): ${verification.message ?? 'see log'}`,
           'warning',
         )
       }
+    }
+
+    // Stage 4: gather per-symbol documentation from the editor view
+    // so `decorateArchive` can stamp it onto the manifest entries.
+    // POUs contribute their "Description" field; data types
+    // contribute their own optional `documentation` field.
+    const pouDocs: Record<string, string> = {}
+    for (const pou of projectData.pous) {
+      if (pou.data.documentation && pou.data.documentation.length > 0) {
+        pouDocs[pou.data.name] = pou.data.documentation
+      }
+    }
+    for (const dt of projectData.dataTypes ?? []) {
+      const doc = (dt as { documentation?: string }).documentation
+      if (typeof doc === 'string' && doc.length > 0) {
+        pouDocs[(dt as { name: string }).name] = doc
+      }
+    }
+
+    // Stage 5: strucpp `compileStlib` — splits program.st per-POU,
+    // drops the synthetic main, builds the archive.  Hard failures
+    // here (xml2st-malformed output, strucpp internal errors) stop
+    // the build because we have no archive to ship.  These are NOT
+    // advisory like verification — strucpp owns the artefact format.
+    const stage2 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
+      pouDocs,
+      dependencyArchives: depArchives,
+      dependencyRefs: enabledLibraryRefs,
+    })
+    if (!stage2.success) {
+      for (const err of stage2.errors) {
+        const where = err.file ? `[${err.file}${err.line ? `:${err.line}` : ''}] ` : ''
+        post(`${where}${err.message}`, 'error')
+      }
+      finish({
+        success: false,
+        error: stage2.errors[0]?.message ?? 'Library compilation failed.',
+        libraryName: manifest.name,
+      })
+      return
+    }
+
+    // Stage 6 (final): serialise the archive to disk.  Same JSON
+    // shape `library-manager-module` persists user-installed archives
+    // with, so a future "build then install" round-trip uses the
+    // identical on-disk format.  This is unconditionally the last
+    // step so the user's "Library built successfully" line refers
+    // to a fresh artefact, never a stale one.
+    const stlibPath = join(normalizedProjectPath, 'build', `${manifest.name}.stlib`)
+    try {
+      await mkdir(join(normalizedProjectPath, 'build'), { recursive: true })
+      await writeFile(stlibPath, JSON.stringify(stage2.archive, null, 2) + '\n', 'utf-8')
+    } catch (error) {
+      const msg = `Could not write ${manifest.name}.stlib: ${getErrorMessage(error)}`
+      post(msg, 'error')
+      finish({ success: false, error: msg })
+      return
     }
 
     post(`Library built successfully: ${stlibPath}`)
