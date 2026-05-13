@@ -518,38 +518,13 @@ describe('createEditorCompilerAdapter', () => {
         libraryName: 'demo_lib',
       })
 
-      // Final progress event is a stage-only `done` (no message).
+      // The adapter does NOT emit a synthetic done event on close.
       // The backend already posts "Library built successfully: <path>"
-      // through the message stream, so the adapter intentionally
-      // does NOT re-emit the path on close — adding a second copy
-      // would double-print the success line in the console.
-      const doneEvent = progressEvents[progressEvents.length - 1]
-      expect(doneEvent.stage).toBe('done')
-      expect(doneEvent.message).toBe('')
-    })
-
-    it('ignores a second closePort callback (renderer bridge fires both message + close)', async () => {
-      // The renderer-side bridge invokes the callback twice on a
-      // clean close: first for the `{closePort: true}` message,
-      // then again for the MessagePort `'close'` event listener.
-      // The adapter must settle once — otherwise the consumer's
-      // `onProgress` runs twice and the build result line shows up
-      // duplicated in the console.
-      const progressEvents: CompileProgressEvent[] = []
-      const promise = adapter.compileLibrary!(
-        { projectData: mockProjectData, projectPath: '/lib/project' },
-        (event) => progressEvents.push(event),
-      )
-
-      await flushMicrotasks()
-      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
-      libraryCallback!({ closePort: true })
-      libraryCallback!({ closePort: true })
-
-      await promise
-
-      // Exactly one `done` event — the second closePort is dropped.
-      expect(progressEvents.filter((e) => e.stage === 'done')).toHaveLength(1)
+      // through the message stream, and re-emitting on close would
+      // double-print the success line.  Only the forwarded log
+      // message should appear.
+      expect(progressEvents).toHaveLength(1)
+      expect(progressEvents[0].message).toBe('Starting library build...')
     })
 
     it('forwards error log entries and resolves the failure result', async () => {

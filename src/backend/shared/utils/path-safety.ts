@@ -29,22 +29,42 @@ import path from 'node:path'
 const SAFE_ID_RE = /^[a-zA-Z0-9._-]+$/
 
 /**
- * Validate a manifest-supplied identifier that will be used as a
- * filesystem path component. Throws if the value violates the regex,
- * is empty, or starts with a dot (which would shadow `.` / `..`).
+ * Validate that an identifier (manifest name, package id, …) is safe
+ * to use as a filesystem path component.  Returns `null` on success,
+ * or a human-readable error message on failure.  Non-throwing so
+ * callers that need to accumulate multiple errors (manifest parsing,
+ * batch validation) can collect them without try/catch around every
+ * call — see `validatePathId` for the throwing form.
+ *
+ * The single source of truth for what "safe path id" means:
+ *   1. Must be a non-empty string.
+ *   2. Must not start with `.` (would shadow `.` / `..` traversal).
+ *   3. Must match `SAFE_ID_RE`: `[a-zA-Z0-9._-]+`.
  */
-export function validatePathId(id: string, fieldName: string): void {
+export function checkPathId(id: unknown, fieldName: string): string | null {
   if (typeof id !== 'string' || id.length === 0) {
-    throw new Error(`${fieldName} is required and must be a non-empty string`)
+    return `${fieldName} is required and must be a non-empty string`
   }
   if (id.startsWith('.')) {
-    throw new Error(`${fieldName} must not start with '.' (got ${JSON.stringify(id)})`)
+    return `${fieldName} must not start with '.' (got ${JSON.stringify(id)})`
   }
   if (!SAFE_ID_RE.test(id)) {
-    throw new Error(
-      `${fieldName} contains disallowed characters; only [a-zA-Z0-9._-] are permitted (got ${JSON.stringify(id)})`,
-    )
+    return `${fieldName} contains disallowed characters; only [a-zA-Z0-9._-] are permitted (got ${JSON.stringify(id)})`
   }
+  return null
+}
+
+/**
+ * Validate a manifest-supplied identifier and throw on failure.
+ * Thin wrapper around `checkPathId` so the throwing call sites
+ * (`library-manager-module`, `package-manager-module`, the
+ * compiler's path-id checks) share a single set of rules with the
+ * non-throwing call sites (manifest parsing in `build-pipeline`).
+ * Editing either form will break the other if the rules diverge.
+ */
+export function validatePathId(id: string, fieldName: string): void {
+  const error = checkPathId(id, fieldName)
+  if (error !== null) throw new Error(error)
 }
 
 /**

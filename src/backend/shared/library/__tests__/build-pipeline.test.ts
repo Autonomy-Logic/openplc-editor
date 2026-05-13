@@ -150,9 +150,13 @@ describe('parseLibraryManifest', () => {
     const res = parseLibraryManifest('{}')
     expect(res.ok).toBe(false)
     if (res.ok) return
+    // `manifest.name` flows through the shared `checkPathId` helper,
+    // so the error message is the same shape `validatePathId` would
+    // throw at install time — single source of truth for path-id
+    // rules.
     expect(res.errors).toEqual(
       expect.arrayContaining([
-        'manifest.name must be a non-empty string',
+        'manifest.name is required and must be a non-empty string',
         'manifest.version must be a non-empty string',
         'manifest.namespace must be a non-empty string',
       ]),
@@ -164,6 +168,28 @@ describe('parseLibraryManifest', () => {
     expect(res.ok).toBe(false)
     if (res.ok) return
     expect(res.errors).toHaveLength(3)
+  })
+
+  it('rejects names with characters the library-manager rejects at install time', () => {
+    // The user hit this on a freshly-built library: strucpp's
+    // `compileStlib` accepted "Semaphore Package" as the manifest
+    // name, but the library manager later refused to install the
+    // `.stlib` because the name contains a space.  Validate against
+    // the same `[a-zA-Z0-9._-]` rule here so the build fails up
+    // front instead of producing a `.stlib` that can't be installed.
+    const res = parseLibraryManifest(
+      JSON.stringify({ name: 'Semaphore Package', version: '0.1.0', namespace: 'semaphore_pkg' }),
+    )
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.errors[0]).toMatch(/manifest\.name contains disallowed characters/)
+  })
+
+  it('accepts safe names: letters, digits, dot, hyphen, underscore', () => {
+    const res = parseLibraryManifest(
+      JSON.stringify({ name: 'demo-lib_1.0', version: '0.1.0', namespace: 'demo_lib' }),
+    )
+    expect(res.ok).toBe(true)
   })
 
   it('rejects a namespace that is not a valid C++ identifier', () => {

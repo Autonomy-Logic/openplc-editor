@@ -296,35 +296,27 @@ export function createEditorCompilerAdapter(): CompilerPort {
         let finalResult: CompileLibraryResult | undefined
         let hasError = false
         let lastError = ''
-        // The renderer-side bridge invokes the callback twice on a
-        // normal close: once for the backend's `{closePort: true,
-        // libraryBuildResult}` message, then again for the
-        // MessagePort's `'close'` event listener (which also pushes
-        // `{closePort: true}`).  Guard against the second invocation
-        // so we don't log the build result twice and don't resolve
-        // the promise twice.
-        let settled = false
 
+        // Protocol:
+        //   - The backend posts log messages (info / warning /
+        //     error) one by one, forwarded to onProgress.
+        //   - The backend posts ONE final message carrying
+        //     `libraryBuildResult` (no closePort flag), then closes
+        //     the port after a small delay so the result is
+        //     guaranteed to be delivered first.
+        //   - The renderer-side bridge fires a synthetic
+        //     `{closePort: true}` callback on the MessagePort's
+        //     `'close'` event — that's the sole "build done"
+        //     signal the adapter resolves on.
         window.bridge.runCompileLibrary(
           [args.projectPath, ipcData as never, args.cleanBuild ?? false],
           (data: Record<string, unknown>) => {
-            if (settled) return
-
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult
+              return
             }
 
             if (data.closePort) {
-              settled = true
-              // No `message` here: the backend already posted
-              // "Library built successfully: <path>" before sending
-              // closePort, and the renderer's `handleBuildLibrary`
-              // surfaces a warning if `result.verification?.success`
-              // is false.  Forwarding another message would double-
-              // print the success line.  We still emit a stage-only
-              // event so any subscriber that watches stage transitions
-              // (build-button spinner, etc.) sees the transition.
-              onProgress({ stage: finalResult?.success ? 'done' : 'error', message: '' })
               resolve(
                 finalResult ?? {
                   success: false,

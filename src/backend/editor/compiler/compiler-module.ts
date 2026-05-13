@@ -3033,8 +3033,16 @@ class CompilerModule {
     const post = (message: string, logLevel: 'info' | 'warning' | 'error' = 'info') =>
       _mainProcessPort.postMessage({ logLevel, message })
 
+    // Sends the structured result and closes the port.  No
+    // `closePort: true` flag is needed on the payload: the
+    // renderer-side bridge already synthesises one callback for the
+    // MessagePort `'close'` event the `setTimeout` triggers, and
+    // posting an explicit flag in the same message just made the
+    // adapter fire its closePort branch twice (once via onmessage,
+    // once via the close listener).  Keep the 25 ms delay so the
+    // result payload is delivered before the port closes.
     const finish = (result: import('@root/middleware/shared/ports/types').CompileLibraryResult) => {
-      _mainProcessPort.postMessage({ closePort: true, libraryBuildResult: result })
+      _mainProcessPort.postMessage({ libraryBuildResult: result })
       setTimeout(() => _mainProcessPort.close(), 25)
     }
 

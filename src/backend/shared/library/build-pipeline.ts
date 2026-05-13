@@ -36,6 +36,7 @@
  */
 
 import type { PLCProject, PLCProjectData } from '../types/PLC/open-plc'
+import { checkPathId } from '../utils/path-safety'
 import { type KnownPou, splitProgramSt } from '../utils/PLC/split-program-st'
 import { XmlGenerator } from '../utils/PLC/xml-generator'
 import { compileStlib, type CompileStlibError, type CompileStlibSource } from './compile-stlib'
@@ -92,8 +93,14 @@ export function parseLibraryManifest(json: string): ManifestParseResult {
   const obj = raw as Record<string, unknown>
   const errors: string[] = []
 
-  if (typeof obj.name !== 'string' || obj.name.length === 0) {
-    errors.push('manifest.name must be a non-empty string')
+  // `manifest.name` doubles as the on-disk archive filename and the
+  // identifier the library manager validates with `validatePathId`
+  // at install time.  Run the SAME check here so an invalid name
+  // (e.g. one with spaces) fails the build instead of producing a
+  // `.stlib` that the library manager would later refuse to install.
+  const nameError = checkPathId(obj.name, 'manifest.name')
+  if (nameError) {
+    errors.push(nameError)
   }
   if (typeof obj.version !== 'string' || obj.version.length === 0) {
     errors.push('manifest.version must be a non-empty string')
