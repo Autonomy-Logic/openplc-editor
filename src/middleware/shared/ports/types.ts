@@ -900,6 +900,31 @@ export interface DebugCompileResult {
   error?: string
 }
 
+/**
+ * Result of building a `.stlib` from a Library Project.  Mirrors the
+ * shape of `CompileResult` (success / error) plus the artefact path
+ * the console surfaces so the user can find the produced archive.
+ *
+ * The verification step (Phase 8 — running the synthetic project
+ * through avr-gcc on the simulator target) reports its outcome
+ * through `verification`: missing means the step hasn't been wired
+ * yet; `success: true` means it ran clean; `success: false` does NOT
+ * fail the build, the warning surfaces to the console instead (a
+ * legitimate target may have more memory than the AVR simulator).
+ */
+export interface CompileLibraryResult {
+  success: boolean
+  /** Absolute path to the produced `<libname>.stlib`.  Only set on success. */
+  stlibPath?: string
+  /** Manifest name extracted from `library.json`. */
+  libraryName?: string
+  error?: string
+  verification?: {
+    success: boolean
+    message?: string
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Debugger Tree
 // ---------------------------------------------------------------------------

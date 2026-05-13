@@ -61,6 +61,7 @@ const boardsMap = new Map([
 
 let compileCallback: ((data: Record<string, unknown>) => void) | null = null
 let debugCallback: ((data: Record<string, unknown>) => void) | null = null
+let libraryCallback: ((data: Record<string, unknown>) => void) | null = null
 
 /** Flush microtask queue so async bridge calls complete and callbacks are registered. */
 const flushMicrotasks = () => new Promise<void>((resolve) => process.nextTick(resolve))
@@ -68,6 +69,7 @@ const flushMicrotasks = () => new Promise<void>((resolve) => process.nextTick(re
 beforeEach(() => {
   compileCallback = null
   debugCallback = null
+  libraryCallback = null
 
   window.bridge = {
     getAvailableBoards: jest.fn().mockResolvedValue(boardsMap),
@@ -78,6 +80,11 @@ beforeEach(() => {
       .fn()
       .mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
         debugCallback = cb
+      }),
+    runCompileLibrary: jest
+      .fn()
+      .mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
+        libraryCallback = cb
       }),
     exportProjectXml: jest.fn().mockResolvedValue({ success: true, message: 'Exported successfully' }),
   } as unknown as typeof window.bridge
@@ -476,6 +483,136 @@ describe('createEditorCompilerAdapter', () => {
       })
 
       expect(result).toEqual({ success: false, error: 'Export failed: disk full' })
+    })
+  })
+
+  describe('compileLibrary', () => {
+    it('posts project path + IPC data to runCompileLibrary and resolves the structured result', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+
+      libraryCallback!({ message: 'Starting library build...', logLevel: 'info' })
+      libraryCallback!({
+        libraryBuildResult: {
+          success: true,
+          stlibPath: '/lib/project/build/demo_lib.stlib',
+          libraryName: 'demo_lib',
+        },
+      })
+      libraryCallback!({ closePort: true })
+
+      const result = await promise
+
+      expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
+        ['/lib/project', expect.objectContaining({ pous: expect.any(Array) })],
+        expect.any(Function),
+      )
+      expect(result).toEqual({
+        success: true,
+        stlibPath: '/lib/project/build/demo_lib.stlib',
+        libraryName: 'demo_lib',
+      })
+
+      // Final progress event should be `done` with the artefact path.
+      const doneEvent = progressEvents[progressEvents.length - 1]
+      expect(doneEvent.stage).toBe('done')
+      expect(doneEvent.message).toContain('/lib/project/build/demo_lib.stlib')
+    })
+
+    it('forwards error log entries and resolves the failure result', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+
+      libraryCallback!({ message: 'manifest.namespace is invalid', logLevel: 'error' })
+      libraryCallback!({
+        libraryBuildResult: {
+          success: false,
+          error: 'manifest.namespace is invalid',
+        },
+      })
+      libraryCallback!({ closePort: true })
+
+      const result = await promise
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('manifest.namespace is invalid')
+      expect(progressEvents.some((e) => e.stage === 'error')).toBe(true)
+      expect(progressEvents[progressEvents.length - 1].stage).toBe('error')
+    })
+
+    it('resolves with a fallback error when the port closes without a structured result', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      // No libraryBuildResult — port closes unexpectedly.
+      libraryCallback!({ closePort: true })
+
+      const result = await promise
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/closed unexpectedly/i)
+    })
+
+    it('captures the last error message when no structured result arrives', async () => {
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        () => {},
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ message: 'something went wrong', logLevel: 'error' })
+      libraryCallback!({ closePort: true })
+
+      const result = await promise
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('something went wrong')
+    })
+
+    it('routes non-error log messages through inferStage', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ message: 'Generating XML from JSON', logLevel: 'info' })
+      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
+      libraryCallback!({ closePort: true })
+
+      await promise
+      expect(progressEvents[0].stage).toBe('xml')
+      expect(progressEvents[0].level).toBe('info')
+    })
+
+    it('defaults non-error log levels to info when logLevel is missing', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ message: 'progress with no logLevel' })
+      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
+      libraryCallback!({ closePort: true })
+
+      await promise
+      const firstLogEvent = progressEvents.find((e) => e.stage !== 'done')
+      expect(firstLogEvent?.level).toBe('info')
     })
   })
 })

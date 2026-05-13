@@ -204,6 +204,69 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   handleBuildRef.current = handleBuild
 
   // ---------------------------------------------------------------------------
+  // Build Library (.stlib)
+  // ---------------------------------------------------------------------------
+
+  const handleBuildLibrary = useCallback(async () => {
+    if (isCompiling) return
+
+    // Library projects can have a dirty `library.json` tab; save flushes
+    // the manifest surgically (Phase 5) so the backend reads the latest
+    // content from disk in Stage 0 of the build.
+    if (editingState === 'unsaved') {
+      const saved = await executeSave()
+      if (!saved) return
+    }
+
+    if (!compiler.compileLibrary) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: 'Current platform does not implement library builds.',
+      })
+      return
+    }
+
+    setIsCompiling(true)
+    addLog({ id: crypto.randomUUID(), level: 'info', message: 'Library build started' })
+
+    try {
+      const result = await compiler.compileLibrary(
+        { projectData, projectPath: projectMeta.path },
+        (event) => {
+          if (!event.message) return
+          addLog({
+            id: crypto.randomUUID(),
+            level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
+            message: event.message,
+          })
+        },
+      )
+      if (!result.success) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: result.error ?? 'Library build failed.',
+        })
+      } else if (result.verification && !result.verification.success) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `Library built, but verification reported: ${result.verification.message ?? 'unknown'}`,
+        })
+      }
+    } catch (err) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message: `Library build error: ${getErrorMessage(err)}`,
+      })
+    } finally {
+      setIsCompiling(false)
+    }
+  }, [compiler, projectData, projectMeta, addLog, isCompiling, editingState, executeSave])
+
+  // ---------------------------------------------------------------------------
   // PLC control (Start/Stop for runtime targets)
   // ---------------------------------------------------------------------------
 
@@ -625,23 +688,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         </>
       )}
       {/* Library-build affordance: shown only for library projects.
-          The actual compile dispatch (`compileLibrary`) lands in
-          Phase 7 — for Phase 3 the click handler emits a console
-          log placeholder so the affordance is visible and reachable
-          without any half-wired backend behaviour. */}
+          Single action — "Build Library" — produces a `.stlib`
+          archive at `<projectPath>/build/<name>.stlib`.  Upload is
+          intentionally not offered: libraries don't run on a
+          target, they ship to a consumer project. */}
       {projectCaps.hasLibraryBuild && (
-        <TooltipSidebarWrapperButton tooltipContent='Build Library'>
+        <TooltipSidebarWrapperButton tooltipContent={isCompiling ? 'Building library…' : 'Build Library'}>
           <BuildOptionsPopover
-            disabled={true}
-            triggerTooltip='Build Library — wiring in progress'
+            disabled={isCompiling}
+            triggerTooltip={isCompiling ? 'Building library…' : 'Build Library'}
             uploadAvailable={false}
             uploadDisabledReason='library builds do not upload'
-            onSelect={() => {
-              addLog({
-                id: crypto.randomUUID(),
-                level: 'info',
-                message: 'Library build not yet wired (Phase 7).',
-              })
+            onSelect={(option: BuildOption) => {
+              if (option === 'build-only') {
+                void handleBuildLibrary()
+              }
             }}
           />
         </TooltipSidebarWrapperButton>

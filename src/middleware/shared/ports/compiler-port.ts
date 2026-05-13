@@ -26,6 +26,7 @@
  */
 
 import type {
+  CompileLibraryResult,
   CompileProgressEvent,
   CompileResult,
   DebugCompileResult,
@@ -58,6 +59,19 @@ export interface ExportXmlArgs {
   format: 'old-editor' | 'codesys'
 }
 
+/**
+ * Inputs for a library build.  The backend reads `library.json` from
+ * the project root fresh on each invocation (the manifest tab's
+ * surgical-save flow writes it ahead of the build click), so this
+ * struct only needs the in-memory project data and the path; the
+ * adapter doesn't have to round-trip the manifest contents through
+ * the bridge.
+ */
+export interface CompileLibraryArgs {
+  projectData: PLCProjectData
+  projectPath: string
+}
+
 export interface CompilerPort {
   /**
    * Run the full compilation pipeline (XML -> ST -> C -> binary).
@@ -80,6 +94,28 @@ export interface CompilerPort {
    * Web: returns XML string (or triggers download).
    */
   exportProjectXml(args: ExportXmlArgs): Promise<Result<{ message: string }>>
+
+  /**
+   * Build a `.stlib` archive from a Library Project on disk.
+   * Editor: validates the manifest, runs the local xml2st binary,
+   *   pipes the result through strucpp's library compiler, and
+   *   writes the archive to `<projectPath>/build/<name>.stlib`.
+   * Web (future): posts the project + manifest to a remote service
+   *   that performs the same flow on the server side.
+   *
+   * Library builds are only valid for projects with `meta.type ===
+   * 'plc-library'`.  Caller is expected to gate the invocation via
+   * `projectCapabilities(meta).hasLibraryBuild`.
+   *
+   * Returns the artefact path on success, or an error string the
+   * console renders directly.  The optional `verification` field
+   * reports the Phase-8 avr-gcc verification result when wired —
+   * a verification failure does NOT fail the build.
+   */
+  compileLibrary?(
+    args: CompileLibraryArgs,
+    onProgress: (event: CompileProgressEvent) => void,
+  ): Promise<CompileLibraryResult>
 
   /**
    * Subscribe to compilation output logs (stdout/stderr streaming).

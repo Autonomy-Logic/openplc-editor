@@ -31,6 +31,11 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
+  /** Final structured outcome of a library build.  Set only on the
+   *  close-port message emitted by `compileLibrary`; absent from
+   *  intermediate log entries and from program-build / debug-build
+   *  callbacks. */
+  libraryBuildResult?: import('@root/middleware/shared/ports/types').CompileLibraryResult
 }
 
 /**
@@ -207,6 +212,20 @@ const rendererProcessBridge = {
         closePort: true,
       }),
     )
+  },
+
+  /** Build the open Library Project into a `.stlib` archive.  Same
+   *  MessageChannel pattern as `runCompileProgram` — args carry the
+   *  project path + in-memory project data, callback receives a
+   *  stream of log messages and a final `libraryBuildResult`. */
+  runCompileLibrary: (
+    compileArgs: Array<string | PLCProjectData>,
+    callback: (args: CompilerPortMessage) => void,
+  ) => {
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])
+    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
+    rendererProcessPort.addEventListener('close', () => callback({ closePort: true }))
   },
 
   // !! Deprecated: These methods are an outdated implementation and should be removed.

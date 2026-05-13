@@ -15,6 +15,10 @@ type StrucppFormatDiagnostic = typeof import('strucpp')['formatDiagnostic']
 type StrucppCompileError = import('strucpp').CompileError
 type StrucppSourceMap = ReturnType<typeof import('strucpp')['buildSourceMap']>
 
+import {
+  libraryBuildFromTranspiledSt,
+  prepareXmlForLibraryBuild,
+} from '@root/backend/shared/library/build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
 import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
 
@@ -2927,6 +2931,178 @@ class CompilerModule {
     setTimeout(() => {
       _mainProcessPort.close()
     }, 25)
+  }
+
+  /**
+   * Build a `.stlib` archive from a Library Project on disk.
+   *
+   * The orchestration intentionally mirrors `compileProgram`'s
+   * stream-back pattern: status / error messages travel over the
+   * MessagePort, and a final `libraryBuildResult` field on the
+   * close-port message carries the structured outcome the adapter
+   * surfaces to the renderer.
+   *
+   * Flow:
+   *   1. Read `<projectPath>/library.json` from disk (the manifest
+   *      tab's surgical save has already written the live buffer
+   *      ahead of this call — Phase 5).
+   *   2. `prepareXmlForLibraryBuild` validates the manifest and
+   *      emits the XML xml2st consumes.  Manifest errors fail fast
+   *      here without spawning xml2st.
+   *   3. Persist plc.xml under `<projectPath>/build/library/src/`
+   *      and run the existing `handleTranspileXMLtoST` helper so
+   *      this path shares the xml2st spawn / error-handling code
+   *      the program build already uses.
+   *   4. Read xml2st's program.st back and hand it +
+   *      knownPous + manifest to `libraryBuildFromTranspiledSt`,
+   *      which drops the synthetic stub and calls strucpp's
+   *      `compileStlib`.
+   *   5. Write the archive (same `JSON.stringify(archive, null, 2)`
+   *      shape `library-manager-module` persists user-installed
+   *      archives with) to `<projectPath>/build/<name>.stlib`.
+   *
+   * The verification step (Phase 8 — running the synthetic project
+   * through avr-gcc on the simulator target to surface generated
+   * C++ compile errors) is a no-op here.  `composeVerificationProject`
+   * gets called for its side-effect of validating the stub shape,
+   * but its result is unused until Phase 8 wires the actual
+   * verification compile.
+   */
+  async compileLibrary(
+    args: Array<string | PLCProjectData>,
+    _mainProcessPort: MessagePortMain,
+  ): Promise<void> {
+    _mainProcessPort.start()
+
+    const post = (message: string, logLevel: 'info' | 'warning' | 'error' = 'info') =>
+      _mainProcessPort.postMessage({ logLevel, message })
+
+    const finish = (result: import('@root/middleware/shared/ports/types').CompileLibraryResult) => {
+      _mainProcessPort.postMessage({ closePort: true, libraryBuildResult: result })
+      setTimeout(() => _mainProcessPort.close(), 25)
+    }
+
+    const [projectPath, projectData] = args as [string, PLCProjectData]
+    const normalizedProjectPath = projectPath.replace('project.json', '')
+
+    post('Starting library build...')
+
+    // Stage 0: read manifest from disk.
+    const manifestPath = join(normalizedProjectPath, 'library.json')
+    let manifestJson: string
+    try {
+      manifestJson = await readFile(manifestPath, { encoding: 'utf8' })
+    } catch (error) {
+      post(`Could not read library.json: ${getErrorMessage(error)}`, 'error')
+      finish({ success: false, error: 'Could not read library.json' })
+      return
+    }
+
+    // Stage 1: manifest validation + XML generation.
+    const project: import('@root/backend/shared/types/PLC/open-plc').PLCProject = {
+      meta: { name: '', type: 'plc-library' as const },
+      data: projectData as unknown as import('@root/backend/shared/types/PLC/open-plc').PLCProjectData,
+    }
+    const stage1 = prepareXmlForLibraryBuild(project, manifestJson)
+    if ('error' in stage1) {
+      post(stage1.error, 'error')
+      finish({ success: false, error: stage1.error })
+      return
+    }
+    const { xml, knownPous, manifest } = stage1
+    post(`Manifest OK — building "${manifest.name}" v${manifest.version}.`)
+
+    // Persist plc.xml in an isolated `library` build sub-directory so
+    // it doesn't collide with the program-build artefacts when both
+    // modes coexist on the same project tree.
+    const libraryBuildDir = join(normalizedProjectPath, 'build', 'library')
+    const libraryBuildSrcDir = join(libraryBuildDir, 'src')
+    try {
+      await fs.rm(libraryBuildDir, { recursive: true, force: true })
+      await mkdir(libraryBuildSrcDir, { recursive: true })
+    } catch (error) {
+      const msg = `Could not prepare build directory: ${getErrorMessage(error)}`
+      post(msg, 'error')
+      finish({ success: false, error: msg })
+      return
+    }
+
+    const xmlPath = join(libraryBuildSrcDir, 'plc.xml')
+    try {
+      await writeFile(xmlPath, xml, 'utf-8')
+    } catch (error) {
+      const msg = `Could not write plc.xml: ${getErrorMessage(error)}`
+      post(msg, 'error')
+      finish({ success: false, error: msg })
+      return
+    }
+
+    // Stage 2: xml2st spawn (shared with the program-build path).
+    try {
+      await this.handleTranspileXMLtoST(xmlPath, (data, logLevel) => {
+        // xml2st's stdout doubles as progress + error stream; surface
+        // it verbatim so the user sees the same diagnostics the
+        // program-build path produces.
+        const message = typeof data === 'string' ? data : data.toString()
+        post(message, logLevel ?? 'info')
+      })
+    } catch (error) {
+      const msg = `xml2st failed: ${getErrorMessage(error)}`
+      post(msg, 'error')
+      finish({ success: false, error: msg })
+      return
+    }
+
+    // Stage 3: read program.st + run library compile.
+    const programStPath = join(libraryBuildSrcDir, 'program.st')
+    let programSt: string
+    try {
+      programSt = await readFile(programStPath, { encoding: 'utf8' })
+    } catch (error) {
+      const msg = `Could not read program.st from xml2st output: ${getErrorMessage(error)}`
+      post(msg, 'error')
+      finish({ success: false, error: msg })
+      return
+    }
+
+    const stage2 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest)
+    if (!stage2.success) {
+      for (const err of stage2.errors) {
+        const where = err.file ? `[${err.file}${err.line ? `:${err.line}` : ''}] ` : ''
+        post(`${where}${err.message}`, 'error')
+      }
+      finish({
+        success: false,
+        error: stage2.errors[0]?.message ?? 'Library compilation failed.',
+        libraryName: manifest.name,
+      })
+      return
+    }
+
+    // Stage 4: serialise the archive to disk.  Same JSON shape the
+    // library-manager-module persists user-installed archives with,
+    // so a future "build then install" round-trip uses the identical
+    // on-disk format.
+    const stlibPath = join(normalizedProjectPath, 'build', `${manifest.name}.stlib`)
+    try {
+      await mkdir(join(normalizedProjectPath, 'build'), { recursive: true })
+      await writeFile(stlibPath, JSON.stringify(stage2.archive, null, 2) + '\n', 'utf-8')
+    } catch (error) {
+      const msg = `Could not write ${manifest.name}.stlib: ${getErrorMessage(error)}`
+      post(msg, 'error')
+      finish({ success: false, error: msg })
+      return
+    }
+
+    // Phase 8 wires verification here: `composeVerificationProject`
+    // produces the stubbed PLCProject the existing program-build
+    // path can consume against the simulator target.  A failure
+    // there surfaces as a warning on `result.verification`, not as
+    // a build error — a legitimate user target may have more
+    // memory than the AVR simulator.
+
+    post(`Library built successfully: ${stlibPath}`)
+    finish({ success: true, stlibPath, libraryName: manifest.name })
   }
 }
 export { CompilerModule }

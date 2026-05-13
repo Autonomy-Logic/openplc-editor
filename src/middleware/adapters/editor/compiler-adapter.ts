@@ -13,12 +13,14 @@
 
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type {
+  CompileLibraryArgs,
   CompileProgramArgs,
   CompilerPort,
   DebugCompileArgs,
   ExportXmlArgs,
 } from '../../shared/ports/compiler-port'
 import type {
+  CompileLibraryResult,
   CompileProgressEvent,
   CompileResult,
   DebugCompileResult,
@@ -259,6 +261,59 @@ export function createEditorCompilerAdapter(): CompilerPort {
         return { success: true, message: result.message }
       }
       return { success: false, error: result.message }
+    },
+
+    async compileLibrary(
+      args: CompileLibraryArgs,
+      onProgress: (event: CompileProgressEvent) => void,
+    ): Promise<CompileLibraryResult> {
+      const ipcData = toIpcProjectData(args.projectData)
+
+      return new Promise<CompileLibraryResult>((resolve) => {
+        let finalResult: CompileLibraryResult | undefined
+        let hasError = false
+        let lastError = ''
+
+        window.bridge.runCompileLibrary(
+          [args.projectPath, ipcData as never],
+          (data: Record<string, unknown>) => {
+            if (data.libraryBuildResult) {
+              finalResult = data.libraryBuildResult as CompileLibraryResult
+            }
+
+            if (data.closePort) {
+              onProgress({
+                stage: finalResult?.success ? 'done' : 'error',
+                message: finalResult?.success
+                  ? `Library built: ${finalResult.stlibPath ?? ''}`
+                  : finalResult?.error ?? lastError ?? 'Library build failed.',
+              })
+              resolve(
+                finalResult ?? {
+                  success: false,
+                  error: hasError ? lastError : 'Library build closed unexpectedly.',
+                },
+              )
+              return
+            }
+
+            if (data.message) {
+              const message = decodeMessage(data.message)
+              if (data.logLevel === 'error') {
+                hasError = true
+                lastError = message
+                onProgress({ stage: 'error', message, level: 'error' })
+              } else {
+                onProgress({
+                  stage: inferStage(message),
+                  message,
+                  level: (data.logLevel as string) ?? 'info',
+                })
+              }
+            }
+          },
+        )
+      })
     },
   }
 }
