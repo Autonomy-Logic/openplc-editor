@@ -46,7 +46,13 @@ const OptionRow = ({ label, description, disabled, disabledReason, onClick }: Op
         'flex w-full select-none flex-col items-start rounded-md px-2 py-2 text-left outline-none',
         disabled
           ? 'cursor-not-allowed opacity-40'
-          : 'cursor-pointer hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900',
+          : // `focus-visible` (vs `focus`) only paints the highlight
+            // when focus came from keyboard navigation.  Radix
+            // Popover auto-focuses the first row on open, which
+            // with plain `focus:` left "Build" looking permanently
+            // selected even when the mouse was hovering "Clean
+            // build" — two backgrounds visible at once.
+            'cursor-pointer hover:bg-neutral-100 focus-visible:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus-visible:bg-neutral-900',
       )}
     >
       <span className='font-caption text-cp-sm font-medium text-neutral-1000 dark:text-neutral-300'>{label}</span>
