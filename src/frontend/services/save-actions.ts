@@ -50,9 +50,17 @@ function buildProjectJsonContent(state: StoreState): string {
   // diffs.  Bundled / canonical strucpp libs are always-on regardless
   // and intentionally don't appear here.
   const libraries = [...(project.data.libraries ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  // Preserve the project type on disk: a library opened, edited, and
+  // re-saved must round-trip as `plc-library`.  The previous
+  // hard-coded `plc-project` silently downgraded every library to
+  // a PLC project on first save, so the project would re-open with
+  // the wrong sidebar shape (Resource / Servers / Devices visible
+  // instead of the Manifest tab).
+  const metaType: 'plc-project' | 'plc-library' =
+    project.meta.type === 'plc-library' ? 'plc-library' : 'plc-project'
   return JSON.stringify(
     {
-      meta: { name: project.meta.name, type: 'plc-project' },
+      meta: { name: project.meta.name, type: metaType },
       data: {
         dataTypes: project.data.dataTypes,
         pous: [],
