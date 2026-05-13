@@ -131,6 +131,7 @@ class ProjectService {
       projectJson: string
       deviceConfig: string
       pinMapping: string
+      libraryManifest: string
       pouFiles: Array<{ relativePath: string; content: string }>
       serverFiles: Array<{ relativePath: string; content: string }>
       remoteDeviceFiles: Array<{ relativePath: string; content: string }>
@@ -227,6 +228,20 @@ class ProjectService {
       const serverFiles = await readDirRecursive(join(projectPath, 'devices', 'servers'), 'devices/servers')
       const remoteDeviceFiles = await readDirRecursive(join(projectPath, 'devices', 'remote'), 'devices/remote')
 
+      // Library projects own a `library.json` at the project root.
+      // Read it as a plain string (parsing happens upstream in the
+      // build pipeline + manifest editor — same convention POUs use:
+      // raw bytes here, structure upstream).  Empty string for PLC
+      // projects and for libraries whose disk shape is missing the
+      // file; the manifest editor seeds a template on first save.
+      let libraryManifest = ''
+      try {
+        libraryManifest = await promises.readFile(join(projectPath, 'library.json'), 'utf-8')
+      } catch {
+        // No library.json on disk — not a library, or a library
+        // whose manifest was never persisted.  Leave empty.
+      }
+
       return {
         success: true,
         data: {
@@ -234,6 +249,7 @@ class ProjectService {
           projectJson,
           deviceConfig,
           pinMapping,
+          libraryManifest,
           pouFiles,
           serverFiles,
           remoteDeviceFiles,

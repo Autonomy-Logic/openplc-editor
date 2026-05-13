@@ -787,6 +787,14 @@ const PLCProjectDataSchema = z.object({
    * save for stable diffs.
    */
   libraries: z.array(PLCProjectLibraryRefSchema).default([]),
+  /** Raw bytes of the library project's `library.json` manifest.
+   *  Lives in-memory exactly like POU bodies (`pous[i].body.value`)
+   *  — set for library projects when the project opens, serialised
+   *  out to `library.json` by the save pipeline, NEVER embedded in
+   *  the on-disk `project.json` (the save serialiser drops it the
+   *  same way it drops POU bodies, which write to their own
+   *  `.st`/`.il`/etc. files).  Optional / undefined for PLC projects. */
+  libraryManifest: z.string().optional(),
   debugVariables: PLCDebugVariablesSchema,
   deletedPous: z
     .array(

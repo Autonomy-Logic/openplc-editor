@@ -130,6 +130,11 @@ export interface RawProjectFiles {
     deviceConfig: string
     /** Raw content of devices/pin-mapping.json */
     pinMapping: string
+    /** Raw content of `library.json` for library projects.  Empty
+     *  string for PLC projects (no manifest file) and for library
+     *  projects whose disk shape is missing the file (defensive —
+     *  the manifest editor seeds a template on first save). */
+    libraryManifest: string
     /** Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json) */
     pouFiles: RawProjectFile[]
     /** Raw server config files from devices/servers/ */

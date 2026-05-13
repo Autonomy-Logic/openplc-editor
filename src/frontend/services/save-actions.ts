@@ -159,27 +159,18 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
   }
 
   // For library projects, yield `library.json` from the manifest
-  // tab's workspace-level buffer.  The buffer is updated
-  // synchronously by the manifest editor on every keystroke (see
-  // `LibraryManifestEditor`), so by the time the save flow runs
-  // the buffer IS the latest content — there's no race vs. the
-  // tab's React state.
-  //
-  // `null` means the tab hasn't been mounted this session (no
-  // in-flight edits to flush) — skip in that case so the on-disk
-  // copy isn't overwritten with a stale snapshot from a previous
-  // open.  Single-file saves (Ctrl+S on the manifest tab) flow
-  // through `executeSaveFile`, but the full-project save covers
-  // the same write — `executeSaveFile` is just an optimisation
-  // for the single-tab Ctrl+S path, not a separate save flow.
-  if (isLibrary) {
-    const buffer = state.workspace.libraryManifestBuffer
-    if (buffer !== null) {
-      yield {
-        path: 'library.json',
-        content: buffer,
-        category: 'library-manifest',
-      }
+  // content the store carries on `project.data.libraryManifest`
+  // — exact same shape POU bodies use (`project.data.pous[i].body
+  // .value`): loaded from disk on project open, edited in-place by
+  // the manifest editor (via a dedicated project-slice action),
+  // serialised out by the standard save pipeline.  No parallel
+  // dirty-tracking, no workspace-level buffer, no separate save
+  // path — just one source of truth.
+  if (isLibrary && typeof project.data.libraryManifest === 'string') {
+    yield {
+      path: 'library.json',
+      content: project.data.libraryManifest,
+      category: 'library-manifest',
     }
   }
 }
@@ -248,15 +239,9 @@ function serializeProjectFile(
   }
 
   if (file.type === 'library-manifest') {
-    // The manifest's authoritative content is the live editor
-    // buffer (`workspace.libraryManifestBuffer`).  `executeSaveFile`
-    // reads that directly via `saveLibraryManifestOnly`; this spec
-    // exists only so the version-control snapshot bookkeeping
-    // records the same content.  Falls back to '' if the tab
-    // hasn't mounted — same defensive shape the surgical save
-    // helper uses.
-    const buffer = state.workspace.libraryManifestBuffer ?? ''
-    return [{ path: 'library.json', content: buffer, category: 'project-json' }]
+    // Same in-store source the iterator + Monaco editor use.
+    const content = project.data.libraryManifest ?? ''
+    return [{ path: 'library.json', content, category: 'library-manifest' }]
   }
 
   // data-type, resource: live in project.json
@@ -551,13 +536,13 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       const res = await saveVendorScreenOnly(projectPath, projectPort, state, fileName)
       if (!res.success) return fail(res.error ?? 'Save failed')
     } else if (file.type === 'library-manifest') {
-      // Surgical save: write the manifest tab's current buffer
-      // verbatim to `library.json` at the project root.  The Monaco
-      // editor on the renderer side owns the buffer state and tracks
-      // dirty via its file-slice `cleanState` snapshot — we just
-      // serialise the file path here.  No project.json or
-      // configuration.json side-effects.
-      const res = await saveLibraryManifestOnly(projectPath, projectPort, fileName)
+      // Single-file save for the manifest tab: write the in-store
+      // content (`project.data.libraryManifest`) to `library.json`.
+      // Same content the full-project save's iterator yields —
+      // this is just the partial-write shortcut.
+      const spec = specs[0]
+      if (!spec) return fail('Save failed')
+      const res = await projectPort.saveFile(joinPath(projectPath, 'library.json'), spec.content)
       if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
       // data-type, resource: live in project.json (legacy whole-file
@@ -596,10 +581,11 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       const cleanState = serializeVendorScreenSlice(state, ownedKeys)
       updateFile({ name: fileName, saved: true, isNew: false, cleanState })
     } else if (file.type === 'library-manifest') {
-      // Snapshot the just-saved buffer as the new cleanState so the
-      // dirty effect in `LibraryManifestEditor` doesn't immediately
-      // re-mark the file unsaved on the next render.
-      const cleanState = state.workspace.libraryManifestBuffer ?? ''
+      // Snapshot the just-saved manifest content as the new
+      // cleanState so the file-slice dirty compare stays accurate.
+      // Sources from `project.data.libraryManifest` — the only
+      // place the manifest content lives.
+      const cleanState = state.project.data.libraryManifest ?? ''
       updateFile({ name: fileName, saved: true, isNew: false, cleanState })
     } else {
       updateFile({ name: fileName, saved: true, isNew: false })
@@ -873,61 +859,21 @@ async function saveVendorScreenOnly(
 }
 
 /**
- * Surgical save for the Library Project's manifest tab.  Writes
- * the live buffer (which the Monaco editor mirrors into the
- * workspace slice on every edit) verbatim to `library.json` at
- * the project root.  Does not touch project.json or any other
- * file — saving the manifest never carries unrelated unsaved
- * project-level state to disk.
- *
- * No on-disk merge: the manifest is a standalone JSON file with
- * no shared fields, so a buffer-out replacement is the right
- * thing.  Build-time validation against strucpp's manifest
- * contract happens in Phase 6 — surfaced as a build error, not
- * a save error.
+ * "Don't save" revert for the Library Project's manifest tab.
+ * Restores the in-store manifest content from the file-slice
+ * `cleanState` snapshot — the same value that was current when
+ * the tab opened — and clears the dirty flag.  Mirrors
+ * `reloadLibraryManagerFromCleanState` and
+ * `reloadVendorScreenFromCleanState`: no disk read, just an
+ * in-store restore from the snapshot the editor seeded on mount.
  */
-async function saveLibraryManifestOnly(
-  projectPath: string,
-  projectPort: ProjectPort,
-  fileName: string,
-): Promise<{ success: boolean; error?: string }> {
-  const state = openPLCStoreBase.getState()
-  const buffer = state.workspace.libraryManifestBuffer
-  if (typeof buffer !== 'string') {
-    // No live buffer means the manifest tab never mounted in this
-    // session — saving with no buffer would silently truncate
-    // `library.json` to '', which would brick the next build.
-    // Refuse instead.
-    return {
-      success: false,
-      error: 'Library manifest editor not mounted; open the Manifest tab before saving.',
-    }
-  }
-  const file = state.fileActions.getFile({ name: fileName }).file
-  const target = file?.filePath || joinPath(projectPath, 'library.json')
-  return projectPort.saveFile(target, buffer)
-}
-
-/**
- * Reload the manifest tab's in-memory buffer + cleanState from
- * disk.  Used by the save-changes-on-close modal's "Don't save"
- * path: re-reads `library.json`, refreshes the buffer, and
- * refreshes the file-slice's cleanState so the dirty flag goes
- * back to clean.  Mirrors `reloadLibraryManagerFromCleanState`
- * and `reloadVendorScreenFromCleanState`.
- */
-async function reloadLibraryManifestFromDisk(
-  fileName: string,
-  projectPort: ProjectPort,
-): Promise<{ success: boolean }> {
+function reloadLibraryManifestFromCleanState(fileName: string): { success: boolean } {
   const state = openPLCStoreBase.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
   if (!file || file.type !== 'library-manifest') return { success: false }
-  const path = file.filePath || joinPath(state.project.meta.path, 'library.json')
-  const res = await projectPort.readFileContent(path)
-  if (!res.success || typeof res.content !== 'string') return { success: false }
-  state.workspaceActions.setLibraryManifestBuffer(res.content)
-  state.fileActions.updateFile({ name: fileName, saved: true, cleanState: res.content })
+  const cleanState = typeof file.cleanState === 'string' ? file.cleanState : ''
+  state.projectActions.updateLibraryManifest(cleanState)
+  state.fileActions.updateFile({ name: fileName, saved: true })
   return { success: true }
 }
 
@@ -1037,7 +983,7 @@ export async function reloadFileFromDisk(
     return reloadVendorScreenFromCleanState(fileName)
   }
   if (file.type === 'library-manifest') {
-    return reloadLibraryManifestFromDisk(fileName, projectPort)
+    return reloadLibraryManifestFromCleanState(fileName)
   }
   // Everything else routes through the POU-specific reload.  Non-POU
   // file types that need a revert path should add a branch above

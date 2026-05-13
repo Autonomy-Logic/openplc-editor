@@ -111,13 +111,6 @@ export type WorkspaceState = {
      *  MD5 verification runs before any force / read transaction so
      *  the value is correct by the time any swap path executes. */
     debugTargetEndian: 'le' | 'be'
-    /** Live buffer for the Library Project's manifest tab.  Mirrors
-     *  the POU-body pattern: the manifest editor writes here on
-     *  every keystroke; the save flow reads from here when
-     *  surgical-saving `library.json` to disk.  `null` when no
-     *  library project is open or the manifest tab hasn't mounted
-     *  yet. */
-    libraryManifestBuffer: string | null
     // Project loading state
     isProjectLoading: boolean
     projectLoadingMessage: string
@@ -181,10 +174,6 @@ export type WorkspaceActions = {
   setDebugMd5Mismatch: (mismatch: { runtimeMd5: string; localMd5: string } | null) => void
   setDebugConnectionType: (connectionType: DebugConnectionType | null) => void
   setDebugTargetEndian: (endian: 'le' | 'be') => void
-  /** Update the live buffer of the Library Project's manifest tab.
-   *  Called by `LibraryManifestEditor` on every Monaco edit; read
-   *  by `executeSaveFile` when the user triggers a surgical save. */
-  setLibraryManifestBuffer: (buffer: string | null) => void
   clearDebugState: () => void
   clearFbDebugContext: () => void
   removeDebugVariable: (compositeKey: string) => void

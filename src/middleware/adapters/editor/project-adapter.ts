@@ -149,6 +149,14 @@ function mapIpcResponse(
         // `libraries` field; the schema's `default([])` covers parsed
         // payloads but the IPC route reaches us with the raw shape.
         libraries: (content.project.data as { libraries?: PLCProjectData['libraries'] }).libraries ?? [],
+        // Threading the library manifest content through the create
+        // response so the post-create handler seeds the in-memory
+        // store with the same content that just landed on disk —
+        // same pattern POU bodies use (parsed from the .st files in
+        // `content.pous`).
+        ...(typeof (content.project.data as { libraryManifest?: string }).libraryManifest === 'string'
+          ? { libraryManifest: (content.project.data as { libraryManifest?: string }).libraryManifest }
+          : {}),
         debugVariables: content.project.data.debugVariables,
       },
       deviceConfiguration: content.deviceConfiguration,
@@ -190,6 +198,7 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.pouFiles,
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
+        raw.data.libraryManifest,
       )
       return { success: true, data: parsed }
     },
@@ -208,6 +217,7 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.pouFiles,
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
+        raw.data.libraryManifest,
       )
       return { success: true, data: parsed }
     },

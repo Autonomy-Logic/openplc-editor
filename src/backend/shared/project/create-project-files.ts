@@ -152,6 +152,11 @@ function buildProjectObject(input: CreateProjectFileInput): PLCProject {
       pous: [],
       dataTypes: [],
       libraries: [],
+      // Library projects carry the manifest content in-memory the
+      // same way POU bodies do — loaded from / saved to its own
+      // file by the standard pipeline, not embedded in
+      // `project.json`.  PLC projects leave the field unset.
+      ...(isLibrary ? { libraryManifest: buildLibraryManifestTemplate(input.name) } : {}),
       configuration: {
         resource: {
           tasks: isLibrary

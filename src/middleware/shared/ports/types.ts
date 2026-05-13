@@ -437,6 +437,13 @@ export interface PLCProjectData {
    *  store's default state and the parsed-project loader both
    *  surface the absent case as `[]`. */
   libraries?: PLCProjectLibraryRef[]
+  /** Raw bytes of the library project's `library.json` manifest.
+   *  Same in-memory pattern POU bodies use (`pous[i].body.value`):
+   *  loaded from disk on project open, serialised back to its own
+   *  file by the save pipeline, NEVER embedded in `project.json`.
+   *  Optional / undefined for PLC projects, which don't own this
+   *  file. */
+  libraryManifest?: string
   debugVariables?: {
     global?: string[]
     pous?: Record<string, string[]>

@@ -245,6 +245,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+    updateLibraryManifest: (content) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.project.data.libraryManifest = content
+        }),
+      )
+    },
 
     // -----------------------------------------------------------------------
     // POU
