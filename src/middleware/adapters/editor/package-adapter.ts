@@ -13,6 +13,7 @@
  *   packages:boards-updated       (on)
  */
 
+import { parsePackageManifest } from '../../shared/ports/package-manifest-schema'
 import type { PackagePort } from '../../shared/ports/package-port'
 import type { ImportResult, InstalledPackage, PackageManifest, Result, Unsubscribe } from '../../shared/ports/types'
 
@@ -33,7 +34,14 @@ export function createEditorPackageAdapter(): PackagePort {
     },
 
     async getManifest(packageId: string): Promise<PackageManifest | null> {
-      return (await window.bridge.getPackageManifest(packageId)) as PackageManifest | null
+      // The bridge declares this as `Promise<unknown>` because the wire
+      // contract is JSON the main process originally read from a `.vpp`'s
+      // manifest.json. Validate the shape here before handing it to UI
+      // code — drift between port type and on-disk JSON is a real risk
+      // that an unchecked cast would silently absorb.
+      const raw = await window.bridge.getPackageManifest(packageId)
+      if (raw === null || raw === undefined) return null
+      return parsePackageManifest(raw)
     },
 
     onOpenManager(callback: () => void): Unsubscribe {

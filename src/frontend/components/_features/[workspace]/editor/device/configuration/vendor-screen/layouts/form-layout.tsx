@@ -3,6 +3,7 @@ import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 
 import type { ScreenSection } from '../index'
 
@@ -52,15 +53,23 @@ function FormLayout({ section }: FormLayoutProps) {
 
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
-  const persistenceKey = section.persistence || section.id
+  // Single-source-of-truth for the per-section storage key — see
+  // `getSectionPersistenceKey` in ../index.tsx.  Every layout that
+  // persists must derive its key through this helper so the
+  // editor's dirty-tracking sees the same keys the layouts write.
+  const persistenceKey = getSectionPersistenceKey(section)
 
-  const storedValues = vendorScreenData?.[persistenceKey] as Record<string, string | number | boolean> | undefined
+  const storedValues =
+    persistenceKey !== null
+      ? (vendorScreenData?.[persistenceKey] as Record<string, string | number | boolean> | undefined)
+      : undefined
   const values: Record<string, string | number | boolean> = {}
   for (const field of fields) {
     values[field.id] = storedValues?.[field.id] ?? (field.default as string | number | boolean) ?? ''
   }
 
   const updateField = (id: string, value: string | number | boolean) => {
+    if (persistenceKey === null) return
     setVendorScreenData(persistenceKey, { ...storedValues, [id]: value })
   }
 

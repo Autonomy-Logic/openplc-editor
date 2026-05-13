@@ -24,6 +24,7 @@ import { serializePouToText } from '../utils/PLC/pou-text-serializer'
 import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
 import { pickContentForSave } from '../utils/version-control-content'
+import { collectScreenPersistenceKeys } from '../utils/vpp/persistence-keys'
 
 /** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
 const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')
@@ -45,6 +46,10 @@ type ProjectFileSpec = {
 function buildProjectJsonContent(state: StoreState): string {
   const { project } = state
   const debugVariables = collectDebugVariables(project.data.configurations.resource.globalVariables, project.data.pous)
+  // Per-project library enablement, alphabetical-by-name for stable
+  // diffs.  Bundled / canonical strucpp libs are always-on regardless
+  // and intentionally don't appear here.
+  const libraries = [...(project.data.libraries ?? [])].sort((a, b) => a.name.localeCompare(b.name))
   return JSON.stringify(
     {
       meta: { name: project.meta.name, type: 'plc-project' },
@@ -52,6 +57,7 @@ function buildProjectJsonContent(state: StoreState): string {
         dataTypes: project.data.dataTypes,
         pous: [],
         configuration: project.data.configurations,
+        libraries,
         debugVariables,
       },
     },
@@ -443,8 +449,30 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
         spec.content,
       )
       if (!res.success) return fail(res.error ?? 'Save failed')
+    } else if (file.type === 'library-manager') {
+      // Surgical save: read project.json from disk and replace only
+      // the `data.libraries` field with the current in-memory list.
+      // This keeps a library-manager save from carrying along other
+      // unsaved project-level changes (data types, resource config,
+      // debug snapshot) that the user hasn't touched in this tab.
+      const res = await saveLibraryManagerOnly(projectPath, projectPort, state)
+      if (!res.success) return fail(res.error ?? 'Save failed')
+    } else if (file.type === 'vendor-screen') {
+      // Surgical save: read devices/configuration.json from disk and
+      // replace only the `vendorScreenData` keys this screen owns
+      // (computed from the screen definition's `sections[].persistence`).
+      // Other screens' slices and the device editor's own fields stay
+      // exactly as they are on disk.  cleanState carries the
+      // serialised owned slice so the screen definition isn't needed
+      // here.
+      const res = await saveVendorScreenOnly(projectPath, projectPort, state, fileName)
+      if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
-      // data-type, resource: live in project.json
+      // data-type, resource: live in project.json (legacy whole-file
+      // write).  These editors don't yet have a surgical save path —
+      // they still cross-contaminate each other today, which we accept
+      // until each is migrated to its own read-modify-write branch
+      // mirroring the library-manager case above.
       const spec = specs[0]
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), spec.content)
@@ -460,8 +488,24 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       })
     }
 
-    // Mark only this file as saved
-    updateFile({ name: fileName, saved: true, isNew: false })
+    // Mark only this file as saved.  For tabs whose dirty-tracking
+    // compares against a `cleanState` snapshot (library-manager and
+    // vendor-screen today), also refresh that snapshot to the
+    // just-saved state — otherwise the editor effect would
+    // immediately re-mark the file unsaved on the next render.
+    if (file.type === 'library-manager') {
+      const refs = state.project.data.libraries ?? []
+      const cleanState = JSON.stringify(
+        [...refs].sort((a, b) => a.name.localeCompare(b.name)).map((r) => ({ name: r.name, version: r.version })),
+      )
+      updateFile({ name: fileName, saved: true, isNew: false, cleanState })
+    } else if (file.type === 'vendor-screen') {
+      const ownedKeys = vendorScreenOwnedKeysFor(state, fileName)
+      const cleanState = serializeVendorScreenSlice(state, ownedKeys)
+      updateFile({ name: fileName, saved: true, isNew: false, cleanState })
+    } else {
+      updateFile({ name: fileName, saved: true, isNew: false })
+    }
     markSaved(fileName)
 
     // Reset graphical flow state: clear selections (prevents spurious dirty on reopen
@@ -585,4 +629,259 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
   } catch {
     return { success: false }
   }
+}
+
+/**
+ * Surgical save for the Library Manager tab.
+ *
+ * Reads the on-disk `project.json`, swaps in **only** the current
+ * in-memory `data.libraries` list, and writes the file back.  Other
+ * project-level fields (`data.dataTypes`, `data.configuration`,
+ * `data.debugVariables`, etc.) are preserved verbatim from disk so
+ * unrelated unsaved edits in other tabs don't get persisted as a
+ * side-effect of a library-manager save.
+ *
+ * Falls back gracefully if the file doesn't exist yet (new project) —
+ * writes the canonical full-project serialisation in that case so the
+ * caller still ends up with a valid project.json.
+ */
+async function saveLibraryManagerOnly(
+  projectPath: string,
+  projectPort: ProjectPort,
+  state: ReturnType<typeof openPLCStoreBase.getState>,
+): Promise<{ success: boolean; error?: string }> {
+  const fullPath = joinPath(projectPath, 'project.json')
+  const refs = state.project.data.libraries ?? []
+  const sortedRefs = [...refs]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((r) => ({ name: r.name, version: r.version }))
+
+  const read = await projectPort.readFileContent(fullPath)
+  if (!read.success || typeof read.content !== 'string') {
+    // No existing file — fall back to the canonical full-project
+    // write.  This branch is unreachable in practice (the project
+    // is open, so the file existed when it loaded) but keeps the
+    // fallback honest.
+    return projectPort.saveFile(fullPath, buildProjectJsonContent(state))
+  }
+
+  let onDisk: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(read.content) as unknown
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { success: false, error: 'project.json on disk is not an object' }
+    }
+    onDisk = parsed as Record<string, unknown>
+  } catch {
+    return { success: false, error: 'project.json on disk is malformed' }
+  }
+
+  const data = (onDisk.data && typeof onDisk.data === 'object'
+    ? (onDisk.data as Record<string, unknown>)
+    : ((onDisk.data = {}), onDisk.data as Record<string, unknown>))
+  data.libraries = sortedRefs
+
+  return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
+}
+
+/**
+ * Resolve the `vendorScreenData` keys this screen tab owns.  Looks
+ * up the screen definition from the current board's VPP catalogue
+ * and delegates to the canonical helper in the renderer module so
+ * the contract lives in exactly one place.  Empty array when the
+ * screen / board is no longer available (e.g. board changed since
+ * the tab opened) — callers fall through to a no-op.
+ */
+function vendorScreenOwnedKeysFor(
+  state: ReturnType<typeof openPLCStoreBase.getState>,
+  screenName: string,
+): string[] {
+  const boardId = state.deviceDefinitions.configuration.deviceBoard
+  const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardId)
+  const screen = boardInfo?.vpp?.screens?.[screenName]
+  return collectScreenPersistenceKeys(screen)
+}
+
+function serializeVendorScreenSlice(
+  state: ReturnType<typeof openPLCStoreBase.getState>,
+  ownedKeys: string[],
+): string {
+  const vendorScreenData = state.deviceDefinitions.configuration.vendorScreenData ?? {}
+  const slice: Record<string, unknown> = {}
+  for (const k of [...ownedKeys].sort()) {
+    if (Object.prototype.hasOwnProperty.call(vendorScreenData, k)) {
+      slice[k] = vendorScreenData[k]
+    }
+  }
+  return JSON.stringify(slice)
+}
+
+/**
+ * Surgical save for a single Vendor Screen tab.  Reads
+ * `devices/configuration.json` from disk, swaps in **only** the
+ * `vendorScreenData` keys this screen owns (the rest of
+ * vendorScreenData and every other configuration field stay verbatim
+ * from disk), and writes the file back.
+ *
+ * This is what isolates one vendor-screen tab's save from other
+ * unsaved vendor-screen tabs and from the device editor's own
+ * pending edits.
+ */
+async function saveVendorScreenOnly(
+  projectPath: string,
+  projectPort: ProjectPort,
+  state: ReturnType<typeof openPLCStoreBase.getState>,
+  screenName: string,
+): Promise<{ success: boolean; error?: string }> {
+  const fullPath = joinPath(projectPath, 'devices/configuration.json')
+  const ownedKeys = vendorScreenOwnedKeysFor(state, screenName)
+  if (ownedKeys.length === 0) {
+    // No keys to write — treat as success so the file marks clean
+    // and the tab closes.  Happens when the screen definition is no
+    // longer reachable (board changed).
+    return { success: true }
+  }
+
+  const memVendor = state.deviceDefinitions.configuration.vendorScreenData ?? {}
+
+  const read = await projectPort.readFileContent(fullPath)
+  let onDisk: Record<string, unknown> = {}
+  if (read.success && typeof read.content === 'string') {
+    try {
+      const parsed = JSON.parse(read.content) as unknown
+      if (typeof parsed === 'object' && parsed !== null) {
+        onDisk = parsed as Record<string, unknown>
+      }
+    } catch {
+      return { success: false, error: 'devices/configuration.json on disk is malformed' }
+    }
+  }
+
+  const diskVendor =
+    onDisk.vendorScreenData && typeof onDisk.vendorScreenData === 'object'
+      ? ({ ...(onDisk.vendorScreenData as Record<string, unknown>) } as Record<string, unknown>)
+      : ({} as Record<string, unknown>)
+
+  for (const key of ownedKeys) {
+    if (Object.prototype.hasOwnProperty.call(memVendor, key)) {
+      diskVendor[key] = memVendor[key]
+    } else {
+      delete diskVendor[key]
+    }
+  }
+  onDisk.vendorScreenData = diskVendor
+
+  return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
+}
+
+/**
+ * Reload a vendor-screen tab's in-memory state from its `cleanState`
+ * snapshot.  Mirrors `reloadLibraryManagerFromCleanState` — parses
+ * the serialised owned-slice and writes it back via the device
+ * slice's bulk setter so other vendor-screen tabs and the device
+ * editor stay untouched.
+ */
+function reloadVendorScreenFromCleanState(fileName: string): { success: boolean } {
+  const state = openPLCStoreBase.getState()
+  const file = state.fileActions.getFile({ name: fileName }).file
+  if (!file || file.type !== 'vendor-screen') return { success: false }
+  const cleanState = typeof file.cleanState === 'string' ? file.cleanState : '{}'
+  try {
+    const parsed = JSON.parse(cleanState) as unknown
+    if (typeof parsed !== 'object' || parsed === null) return { success: false }
+    const snapshot = parsed as Record<string, unknown>
+    // Owned keys can change if the screen definition changed since
+    // the tab opened (board switch).  Use the union of cleanState's
+    // own keys (so we delete what the user added in this session)
+    // and the screen's current owned set (so we touch the right
+    // things).  In practice they overlap entirely.
+    const definitionKeys = vendorScreenOwnedKeysFor(state, fileName)
+    const ownedKeys = Array.from(new Set([...Object.keys(snapshot), ...definitionKeys]))
+    state.deviceActions.restoreVendorScreenSlice(ownedKeys, snapshot)
+    return { success: true }
+  } catch {
+    return { success: false }
+  }
+}
+
+/**
+ * Reload the Library Manager file's in-memory state from its
+ * `cleanState` snapshot.
+ *
+ * "Don't save" needs an actual revert path for the Library Manager.
+ * Project library mutations (enable / disable from the manager UI)
+ * write straight into `state.project.data.libraries` via the library
+ * slice's `enableLibrary` / `disableLibrary` actions — they're not
+ * staged anywhere.  Without this revert, clicking "Don't save"
+ * leaves the in-memory project mutated, and the next save of any
+ * file (the project.json branch in `executeSaveFile` is shared by
+ * data-type / resource / library-manager) would persist those
+ * library changes the user explicitly discarded.
+ *
+ * The serialised `cleanState` is the snapshot the LibraryManagerEditor
+ * captured on tab mount (or on the last successful save) — full
+ * `{name, version}` refs, so a `setProjectLibraries(parsedRefs)`
+ * call restores both the durable list and the derived
+ * `enabledLibraries` view in one shot.
+ */
+function reloadLibraryManagerFromCleanState(fileName: string): { success: boolean } {
+  const state = openPLCStoreBase.getState()
+  const file = state.fileActions.getFile({ name: fileName }).file
+  if (!file || file.type !== 'library-manager') return { success: false }
+  const cleanState = typeof file.cleanState === 'string' ? file.cleanState : '[]'
+  try {
+    const parsed = JSON.parse(cleanState) as unknown
+    if (!Array.isArray(parsed)) return { success: false }
+    // Defensive shape check — cleanState was written by the editor,
+    // but a future migration could change the format and we'd rather
+    // refuse than corrupt the project's library list.
+    const refs: { name: string; version: string }[] = []
+    for (const r of parsed) {
+      if (
+        typeof r === 'object' &&
+        r !== null &&
+        typeof (r as { name?: unknown }).name === 'string' &&
+        typeof (r as { version?: unknown }).version === 'string'
+      ) {
+        refs.push({ name: (r as { name: string }).name, version: (r as { version: string }).version })
+      }
+    }
+    state.libraryActions.setProjectLibraries(refs)
+    return { success: true }
+  } catch {
+    return { success: false }
+  }
+}
+
+/**
+ * Generic "discard in-memory changes for this file" dispatcher.  The
+ * save-changes modal's "Don't save" path uses this so the modal
+ * itself doesn't need to know about every file type that supports
+ * revert.  Returns `{success: true}` whenever the revert ran (or
+ * was a no-op for a file type that doesn't need one); `false`
+ * means the revert was *meant* to happen but failed (logged
+ * upstream).
+ */
+export async function reloadFileFromDisk(
+  fileName: string,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
+  const state = openPLCStoreBase.getState()
+  const file = state.fileActions.getFile({ name: fileName }).file
+  if (!file) {
+    // File entry vanished — nothing to revert.  Treat as success so
+    // the modal continues to close the tab.
+    return { success: true }
+  }
+  if (file.type === 'library-manager') {
+    return reloadLibraryManagerFromCleanState(fileName)
+  }
+  if (file.type === 'vendor-screen') {
+    return reloadVendorScreenFromCleanState(fileName)
+  }
+  // Everything else routes through the POU-specific reload.  Non-POU
+  // file types that need a revert path should add a branch above
+  // (mirroring the library-manager / vendor-screen cases) rather
+  // than overloading reloadPouFromDisk.
+  return reloadPouFromDisk(fileName, projectPort)
 }

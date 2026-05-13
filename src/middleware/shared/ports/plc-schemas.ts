@@ -8,33 +8,31 @@
  *   Editor: src/types/PLC/units/library.ts
  *   Web:    src/store/types/PLC/units/library.ts
  */
+import { BASE_TYPE_NAMES } from '@root/frontend/utils/iec-types-registry'
 import z from 'zod'
 
 /**
- * Base PLC types common to all libraries.
+ * Base PLC types common to all libraries — derived from strucpp's
+ * canonical `libs/iec-types.json`.  The narrow `[string, ...string[]]`
+ * cast is what `z.enum` requires for non-empty literal lists; the
+ * registry guarantees the array has ≥ 1 entry.
+ *
+ * IEC 61131-3 identifiers (type names included) are case-insensitive.
+ * `baseTypeSchema` accepts any case on input and normalises to the
+ * canonical uppercase form before validating — so legacy lowercase
+ * project files (`'real'`) load alongside the current uppercase
+ * spelling (`'REAL'`) and a mixed file works too.
+ *
+ * The raw enum is also exported as `baseTypeEnum` for code that
+ * needs `.options` / `.extract()` (UI dropdowns, generic-type
+ * subset schemas).  Those are strict by design — they list canonical
+ * names — and don't need to round-trip mixed-case input.
  */
-const baseTypeSchema = z.enum([
-  'BOOL',
-  'SINT',
-  'INT',
-  'DINT',
-  'LINT',
-  'USINT',
-  'UINT',
-  'UDINT',
-  'ULINT',
-  'REAL',
-  'LREAL',
-  'TIME',
-  'DATE',
-  'TOD',
-  'DT',
-  'STRING',
-  'BYTE',
-  'WORD',
-  'DWORD',
-  'LWORD',
-])
+const baseTypeEnum = z.enum(BASE_TYPE_NAMES as unknown as [string, ...string[]])
+const baseTypeSchema = z.preprocess(
+  (v) => (typeof v === 'string' ? v.trim().toUpperCase() : v),
+  baseTypeEnum,
+)
 
 const genericTypeSchema = z.object({
   ANY: z.union([
@@ -53,17 +51,17 @@ const genericTypeSchema = z.object({
     z.literal('ANY_MAGNITUDE'),
     z.literal('ANY_ELEMENTARY'),
   ]),
-  ANY_INT: baseTypeSchema.extract(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT']),
-  ANY_BIT: baseTypeSchema.extract(['BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD']),
-  ANY_STRING: baseTypeSchema.extract(['STRING']),
-  ANY_REAL: baseTypeSchema.extract(['REAL', 'LREAL']),
-  ANY_DATE: baseTypeSchema.extract(['TIME', 'DATE', 'TOD', 'DT']),
+  ANY_INT: baseTypeEnum.extract(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT']),
+  ANY_BIT: baseTypeEnum.extract(['BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD']),
+  ANY_STRING: baseTypeEnum.extract(['STRING']),
+  ANY_REAL: baseTypeEnum.extract(['REAL', 'LREAL']),
+  ANY_DATE: baseTypeEnum.extract(['TIME', 'DATE', 'TOD', 'DT']),
   ANY_CHAR: z.enum(['CHAR', 'WCHAR']),
   ANY_CHARS: z.union([z.literal('ANY_CHAR'), z.array(z.literal('ANY_STRING'))]),
   ANY_NUM: z.union([z.literal('ANY_INT'), z.literal('ANY_REAL')]),
   ANY_INTEGRAL: z.union([z.literal('ANY_INT'), z.literal('ANY_BIT')]),
-  ANY_SIGNED: baseTypeSchema.extract(['SINT', 'INT', 'DINT', 'LINT']),
-  ANY_UNSIGNED: baseTypeSchema.extract(['USINT', 'UINT', 'UDINT', 'ULINT']),
+  ANY_SIGNED: baseTypeEnum.extract(['SINT', 'INT', 'DINT', 'LINT']),
+  ANY_UNSIGNED: baseTypeEnum.extract(['USINT', 'UINT', 'UDINT', 'ULINT']),
   ANY_MAGNITUDE: z.union([z.literal('ANY_REAL'), z.literal('ANY_INT'), z.literal('TIME')]),
   ANY_ELEMENTARY: z.union([
     z.literal('ANY_MAGNITUDE'),
@@ -101,4 +99,4 @@ const BaseLibraryPouSchema = z.object({
   extensible: z.boolean().optional(),
 })
 
-export { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema }
+export { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeEnum, baseTypeSchema, genericTypeSchema }

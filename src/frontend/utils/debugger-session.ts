@@ -23,12 +23,46 @@ import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from 
 // 0. logCompilerEvent — shared log helper for compile/debug progress
 // ---------------------------------------------------------------------------
 
-/** Forward compile/debug progress lines to the console log. */
+/**
+ * Forward compile/debug progress lines to the console log.
+ *
+ * Plain progress messages get split on newlines into one log entry
+ * per line — keeps the existing scroll/wrap/copy behaviour intact for
+ * the long Arduino-CLI / xml2st outputs.
+ *
+ * Events that carry a structured `compileError` are emitted as a
+ * single multi-line entry instead, with the structured field attached.
+ * The renderer's LogComponent uses `whitespace-pre-wrap` so the
+ * gcc-style snippet still displays correctly, and the bracketed POU
+ * prefix on the first line becomes a clickable affordance backed by
+ * the carried strucpp diagnostic.
+ */
 export function logCompilerEvent(
-  event: { message?: string; level?: string },
-  log: (entry: { id: string; level: 'error' | 'debug' | 'info' | 'warning'; message: string }) => void,
+  event: {
+    message?: string
+    level?: string
+    compileError?: import('../../middleware/shared/ports/types').StructuredCompileError
+  },
+  log: (entry: {
+    id: string
+    level: 'error' | 'debug' | 'info' | 'warning'
+    message: string
+    compileError?: import('../../middleware/shared/ports/types').StructuredCompileError
+  }) => void,
 ): void {
   if (!event.message) return
+  const level = (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info'
+
+  if (event.compileError) {
+    log({
+      id: crypto.randomUUID(),
+      level,
+      message: event.message.trim(),
+      compileError: event.compileError,
+    })
+    return
+  }
+
   event.message
     .trim()
     .split('\n')
@@ -36,7 +70,7 @@ export function logCompilerEvent(
       if (line) {
         log({
           id: crypto.randomUUID(),
-          level: (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info',
+          level,
           message: line,
         })
       }

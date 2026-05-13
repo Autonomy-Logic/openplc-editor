@@ -1,5 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { useMemo } from 'react'
 
 import type { ModuleSystem, ScreenSection } from '../index'
@@ -15,18 +16,25 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
-  const persistenceKey = section.persistence || section.id
+  // Single source of truth — see `getSectionPersistenceKey` in
+  // ../index.tsx.
+  const persistenceKey = getSectionPersistenceKey(section)
 
-  const storedData = vendorScreenData?.[persistenceKey] as { slots?: (string | null)[] } | undefined
+  const storedData =
+    persistenceKey !== null
+      ? (vendorScreenData?.[persistenceKey] as { slots?: (string | null)[] } | undefined)
+      : undefined
   const slots = storedData?.slots ?? Array<string | null>(maxSlots).fill(null)
 
   const handleSlotChange = (slotIndex: number, moduleId: string) => {
+    if (persistenceKey === null) return
     const next = [...slots]
     next[slotIndex] = moduleId || null
     setVendorScreenData(persistenceKey, { ...storedData, slots: next })
   }
 
   const handleClearAll = () => {
+    if (persistenceKey === null) return
     setVendorScreenData(persistenceKey, { ...storedData, slots: Array<string | null>(maxSlots).fill(null) })
   }
 

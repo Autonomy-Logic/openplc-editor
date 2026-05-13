@@ -52,6 +52,7 @@ const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLC
   data: {
     pous: [],
     dataTypes: [],
+    libraries: [],
     configuration: {
       resource: {
         tasks: [

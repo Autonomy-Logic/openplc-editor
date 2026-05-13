@@ -9,6 +9,7 @@ import type { CompilerPort } from '../ports/compiler-port'
 import type { DebuggerPort } from '../ports/debugger-port'
 import type { DevicePort } from '../ports/device-port'
 import type { EsiPort } from '../ports/esi-port'
+import type { LibraryPort } from '../ports/library-port'
 import type { NavigationPort } from '../ports/navigation-port'
 import type { OrchestratorPort } from '../ports/orchestrator-port'
 import type { PackagePort } from '../ports/package-port'
@@ -35,6 +36,7 @@ export interface PlatformPorts {
   theme: ThemePort
   versionControl: VersionControlPort
   navigation: NavigationPort
+  library: LibraryPort
   capabilities: PlatformCapabilities
   packages?: PackagePort
   esi?: EsiPort

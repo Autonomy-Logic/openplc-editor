@@ -4,7 +4,7 @@
  */
 
 import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
-import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
+import { openPLCStoreBase } from '../store'
 
 /**
  * Variable definition from a POU or library FB.
@@ -97,14 +97,21 @@ const USER_FB_PERSISTENT_CLASSES: ReadonlySet<string> = new Set(['input', 'outpu
 export const findFunctionBlockVariables = (typeName: string, projectPous: PLCPou[]): PouVariable[] | null => {
   const typeNameUpper = typeName.toUpperCase()
 
-  // Check standard library FBs — interface only.
-  const standardFB = StandardFunctionBlocks.pous.find(
-    (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
-  )
-  if (standardFB) {
-    return (standardFB.variables as PouVariable[]).filter((v) =>
-      v.class === undefined ? false : LIBRARY_FB_INTERFACE_CLASSES.has(v.class),
+  // Check system library FBs across every loaded .stlib bundle —
+  // interface only. Loaded libraries live in the Zustand store,
+  // populated at app boot from bundled .stlib archives. We search every
+  // library because a typeName may belong to standard, additional,
+  // OSCAT, or a future user-installed lib; first match wins, and FB
+  // names are unique across IEC libraries by convention.
+  for (const lib of openPLCStoreBase.getState().libraries.system) {
+    const systemFB = lib.pous.find(
+      (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
     )
+    if (systemFB) {
+      return (systemFB.variables as PouVariable[]).filter((v) =>
+        v.class === undefined ? false : LIBRARY_FB_INTERFACE_CLASSES.has(v.class),
+      )
+    }
   }
 
   // Check project POUs (user-defined FBs) — interface + locals,

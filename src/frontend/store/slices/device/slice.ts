@@ -408,6 +408,33 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    /**
+     * Restore a contiguous slice of `vendorScreenData` from a snapshot.
+     * Used by the vendor-screen tab's "Don't save" revert path: the
+     * snapshot was captured when the tab opened (or on last save),
+     * and applying it back means deleting any keys the user added in
+     * this session and putting the rest back to their original
+     * values.  Keys outside `ownedKeys` are left untouched so other
+     * vendor-screen tabs and the device editor don't see unrelated
+     * mutations.
+     */
+    restoreVendorScreenSlice: (ownedKeys, snapshot): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (!deviceDefinitions.configuration.vendorScreenData) {
+            deviceDefinitions.configuration.vendorScreenData = {}
+          }
+          const target = deviceDefinitions.configuration.vendorScreenData
+          for (const key of ownedKeys) {
+            if (Object.prototype.hasOwnProperty.call(snapshot, key)) {
+              target[key] = snapshot[key]
+            } else {
+              delete target[key]
+            }
+          }
+        }),
+      )
+    },
   },
 })
 

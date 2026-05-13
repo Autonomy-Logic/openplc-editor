@@ -1306,17 +1306,26 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
 }
 
 // PDU request:  [FC, endian_check_hi, endian_check_lo]
-// PDU response: [FC, STATUS, md5_ascii..., endian_echo_hi, endian_echo_lo]
+// PDU response: [FC, STATUS, md5_ascii..., endian_marker_hi, endian_marker_lo]
 //
-// The target always writes data in native byte order. The editor probes with
-// 0xDEAD and reads back what arrived; if the bytes are reversed it byte-swaps
-// debug reads locally. STruC++ makes no server-side byte-order adaptation —
-// any memcpy dispatch is identical regardless of what the editor sent.
-void debugGetMd5(void *endianness)
+// The target always writes variable data in native byte order — STruC++ does
+// no server-side byte-order adaptation, force/read is pure memcpy.  To let
+// the editor detect what "native" means here, the MD5 response trailer
+// writes the literal value 0xDEAD via a native `uint16_t*` store.  The
+// bytes that land in the response are therefore in the target's native
+// byte order:
+//
+//     LE target  →  trailer bytes = [0xAD, 0xDE]
+//     BE target  →  trailer bytes = [0xDE, 0xAD]
+//
+// The editor inspects those two bytes after MD5 verification and decides
+// whether subsequent force/read traffic needs byte-swapping at its end.
+//
+// The probe bytes the editor sends are intentionally ignored — the trailer
+// is a runtime-driven sentinel, not an echo.  The argument stays in the
+// signature for ABI compatibility with the dispatcher.
+void debugGetMd5(void * /*endianness*/)
 {
-    uint8_t echo_hi = ((uint8_t *)endianness)[0];
-    uint8_t echo_lo = ((uint8_t *)endianness)[1];
-
     mb_frame[1] = MB_FC_DEBUG_GET_MD5;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
@@ -1327,9 +1336,11 @@ void debugGetMd5(void *endianness)
         mb_frame[md5_len + 3] = md5[md5_len];
     }
 
-    // Echo the endianness probe bytes back to the editor.
-    mb_frame[md5_len + 3] = echo_hi;
-    mb_frame[md5_len + 4] = echo_lo;
+    // Native-order store of the endianness sentinel.  The reinterpret_cast
+    // is intentional: it preserves the target's byte ordering in the
+    // emitted bytes, which is exactly the signal the editor uses to choose
+    // its swap behaviour.
+    *reinterpret_cast<uint16_t *>(&mb_frame[md5_len + 3]) = 0xDEAD;
     mb_frame_len = md5_len + 5;
 }
 

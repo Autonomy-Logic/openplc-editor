@@ -344,6 +344,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // pollers (useDebugPolling) can size their batches against the
         // real frame budget rather than guessing from the board target.
         useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(debugConfig.connectionType)
+        // Persist the target's byte order — detected from the MD5
+        // response trailer in the runtime — so the swap layer at the
+        // read / write boundaries flips on BE targets.  Default to
+        // `'le'` when the trailer was missing or malformed (older
+        // runtimes); detectTargetEndian already logged a warning.
+        useOpenPLCStore
+          .getState()
+          .workspaceActions.setDebugTargetEndian(verifyResult.targetEndian ?? 'le')
         await debugSession.connectAndStart(debugConfig)
         setIsDebuggerProcessing(false)
       } else {

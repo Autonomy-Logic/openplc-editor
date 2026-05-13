@@ -3,11 +3,12 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCStructureVariable } from '../../../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
 import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
+import { hasStringName, safeUpper } from '../../../../../utils/safe-upper'
 import { InputWithRef } from '../../../../_atoms/input'
 import { ArrayModal } from './elements/array-modal'
 
@@ -29,30 +30,35 @@ const SelectableTypeCell = ({
   } = useOpenPLCStore()
 
   const VariableTypes = [
-    { definition: 'base-type', values: baseTypeSchema.options },
-    { definition: 'user-data-type', values: dataTypes.map((dataType) => dataType.name) },
+    { definition: 'base-type', values: baseTypeEnum.options },
+    { definition: 'user-data-type', values: dataTypes.filter(hasStringName).map((dataType) => dataType.name) },
   ]
 
   const LibraryTypes = [
     {
       definition: 'system',
       values: sliceLibraries.system.flatMap((library) =>
-        library.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+        (library.pous ?? [])
+          .filter((pou) => pou?.type === 'function-block')
+          .filter(hasStringName)
+          .map((pou) => pou.name.toUpperCase()),
       ),
     },
     {
       definition: 'user',
       values: sliceLibraries.user
+        .filter(hasStringName)
         .filter((userLibrary) => userLibrary.name !== editor.meta.name)
-        .flatMap((userLibrary) =>
-          'pous' in userLibrary && Array.isArray((userLibrary as { pous: { type: string; name: string }[] }).pous)
-            ? (userLibrary as { pous: { type: string; name: string }[] }).pous
-                .filter((pou) => pou.type === 'function-block')
-                .map((pou) => pou.name.toUpperCase())
-            : userLibrary.type === 'function-block'
-              ? [userLibrary.name.toUpperCase()]
-              : [],
-        ),
+        .flatMap((userLibrary) => {
+          const pous = (userLibrary as { pous?: { type?: string; name?: string }[] }).pous
+          if (Array.isArray(pous)) {
+            return pous
+              .filter((pou) => pou?.type === 'function-block')
+              .filter(hasStringName)
+              .map((pou) => pou.name.toUpperCase())
+          }
+          return userLibrary.type === 'function-block' ? [userLibrary.name.toUpperCase()] : []
+        }),
     },
   ]
 
@@ -84,13 +90,13 @@ const SelectableTypeCell = ({
   const filteredVariableValues = VariableTypes.map((scope) => ({
     definition: scope.definition,
     values: scope.values.filter((v) =>
-      v.toUpperCase().includes((variableFilters[scope.definition] || '').toUpperCase()),
+      safeUpper(v).includes(safeUpper(variableFilters[scope.definition] || '')),
     ),
   }))
 
   const filteredLibraryValues = LibraryTypes.map((scope) => ({
     definition: scope.definition,
-    values: scope.values.filter((v) => v.toUpperCase().includes(inputFilter.toUpperCase())),
+    values: scope.values.filter((v) => safeUpper(v).includes(safeUpper(inputFilter))),
   }))
 
   return (

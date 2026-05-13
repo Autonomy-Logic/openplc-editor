@@ -145,6 +145,10 @@ function mapIpcResponse(
         configurations: configuration,
         servers: content.project.data.servers as PLCProjectData['servers'],
         remoteDevices: content.project.data.remoteDevices as PLCProjectData['remoteDevices'],
+        // Defensive default: legacy projects on disk have no
+        // `libraries` field; the schema's `default([])` covers parsed
+        // payloads but the IPC route reaches us with the raw shape.
+        libraries: (content.project.data as { libraries?: PLCProjectData['libraries'] }).libraries ?? [],
         debugVariables: content.project.data.debugVariables,
       },
       deviceConfiguration: content.deviceConfiguration,

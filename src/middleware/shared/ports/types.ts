@@ -408,6 +408,16 @@ export interface PLCRemoteDevice {
 // Project
 // ---------------------------------------------------------------------------
 
+export interface PLCProjectLibraryRef {
+  /** Strucpp manifest identifier — same value
+   *  `InstalledLibrary.name` carries.  Project ↔ system pool joins
+   *  go through this field. */
+  name: string
+  /** Informational on load (name-only match against the pool today);
+   *  the manager surfaces a soft warning when versions differ. */
+  version: string
+}
+
 export interface PLCProjectData {
   dataTypes: PLCDataType[]
   pous: PLCPou[]
@@ -420,6 +430,13 @@ export interface PLCProjectData {
   }
   servers?: PLCServer[]
   remoteDevices?: PLCRemoteDevice[]
+  /** Opt-in libraries the project pulls into compile + UI surfaces.
+   *  Bundled / canonical strucpp libraries are always-on regardless
+   *  of this list and do not appear here.  Optional on the wire so
+   *  legacy fixtures and projects without the field type-check; the
+   *  store's default state and the parsed-project loader both
+   *  surface the absent case as `[]`. */
+  libraries?: PLCProjectLibraryRef[]
   debugVariables?: {
     global?: string[]
     pous?: Record<string, string[]>
@@ -463,6 +480,11 @@ export interface BoardInfo {
 export interface VppModuleDefinition {
   id: string
   name: string
+  /** Vendor-specific hardware id (e.g. board model number) used by the
+   *  module-discovery flow to match a detected device against this
+   *  definition. Optional — modules with no hwId can only be added
+   *  manually. */
+  hwId?: string
   image?: string
   io: {
     digitalInputs: number
@@ -542,6 +564,10 @@ export interface PackageManifest {
       enabled: boolean
       maxSlots: number
       discoverySupported?: boolean
+      /** Shell command the editor invokes to ask a connected device
+       *  to enumerate its modules. Returns lines parsed by the
+       *  module-system's discovery flow; format defined per package. */
+      discoveryCommand?: string
       modules: VppModuleDefinition[]
     }
   }>
@@ -706,6 +732,10 @@ export interface Md5VerifyResult {
   success: boolean
   match?: boolean
   targetMd5?: string
+  /** Target byte order, detected from the runtime's MD5 response
+   *  trailer.  Renderer-side debug components feed this into the
+   *  swap layer at read / write boundaries.  Omitted on failure. */
+  targetEndian?: 'le' | 'be'
   error?: string
 }
 
@@ -732,6 +762,34 @@ export interface CompileProgressEvent {
   level?: string
   firmwarePath?: string
   plcStatus?: string
+  /**
+   * Structured strucpp diagnostic for click-to-open in the console.
+   * Set on the per-error events emitted during a failed strucpp
+   * compile; absent for plain progress messages.  Consumers that
+   * don't care about navigation can ignore it.
+   */
+  compileError?: StructuredCompileError
+}
+
+/**
+ * Subset of strucpp's `CompileError` carried over IPC.  Kept narrow
+ * on purpose — only the fields the editor's console / navigation
+ * actually consume travel across the bridge, to avoid coupling the
+ * IPC shape to every internal strucpp detail.
+ */
+export interface StructuredCompileError {
+  message: string
+  line: number
+  column: number
+  endLine?: number
+  endColumn?: number
+  file?: string
+  severity: 'error' | 'warning' | 'info'
+  pouName?: string
+  pouKind?: 'PROGRAM' | 'FUNCTION' | 'FUNCTION_BLOCK'
+  section?: 'interface' | 'var-block' | 'body'
+  bodyLine?: number
+  variableName?: string
 }
 
 export interface CompileResult {
@@ -813,6 +871,13 @@ export interface LogObject {
   level?: 'debug' | 'info' | 'warning' | 'error'
   message: string
   tstamp?: Date
+  /**
+   * Optional structured strucpp diagnostic that originated this log.
+   * When set, the console renders the bracketed POU prefix as a
+   * clickable button that opens the right tab/section. Plain
+   * progress / informational logs leave this undefined.
+   */
+  compileError?: StructuredCompileError
 }
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
+import { LibraryManagerEditor } from '../components/_features/[workspace]/editor/library-manager'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
 import { PackageManagerEditor } from '../components/_features/[workspace]/editor/package-manager'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
@@ -209,7 +210,7 @@ const WorkspaceScreen = () => {
   const handleForceVariable = useCallback(
     async (
       compositeKey: string,
-      _variableType: string,
+      variableType: string,
       value?: boolean,
       valueBuffer?: Uint8Array,
       lookupKey?: string,
@@ -224,7 +225,17 @@ const WorkspaceScreen = () => {
         await releaseDebugVariable(debuggerPort, compositeKey, variableIndex)
       } else {
         const buffer = valueBuffer ?? new Uint8Array([value ? 1 : 0])
-        await forceDebugVariable(debuggerPort, compositeKey, variableIndex, buffer, value ?? true)
+        // Pass variableType so the wire-endianness swap inside the
+        // service knows whether to skip swapping (BOOL one-byte
+        // paths, STRING / WSTRING) — see services/debug-force-variable.
+        await forceDebugVariable(
+          debuggerPort,
+          compositeKey,
+          variableIndex,
+          buffer,
+          value ?? true,
+          variableType,
+        )
       }
     },
     [debugVariableIndexes, debuggerPort],
@@ -497,6 +508,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
                         {editor['type'] === 'plc-vendor-screen' && <VendorScreenEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
+                        {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-datatype' && (
                           <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
                             <DataTypeEditor dataTypeName={editor.meta.name} />{' '}

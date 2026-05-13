@@ -43,6 +43,7 @@ interface IpcProjectData {
   configuration: PLCProjectData['configurations']
   servers?: PLCProjectData['servers']
   remoteDevices?: PLCProjectData['remoteDevices']
+  libraries?: PLCProjectData['libraries']
   originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
 }
 
@@ -68,6 +69,7 @@ function toIpcProjectData(data: PLCProjectData & { originalCppPous?: unknown[] }
     configuration: data.configurations,
     servers: data.servers,
     remoteDevices: data.remoteDevices,
+    libraries: data.libraries,
     ...(data.originalCppPous ? { originalCppPous: data.originalCppPous as IpcProjectData['originalCppPous'] } : {}),
   }
 }
@@ -169,16 +171,30 @@ export function createEditorCompilerAdapter(): CompilerPort {
 
             if (data.message) {
               const message = decodeMessage(data.message)
+              // Structured CompileError travels alongside the formatted
+              // text whenever the compiler-module's strucpp failure
+              // path emits a per-error log entry.  Forward it as-is
+              // so the console can drive click-to-open from the
+              // structured fields rather than parsing text.
+              const compileError = data.compileError as
+                | CompileProgressEvent['compileError']
+                | undefined
 
               if (data.logLevel === 'error') {
                 hasError = true
                 lastError = message
-                onProgress({ stage: 'error', message, level: 'error' })
+                onProgress({
+                  stage: 'error',
+                  message,
+                  level: 'error',
+                  ...(compileError ? { compileError } : {}),
+                })
               } else {
                 onProgress({
                   stage: inferStage(message),
                   message,
                   level: (data.logLevel as string) ?? 'info',
+                  ...(compileError ? { compileError } : {}),
                 })
               }
             }

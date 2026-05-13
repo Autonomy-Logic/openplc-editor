@@ -1,6 +1,7 @@
 import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { generateIecAddress } from '@root/frontend/utils/iec-address'
+import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import type { IoMappingEntry, VendorIoMapping } from '@root/middleware/shared/ports/types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -12,7 +13,11 @@ type IoTableLayoutProps = {
 }
 
 function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
-  const persistenceKey = section.persistence || section.id
+  // See `getSectionPersistenceKey` in ../index.tsx — the single
+  // source of truth for the per-section storage key.  Falls back to
+  // section.id when no explicit `persistence` is declared, matching
+  // every other layout in this folder.
+  const persistenceKey = getSectionPersistenceKey(section) ?? ''
   const availableModules = moduleSystem?.modules ?? []
 
   const getStoreState = useCallback(() => {

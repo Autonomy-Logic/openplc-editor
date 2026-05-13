@@ -26,6 +26,7 @@ import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
@@ -64,6 +65,8 @@ class MainProcessBridge implements MainIpcModule {
   private simulatorModule = new SimulatorModule()
   // VPP package manager for board package operations
   private packageManagerModule = new PackageManagerModule()
+  // System-wide IEC 61131-3 library pool (bundled + user-installed)
+  private libraryManagerModule = new LibraryManagerModule()
   // ESI repository service for EtherCAT device descriptions
   private esiService = new ESIService()
 
@@ -621,6 +624,10 @@ class MainProcessBridge implements MainIpcModule {
     // App and system handlers
     this.registerHandle('open-external-link', this.handleOpenExternalLink)
     this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
+    this.registerHandle('libraries:load-all', this.handleLibrariesLoadAll)
+    this.registerHandle('libraries:list-installed', this.handleLibrariesListInstalled)
+    this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
+    this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
@@ -898,6 +905,57 @@ class MainProcessBridge implements MainIpcModule {
       isWindowMaximized: this.mainWindow?.isMaximized(),
     }
   }
+
+  /**
+   * Load every bundled .stlib archive shipped with the app.
+   *
+   * The archives live alongside the strucpp compiler binaries under
+   * `<resources>/strucpp/libs/` — same dev-vs-packaged resolution
+   * Electron uses for any other resource (`process.resourcesPath`
+   * after packaging, the project root in dev). The .stlib files are
+   * synced into that directory by the strucpp build pipeline so they
+   * always travel with the strucpp version the compiler targets.
+   *
+   * Returns the parsed JSON contents in alphabetical filename order so
+   * the renderer-side library tree renders deterministically across
+   * platforms. Errors (missing dir, malformed JSON) propagate back to
+   * the renderer so a startup failure surfaces as a UI error rather
+   * than silently dropping libraries.
+   */
+  // Library manager handlers — system-wide IEC 61131-3 library pool
+  // (bundled strucpp libs + user-installed .stlib / CODESYS imports).
+  // Library identity is the strucpp manifest `name` shared with the
+  // project's `libraries[]` field.
+  handleLibrariesLoadAll = async (): Promise<unknown[]> =>
+    this.libraryManagerModule.loadAll()
+  handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
+  handleLibrariesInstallFromFile = async () => {
+    if (!this.mainWindow) return { success: false, error: 'No main window' }
+    const result = await dialog.showOpenDialog(this.mainWindow, {
+      title: 'Install Library',
+      filters: [
+        { name: 'Library files', extensions: ['stlib', 'lib', 'library'] },
+        { name: 'STruC++ archive', extensions: ['stlib'] },
+        { name: 'CODESYS library', extensions: ['lib', 'library'] },
+      ],
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: true, canceled: true }
+    }
+    const installResult = await this.libraryManagerModule.installFromFile(result.filePaths[0])
+    if (installResult.success && !installResult.canceled) {
+      this.mainWindow.webContents.send('libraries:changed')
+    }
+    return installResult
+  }
+  handleLibrariesUninstall = async (_event: IpcMainInvokeEvent, name: string) => {
+    const result = this.libraryManagerModule.uninstall(name)
+    if (result.success) {
+      this.mainWindow?.webContents.send('libraries:changed')
+    }
+    return result
+  }
   handleStoreRetrieveRecent = async () => {
     const pathToUserDataFolder = join(app.getPath('userData'), 'User')
     const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
@@ -934,8 +992,19 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileForDebugger(args, mainProcessPort)
+    void this.compilerModule.compileForDebugger(args, mainProcessPort, this)
   }
+
+  /**
+   * Bridge method consumed by the compiler module.  Walks the
+   * library manager's registry to turn `project.libraries` names
+   * into the disk directories strucpp's `libraryPaths` should scan,
+   * always including bundled libraries.  Bridge owns the library
+   * manager instance, so the compiler module doesn't need its own
+   * reference.
+   */
+  resolveLibraryDirs = (enabledNames: string[]): { dirs: string[]; missing: string[] } =>
+    this.libraryManagerModule.resolveEnabledLibraryDirs(enabledNames)
 
   // TODO: These handlers are outdated and should be removed.
   // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
@@ -1055,7 +1124,13 @@ class MainProcessBridge implements MainIpcModule {
       jwtToken?: string
     },
     expectedMd5: string,
-  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
+  ): Promise<{
+    success: boolean
+    match?: boolean
+    targetMd5?: string
+    targetEndian?: 'le' | 'be'
+    error?: string
+  }> => {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
     let wsClient: WebSocketDebugClient | null = null
     try {
@@ -1069,14 +1144,14 @@ class MainProcessBridge implements MainIpcModule {
           serialPort: virtualPort,
         })
         await client.connect()
-        const targetMd5 = await client.getMd5Hash()
+        const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
         // Keep the client for subsequent debug operations
         this.debuggerModbusClient = client
         this.debuggerConnectionType = 'simulator'
 
-        return { success: true, match, targetMd5 }
+        return { success: true, match, targetMd5, targetEndian }
       } else if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
@@ -1093,7 +1168,7 @@ class MainProcessBridge implements MainIpcModule {
           wsClient = this.debuggerWebSocketClient
         }
 
-        const targetMd5 = await wsClient.getMd5Hash()
+        const { md5: targetMd5, targetEndian } = await wsClient.getMd5Hash()
 
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1104,7 +1179,7 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerConnectionType = 'websocket'
         }
 
-        return { success: true, match, targetMd5 }
+        return { success: true, match, targetMd5, targetEndian }
       } else if (connectionType === 'tcp') {
         if (!connectionParams.ipAddress) {
           return { success: false, error: 'IP address is required for TCP connection' }
@@ -1125,9 +1200,9 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerConnectionType === 'rtu' &&
           this.debuggerRtuPort === connectionParams.port
         ) {
-          const targetMd5 = await this.debuggerModbusClient.getMd5Hash()
+          const { md5: targetMd5, targetEndian } = await this.debuggerModbusClient.getMd5Hash()
           const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-          return { success: true, match, targetMd5 }
+          return { success: true, match, targetMd5, targetEndian }
         }
 
         client = new ModbusRtuClient({
@@ -1139,7 +1214,7 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       await client.connect()
-      const targetMd5 = await client.getMd5Hash()
+      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
 
       const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1153,7 +1228,7 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerRtuSlaveId = connectionParams.slaveId!
       }
 
-      return { success: true, match, targetMd5 }
+      return { success: true, match, targetMd5, targetEndian }
     } catch (error) {
       client?.disconnect()
       wsClient?.disconnect()
@@ -1363,11 +1438,11 @@ class MainProcessBridge implements MainIpcModule {
         })
         await this.debuggerModbusClient.connect()
 
-        // Trigger endianness detection on the emulated runtime.
-        // getMd5Hash sends 0xDEAD which the runtime uses to detect byte order
-        // and call set_endianness(). Without this, the default SAME_ENDIANNESS
-        // causes multi-byte values to be stored with swapped bytes on the
-        // little-endian AVR emulator.
+        // MD5 fetch warms the connection and exercises the
+        // runtime's endianness-sentinel path.  Endianness detection
+        // itself is handled at the editor's verify-MD5 step (see
+        // handleDebuggerVerifyMd5) where the result feeds the swap
+        // layer; here we just need the connection live.
         await this.debuggerModbusClient.getMd5Hash()
       } else if (connectionType === 'websocket') {
         if (this.debuggerModbusClient) {

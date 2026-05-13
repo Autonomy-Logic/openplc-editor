@@ -1,6 +1,6 @@
 import { exec, spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
@@ -14,6 +14,94 @@ import { promisify } from 'node:util'
 type StrucppCompile = typeof import('strucpp')['compile']
 type StrucppFormatDiagnostic = typeof import('strucpp')['formatDiagnostic']
 type StrucppBuildSourceMap = typeof import('strucpp')['buildSourceMap']
+type StrucppGetVersion = typeof import('strucpp')['getVersion']
+type StrucppCompileError = import('strucpp').CompileError
+type StrucppSourceMap = ReturnType<typeof import('strucpp')['buildSourceMap']>
+
+interface StrucppModule {
+  compile: StrucppCompile
+  formatDiagnostic: StrucppFormatDiagnostic
+  buildSourceMap: StrucppBuildSourceMap
+  getVersion: StrucppGetVersion
+}
+
+import { type KnownPou, splitProgramSt } from './utils/split-program-st'
+
+/**
+ * Wrap strucpp's plain (file:line:col) diagnostic with the POU/section
+ * context the new error fields carry, so the editor's console shows
+ * something the user can act on:
+ *
+ *     [Manual_Override / body line 7] Cannot assign WSTRING to BOOL
+ *
+ * For var-block errors with a known variable name, surface that
+ * instead of the raw line number — the variables-table view doesn't
+ * always show line numbers (table mode), and a name is more
+ * actionable. Falls back to plain formatDiagnostic when none of the
+ * new fields are populated (e.g. errors in synthetic _types.st /
+ * _config.st sections, or before the splitter ran).
+ */
+function formatErrorWithPouContext(
+  err: StrucppCompileError,
+  formatDiagnostic: StrucppFormatDiagnostic,
+  sourceMap: StrucppSourceMap,
+): string {
+  // `preferBodyLine: true` makes strucpp's gcc-style formatter render
+  // body errors with the body-relative line in both the header column
+  // and the snippet gutter, matching the Monaco body view the user
+  // sees and the bracketed `[POU / body line N]` prefix we render
+  // alongside.  Var-block errors and non-POU errors are unaffected.
+  // CLI and vscode-extension callers don't pass this flag, so their
+  // long-standing absolute-file-line output is preserved.
+  const base = formatDiagnostic(err, sourceMap, { preferBodyLine: true })
+  if (!err.pouName) return base
+  let prefix: string
+  if (err.section === 'body' && err.bodyLine !== undefined) {
+    prefix = `[${err.pouName} / body line ${err.bodyLine}]`
+  } else if (err.section === 'var-block') {
+    prefix = err.variableName
+      ? `[${err.pouName} / variable ${err.variableName}]`
+      : `[${err.pouName} / variables, line ${err.line}]`
+  } else {
+    prefix = `[${err.pouName}]`
+  }
+  return `${prefix}\n${base}`
+}
+
+/**
+ * Load the strucpp package via require, kept out of the static import
+ * graph because strucpp uses ESM features (top-level await, import.meta)
+ * that are incompatible with Jest's CJS transform — switching the
+ * editor's test runner to ESM is a separate undertaking. Single
+ * helper so the lint-disable lives in exactly one place.
+ */
+function loadStrucpp(): StrucppModule {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('strucpp') as StrucppModule
+}
+
+/**
+ * Project data with the optional C++ POU sidecar attached. The base
+ * PLCProjectData type doesn't carry C++ POUs because they're an
+ * editor-side editor-only artefact; we splice them in for the compile
+ * pipeline. Centralised here so the cast appears once instead of
+ * inline at every read site.
+ */
+type ProjectDataWithCppPous = import('@root/backend/shared/types/PLC/open-plc').PLCProjectData & {
+  originalCppPous?: CppPouDataCode[]
+}
+
+/**
+ * Post-build PLC start retry loop bounds. Why these numbers:
+ *   - 5000 ms total: longer than the slowest STOP transition observed
+ *     end-to-end (worst case ~3 s on a Pi 4 with EtherCAT teardown).
+ *   - 150 ms poll: tight enough to feel responsive, loose enough to
+ *     avoid hammering the runtime's unix socket.
+ * If the runtime ABI changes the STOP transition pattern (e.g. adds
+ * an explicit "ready for START" event), retire this loop.
+ */
+const POST_BUILD_START_TIMEOUT_MS = 5000
+const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
@@ -28,6 +116,7 @@ import {
   generateCBlocksHeader,
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
 import { generateModbusMasterConfig } from '@root/backend/shared/utils/modbus/generate-modbus-master-config'
+import { assertPathContained, validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import { parsePlcStatus } from '@root/backend/shared/utils/plc-status'
 import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
@@ -309,9 +398,7 @@ class CompilerModule {
 
   checkStrucppAvailability(): MethodsResult<string> {
     try {
-      // Lazy import — strucpp uses ESM features incompatible with Jest's CJS transform
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getVersion } = require('strucpp') as { getVersion: () => string }
+      const { getVersion } = loadStrucpp()
       return { success: true, data: getVersion() }
     } catch {
       throw new Error('STruC++ not available. Run "npm run setup:binaries" to install it.')
@@ -385,6 +472,15 @@ class CompilerModule {
     if (boardTarget !== 'openplc-compiler') {
       // Arduino targets: headers go flat next to the sketch (Baremetal.ino
       // includes "iec_var.hpp" etc. directly).
+      //
+      // resources/sources/arduino/ also ships arduino_runtime_glue.{cpp,h}.
+      // The glue owns g_config and every helper that touches strucpp types,
+      // isolating them in a library translation unit that arduino-cli
+      // compiles WITHOUT the <Arduino.h> prelude. The .ino sketch therefore
+      // never has Arduino.h's macros (DEFAULT/HIGH/LOW/PI/B0..B7/…) and
+      // strucpp library struct member names in the same TU — eliminating
+      // the collisions that previously broke any project including OSCAT
+      // blocks.
       filesToCopy.push(
         cp(staticArduinoFilesPath, sourceTargetFolderPath, { recursive: true }),
         this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
@@ -412,6 +508,8 @@ class CompilerModule {
   /**
    * Copy STruC++ C++ runtime headers to the target directory.
    * These headers are downloaded by scripts/download-binaries.ts from the STruC++ release.
+   * Single recursive copy so any future subdirectory under
+   * resources/strucpp/runtime/include/ propagates without code change.
    */
   private async copyStrucppRuntimeHeaders(targetDir: string): Promise<void> {
     const runtimeDir = this.strucppRuntimeDir
@@ -425,8 +523,33 @@ class CompilerModule {
     // Ensure the target directory exists. v4 passes a nested path
     // (strucpp_runtime/include) that may not exist yet.
     await fs.mkdir(targetDir, { recursive: true })
-    const files = await readdir(runtimeDir)
-    await Promise.all(files.map((file) => cp(join(runtimeDir, file), join(targetDir, file))))
+    await cp(runtimeDir, targetDir, { recursive: true })
+  }
+
+
+  /**
+   * Mirror the bundled avr-libstdcpp headers into a stable no-space
+   * cache path so arduino-cli's compiler.cpp.extra_flags substitution
+   * doesn't trip on a path containing spaces (common on macOS Electron
+   * userData paths).
+   *
+   * The cache key includes the editor version, so an upgrade that
+   * ships new headers self-invalidates. A presence check on a sentinel
+   * file (cstdint, which has shipped since the avr-libstdcpp v1) keeps
+   * the steady-state cost to a single existsSync per compile.
+   */
+  private async ensureAvrLibStdCppCache(): Promise<string> {
+    const sourceDir = join(this.sourceDirectoryPath, 'avr-libstdcpp', 'include')
+    const cacheDir = join(os.tmpdir(), `openplc-avr-libstdcpp-${electronApp.getVersion()}`, 'include')
+
+    const sentinel = join(cacheDir, 'cstdint')
+    if (existsSync(sentinel)) {
+      return cacheDir
+    }
+
+    await fs.mkdir(cacheDir, { recursive: true })
+    await cp(sourceDir, cacheDir, { recursive: true })
+    return cacheDir
   }
 
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
@@ -481,38 +604,104 @@ class CompilerModule {
 
   async handleCompileSTtoCpp(
     sourceTargetFolderPath: string,
-    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
-    options: { hasCBlocks?: boolean } = {},
+    handleOutputData: (
+      chunk: Buffer | string,
+      logLevel?: 'info' | 'error',
+      compileError?: StrucppCompileError,
+    ) => void,
+    options: {
+      hasCBlocks?: boolean
+      pous?: KnownPou[]
+      /**
+       * Directories `strucpp.libraryPaths` should scan for `.stlib`
+       * archives.  When supplied, fully overrides the default
+       * "scan strucppLibsDir" behaviour — pass the bundled directory
+       * plus any project-enabled user-installed directories.  When
+       * omitted, the legacy "scan only strucppLibsDir" path keeps
+       * working (bundled-only).
+       */
+      libraryDirs?: string[]
+      /**
+       * Names of libraries the project enables but the system pool
+       * doesn't currently have on disk.  Surfaced as a pre-compile
+       * error so the user gets a clear "open the Library Manager"
+       * message instead of strucpp's per-symbol cascade.
+       */
+      missingLibraries?: string[]
+    } = {},
   ): Promise<{ md5Hash: string }> {
     const stFilePath = join(sourceTargetFolderPath, 'program.st')
     const stSource = await readFile(stFilePath, { encoding: 'utf8' })
 
     handleOutputData('Compiling Structured Text to C++ with STruC++...', 'info')
 
-    // Lazy import to avoid ESM/CJS issues at module load time (Jest compatibility)
     const {
       compile: strucppCompile,
       formatDiagnostic: strucppFormatDiagnostic,
       buildSourceMap: strucppBuildSourceMap,
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-    } = require('strucpp') as {
-      compile: StrucppCompile
-      formatDiagnostic: StrucppFormatDiagnostic
-      buildSourceMap: StrucppBuildSourceMap
+    } = loadStrucpp()
+
+    // Pre-compile gate: every library the project enables must be
+    // resolvable on disk before strucpp runs, otherwise the
+    // user gets a confusing "function 'X' not found" error per
+    // missing symbol instead of a clear "library 'Y' is enabled but
+    // not installed" message.
+    if (options.missingLibraries && options.missingLibraries.length > 0) {
+      const list = options.missingLibraries.join(', ')
+      throw new Error(
+        `Cannot compile: project enables libraries that are not installed (${list}). ` +
+          `Open the Library Manager to install or remove them.`,
+      )
     }
 
-    const libsDir = this.strucppLibsDir
+    // When the caller supplied a project-scoped directory list (the
+    // editor path goes through this), use it as-is — bundled +
+    // project-enabled subset only.  Fallback path (no list) scans
+    // the strucpp resources dir directly so direct API consumers
+    // and old call sites keep working with bundled-only behaviour.
     let libraryPaths: string[] = []
-    try {
-      await fs.access(libsDir)
-      libraryPaths = [libsDir]
-    } catch {
-      // No libs directory available, compile without libraries
+    if (options.libraryDirs && options.libraryDirs.length > 0) {
+      libraryPaths = options.libraryDirs
+    } else {
+      const libsDir = this.strucppLibsDir
+      try {
+        await fs.access(libsDir)
+        libraryPaths = [libsDir]
+      } catch {
+        // No libs directory available, compile without libraries
+      }
     }
 
     // Precompute MD5 so STruC++ can embed it into debugMap (so the editor
     // can detect stale layouts without re-reading program.st).
     const md5Hash = crypto.createHash('md5').update(stSource).digest('hex')
+
+    // Try to split program.st into per-POU files so strucpp errors come
+    // back with `error.file === '<PouName>.st'` and the new
+    // pouName/section/bodyLine fields populated. Failure is non-fatal:
+    // we fall back to monolithic compilation, which is exactly today's
+    // behaviour — the build never breaks because of the splitter.
+    const split = options.pous && options.pous.length > 0 ? splitProgramSt(stSource, options.pous) : null
+    if (options.pous && options.pous.length > 0 && !split) {
+      handleOutputData(
+        'ST splitter could not segment program.st; falling back to monolithic compilation. ' +
+          'Error line numbers may not match the editor view.',
+        'info',
+      )
+    }
+
+    // Persist the offset table next to the build artefacts even though
+    // nothing reads it yet — handy for future iec2c-error remapping on
+    // Runtime v3 and trivial to produce.
+    if (split) {
+      const offsets: Record<string, { kind: string; startLine: number; endLine: number }> = {}
+      for (const [name, off] of split.pouOffsets) offsets[name] = off
+      await writeFile(
+        join(sourceTargetFolderPath, 'program.st.map.json'),
+        JSON.stringify({ pouOffsets: offsets }, null, 2),
+        { encoding: 'utf8' },
+      )
+    }
 
     const stFileName = 'program.st'
     // When the project has C/C++ POUs, every per-POU TU may reference the
@@ -520,25 +709,64 @@ class CompilerModule {
     // extern declarations. They live in c_blocks.h (generated immediately
     // after this step), so plumb the include through.
     const pouIncludes = options.hasCBlocks ? ['c_blocks.h'] : []
-    const result = strucppCompile(stSource, {
+
+    let primaryFileName = stFileName
+    let primarySource = stSource
+    let additionalSources: { fileName: string; source: string }[] | undefined
+    if (split) {
+      const entries = [...split.files.entries()]
+      // Take the first as primary; rest go through additionalSources.
+      // Order doesn't affect compilation correctness — strucpp merges
+      // every parsed unit before semantic analysis.
+      const [firstName, firstSource] = entries[0]
+      primaryFileName = firstName
+      primarySource = firstSource
+      additionalSources = entries.slice(1).map(([fileName, source]) => ({ fileName, source }))
+    }
+
+    const result = strucppCompile(primarySource, {
       headerFileName: 'generated.hpp',
-      fileName: stFileName,
+      fileName: primaryFileName,
       debug: true,
       lineMapping: true,
       libraryPaths,
       md5: md5Hash,
       pouIncludes,
+      ...(additionalSources ? { additionalSources } : {}),
     })
 
-    const diagSourceMap = strucppBuildSourceMap([{ fileName: stFileName, source: stSource }])
+    // Source map covers every file we fed strucpp, so formatDiagnostic
+    // can pull the offending source line whichever per-POU file the
+    // error came from.
+    const diagFiles = split
+      ? [...split.files.entries()].map(([fileName, source]) => ({ fileName, source }))
+      : [{ fileName: stFileName, source: stSource }]
+    const diagSourceMap = strucppBuildSourceMap(diagFiles)
 
     if (!result.success) {
-      const msgs = result.errors.map((e) => strucppFormatDiagnostic(e, diagSourceMap)).join('\n\n')
-      throw new Error(`STruC++ compilation failed:\n\n${msgs}`)
+      // Emit one structured log entry per error so the renderer's
+      // console can attach a click-to-open handler to each one.  The
+      // formatted text is what the user sees; the third argument
+      // carries the raw `CompileError` (pouName / section / bodyLine
+      // / variableName / …) for navigation.  We then throw a short
+      // marker so the outer catch posts only the high-level
+      // "STruC++ compilation failed" line — without re-dumping every
+      // error blob a second time through the catch's plain-message
+      // path.
+      handleOutputData('STruC++ compilation failed:', 'error')
+      for (const err of result.errors) {
+        const formatted = formatErrorWithPouContext(err, strucppFormatDiagnostic, diagSourceMap)
+        handleOutputData(formatted, 'error', err)
+      }
+      throw new Error('STruC++ compilation failed')
     }
 
     for (const warn of result.warnings) {
-      handleOutputData(strucppFormatDiagnostic(warn, diagSourceMap), 'info')
+      handleOutputData(
+        formatErrorWithPouContext(warn, strucppFormatDiagnostic, diagSourceMap),
+        'info',
+        warn,
+      )
     }
 
     // STruC++ splits the implementation across one TU per POU plus a
@@ -946,7 +1174,7 @@ class CompilerModule {
   }
 
   async handleGenerateCBlocksHeader(
-    projectData: PLCProjectData & { originalCppPous?: CppPouDataCode[] },
+    projectData: ProjectDataWithCppPous,
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
@@ -974,7 +1202,7 @@ class CompilerModule {
   }
 
   async handleGenerateCBlocksCode(
-    projectData: PLCProjectData & { originalCppPous?: CppPouDataCode[] },
+    projectData: ProjectDataWithCppPous,
     compilationPath: string,
     boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
@@ -1047,11 +1275,24 @@ class CompilerModule {
 
     if (boardHalsContent['cxx_flags']) {
       const cxxFlags = [...boardHalsContent['cxx_flags']]
-      // AVR toolchains don't ship the C++ standard library (no <type_traits>, <algorithm>, etc.).
-      // Add avr-libstdcpp headers so STruC++ runtime compiles on AVR targets.
-      const avrLibStdCppPath = join(this.sourceDirectoryPath, 'avr-libstdcpp', 'include')
+      // AVR toolchains don't ship the C++ standard library (no
+      // <type_traits>, <algorithm>, etc.). We bundle a freestanding-
+      // libstdc++ port at resources/sources/avr-libstdcpp/include and
+      // pass it via -I.
+      //
+      // The original path can sit anywhere — Electron's user-data dir
+      // on macOS is `~/Library/Application Support/<App>/` and many
+      // users have spaces in their home path. arduino-cli builds the
+      // compile invocation by token-substituting compiler.cpp.extra_flags
+      // into a recipe and processing the result; quoted paths with
+      // embedded spaces have been known to confuse the substitution and
+      // break AVR builds. Mirror the headers into a known no-space
+      // cache path on first compile to sidestep that whole class of
+      // breakage. Versioned cache key so the editor self-invalidates
+      // on upgrades that ship new headers.
       if (boardHalsContent['core']?.startsWith('arduino:avr')) {
-        cxxFlags.push(`-I "${avrLibStdCppPath}"`)
+        const avrLibStdCppPath = await this.ensureAvrLibStdCppCache()
+        cxxFlags.push(`-I${avrLibStdCppPath}`)
       }
       buildProjectFlags = [
         ...buildProjectFlags,
@@ -1065,6 +1306,22 @@ class CompilerModule {
         ...buildProjectFlags,
         '--build-property',
         `compiler.c.elf.extra_flags=${boardHalsContent['ld_flags'].map((f: string) => f).join(' ')}`,
+      ]
+    }
+
+    // `upload.maximum_data_size` controls arduino-cli's post-link
+    // size check, not the linker memory map (that's `ld_flags`).
+    // For boards like the simulator that target a stock Arduino
+    // platform but emulate more RAM than the canonical SoC, we
+    // need to override both — otherwise the link succeeds but
+    // arduino-cli rejects the binary with "data section exceeds
+    // available space in board" because boards.txt still reports
+    // 8192 bytes for atmega2560.
+    if (typeof boardHalsContent['max_data_size'] === 'number') {
+      buildProjectFlags = [
+        ...buildProjectFlags,
+        '--build-property',
+        `upload.maximum_data_size=${boardHalsContent['max_data_size']}`,
       ]
     }
 
@@ -1523,10 +1780,18 @@ class CompilerModule {
           const modules = matchingDevice.moduleSystem?.modules ?? []
           const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
 
-          pluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
+          // configTemplate is supplied by the package author through
+          // their .vpp manifest. Without validation, plugin_name like
+          // "../../../etc/cron.d/runme" would be join-ed into a path
+          // outside confFolderPath and the editor would write user-
+          // controlled JSON to an arbitrary location.
+          const rawPluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
+          validatePathId(rawPluginName, 'configTemplate.plugin_name')
+          pluginName = rawPluginName
           const confFolderPath = join(sourceTargetFolderPath, 'conf')
           await mkdir(confFolderPath, { recursive: true })
           const configFilePath = join(confFolderPath, `${pluginName}.json`)
+          assertPathContained(confFolderPath, configFilePath, 'plugin config path')
           await writeFile(configFilePath, JSON.stringify(finalConfig, null, 2), 'utf-8')
           handleOutputData(`Generated conf/${pluginName}.json for VPP plugin`, 'info')
         }
@@ -1541,8 +1806,18 @@ class CompilerModule {
         return
       }
 
-      // The plugin source directory is the parent directory of pluginEntry
+      // The plugin source directory is the parent directory of pluginEntry.
+      // pluginEntryRelPath is supplied by the package manifest; without
+      // containment, an entry like `../../../etc` would resolve outside
+      // matchingPackagePath and the recursive-copy below would slurp
+      // arbitrary host files into the build's vpp_plugin directory.
       const pluginSourceDir = join(matchingPackagePath, path.dirname(pluginEntryRelPath))
+      try {
+        assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
+      } catch (err) {
+        handleOutputData(`Invalid VPP pluginEntry: ${getErrorMessage(err)}`, 'error')
+        return
+      }
       let pluginSourceStat
       try {
         pluginSourceStat = await stat(pluginSourceDir)
@@ -1570,12 +1845,25 @@ class CompilerModule {
       // Copy the plugin source, excluding files that are only useful in the editor
       // (config_template.json is already turned into conf/<plugin>.json, and
       // requirements.txt is for Python-style plugins that don't apply here).
+      // Symlinks are rejected unconditionally:
+      //   - they aren't useful inside a .vpp (the format ships a flat tree),
+      //   - a self-referential or parent-pointing symlink would make this
+      //     recursion unbounded, hanging the build,
+      //   - and a symlink to outside matchingPackagePath would let a
+      //     malicious package exfiltrate host files into the upload.
       const EXCLUDE_FILES = new Set(['config_template.json', 'requirements.txt'])
       const copiedFiles: string[] = []
       const collectAndCopy = async (sourceDir: string, destDir: string, relPath: string = ''): Promise<void> => {
         const entries = await readdir(sourceDir, { withFileTypes: true })
         for (const entry of entries) {
           if (EXCLUDE_FILES.has(entry.name)) continue
+          if (entry.isSymbolicLink()) {
+            handleOutputData(
+              `Skipping symlink in VPP plugin source: ${relPath ? `${relPath}/` : ''}${entry.name}`,
+              'info',
+            )
+            continue
+          }
           const sourcePath = join(sourceDir, entry.name)
           const destPath = join(destDir, entry.name)
           const relFilePath = relPath ? `${relPath}/${entry.name}` : entry.name
@@ -1612,7 +1900,7 @@ class CompilerModule {
       await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
 
       handleOutputData(
-        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}…)`,
+        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
       )
     } catch (error) {
@@ -1636,6 +1924,15 @@ class CompilerModule {
         endpoint: string,
         responseParser?: (data: string) => T,
       ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+      /**
+       * Resolve a list of project-enabled library names to the disk
+       * directories `strucpp.libraryPaths` should scan.  Bundled
+       * libraries are always-on and live in a single shared dir;
+       * each enabled user library gets its own folder.  Missing
+       * names (enabled but not installed) come back so the caller
+       * can abort with a clear error before strucpp runs.
+       */
+      resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
     },
   ): Promise<void> {
     // Start the main process port to communicate with the renderer process.
@@ -1798,13 +2095,37 @@ class CompilerModule {
 
     // Step 4: Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      const hasCBlocks = ((projectData as PLCProjectData & { originalCppPous?: unknown[] }).originalCppPous?.length ?? 0) > 0
+      const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
+      // Hand the POU list to handleCompileSTtoCpp so the splitter can
+      // segment program.st into per-POU files and surface errors with
+      // POU-relative location data.
+      const knownPous: KnownPou[] = projectData.pous.map((p) => ({
+        name: p.data.name,
+        kind:
+          p.type === 'program'
+            ? ('PROGRAM' as const)
+            : p.type === 'function'
+              ? ('FUNCTION' as const)
+              : ('FUNCTION_BLOCK' as const),
+        language: p.data.language as KnownPou['language'],
+      }))
+      // Resolve project-enabled libraries to disk directories.
+      // Bundled libs are always-on; missing names (enabled but not
+      // installed) abort the compile early in handleCompileSTtoCpp
+      // with a clear "open the Library Manager" message.
+      const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
+      const { dirs: libraryDirs, missing: missingLibraries } =
+        mainProcessBridge.resolveLibraryDirs(enabledLibraryNames)
       const { md5Hash } = await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
-        (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
+        (data, logLevel, compileError) => {
+          _mainProcessPort.postMessage({
+            logLevel,
+            message: data,
+            ...(compileError ? { compileError } : {}),
+          })
         },
-        { hasCBlocks },
+        { hasCBlocks, pous: knownPous, libraryDirs, missingLibraries },
       )
       buildMD5Hash = md5Hash
     } catch (error) {
@@ -2151,8 +2472,8 @@ class CompilerModule {
                    * error, etc.) stops the retry immediately.
                    */
                   const startPlcAfterBuildWithRetry = async (): Promise<void> => {
-                    const maxWaitMs = 5000
-                    const pollIntervalMs = 150
+                    const maxWaitMs = POST_BUILD_START_TIMEOUT_MS
+                    const pollIntervalMs = POST_BUILD_START_POLL_INTERVAL_MS
                     const deadline = Date.now() + maxWaitMs
 
                     while (Date.now() < deadline) {
@@ -2450,6 +2771,9 @@ class CompilerModule {
   async compileForDebugger(
     args: Array<string | null | PLCProjectData>,
     _mainProcessPort: MessagePortMain,
+    mainProcessBridge: {
+      resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
+    },
   ): Promise<void> {
     _mainProcessPort.start()
 
@@ -2539,13 +2863,30 @@ class CompilerModule {
 
     // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
-      const hasCBlocks = ((projectData as PLCProjectData & { originalCppPous?: unknown[] }).originalCppPous?.length ?? 0) > 0
+      const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
+      const knownPous: KnownPou[] = projectData.pous.map((p) => ({
+        name: p.data.name,
+        kind:
+          p.type === 'program'
+            ? ('PROGRAM' as const)
+            : p.type === 'function'
+              ? ('FUNCTION' as const)
+              : ('FUNCTION_BLOCK' as const),
+        language: p.data.language as KnownPou['language'],
+      }))
+      const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
+      const { dirs: libraryDirs, missing: missingLibraries } =
+        mainProcessBridge.resolveLibraryDirs(enabledLibraryNames)
       await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
-        (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
+        (data, logLevel, compileError) => {
+          _mainProcessPort.postMessage({
+            logLevel,
+            message: data,
+            ...(compileError ? { compileError } : {}),
+          })
         },
-        { hasCBlocks },
+        { hasCBlocks, pous: knownPous, libraryDirs, missingLibraries },
       )
     } catch (error) {
       _mainProcessPort.postMessage({

@@ -1,5 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
+import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { SerialPort } from 'serialport'
 
@@ -250,7 +252,7 @@ export class ModbusRtuClient {
     })
   }
 
-  async getMd5Hash(): Promise<string> {
+  async getMd5Hash(): Promise<Md5ProbeResult> {
     const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
     const endiannessCheck = 0xdead
 
@@ -285,11 +287,16 @@ export class ModbusRtuClient {
           throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
         }
 
-        // Phase 4: the MD5 response trailer echoes the 2-byte endianness
-        // probe so the editor can detect target byte order. Strip it.
+        // Response trailer is a 2-byte runtime-driven sentinel: the
+        // runtime stores the literal 0xDEAD through a native uint16_t,
+        // so the bytes reflect target byte order.
+        const trailerHi = response.readUInt8(response.length - 2)
+        const trailerLo = response.readUInt8(response.length - 1)
+        const targetEndian = detectTargetEndian(trailerHi, trailerLo)
+
         const md5Region = response.slice(9, response.length - 2)
-        const md5String = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
-        return md5String
+        const md5 = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
+        return { md5, targetEndian }
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(getErrorMessage(error))
         if (attempt < MD5_REQUEST_MAX_RETRIES) {

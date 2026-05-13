@@ -2,8 +2,25 @@ import { PLCProject } from '@root/middleware/shared/ports/types'
 import { escapeRegExp } from 'lodash'
 import * as monaco from 'monaco-editor'
 
-import { StandardFunctionBlocks } from '../../../../../../data/library/standard-function-blocks'
+import type { SystemLibraryPou } from '../../../../../../../middleware/shared/ports/library-types'
+import { openPLCStoreBase } from '../../../../../../store'
 import type { VariableDTO } from '../../../../../../store/slices/project'
+
+/**
+ * Find a function block named `typeName` across every loaded system
+ * library (.stlib bundle). Returns the first match — FB names are
+ * unique across IEC libraries by convention. Returns undefined when
+ * libraries haven't loaded yet (early startup) or when the type
+ * belongs to a user-defined POU instead.
+ */
+function findSystemFB(typeName: string): SystemLibraryPou | undefined {
+  const upper = typeName.toUpperCase()
+  for (const lib of openPLCStoreBase.getState().libraries.system) {
+    const fb = lib.pous.find((pou) => pou.name === upper && pou.type === 'function-block')
+    if (fb) return fb
+  }
+  return undefined
+}
 
 interface FBCompletionContext {
   isAfterDot: boolean
@@ -69,10 +86,10 @@ function findFinalType(
   while (currentPath < instancePath.length) {
     const fieldName = instancePath[currentPath]
 
-    // First, check if it's a Standard FB
-    const standardFB = StandardFunctionBlocks.pous.find((fb) => fb.name === currentTypeName.toUpperCase())
-    if (standardFB) {
-      const field = standardFB.variables.find(
+    // First, check if it's a system library FB (any loaded .stlib)
+    const systemFB = findSystemFB(currentTypeName)
+    if (systemFB) {
+      const field = systemFB.variables.find(
         (v) => v.name === fieldName && (v.class === 'input' || v.class === 'output'),
       )
       if (field) {
@@ -102,8 +119,9 @@ function findFinalType(
     currentPath++
   }
 
-  // Determine if the final type is Standard or Custom
-  const isStandard = StandardFunctionBlocks.pous.some((fb) => fb.name === currentTypeName.toUpperCase())
+  // Determine whether the final type belongs to a system library or a
+  // user-defined POU.
+  const isStandard = findSystemFB(currentTypeName) !== undefined
 
   return { type: currentTypeName, isStandard }
 }
@@ -128,10 +146,10 @@ function findFBType(
   if (pouVariable) {
     const typeName = pouVariable.type.value.toUpperCase()
 
-    // Check if it's a Standard FB first
-    const standardFB = StandardFunctionBlocks.pous.find((fb) => fb.name === typeName)
-    if (standardFB) {
-      return { type: standardFB.name, isStandard: true }
+    // Check system libraries (any loaded .stlib) first
+    const systemFB = findSystemFB(typeName)
+    if (systemFB) {
+      return { type: systemFB.name, isStandard: true }
     }
 
     // Check if it's a Custom FB
@@ -148,10 +166,10 @@ function findFBType(
   if (match) {
     const typeName = match[1].toUpperCase()
 
-    // Check Standard FBs
-    const standardFB = StandardFunctionBlocks.pous.find((fb) => fb.name === typeName)
-    if (standardFB) {
-      return { type: standardFB.name, isStandard: true }
+    // Check system libraries first
+    const systemFB = findSystemFB(typeName)
+    if (systemFB) {
+      return { type: systemFB.name, isStandard: true }
     }
 
     // Check Custom FBs
@@ -165,18 +183,19 @@ function findFBType(
 }
 
 /**
- * Get variable suggestions for Standard Function Blocks
+ * Get variable suggestions for system library Function Blocks (any
+ * loaded .stlib bundle: standard, additional, OSCAT, std-functions, …).
  */
 function getStandardFBVariableSuggestions(
   fbType: string,
   range: monaco.IRange,
   editorName: string,
 ): monaco.languages.CompletionItem[] {
-  const standardFB = StandardFunctionBlocks.pous.find((fb) => fb.name === fbType)
-  if (!standardFB) return []
+  const systemFB = findSystemFB(fbType)
+  if (!systemFB) return []
 
   // Filter only public variables (Input, Output) - 'local' are private
-  const publicVariables = standardFB.variables
+  const publicVariables = systemFB.variables
     .filter((variable) => variable.class === 'input' || variable.class === 'output')
     .filter((variable) => variable.name !== editorName)
 
@@ -186,7 +205,7 @@ function getStandardFBVariableSuggestions(
     insertText: variable.name,
     detail: `${variable.type.value} (${variable.class})`,
     documentation: {
-      value: `**${variable.name}** - ${variable.class} variable\n\nType: \`${variable.type.value}\`\n\nStandard Function Block: ${fbType}\n\n${variable.documentation || standardFB.documentation}`,
+      value: `**${variable.name}** - ${variable.class} variable\n\nType: \`${variable.type.value}\`\n\nFunction Block: ${fbType}\n\n${variable.documentation || systemFB.documentation}`,
     },
     range,
     sortText: `${variable.class === 'input' ? '1' : variable.class === 'output' ? '2' : '3'}_${variable.name}`,

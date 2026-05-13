@@ -104,13 +104,17 @@ describe('shared/utils', () => {
   // createDatatypeObject
   // -------------------------------------------------------------------------
   describe('createDatatypeObject', () => {
-    it('creates an array data type with base-type bool', () => {
+    it('creates an array data type with base-type bool and empty initial value', () => {
       const result = createDatatypeObject({ name: 'IntArray', derivation: 'array' })
       expect(result.name).toBe('IntArray')
       expect(result.derivation).toBe('array')
       if (result.derivation === 'array') {
         expect(result.baseType).toEqual({ definition: 'base-type', value: 'BOOL' })
-        expect(result.initialValue).toBe('false')
+        // Empty stays empty — codegen omits `:= ...` for falsy
+        // values, which keeps the array compile-clean if the user
+        // later changes the base type without touching the initial
+        // value field.
+        expect(result.initialValue).toBe('')
         expect(result.dimensions).toEqual([])
       }
     })

@@ -164,6 +164,12 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        type: 'plc-library-manager'
+        meta: {
+          name: string
+        }
+      }
+    | {
         type: 'plc-ethercat-device'
         meta: {
           name: string
@@ -223,6 +229,16 @@ export type EditorActions = {
     scrollPosition?: ScrollPosition
     fbdPosition?: FbdPosition
   }) => void
+  /**
+   * Programmatically update an editor model's cursor position.  Unlike
+   * {@link saveEditorViewState} (which captures view state for the
+   * *previously*-active editor on tab switch), this is meant for
+   * navigation INTO an editor (e.g. compile-error click).  Updates
+   * both the model in `state.editors[]` AND `state.editor` when names
+   * match — without that double-write the active editor's reactive
+   * Monaco useEffect never sees the change.
+   */
+  setEditorCursor: (name: string, cursorPosition: CursorPosition) => void
   getEditorFromEditors: (name: string) => EditorModel | null
   setMonacoFocused: (focused: boolean) => void
 }

@@ -7,7 +7,9 @@ import { promisify } from 'node:util'
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
+import { assertPathContained } from '../../shared/utils/path-safety'
 import { PackageManagerModule } from '../package-manager'
+import { logger } from '../services/logger-service'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
 // interface MethodsResult<T> {
@@ -104,7 +106,7 @@ class HardwareModule {
       const { stdout, stderr } = await executeCommand(`"${xml2stBinaryPath}" --list-ports`)
 
       if (stderr) {
-        console.warn('xml2st stderr output:', stderr)
+        logger.warn(`xml2st stderr output: ${stderr}`)
       }
 
       let normalizedOutputString: SerialPort[] = [{ name: '', address: 'fallback' }]
@@ -122,14 +124,14 @@ class HardwareModule {
             address: port.address,
           }))
         } catch (parseError: unknown) {
-          console.error('Failed to parse xml2st output:', parseError)
+          logger.error(`Failed to parse xml2st output: ${String(parseError)}`)
           return []
         }
       }
 
       return normalizedOutputString
     } catch (execError: unknown) {
-      console.error('Failed to execute xml2st:', execError)
+      logger.error(`Failed to execute xml2st: ${String(execError)}`)
       return []
     }
   }
@@ -255,14 +257,27 @@ class HardwareModule {
         }
       }
     } catch (err) {
-      console.error('Failed to load VPP packages:', err)
+      logger.error(`Failed to load VPP packages: ${String(err)}`)
     }
   }
 
   async getBoardImagePreview(image: string, packagePath?: string) {
-    const imagePath = packagePath
-      ? join(packagePath, image)
-      : join(this.sourcesDirectoryPath, 'boards', 'previews', image)
+    // `image` arrives from a board manifest (built-in or VPP-installed)
+    // and ultimately from disk-resident JSON the user can edit. Without
+    // containment, an entry like `image: "../../../../etc/passwd"`
+    // would resolve outside the expected directory and the contents
+    // would be base64'd back across the IPC boundary — effectively a
+    // file-read primitive scoped to whatever the editor user can read.
+    //
+    // For built-in boards: contain under sources/boards/previews.
+    // For VPP boards: contain under the package's own directory, since
+    // package authors expect to ship their preview alongside other
+    // package assets.
+    const baseDir = packagePath
+      ? packagePath
+      : join(this.sourcesDirectoryPath, 'boards', 'previews')
+    const imagePath = join(baseDir, image)
+    assertPathContained(baseDir, imagePath, 'preview image path')
 
     const imageBuffer = await readFile(imagePath)
 

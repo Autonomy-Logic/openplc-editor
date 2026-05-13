@@ -18,10 +18,16 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
-/** Data posted through the MessagePort by the compiler module. */
+/** Data posted through the MessagePort by the compiler module.
+ *  `compileError` carries strucpp's structured `CompileError` (pouName,
+ *  section, bodyLine, …) when the message is one of the per-error log
+ *  entries emitted by the strucpp compile failure path — the renderer
+ *  uses it to attach a click-to-open handler to the rendered line.
+ *  Absent for plain progress messages. */
 type CompilerPortMessage = {
   message?: string
   logLevel?: string
+  compileError?: import('strucpp').CompileError
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
@@ -100,6 +106,38 @@ const rendererProcessBridge = {
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
+  /**
+   * Load all bundled .stlib archives. Returns parsed `StlibArchive`
+   * objects in alphabetical-filename order. Typed as `unknown[]` here
+   * so the IPC layer stays free of strucpp type imports — the
+   * LibraryPort consumer narrows to `StlibArchiveDTO[]`.
+   */
+  // ===================== LIBRARY MANAGER METHODS =====================
+  loadAllLibraries: (): Promise<unknown[]> => ipcRenderer.invoke('libraries:load-all'),
+  listInstalledLibraries: (): Promise<
+    Array<{
+      name: string
+      version: string
+      bundled: boolean
+      installedAt: string
+      origin: 'stlib' | 'codesys' | 'bundled'
+      displayName?: string
+      description?: string
+      author?: string
+    }>
+  > => ipcRenderer.invoke('libraries:list-installed'),
+  installLibraryFromFile: (): Promise<
+    | { success: true; canceled?: false; name: string; version: string; origin: 'stlib' | 'codesys' }
+    | { success: true; canceled: true }
+    | { success: false; error: string }
+  > => ipcRenderer.invoke('libraries:install-from-file'),
+  uninstallLibrary: (name: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('libraries:uninstall', name),
+  onLibrariesChanged: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('libraries:changed', listener)
+    return () => ipcRenderer.removeListener('libraries:changed', listener)
+  },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),

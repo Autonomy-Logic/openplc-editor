@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { z } from 'zod'
 
-import { baseTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../../middleware/shared/ports/plc-schemas'
 import { useOpenPLCStore } from '../../../../store'
 import { arrayValidation } from '../../../../store/slices/project/validation/variables'
+import { hasStringName } from '../../../../utils/safe-upper'
 import { DimensionsModal } from '../../../_atoms/dimensions-modal'
 import { toast } from '../../../_features/[app]/toast/use-toast'
-
-type BaseType = z.infer<typeof baseTypeSchema>
 
 type ArrayModalProps = {
   variableName: string
@@ -42,9 +40,12 @@ export const ArrayModal = ({
   } = useOpenPLCStore()
 
   const isNativeLanguage = language === 'python' || language === 'cpp'
-  const excludedNativeTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
+  // Same exclusion as `selectable-cell.tsx`: native-language POUs
+  // can't yet round-trip strucpp's chrono types.
+  const excludedNativeTypes = ['TIME', 'DATE', 'TOD', 'DT']
 
-  const baseTypes = baseTypeSchema.options.filter((type) => {
+  const baseTypes = baseTypeEnum.options.filter((type) => {
+    if (typeof type !== 'string') return false
     if (type.toUpperCase() === 'ARRAY') return false
     if (isNativeLanguage && excludedNativeTypes.includes(type.toUpperCase())) return false
     return true
@@ -52,23 +53,32 @@ export const ArrayModal = ({
 
   const userDataTypes = isNativeLanguage
     ? []
-    : dataTypes.map((type) => type.name).filter((typeName) => typeName !== name && typeName.toUpperCase() !== 'ARRAY')
+    : dataTypes
+        .filter(hasStringName)
+        .map((type) => type.name)
+        .filter((typeName) => typeName !== name && typeName.toUpperCase() !== 'ARRAY')
 
   const systemFunctionBlocks = isNativeLanguage
     ? []
     : sliceLibraries.system.flatMap((lib) =>
-        lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+        (lib.pous ?? [])
+          .filter((pou) => pou?.type === 'function-block')
+          .filter(hasStringName)
+          .map((pou) => pou.name.toUpperCase()),
       )
 
   const userFunctionBlocks = isNativeLanguage
     ? []
-    : sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
-        'pous' in userLib && Array.isArray(userLib.pous)
-          ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
-          : (userLib as UserLibFunctionBlock).type === 'function-block'
-            ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
-            : [],
-      )
+    : sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) => {
+        if ('pous' in userLib && Array.isArray(userLib.pous)) {
+          return userLib.pous
+            .filter((pou) => pou?.type === 'function-block')
+            .filter(hasStringName)
+            .map((pou) => pou.name.toUpperCase())
+        }
+        const fb = userLib as UserLibFunctionBlock
+        return fb.type === 'function-block' && typeof fb.name === 'string' ? [fb.name.toUpperCase()] : []
+      })
 
   const VariableTypes = [
     { definition: 'base-type', values: baseTypes },
@@ -162,9 +172,9 @@ export const ArrayModal = ({
       })
       return
     }
-    const formatArrayName = `ARRAY [${dimensionToSave.join(', ')}] OF ${typeValue?.toUpperCase()}`
+    const formatArrayName = `ARRAY [${dimensionToSave.join(', ')}] OF ${typeValue.toUpperCase()}`
 
-    const isBaseType = baseTypes.includes(typeValue as BaseType)
+    const isBaseType = (baseTypes as readonly string[]).includes(typeValue)
 
     updateVariable({
       scope: 'local',

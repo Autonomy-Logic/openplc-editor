@@ -1,3 +1,5 @@
+import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { io, Socket } from 'socket.io-client'
 
@@ -82,7 +84,7 @@ export class WebSocketDebugClient {
     return Buffer.from(bytes)
   }
 
-  async getMd5Hash(): Promise<string> {
+  async getMd5Hash(): Promise<Md5ProbeResult> {
     if (!this.socket) {
       throw new Error('Not connected to target')
     }
@@ -138,10 +140,16 @@ export class WebSocketDebugClient {
             return
           }
 
-          // Phase 4: response trailer echoes the 2-byte endianness probe.
+          // Response trailer is a 2-byte runtime-driven sentinel: the
+          // runtime stores the literal 0xDEAD through a native
+          // uint16_t, so the bytes reflect target byte order.
+          const trailerHi = responseBuffer.readUInt8(responseBuffer.length - 2)
+          const trailerLo = responseBuffer.readUInt8(responseBuffer.length - 1)
+          const targetEndian = detectTargetEndian(trailerHi, trailerLo)
+
           const md5Region = responseBuffer.slice(2, responseBuffer.length - 2)
-          const md5String = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
-          resolve(md5String)
+          const md5 = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
+          resolve({ md5, targetEndian })
         } catch (error) {
           reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
         }

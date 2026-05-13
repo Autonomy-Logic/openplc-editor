@@ -36,6 +36,12 @@ const BoardInfoSchema = z.object({
   c_flags: z.array(z.string()).optional(),
   cxx_flags: z.array(z.string()).optional(),
   ld_flags: z.array(z.string()).optional(),
+  // Overrides arduino-cli's post-link `upload.maximum_data_size`
+  // check.  Required when `ld_flags` extend the linker memory
+  // map past the canonical SoC RAM (e.g. emulated boards) —
+  // otherwise the link succeeds but the CLI rejects the binary
+  // with "data section exceeds available space in board".
+  max_data_size: z.number().optional(),
   arch: z.string().optional(),
 })
 
