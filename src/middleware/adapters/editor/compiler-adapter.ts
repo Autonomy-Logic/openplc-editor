@@ -267,19 +267,38 @@ export function createEditorCompilerAdapter(): CompilerPort {
       args: CompileLibraryArgs,
       onProgress: (event: CompileProgressEvent) => void,
     ): Promise<CompileLibraryResult> {
-      // Run the SAME `preprocessPous` step the program build runs.
-      // The library build pipeline reuses `compileProgram` verbatim
-      // for its simulator-target verification step (see
-      // `runVerificationCompile` in the backend), so the input
-      // projectData has to land in the same preprocessed shape
-      // — otherwise a C++ POU in a library would behave differently
-      // here than in a PLC project built for the simulator.
-      // `isSimulator: true` because the verification step always
-      // targets the simulator regardless of whatever board the user
-      // currently has selected.
+      // Reject C/C++ function blocks up front.  strucpp's library
+      // compiler (`compileStlib`) is ST/IL only — it has no
+      // `pouIncludes` / `hasCBlocks` knob and no way to package the
+      // implementation files (`c_blocks.h` / `c_blocks_code.cpp`)
+      // into the `.stlib` archive.  Letting the preprocessor turn
+      // the C/C++ POU into an ST stub would produce a `.stlib` that
+      // builds cleanly here but links with undefined externs at
+      // consume time.  Fail with a clear message instead.
+      const cppPous = args.projectData.pous.filter((pou) => pou.body.language === 'cpp')
+      if (cppPous.length > 0) {
+        const names = cppPous.map((p) => p.name).join(', ')
+        return {
+          success: false,
+          error:
+            `C/C++ function blocks are not yet supported in library projects ` +
+            `(strucpp's library compiler only accepts ST/IL sources).  ` +
+            `Convert or remove: ${names}.`,
+        }
+      }
+
+      // Run the SAME `preprocessPous` the runtime-target program
+      // build runs (`isSimulator: false`).  For Python POUs this
+      // converts the Python body into ST with the Python code
+      // embedded as strings — exactly the shape strucpp compiles.
+      // The simulator-only `isSimulator: true` branch would replace
+      // Python with a `first_run := 0;` no-op stub, which is the
+      // right thing for a sim-target program build but wrong for
+      // a library that's meant to be shipped to consumers that
+      // might target a real Python-capable runtime.
       const { projectData: processedData, validationFailed } = preprocessPous(
         args.projectData,
-        true,
+        false,
         (level, message) => {
           onProgress({ stage: 'st', message, level })
         },
