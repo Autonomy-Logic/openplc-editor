@@ -2747,6 +2747,19 @@ class CompilerModule {
 
     // Step 13: Upload program to board or load into simulator
     if (boardRuntime === 'simulator') {
+      // `compileOnly: true` callers (the library-project verification
+      // step today; a future "Build only" on simulator) want to
+      // confirm the compile succeeded without any side effect on the
+      // simulator process.  Emitting the firmware path makes the
+      // renderer load the .hex into the running simulator; emitting
+      // "Loading firmware into simulator..." advertises an action
+      // that isn't happening.  Skip both for compile-only callers.
+      if (compileOnly) {
+        _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
+        _mainProcessPort.postMessage({ closePort: true })
+        _mainProcessPort.close()
+        return
+      }
       // For simulator targets, send the HEX firmware path back to the renderer.
       // Derive the build sub-directory from the platform FQBN (e.g. "arduino:avr:mega" → "arduino.avr.mega")
       // so it stays in sync with the hals.json entry.
