@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCapabilities } from '../../../../middleware/shared/providers'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useOpenPLCStore } from '../../../store'
@@ -21,7 +22,7 @@ const Project = () => {
   const {
     project: {
       data: { pous, dataTypes, configurations, servers, remoteDevices },
-      meta: { name },
+      meta: { name, type: projectType },
     },
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
@@ -29,6 +30,13 @@ const Project = () => {
     workspaceActions: { setSelectedProjectTreeLeaf },
     searchQuery,
   } = useOpenPLCStore()
+
+  // Per-project-type capability matrix — drives which branches
+  // render.  Library projects only show Functions / Function Blocks /
+  // Data Types plus the manifest tab; Programs / Resource / Devices /
+  // Servers / Remote-Devices / VPP screens are program-level
+  // affordances that don't apply to a `.stlib` build.
+  const projectCaps = projectCapabilities({ type: projectType })
 
   // Get VPP vendor screens from the currently selected board
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
@@ -151,27 +159,30 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
-          {/* Project Programs tree branch */}
-          <ProjectTreeBranch branchTarget='program'>
-            {pous
-              ?.filter((pou) => pou.pouType === 'program')
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((pou) => (
-                <ProjectTreeLeaf
-                  key={pou.name}
-                  leafLang={pou.body.language as PouLeafLang}
-                  leafType='program'
-                  label={searchQuery ? extractSearchQuery(pou.name, searchQuery) : pou.name}
-                  onClick={() =>
-                    handleCreateTab({
-                      name: pou.name,
-                      path: `/data/pous/program/${pou.name}`,
-                      elementType: { type: 'program', language: pou.body.language as PouLeafLang },
-                    })
-                  }
-                />
-              ))}
-          </ProjectTreeBranch>
+          {/* Project Programs tree branch — hidden in library projects
+              (libraries have no programs). */}
+          {projectCaps.hasPrograms && (
+            <ProjectTreeBranch branchTarget='program'>
+              {pous
+                ?.filter((pou) => pou.pouType === 'program')
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((pou) => (
+                  <ProjectTreeLeaf
+                    key={pou.name}
+                    leafLang={pou.body.language as PouLeafLang}
+                    leafType='program'
+                    label={searchQuery ? extractSearchQuery(pou.name, searchQuery) : pou.name}
+                    onClick={() =>
+                      handleCreateTab({
+                        name: pou.name,
+                        path: `/data/pous/program/${pou.name}`,
+                        elementType: { type: 'program', language: pou.body.language as PouLeafLang },
+                      })
+                    }
+                  />
+                ))}
+            </ProjectTreeBranch>
+          )}
 
           {/* Project Data Types tree branch */}
           <ProjectTreeBranch branchTarget='data-type'>
@@ -233,75 +244,80 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
-          {/* Project Resources tree branch */}
-          <ProjectTreeBranch
-            branchTarget='resource'
-            onClick={() => {
-              handleCreateTab({
-                configuration: configurations,
-                name: 'Resource',
-                path: `/data/configuration/resource`,
-                elementType: { type: 'resource' },
-              })
-              setSelectedProjectTreeLeaf({
-                label: 'Resource',
-                type: 'resource',
-              })
-            }}
-          />
-
-          {/* Project Device tree branch */}
-          <ProjectTreeBranch branchTarget='device'>
-            {capabilities.hasLocalSerialPorts && (
-              <ProjectTreeLeaf
-                key='Configuration'
-                leafLang='devConfig'
-                leafType='device'
-                label='Configuration'
-                onClick={() =>
-                  handleCreateTab({
-                    name: 'Configuration',
-                    path: `/device/configuration`,
-                    elementType: { type: 'device', derivation: 'configuration' },
-                  })
-                }
-              />
-            )}
-            {capabilities.hasOrchestratorDevices && (
-              <ProjectTreeLeaf
-                leafLang='devOrchestrators'
-                leafType='device'
-                label='Orchestrators'
-                onClick={() =>
-                  handleCreateTab({
-                    name: 'Orchestrators',
-                    path: `/device/orchestrators`,
-                    elementType: { type: 'device', derivation: 'orchestrators' },
-                  })
-                }
-              />
-            )}
-          </ProjectTreeBranch>
-
-          {/* Vendor screens from VPP packages */}
-          {vendorScreens.map((screenName) => (
-            <ProjectTreeLeaf
-              key={`vendor-${screenName}`}
-              leafLang='vendorScreen'
-              leafType='vendor-screen'
-              label={screenName}
-              onClick={() =>
+          {/* Project Resources tree branch — hidden for libraries. */}
+          {projectCaps.hasResource && (
+            <ProjectTreeBranch
+              branchTarget='resource'
+              onClick={() => {
                 handleCreateTab({
-                  name: screenName,
-                  path: `/vendor-screen/${screenName}`,
-                  elementType: { type: 'vendor-screen', screenName },
+                  configuration: configurations,
+                  name: 'Resource',
+                  path: `/data/configuration/resource`,
+                  elementType: { type: 'resource' },
                 })
-              }
+                setSelectedProjectTreeLeaf({
+                  label: 'Resource',
+                  type: 'resource',
+                })
+              }}
             />
-          ))}
+          )}
 
-          {/* Project Servers tree branch */}
-          {capabilities.hasLocalSerialPorts && (
+          {/* Project Device tree branch — hidden for libraries. */}
+          {projectCaps.hasDevices && (
+            <ProjectTreeBranch branchTarget='device'>
+              {capabilities.hasLocalSerialPorts && (
+                <ProjectTreeLeaf
+                  key='Configuration'
+                  leafLang='devConfig'
+                  leafType='device'
+                  label='Configuration'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: 'Configuration',
+                      path: `/device/configuration`,
+                      elementType: { type: 'device', derivation: 'configuration' },
+                    })
+                  }
+                />
+              )}
+              {capabilities.hasOrchestratorDevices && (
+                <ProjectTreeLeaf
+                  leafLang='devOrchestrators'
+                  leafType='device'
+                  label='Orchestrators'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: 'Orchestrators',
+                      path: `/device/orchestrators`,
+                      elementType: { type: 'device', derivation: 'orchestrators' },
+                    })
+                  }
+                />
+              )}
+            </ProjectTreeBranch>
+          )}
+
+          {/* Vendor screens from VPP packages — hidden for libraries. */}
+          {projectCaps.hasVendorScreens &&
+            vendorScreens.map((screenName) => (
+              <ProjectTreeLeaf
+                key={`vendor-${screenName}`}
+                leafLang='vendorScreen'
+                leafType='vendor-screen'
+                label={screenName}
+                onClick={() =>
+                  handleCreateTab({
+                    name: screenName,
+                    path: `/vendor-screen/${screenName}`,
+                    elementType: { type: 'vendor-screen', screenName },
+                  })
+                }
+              />
+            ))}
+
+          {/* Project Servers tree branch — host-capability AND project-type gated. */}
+          {projectCaps.hasServers && capabilities.hasLocalSerialPorts && (
             <ProjectTreeBranch branchTarget='server'>
               {[...(servers || [])]
                 .sort((a, b) => a.name.localeCompare(b.name))
@@ -323,60 +339,62 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* Project Remote Devices tree branch */}
-          <ProjectTreeBranch branchTarget='remote-device'>
-            {[...(remoteDevices || [])]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((device) =>
-                device.protocol === 'ethercat' ? (
-                  <ProjectTreeExpandableLeaf
-                    key={device.name}
-                    leafLang='remoteDevice'
-                    leafType='remote-device'
-                    label={searchQuery ? extractSearchQuery(device.name, searchQuery) : device.name}
-                    onClick={() =>
-                      handleCreateTab({
-                        name: device.name,
-                        path: `/devices/remote/${device.name}.json`,
-                        elementType: { type: 'remote-device', protocol: device.protocol },
-                      })
-                    }
-                  >
-                    {device.ethercatConfig?.devices?.map((child) => (
-                      <ProjectTreeLeaf
-                        key={child.id}
-                        leafLang='ethercatDevice'
-                        leafType='ethercat-device'
-                        busName={device.name}
-                        deviceId={child.id}
-                        label={searchQuery ? extractSearchQuery(child.name, searchQuery) : child.name}
-                        onClick={() =>
-                          handleCreateTab({
-                            name: child.name,
-                            path: `/devices/remote/${device.name}/devices/${child.id}`,
-                            elementType: { type: 'ethercat-device', busName: device.name, deviceId: child.id },
-                          })
-                        }
-                      />
-                    ))}
-                  </ProjectTreeExpandableLeaf>
-                ) : (
-                  <ProjectTreeLeaf
-                    key={device.name}
-                    leafLang='remoteDevice'
-                    leafType='remote-device'
-                    label={searchQuery ? extractSearchQuery(device.name, searchQuery) : device.name}
-                    onClick={() =>
-                      handleCreateTab({
-                        name: device.name,
-                        path: `/device/remote/${device.name}`,
-                        elementType: { type: 'remote-device', protocol: device.protocol },
-                      })
-                    }
-                  />
-                ),
-              )}
-          </ProjectTreeBranch>
+          {/* Project Remote Devices tree branch — hidden for libraries. */}
+          {projectCaps.hasRemoteDevices && (
+            <ProjectTreeBranch branchTarget='remote-device'>
+              {[...(remoteDevices || [])]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((device) =>
+                  device.protocol === 'ethercat' ? (
+                    <ProjectTreeExpandableLeaf
+                      key={device.name}
+                      leafLang='remoteDevice'
+                      leafType='remote-device'
+                      label={searchQuery ? extractSearchQuery(device.name, searchQuery) : device.name}
+                      onClick={() =>
+                        handleCreateTab({
+                          name: device.name,
+                          path: `/devices/remote/${device.name}.json`,
+                          elementType: { type: 'remote-device', protocol: device.protocol },
+                        })
+                      }
+                    >
+                      {device.ethercatConfig?.devices?.map((child) => (
+                        <ProjectTreeLeaf
+                          key={child.id}
+                          leafLang='ethercatDevice'
+                          leafType='ethercat-device'
+                          busName={device.name}
+                          deviceId={child.id}
+                          label={searchQuery ? extractSearchQuery(child.name, searchQuery) : child.name}
+                          onClick={() =>
+                            handleCreateTab({
+                              name: child.name,
+                              path: `/devices/remote/${device.name}/devices/${child.id}`,
+                              elementType: { type: 'ethercat-device', busName: device.name, deviceId: child.id },
+                            })
+                          }
+                        />
+                      ))}
+                    </ProjectTreeExpandableLeaf>
+                  ) : (
+                    <ProjectTreeLeaf
+                      key={device.name}
+                      leafLang='remoteDevice'
+                      leafType='remote-device'
+                      label={searchQuery ? extractSearchQuery(device.name, searchQuery) : device.name}
+                      onClick={() =>
+                        handleCreateTab({
+                          name: device.name,
+                          path: `/device/remote/${device.name}`,
+                          elementType: { type: 'remote-device', protocol: device.protocol },
+                        })
+                      }
+                    />
+                  ),
+                )}
+            </ProjectTreeBranch>
+          )}
         </ProjectTreeRoot>
       </div>
     </div>

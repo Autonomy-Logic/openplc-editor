@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
+import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCompiler, useDebugger, useProject, useRuntime, useSimulator } from '../../../../middleware/shared/providers'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
@@ -52,6 +53,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     deviceAvailableOptions: { availableBoards },
     consoleActions: { addLog },
   } = useOpenPLCStore()
+
+  // Project-type capability matrix.  Drives which set of action
+  // buttons the activity bar shows — the program path (Build /
+  // Run / Debug) for PLC projects, the library path (Build
+  // Library) for library projects.  See `projectCapabilities` in
+  // `middleware/shared/ports/types.ts`.
+  const projectCaps = projectCapabilities(projectMeta)
 
   const compiler = useCompiler()
   const runtime = useRuntime()
@@ -543,71 +551,101 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       <TooltipSidebarWrapperButton tooltipContent='Open/Close Toolbox'>
         <ZoomButton {...zoom} />
       </TooltipSidebarWrapperButton>
-      <BuildOptionsPopover
-        disabled={isCompiling || isSimulatorBoard}
-        triggerTooltip={
-          isSimulatorBoard ? 'Use Start to build and run' : isCompiling ? 'Compiling…' : 'Build options'
-        }
-        // Arduino targets always allow upload (arduino-cli connects via USB
-        // at upload time). Runtime v3/v4 targets must be connected first
-        // since the upload goes over the network to the on-device webserver.
-        uploadAvailable={(() => {
-          const arduino = isArduinoTarget(currentBoardInfo)
-          if (arduino) return true
-          return connectionStatus === 'connected'
-        })()}
-        uploadDisabledReason='must be connected to the device to upload'
-        onSelect={(option: BuildOption) => {
-          switch (option) {
-            case 'build-only':
-              void handleBuild({ compileOnly: true, cleanBuild: false })
-              break
-            case 'build-upload':
-              void handleBuild({ compileOnly: false, cleanBuild: false })
-              break
-            case 'clean-upload':
-              void handleBuild({ compileOnly: false, cleanBuild: true })
-              break
-          }
-        }}
-      />
-      <TooltipSidebarWrapperButton
-        tooltipContent={
-          isSimulatorBoard
-            ? simulatorRunning
-              ? 'Stop Simulator'
-              : 'Start Simulator'
-            : connectionStatus !== 'connected'
-              ? 'Connect to runtime first'
-              : plcStatus === 'RUNNING'
-                ? 'Stop PLC'
-                : 'Start PLC'
-        }
-      >
-        <PlayButton
-          onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
-          disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
-          className={cn(
-            isSimulatorBoard
-              ? isCompiling || isDebuggerProcessing
-                ? disabledButtonClass
-                : ''
-              : connectionStatus !== 'connected'
-                ? disabledButtonClass
-                : '',
-          )}
-        >
-          {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
-        </PlayButton>
-      </TooltipSidebarWrapperButton>
-      <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to debug' : 'Debugger'}>
-        <DebuggerButton
-          onClick={() => void handleDebuggerClick()}
-          disabled={isDebuggerProcessing || isSimulatorBoard}
-          isActive={isDebuggerVisible}
-          className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
-        />
-      </TooltipSidebarWrapperButton>
+      {/* Program-build affordances: hidden for library projects.
+          Library builds use a dedicated button (Phase 7 wires the
+          actual compile dispatch — for Phase 3 we render a disabled
+          placeholder that surfaces in the right spot). */}
+      {projectCaps.hasProgramBuild && (
+        <>
+          <BuildOptionsPopover
+            disabled={isCompiling || isSimulatorBoard}
+            triggerTooltip={
+              isSimulatorBoard ? 'Use Start to build and run' : isCompiling ? 'Compiling…' : 'Build options'
+            }
+            // Arduino targets always allow upload (arduino-cli connects via USB
+            // at upload time). Runtime v3/v4 targets must be connected first
+            // since the upload goes over the network to the on-device webserver.
+            uploadAvailable={(() => {
+              const arduino = isArduinoTarget(currentBoardInfo)
+              if (arduino) return true
+              return connectionStatus === 'connected'
+            })()}
+            uploadDisabledReason='must be connected to the device to upload'
+            onSelect={(option: BuildOption) => {
+              switch (option) {
+                case 'build-only':
+                  void handleBuild({ compileOnly: true, cleanBuild: false })
+                  break
+                case 'build-upload':
+                  void handleBuild({ compileOnly: false, cleanBuild: false })
+                  break
+                case 'clean-upload':
+                  void handleBuild({ compileOnly: false, cleanBuild: true })
+                  break
+              }
+            }}
+          />
+          <TooltipSidebarWrapperButton
+            tooltipContent={
+              isSimulatorBoard
+                ? simulatorRunning
+                  ? 'Stop Simulator'
+                  : 'Start Simulator'
+                : connectionStatus !== 'connected'
+                  ? 'Connect to runtime first'
+                  : plcStatus === 'RUNNING'
+                    ? 'Stop PLC'
+                    : 'Start PLC'
+            }
+          >
+            <PlayButton
+              onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
+              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
+              className={cn(
+                isSimulatorBoard
+                  ? isCompiling || isDebuggerProcessing
+                    ? disabledButtonClass
+                    : ''
+                  : connectionStatus !== 'connected'
+                    ? disabledButtonClass
+                    : '',
+              )}
+            >
+              {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
+            </PlayButton>
+          </TooltipSidebarWrapperButton>
+          <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to debug' : 'Debugger'}>
+            <DebuggerButton
+              onClick={() => void handleDebuggerClick()}
+              disabled={isDebuggerProcessing || isSimulatorBoard}
+              isActive={isDebuggerVisible}
+              className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
+            />
+          </TooltipSidebarWrapperButton>
+        </>
+      )}
+      {/* Library-build affordance: shown only for library projects.
+          The actual compile dispatch (`compileLibrary`) lands in
+          Phase 7 — for Phase 3 the click handler emits a console
+          log placeholder so the affordance is visible and reachable
+          without any half-wired backend behaviour. */}
+      {projectCaps.hasLibraryBuild && (
+        <TooltipSidebarWrapperButton tooltipContent='Build Library'>
+          <BuildOptionsPopover
+            disabled={true}
+            triggerTooltip='Build Library — wiring in progress'
+            uploadAvailable={false}
+            uploadDisabledReason='library builds do not upload'
+            onSelect={() => {
+              addLog({
+                id: crypto.randomUUID(),
+                level: 'info',
+                message: 'Library build not yet wired (Phase 7).',
+              })
+            }}
+          />
+        </TooltipSidebarWrapperButton>
+      )}
       <TooltipSidebarWrapperButton tooltipContent='AI Chat'>
         <ChatButton />
       </TooltipSidebarWrapperButton>

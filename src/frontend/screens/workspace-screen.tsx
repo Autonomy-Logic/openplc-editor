@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 import { useShallow } from 'zustand/react/shallow'
 
+import { projectCapabilities } from '../../middleware/shared/ports/types'
 import { useCapabilities, useChatPanel, useDebugger, useDevice, usePlatform, useProject } from '../../middleware/shared/providers'
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
@@ -66,6 +67,11 @@ const WorkspaceScreen = () => {
   const searchResults = useOpenPLCStore(useCallback((s) => s.searchResults, []))
   const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
   const projectPath = useOpenPLCStore(useCallback((s) => s.project.meta.path, []))
+  const projectType = useOpenPLCStore(useCallback((s) => s.project.meta.type, []))
+  // Project-type capability matrix.  Combines with `capabilities`
+  // (host platform features) below to decide what affordances render
+  // in this workspace shell.
+  const projectCaps = projectCapabilities({ type: projectType })
 
   // RARE: workspace UI + debug session state (grouped with shallow)
   const {
@@ -118,7 +124,12 @@ const WorkspaceScreen = () => {
   const debugNonBoolValues = useDebugNonBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()
 
-  const hasVersionControl = capabilities.hasVersionControl
+  // Version control is an intersection: the host must support it
+  // (web edition has its own VC adapter; desktop has git) AND the
+  // project type must allow it.  Library projects ship without VC
+  // for now — git-on-library is plausible but out of scope and
+  // would re-introduce the same UI churn we just removed.
+  const hasVersionControl = capabilities.hasVersionControl && projectCaps.hasVersionControl
   const sourceControlPanelRef = useRef<ImperativePanelHandle | null>(null)
   const [leftPanelSize, setLeftPanelSize] = useState(16)
 
