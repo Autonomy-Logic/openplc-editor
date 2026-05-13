@@ -79,6 +79,12 @@ export interface WriteProjectFiles {
   /** Pre-serialized devices/pin-mapping.json content.  Same
    *  optional-on-libraries semantics as `deviceConfig`. */
   pinMapping?: string
+  /** Pre-serialized library.json content for library projects.
+   *  `undefined` for PLC projects (no manifest file) and for
+   *  library projects whose manifest tab hasn't been mounted this
+   *  session (no in-memory buffer to persist).  Backend skips the
+   *  write when undefined — never truncates the on-disk copy. */
+  libraryManifest?: string
   /** POU files with pre-serialized IEC text content */
   pouFiles: RawProjectFile[]
   /** Server config files with pre-serialized JSON content */

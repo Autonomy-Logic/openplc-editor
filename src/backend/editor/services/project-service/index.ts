@@ -372,13 +372,28 @@ class ProjectService {
     deviceConfig?: string
     /** Same optional-on-libraries semantics as `deviceConfig`. */
     pinMapping?: string
+    /** Library projects' manifest (`library.json`).  PLC projects
+     *  send `undefined`; libraries whose manifest tab hasn't been
+     *  mounted this session also send `undefined` (no pending edits
+     *  to flush).  Skipped on the write side when undefined so the
+     *  on-disk copy stays intact. */
+    libraryManifest?: string
     pouFiles: Array<{ relativePath: string; content: string }>
     serverFiles: Array<{ relativePath: string; content: string }>
     remoteDeviceFiles: Array<{ relativePath: string; content: string }>
     deletions: string[]
   }): Promise<IProjectServiceResponse> {
-    const { projectPath, projectJson, deviceConfig, pinMapping, pouFiles, serverFiles, remoteDeviceFiles, deletions } =
-      files
+    const {
+      projectPath,
+      projectJson,
+      deviceConfig,
+      pinMapping,
+      libraryManifest,
+      pouFiles,
+      serverFiles,
+      remoteDeviceFiles,
+      deletions,
+    } = files
 
     if (!projectPath) {
       return {
@@ -398,10 +413,11 @@ class ProjectService {
         ),
       )
 
-      // Write config files.  `deviceConfig` / `pinMapping` are
-      // optional — library projects don't own them, so the renderer
-      // sends `undefined` and we leave the on-disk copies untouched
-      // rather than overwriting them with an empty string.
+      // Write config files.  `deviceConfig` / `pinMapping` /
+      // `libraryManifest` are optional — each is skipped by project
+      // types that don't own it, so the renderer sends `undefined`
+      // and we leave the on-disk copies untouched rather than
+      // overwriting them with an empty string.
       const writes: Promise<void>[] = [
         promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8'),
       ]
@@ -410,6 +426,9 @@ class ProjectService {
       }
       if (pinMapping !== undefined) {
         writes.push(promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'))
+      }
+      if (libraryManifest !== undefined) {
+        writes.push(promises.writeFile(join(dir, 'library.json'), libraryManifest, 'utf-8'))
       }
       await Promise.all(writes)
 

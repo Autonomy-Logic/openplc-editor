@@ -35,7 +35,14 @@ const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g,
 
 type StoreState = ReturnType<typeof openPLCStoreBase.getState>
 
-type ProjectFileCategory = 'pou' | 'server' | 'remote-device' | 'device-config' | 'pin-mapping' | 'project-json'
+type ProjectFileCategory =
+  | 'pou'
+  | 'server'
+  | 'remote-device'
+  | 'device-config'
+  | 'pin-mapping'
+  | 'project-json'
+  | 'library-manifest'
 
 type ProjectFileSpec = {
   path: string
@@ -151,13 +158,30 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
     category: 'project-json',
   }
 
-  // The library manifest is owned by its own Monaco tab — its dirty
-  // tracking and surgical save go through that tab's file-slice
-  // entry, NOT through this generator.  We don't yield it here:
-  // including it would risk an "overwrite library.json with whatever
-  // the in-memory tab buffer holds" race during full-project saves.
-  // Single-file saves (Ctrl+S on the manifest tab) write it via the
-  // dedicated `'library-manifest'` branch in executeSaveFile.
+  // For library projects, yield `library.json` from the manifest
+  // tab's workspace-level buffer.  The buffer is updated
+  // synchronously by the manifest editor on every keystroke (see
+  // `LibraryManifestEditor`), so by the time the save flow runs
+  // the buffer IS the latest content — there's no race vs. the
+  // tab's React state.
+  //
+  // `null` means the tab hasn't been mounted this session (no
+  // in-flight edits to flush) — skip in that case so the on-disk
+  // copy isn't overwritten with a stale snapshot from a previous
+  // open.  Single-file saves (Ctrl+S on the manifest tab) flow
+  // through `executeSaveFile`, but the full-project save covers
+  // the same write — `executeSaveFile` is just an optimisation
+  // for the single-tab Ctrl+S path, not a separate save flow.
+  if (isLibrary) {
+    const buffer = state.workspace.libraryManifestBuffer
+    if (buffer !== null) {
+      yield {
+        path: 'library.json',
+        content: buffer,
+        category: 'library-manifest',
+      }
+    }
+  }
 }
 
 /**
@@ -317,13 +341,16 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
     const serverFiles: RawProjectFile[] = []
     const remoteDeviceFiles: RawProjectFile[] = []
     let projectJson = ''
-    // `deviceConfig` / `pinMapping` stay `undefined` when the
-    // iterator doesn't yield them (library projects intentionally
-    // skip the device files).  Passing an empty string used to
+    // `deviceConfig` / `pinMapping` / `libraryManifest` stay
+    // `undefined` when the iterator doesn't yield them.  Library
+    // projects skip the device files; PLC projects skip the
+    // manifest; either skips when the relevant tab hasn't been
+    // mounted this session.  Passing an empty string used to
     // truncate the on-disk copy to 0 bytes on every save — the
     // backend now skips writes for `undefined` instead.
     let deviceConfig: string | undefined
     let pinMapping: string | undefined
+    let libraryManifest: string | undefined
 
     for (const spec of iterateProjectFiles(state)) {
       const content = pickContentForSave(spec.path, spec.content, state.versionControl)
@@ -346,6 +373,9 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
         case 'project-json':
           projectJson = content
           break
+        case 'library-manifest':
+          libraryManifest = content
+          break
       }
     }
 
@@ -354,6 +384,7 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
       projectJson,
       ...(deviceConfig !== undefined ? { deviceConfig } : {}),
       ...(pinMapping !== undefined ? { pinMapping } : {}),
+      ...(libraryManifest !== undefined ? { libraryManifest } : {}),
       pouFiles,
       serverFiles,
       remoteDeviceFiles,
@@ -370,6 +401,7 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
         { path: 'project.json', content: projectJson },
         ...(deviceConfig !== undefined ? [{ path: 'devices/configuration.json', content: deviceConfig }] : []),
         ...(pinMapping !== undefined ? [{ path: 'devices/pin-mapping.json', content: pinMapping }] : []),
+        ...(libraryManifest !== undefined ? [{ path: 'library.json', content: libraryManifest }] : []),
         ...pouFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...serverFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...remoteDeviceFiles.map((f) => ({ path: f.relativePath, content: f.content })),
