@@ -28,6 +28,48 @@ const moduleAi4 = {
   },
 } satisfies VppModuleDefinition
 
+// A module with a configScreen — used for module_config encoding tests.
+const moduleThm4 = {
+  id: 'thm-4',
+  name: 'THM-4',
+  hwId: '0x34608CE1',
+  addressMapping: {
+    channels: [{ name: 'TC1', type: 'analogInput', dataType: 'INT', addressPrefix: '%IW' }],
+  },
+  configScreenDefinition: {
+    sections: [
+      {
+        id: 'config',
+        layout: 'form',
+        totalBytes: 20,
+        fields: [
+          {
+            id: 'channels_enabled',
+            label: 'Channels',
+            type: 'select',
+            default: '0x4003',
+            encoding: { byteOffset: 0, size: 2, endian: 'big' },
+          },
+          {
+            id: 'burnout_units',
+            label: 'Burnout / Units',
+            type: 'select',
+            default: '0x6005',
+            encoding: { byteOffset: 2, size: 2, endian: 'big' },
+          },
+          {
+            id: 'ch1_type',
+            label: 'CH1 Type',
+            type: 'select',
+            default: '0x0',
+            encoding: { byteOffset: 4, size: 2, endian: 'big', base: '0x2100', mask: '0x000F' },
+          },
+        ],
+      },
+    ],
+  },
+} satisfies VppModuleDefinition
+
 describe('generateVendorPluginConfig', () => {
   it('preserves all fields from the config template', () => {
     const template = { plugin_name: 'acme', baud_rate: 115200, nested: { x: 1 } }
@@ -315,5 +357,142 @@ describe('generateVendorPluginConfig', () => {
       'digital_inputs',
       'digital_outputs',
     ])
+  })
+
+  /* ------------------------------------------------------------ */
+  /* module_config (per-slot configuration bytes)                  */
+  /* ------------------------------------------------------------ */
+
+  it('emits module_config built from field defaults when the user has not set values', () => {
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['thm-4'] },
+      'io-mapping': { entries: [] },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleThm4])
+    const slot = (result.slots as Array<{ module_config?: string }>)[0]
+    // defaults: channels=0x4003, burnout/units=0x6005, ch1=type J (0x2100|0=0x2100)
+    // padded to totalBytes=20
+    expect(slot.module_config).toBe('40 03 60 05 21 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00')
+  })
+
+  it('lets per-slot user values override field defaults', () => {
+    const data: VendorScreenData = {
+      'module-configuration': {
+        slots: ['thm-4'],
+        slotsConfig: {
+          '1': { channels_enabled: '0x4001', burnout_units: '0x6001', ch1_type: '0x1' },
+        },
+      },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleThm4])
+    const slot = (result.slots as Array<{ module_config?: string }>)[0]
+    // 0x4001 / 0x6001 / 0x2101 (CH1 type K)
+    expect(slot.module_config?.startsWith('40 01 60 01 21 01')).toBe(true)
+  })
+
+  it('omits module_config when the module has no configScreenDefinition', () => {
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['di-8'] },
+      'io-mapping': { entries: [] },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleDi8])
+    const slot = (result.slots as Array<{ module_config?: string }>)[0]
+    expect(slot.module_config).toBeUndefined()
+  })
+
+  it('omits module_config when the configScreen declares no encodable fields', () => {
+    const moduleEmpty: VppModuleDefinition = {
+      id: 'empty-screen',
+      name: 'Empty',
+      hwId: '0xAA',
+      addressMapping: { channels: [] },
+      configScreenDefinition: { sections: [{ id: 'x', fields: [] }] },
+    }
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['empty-screen'] },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleEmpty])
+    const slot = (result.slots as Array<{ module_config?: string }>)[0]
+    expect(slot.module_config).toBeUndefined()
+  })
+
+  it('handles malformed configScreenDefinitions gracefully', () => {
+    // sections is not an array, fields is not an array, items have no id —
+    // collectConfigFormFields must silently skip and return no fields.
+    const moduleBad: VppModuleDefinition = {
+      id: 'bad-screen',
+      name: 'Bad',
+      hwId: '0xBB',
+      addressMapping: { channels: [] },
+      configScreenDefinition: {
+        sections: [
+          null,
+          'not-an-object',
+          { fields: 'not-an-array' },
+          { fields: [null, 'string-field', { /* no id */ encoding: { byteOffset: 0, size: 1 } }] },
+        ],
+      },
+    }
+    const data: VendorScreenData = { 'module-configuration': { slots: ['bad-screen'] } }
+    const result = generateVendorPluginConfig({}, data, [moduleBad])
+    const slot = (result.slots as Array<{ module_config?: string }>)[0]
+    expect(slot.module_config).toBeUndefined()
+  })
+
+  it('omits module_config when configScreenDefinition is explicitly null', () => {
+    const moduleNullDef: VppModuleDefinition = {
+      id: 'null-def',
+      name: 'Null',
+      hwId: '0xCC',
+      addressMapping: { channels: [] },
+      configScreenDefinition: null,
+    }
+    const data: VendorScreenData = { 'module-configuration': { slots: ['null-def'] } }
+    const result = generateVendorPluginConfig({}, data, [moduleNullDef])
+    const slot = (result.slots as Array<{ module_config?: string }>)[0]
+    expect(slot.module_config).toBeUndefined()
+  })
+
+  it('falls back to encoder-computed length when totalBytes is absent', () => {
+    const moduleShort: VppModuleDefinition = {
+      id: 'short',
+      name: 'Short',
+      hwId: '0xDD',
+      addressMapping: { channels: [] },
+      configScreenDefinition: {
+        sections: [
+          {
+            id: 'cfg',
+            layout: 'form',
+            fields: [
+              {
+                id: 'channels_enabled',
+                label: 'Channels',
+                type: 'select',
+                default: '0x4007',
+                encoding: { byteOffset: 0, size: 2, endian: 'big' },
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const data: VendorScreenData = { 'module-configuration': { slots: ['short'] } }
+    const result = generateVendorPluginConfig({}, data, [moduleShort])
+    const slot = (result.slots as Array<{ module_config?: string }>)[0]
+    expect(slot.module_config).toBe('40 07')
+  })
+
+  it('treats empty-string user values as "use the default"', () => {
+    const data: VendorScreenData = {
+      'module-configuration': {
+        slots: ['thm-4'],
+        slotsConfig: { '1': { channels_enabled: '' } },
+      },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleThm4])
+    const slot = (result.slots as Array<{ module_config?: string }>)[0]
+    // empty -> use default 0x4003
+    expect(slot.module_config?.startsWith('40 03')).toBe(true)
   })
 })

@@ -1832,7 +1832,29 @@ class CompilerModule {
             // Device configuration may not exist yet — use empty vendor data
           }
 
-          const modules = matchingDevice.moduleSystem?.modules ?? []
+          // Pre-load each module's configScreen JSON so the (pure)
+          // generator can encode per-slot configuration bytes without
+          // touching the filesystem.
+          const rawModules = matchingDevice.moduleSystem?.modules ?? []
+          const modules = await Promise.all(
+            rawModules.map(async (m) => {
+              let configScreenDefinition: unknown
+              const rel = (m as { configScreen?: string }).configScreen
+              if (rel) {
+                try {
+                  const screenPath = join(matchingPackagePath, rel)
+                  const raw = await readFile(screenPath, 'utf-8')
+                  configScreenDefinition = JSON.parse(raw)
+                } catch (err) {
+                  handleOutputData(
+                    `Failed to load configScreen ${rel} for module ${m.id}: ${getErrorMessage(err)}`,
+                    'error',
+                  )
+                }
+              }
+              return { ...m, configScreenDefinition }
+            }),
+          )
           const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
 
           // configTemplate is supplied by the package author through
