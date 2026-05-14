@@ -63,7 +63,10 @@ const VendorScreenRenderer = memo(function VendorScreenRenderer({
   if (!screen?.sections) return null
 
   return (
-    <div className='flex w-full flex-col gap-6'>
+    // `flex-1 min-h-0` lets a child section (e.g. `module-slots`) claim
+    // the full available height and host its own internal scrollers
+    // instead of forcing the page-level container to scroll.
+    <div className='flex w-full flex-1 min-h-0 flex-col gap-6'>
       {screen.sections.map((section) => (
         <SectionRenderer key={section.id} section={section} moduleSystem={moduleSystem} />
       ))}

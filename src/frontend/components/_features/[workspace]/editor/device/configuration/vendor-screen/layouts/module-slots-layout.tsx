@@ -231,8 +231,6 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     writeModuleConfig({ ...moduleConfig, slots: Array<string | null>(maxSlots).fill(null), slotsConfig: {} })
   }
 
-  const handleClearSlot = (slotIndex: number) => handleSlotChange(slotIndex, '')
-
   const handleFieldChange = (slotIndex: number, fieldId: string, value: FieldValue) => {
     const key = String(slotIndex + 1)
     const slotValues = { ...(slotsConfig[key] ?? {}), [fieldId]: value }
@@ -289,7 +287,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   })()
 
   return (
-    <div className='flex h-[600px] flex-col gap-3'>
+    // `flex-1 min-h-0` claims all available vertical space the parent
+    // section grants us; both panes inside scroll independently so the
+    // page-level container never needs to.
+    <div className='flex min-h-0 flex-1 flex-col gap-3'>
       {/* Top-level actions (e.g. Clear All Slots) */}
       {section.actions && (
         <div className='flex gap-2'>
@@ -345,14 +346,60 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
         </div>
 
         {/* ------ Right: contextual detail pane ------ */}
-        <div className='min-w-0 flex-1 overflow-y-auto rounded-md border border-neutral-200 p-4 dark:border-neutral-700'>
+        <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-md border border-neutral-200 p-4 dark:border-neutral-700'>
           <h3 className='mb-3 font-caption text-base font-semibold text-neutral-950 dark:text-white'>
             Slot {selectedSlot + 1}
           </h3>
 
+          {/* Module picker — always visible. Selecting "-- Empty --"
+              clears the slot; selecting another module switches in
+              place without an intermediate clear step. */}
+          <div className='mb-4 flex items-center gap-3'>
+            <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>Module</Label>
+            <Select
+              value={selectedModule ? selectedModule.id : '__empty__'}
+              onValueChange={(v) => handleSlotChange(selectedSlot, v === '__empty__' ? '' : v)}
+            >
+              <SelectTrigger
+                aria-label={`Module for slot ${selectedSlot + 1}`}
+                placeholder='-- Empty --'
+                withIndicator
+                className='flex h-[32px] w-80 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              />
+              <SelectContent
+                className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                sideOffset={5}
+                position='popper'
+                align='center'
+                side='bottom'
+              >
+                <SelectItem
+                  value='__empty__'
+                  className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                >
+                  <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
+                    -- Empty --
+                  </span>
+                </SelectItem>
+                {availableModules.map((mod) => (
+                  <SelectItem
+                    key={mod.id}
+                    value={mod.id}
+                    className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                  >
+                    <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                      {mod.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {selectedModule ? (
             <div className='flex flex-col gap-5'>
-              {/* Header: image + name + description + specs */}
+              {/* Header: image + description + specs (module name
+                  already lives in the picker above) */}
               <div className='flex gap-4'>
                 <div className='flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900'>
                   {moduleImage ? (
@@ -362,11 +409,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                   )}
                 </div>
                 <div className='min-w-0 flex-1'>
-                  <div className='font-caption text-base font-semibold text-neutral-950 dark:text-white'>
-                    {selectedModule.name}
-                  </div>
                   {(selectedModule as { description?: string }).description && (
-                    <p className='mt-1 text-xs text-neutral-600 dark:text-neutral-400'>
+                    <p className='text-xs text-neutral-600 dark:text-neutral-400'>
                       {(selectedModule as { description?: string }).description}
                     </p>
                   )}
@@ -438,6 +482,19 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                   </table>
                 </section>
               )}
+
+              {/* Defensive hint: manifest declared a configScreen path
+                  but the parsed definition didn't reach us. Almost
+                  always means an installed vpp predates the per-module
+                  screens. Surface it instead of silently dropping the
+                  config form. */}
+              {(selectedModule as { configScreen?: string }).configScreen &&
+                !(selectedModule as { configScreenDefinition?: unknown }).configScreenDefinition && (
+                  <p className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300'>
+                    This module ships a configuration screen but it could not be loaded. Reinstall the vendor package to
+                    pick up the latest assets.
+                  </p>
+                )}
 
               {/* Configuration (only when this module has a configScreen) */}
               {configFields.length > 0 && (
@@ -543,51 +600,13 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                 </section>
               )}
 
-              {/* Per-slot actions */}
-              <div className='flex gap-2 pt-2'>
-                <button
-                  type='button'
-                  onClick={() => handleClearSlot(selectedSlot)}
-                  className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
-                >
-                  Clear this slot
-                </button>
-              </div>
             </div>
           ) : (
-            /* Empty-slot state: just the module picker */
-            <div className='flex flex-col items-start gap-3 py-6'>
-              <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-                This slot is empty. Choose a module to populate it.
-              </p>
-              <Select value='' onValueChange={(v) => handleSlotChange(selectedSlot, v)}>
-                <SelectTrigger
-                  aria-label={`Select module for slot ${selectedSlot + 1}`}
-                  placeholder='-- Pick a module --'
-                  withIndicator
-                  className='flex h-[32px] w-80 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                />
-                <SelectContent
-                  className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                  sideOffset={5}
-                  position='popper'
-                  align='center'
-                  side='bottom'
-                >
-                  {availableModules.map((mod) => (
-                    <SelectItem
-                      key={mod.id}
-                      value={mod.id}
-                      className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                    >
-                      <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                        {mod.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            /* Empty-slot state: nothing else to show — the always-
+                visible Module picker above is the only action. */
+            <p className='py-4 text-xs italic text-neutral-500 dark:text-neutral-400'>
+              This slot is empty. Pick a module above to populate it.
+            </p>
           )}
         </div>
       </div>
