@@ -92,6 +92,64 @@ function decodeMessage(raw: unknown): string {
   return String(raw)
 }
 
+/**
+ * Graft any library-supplied C/C++ function blocks into the
+ * project's POU list before the standard preprocessor runs.  Each
+ * library archive's `cppBlocks` entry becomes a synthesized
+ * `PLCPou` with `body.language: 'cpp'` — from there it flows
+ * through `preprocessPous` exactly like a user-defined C++ POU
+ * (ST stub generation, `originalCppPous` sidecar, downstream
+ * `c_blocks.h` / `c_blocks_code.cpp` generation, link-time
+ * resolution).  Strucpp never sees the C++ — it sees the
+ * generated ST stub that calls into `c_blocks.h` externs.
+ *
+ * **Renaming**: each block's name is prefixed with the library's
+ * manifest name (`${library_name}__${block_name}`) so two
+ * different libraries can ship a block called `Foo` without
+ * collision, and so a consumer's user-defined POU can also be
+ * called `Foo` without colliding with a library's block.  The
+ * editor's library-tree picker surfaces the prefixed name, so the
+ * user authors their ST against that name directly — no parse +
+ * rewrite of the user's source.
+ *
+ * Symbol-level renames inside the synthesized POU (the struct
+ * `<NAME>_VARS`, the C functions `<name>_setup` /
+ * `<name>_loop`) happen automatically because
+ * `generateCppSTCode` / `generateCBlocksHeader` /
+ * `generateCBlocksCode` all derive their names from
+ * `pou.name`.
+ */
+function injectLibraryCppBlocks(
+  projectData: PLCProjectData,
+  archives: Array<{
+    manifest: { name: string }
+    cppBlocks?: Array<{ name: string; code: string; variables: unknown[]; documentation?: string }>
+  }>,
+): PLCProjectData {
+  if (!projectData.libraries || projectData.libraries.length === 0) return projectData
+
+  const enabledNames = new Set(projectData.libraries.map((ref) => ref.name))
+  const synthesized: PLCPou[] = []
+
+  for (const archive of archives) {
+    if (!archive.cppBlocks || archive.cppBlocks.length === 0) continue
+    if (!enabledNames.has(archive.manifest.name)) continue
+    for (const block of archive.cppBlocks) {
+      synthesized.push({
+        name: `${archive.manifest.name}__${block.name}`,
+        pouType: 'function-block',
+        interface: { variables: block.variables as never },
+        body: { language: 'cpp', value: block.code },
+        documentation: block.documentation ?? '',
+      } as PLCPou)
+    }
+  }
+
+  if (synthesized.length === 0) return projectData
+
+  return { ...projectData, pous: [...projectData.pous, ...synthesized] }
+}
+
 /** Best-effort stage inference from compiler log messages. */
 function inferStage(message: string): CompileProgressEvent['stage'] {
   const lower = message.toLowerCase()
@@ -114,9 +172,18 @@ export function createEditorCompilerAdapter(): CompilerPort {
       const boardCore = boardInfo?.core ?? null
       const isSimulator = args.isSimulator ?? boardInfo?.compiler === 'simulator'
 
+      // Graft library-supplied C++ blocks into the project's POU
+      // list before preprocessing.  They behave like user-defined
+      // C++ POUs from this point on — same `preprocessPous` branch,
+      // same `c_blocks.h` / `c_blocks_code.cpp` generation
+      // downstream.  See `injectLibraryCppBlocks` for the renaming
+      // contract.
+      const archives = await window.bridge.loadAllLibraries()
+      const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives as never)
+
       // Preprocess POUs (comment wrapping, Python->ST stubs, C++ validation/ST generation)
       const { projectData: processedData, validationFailed } = preprocessPous(
-        args.projectData,
+        dataWithLibCpp,
         isSimulator,
         (level, message) => {
           onProgress({ stage: 'st', message, level })
@@ -209,9 +276,13 @@ export function createEditorCompilerAdapter(): CompilerPort {
       args: DebugCompileArgs,
       onProgress: (event: CompileProgressEvent) => void,
     ): Promise<DebugCompileResult> {
+      // Same library-C++ injection as the program build path.
+      const archives = await window.bridge.loadAllLibraries()
+      const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives as never)
+
       // Preprocess for debug compilation too
       const { projectData: processedData, validationFailed } = preprocessPous(
-        args.projectData,
+        dataWithLibCpp,
         false,
         (level, message) => {
           onProgress({ stage: 'st', message, level })
@@ -267,30 +338,48 @@ export function createEditorCompilerAdapter(): CompilerPort {
       args: CompileLibraryArgs,
       onProgress: (event: CompileProgressEvent) => void,
     ): Promise<CompileLibraryResult> {
-      // Run the SAME `preprocessPous` step the program build runs.
-      // The library build pipeline reuses `compileProgram` verbatim
-      // for its simulator-target verification step (see
-      // `runVerificationCompile` in the backend), so the input
-      // projectData has to land in the same preprocessed shape
-      // — otherwise a C++ POU in a library would behave differently
-      // here than in a PLC project built for the simulator.
-      // `isSimulator: true` because the verification step always
-      // targets the simulator regardless of whatever board the user
-      // currently has selected.
-      const { projectData: processedData, validationFailed } = preprocessPous(
-        args.projectData,
-        true,
-        (level, message) => {
-          onProgress({ stage: 'st', message, level })
-        },
-      )
-      if (validationFailed) {
+      // Two preprocess passes — the library build and the
+      // simulator-target verification want different Python
+      // treatment, and `preprocessPous` is the only place that
+      // decision lives.
+      //
+      //   - `isSimulator: false` for the LIBRARY BUILD itself.
+      //     Python POUs go through `injectPythonCode` +
+      //     `generateSTCode`, becoming self-contained ST with the
+      //     Python source embedded as strings — exactly the shape
+      //     strucpp compiles for a runtime-target program build.
+      //     The `.stlib` ships real Python code, usable by any
+      //     consumer that targets a Python-capable runtime.
+      //
+      //   - `isSimulator: true` for the VERIFICATION compile.
+      //     Python POUs become `first_run := 0;` no-op stubs.  The
+      //     AVR simulator has no Python interpreter, so passing
+      //     full-Python-as-ST through to arduino-cli would fail at
+      //     link time (the strucpp-emitted code calls into
+      //     Python loader externs the simulator runtime doesn't
+      //     ship).  Stubbing keeps the verify compile honest: it
+      //     still proves the library's ST/IL/data-types compile
+      //     cleanly to AVR — the only thing it can't prove is
+      //     that the Python POUs run, and we accept that.
+      //
+      // The renderer-side `onProgress` log channel only sees the
+      // build pass's preprocess output to avoid duplicate "Found
+      // Python POU…" lines.
+      const buildResult = preprocessPous(args.projectData, false, (level, message) => {
+        onProgress({ stage: 'st', message, level })
+      })
+      if (buildResult.validationFailed) {
         return {
           success: false,
           error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
         }
       }
-      const ipcData = toIpcProjectData(processedData)
+      const verifyResult = preprocessPous(args.projectData, true, () => {
+        // Silent — same project gets logged once via the build
+        // pass; a second round of "Found …" lines is noise.
+      })
+      const ipcDataForBuild = toIpcProjectData(buildResult.projectData)
+      const ipcDataForVerify = toIpcProjectData(verifyResult.projectData)
 
       return new Promise<CompileLibraryResult>((resolve) => {
         let finalResult: CompileLibraryResult | undefined
@@ -309,7 +398,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         //     `'close'` event — that's the sole "build done"
         //     signal the adapter resolves on.
         window.bridge.runCompileLibrary(
-          [args.projectPath, ipcData as never, args.cleanBuild ?? false],
+          [args.projectPath, ipcDataForBuild as never, ipcDataForVerify as never, args.cleanBuild ?? false],
           (data: Record<string, unknown>) => {
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult

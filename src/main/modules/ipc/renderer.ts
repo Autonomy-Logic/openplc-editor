@@ -215,10 +215,17 @@ const rendererProcessBridge = {
   },
 
   /** Build the open Library Project into a `.stlib` archive.  Same
-   *  MessageChannel pattern as `runCompileProgram` — args carry the
-   *  project path, in-memory project data, and the `cleanBuild`
-   *  flag (skips the verification cache); callback receives a
-   *  stream of log messages and a final `libraryBuildResult`. */
+   *  MessageChannel pattern as `runCompileProgram`.  Args:
+   *    [0] projectPath
+   *    [1] projectData preprocessed with `isSimulator: false` (full
+   *        Python-as-ST), used for the library build proper.
+   *    [2] projectData preprocessed with `isSimulator: true` (Python
+   *        as no-op stubs), used as input to the simulator-target
+   *        verification compile so it doesn't try to link Python
+   *        loader externs the AVR simulator runtime doesn't ship.
+   *    [3] cleanBuild flag (skips the verification cache).
+   *  Callback receives a stream of log messages and a final
+   *  `libraryBuildResult`. */
   runCompileLibrary: (
     compileArgs: Array<string | PLCProjectData | boolean>,
     callback: (args: CompilerPortMessage) => void,

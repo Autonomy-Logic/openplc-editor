@@ -1,5 +1,11 @@
 export type LibraryPouType = 'function' | 'function-block'
-export type LibraryLanguage = 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+/** Body language as the library presents it to consumers.  `cpp`
+ *  surfaces user-authored C/C++ function blocks the library ships
+ *  via `archive.cppBlocks` — strucpp doesn't compile them; the
+ *  consumer's program build grafts them into the project's own
+ *  C/C++-POU pipeline.  ST/IL/LD/SFC/FBD libraries are
+ *  strucpp-compiled and the chunks ride the manifest entries. */
+export type LibraryLanguage = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'cpp'
 
 export interface SystemLibraryVariable {
   name: string

@@ -62,6 +62,21 @@ export interface StlibArchiveDTO {
     }>
   }
   globalConstants?: Record<string, number>
+  /** C/C++ function blocks the library ships, carried verbatim
+   *  through the archive.  Strucpp doesn't compile these — the
+   *  consumer's program build grafts them into the project's own
+   *  C++-POU pipeline (with a `<library_name>__<name>` rename for
+   *  collision avoidance) and routes them through the existing
+   *  `c_blocks.h` / `c_blocks_code.cpp` generation.  Absent on
+   *  libraries that don't ship any. */
+  cppBlocks?: Array<{
+    name: string
+    code: string
+    /** Opaque on this side — the editor maps to/from `PLCVariable`
+     *  on the renderer when grafting back into the project. */
+    variables: unknown[]
+    documentation?: string
+  }>
 }
 
 export interface LibraryPort {

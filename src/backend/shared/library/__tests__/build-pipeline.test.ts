@@ -587,6 +587,99 @@ describe('libraryBuildFromTranspiledSt', () => {
     expect(archive.dependencies).toEqual([{ name: 'oscat', version: '3.3.0' }])
   })
 
+  it('filters C/C++ POUs from strucpp inputs and attaches them as `cppBlocks` on the archive', () => {
+    // The library has one ST FB (`Tank`) and one C/C++ FB (`SmartGate`).
+    // The user's `SmartGate` arrived here as an ST stub (preprocessPous
+    // converts C++ → ST stub + `originalCppPous` sidecar on the
+    // renderer side), so the splitter sees `SmartGate.st` in
+    // program.st.  The build pipeline must drop that source from the
+    // strucpp inputs (strucpp's library compiler has no
+    // `pouIncludes` to resolve the c_blocks.h externs the stub
+    // references) and stamp the original C++ onto the archive.
+    const archive: { manifest: { name: string }; dependencies: unknown[]; cppBlocks?: unknown[] } = {
+      manifest: { name: 'demo_lib' },
+      dependencies: [],
+    }
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive })
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    const programSt =
+      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
+      '\n' +
+      'FUNCTION_BLOCK SmartGate\n  VAR x : BOOL; END_VAR\n  x := TRUE;\nEND_FUNCTION_BLOCK\n' +
+      '\n' +
+      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
+
+    libraryBuildFromTranspiledSt(
+      programSt,
+      [
+        { name: 'Tank', kind: 'FUNCTION_BLOCK' },
+        { name: 'SmartGate', kind: 'FUNCTION_BLOCK' },
+        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
+      ],
+      manifest,
+      {
+        cppBlocks: [
+          {
+            name: 'SmartGate',
+            code: 'void setup() {}\nvoid loop() {}',
+            variables: [{ name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' } }],
+          },
+        ],
+      },
+    )
+
+    // SmartGate.st must be filtered out of strucpp's input list.
+    const sources = compileStlib.mock.calls[0][0] as Array<{ fileName: string }>
+    const filenames = sources.map((s) => s.fileName)
+    expect(filenames).toContain('Tank.st')
+    expect(filenames).not.toContain('SmartGate.st')
+    expect(filenames).not.toContain(STUB.STUB_SPLIT_FILENAME)
+
+    // SmartGate rides through on `archive.cppBlocks` verbatim.
+    expect(archive.cppBlocks).toEqual([
+      {
+        name: 'SmartGate',
+        code: 'void setup() {}\nvoid loop() {}',
+        variables: [{ name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' } }],
+      },
+    ])
+  })
+
+  it('accepts a library that ships only C/C++ blocks (no ST/IL POUs)', () => {
+    // Edge case: the library has one C++ FB and nothing else.  The
+    // ST/IL source list is empty after filtering, but `cppBlocks`
+    // is non-empty so the build still produces a valid archive.
+    const archive = { manifest: { name: 'cpp_only_lib' }, dependencies: [] }
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive })
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    const programSt =
+      'FUNCTION_BLOCK CppOnly\n  VAR x : BOOL; END_VAR\n  x := TRUE;\nEND_FUNCTION_BLOCK\n' +
+      '\n' +
+      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
+
+    const res = libraryBuildFromTranspiledSt(
+      programSt,
+      [
+        { name: 'CppOnly', kind: 'FUNCTION_BLOCK' },
+        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
+      ],
+      { ...manifest, name: 'cpp_only_lib', namespace: 'cpp_only_lib' },
+      {
+        cppBlocks: [
+          { name: 'CppOnly', code: 'void setup() {}\nvoid loop() {}', variables: [] },
+        ],
+      },
+    )
+
+    expect(res.success).toBe(true)
+  })
+
   it('matches POU docs case-insensitively (xml2st upper-cases identifiers)', () => {
     const archive = {
       manifest: {

@@ -294,10 +294,45 @@ export interface LibraryBuildResult {
  *     archive's `dependencies` array so consumers can resolve
  *     transitive deps without re-reading every archive on disk.
  */
+/**
+ * C/C++ function block carried verbatim through the `.stlib`.
+ * Strucpp's library compiler is ST/IL-only, so the editor pulls
+ * these out of the strucpp input set and re-attaches them on the
+ * resulting archive as a separate field.  At consume time, the
+ * editor reads them back, synthesizes user-POU-equivalent entries
+ * into the consumer project (with a library-name prefix on the
+ * POU name to avoid collisions), and feeds them through the
+ * existing user-defined C/C++ block pipeline.  Strucpp never sees
+ * them — same shape user-defined C++ POUs use today.
+ */
+export interface LibraryCppBlock {
+  /** FB name as the library author wrote it.  The consumer-side
+   *  injection renames this to `<library_name>__<name>` before
+   *  feeding to `preprocessPous`, so collisions with the
+   *  consumer's own POUs are impossible by construction. */
+  name: string
+  /** Raw user-authored C++ source.  Same shape `originalCppPous`
+   *  carries today (the body of `void setup()` / `void loop()`
+   *  plus any helpers). */
+  code: string
+  /** Variable declarations on the FB (inputs / outputs / etc.).
+   *  Same shape `PLCVariable` uses elsewhere; carried opaquely
+   *  here so this module stays free of the variable-schema
+   *  import. */
+  variables: unknown[]
+  /** Optional documentation surfaced in the library tree picker. */
+  documentation?: string
+}
+
 export interface LibraryBuildAux {
   pouDocs?: Record<string, string>
   dependencyArchives?: unknown[]
   dependencyRefs?: Array<{ name: string; version: string }>
+  /** C/C++ POUs from the library's project.  Filtered OUT of
+   *  strucpp's input set and stamped onto the archive's
+   *  `cppBlocks` field after compileStlib returns.  See
+   *  `LibraryCppBlock` for the per-entry shape. */
+  cppBlocks?: LibraryCppBlock[]
 }
 
 /**
@@ -329,20 +364,36 @@ export function libraryBuildFromTranspiledSt(
     }
   }
 
-  // Build the strucpp input list.  Drop the stub program's `.st`
-  // file (the library doesn't ship the stub) and drop `_config.st`
-  // (xml2st's CONFIGURATION block references the stub program,
-  // which we've just removed — leaving it in causes strucpp to
-  // emit "Unknown program type 'MAIN'" diagnostics).  Libraries
-  // don't carry configurations anyway — they ship POUs + types
-  // for consumer projects to instantiate.
+  // Build the strucpp input list.  Drops:
+  //
+  //   - The stub program's `.st` file (the library doesn't ship
+  //     the stub).
+  //   - `_config.st` (xml2st's CONFIGURATION block references the
+  //     stub program, which we've just removed — leaving it in
+  //     causes strucpp to emit "Unknown program type 'MAIN'"
+  //     diagnostics).  Libraries don't carry configurations
+  //     anyway — they ship POUs + types for consumer projects to
+  //     instantiate.
+  //   - Every per-POU file whose source POU was originally a
+  //     C/C++ function block.  Those POUs' ST bodies are
+  //     `generateCppSTCode`-emitted stubs that reference
+  //     `c_blocks.h` externs strucpp's library compiler can't
+  //     resolve (no `pouIncludes` on `compileStlib`).  We
+  //     re-attach the verbatim C++ source on the archive's
+  //     `cppBlocks` field after `compileStlib` returns; the
+  //     consumer's program compile reads it back and routes it
+  //     through the existing user-C++-block path.
   //
   // Keep `_types.st` and `_globals.st`: they may carry user-defined
   // types and library-internal globals the POUs reference.
+  const cppBlockFilenames = new Set(
+    (aux?.cppBlocks ?? []).map((b) => `${b.name}.st`),
+  )
   const sources: CompileStlibSource[] = []
   for (const [fileName, source] of split.files.entries()) {
     if (fileName === STUB_SPLIT_FILENAME) continue
     if (fileName === '_config.st') continue
+    if (cppBlockFilenames.has(fileName)) continue
     sources.push({
       fileName,
       source,
@@ -356,8 +407,14 @@ export function libraryBuildFromTranspiledSt(
   // user has added any symbols).  Refuse with a clear message
   // rather than producing an empty .stlib that strucpp would
   // accept silently.
+  //
+  // C/C++ blocks count as "real content" — a library that ships
+  // only C/C++ FBs is still useful (no strucpp-compiled chunks,
+  // just `cppBlocks` riding through the archive for the consumer
+  // to consume).
   const hasRealSources = sources.some((s) => s.fileName !== '_globals.st')
-  if (!hasRealSources) {
+  const hasCppBlocks = (aux?.cppBlocks?.length ?? 0) > 0
+  if (!hasRealSources && !hasCppBlocks) {
     return {
       success: false,
       errors: [
@@ -417,6 +474,7 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
       types?: Array<{ name: string; documentation?: string }>
     }
     dependencies?: Array<{ name: string; version: string }>
+    cppBlocks?: LibraryCppBlock[]
   }
   if (!arch.manifest) return
 
@@ -453,6 +511,21 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
 
   if (aux?.dependencyRefs && aux.dependencyRefs.length > 0) {
     arch.dependencies = aux.dependencyRefs.map((ref) => ({ name: ref.name, version: ref.version }))
+  }
+
+  // C/C++ blocks ride through the archive verbatim — strucpp has
+  // no notion of them, the consumer-side editor reads them back
+  // at program-compile time and grafts them into the project's
+  // own C++-POU pipeline.  JSON.stringify preserves the field, so
+  // attaching it on the in-memory archive is enough to round-trip
+  // to disk.
+  if (aux?.cppBlocks && aux.cppBlocks.length > 0) {
+    arch.cppBlocks = aux.cppBlocks.map((b) => ({
+      name: b.name,
+      code: b.code,
+      variables: b.variables,
+      ...(b.documentation && b.documentation.length > 0 ? { documentation: b.documentation } : {}),
+    }))
   }
 }
 

@@ -3059,7 +3059,28 @@ class CompilerModule {
       setTimeout(() => _mainProcessPort.close(), 25)
     }
 
-    const [projectPath, projectData, cleanBuild = false] = args as [string, PLCProjectData, boolean | undefined]
+    // The renderer adapter sends two preprocessed datasets:
+    //   - `projectData` (formerly the only one) is preprocessed with
+    //     `isSimulator: false` — Python POUs carry the full
+    //     Python-as-ST conversion, C++ POUs carry the ST stub +
+    //     `originalCppPous` sidecar.  Used for the library build
+    //     itself (Stages 1–6).
+    //   - `verifyProjectData` is preprocessed with `isSimulator:
+    //     true` — Python POUs are no-op stubs the AVR simulator
+    //     can compile cleanly; C++ POUs are unchanged.  Used as
+    //     input to `composeVerificationProject` so the verify
+    //     compile (Stage 3) doesn't try to link Python loader
+    //     externs the simulator runtime doesn't ship.
+    //
+    // Both datasets share the same source POU list, just with
+    // different Python treatment.  C++ POUs and ST/IL/data-types
+    // are identical between them.
+    const [projectPath, projectData, verifyProjectData, cleanBuild = false] = args as [
+      string,
+      PLCProjectData,
+      PLCProjectData,
+      boolean | undefined,
+    ]
     const normalizedProjectPath = projectPath.replace('project.json', '')
 
     post('Starting library build...')
@@ -3205,9 +3226,14 @@ class CompilerModule {
           'Use "Clean build" to force re-verification.',
       )
     } else {
+      // Feed `composeVerificationProject` the verify-preprocessed
+      // dataset (Python POUs as no-op stubs) — the AVR simulator's
+      // compile path can't link the Python loader externs the
+      // full Python-as-ST shape produces.  The build dataset
+      // (Python as full ST) is intentionally NOT used here.
       const verifyProject = composeVerificationProject({
         meta: { name: manifest.name, type: 'plc-library' },
-        data: projectData as unknown as import('@root/backend/shared/types/PLC/open-plc').PLCProjectData,
+        data: verifyProjectData as unknown as import('@root/backend/shared/types/PLC/open-plc').PLCProjectData,
       })
       post('Verifying with OpenPLC Simulator (avr-gcc)...')
       try {
@@ -3280,10 +3306,27 @@ class CompilerModule {
     // here (xml2st-malformed output, strucpp internal errors) stop
     // the build because we have no archive to ship.  These are NOT
     // advisory like verification — strucpp owns the artefact format.
+    // Pull the C/C++ FBs out of the preprocessed data — they live
+    // on `originalCppPous` (placed there by `preprocessPous`'s C++
+    // branch).  These ride through the archive verbatim; strucpp
+    // never sees them.  The consumer-side compile reads them back
+    // and routes them through the existing user-C++-block path
+    // with a `<library_name>__<block_name>` rename for collision
+    // avoidance.
+    const cppBlocks = (
+      (projectData as { originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }> })
+        .originalCppPous ?? []
+    ).map((b) => ({
+      name: b.name,
+      code: b.code,
+      variables: b.variables,
+    }))
+
     const stage2 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
       pouDocs,
       dependencyArchives: depArchives,
       dependencyRefs: enabledLibraryRefs,
+      cppBlocks,
     })
     if (!stage2.success) {
       for (const err of stage2.errors) {
