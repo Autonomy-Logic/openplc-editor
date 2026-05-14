@@ -19,7 +19,6 @@ export interface CompileStlibSource {
    *  Matches the `category` field on the project-file specs the
    *  editor's save pipeline emits. */
   category?: string
-  documentation?: string
 }
 
 export interface CompileStlibOptions {

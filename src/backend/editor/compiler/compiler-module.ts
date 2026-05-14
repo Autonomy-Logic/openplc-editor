@@ -24,6 +24,31 @@ import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
 import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
 
 /**
+ * Shared bridge contract between `compileLibrary` and its inner
+ * `runVerificationCompile` step.  Both paths talk to the same
+ * runtime API and library-resolution helpers, so giving the two
+ * methods a single named shape keeps the call site and the private
+ * helper from drifting when a new bridge method is added for one
+ * but not the other.  `loadEnabledArchives` is unique to the outer
+ * build (it feeds `compileStlib`'s dependency list); the
+ * verification compile inherits the program-build's directory-based
+ * resolution and doesn't need it, so it picks the smaller subset
+ * via `Pick<>` below.
+ */
+type LibraryCompileBridge = {
+  makeRuntimeApiRequest: <T = void>(
+    ipAddress: string,
+    jwtToken: string,
+    endpoint: string,
+    responseParser?: (data: string) => T,
+  ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+  resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
+  loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+}
+
+type LibraryVerificationBridge = Pick<LibraryCompileBridge, 'makeRuntimeApiRequest' | 'resolveLibraryDirs'>
+
+/**
  * Wrap strucpp's plain (file:line:col) diagnostic with the POU/section
  * context the new error fields carry, so the editor's console shows
  * something the user can act on:
@@ -71,7 +96,7 @@ function formatErrorWithPouContext(
  * pipeline. Centralised here so the cast appears once instead of
  * inline at every read site.
  */
-type ProjectDataWithCppPous = import('@root/backend/shared/types/PLC/open-plc').PLCProjectData & {
+type ProjectDataWithCppPous = PLCProjectData & {
   originalCppPous?: CppPouDataCode[]
 }
 
@@ -90,7 +115,7 @@ const POST_BUILD_START_POLL_INTERVAL_MS = 150
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
-import type { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
+import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
   type CppPouData as CppPouDataCode,
   generateCBlocksCode,
@@ -108,6 +133,7 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
 import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
+import type { CompileLibraryResult } from '@root/middleware/shared/ports/types'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
@@ -3030,16 +3056,7 @@ class CompilerModule {
   async compileLibrary(
     args: Array<string | PLCProjectData | boolean>,
     _mainProcessPort: MessagePortMain,
-    mainProcessBridge: {
-      makeRuntimeApiRequest: <T = void>(
-        ipAddress: string,
-        jwtToken: string,
-        endpoint: string,
-        responseParser?: (data: string) => T,
-      ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
-      resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
-      loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
-    },
+    mainProcessBridge: LibraryCompileBridge,
   ): Promise<void> {
     _mainProcessPort.start()
 
@@ -3054,9 +3071,21 @@ class CompilerModule {
     // adapter fire its closePort branch twice (once via onmessage,
     // once via the close listener).  Keep the 25 ms delay so the
     // result payload is delivered before the port closes.
-    const finish = (result: import('@root/middleware/shared/ports/types').CompileLibraryResult) => {
+    const finish = (result: CompileLibraryResult) => {
       _mainProcessPort.postMessage({ libraryBuildResult: result })
       setTimeout(() => _mainProcessPort.close(), 25)
+    }
+
+    // Single-shot error path used by every "fail-fast" stage below.
+    // Every stage that aborts the build with one error message posts
+    // it to the console then forwards the same string as `error` on
+    // the structured result; this helper collapses both calls so the
+    // 8 fail-fast sites read as one line each.  Extra fields (e.g.
+    // `libraryName` once the manifest is known) can be threaded via
+    // the second arg.
+    const bail = (msg: string, extra: Partial<CompileLibraryResult> = {}) => {
+      post(msg, 'error')
+      finish({ success: false, error: msg, ...extra })
     }
 
     // The renderer adapter sends two preprocessed datasets:
@@ -3091,20 +3120,18 @@ class CompilerModule {
     try {
       manifestJson = await readFile(manifestPath, { encoding: 'utf8' })
     } catch (error) {
-      post(`Could not read library.json: ${getErrorMessage(error)}`, 'error')
-      finish({ success: false, error: 'Could not read library.json' })
+      bail(`Could not read library.json: ${getErrorMessage(error)}`)
       return
     }
 
     // Stage 1: manifest validation + XML generation.
-    const project: import('@root/backend/shared/types/PLC/open-plc').PLCProject = {
+    const project: PLCProject = {
       meta: { name: '', type: 'plc-library' as const },
-      data: projectData as unknown as import('@root/backend/shared/types/PLC/open-plc').PLCProjectData,
+      data: projectData as unknown as PLCProjectData,
     }
     const stage1 = prepareXmlForLibraryBuild(project, manifestJson)
     if ('error' in stage1) {
-      post(stage1.error, 'error')
-      finish({ success: false, error: stage1.error })
+      bail(stage1.error)
       return
     }
     const { xml, knownPous, manifest } = stage1
@@ -3119,9 +3146,7 @@ class CompilerModule {
       await fs.rm(libraryBuildDir, { recursive: true, force: true })
       await mkdir(libraryBuildSrcDir, { recursive: true })
     } catch (error) {
-      const msg = `Could not prepare build directory: ${getErrorMessage(error)}`
-      post(msg, 'error')
-      finish({ success: false, error: msg })
+      bail(`Could not prepare build directory: ${getErrorMessage(error)}`)
       return
     }
 
@@ -3129,9 +3154,7 @@ class CompilerModule {
     try {
       await writeFile(xmlPath, xml, 'utf-8')
     } catch (error) {
-      const msg = `Could not write plc.xml: ${getErrorMessage(error)}`
-      post(msg, 'error')
-      finish({ success: false, error: msg })
+      bail(`Could not write plc.xml: ${getErrorMessage(error)}`)
       return
     }
 
@@ -3145,9 +3168,7 @@ class CompilerModule {
         post(message, logLevel ?? 'info')
       })
     } catch (error) {
-      const msg = `xml2st failed: ${getErrorMessage(error)}`
-      post(msg, 'error')
-      finish({ success: false, error: msg })
+      bail(`xml2st failed: ${getErrorMessage(error)}`)
       return
     }
 
@@ -3157,9 +3178,7 @@ class CompilerModule {
     try {
       programSt = await readFile(programStPath, { encoding: 'utf8' })
     } catch (error) {
-      const msg = `Could not read program.st from xml2st output: ${getErrorMessage(error)}`
-      post(msg, 'error')
-      finish({ success: false, error: msg })
+      bail(`Could not read program.st from xml2st output: ${getErrorMessage(error)}`)
       return
     }
 
@@ -3176,12 +3195,11 @@ class CompilerModule {
       enabledLibraryRefs.map((r) => r.name),
     )
     if (missingDeps.length > 0) {
-      const list = missingDeps.join(', ')
-      const msg =
-        `Library build aborted: enabled libraries are not installed (${list}). ` +
-        `Open the Library Manager to install or remove them.`
-      post(msg, 'error')
-      finish({ success: false, error: msg, libraryName: manifest.name })
+      bail(
+        `Library build aborted: enabled libraries are not installed (${missingDeps.join(', ')}). ` +
+          `Open the Library Manager to install or remove them.`,
+        { libraryName: manifest.name },
+      )
       return
     }
 
@@ -3203,8 +3221,13 @@ class CompilerModule {
     // already-verified program.st hasn't changed.  `cleanBuild`
     // skips the cache and forces a re-verification.
     const programStMd5 = crypto.createHash('md5').update(programSt).digest('hex')
-    const verifyCachePath = join(libraryBuildDir, '.verify-cache.json')
-    let cachedVerification: import('@root/middleware/shared/ports/types').CompileLibraryResult['verification']
+    // Keep the cache OUTSIDE `libraryBuildDir` — that directory is
+    // wiped at the start of every build (line ~3119 above), so a
+    // cache file living inside it would never survive between
+    // runs.  Sitting one level up in `build/` keeps it adjacent to
+    // the build outputs without being clobbered.
+    const verifyCachePath = join(normalizedProjectPath, 'build', '.verify-cache-library.json')
+    let cachedVerification: CompileLibraryResult['verification']
     if (!cleanBuild) {
       try {
         const raw = await readFile(verifyCachePath, { encoding: 'utf8' })
@@ -3218,7 +3241,7 @@ class CompilerModule {
       }
     }
 
-    let verification: import('@root/middleware/shared/ports/types').CompileLibraryResult['verification']
+    let verification: CompileLibraryResult['verification']
     if (cachedVerification) {
       verification = cachedVerification
       post(
@@ -3233,7 +3256,7 @@ class CompilerModule {
       // (Python as full ST) is intentionally NOT used here.
       const verifyProject = composeVerificationProject({
         meta: { name: manifest.name, type: 'plc-library' },
-        data: verifyProjectData as unknown as import('@root/backend/shared/types/PLC/open-plc').PLCProjectData,
+        data: verifyProjectData as unknown as PLCProjectData,
       })
       post('Verifying with OpenPLC Simulator (avr-gcc)...')
       try {
@@ -3352,9 +3375,7 @@ class CompilerModule {
       await mkdir(join(normalizedProjectPath, 'build'), { recursive: true })
       await writeFile(stlibPath, JSON.stringify(stage2.archive, null, 2) + '\n', 'utf-8')
     } catch (error) {
-      const msg = `Could not write ${manifest.name}.stlib: ${getErrorMessage(error)}`
-      post(msg, 'error')
-      finish({ success: false, error: msg })
+      bail(`Could not write ${manifest.name}.stlib: ${getErrorMessage(error)}`)
       return
     }
 
@@ -3389,15 +3410,7 @@ class CompilerModule {
   private async runVerificationCompile(
     projectPath: string,
     verifyData: PLCProjectData,
-    bridge: {
-      makeRuntimeApiRequest: <T = void>(
-        ipAddress: string,
-        jwtToken: string,
-        endpoint: string,
-        responseParser?: (data: string) => T,
-      ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
-      resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
-    },
+    bridge: LibraryVerificationBridge,
     forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
   ): Promise<{ success: boolean; message?: string }> {
     // Look up the simulator board's core ID from `hals.json` —

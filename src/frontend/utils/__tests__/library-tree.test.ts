@@ -9,7 +9,7 @@
 import { describe, expect, it } from '@jest/globals'
 
 import type { SystemLibrary, SystemLibraryPou } from '../../../middleware/shared/ports/library-types'
-import { buildLibraryTree } from '../library-tree'
+import { buildLibraryTree, libraryHasMatch } from '../library-tree'
 
 function makePou(overrides: Partial<SystemLibraryPou> & { name: string }): SystemLibraryPou {
   return {
@@ -153,5 +153,31 @@ describe('buildLibraryTree', () => {
     expect(tree.children.map((c) => (c.kind === 'folder' ? c.label : c.pou.name))).toEqual([
       'Arithmetic',
     ])
+  })
+})
+
+describe('libraryHasMatch', () => {
+  it('returns true when at least one POU matches the predicate', () => {
+    const lib = makeLibrary({
+      name: 'L',
+      pous: [makePou({ name: 'ADD' }), makePou({ name: 'SHL' })],
+    })
+
+    expect(libraryHasMatch(lib, (pou) => pou.name === 'SHL')).toBe(true)
+  })
+
+  it('returns false when no POU matches the predicate', () => {
+    const lib = makeLibrary({
+      name: 'L',
+      pous: [makePou({ name: 'ADD' }), makePou({ name: 'SHL' })],
+    })
+
+    expect(libraryHasMatch(lib, (pou) => pou.name === 'MISSING')).toBe(false)
+  })
+
+  it('returns false for an empty POU list', () => {
+    const lib = makeLibrary({ name: 'L', pous: [] })
+
+    expect(libraryHasMatch(lib, () => true)).toBe(false)
   })
 })

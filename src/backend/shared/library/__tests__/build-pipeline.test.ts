@@ -23,15 +23,14 @@ jest.mock('../../utils/PLC/xml-generator', () => ({
 // Import after mocks
 import { __setStrucppRuntimeForTests } from '../strucpp-runtime'
 import {
-  __TESTING_STUB_NAMES__,
+  __TESTING__,
   composeVerificationProject,
   libraryBuildFromTranspiledSt,
-  parseLibraryManifest,
   prepareXmlForLibraryBuild,
-  stubProgramFor,
 } from '../build-pipeline'
 
-const STUB = __TESTING_STUB_NAMES__
+const STUB = __TESTING__
+const { parseLibraryManifest, stubProgramFor } = __TESTING__
 
 function makeStrucppStub(
   overrides: Partial<Pick<StrucppRuntime, 'compileStlib'>> = {},

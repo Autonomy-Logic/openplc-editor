@@ -1,5 +1,4 @@
 import { buildProjectFileContent } from '@root/backend/shared/project/create-project-files'
-import { PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import {
@@ -11,15 +10,6 @@ import { writeFileSync } from 'fs'
 
 import { createDirectory, fileOrDirectoryExists, ipcPouToFlat } from '../../../utils'
 import { CreateJSONFile } from '../../../utils'
-
-/**
- * Legacy thin wrapper around the shared content builder.  Retained
- * because the same name was re-exported from this module's index
- * and an external consumer could still call it.  All in-tree
- * callers should switch to `buildProjectFileContent` from
- * `backend/shared/project/create-project-files`.
- */
-const createProjectFile = (data: CreateProjectFileProps): PLCProject => buildProjectFileContent(data).project
 
 /**
  * Electron-side orchestration for project creation.
@@ -154,9 +144,10 @@ const createProjectDefaultStructure = (
         pous: built.pous,
         deviceConfiguration: built.deviceConfiguration,
         devicePinMapping: built.devicePinMapping,
+        ...(built.libraryManifest !== undefined ? { libraryManifest: built.libraryManifest } : {}),
       },
     },
   }
 }
 
-export { createProjectDefaultStructure, createProjectFile }
+export { createProjectDefaultStructure }

@@ -726,6 +726,67 @@ describe('createEditorCompilerAdapter', () => {
       const firstLogEvent = progressEvents.find((e) => e.stage !== 'done')
       expect(firstLogEvent?.level).toBe('info')
     })
+
+    it('forwards build-pass preprocessor logs through onProgress', async () => {
+      // A C++ POU triggers a `Found C++ POU…` log line from
+      // `preprocessPous`'s build pass — the only path that drives the
+      // onProgress callback inside compileLibrary's preprocess step.
+      const cppLibraryData: PLCProjectData = {
+        dataTypes: [],
+        pous: [
+          {
+            name: 'good_cpp',
+            pouType: 'function-block',
+            interface: { variables: [] },
+            body: { language: 'cpp', value: 'void setup(){}\nvoid loop(){}' },
+          },
+        ],
+        configurations: {
+          resource: { tasks: [], instances: [], globalVariables: [] },
+        },
+      }
+
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: cppLibraryData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
+      libraryCallback!({ closePort: true })
+
+      await promise
+
+      expect(progressEvents.some((e) => e.stage === 'st')).toBe(true)
+    })
+
+    it('aborts with a validation error when the build-pass preprocessor rejects a POU', async () => {
+      const badCppLibraryData: PLCProjectData = {
+        dataTypes: [],
+        pous: [
+          {
+            name: 'bad_cpp',
+            pouType: 'function-block',
+            interface: { variables: [] },
+            body: { language: 'cpp', value: '// no setup or loop' },
+          },
+        ],
+        configurations: {
+          resource: { tasks: [], instances: [], globalVariables: [] },
+        },
+      }
+
+      const result = await adapter.compileLibrary!(
+        { projectData: badCppLibraryData, projectPath: '/lib/project' },
+        () => {},
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('POU validation failed')
+      // Must short-circuit BEFORE invoking the IPC bridge.
+      expect(window.bridge.runCompileLibrary).not.toHaveBeenCalled()
+    })
   })
 })
 

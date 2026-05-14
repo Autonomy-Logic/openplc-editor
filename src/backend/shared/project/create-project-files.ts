@@ -152,11 +152,13 @@ function buildProjectObject(input: CreateProjectFileInput): PLCProject {
       pous: [],
       dataTypes: [],
       libraries: [],
-      // Library projects carry the manifest content in-memory the
-      // same way POU bodies do — loaded from / saved to its own
-      // file by the standard pipeline, not embedded in
-      // `project.json`.  PLC projects leave the field unset.
-      ...(isLibrary ? { libraryManifest: buildLibraryManifestTemplate(input.name) } : {}),
+      // `libraryManifest` is NOT embedded in `project.json` — it
+      // rides on `CreateProjectFileContent` at the top level
+      // (see `buildProjectFileContent` below), gets written to
+      // `library.json` at the project root by the create
+      // orchestrator, and is threaded back to the renderer
+      // through the IPC create-response so the manifest tab
+      // sees the initial content without a follow-up disk read.
       configuration: {
         resource: {
           tasks: isLibrary

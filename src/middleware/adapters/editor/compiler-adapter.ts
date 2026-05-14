@@ -19,6 +19,7 @@ import type {
   DebugCompileArgs,
   ExportXmlArgs,
 } from '../../shared/ports/compiler-port'
+import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type {
   CompileLibraryResult,
   CompileProgressEvent,
@@ -26,6 +27,7 @@ import type {
   DebugCompileResult,
   PLCPou,
   PLCProjectData,
+  PLCVariable,
   Result,
 } from '../../shared/ports/types'
 
@@ -119,13 +121,7 @@ function decodeMessage(raw: unknown): string {
  * `generateCBlocksCode` all derive their names from
  * `pou.name`.
  */
-function injectLibraryCppBlocks(
-  projectData: PLCProjectData,
-  archives: Array<{
-    manifest: { name: string }
-    cppBlocks?: Array<{ name: string; code: string; variables: unknown[]; documentation?: string }>
-  }>,
-): PLCProjectData {
+function injectLibraryCppBlocks(projectData: PLCProjectData, archives: StlibArchiveDTO[]): PLCProjectData {
   if (!projectData.libraries || projectData.libraries.length === 0) return projectData
 
   const enabledNames = new Set(projectData.libraries.map((ref) => ref.name))
@@ -135,13 +131,18 @@ function injectLibraryCppBlocks(
     if (!archive.cppBlocks || archive.cppBlocks.length === 0) continue
     if (!enabledNames.has(archive.manifest.name)) continue
     for (const block of archive.cppBlocks) {
+      // `variables` rides through the StlibArchiveDTO as `unknown[]`
+      // by design — the manifest layer doesn't know our PLCVariable
+      // shape.  The on-disk archives are produced by THIS editor's
+      // own save pipeline using the same PLCVariable type, so the
+      // narrowing here matches reality at runtime.
       synthesized.push({
         name: `${archive.manifest.name}__${block.name}`,
         pouType: 'function-block',
-        interface: { variables: block.variables as never },
+        interface: { variables: block.variables as PLCVariable[] },
         body: { language: 'cpp', value: block.code },
         documentation: block.documentation ?? '',
-      } as PLCPou)
+      })
     }
   }
 
@@ -178,8 +179,8 @@ export function createEditorCompilerAdapter(): CompilerPort {
       // same `c_blocks.h` / `c_blocks_code.cpp` generation
       // downstream.  See `injectLibraryCppBlocks` for the renaming
       // contract.
-      const archives = await window.bridge.loadAllLibraries()
-      const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives as never)
+      const archives = (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[]
+      const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives)
 
       // Preprocess POUs (comment wrapping, Python->ST stubs, C++ validation/ST generation)
       const { projectData: processedData, validationFailed } = preprocessPous(
@@ -277,8 +278,8 @@ export function createEditorCompilerAdapter(): CompilerPort {
       onProgress: (event: CompileProgressEvent) => void,
     ): Promise<DebugCompileResult> {
       // Same library-C++ injection as the program build path.
-      const archives = await window.bridge.loadAllLibraries()
-      const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives as never)
+      const archives = (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[]
+      const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives)
 
       // Preprocess for debug compilation too
       const { projectData: processedData, validationFailed } = preprocessPous(

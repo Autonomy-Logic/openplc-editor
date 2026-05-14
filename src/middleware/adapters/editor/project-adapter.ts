@@ -153,9 +153,12 @@ function mapIpcResponse(
         // response so the post-create handler seeds the in-memory
         // store with the same content that just landed on disk —
         // same pattern POU bodies use (parsed from the .st files in
-        // `content.pous`).
-        ...(typeof (content.project.data as { libraryManifest?: string }).libraryManifest === 'string'
-          ? { libraryManifest: (content.project.data as { libraryManifest?: string }).libraryManifest }
+        // `content.pous`).  The manifest lives at `content.libraryManifest`
+        // (mirrors the on-disk shape: `project.json` carries no
+        // manifest, `library.json` is its own file), NOT inside the
+        // project.json blob.
+        ...(typeof (content as { libraryManifest?: string }).libraryManifest === 'string'
+          ? { libraryManifest: (content as { libraryManifest?: string }).libraryManifest }
           : {}),
         debugVariables: content.project.data.debugVariables,
       },

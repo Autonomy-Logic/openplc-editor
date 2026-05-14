@@ -5,10 +5,9 @@ import { SubmitHandler, useForm } from 'react-hook-form'
 
 import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers/platform-context'
 import { PathIcon } from '../../../../../assets/icons/interface/Path'
-import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
-import { useToast } from '../../../[app]/toast/use-toast'
 import { NewProjectStore } from '../store'
+import { useCreateProjectSubmit } from '../use-create-project-submit'
 
 interface Step2Props {
   onNext: () => void
@@ -30,10 +29,7 @@ const Step2 = ({ onNext, onPrev, isFinalStep = false, onFinish, onClose }: Step2
   const projectData = NewProjectStore((state) => state.formData)
   const capabilities = useCapabilities()
   const project = useProject()
-  const { toast } = useToast()
-  const {
-    sharedWorkspaceActions: { handleOpenProjectResponse },
-  } = useOpenPLCStore()
+  const submitCreate = useCreateProjectSubmit()
   const [path, setPath] = useState('')
   const [pathErrorMessage, setPathErrorMessage] = useState('')
 
@@ -46,51 +42,31 @@ const Step2 = ({ onNext, onPrev, isFinalStep = false, onFinish, onClose }: Step2
 
   const handleFormSubmit: SubmitHandler<{ name: string; path: string }> = async (data) => {
     const allData = { ...projectData, name: data.name, path: data.path }
-    handleUpdateForm(allData)
 
     // PLC projects advance to Step 3 (language + cycle time).
     // Library projects finalise creation here — they don't have a
     // main program or a cyclic task, so the third step would be
     // irrelevant.
     if (!isFinalStep) {
+      handleUpdateForm(allData)
       onNext()
       return
     }
 
-    try {
-      const result = await project.createProject({
-        name: allData.name,
-        type: allData.type as 'plc-project' | 'plc-library',
-        path: allData.path,
-        // Language + cycle time are placeholders for the library
-        // path.  Backend's library branch ignores them and the
-        // resulting project has no POU at all; we still pass ST /
-        // 20 ms so any consumer that reads the IPC payload sees a
-        // safe-looking default rather than empty strings.
-        language: 'st',
-        time: 'T#20ms',
-      })
-
-      if (!result.success || !result.data) {
-        toast({
-          title: 'Cannot create a project!',
-          description: result.error?.description ?? 'Failed to create the project.',
-          variant: 'fail',
-        })
-        return
-      }
-
-      handleOpenProjectResponse(result.data)
-    } catch (_error) {
-      toast({
-        title: 'Cannot create a project!',
-        description: 'Failed to create the project.',
-        variant: 'fail',
-      })
-    } finally {
-      onClose?.()
-      onFinish?.()
-    }
+    // Language + cycle time are placeholders for the library path.
+    // Backend's library branch ignores them and the resulting
+    // project has no POU at all; we still pass ST / 20 ms so any
+    // consumer that reads the IPC payload sees a safe-looking
+    // default rather than empty strings.
+    await submitCreate(
+      { ...allData, language: 'st', time: 'T#20ms' },
+      {
+        onSuccess: () => {
+          onClose?.()
+          onFinish?.()
+        },
+      },
+    )
   }
 
   const handlePathPicker = async () => {

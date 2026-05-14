@@ -35,10 +35,11 @@
  * consume this same orchestration.
  */
 
-import type { PLCProject, PLCProjectData } from '../types/PLC/open-plc'
-import { checkPathId } from '../utils/path-safety'
-import { type KnownPou, splitProgramSt } from '../utils/PLC/split-program-st'
-import { XmlGenerator } from '../utils/PLC/xml-generator'
+import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
+import { checkPathId } from '@root/backend/shared/utils/path-safety'
+import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
+import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
+
 import { compileStlib, type CompileStlibError, type CompileStlibSource } from './compile-stlib'
 
 // ---------------------------------------------------------------------------
@@ -80,7 +81,7 @@ export interface LibraryBuildManifest {
  * is obviously broken — saves a slow xml2st spawn on every
  * mis-edited save.
  */
-export function parseLibraryManifest(json: string): ManifestParseResult {
+function parseLibraryManifest(json: string): ManifestParseResult {
   let raw: unknown
   try {
     raw = JSON.parse(json)
@@ -155,7 +156,7 @@ const STUB_INSTANCE_NAME = '__openplc_library_stub_instance__'
  * — a single trivial assignment + a single INT local is the smallest
  * shape that gets accepted across every xml2st version.
  */
-export function stubProgramFor(project: PLCProject): PLCProject {
+function stubProgramFor(project: PLCProject): PLCProject {
   return {
     meta: project.meta,
     data: {
@@ -240,6 +241,11 @@ export function prepareXmlForLibraryBuild(project: PLCProject, manifestJson: str
   }
 
   const stubbed = stubProgramFor(project)
+  // `'old-editor'` keeps the XML shape compatible with the bundled
+  // xml2st binary (the MatIEC-era flavor), which is the same pipeline
+  // every other library/program build in this repo speaks to.  The
+  // `'codesys'` flavor exists for export-only paths; using it here
+  // would leave xml2st unable to find the program block.
   const xmlRes = XmlGenerator(stubbed.data, 'old-editor')
   if (!xmlRes.ok || !xmlRes.data) {
     return { error: `XML generation failed: ${xmlRes.message ?? 'unknown error'}` }
@@ -569,12 +575,15 @@ export function composeVerificationProject(project: PLCProject): PLCProject {
   }
 }
 
-// Exposed for test ergonomics — same names the build pipeline reads
-// internally, so tests can assert on the stub shape without
-// re-declaring the constants.
-export const __TESTING_STUB_NAMES__ = {
+// Exposed for test ergonomics only — keeps the stub-name constants
+// and pipeline helpers that aren't part of the public API reachable
+// from test code without leaking them as importable symbols for
+// production callers.
+export const __TESTING__ = {
   STUB_PROGRAM_NAME,
   STUB_TASK_NAME,
   STUB_INSTANCE_NAME,
   STUB_SPLIT_FILENAME,
+  parseLibraryManifest,
+  stubProgramFor,
 }

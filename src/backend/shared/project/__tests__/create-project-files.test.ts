@@ -102,6 +102,26 @@ describe('buildProjectFileContent', () => {
     it('does not emit a library manifest', () => {
       expect(built.libraryManifest).toBeUndefined()
     })
+
+    describe('default POU body per language', () => {
+      it('seeds a ladder rung container for LD projects', () => {
+        const ld = buildProjectFileContent({ name: 'P', type: 'plc-project', language: 'ld', time: 'T#20ms' })
+        expect(ld.pous[0].data.body).toEqual({ language: 'ld', value: { name: 'main', rungs: [] } })
+      })
+
+      it('seeds an empty flow graph for FBD projects', () => {
+        const fbd = buildProjectFileContent({ name: 'P', type: 'plc-project', language: 'fbd', time: 'T#20ms' })
+        expect(fbd.pous[0].data.body).toEqual({
+          language: 'fbd',
+          value: { name: 'main', rung: { comment: '', edges: [], nodes: [] } },
+        })
+      })
+
+      it('seeds an empty textual body for ST/IL/SFC projects', () => {
+        const il = buildProjectFileContent({ name: 'P', type: 'plc-project', language: 'il', time: 'T#20ms' })
+        expect(il.pous[0].data.body).toEqual({ language: 'il', value: '' })
+      })
+    })
   })
 
   describe('for plc-library', () => {
