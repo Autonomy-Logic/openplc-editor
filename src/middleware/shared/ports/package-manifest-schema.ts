@@ -22,6 +22,9 @@ const VppModuleSchema = z.object({
   name: z.string().min(1),
   hwId: z.string().optional(),
   image: z.string().optional(),
+  description: z.string().optional(),
+  specs: z.record(z.string(), z.string()).optional(),
+  configScreen: z.string().optional(),
   io: z.object({
     digitalInputs: z.number().int().nonnegative(),
     digitalOutputs: z.number().int().nonnegative(),
