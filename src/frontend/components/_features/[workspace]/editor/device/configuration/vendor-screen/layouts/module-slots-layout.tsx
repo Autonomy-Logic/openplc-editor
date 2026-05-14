@@ -456,7 +456,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               <img
                 src={moduleImage}
                 alt={selectedModule.name}
-                className='h-64 w-64 shrink-0 self-start object-contain'
+                className='h-80 w-80 shrink-0 self-start object-contain'
               />
             )}
           </div>
