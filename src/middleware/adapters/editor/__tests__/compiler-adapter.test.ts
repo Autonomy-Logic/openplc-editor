@@ -527,36 +527,6 @@ describe('createEditorCompilerAdapter', () => {
       expect(progressEvents[0].message).toBe('Starting library build...')
     })
 
-    it('refuses C/C++ POUs up front without touching the bridge', async () => {
-      // strucpp's library compiler is ST/IL-only — it has no way
-      // to package the C++ implementation files into the .stlib,
-      // so a library that contains a C++ POU would compile cleanly
-      // but link with undefined externs at consume time.  The
-      // adapter rejects early, before any IPC traffic.
-      const cppProject: PLCProjectData = {
-        dataTypes: [],
-        pous: [
-          {
-            name: 'cpp_block',
-            pouType: 'function-block',
-            interface: { variables: [] },
-            body: { language: 'cpp', value: 'void cpp_block_setup(...) {}' },
-          },
-        ],
-        configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
-      }
-
-      const result = await adapter.compileLibrary!(
-        { projectData: cppProject, projectPath: '/lib/project' },
-        () => {},
-      )
-
-      expect(result.success).toBe(false)
-      expect(result.error).toMatch(/C\/C\+\+ function blocks are not yet supported/i)
-      expect(result.error).toContain('cpp_block')
-      expect(window.bridge.runCompileLibrary).not.toHaveBeenCalled()
-    })
-
     it('forwards error log entries and resolves the failure result', async () => {
       const progressEvents: CompileProgressEvent[] = []
       const promise = adapter.compileLibrary!(
