@@ -222,6 +222,38 @@ class HardwareModule {
           // Map target type to compiler
           const compiler = device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
 
+          // Per-module configuration screens live alongside top-level
+          // screens; load them eagerly so the renderer can present the
+          // full per-slot detail pane without an extra IPC round trip.
+          const loadModuleConfigScreen = async (relPath: string | undefined) => {
+            if (!relPath) return undefined
+            const fullPath = join(pkg.path, relPath)
+            if (!existsSync(fullPath)) return undefined
+            try {
+              return await HardwareModule.readJSONFile(fullPath)
+            } catch {
+              return undefined
+            }
+          }
+
+          const modules = device.moduleSystem
+            ? await Promise.all(
+                device.moduleSystem.modules.map(async (m) => ({
+                  id: m.id,
+                  name: m.name,
+                  hwId: m.hwId,
+                  image: m.image,
+                  description: m.description,
+                  specs: m.specs,
+                  configScreen: m.configScreen,
+                  configScreenDefinition: await loadModuleConfigScreen(m.configScreen),
+                  io: m.io,
+                  parameters: m.parameters,
+                  addressMapping: m.addressMapping,
+                })),
+              )
+            : []
+
           boards.set(device.name, {
             compiler,
             core: device.target.core ?? '',
@@ -242,14 +274,7 @@ class HardwareModule {
                 ? {
                     enabled: device.moduleSystem.enabled,
                     maxSlots: device.moduleSystem.maxSlots,
-                    modules: device.moduleSystem.modules.map((m) => ({
-                      id: m.id,
-                      name: m.name,
-                      image: m.image,
-                      io: m.io,
-                      parameters: m.parameters,
-                      addressMapping: m.addressMapping,
-                    })),
+                    modules,
                   }
                 : null,
             },

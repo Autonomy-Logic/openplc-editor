@@ -22,6 +22,15 @@ type ScreenDefinition = {
 type ModuleDefinition = {
   id: string
   name: string
+  hwId?: string
+  image?: string
+  description?: string
+  specs?: Record<string, string>
+  configScreen?: string
+  /** Parsed per-module config-screen JSON, loaded by the backend
+   *  alongside top-level screens. Renderers read fields from here to
+   *  produce the slot-detail config form. */
+  configScreenDefinition?: unknown
   io: { digitalInputs: number; digitalOutputs: number; analogInputs: number; analogOutputs: number }
   parameters?: Array<{
     id: string
