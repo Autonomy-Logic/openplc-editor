@@ -450,15 +450,16 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               )}
             </div>
 
-            {/* Module image — stretches vertically to the height of
-                the left text block (Slot title -> specs). Has a fixed
-                width so the text column keeps a stable layout. */}
+            {/* Module image — fixed width with a generous min-height,
+                stretches further if the left text block grows past it
+                via self-stretch. Sized to be the visual anchor of the
+                slot card. */}
             {selectedModule && (
-              <div className='flex w-48 shrink-0 items-center justify-center self-stretch overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900'>
+              <div className='flex min-h-72 w-96 shrink-0 items-center justify-center self-stretch overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900'>
                 {moduleImage ? (
                   <img src={moduleImage} alt={selectedModule.name} className='h-full w-full object-contain' />
                 ) : (
-                  <span className='text-[10px] text-neutral-400 dark:text-neutral-600'>No image</span>
+                  <span className='text-xs text-neutral-400 dark:text-neutral-600'>No image</span>
                 )}
               </div>
             )}
