@@ -450,18 +450,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               )}
             </div>
 
-            {/* Module image — fixed width with a generous min-height,
-                stretches further if the left text block grows past it
-                via self-stretch. Sized to be the visual anchor of the
-                slot card. */}
-            {selectedModule && (
-              <div className='flex min-h-72 w-96 shrink-0 items-center justify-center self-stretch overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900'>
-                {moduleImage ? (
-                  <img src={moduleImage} alt={selectedModule.name} className='h-full w-full object-contain' />
-                ) : (
-                  <span className='text-xs text-neutral-400 dark:text-neutral-600'>No image</span>
-                )}
-              </div>
+            {/* Module image — frameless. The PNGs ship with a
+                transparent background, so no card chrome is needed. */}
+            {selectedModule && moduleImage && (
+              <img
+                src={moduleImage}
+                alt={selectedModule.name}
+                className='h-64 w-64 shrink-0 self-start object-contain'
+              />
             )}
           </div>
 
