@@ -59,6 +59,14 @@ export interface ParsedProjectData {
      *  projects that don't carry the field on disk — bundled libs
      *  are always-on regardless. */
     libraries: { name: string; version: string }[]
+    /** Raw library manifest content (the bytes of `library.json` at
+     *  the project root).  Set for library projects only — same
+     *  shape POU bodies live in: text content held in the store,
+     *  serialised verbatim to its own file by the save pipeline,
+     *  not embedded in `project.json`.  Empty string when the file
+     *  was missing on disk (the manifest editor's load effect
+     *  seeds a template on first edit). */
+    libraryManifest?: string
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
   }
   deviceConfiguration?: DeviceConfiguration
@@ -322,6 +330,7 @@ export function parseProjectFiles(
   pouFiles: RawProjectFile[],
   serverFiles: RawProjectFile[],
   remoteDeviceFiles: RawProjectFile[],
+  libraryManifest: string = '',
 ): ParsedProjectData {
   const warnings: string[] = []
 
@@ -474,6 +483,13 @@ export function parseProjectFiles(
       // are always-on regardless, so the project compiles without
       // needing an explicit enablement record.
       libraries: (data.libraries as ParsedProjectData['projectData']['libraries']) ?? [],
+      // Library projects own a `library.json` at the project root.
+      // The raw bytes are threaded through here from the disk read
+      // (same way the .st POU contents are) so the editor's store
+      // has the manifest content the manifest tab + the save flow
+      // both read.  Empty string when the file is missing on disk
+      // — the manifest editor seeds a template before first save.
+      ...(metaType === 'plc-library' ? { libraryManifest } : {}),
       debugVariables: data.debugVariables as ParsedProjectData['projectData']['debugVariables'],
     },
     deviceConfiguration,

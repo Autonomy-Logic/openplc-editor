@@ -4,40 +4,10 @@ import { basename, extname, join } from 'path'
 
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
+import { importCodesysLibrary as sharedImportCodesys } from '../../shared/library/codesys-import'
+import { compileStlib as sharedCompileStlib } from '../../shared/library/compile-stlib'
 import { assertPathContained, validatePathId } from '../../shared/utils/path-safety'
 import type { LibraryRegistry } from './types'
-
-/**
- * Strucpp's CODESYS importer + .stlib compiler.  Loaded lazily because
- * strucpp uses ESM features (import.meta) that don't survive Jest's
- * CJS transform; the actual import only happens when an install
- * call needs it.  Same shape as `loadStrucpp()` in the compiler module.
- */
-type StrucppImportModule = {
-  importCodesysLibrary: (path: string) => {
-    success: boolean
-    sources?: { fileName: string; source: string; category?: string }[]
-    globalConstants?: Record<string, number>
-    errors?: string[]
-  }
-  compileStlib: (
-    sources: { fileName: string; source: string; category?: string }[],
-    options: {
-      name: string
-      version: string
-      namespace: string
-      noSource?: boolean
-      builtin?: boolean
-      globalConstants?: Record<string, number>
-    },
-  ) => { success: boolean; archive?: unknown; errors?: { message: string; line?: number; file?: string }[] }
-  loadStlibFromFile: (path: string) => unknown
-}
-
-function loadStrucpp(): StrucppImportModule {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('strucpp') as StrucppImportModule
-}
 
 /**
  * System-wide library pool.
@@ -175,6 +145,40 @@ export class LibraryManagerModule {
    * a clear "open the Library Manager" message instead of strucpp's
    * per-symbol "function not found" cascade.
    */
+  /**
+   * Load the full parsed archives for every enabled library — both
+   * bundled and user-installed.  Used by the Library Project build
+   * pipeline to pass `dependencies` into strucpp's `compileStlib` so
+   * a user library that references external symbols (e.g. an OSCAT
+   * function) resolves them at compile time.
+   *
+   * Bundled libraries are always-on and included unconditionally;
+   * user libraries are filtered by `enabledNames`.  `missing` lists
+   * enabled names that have no archive on disk — same shape
+   * `resolveEnabledLibraryDirs` returns, so the caller can surface
+   * a single "install or remove" error before strucpp runs.
+   */
+  loadEnabledArchives(enabledNames: string[]): { archives: StlibArchiveDTO[]; missing: string[] } {
+    const archives: StlibArchiveDTO[] = []
+    for (const archive of this.readBundledArchives()) archives.push(archive)
+    const registry = this.readRegistry()
+    const missing: string[] = []
+    for (const name of enabledNames) {
+      const entry = registry.libraries[name]
+      if (!entry) {
+        missing.push(name)
+        continue
+      }
+      const archive = this.readUserArchive(name, entry.stlibPath)
+      if (!archive) {
+        missing.push(name)
+        continue
+      }
+      archives.push(archive)
+    }
+    return { archives, missing }
+  }
+
   resolveEnabledLibraryDirs(enabledNames: string[]): { dirs: string[]; missing: string[] } {
     const dirs: string[] = []
     if (existsSync(this.bundledDir)) {
@@ -259,8 +263,7 @@ export class LibraryManagerModule {
   }
 
   private async installFromCodesys(filePath: string): Promise<LibraryInstallResult> {
-    const strucpp = loadStrucpp()
-    const importResult = strucpp.importCodesysLibrary(filePath)
+    const importResult = sharedImportCodesys(filePath)
     if (!importResult.success || !importResult.sources) {
       const errs = (importResult.errors ?? ['unknown error']).join('; ')
       return { success: false, error: `CODESYS import failed: ${errs}` }
@@ -275,7 +278,7 @@ export class LibraryManagerModule {
     let identifier = baseName.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[.-]+/, '')
     if (!identifier) identifier = 'imported-library'
 
-    const compileResult = strucpp.compileStlib(importResult.sources, {
+    const compileResult = sharedCompileStlib(importResult.sources, {
       name: identifier,
       version: '1.0.0',
       namespace: identifier.replace(/[^A-Za-z0-9_]/g, '_'),

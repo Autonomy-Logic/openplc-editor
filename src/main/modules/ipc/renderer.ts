@@ -31,6 +31,11 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
+  /** Final structured outcome of a library build.  Set only on the
+   *  close-port message emitted by `compileLibrary`; absent from
+   *  intermediate log entries and from program-build / debug-build
+   *  callbacks. */
+  libraryBuildResult?: import('@root/middleware/shared/ports/types').CompileLibraryResult
 }
 
 /**
@@ -207,6 +212,28 @@ const rendererProcessBridge = {
         closePort: true,
       }),
     )
+  },
+
+  /** Build the open Library Project into a `.stlib` archive.  Same
+   *  MessageChannel pattern as `runCompileProgram`.  Args:
+   *    [0] projectPath
+   *    [1] projectData preprocessed with `isSimulator: false` (full
+   *        Python-as-ST), used for the library build proper.
+   *    [2] projectData preprocessed with `isSimulator: true` (Python
+   *        as no-op stubs), used as input to the simulator-target
+   *        verification compile so it doesn't try to link Python
+   *        loader externs the AVR simulator runtime doesn't ship.
+   *    [3] cleanBuild flag (skips the verification cache).
+   *  Callback receives a stream of log messages and a final
+   *  `libraryBuildResult`. */
+  runCompileLibrary: (
+    compileArgs: Array<string | PLCProjectData | boolean>,
+    callback: (args: CompilerPortMessage) => void,
+  ) => {
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])
+    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
+    rendererProcessPort.addEventListener('close', () => callback({ closePort: true }))
   },
 
   // !! Deprecated: These methods are an outdated implementation and should be removed.

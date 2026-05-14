@@ -61,6 +61,7 @@ const boardsMap = new Map([
 
 let compileCallback: ((data: Record<string, unknown>) => void) | null = null
 let debugCallback: ((data: Record<string, unknown>) => void) | null = null
+let libraryCallback: ((data: Record<string, unknown>) => void) | null = null
 
 /** Flush microtask queue so async bridge calls complete and callbacks are registered. */
 const flushMicrotasks = () => new Promise<void>((resolve) => process.nextTick(resolve))
@@ -68,6 +69,7 @@ const flushMicrotasks = () => new Promise<void>((resolve) => process.nextTick(re
 beforeEach(() => {
   compileCallback = null
   debugCallback = null
+  libraryCallback = null
 
   window.bridge = {
     getAvailableBoards: jest.fn().mockResolvedValue(boardsMap),
@@ -79,6 +81,12 @@ beforeEach(() => {
       .mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
         debugCallback = cb
       }),
+    runCompileLibrary: jest
+      .fn()
+      .mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
+        libraryCallback = cb
+      }),
+    loadAllLibraries: jest.fn().mockResolvedValue([]),
     exportProjectXml: jest.fn().mockResolvedValue({ success: true, message: 'Exported successfully' }),
   } as unknown as typeof window.bridge
 })
@@ -476,6 +484,308 @@ describe('createEditorCompilerAdapter', () => {
       })
 
       expect(result).toEqual({ success: false, error: 'Export failed: disk full' })
+    })
+  })
+
+  describe('library-cpp-block injection', () => {
+    it('grafts each enabled library archive\'s cppBlocks into the project before preprocessing', async () => {
+      // Project enables a library called `motor_lib` that ships a
+      // C++ FB called `Driver`.  The bridge returns the archive with
+      // its cppBlocks; the adapter must inject a synthesized
+      // `motor_lib__Driver` POU into the project's POU list before
+      // it builds the IPC payload, so the program build's
+      // c_blocks.h/code.cpp generation picks up the C++ source.
+      const projectWithLib: PLCProjectData = {
+        ...mockProjectData,
+        libraries: [{ name: 'motor_lib', version: '1.0.0' }],
+      }
+      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([
+        {
+          manifest: { name: 'motor_lib' },
+          cppBlocks: [
+            {
+              name: 'Driver',
+              code: 'void setup() {}\nvoid loop() {}',
+              variables: [
+                {
+                  name: 'pwm',
+                  class: 'input',
+                  type: { definition: 'base-type', value: 'INT' },
+                  location: '',
+                  documentation: '',
+                },
+              ],
+            },
+          ],
+        },
+      ])
+
+      const promise = adapter.compileProgram(
+        { projectData: projectWithLib, boardTarget: 'Arduino Mega', projectPath: '/p' },
+        () => {},
+      )
+      await flushMicrotasks()
+      compileCallback!({ closePort: true })
+      await promise
+
+      // The IPC payload's POU list should contain the synthesized
+      // `motor_lib__Driver` POU AFTER preprocessing has turned its
+      // cpp body into an ST stub.  preprocessPous also stamps an
+      // `originalCppPous` entry alongside.
+      const ipcArgs = (window.bridge.runCompileProgram as jest.Mock).mock.calls[0][0] as unknown[]
+      const ipcProjectData = ipcArgs[4] as { pous: Array<{ data: { name: string } }>; originalCppPous?: Array<{ name: string }> }
+      const pouNames = ipcProjectData.pous.map((p) => p.data.name)
+      expect(pouNames).toContain('motor_lib__Driver')
+      expect(ipcProjectData.originalCppPous?.map((p) => p.name)).toContain('motor_lib__Driver')
+    })
+
+    it('skips library cppBlocks that are not on the project\'s enabled list', async () => {
+      const projectWithLib: PLCProjectData = {
+        ...mockProjectData,
+        libraries: [{ name: 'enabled_lib', version: '1.0.0' }],
+      }
+      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([
+        {
+          manifest: { name: 'enabled_lib' },
+          cppBlocks: [{ name: 'OK', code: 'void setup(){}void loop(){}', variables: [] }],
+        },
+        {
+          // Not enabled — must not leak into the project.
+          manifest: { name: 'other_lib' },
+          cppBlocks: [{ name: 'Leak', code: 'void setup(){}void loop(){}', variables: [] }],
+        },
+      ])
+
+      const promise = adapter.compileProgram(
+        { projectData: projectWithLib, boardTarget: 'Arduino Mega', projectPath: '/p' },
+        () => {},
+      )
+      await flushMicrotasks()
+      compileCallback!({ closePort: true })
+      await promise
+
+      const ipcArgs = (window.bridge.runCompileProgram as jest.Mock).mock.calls[0][0] as unknown[]
+      const ipcProjectData = ipcArgs[4] as { pous: Array<{ data: { name: string } }> }
+      const pouNames = ipcProjectData.pous.map((p) => p.data.name)
+      expect(pouNames).toContain('enabled_lib__OK')
+      expect(pouNames).not.toContain('other_lib__Leak')
+    })
+  })
+
+  describe('compileLibrary', () => {
+    it('posts project path + IPC data to runCompileLibrary and resolves the structured result', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+
+      libraryCallback!({ message: 'Starting library build...', logLevel: 'info' })
+      libraryCallback!({
+        libraryBuildResult: {
+          success: true,
+          stlibPath: '/lib/project/build/demo_lib.stlib',
+          libraryName: 'demo_lib',
+        },
+      })
+      libraryCallback!({ closePort: true })
+
+      const result = await promise
+
+      // Args: [projectPath, ipcDataForBuild, ipcDataForVerify, cleanBuild]
+      expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
+        [
+          '/lib/project',
+          expect.objectContaining({ pous: expect.any(Array) }),
+          expect.objectContaining({ pous: expect.any(Array) }),
+          false,
+        ],
+        expect.any(Function),
+      )
+      expect(result).toEqual({
+        success: true,
+        stlibPath: '/lib/project/build/demo_lib.stlib',
+        libraryName: 'demo_lib',
+      })
+
+      // The adapter does NOT emit a synthetic done event on close.
+      // The backend already posts "Library built successfully: <path>"
+      // through the message stream, and re-emitting on close would
+      // double-print the success line.  Only the forwarded log
+      // message should appear.
+      expect(progressEvents).toHaveLength(1)
+      expect(progressEvents[0].message).toBe('Starting library build...')
+    })
+
+    it('forwards error log entries and resolves the failure result', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+
+      libraryCallback!({ message: 'manifest.namespace is invalid', logLevel: 'error' })
+      libraryCallback!({
+        libraryBuildResult: {
+          success: false,
+          error: 'manifest.namespace is invalid',
+        },
+      })
+      libraryCallback!({ closePort: true })
+
+      const result = await promise
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('manifest.namespace is invalid')
+      expect(progressEvents.some((e) => e.stage === 'error')).toBe(true)
+      expect(progressEvents[progressEvents.length - 1].stage).toBe('error')
+    })
+
+    it('resolves with a fallback error when the port closes without a structured result', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      // No libraryBuildResult — port closes unexpectedly.
+      libraryCallback!({ closePort: true })
+
+      const result = await promise
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/closed unexpectedly/i)
+    })
+
+    it('captures the last error message when no structured result arrives', async () => {
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        () => {},
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ message: 'something went wrong', logLevel: 'error' })
+      libraryCallback!({ closePort: true })
+
+      const result = await promise
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('something went wrong')
+    })
+
+    it('routes non-error log messages through inferStage', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ message: 'Generating XML from JSON', logLevel: 'info' })
+      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
+      libraryCallback!({ closePort: true })
+
+      await promise
+      expect(progressEvents[0].stage).toBe('xml')
+      expect(progressEvents[0].level).toBe('info')
+    })
+
+    it('propagates the cleanBuild flag through to the bridge', async () => {
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project', cleanBuild: true },
+        () => {},
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
+      libraryCallback!({ closePort: true })
+      await promise
+
+      expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
+        ['/lib/project', expect.any(Object), expect.any(Object), true],
+        expect.any(Function),
+      )
+    })
+
+    it('defaults non-error log levels to info when logLevel is missing', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: mockProjectData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ message: 'progress with no logLevel' })
+      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
+      libraryCallback!({ closePort: true })
+
+      await promise
+      const firstLogEvent = progressEvents.find((e) => e.stage !== 'done')
+      expect(firstLogEvent?.level).toBe('info')
+    })
+
+    it('forwards build-pass preprocessor logs through onProgress', async () => {
+      // A C++ POU triggers a `Found C++ POU…` log line from
+      // `preprocessPous`'s build pass — the only path that drives the
+      // onProgress callback inside compileLibrary's preprocess step.
+      const cppLibraryData: PLCProjectData = {
+        dataTypes: [],
+        pous: [
+          {
+            name: 'good_cpp',
+            pouType: 'function-block',
+            interface: { variables: [] },
+            body: { language: 'cpp', value: 'void setup(){}\nvoid loop(){}' },
+          },
+        ],
+        configurations: {
+          resource: { tasks: [], instances: [], globalVariables: [] },
+        },
+      }
+
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileLibrary!(
+        { projectData: cppLibraryData, projectPath: '/lib/project' },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      libraryCallback!({ libraryBuildResult: { success: true, stlibPath: '/x.stlib' } })
+      libraryCallback!({ closePort: true })
+
+      await promise
+
+      expect(progressEvents.some((e) => e.stage === 'st')).toBe(true)
+    })
+
+    it('aborts with a validation error when the build-pass preprocessor rejects a POU', async () => {
+      const badCppLibraryData: PLCProjectData = {
+        dataTypes: [],
+        pous: [
+          {
+            name: 'bad_cpp',
+            pouType: 'function-block',
+            interface: { variables: [] },
+            body: { language: 'cpp', value: '// no setup or loop' },
+          },
+        ],
+        configurations: {
+          resource: { tasks: [], instances: [], globalVariables: [] },
+        },
+      }
+
+      const result = await adapter.compileLibrary!(
+        { projectData: badCppLibraryData, projectPath: '/lib/project' },
+        () => {},
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('POU validation failed')
+      // Must short-circuit BEFORE invoking the IPC bridge.
+      expect(window.bridge.runCompileLibrary).not.toHaveBeenCalled()
     })
   })
 })

@@ -17,6 +17,7 @@ export type TabsProps = {
     | { type: 'vendor-screen'; screenName: string }
     | { type: 'package-manager' }
     | { type: 'library-manager' }
+    | { type: 'library-manifest' }
     | { type: 'ethercat-device'; busName: string; deviceId: string }
   configuration?: Record<string, unknown>
 }

@@ -22,7 +22,7 @@ export const LibraryIcon = (props: ILibraryIconProps) => {
   const { className, size = 'sm', ...res } = props
   return (
     <svg
-      role='button'
+      aria-hidden='true'
       viewBox='0 0 28 28'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'

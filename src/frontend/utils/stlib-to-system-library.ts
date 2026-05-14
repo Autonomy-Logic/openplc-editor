@@ -157,6 +157,48 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
     })
   }
 
+  // C/C++ function blocks carried verbatim in `archive.cppBlocks`
+  // (strucpp doesn't compile these — the consumer's program build
+  // grafts them into its own C++-POU pipeline).  Each block is
+  // surfaced under the library-prefixed name (`<library>__<name>`)
+  // that the consumer's source code must reference, since the
+  // injection step at compile time uses the same prefix.  The
+  // picker shows the prefix so the user types the right name; the
+  // injection produces a POU with that exact name; everything
+  // resolves cleanly.
+  type CppBlockVar = {
+    name: string
+    class?: string
+    type?: { value?: string }
+    documentation?: string
+  }
+  type CppBlockEntry = {
+    name: string
+    code: string
+    variables: CppBlockVar[]
+    documentation?: string
+  }
+  const archiveWithCppBlocks = archive as typeof archive & { cppBlocks?: CppBlockEntry[] }
+  for (const block of archiveWithCppBlocks.cppBlocks ?? []) {
+    const variables: SystemLibraryVariable[] = []
+    for (const v of block.variables) {
+      if (v.class !== 'input' && v.class !== 'output' && v.class !== 'inOut') continue
+      variables.push({
+        name: v.name,
+        class: v.class,
+        type: typeRef(v.type?.value ?? 'BOOL'),
+      })
+    }
+    pous.push({
+      name: `${m.name}__${block.name}`,
+      type: 'function-block',
+      language: 'cpp',
+      variables,
+      body: block.code,
+      documentation: block.documentation ?? '',
+    })
+  }
+
   const result: SystemLibrary = {
     name: m.name,
     author: '',

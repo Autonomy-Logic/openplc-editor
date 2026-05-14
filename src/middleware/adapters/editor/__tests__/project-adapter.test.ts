@@ -264,6 +264,32 @@ describe('createEditorProjectAdapter', () => {
 
       expect(window.bridge.createProject).toHaveBeenCalledWith(expect.objectContaining({ path: '' }))
     })
+
+    it('threads libraryManifest from the IPC content level into projectData', async () => {
+      const manifestJson = '{ "name": "my-lib", "version": "0.1.0", "namespace": "my_lib" }\n'
+      ;(window.bridge.createProject as jest.Mock).mockResolvedValueOnce({
+        ...mockIpcProjectResponse,
+        data: {
+          ...mockIpcProjectResponse.data,
+          content: {
+            ...mockIpcProjectResponse.data.content,
+            libraryManifest: manifestJson,
+          },
+        },
+      })
+
+      const result = await adapter.createProject({ name: 'my-lib', type: 'plc-library' })
+
+      expect(result.success).toBe(true)
+      expect(result.data?.projectData.libraryManifest).toBe(manifestJson)
+    })
+
+    it('omits libraryManifest when the IPC response does not carry one (PLC projects)', async () => {
+      const result = await adapter.createProject({ name: 'test', type: 'plc-project' })
+
+      expect(result.success).toBe(true)
+      expect(result.data?.projectData.libraryManifest).toBeUndefined()
+    })
   })
 
   describe('openProject', () => {

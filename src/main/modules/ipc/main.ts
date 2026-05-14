@@ -641,6 +641,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
     this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
+    this.ipcMain.on('compiler:run-compile-library', this.handleRunCompileLibrary)
 
     // +++ !! Deprecated: These handlers are outdated and should be removed. +++
 
@@ -732,6 +733,15 @@ class MainProcessBridge implements MainIpcModule {
   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
     this.stopSimulatorAndNotify()
     const response = await this.projectService.createProject(data)
+    // Mirror `handleProjectOpen`: a freshly-created project is the
+    // active project from this point on, so any sandboxed file IPC
+    // that gates on `validateFilePath` (file:read-content, watcher
+    // start/stop) has a project root to compare against.  Skipping
+    // this left newly-created library projects unable to read their
+    // own `library.json` on first mount of the manifest tab.
+    if (response.success && response.data?.meta.path) {
+      this.currentProjectPath = response.data.meta.path
+    }
     return response
   }
   handleProjectOpen = async () => {
@@ -995,6 +1005,11 @@ class MainProcessBridge implements MainIpcModule {
     void this.compilerModule.compileForDebugger(args, mainProcessPort, this)
   }
 
+  handleRunCompileLibrary = (event: IpcMainEvent, args: Array<string | PLCProjectData | boolean>) => {
+    const mainProcessPort = event.ports[0]
+    void this.compilerModule.compileLibrary(args, mainProcessPort, this)
+  }
+
   /**
    * Bridge method consumed by the compiler module.  Walks the
    * library manager's registry to turn `project.libraries` names
@@ -1005,6 +1020,19 @@ class MainProcessBridge implements MainIpcModule {
    */
   resolveLibraryDirs = (enabledNames: string[]): { dirs: string[]; missing: string[] } =>
     this.libraryManagerModule.resolveEnabledLibraryDirs(enabledNames)
+
+  /**
+   * Bridge method consumed by the Library Project build pipeline.
+   * Returns the parsed `.stlib` archives for every enabled library
+   * — bundled + the user-installed subset — so strucpp's
+   * `compileStlib` can resolve cross-library symbol references when
+   * the library under build depends on another archive (e.g. an
+   * OSCAT-using utility library).  `missing` mirrors the same
+   * shape `resolveLibraryDirs` returns so callers fail with the
+   * same diagnostic.
+   */
+  loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
+    this.libraryManagerModule.loadEnabledArchives(enabledNames)
 
   // TODO: These handlers are outdated and should be removed.
   // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {

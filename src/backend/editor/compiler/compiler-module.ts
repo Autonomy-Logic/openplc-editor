@@ -10,22 +10,43 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
-// incompatible with Jest's CJS transform. The actual import happens in handleCompileSTtoCpp().
-type StrucppCompile = typeof import('strucpp')['compile']
+// incompatible with Jest's CJS transform — see `backend/shared/library/strucpp-runtime`.
 type StrucppFormatDiagnostic = typeof import('strucpp')['formatDiagnostic']
-type StrucppBuildSourceMap = typeof import('strucpp')['buildSourceMap']
-type StrucppGetVersion = typeof import('strucpp')['getVersion']
 type StrucppCompileError = import('strucpp').CompileError
 type StrucppSourceMap = ReturnType<typeof import('strucpp')['buildSourceMap']>
 
-interface StrucppModule {
-  compile: StrucppCompile
-  formatDiagnostic: StrucppFormatDiagnostic
-  buildSourceMap: StrucppBuildSourceMap
-  getVersion: StrucppGetVersion
+import {
+  composeVerificationProject,
+  libraryBuildFromTranspiledSt,
+  prepareXmlForLibraryBuild,
+} from '@root/backend/shared/library/build-pipeline'
+import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
+import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
+
+/**
+ * Shared bridge contract between `compileLibrary` and its inner
+ * `runVerificationCompile` step.  Both paths talk to the same
+ * runtime API and library-resolution helpers, so giving the two
+ * methods a single named shape keeps the call site and the private
+ * helper from drifting when a new bridge method is added for one
+ * but not the other.  `loadEnabledArchives` is unique to the outer
+ * build (it feeds `compileStlib`'s dependency list); the
+ * verification compile inherits the program-build's directory-based
+ * resolution and doesn't need it, so it picks the smaller subset
+ * via `Pick<>` below.
+ */
+type LibraryCompileBridge = {
+  makeRuntimeApiRequest: <T = void>(
+    ipAddress: string,
+    jwtToken: string,
+    endpoint: string,
+    responseParser?: (data: string) => T,
+  ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+  resolveLibraryDirs: (enabledNames: string[]) => { dirs: string[]; missing: string[] }
+  loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
 }
 
-import { type KnownPou, splitProgramSt } from './utils/split-program-st'
+type LibraryVerificationBridge = Pick<LibraryCompileBridge, 'makeRuntimeApiRequest' | 'resolveLibraryDirs'>
 
 /**
  * Wrap strucpp's plain (file:line:col) diagnostic with the POU/section
@@ -69,25 +90,13 @@ function formatErrorWithPouContext(
 }
 
 /**
- * Load the strucpp package via require, kept out of the static import
- * graph because strucpp uses ESM features (top-level await, import.meta)
- * that are incompatible with Jest's CJS transform — switching the
- * editor's test runner to ESM is a separate undertaking. Single
- * helper so the lint-disable lives in exactly one place.
- */
-function loadStrucpp(): StrucppModule {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('strucpp') as StrucppModule
-}
-
-/**
  * Project data with the optional C++ POU sidecar attached. The base
  * PLCProjectData type doesn't carry C++ POUs because they're an
  * editor-side editor-only artefact; we splice them in for the compile
  * pipeline. Centralised here so the cast appears once instead of
  * inline at every read site.
  */
-type ProjectDataWithCppPous = import('@root/backend/shared/types/PLC/open-plc').PLCProjectData & {
+type ProjectDataWithCppPous = PLCProjectData & {
   originalCppPous?: CppPouDataCode[]
 }
 
@@ -106,7 +115,7 @@ const POST_BUILD_START_POLL_INTERVAL_MS = 150
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
-import type { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
+import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
   type CppPouData as CppPouDataCode,
   generateCBlocksCode,
@@ -124,7 +133,8 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
 import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
-import { app as electronApp, dialog } from 'electron'
+import type { CompileLibraryResult } from '@root/middleware/shared/ports/types'
+import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
@@ -138,6 +148,34 @@ interface MethodsResult<T> {
   data?: T
 }
 type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'error') => void
+
+/**
+ * Decode a `MessagePortMain` payload back to a string, handling the
+ * forms a Node `Buffer` survives V8's structured clone as:
+ *
+ *   - `string` — passthrough.
+ *   - `Uint8Array` / `ArrayBuffer` — typed-array decode (this is the
+ *     shape Buffers ride as when the channel stays inside the main
+ *     process; `.toString()` on a Uint8Array returns the comma-
+ *     separated number list and was the cause of the `[verify]
+ *     67,111,109,…` console flood).
+ *   - `{ type: 'Buffer', data: number[] }` — Electron's IPC
+ *     serialisation form, same shape `decodeMessage` in the
+ *     `compiler-adapter` already handles.
+ *   - anything else — `String(...)` fallback.
+ */
+function decodePortMessage(raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (raw instanceof Uint8Array) return new TextDecoder().decode(raw)
+  if (raw instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(raw))
+  if (raw && typeof raw === 'object' && 'type' in raw) {
+    const obj = raw as Record<string, unknown>
+    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+      return new TextDecoder().decode(new Uint8Array(obj.data as number[]))
+    }
+  }
+  return String(raw)
+}
 
 type CompileArduinoProgramArgs = {
   boardTarget: string
@@ -300,6 +338,23 @@ class CompilerModule {
       'strucpp',
       'libs',
     )
+  }
+
+  /**
+   * Resolve a board target to the arduino-cli core ID
+   * (`arduino-cli core install` target — e.g. `arduino:avr`).
+   *
+   * Single source of truth: reads from `resources/sources/boards/
+   * hals.json`, the same file the renderer's
+   * `bridge.getAvailableBoards()` exposes via `boardInfo.core`.
+   * Used internally by the library-project verification path so a
+   * future hals.json edit (rename, new board, version bump)
+   * propagates to verification automatically — without any code
+   * change here.
+   */
+  async #getBoardCore(board: string): Promise<string | null> {
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    return halsFileContent[board]?.['core'] ?? null
   }
 
   async #getBoardRuntime(board: string) {
@@ -2718,6 +2773,19 @@ class CompilerModule {
 
     // Step 13: Upload program to board or load into simulator
     if (boardRuntime === 'simulator') {
+      // `compileOnly: true` callers (the library-project verification
+      // step today; a future "Build only" on simulator) want to
+      // confirm the compile succeeded without any side effect on the
+      // simulator process.  Emitting the firmware path makes the
+      // renderer load the .hex into the running simulator; emitting
+      // "Loading firmware into simulator..." advertises an action
+      // that isn't happening.  Skip both for compile-only callers.
+      if (compileOnly) {
+        _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
+        _mainProcessPort.postMessage({ closePort: true })
+        _mainProcessPort.close()
+        return
+      }
       // For simulator targets, send the HEX firmware path back to the renderer.
       // Derive the build sub-directory from the platform FQBN (e.g. "arduino:avr:mega" → "arduino.avr.mega")
       // so it stays in sync with the hals.json entry.
@@ -2948,6 +3016,488 @@ class CompilerModule {
     setTimeout(() => {
       _mainProcessPort.close()
     }, 25)
+  }
+
+  /**
+   * Build a `.stlib` archive from a Library Project on disk.
+   *
+   * The orchestration intentionally mirrors `compileProgram`'s
+   * stream-back pattern: status / error messages travel over the
+   * MessagePort, and a final `libraryBuildResult` field on the
+   * close-port message carries the structured outcome the adapter
+   * surfaces to the renderer.
+   *
+   * Flow:
+   *   1. Read `<projectPath>/library.json` from disk (the manifest
+   *      tab's surgical save has already written the live buffer
+   *      ahead of this call — Phase 5).
+   *   2. `prepareXmlForLibraryBuild` validates the manifest and
+   *      emits the XML xml2st consumes.  Manifest errors fail fast
+   *      here without spawning xml2st.
+   *   3. Persist plc.xml under `<projectPath>/build/library/src/`
+   *      and run the existing `handleTranspileXMLtoST` helper so
+   *      this path shares the xml2st spawn / error-handling code
+   *      the program build already uses.
+   *   4. Read xml2st's program.st back and hand it +
+   *      knownPous + manifest to `libraryBuildFromTranspiledSt`,
+   *      which drops the synthetic stub and calls strucpp's
+   *      `compileStlib`.
+   *   5. Write the archive (same `JSON.stringify(archive, null, 2)`
+   *      shape `library-manager-module` persists user-installed
+   *      archives with) to `<projectPath>/build/<name>.stlib`.
+   *   6. (Phase 8) Run an end-to-end avr-gcc verification compile
+   *      against the OpenPLC Simulator target, gated by an MD5
+   *      cache keyed off the produced program.st.  Verification
+   *      failures surface as warnings on `result.verification`,
+   *      never as build errors — a legitimate user target may have
+   *      more memory than the AVR simulator.  `cleanBuild` skips
+   *      the cache and forces a re-verification.
+   */
+  async compileLibrary(
+    args: Array<string | PLCProjectData | boolean>,
+    _mainProcessPort: MessagePortMain,
+    mainProcessBridge: LibraryCompileBridge,
+  ): Promise<void> {
+    _mainProcessPort.start()
+
+    const post = (message: string, logLevel: 'info' | 'warning' | 'error' = 'info') =>
+      _mainProcessPort.postMessage({ logLevel, message })
+
+    // Sends the structured result and closes the port.  No
+    // `closePort: true` flag is needed on the payload: the
+    // renderer-side bridge already synthesises one callback for the
+    // MessagePort `'close'` event the `setTimeout` triggers, and
+    // posting an explicit flag in the same message just made the
+    // adapter fire its closePort branch twice (once via onmessage,
+    // once via the close listener).  Keep the 25 ms delay so the
+    // result payload is delivered before the port closes.
+    const finish = (result: CompileLibraryResult) => {
+      _mainProcessPort.postMessage({ libraryBuildResult: result })
+      setTimeout(() => _mainProcessPort.close(), 25)
+    }
+
+    // Single-shot error path used by every "fail-fast" stage below.
+    // Every stage that aborts the build with one error message posts
+    // it to the console then forwards the same string as `error` on
+    // the structured result; this helper collapses both calls so the
+    // 8 fail-fast sites read as one line each.  Extra fields (e.g.
+    // `libraryName` once the manifest is known) can be threaded via
+    // the second arg.
+    const bail = (msg: string, extra: Partial<CompileLibraryResult> = {}) => {
+      post(msg, 'error')
+      finish({ success: false, error: msg, ...extra })
+    }
+
+    // The renderer adapter sends two preprocessed datasets:
+    //   - `projectData` (formerly the only one) is preprocessed with
+    //     `isSimulator: false` — Python POUs carry the full
+    //     Python-as-ST conversion, C++ POUs carry the ST stub +
+    //     `originalCppPous` sidecar.  Used for the library build
+    //     itself (Stages 1–6).
+    //   - `verifyProjectData` is preprocessed with `isSimulator:
+    //     true` — Python POUs are no-op stubs the AVR simulator
+    //     can compile cleanly; C++ POUs are unchanged.  Used as
+    //     input to `composeVerificationProject` so the verify
+    //     compile (Stage 3) doesn't try to link Python loader
+    //     externs the simulator runtime doesn't ship.
+    //
+    // Both datasets share the same source POU list, just with
+    // different Python treatment.  C++ POUs and ST/IL/data-types
+    // are identical between them.
+    const [projectPath, projectData, verifyProjectData, cleanBuild = false] = args as [
+      string,
+      PLCProjectData,
+      PLCProjectData,
+      boolean | undefined,
+    ]
+    const normalizedProjectPath = projectPath.replace('project.json', '')
+
+    post('Starting library build...')
+
+    // Stage 0: read manifest from disk.
+    const manifestPath = join(normalizedProjectPath, 'library.json')
+    let manifestJson: string
+    try {
+      manifestJson = await readFile(manifestPath, { encoding: 'utf8' })
+    } catch (error) {
+      bail(`Could not read library.json: ${getErrorMessage(error)}`)
+      return
+    }
+
+    // Stage 1: manifest validation + XML generation.
+    const project: PLCProject = {
+      meta: { name: '', type: 'plc-library' as const },
+      data: projectData as unknown as PLCProjectData,
+    }
+    const stage1 = prepareXmlForLibraryBuild(project, manifestJson)
+    if ('error' in stage1) {
+      bail(stage1.error)
+      return
+    }
+    const { xml, knownPous, manifest } = stage1
+    post(`Manifest OK — building "${manifest.name}" v${manifest.version}.`)
+
+    // Persist plc.xml in an isolated `library` build sub-directory so
+    // it doesn't collide with the program-build artefacts when both
+    // modes coexist on the same project tree.
+    const libraryBuildDir = join(normalizedProjectPath, 'build', 'library')
+    const libraryBuildSrcDir = join(libraryBuildDir, 'src')
+    try {
+      await fs.rm(libraryBuildDir, { recursive: true, force: true })
+      await mkdir(libraryBuildSrcDir, { recursive: true })
+    } catch (error) {
+      bail(`Could not prepare build directory: ${getErrorMessage(error)}`)
+      return
+    }
+
+    const xmlPath = join(libraryBuildSrcDir, 'plc.xml')
+    try {
+      await writeFile(xmlPath, xml, 'utf-8')
+    } catch (error) {
+      bail(`Could not write plc.xml: ${getErrorMessage(error)}`)
+      return
+    }
+
+    // Stage 2: xml2st spawn (shared with the program-build path).
+    try {
+      await this.handleTranspileXMLtoST(xmlPath, (data, logLevel) => {
+        // xml2st's stdout doubles as progress + error stream; surface
+        // it verbatim so the user sees the same diagnostics the
+        // program-build path produces.
+        const message = typeof data === 'string' ? data : data.toString()
+        post(message, logLevel ?? 'info')
+      })
+    } catch (error) {
+      bail(`xml2st failed: ${getErrorMessage(error)}`)
+      return
+    }
+
+    // Stage 3: read program.st + run library compile.
+    const programStPath = join(libraryBuildSrcDir, 'program.st')
+    let programSt: string
+    try {
+      programSt = await readFile(programStPath, { encoding: 'utf8' })
+    } catch (error) {
+      bail(`Could not read program.st from xml2st output: ${getErrorMessage(error)}`)
+      return
+    }
+
+    // Resolve project-enabled libraries up front — these archives feed
+    // both verification (so the simulator compile sees the same symbols
+    // a real user would) and `compileStlib` below.  Missing names fail
+    // the build with the same "open the Library Manager" message
+    // `compileProgram` uses, before either heavy step runs.
+    const enabledLibraryRefs = (projectData.libraries ?? []).map((ref) => ({
+      name: ref.name,
+      version: ref.version,
+    }))
+    const { archives: depArchives, missing: missingDeps } = mainProcessBridge.loadEnabledArchives(
+      enabledLibraryRefs.map((r) => r.name),
+    )
+    if (missingDeps.length > 0) {
+      bail(
+        `Library build aborted: enabled libraries are not installed (${missingDeps.join(', ')}). ` +
+          `Open the Library Manager to install or remove them.`,
+        { libraryName: manifest.name },
+      )
+      return
+    }
+
+    // Stage 3: end-to-end C++ verification against the OpenPLC
+    // Simulator target — same strucpp → arduino-cli → bundled avr-gcc
+    // pipeline the program build uses, so the editor never depends on
+    // a host compiler.  Runs BEFORE the `.stlib` write so the artefact
+    // generation is unconditionally the last step: whatever the
+    // verification outcome, the user always sees a fresh `.stlib` on
+    // disk when "Library built successfully" lands.
+    //
+    // Verification is advisory: a failure surfaces as a warning, not
+    // a build error.  A legitimate user target may have more memory
+    // than the AVR simulator, and the tight AVR memory budget the
+    // simulator imposes is exactly the constraint many real
+    // industrial targets don't share.
+    //
+    // The MD5 cache short-circuits the slow compile when the
+    // already-verified program.st hasn't changed.  `cleanBuild`
+    // skips the cache and forces a re-verification.
+    const programStMd5 = crypto.createHash('md5').update(programSt).digest('hex')
+    // Keep the cache OUTSIDE `libraryBuildDir` — that directory is
+    // wiped at the start of every build (line ~3119 above), so a
+    // cache file living inside it would never survive between
+    // runs.  Sitting one level up in `build/` keeps it adjacent to
+    // the build outputs without being clobbered.
+    const verifyCachePath = join(normalizedProjectPath, 'build', '.verify-cache-library.json')
+    let cachedVerification: CompileLibraryResult['verification']
+    if (!cleanBuild) {
+      try {
+        const raw = await readFile(verifyCachePath, { encoding: 'utf8' })
+        const parsed = JSON.parse(raw) as { md5?: string; success?: boolean; message?: string }
+        if (parsed && parsed.md5 === programStMd5 && typeof parsed.success === 'boolean') {
+          cachedVerification = { success: parsed.success, message: parsed.message }
+        }
+      } catch {
+        // Missing or malformed cache — fall through to fresh
+        // verification.  Never fail the build over the cache.
+      }
+    }
+
+    let verification: CompileLibraryResult['verification']
+    if (cachedVerification) {
+      verification = cachedVerification
+      post(
+        `Skipping verification (cached: ${cachedVerification.success ? 'pass' : 'fail'}). ` +
+          'Use "Clean build" to force re-verification.',
+      )
+    } else {
+      // Feed `composeVerificationProject` the verify-preprocessed
+      // dataset (Python POUs as no-op stubs) — the AVR simulator's
+      // compile path can't link the Python loader externs the
+      // full Python-as-ST shape produces.  The build dataset
+      // (Python as full ST) is intentionally NOT used here.
+      const verifyProject = composeVerificationProject({
+        meta: { name: manifest.name, type: 'plc-library' },
+        data: verifyProjectData as unknown as PLCProjectData,
+      })
+      post('Verifying with OpenPLC Simulator (avr-gcc)...')
+      try {
+        // Stream the inner pipeline's output through the renderer
+        // port with a `[verify]` prefix so the user sees the same
+        // strucpp + arduino-cli progress they'd see on a normal
+        // simulator build.  Critical for two reasons:
+        //   - avr-gcc compile can take 10+ seconds on a library
+        //     with a lot of C++; a silent console looks frozen.
+        //   - When verification fails, the user needs the actual
+        //     compile diagnostic, not just the summary line.
+        // The success line at the bottom of compileLibrary still
+        // comes after this stream — `.stlib` generation is the
+        // last step regardless of verification outcome.
+        verification = await this.runVerificationCompile(
+          normalizedProjectPath,
+          verifyProject.data,
+          mainProcessBridge,
+          (message, logLevel) =>
+            // Demote inner errors to warnings on the way out.
+            // The library's own `.stlib` will still be produced,
+            // so an `[verify]` line being level=error in the
+            // console would falsely suggest the build failed.
+            _mainProcessPort.postMessage({
+              logLevel: logLevel === 'error' ? 'warning' : (logLevel ?? 'info'),
+              message: `[verify] ${message}`,
+            }),
+        )
+        try {
+          await writeFile(
+            verifyCachePath,
+            JSON.stringify({ md5: programStMd5, ...verification }, null, 2),
+            'utf-8',
+          )
+        } catch (cacheErr) {
+          post(`Could not write verification cache: ${getErrorMessage(cacheErr)}`, 'warning')
+        }
+      } catch (err) {
+        verification = { success: false, message: getErrorMessage(err) }
+      }
+      if (verification.success) {
+        post('Verification passed.')
+      } else {
+        post(
+          `Verification reported issues (warning only — .stlib will still be generated): ${verification.message ?? 'see log'}`,
+          'warning',
+        )
+      }
+    }
+
+    // Stage 4: gather per-symbol documentation from the editor view
+    // so `decorateArchive` can stamp it onto the manifest entries.
+    // POUs contribute their "Description" field; data types
+    // contribute their own optional `documentation` field.
+    const pouDocs: Record<string, string> = {}
+    for (const pou of projectData.pous) {
+      if (pou.data.documentation && pou.data.documentation.length > 0) {
+        pouDocs[pou.data.name] = pou.data.documentation
+      }
+    }
+    for (const dt of projectData.dataTypes ?? []) {
+      const doc = (dt as { documentation?: string }).documentation
+      if (typeof doc === 'string' && doc.length > 0) {
+        pouDocs[(dt as { name: string }).name] = doc
+      }
+    }
+
+    // Stage 5: strucpp `compileStlib` — splits program.st per-POU,
+    // drops the synthetic main, builds the archive.  Hard failures
+    // here (xml2st-malformed output, strucpp internal errors) stop
+    // the build because we have no archive to ship.  These are NOT
+    // advisory like verification — strucpp owns the artefact format.
+    // Pull the C/C++ FBs out of the preprocessed data — they live
+    // on `originalCppPous` (placed there by `preprocessPous`'s C++
+    // branch).  These ride through the archive verbatim; strucpp
+    // never sees them.  The consumer-side compile reads them back
+    // and routes them through the existing user-C++-block path
+    // with a `<library_name>__<block_name>` rename for collision
+    // avoidance.
+    const cppBlocks = (
+      (projectData as { originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }> })
+        .originalCppPous ?? []
+    ).map((b) => ({
+      name: b.name,
+      code: b.code,
+      variables: b.variables,
+    }))
+
+    const stage2 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
+      pouDocs,
+      dependencyArchives: depArchives,
+      dependencyRefs: enabledLibraryRefs,
+      cppBlocks,
+    })
+    if (!stage2.success) {
+      for (const err of stage2.errors) {
+        const where = err.file ? `[${err.file}${err.line ? `:${err.line}` : ''}] ` : ''
+        post(`${where}${err.message}`, 'error')
+      }
+      finish({
+        success: false,
+        error: stage2.errors[0]?.message ?? 'Library compilation failed.',
+        libraryName: manifest.name,
+      })
+      return
+    }
+
+    // Stage 6 (final): serialise the archive to disk.  Same JSON
+    // shape `library-manager-module` persists user-installed archives
+    // with, so a future "build then install" round-trip uses the
+    // identical on-disk format.  This is unconditionally the last
+    // step so the user's "Library built successfully" line refers
+    // to a fresh artefact, never a stale one.
+    const stlibPath = join(normalizedProjectPath, 'build', `${manifest.name}.stlib`)
+    try {
+      await mkdir(join(normalizedProjectPath, 'build'), { recursive: true })
+      await writeFile(stlibPath, JSON.stringify(stage2.archive, null, 2) + '\n', 'utf-8')
+    } catch (error) {
+      bail(`Could not write ${manifest.name}.stlib: ${getErrorMessage(error)}`)
+      return
+    }
+
+    post(`Library built successfully: ${stlibPath}`)
+    finish({ success: true, stlibPath, libraryName: manifest.name, verification })
+  }
+
+  /**
+   * Run an end-to-end verification compile of a synthetic Library
+   * Project against the OpenPLC Simulator target.  Reuses the full
+   * `compileProgram` pipeline (strucpp → arduino-cli → bundled
+   * avr-gcc) by feeding it a private `MessageChannelMain` — verifies
+   * the same way the program build does, against the same binaries,
+   * with zero code duplication.
+   *
+   * `forwardLog` is the caller's drain for the inner pipeline's
+   * message stream.  Streaming the strucpp / arduino-cli output is
+   * the difference between "blank console for 30 seconds while
+   * arduino-cli compiles" and "user sees progress" — and crucially
+   * the difference between "the .stlib generated but verification
+   * failed silently" and "the user knows which C++ line tripped
+   * avr-gcc".  We do keep the first error message internally so the
+   * summary line at the end of the build is succinct, but every log
+   * line still flows through.
+   *
+   * Resolves with `{success, message?}` either when the inner
+   * pipeline posts `closePort: true` (happy path) or when its port
+   * closes without one (the many error paths in `compileProgram`).
+   * Never throws — matches the caller's "verification is advisory"
+   * contract.
+   */
+  private async runVerificationCompile(
+    projectPath: string,
+    verifyData: PLCProjectData,
+    bridge: LibraryVerificationBridge,
+    forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
+  ): Promise<{ success: boolean; message?: string }> {
+    // Look up the simulator board's core ID from `hals.json` —
+    // single source of truth shared with the renderer-side
+    // `boardInfo.core` lookup.  Falls back to a sensible default
+    // only if hals.json has been mangled; the resulting compile
+    // would fail at `core install` and surface as a verification
+    // warning, which is the documented advisory behaviour.
+    const SIMULATOR_BOARD = 'OpenPLC Simulator'
+    const boardCore = (await this.#getBoardCore(SIMULATOR_BOARD)) ?? 'arduino:avr'
+
+    return new Promise((resolve) => {
+      const channel = new MessageChannelMain()
+      let firstError: string | null = null
+      let settled = false
+
+      const settle = (result: { success: boolean; message?: string }) => {
+        if (settled) return
+        settled = true
+        try {
+          channel.port1.close()
+        } catch {
+          // Already closed — fine.
+        }
+        resolve(result)
+      }
+
+      channel.port1.on('message', (event) => {
+        const data = event.data as {
+          message?: unknown
+          logLevel?: 'info' | 'warning' | 'error'
+          closePort?: boolean
+        }
+        if (data.message !== undefined) {
+          // `decodePortMessage` returns readable text from the
+          // `Uint8Array` Node `Buffer` payloads survive structured
+          // clone as.  Without it, `.toString()` on a Uint8Array
+          // would render comma-separated byte numbers in the
+          // console.
+          const text = decodePortMessage(data.message)
+          // Forward every line — the caller decides how to render
+          // them (PLC-build path would prepend `[verify]`).  Even
+          // info-level messages matter here: avr-gcc compile can
+          // take 10+ seconds on a large library and the user needs
+          // to see progress.
+          forwardLog(text, data.logLevel)
+          // Keep only the FIRST error string for the summary.  Once
+          // arduino-cli or strucpp errors, the cascade usually
+          // continues with knock-on failures; the first one names
+          // the underlying cause.
+          if (data.logLevel === 'error' && firstError === null) {
+            firstError = text
+          }
+        }
+        if (data.closePort) {
+          settle(firstError ? { success: false, message: firstError } : { success: true })
+        }
+      })
+      // `compileProgram` posts intermediate `closePort: true` messages
+      // on its happy path but jumps straight to `port.close()` on its
+      // many error paths, without an explicit close message.  Listen
+      // for the port's 'close' event so an inner-pipeline error can't
+      // leave the outer library build hanging on an unresolved promise
+      // — same convention the renderer-side adapter uses.
+      channel.port1.on('close', () => {
+        settle(firstError ? { success: false, message: firstError } : { success: true })
+      })
+      channel.port1.start()
+
+      // The boolean slots (compileOnly / cleanBuild) are runtime
+      // values the inner `compileProgram` re-casts off `args as [...]`,
+      // so the outer cast is needed to silence the strict arg type
+      // (which only admits `string | null | PLCProjectData`).
+      const compileArgs = [
+        projectPath,
+        SIMULATOR_BOARD,
+        boardCore,
+        true,
+        verifyData,
+        null,
+        null,
+        true,
+      ] as unknown as Array<string | null | PLCProjectData>
+      void this.compileProgram(compileArgs, channel.port2, bridge).catch((err) =>
+        settle({ success: false, message: getErrorMessage(err) }),
+      )
+    })
   }
 }
 export { CompilerModule }

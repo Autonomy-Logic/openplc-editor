@@ -97,6 +97,13 @@ export type ProjectActions = {
   updateMetaName: (name: string) => void
   updateMetaPath: (path: string) => void
 
+  /** Replace the in-memory `library.json` content.  Library projects
+   *  only — POU bodies use `updatePou` for the same flow.  The
+   *  manifest editor calls this on every Monaco edit; the save
+   *  pipeline serialises it to `library.json` via the standard
+   *  iterator (no separate save path). */
+  updateLibraryManifest: (content: string) => void
+
   // POU
   createPou: (dto: PouDTO) => ProjectResponse
   updatePou: (args: { name: string; content: PLCBody }) => void

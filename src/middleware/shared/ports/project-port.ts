@@ -71,10 +71,20 @@ export interface WriteProjectFiles {
   projectPath: string
   /** Pre-serialized project.json content */
   projectJson: string
-  /** Pre-serialized devices/configuration.json content */
-  deviceConfig: string
-  /** Pre-serialized devices/pin-mapping.json content */
-  pinMapping: string
+  /** Pre-serialized devices/configuration.json content.  `undefined`
+   *  for project types that don't own this file (library projects);
+   *  the backend skips the write rather than truncating the on-disk
+   *  copy to an empty string. */
+  deviceConfig?: string
+  /** Pre-serialized devices/pin-mapping.json content.  Same
+   *  optional-on-libraries semantics as `deviceConfig`. */
+  pinMapping?: string
+  /** Pre-serialized library.json content for library projects.
+   *  `undefined` for PLC projects (no manifest file) and for
+   *  library projects whose manifest tab hasn't been mounted this
+   *  session (no in-memory buffer to persist).  Backend skips the
+   *  write when undefined — never truncates the on-disk copy. */
+  libraryManifest?: string
   /** POU files with pre-serialized IEC text content */
   pouFiles: RawProjectFile[]
   /** Server config files with pre-serialized JSON content */
@@ -120,6 +130,11 @@ export interface RawProjectFiles {
     deviceConfig: string
     /** Raw content of devices/pin-mapping.json */
     pinMapping: string
+    /** Raw content of `library.json` for library projects.  Empty
+     *  string for PLC projects (no manifest file) and for library
+     *  projects whose disk shape is missing the file (defensive —
+     *  the manifest editor seeds a template on first save). */
+    libraryManifest: string
     /** Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json) */
     pouFiles: RawProjectFile[]
     /** Raw server config files from devices/servers/ */

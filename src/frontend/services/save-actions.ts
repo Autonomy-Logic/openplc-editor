@@ -35,7 +35,14 @@ const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g,
 
 type StoreState = ReturnType<typeof openPLCStoreBase.getState>
 
-type ProjectFileCategory = 'pou' | 'server' | 'remote-device' | 'device-config' | 'pin-mapping' | 'project-json'
+type ProjectFileCategory =
+  | 'pou'
+  | 'server'
+  | 'remote-device'
+  | 'device-config'
+  | 'pin-mapping'
+  | 'project-json'
+  | 'library-manifest'
 
 type ProjectFileSpec = {
   path: string
@@ -50,9 +57,17 @@ function buildProjectJsonContent(state: StoreState): string {
   // diffs.  Bundled / canonical strucpp libs are always-on regardless
   // and intentionally don't appear here.
   const libraries = [...(project.data.libraries ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  // Preserve the project type on disk: a library opened, edited, and
+  // re-saved must round-trip as `plc-library`.  The previous
+  // hard-coded `plc-project` silently downgraded every library to
+  // a PLC project on first save, so the project would re-open with
+  // the wrong sidebar shape (Resource / Servers / Devices visible
+  // instead of the Manifest tab).
+  const metaType: 'plc-project' | 'plc-library' =
+    project.meta.type === 'plc-library' ? 'plc-library' : 'plc-project'
   return JSON.stringify(
     {
-      meta: { name: project.meta.name, type: 'plc-project' },
+      meta: { name: project.meta.name, type: metaType },
       data: {
         dataTypes: project.data.dataTypes,
         pous: [],
@@ -83,46 +98,80 @@ function buildPouSpec(pou: PLCPou, state: StoreState): ProjectFileSpec {
  * canonical serialized content for each. Used by `buildAllProjectFileContents*`
  * for snapshots and previews, and by `executeSaveProject` to build the
  * platform write payload.
+ *
+ * Library projects yield a restricted set:
+ *
+ *   - POU files (functions / function blocks — libraries have no
+ *     programs but the loop is identical for whichever POUs the
+ *     project carries).
+ *   - The library manifest (`library.json` at the project root).
+ *   - A lean `project.json` (no resource / server / remote-device
+ *     because those don't exist for a library; the `data.libraries`
+ *     and `data.dataTypes` fields are still emitted via the same
+ *     serialiser the PLC path uses).
+ *
+ * Configuration / pin-mapping / server / remote-device files are
+ * skipped entirely for libraries — there are no runtime targets to
+ * configure.  The PLC project path emits everything as before.
  */
 function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
   const { project, deviceDefinitions } = state
+  const isLibrary = project.meta.type === 'plc-library'
 
   for (const pou of project.data.pous) {
     yield buildPouSpec(pou, state)
   }
 
-  for (const s of project.data.servers ?? []) {
-    yield {
-      path: `devices/servers/${s.name}.json`,
-      content: JSON.stringify(s, null, 2),
-      category: 'server',
+  if (!isLibrary) {
+    for (const s of project.data.servers ?? []) {
+      yield {
+        path: `devices/servers/${s.name}.json`,
+        content: JSON.stringify(s, null, 2),
+        category: 'server',
+      }
     }
-  }
 
-  for (const d of project.data.remoteDevices ?? []) {
-    yield {
-      path: `devices/remote/${d.name}.json`,
-      content: JSON.stringify(d, null, 2),
-      category: 'remote-device',
+    for (const d of project.data.remoteDevices ?? []) {
+      yield {
+        path: `devices/remote/${d.name}.json`,
+        content: JSON.stringify(d, null, 2),
+        category: 'remote-device',
+      }
     }
-  }
 
-  yield {
-    path: 'devices/configuration.json',
-    content: JSON.stringify(deviceDefinitions.configuration, null, 2),
-    category: 'device-config',
-  }
+    yield {
+      path: 'devices/configuration.json',
+      content: JSON.stringify(deviceDefinitions.configuration, null, 2),
+      category: 'device-config',
+    }
 
-  yield {
-    path: 'devices/pin-mapping.json',
-    content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
-    category: 'pin-mapping',
+    yield {
+      path: 'devices/pin-mapping.json',
+      content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+      category: 'pin-mapping',
+    }
   }
 
   yield {
     path: 'project.json',
     content: buildProjectJsonContent(state),
     category: 'project-json',
+  }
+
+  // For library projects, yield `library.json` from the manifest
+  // content the store carries on `project.data.libraryManifest`
+  // — exact same shape POU bodies use (`project.data.pous[i].body
+  // .value`): loaded from disk on project open, edited in-place by
+  // the manifest editor (via a dedicated project-slice action),
+  // serialised out by the standard save pipeline.  No parallel
+  // dirty-tracking, no workspace-level buffer, no separate save
+  // path — just one source of truth.
+  if (isLibrary && typeof project.data.libraryManifest === 'string') {
+    yield {
+      path: 'library.json',
+      content: project.data.libraryManifest,
+      category: 'library-manifest',
+    }
   }
 }
 
@@ -187,6 +236,12 @@ function serializeProjectFile(
         category: 'remote-device',
       },
     ]
+  }
+
+  if (file.type === 'library-manifest') {
+    // Same in-store source the iterator + Monaco editor use.
+    const content = project.data.libraryManifest ?? ''
+    return [{ path: 'library.json', content, category: 'library-manifest' }]
   }
 
   // data-type, resource: live in project.json
@@ -271,8 +326,16 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
     const serverFiles: RawProjectFile[] = []
     const remoteDeviceFiles: RawProjectFile[] = []
     let projectJson = ''
-    let deviceConfig = ''
-    let pinMapping = ''
+    // `deviceConfig` / `pinMapping` / `libraryManifest` stay
+    // `undefined` when the iterator doesn't yield them.  Library
+    // projects skip the device files; PLC projects skip the
+    // manifest; either skips when the relevant tab hasn't been
+    // mounted this session.  Passing an empty string used to
+    // truncate the on-disk copy to 0 bytes on every save — the
+    // backend now skips writes for `undefined` instead.
+    let deviceConfig: string | undefined
+    let pinMapping: string | undefined
+    let libraryManifest: string | undefined
 
     for (const spec of iterateProjectFiles(state)) {
       const content = pickContentForSave(spec.path, spec.content, state.versionControl)
@@ -295,14 +358,18 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
         case 'project-json':
           projectJson = content
           break
+        case 'library-manifest':
+          libraryManifest = content
+          break
       }
     }
 
     const files: WriteProjectFiles = {
       projectPath: project.meta.path,
       projectJson,
-      deviceConfig,
-      pinMapping,
+      ...(deviceConfig !== undefined ? { deviceConfig } : {}),
+      ...(pinMapping !== undefined ? { pinMapping } : {}),
+      ...(libraryManifest !== undefined ? { libraryManifest } : {}),
       pouFiles,
       serverFiles,
       remoteDeviceFiles,
@@ -317,8 +384,9 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
       // case correctly without round-tripping to /changes).
       const savedRecords = [
         { path: 'project.json', content: projectJson },
-        { path: 'devices/configuration.json', content: deviceConfig },
-        { path: 'devices/pin-mapping.json', content: pinMapping },
+        ...(deviceConfig !== undefined ? [{ path: 'devices/configuration.json', content: deviceConfig }] : []),
+        ...(pinMapping !== undefined ? [{ path: 'devices/pin-mapping.json', content: pinMapping }] : []),
+        ...(libraryManifest !== undefined ? [{ path: 'library.json', content: libraryManifest }] : []),
         ...pouFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...serverFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...remoteDeviceFiles.map((f) => ({ path: f.relativePath, content: f.content })),
@@ -467,6 +535,15 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       // here.
       const res = await saveVendorScreenOnly(projectPath, projectPort, state, fileName)
       if (!res.success) return fail(res.error ?? 'Save failed')
+    } else if (file.type === 'library-manifest') {
+      // Single-file save for the manifest tab: write the in-store
+      // content (`project.data.libraryManifest`) to `library.json`.
+      // Same content the full-project save's iterator yields —
+      // this is just the partial-write shortcut.
+      const spec = specs[0]
+      if (!spec) return fail('Save failed')
+      const res = await projectPort.saveFile(joinPath(projectPath, 'library.json'), spec.content)
+      if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
       // data-type, resource: live in project.json (legacy whole-file
       // write).  These editors don't yet have a surgical save path —
@@ -502,6 +579,13 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
     } else if (file.type === 'vendor-screen') {
       const ownedKeys = vendorScreenOwnedKeysFor(state, fileName)
       const cleanState = serializeVendorScreenSlice(state, ownedKeys)
+      updateFile({ name: fileName, saved: true, isNew: false, cleanState })
+    } else if (file.type === 'library-manifest') {
+      // Snapshot the just-saved manifest content as the new
+      // cleanState so the file-slice dirty compare stays accurate.
+      // Sources from `project.data.libraryManifest` — the only
+      // place the manifest content lives.
+      const cleanState = state.project.data.libraryManifest ?? ''
       updateFile({ name: fileName, saved: true, isNew: false, cleanState })
     } else {
       updateFile({ name: fileName, saved: true, isNew: false })
@@ -775,6 +859,25 @@ async function saveVendorScreenOnly(
 }
 
 /**
+ * "Don't save" revert for the Library Project's manifest tab.
+ * Restores the in-store manifest content from the file-slice
+ * `cleanState` snapshot — the same value that was current when
+ * the tab opened — and clears the dirty flag.  Mirrors
+ * `reloadLibraryManagerFromCleanState` and
+ * `reloadVendorScreenFromCleanState`: no disk read, just an
+ * in-store restore from the snapshot the editor seeded on mount.
+ */
+function reloadLibraryManifestFromCleanState(fileName: string): { success: boolean } {
+  const state = openPLCStoreBase.getState()
+  const file = state.fileActions.getFile({ name: fileName }).file
+  if (!file || file.type !== 'library-manifest') return { success: false }
+  const cleanState = typeof file.cleanState === 'string' ? file.cleanState : ''
+  state.projectActions.updateLibraryManifest(cleanState)
+  state.fileActions.updateFile({ name: fileName, saved: true })
+  return { success: true }
+}
+
+/**
  * Reload a vendor-screen tab's in-memory state from its `cleanState`
  * snapshot.  Mirrors `reloadLibraryManagerFromCleanState` — parses
  * the serialised owned-slice and writes it back via the device
@@ -878,6 +981,9 @@ export async function reloadFileFromDisk(
   }
   if (file.type === 'vendor-screen') {
     return reloadVendorScreenFromCleanState(fileName)
+  }
+  if (file.type === 'library-manifest') {
+    return reloadLibraryManifestFromCleanState(fileName)
   }
   // Everything else routes through the POU-specific reload.  Non-POU
   // file types that need a revert path should add a branch above

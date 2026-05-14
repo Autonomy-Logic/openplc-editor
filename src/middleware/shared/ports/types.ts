@@ -437,6 +437,13 @@ export interface PLCProjectData {
    *  store's default state and the parsed-project loader both
    *  surface the absent case as `[]`. */
   libraries?: PLCProjectLibraryRef[]
+  /** Raw bytes of the library project's `library.json` manifest.
+   *  Same in-memory pattern POU bodies use (`pous[i].body.value`):
+   *  loaded from disk on project open, serialised back to its own
+   *  file by the save pipeline, NEVER embedded in `project.json`.
+   *  Optional / undefined for PLC projects, which don't own this
+   *  file. */
+  libraryManifest?: string
   debugVariables?: {
     global?: string[]
     pous?: Record<string, string[]>
@@ -450,6 +457,98 @@ export interface ProjectMeta {
   name: string
   type: 'plc-project' | 'plc-library'
   path: string
+}
+
+/**
+ * Single source of truth for "is this project a library?"  Every UI
+ * conditional that hides or rearranges affordances for libraries
+ * funnels through this — never compare `meta.type` directly at a
+ * call site.  A future third project type (firmware project, board
+ * preset bundle, …) would change this helper, not every consumer.
+ */
+export function isLibraryProject(meta: { type: 'plc-project' | 'plc-library' } | null | undefined): boolean {
+  return meta?.type === 'plc-library'
+}
+
+/**
+ * Per-project-type capability matrix.  Drives every UI affordance
+ * that depends on what kind of project is open: project tree
+ * branches, sidebar actions, menu entries, the New Project modal's
+ * step count, etc.
+ *
+ * Layered on top of `useCapabilities()` (which gates by host
+ * platform — serial ports, native dialogs, …).  The two are
+ * independent: `useCapabilities` answers "what can this build of
+ * the editor do?", `projectCapabilities` answers "what makes sense
+ * for this project?".
+ *
+ * Pure function so the renderer can call it inline without
+ * memoising — `meta.type` only changes when the project changes,
+ * which is rare and always triggers a re-render anyway.
+ */
+export interface ProjectCapabilities {
+  /** Show the Programs branch in the project tree and allow the
+   *  create-element modal to make new programs. */
+  hasPrograms: boolean
+  /** Show the Resource entry in the project tree. */
+  hasResource: boolean
+  /** Show Device / Configuration / Orchestrators entries. */
+  hasDevices: boolean
+  /** Show Server entries (Modbus / OPC-UA servers). */
+  hasServers: boolean
+  /** Show Remote-Device entries (Modbus client, EtherCAT). */
+  hasRemoteDevices: boolean
+  /** Show VPP vendor screens for the current board. */
+  hasVendorScreens: boolean
+  /** Show the standard Compile / Run on Simulator / Upload /
+   *  Start-Stop / Debug affordances in the workspace activity bar. */
+  hasProgramBuild: boolean
+  /** Show the Library-specific build button (produces `.stlib`). */
+  hasLibraryBuild: boolean
+  /** Show the version-control affordance. */
+  hasVersionControl: boolean
+  /** Show the debugger panel + watch list. */
+  hasDebugger: boolean
+  /** Show the runtime-connection status and Start/Stop controls. */
+  hasRuntimeControls: boolean
+  /** Show the library manifest tab (the JSON-on-disk Monaco editor
+   *  that controls .stlib build output). */
+  hasLibraryManifest: boolean
+}
+
+export function projectCapabilities(
+  meta: { type: 'plc-project' | 'plc-library' } | null | undefined,
+): ProjectCapabilities {
+  if (isLibraryProject(meta)) {
+    return {
+      hasPrograms: false,
+      hasResource: false,
+      hasDevices: false,
+      hasServers: false,
+      hasRemoteDevices: false,
+      hasVendorScreens: false,
+      hasProgramBuild: false,
+      hasLibraryBuild: true,
+      hasVersionControl: false,
+      hasDebugger: false,
+      hasRuntimeControls: false,
+      hasLibraryManifest: true,
+    }
+  }
+  return {
+    hasPrograms: true,
+    hasResource: true,
+    hasDevices: true,
+    hasServers: true,
+    hasRemoteDevices: true,
+    hasVendorScreens: true,
+    hasProgramBuild: true,
+    hasLibraryBuild: false,
+    hasVersionControl: true,
+    hasDebugger: true,
+    hasRuntimeControls: true,
+    hasLibraryManifest: false,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -806,6 +905,31 @@ export interface DebugCompileResult {
   debugContent?: string
   md5?: string
   error?: string
+}
+
+/**
+ * Result of building a `.stlib` from a Library Project.  Mirrors the
+ * shape of `CompileResult` (success / error) plus the artefact path
+ * the console surfaces so the user can find the produced archive.
+ *
+ * The verification step (Phase 8 — running the synthetic project
+ * through avr-gcc on the simulator target) reports its outcome
+ * through `verification`: missing means the step hasn't been wired
+ * yet; `success: true` means it ran clean; `success: false` does NOT
+ * fail the build, the warning surfaces to the console instead (a
+ * legitimate target may have more memory than the AVR simulator).
+ */
+export interface CompileLibraryResult {
+  success: boolean
+  /** Absolute path to the produced `<libname>.stlib`.  Only set on success. */
+  stlibPath?: string
+  /** Manifest name extracted from `library.json`. */
+  libraryName?: string
+  error?: string
+  verification?: {
+    success: boolean
+    message?: string
+  }
 }
 
 // ---------------------------------------------------------------------------

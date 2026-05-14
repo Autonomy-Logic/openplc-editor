@@ -19,6 +19,7 @@ import { FunctionIcon } from '../../../assets/icons/project/Function'
 import { FunctionBlockIcon } from '../../../assets/icons/project/FunctionBlock'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
+import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
 import { OrchestratorIcon } from '../../../assets/icons/project/Orchestrator'
 import { PLCIcon } from '../../../assets/icons/project/PLC'
 import { ProgramIcon } from '../../../assets/icons/project/Program'
@@ -458,6 +459,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'remoteDevice'
     | 'vendorScreen'
     | 'ethercatDevice'
+    | 'libraryManifest'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
   busName?: string
@@ -483,6 +485,11 @@ const LeafSources = {
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
   vendorScreen: { LeafIcon: ConfigIcon },
   ethercatDevice: { LeafIcon: DeviceTransferIcon },
+  // Library manifest gets its own document-with-bookmark icon so
+  // the explorer leaf, the workspace tab, and the breadcrumb all
+  // render the same glyph — the manifest is the user's entry point
+  // into a library project, so it earns a dedicated mark.
+  libraryManifest: { LeafIcon: LibraryManifestIcon },
 }
 const ProjectTreeLeaf = ({
   leafLang,

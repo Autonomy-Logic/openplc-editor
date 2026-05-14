@@ -11,6 +11,7 @@ import { FBDIcon } from '../../../assets/icons/project/FBD'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
 import { LibraryIcon } from '../../../assets/icons/project/Library'
+import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
 import { OrchestratorIcon } from '../../../assets/icons/project/Orchestrator'
 import { PythonIcon } from '../../../assets/icons/project/Python'
 import { RemoteDeviceIcon } from '../../../assets/icons/project/RemoteDevice'
@@ -53,6 +54,7 @@ const TabIcons: Record<string, React.ReactNode> = {
   'package-manager': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   'ethercat-device': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manager': <LibraryIcon className='h-4 w-4 flex-shrink-0' />,
+  'library-manifest': <LibraryManifestIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
 const Tab = (props: ITabProps) => {
@@ -81,7 +83,8 @@ const Tab = (props: ITabProps) => {
     | 'vendor-screen'
     | 'package-manager'
     | 'ethercat-device'
-    | 'library-manager' = 'il'
+    | 'library-manager'
+    | 'library-manifest' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
     languageOrDerivation = fileDerivation?.derivation
@@ -113,6 +116,9 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'library-manager') {
     languageOrDerivation = 'library-manager'
+  }
+  if (fileDerivation?.type === 'library-manifest') {
+    languageOrDerivation = 'library-manifest'
   }
 
   const { file: associatedFile } = getFile({ name: fileName || '' })

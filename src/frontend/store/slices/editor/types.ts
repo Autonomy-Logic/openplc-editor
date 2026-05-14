@@ -170,6 +170,17 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        /** The Library Project's manifest tab — Monaco-wrapped
+         *  `library.json` at the project root.  Only ever opened
+         *  when `meta.type === 'plc-library'`.  Always present
+         *  while a library project is open; the user can close
+         *  the tab and re-open it from the project tree. */
+        type: 'plc-library-manifest'
+        meta: {
+          name: string
+        }
+      }
+    | {
         type: 'plc-ethercat-device'
         meta: {
           name: string

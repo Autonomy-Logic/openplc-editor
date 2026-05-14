@@ -2,6 +2,25 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ;(globalThis as any).vi = jest
 
+// jsdom 24+ ships `structuredClone` on the window, but the jest
+// jsdom environment we ship doesn't expose it on the test global
+// scope.  Production code that runs through this shim (e.g.
+// `frontend/utils/cpp/addCppLocalVariables` cloning the project
+// before mutating) calls `structuredClone` directly.  Polyfill via
+// the Node global so tests don't crash on the missing symbol.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+if (typeof (globalThis as any).structuredClone !== 'function') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { structuredClone: nodeClone } = require('node:util') as { structuredClone?: <T>(v: T) => T }
+  if (nodeClone) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).structuredClone = nodeClone
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).structuredClone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
+  }
+}
+
 /*
  * Pre-populate the system-library Zustand slice with the bundled .stlib
  * archives so helpers that look up FBs by name (`pou-helpers`,
@@ -27,6 +46,6 @@ try {
     .map((f) => JSON.parse(readFileSync(join(stlibsDir, f), 'utf-8')))
   openPLCStoreBase.getState().libraryActions.setSystemLibraries(stlibsToSystemLibraries(archives))
 } catch (err) {
-  // eslint-disable-next-line no-console
+   
   console.warn(`[jest-setup] could not pre-load bundled .stlibs from ${stlibsDir}:`, err)
 }
