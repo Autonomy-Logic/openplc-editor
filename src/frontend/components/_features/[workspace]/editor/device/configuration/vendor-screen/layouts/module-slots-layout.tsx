@@ -2,6 +2,7 @@ import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { generateIecAddress } from '@root/frontend/utils/iec-address'
@@ -11,6 +12,31 @@ import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleDefinition, ModuleSystem, ScreenSection } from '../index'
+
+// Same help glyph the HAL Settings form-layout uses, so per-field
+// explanations live in a tooltip instead of cluttering the row.
+function FieldHelpIcon({ text }: { text: string }) {
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          aria-label='Field help'
+          className='inline-flex h-3.5 w-3.5 cursor-help select-none items-center justify-center rounded-full text-neutral-400 hover:text-neutral-600 focus:outline-none focus-visible:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
+        >
+          <svg viewBox='0 0 16 16' fill='none' className='h-3.5 w-3.5'>
+            <circle cx='8' cy='8' r='7' stroke='currentColor' strokeWidth='1.5' />
+            <path d='M8 7.25v4.25' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
+            <circle cx='8' cy='4.75' r='0.85' fill='currentColor' />
+          </svg>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side='right' align='start' sideOffset={6} className='text-xs'>
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 type ModuleSlotsLayoutProps = {
   section: ScreenSection
@@ -321,7 +347,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                 key={idx}
                 type='button'
                 onClick={() => setSelectedSlot(idx)}
-                className={`flex flex-col gap-0.5 border-b border-neutral-100 px-3 py-2 text-left last:border-b-0 dark:border-neutral-800 ${
+                className={`flex shrink-0 flex-col gap-0.5 border-b border-neutral-100 px-3 py-2 text-left dark:border-neutral-800 ${
                   isSelected
                     ? 'bg-brand-light/20 dark:bg-brand-medium-dark/30'
                     : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
@@ -398,16 +424,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
           {selectedModule ? (
             <div className='flex flex-col gap-5'>
-              {/* Header: image + description + specs (module name
-                  already lives in the picker above) */}
+              {/* Header: description + specs on the left (under the
+                  Module picker above), image on the right. Picture
+                  height grows to match the text block. */}
               <div className='flex gap-4'>
-                <div className='flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900'>
-                  {moduleImage ? (
-                    <img src={moduleImage} alt={selectedModule.name} className='h-full w-full object-contain' />
-                  ) : (
-                    <span className='text-[10px] text-neutral-400 dark:text-neutral-600'>No image</span>
-                  )}
-                </div>
                 <div className='min-w-0 flex-1'>
                   {(selectedModule as { description?: string }).description && (
                     <p className='text-xs text-neutral-600 dark:text-neutral-400'>
@@ -425,6 +445,13 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                         ),
                       )}
                     </dl>
+                  )}
+                </div>
+                <div className='flex h-36 w-36 shrink-0 items-center justify-center self-start overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900'>
+                  {moduleImage ? (
+                    <img src={moduleImage} alt={selectedModule.name} className='h-full w-full object-contain' />
+                  ) : (
+                    <span className='text-[10px] text-neutral-400 dark:text-neutral-600'>No image</span>
                   )}
                 </div>
               </div>
@@ -496,8 +523,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                   </p>
                 )}
 
-              {/* Configuration (only when this module has a configScreen) */}
+              {/* Configuration (only when this module has a configScreen).
+                  TooltipProvider scopes the help-icon hover behaviour. */}
               {configFields.length > 0 && (
+                <TooltipProvider>
                 <section>
                   <h4 className='mb-2 font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
                     Configuration
@@ -590,14 +619,13 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                               )}
                             </>
                           )}
-                          {field.help && (
-                            <span className='text-[11px] text-neutral-500 dark:text-neutral-500'>{field.help}</span>
-                          )}
+                          {field.help && <FieldHelpIcon text={field.help} />}
                         </div>
                       )
                     })}
                   </div>
                 </section>
+                </TooltipProvider>
               )}
 
             </div>
