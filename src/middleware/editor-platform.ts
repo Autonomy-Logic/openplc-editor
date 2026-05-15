@@ -25,6 +25,7 @@ import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
+import { createEditorStlibSourceAdapter } from './adapters/editor/stlib-source-adapter'
 import { createEditorSystemAdapter } from './adapters/editor/system-adapter'
 import { createEditorThemeAdapter } from './adapters/editor/theme-adapter'
 import { createEditorVersionControlAdapter } from './adapters/editor/version-control-adapter'
@@ -67,5 +68,6 @@ export const editorPorts: PlatformPorts = {
   versionControl: createEditorVersionControlAdapter(),
   navigation: createEditorNavigationAdapter(),
   library: createEditorLibraryAdapter(),
+  stlibSource: createEditorStlibSourceAdapter(),
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

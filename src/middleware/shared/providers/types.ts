@@ -17,6 +17,7 @@ import type { PlatformCapabilities } from '../ports/platform-capabilities'
 import type { ProjectPort } from '../ports/project-port'
 import type { RuntimePort } from '../ports/runtime-port'
 import type { SimulatorPort } from '../ports/simulator-port'
+import type { StlibSourcePort } from '../ports/stlib-source-port'
 import type { SystemPort } from '../ports/system-port'
 import type { ThemePort } from '../ports/theme-port'
 import type { VersionControlPort } from '../ports/version-control-port'
@@ -41,4 +42,12 @@ export interface PlatformPorts {
   packages?: PackagePort
   esi?: EsiPort
   ai?: AIPort
+  /**
+   * Optional — present only on platforms that intend to host the
+   * STruC++ language server.  When `capabilities.hasStLSP` is true
+   * this port MUST be set; the editor adapter wires it, the web
+   * adapter wires a fetch-based variant, and headless test
+   * harnesses can leave it `undefined`.
+   */
+  stlibSource?: StlibSourcePort
 }
