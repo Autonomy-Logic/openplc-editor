@@ -10,6 +10,7 @@ import { checkVariableName } from '../../../../store/slices/project/validation/v
 import { cn } from '../../../../utils/cn'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import { reconcileBranchesIfNeeded } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
@@ -60,7 +61,7 @@ export const BlockNodeElement = <T extends object>({
     editorActions: { updateModelVariables },
     libraries,
     ladderFlows,
-    ladderFlowActions: { setNodes, setEdges },
+    ladderFlowActions: { setNodes, setEdges, setHandleBranches },
     project: {
       data: { pous },
     },
@@ -265,6 +266,19 @@ export const BlockNodeElement = <T extends object>({
 
     newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
 
+    // Reconcile branches before main edge remapping so branch edges get new IDs
+    const reconciled = reconcileBranchesIfNeeded(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      node.id,
+      newBlockNode.id,
+      (libraryBlock as { variables?: BlockVariant['variables'] })?.variables ?? [],
+    )
+    if (reconciled) {
+      newNodes = reconciled.nodes
+      newEdges = reconciled.edges
+    }
+    const reconciledHandleBranches = reconciled?.handleBranches
+
     edges.source?.forEach((edge) => {
       const newEdge = {
         ...edge,
@@ -289,6 +303,7 @@ export const BlockNodeElement = <T extends object>({
         ...rung,
         nodes: newNodes,
         edges: newEdges,
+        ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
@@ -310,6 +325,13 @@ export const BlockNodeElement = <T extends object>({
       rungId: rung.id,
       edges: variableEdges,
     })
+    if (reconciledHandleBranches) {
+      setHandleBranches({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        handleBranches: reconciledHandleBranches,
+      })
+    }
 
     setWrongName(false)
   }
@@ -349,24 +371,26 @@ export const BlockNodeElement = <T extends object>({
         onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
         ref={inputNameRef}
       />
-      {inputConnectors.map((connector, index) => (
-        <div
-          key={index}
-          className='absolute text-xs'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, left: 6 }}
-        >
-          {connector}
-        </div>
-      ))}
-      {outputConnectors.map((connector, index) => (
-        <div
-          key={index}
-          className='absolute text-xs'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, right: 6 }}
-        >
-          {connector}
-        </div>
-      ))}
+      {inputConnectors.map((connector, index) => {
+        const handle = (data as BasicNodeData).inputHandles?.[index]
+        const top =
+          (handle?.relPosition?.y ?? DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
+        return (
+          <div key={index} className='absolute text-xs' style={{ top, left: 6 }}>
+            {connector}
+          </div>
+        )
+      })}
+      {outputConnectors.map((connector, index) => {
+        const handle = (data as BasicNodeData).outputHandles?.[index]
+        const top =
+          (handle?.relPosition?.y ?? DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
+        return (
+          <div key={index} className='absolute text-xs' style={{ top, right: 6 }}>
+            {connector}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -383,7 +407,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     snapshotActions: { pushToHistory },
     libraries: { user: userLibraries },
     ladderFlows,
-    ladderFlowActions: { updateNode, setNodes, setEdges },
+    ladderFlowActions: { updateNode, setNodes, setEdges, setHandleBranches: setHandleBranchesBlock },
   } = useOpenPLCStore()
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as newBlockVariant)
@@ -722,6 +746,19 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
 
+    // Reconcile branches before main edge remapping so branch edges get new IDs
+    const reconciled2 = reconcileBranchesIfNeeded(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      node.id,
+      newBlockNode.id,
+      newNodeVariables as BlockVariant['variables'],
+    )
+    if (reconciled2) {
+      newNodes = reconciled2.nodes
+      newEdges = reconciled2.edges
+    }
+    const reconciledHandleBranches = reconciled2?.handleBranches
+
     edges.source?.forEach((edge) => {
       const newEdge = {
         ...edge,
@@ -746,6 +783,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         ...rung,
         nodes: newNodes,
         edges: newEdges,
+        ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
@@ -760,6 +798,13 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       rungId: rung.id,
       edges: variableEdges,
     })
+    if (reconciledHandleBranches) {
+      setHandleBranchesBlock({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        handleBranches: reconciledHandleBranches,
+      })
+    }
   }
 
   return (

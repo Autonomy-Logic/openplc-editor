@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla'
 
+import type { EtherCATRuntimeStatusResponse } from '../../../middleware/shared/ports/ethercat-types'
 import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../../../middleware/shared/ports/types'
 import { createDeviceSlice, DeviceSlice } from '../slices/device'
 import { defaultDeviceConfiguration } from '../slices/device/data/types'
@@ -44,6 +45,37 @@ function makeTimingStats(overrides?: Partial<TimingStats>): TimingStats {
   }
 }
 
+function makeEthercatStatus(overrides?: Partial<EtherCATRuntimeStatusResponse>): EtherCATRuntimeStatusResponse {
+  return {
+    masters: overrides?.masters ?? [
+      {
+        name: 'master0',
+        plugin_state: 'OPERATIONAL',
+        slave_count: 3,
+        expected_wkc: 6,
+        slaves: [],
+        metrics: {
+          cycle_count: 1000,
+          wkc_error_count: 0,
+          avg_cycle_us: 800,
+          min_cycle_us: 600,
+          max_cycle_us: 1200,
+          min_exchange_us: 400,
+          max_exchange_us: 600,
+          avg_period_us: 1000,
+          min_period_us: 900,
+          max_period_us: 1100,
+          avg_latency_us: 50,
+          min_latency_us: 20,
+          max_latency_us: 100,
+          consecutive_wkc_errors: 0,
+          recovery_attempts: 0,
+        },
+      },
+    ],
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -85,6 +117,8 @@ describe('createDeviceSlice', () => {
       expect(rc.storedCredentials).toBeNull()
       expect(rc.timingStats).toBeNull()
       expect(rc.includeTimingStatsInPolling).toBe(false)
+      expect(rc.ethercatStatus).toBeNull()
+      expect(rc.includeEthercatStatsInPolling).toBe(false)
     })
 
     it('exposes deviceActions object', () => {
@@ -225,6 +259,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setStoredCredentials({ username: 'u', password: 'p' })
       store.getState().deviceActions.setTimingStats(makeTimingStats())
       store.getState().deviceActions.setIncludeTimingStatsInPolling(true)
+      store.getState().deviceActions.setEthercatStatus(makeEthercatStatus())
+      store.getState().deviceActions.setIncludeEthercatStatsInPolling(true)
 
       store.getState().deviceActions.clearDeviceDefinitions()
       const rc = store.getState().runtimeConnection
@@ -236,6 +272,8 @@ describe('createDeviceSlice', () => {
       expect(rc.storedCredentials).toBeNull()
       expect(rc.timingStats).toBeNull()
       expect(rc.includeTimingStatsInPolling).toBe(false)
+      expect(rc.ethercatStatus).toBeNull()
+      expect(rc.includeEthercatStatsInPolling).toBe(false)
     })
   })
 
@@ -875,6 +913,60 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setEthercatStatus
+  // -----------------------------------------------------------------------
+  describe('setEthercatStatus', () => {
+    it('sets ethercat status', () => {
+      const store = makeStore()
+      const status = makeEthercatStatus()
+      store.getState().deviceActions.setEthercatStatus(status)
+      expect(store.getState().runtimeConnection.ethercatStatus).toEqual(status)
+    })
+
+    it('clears ethercat status', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setEthercatStatus(makeEthercatStatus())
+      store.getState().deviceActions.setEthercatStatus(null)
+      expect(store.getState().runtimeConnection.ethercatStatus).toBeNull()
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // setIncludeEthercatStatsInPolling
+  // -----------------------------------------------------------------------
+  describe('setIncludeEthercatStatsInPolling', () => {
+    it('enables ethercat stats in polling', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setIncludeEthercatStatsInPolling(true)
+      expect(store.getState().runtimeConnection.includeEthercatStatsInPolling).toBe(true)
+    })
+
+    it('disables ethercat stats in polling', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setIncludeEthercatStatsInPolling(true)
+      store.getState().deviceActions.setIncludeEthercatStatsInPolling(false)
+      expect(store.getState().runtimeConnection.includeEthercatStatsInPolling).toBe(false)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // setTemporaryDhcpIp
+  // -----------------------------------------------------------------------
+  describe('setTemporaryDhcpIp', () => {
+    it('sets temporary DHCP IP', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setTemporaryDhcpIp('172.16.0.1')
+      expect(store.getState().deviceDefinitions.temporaryDhcpIp).toBe('172.16.0.1')
+    })
+
+    it('clears temporary DHCP IP when undefined', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setTemporaryDhcpIp('172.16.0.1')
+      store.getState().deviceActions.setTemporaryDhcpIp(undefined)
+      expect(store.getState().deviceDefinitions.temporaryDhcpIp).toBeUndefined()
+    })
+  })
 
   // -----------------------------------------------------------------------
   // clearRuntimeConnection
@@ -896,6 +988,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setStoredCredentials({ username: 'u', password: 'p' })
       store.getState().deviceActions.setTimingStats(makeTimingStats())
       store.getState().deviceActions.setIncludeTimingStatsInPolling(true)
+      store.getState().deviceActions.setEthercatStatus(makeEthercatStatus())
+      store.getState().deviceActions.setIncludeEthercatStatsInPolling(true)
 
       store.getState().deviceActions.clearRuntimeConnection()
       const rc = store.getState().runtimeConnection
@@ -907,6 +1001,8 @@ describe('createDeviceSlice', () => {
       expect(rc.storedCredentials).toBeNull()
       expect(rc.timingStats).toBeNull()
       expect(rc.includeTimingStatsInPolling).toBe(false)
+      expect(rc.ethercatStatus).toBeNull()
+      expect(rc.includeEthercatStatsInPolling).toBe(false)
     })
 
     it('does not affect device definitions', () => {

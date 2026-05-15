@@ -1,7 +1,19 @@
-import type { ChatMessage, ChatMessageRole } from '../../../../middleware/shared/ports/types'
+import type { AIChatContentBlock, ChatMessage, ChatMessageRole } from '../../../../middleware/shared/ports/types'
 import type { DiffHunk } from '../../../utils/ai-diff-review'
 
-export type { ChatMessage, ChatMessageRole }
+export type { AIChatContentBlock, ChatMessage, ChatMessageRole }
+
+// ---------------------------------------------------------------------------
+// Conversation summary (returned by GET /ai/conversations)
+// ---------------------------------------------------------------------------
+
+export type ConversationSummary = {
+  id: string
+  title: string
+  lastModel: 'haiku' | 'sonnet' | null
+  createdAt: string
+  updatedAt: string
+}
 
 // ---------------------------------------------------------------------------
 // AI message types
@@ -59,6 +71,17 @@ export type AIState = {
     error: string | null
     /** Pending diff review entries, keyed by POU name. */
     pendingDiffs: Record<string, DiffReviewEntry>
+    /**
+     * Currently-active backend conversation. `null` when the user is
+     * starting a fresh chat (the backend creates the conversation on the
+     * first /ai/chat call and emits `conversation_started`, after which
+     * this id is set so iteration N+1 of the agentic loop can append).
+     */
+    conversationId: string | null
+    /** Recent conversations for the active project, populated by the list query. */
+    conversations: ConversationSummary[]
+    /** True while a conversation detail (with messages) is being fetched. */
+    isLoadingConversation: boolean
   }
 }
 
@@ -78,7 +101,7 @@ export type AIActions = {
   setActiveEditorPou: (pouName: string | null) => void
   setAgenticLoopRunning: (running: boolean) => void
   addMessage: (message: ChatMessage) => void
-  updateMessageContent: (messageId: string, content: string) => void
+  updateMessageContent: (messageId: string, content: string | AIChatContentBlock[]) => void
   rateMessage: (messageId: string, rating: 'up' | 'down' | undefined) => void
   clearConversation: () => void
   toggleChat: () => void
@@ -88,6 +111,19 @@ export type AIActions = {
   updatePendingDiff: (pouName: string, update: { newBody: string; hunks: DiffHunk[]; acceptedHunks: string[] }) => void
   clearPendingDiff: (pouName: string) => void
   clearAllPendingDiffs: () => void
+  /** Set the active backend conversation id (or null on "+ New chat"). */
+  setConversationId: (id: string | null) => void
+  /** Replace the conversation list (typically called after a list query resolves). */
+  setConversations: (conversations: ConversationSummary[]) => void
+  /** Insert a new conversation summary at the top of the list (after creation). */
+  prependConversation: (conversation: ConversationSummary) => void
+  /** Drop a conversation from the list by id (after delete). */
+  removeConversation: (id: string) => void
+  /** Update a conversation summary's title (after rename). */
+  updateConversationTitle: (id: string, title: string) => void
+  /** Replace the message list wholesale (used when loading a persisted conversation). */
+  replaceMessages: (messages: ChatMessage[]) => void
+  setLoadingConversation: (loading: boolean) => void
 }
 
 // ---------------------------------------------------------------------------

@@ -127,13 +127,22 @@ function hexToInt(hex: string): number {
 
 /**
  * Parses a user-entered value string into a numeric value.
- * Handles decimal ("100"), hex ("0xFF", "#xFF"), float ("3.14"), and negative ("-50").
+ * Handles:
+ *   - Decimal ("100"), hex ("0xFF", "#xFF"), float ("3.14"), negative ("-50")
+ *   - BOOL strings ("TRUE"/"FALSE", case-insensitive) -> 1/0.  Without this
+ *     branch the decoder's BOOL output collapses to 0 because Number("TRUE")
+ *     is NaN.
  * Returns 0 for empty or unparseable strings.
  */
 function parseNumericValue(str: string): number {
   if (!str || str.trim() === '') return 0
 
   const trimmed = str.trim()
+
+  // BOOL literals (decoder output for BOOL defaults uses these)
+  const lower = trimmed.toLowerCase()
+  if (lower === 'true') return 1
+  if (lower === 'false') return 0
 
   // Handle hex prefixes: "0x" / "0X" / "#x" / "#X"
   if (/^(0x|#x)/i.test(trimmed)) {
@@ -199,21 +208,28 @@ function buildChannels(
 
 /**
  * Converts SDOConfigurationEntry[] to RuntimeSdoConfig[] for the runtime plugin.
+ *
+ * Entries the operator left blank (empty value) are dropped: the ESI may
+ * declare an RW SDO without a vendor default expecting the operator to
+ * supply one.  If they did not, we must not silently send 0 -- the slave's
+ * own internal default applies instead.
  */
 function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): RuntimeSdoConfig[] {
   if (!entries || entries.length === 0) return []
 
-  return entries.map(
-    (entry): RuntimeSdoConfig => ({
-      index: entry.index,
-      subindex: entry.subIndex,
-      value: parseNumericValue(entry.value),
-      data_type: entry.dataType,
-      bit_length: entry.bitLength,
-      name: entry.name,
-      comment: `Startup SDO: ${entry.objectName}`,
-    }),
-  )
+  return entries
+    .filter((entry) => entry.value !== undefined && entry.value !== null && entry.value.trim() !== '')
+    .map(
+      (entry): RuntimeSdoConfig => ({
+        index: entry.index,
+        subindex: entry.subIndex,
+        value: parseNumericValue(entry.value),
+        data_type: entry.dataType,
+        bit_length: entry.bitLength,
+        name: entry.name,
+        comment: `Startup SDO: ${entry.objectName}`,
+      }),
+    )
 }
 
 /**

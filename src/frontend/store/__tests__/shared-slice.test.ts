@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { createAISlice } from '../slices/ai'
 import { createConsoleSlice } from '../slices/console/slice'
 import { createDeviceSlice } from '../slices/device/slice'
 import { createEditorSlice } from '../slices/editor/slice'
@@ -34,6 +35,7 @@ function makeStore() {
     ...createLadderFlowSlice(...args),
     ...createHistorySlice(...args),
     ...createVersionControlSlice(...args),
+    ...createAISlice(...args),
     ...createSharedSlice(...args),
   }))
 }

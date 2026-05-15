@@ -55,7 +55,7 @@ const EtherCATDeviceEditor = () => {
   const deviceId = editor.type === 'plc-ethercat-device' ? editor.meta.deviceId : ''
   const projectPath = project.meta.path
 
-  const [activeTab, setActiveTab] = useState<DeviceDetailTab>('info')
+  const [activeTab, setActiveTab] = useState<DeviceDetailTab>('channel-mappings')
 
   // Repository state
   const [repository, setRepository] = useState<ESIRepositoryItemLight[]>([])
@@ -238,10 +238,10 @@ const EtherCATDeviceEditor = () => {
         className='flex min-h-0 flex-1 flex-col overflow-hidden'
       >
         <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>
+          <TabItem value='channel-mappings' label='Channel Mappings' isActive={activeTab === 'channel-mappings'} />
           <TabItem value='info' label='Device Info' isActive={activeTab === 'info'} />
           <TabItem value='configuration' label='Configuration' isActive={activeTab === 'configuration'} />
           <TabItem value='startup-params' label='Startup Parameters' isActive={activeTab === 'startup-params'} />
-          <TabItem value='channel-mappings' label='Channel Mappings' isActive={activeTab === 'channel-mappings'} />
         </Tabs.List>
 
         {/* Device Info Tab */}

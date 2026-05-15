@@ -64,12 +64,14 @@ const Board = memo(function () {
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
-  const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
   const setIncludeTimingStatsInPolling = useOpenPLCStore(
     (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
+  )
+  const setIncludeEthercatStatsInPolling = useOpenPLCStore(
+    (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
   )
 
   const [isPressed, setIsPressed] = useState(false)
@@ -339,6 +341,15 @@ const Board = memo(function () {
     }
   }, [setIncludeTimingStatsInPolling])
 
+  // Only runtime targets expose the EtherCAT endpoint; skip the poll otherwise.
+  useEffect(() => {
+    if (!isOpenPLCRuntimeTarget(currentBoardInfo)) return
+    setIncludeEthercatStatsInPolling(true)
+    return () => {
+      setIncludeEthercatStatsInPolling(false)
+    }
+  }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
+
   return (
     <DeviceEditorSlot>
       <div
@@ -572,11 +583,7 @@ const Board = memo(function () {
         connectionStatus === 'connected' && (
           <div className='flex w-full flex-col gap-6'>
             {timingStats && <ScanCycleStats timingStats={timingStats} />}
-            <EtherCATStats
-              ipAddress={runtimeIpAddress || null}
-              jwtToken={jwtToken}
-              isConnected={connectionStatus === 'connected'}
-            />
+            <EtherCATStats />
             <PluginStatsPanel pluginStats={timingStats?.plugin_stats} />
           </div>
         )

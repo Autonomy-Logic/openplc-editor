@@ -1,15 +1,7 @@
 import { RangeCell, StatsTable, type StatsTableColumn } from '@root/frontend/components/_molecules/stats-table'
-import { useRuntime } from '@root/middleware/shared/providers/platform-context'
-import type { EtherCATMasterStatus, EtherCATRuntimeStatusResponse } from '@root/types/ethercat'
-import { useCallback, useEffect, useRef, useState } from 'react'
-
-const POLL_INTERVAL_MS = 2000
-
-interface EtherCATStatsProps {
-  ipAddress: string | null
-  jwtToken: string | null
-  isConnected: boolean
-}
+import { useOpenPLCStore } from '@root/frontend/store'
+import { normalizeEthercatStatus } from '@root/frontend/utils/ethercat-status'
+import type { EtherCATMasterStatus } from '@root/middleware/shared/ports/ethercat-types'
 
 const columns: StatsTableColumn<EtherCATMasterStatus>[] = [
   {
@@ -17,7 +9,17 @@ const columns: StatsTableColumn<EtherCATMasterStatus>[] = [
     header: 'Master',
     align: 'left',
     className: 'font-mono',
-    render: (m) => m.name,
+    render: (m) => m.name || 'default',
+  },
+  {
+    key: 'state',
+    header: 'State',
+    render: (m) => m.plugin_state,
+  },
+  {
+    key: 'slaves',
+    header: 'Slaves',
+    render: (m) => m.slave_count.toLocaleString(),
   },
   {
     key: 'cycle-count',
@@ -46,125 +48,54 @@ const columns: StatsTableColumn<EtherCATMasterStatus>[] = [
     ),
   },
   {
+    key: 'max-exchange',
+    header: 'Max Exchange',
+    render: (m) => m.metrics.max_exchange_us.toLocaleString(),
+  },
+  {
     key: 'wkc-errors',
     header: 'WKC Errors',
-    render: (m) => m.metrics.wkc_error_count.toLocaleString(),
+    render: (m) => (
+      <div className='flex flex-col items-end'>
+        <span>{m.metrics.wkc_error_count.toLocaleString()}</span>
+        {m.metrics.consecutive_wkc_errors > 0 && (
+          <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+            consecutive: {m.metrics.consecutive_wkc_errors}
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
+    key: 'recovery',
+    header: 'Recovery',
+    render: (m) => m.metrics.recovery_attempts.toLocaleString(),
   },
 ]
 
 /**
- * Normalises the runtime-status payload into a list of masters.
- * Handles both the multi-master `masters[]` shape and the legacy flat
- * single-master shape.
- */
-function resolveMasters(response: EtherCATRuntimeStatusResponse): EtherCATMasterStatus[] {
-  if (response.masters && response.masters.length > 0) return response.masters
-  if (response.plugin_state && response.metrics && response.slaves) {
-    return [
-      {
-        name: 'default',
-        plugin_state: response.plugin_state,
-        slave_count: response.slave_count ?? 0,
-        expected_wkc: response.expected_wkc ?? 0,
-        slaves: response.slaves,
-        metrics: response.metrics,
-      },
-    ]
-  }
-  return []
-}
-
-/**
- * Recognises errors that mean the EtherCAT plugin isn't loaded on the
- * runtime — distinct from real connectivity failures. Plugin-not-active
- * cases hide the panel silently; everything else stays out of view too
- * (this component is a quiet drop-in next to the IEC stats table).
- */
-function isPluginNotActiveError(message: string): boolean {
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('not loaded') ||
-    lower.includes('not available') ||
-    lower.includes('plugin not active') ||
-    lower.includes('plugin not found') ||
-    lower.includes('<!doctype') ||
-    lower.includes('<html') ||
-    lower.includes('404')
-  )
-}
-
-/**
- * EtherCAT bus-cycle statistics — one row per configured master.
+ * EtherCAT bus statistics — one row per configured master.
  *
- * Polls the runtime's EtherCAT plugin status endpoint on the same 2 s
- * cadence as the IEC stats table. Renders nothing when the plugin isn't
- * active, hasn't reported any cycles yet, or the device isn't connected,
- * so it's safe to drop in unconditionally next to the IEC stats.
+ * Reads `runtimeConnection.ethercatStatus` straight from the device
+ * slice; the poll that populates it is owned by `useRuntimePolling`
+ * and gated by `includeEthercatStatsInPolling`. Call sites flip that
+ * gate on mount and off on unmount so the global hook only does the
+ * extra fetch when a stats screen is actually showing.
+ *
+ * Renders nothing when disconnected or when no masters have been
+ * reported (plugin not loaded). When masters exist but haven't
+ * started cycling yet, the row still renders with zeroed metrics —
+ * matches the rest of the screen's "show the panel immediately,
+ * fill in the numbers as they arrive" behaviour.
  */
-export const EtherCATStats = ({ ipAddress, jwtToken, isConnected }: EtherCATStatsProps) => {
-  const runtime = useRuntime()
-  const [masters, setMasters] = useState<EtherCATMasterStatus[]>([])
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const isMountedRef = useRef(true)
+export const EtherCATStats = () => {
+  const ethercatStatus = useOpenPLCStore((state) => state.runtimeConnection.ethercatStatus)
+  const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
 
-  // Hand-rolled "set if changed" guard so a no-op clear (already empty)
-  // doesn't cause a re-render. Otherwise every poll on a disconnected
-  // component would create a fresh `[]` and bump React's render count
-  // for nothing.
-  const setMastersIfChanged = useCallback((next: EtherCATMasterStatus[]) => {
-    if (!isMountedRef.current) return
-    setMasters((prev) => {
-      if (prev === next) return prev
-      if (prev.length === 0 && next.length === 0) return prev
-      return next
-    })
-  }, [])
+  if (connectionStatus !== 'connected') return null
 
-  const fetchStats = useCallback(async () => {
-    if (!isConnected || !ipAddress || !jwtToken || !runtime.getEthercatRuntimeStatus) {
-      setMastersIfChanged([])
-      return
-    }
-    try {
-      const result = await runtime.getEthercatRuntimeStatus()
-      // Bail if the component unmounted while the fetch was in flight —
-      // setState on an unmounted component is a leak (and a dev warning
-      // under React strict mode).
-      if (!isMountedRef.current) return
-      if (result.success && result.data) {
-        setMastersIfChanged(resolveMasters(result.data))
-      } else {
-        const message = result.error ?? ''
-        if (isPluginNotActiveError(message)) {
-          setMastersIfChanged([])
-        }
-      }
-    } catch {
-      // Quiet drop-in — leave previous state alone on transient errors.
-    }
-  }, [isConnected, ipAddress, jwtToken, runtime, setMastersIfChanged])
-
-  useEffect(() => {
-    isMountedRef.current = true
-    if (!isConnected) {
-      setMastersIfChanged([])
-      return () => {
-        isMountedRef.current = false
-      }
-    }
-    void fetchStats()
-    intervalRef.current = setInterval(() => void fetchStats(), POLL_INTERVAL_MS)
-    return () => {
-      isMountedRef.current = false
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-    }
-  }, [isConnected, fetchStats, setMastersIfChanged])
-
-  const activeMasters = masters.filter((m) => m.metrics?.cycle_count > 0)
-  if (activeMasters.length === 0) return null
+  const masters = normalizeEthercatStatus(ethercatStatus)
+  if (masters.length === 0) return null
 
   return (
     <StatsTable
@@ -172,8 +103,8 @@ export const EtherCATStats = ({ ipAddress, jwtToken, isConnected }: EtherCATStat
       title='EtherCAT Bus Statistics'
       description='Times in microseconds. Each cell shows a moving average with min / max below.'
       columns={columns}
-      rows={activeMasters}
-      rowKey={(m) => m.name}
+      rows={masters}
+      rowKey={(m) => m.name || 'default'}
     />
   )
 }

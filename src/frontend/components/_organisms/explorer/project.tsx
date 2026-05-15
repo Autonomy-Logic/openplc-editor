@@ -336,8 +336,12 @@ const Project = () => {
               />
             ))}
 
-          {/* Project Servers tree branch — host-capability AND project-type gated. */}
-          {projectCaps.hasServers && capabilities.hasLocalSerialPorts && (
+          {/* Project Servers tree branch — gated by project type only.
+           *  The Servers branch must remain visible on platforms that
+           *  lack local serial ports (e.g. orchestrator-only / web
+           *  builds), per the fix in d257e2a07; libraries still hide
+           *  it via the `projectCaps.hasServers` capability check. */}
+          {projectCaps.hasServers && (
             <ProjectTreeBranch branchTarget='server'>
               {[...(servers || [])]
                 .sort((a, b) => a.name.localeCompare(b.name))

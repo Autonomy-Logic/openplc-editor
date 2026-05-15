@@ -18,7 +18,7 @@ import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-edi
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
 
 const SIMULATOR_BOARD_NAME = 'OpenPLC Simulator'
-const RUNTIME_BOARD_NAME = 'OpenPLC Runtime v3'
+const RUNTIME_BOARD_NAME = 'OpenPLC Runtime v4'
 
 /**
  * Returns the appropriate status badge styling based on status value
@@ -305,6 +305,16 @@ const OrchestratorsList = () => {
     }
   }, [deviceActions])
 
+  // Same pattern for EtherCAT runtime status. Only fetched while this screen
+  // is mounted, so non-EtherCAT setups don't pay for the extra round-trip on
+  // every poll.
+  useEffect(() => {
+    deviceActions.setIncludeEthercatStatsInPolling(true)
+    return () => {
+      deviceActions.setIncludeEthercatStatsInPolling(false)
+    }
+  }, [deviceActions])
+
   // Handle device switch confirmation
   const handleConfirmDeviceSwitch = useCallback(async () => {
     if (!pendingDeviceSwitch) return
@@ -588,11 +598,7 @@ const OrchestratorsList = () => {
           className='flex h-full w-1/2 flex-col gap-6 overflow-y-auto overflow-x-hidden p-4 lg:px-8 lg:py-4'
         >
           {runtimeConnection.timingStats && <ScanCycleStats timingStats={runtimeConnection.timingStats} />}
-          <EtherCATStats
-            ipAddress={runtimeConnection.ipAddress}
-            jwtToken={runtimeConnection.jwtToken}
-            isConnected={runtimeConnection.connectionStatus === 'connected'}
-          />
+          <EtherCATStats />
           <PluginStatsPanel pluginStats={runtimeConnection.timingStats?.plugin_stats} />
         </div>
       )}

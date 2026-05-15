@@ -114,6 +114,7 @@ const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
+import { validateEthercatConfig } from '@root/backend/shared/ethercat/validate-ethercat-config'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
@@ -1700,6 +1701,11 @@ class CompilerModule {
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     const ethercatConfig = generateEthercatConfig(projectData.remoteDevices)
+
+    const ethercatErrors = validateEthercatConfig(ethercatConfig)
+    if (ethercatErrors.length > 0) {
+      throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
+    }
 
     if (ethercatConfig) {
       const confFolderPath = join(sourceTargetFolderPath, 'conf')

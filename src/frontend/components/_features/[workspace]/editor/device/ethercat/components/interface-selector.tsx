@@ -4,7 +4,7 @@ import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
 import { InputWithRef } from '@root/frontend/components/_atoms/input'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { cn } from '@root/frontend/utils/cn'
-import type { NetworkInterface } from '@root/types/ethercat'
+import type { NetworkInterface } from '@root/middleware/shared/ports/ethercat-types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type InterfaceSelectorProps = {

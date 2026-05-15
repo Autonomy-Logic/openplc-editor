@@ -100,6 +100,8 @@ describe('Device slice types', () => {
         storedCredentials: null,
         timingStats: null,
         includeTimingStatsInPolling: false,
+        ethercatStatus: null,
+        includeEthercatStatsInPolling: false,
       }
       expect(conn.jwtToken).toBeNull()
       expect(conn.connectionStatus).toBe('disconnected')
@@ -144,6 +146,8 @@ describe('Device slice types', () => {
         storedCredentials: { username: 'u', password: 'p' },
         timingStats: stats,
         includeTimingStatsInPolling: true,
+        ethercatStatus: null,
+        includeEthercatStatsInPolling: false,
       }
       expect(conn.jwtToken).toBe('token')
       expect(conn.connectionStatus).toBe('connected')
@@ -178,6 +182,8 @@ describe('Device slice types', () => {
           storedCredentials: null,
           timingStats: null,
           includeTimingStatsInPolling: false,
+          ethercatStatus: null,
+          includeEthercatStatsInPolling: false,
         },
       }
       expect(state.deviceAvailableOptions).toBeDefined()

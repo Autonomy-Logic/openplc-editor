@@ -128,29 +128,36 @@ const VariableElement = (block: VariableProps) => {
    * Update inputError state when the table of variables is updated
    */
   useEffect(() => {
-    const {
-      node: variableNode,
-      rung,
-      variables,
-    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { node: variableNode, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: data.variable?.name,
     })
     if (!rung || !variableNode) return
 
-    // Use the selected variable from getLadderPouVariablesRungNodeAndEdges which properly
-    // handles derived types for 'variable' node types (block pin variables)
-    const variable = variables.selected
+    // Use the node's current variable name (from the store) as the source of truth.
+    // The prop `data.variable?.name` may be stale during React's render cycle, so
+    // looking up the POU variable by the node's actual name avoids overwriting
+    // user-initiated changes (selection, clearing) with stale prop values.
+    const nodeVariableName = (variableNode as VariableNode).data.variable.name
+    const nodeVarRef = (variableNode as VariableNode).data.variable
+
+    if (!nodeVariableName) {
+      setIsAVariable(false)
+      return
+    }
+
+    // Find the POU variable that matches the node's current variable name
+    const pouVariables = pous.find((p) => p.name === editor.meta.name)?.interface?.variables ?? []
+    const variable = pouVariables.find((v) => v.name.toLowerCase() === nodeVariableName.toLowerCase())
 
     if (!variable || !inputVariableRef) {
       setIsAVariable(false)
     } else {
-      const nodeVariableName = (variableNode as VariableNode).data.variable.name
-
       const namesMatchCI = variable.name.toLowerCase() === nodeVariableName.toLowerCase()
       const caseDiffers = variable.name !== nodeVariableName
+      const refStale = nodeVarRef !== variable
 
-      if (!namesMatchCI || caseDiffers) {
+      if (!namesMatchCI || caseDiffers || refStale) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
@@ -180,8 +187,6 @@ const VariableElement = (block: VariableProps) => {
       setIsAVariable(true)
     }
 
-    if (!rung) return
-
     const relatedBlock = rung.nodes.find((node) => node.id === data.block.id)
     if (!relatedBlock) {
       setInputError(true)
@@ -192,14 +197,37 @@ const VariableElement = (block: VariableProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
-    const variableNameToSubmit = variableName || variableValue
+  const handleSubmitVariableValueOnTextareaBlur = (currentValue?: string) => {
+    const variableNameToSubmit = currentValue ?? variableValue
 
     const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
     const variableNode = node as VariableNode
+
+    // Allow clearing a variable from a block handle by submitting an empty name.
+    // This resets the variable node so a branch (contacts/coils) can be placed instead.
+    if (!variableNameToSubmit.trim()) {
+      const emptyVariable = { id: '', name: '' }
+      setVariableValue('')
+      setIsAVariable(false)
+      setInputError(false)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: variableNode.id,
+        node: {
+          ...variableNode,
+          data: {
+            ...variableNode.data,
+            variable: emptyVariable,
+          },
+        },
+      })
+      updateRelatedNode(rung, variableNode, emptyVariable as PLCVariable)
+      return
+    }
 
     // For variable nodes (block pins), allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types

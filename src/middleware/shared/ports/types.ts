@@ -1063,12 +1063,41 @@ export interface AIFeatureConfig {
 
 export type ChatMessageRole = 'user' | 'assistant'
 
+/**
+ * Anthropic-compatible content block. Persisted on the backend as JSONB.
+ * On the wire from `/ai/chat`, mirrors what we re-send to Anthropic
+ * across iterations of the agentic loop. Plain user text is normalized
+ * to `[{ type: 'text', text: '...' }]` so readers don't need to branch
+ * on string vs array.
+ */
+export type AIChatContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: unknown }
+  | {
+      type: 'tool_result'
+      tool_use_id: string
+      content: string
+      is_error?: boolean
+    }
+
 export type ChatMessage = {
   id: string
   role: ChatMessageRole
-  content: string
+  /**
+   * Plain string for legacy text-only turns; block array for restored
+   * conversations from the backend (so `tool_use` / `tool_result` blocks
+   * survive a reload). Renderers handle either form.
+   */
+  content: string | AIChatContentBlock[]
   timestamp: number
   rating?: 'up' | 'down'
+  /**
+   * Set when the message was loaded from the backend as part of a
+   * persisted conversation; absent for in-progress local-only turns.
+   * Used by the chat panel to know which conversation the message
+   * belongs to when multiple are open across tabs.
+   */
+  conversationId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -1087,6 +1116,28 @@ export type FBDRungState = {
 }
 
 /**
+ * Represents a branch of elements connected to a specific block handle.
+ * Input branches connect from the left rail to a block input handle.
+ * Output branches connect from a block output handle to the right rail.
+ *
+ * Defined here (ports layer) rather than in the components layer so the
+ * `RungLadderState.handleBranches` field below can reference it without
+ * violating the layer rule that forbids ports from depending on components.
+ * The components/_atoms ladder types module re-exports this name so
+ * component code can keep importing it from a single nearby location.
+ */
+export type HandleBranch = {
+  /** The block node ID this branch connects to */
+  blockId: string
+  /** The handle ID on the block (e.g., "R", "PV", "CV") */
+  handleId: string
+  /** Direction: 'input' means elements feed INTO the block, 'output' means elements come OUT */
+  direction: 'input' | 'output'
+  /** Ordered list of node IDs in this branch (left-to-right for input, block-to-right for output) */
+  nodeIds: string[]
+}
+
+/**
  * Ladder rung data — nodes + edges + layout for one Ladder rung.
  * Used by both the store slice and the compiler adapter.
  */
@@ -1098,6 +1149,8 @@ export type RungLadderState = {
   selectedNodes: import('@xyflow/react').Node[]
   nodes: import('@xyflow/react').Node[]
   edges: import('@xyflow/react').Edge[]
+  /** Index of active handle branches in this rung (undefined for backward compatibility) */
+  handleBranches?: HandleBranch[]
 }
 
 // ---------------------------------------------------------------------------

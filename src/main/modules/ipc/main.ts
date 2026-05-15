@@ -14,7 +14,7 @@ import type {
   EtherCATValidateRequest,
   EtherCATValidateResponse,
   NetworkInterface,
-} from '@root/types/ethercat'
+} from '@root/middleware/shared/ports/ethercat-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
