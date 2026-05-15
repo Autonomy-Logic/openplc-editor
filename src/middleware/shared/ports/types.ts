@@ -585,6 +585,20 @@ export interface VppModuleDefinition {
    *  manually. */
   hwId?: string
   image?: string
+  /** One-line prose displayed in the per-slot detail pane of the
+   *  backplane editor. */
+  description?: string
+  /** Key/value pairs (channels, resolution, range, ...) rendered as a
+   *  spec list in the per-slot detail pane. */
+  specs?: Record<string, string>
+  /** Path (in the manifest) to this module's configuration screen. The
+   *  backend loads it eagerly and exposes the parsed JSON via
+   *  `configScreenDefinition`; consumers should prefer that field. */
+  configScreen?: string
+  /** Parsed config-screen JSON for this module. Populated by the
+   *  hardware-module loader when `configScreen` resolves to an
+   *  existing, valid screen file. */
+  configScreenDefinition?: unknown
   io: {
     digitalInputs: number
     digitalOutputs: number

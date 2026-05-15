@@ -22,6 +22,8 @@
  *   }
  */
 
+import { bytesToHexString, encodeConfigBytes } from './byte-encoder'
+
 type ModuleChannel = {
   name: string
   type: string
@@ -34,10 +36,19 @@ type VppModuleDefinition = {
   name: string
   hwId?: string
   addressMapping?: unknown
+  /** Optional per-module config-screen JSON. Pre-loaded by the caller
+   *  (compiler-module) so this pure-function generator never touches
+   *  the filesystem. */
+  configScreenDefinition?: unknown
 }
 
 type ModuleConfiguration = {
   slots?: (string | null)[]
+  /** Per-slot bag of form-field values, keyed by 1-based slot number
+   *  (stored as a string for JSON safety). Populated by the master-
+   *  detail backplane editor when the user fills in a module's
+   *  configuration form. */
+  slotsConfig?: Record<string, Record<string, string | number | boolean>>
 }
 
 type IoMappingEntry = {
@@ -74,6 +85,11 @@ type PluginSlotIoMapping = {
 type PluginSlot = {
   slot: number
   module_hw_id?: string
+  /** Module configuration bytes for the runtime to push over SPI
+   *  immediately after sign-on. Hex-encoded space-separated string,
+   *  e.g. "40 03 60 05 21 00 22 00 ...". Absent when the module has
+   *  no configuration screen or the user left every field empty. */
+  module_config?: string
   io_mapping: PluginSlotIoMapping
 }
 
@@ -150,6 +166,7 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
   const moduleConfig = (vendorScreenData['module-configuration'] as ModuleConfiguration | undefined) ?? {}
   const ioMapping = (vendorScreenData['io-mapping'] as IoMapping | undefined) ?? {}
   const slotAssignments = moduleConfig.slots ?? []
+  const slotsConfigBag = moduleConfig.slotsConfig ?? {}
   const ioEntries = ioMapping.entries ?? []
 
   const slots: PluginSlot[] = []
@@ -163,6 +180,8 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
 
     const slotNumber = slotIndex + 1
     const channels = (moduleDef.addressMapping as { channels?: ModuleChannel[] } | undefined)?.channels ?? []
+    const configScreenDef = moduleDef.configScreenDefinition
+    const slotConfigValues = slotsConfigBag[String(slotNumber)] ?? {}
 
     // Group channels by type and resolve each channel's assigned IEC address
     const di: { name: string; address: string }[] = []
@@ -195,10 +214,90 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
       io_mapping: ioMappingBlock,
     }
     if (moduleDef.hwId) slot.module_hw_id = moduleDef.hwId
+
+    // Module configuration bytes — only when the manifest declared a
+    // configScreen for this SKU and the editor has either user input
+    // or schema defaults to feed the encoder.
+    const moduleConfigBytes = encodeModuleConfig(configScreenDef, slotConfigValues)
+    if (moduleConfigBytes !== null) slot.module_config = bytesToHexString(moduleConfigBytes)
+
     slots.push(slot)
   }
 
   return slots
+}
+
+/* ------------------------------------------------------------------ */
+/* Module configuration encoding                                      */
+/* ------------------------------------------------------------------ */
+
+type FormField = {
+  id: string
+  default?: unknown
+  encoding?: unknown
+}
+
+type ConfigSection = {
+  layout?: string
+  fields?: unknown
+  totalBytes?: number
+}
+
+type ConfigScreenDef = {
+  sections?: ConfigSection[]
+}
+
+/** Walk a module's configScreenDefinition and produce (fields, total). */
+function collectConfigFormFields(def: unknown): { fields: FormField[]; totalBytes?: number } {
+  const screen = (def ?? {}) as ConfigScreenDef
+  const sections = Array.isArray(screen.sections) ? screen.sections : []
+  const fields: FormField[] = []
+  let totalBytes: number | undefined
+  for (const section of sections) {
+    if (!section || typeof section !== 'object') continue
+    if (typeof section.totalBytes === 'number' && totalBytes === undefined) {
+      totalBytes = section.totalBytes
+    }
+    const sectionFields = Array.isArray(section.fields) ? section.fields : []
+    for (const f of sectionFields) {
+      if (f && typeof f === 'object' && typeof (f as { id?: unknown }).id === 'string') {
+        fields.push(f as FormField)
+      }
+    }
+  }
+  return { fields, totalBytes }
+}
+
+/**
+ * Encode the configuration bytes for a single slot.
+ *
+ * Returns `null` when the module has no config screen (and therefore
+ * no module_config in the emitted slot), or when the screen declares
+ * no encodable fields.
+ *
+ * Field values come from the user's stored input where present and
+ * from the field's `default` otherwise — mirroring what the editor's
+ * UI shows so the runtime gets what the user sees.
+ */
+function encodeModuleConfig(
+  configScreenDef: unknown,
+  storedValues: Record<string, string | number | boolean>,
+): number[] | null {
+  if (!configScreenDef) return null
+  const { fields, totalBytes } = collectConfigFormFields(configScreenDef)
+  if (fields.length === 0) return null
+
+  const merged: Record<string, string | number | boolean> = {}
+  for (const f of fields) {
+    const v = storedValues[f.id]
+    if (v !== undefined && v !== null && v !== '') {
+      merged[f.id] = v
+    } else if (f.default !== undefined && f.default !== null && f.default !== '') {
+      merged[f.id] = f.default as string | number | boolean
+    }
+  }
+
+  return encodeConfigBytes(fields, merged, totalBytes)
 }
 
 /**

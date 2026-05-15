@@ -27,8 +27,13 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
     }
   }
 
+  // `module-slots` is a master-detail layout that owns the full visible
+  // area and hosts its own internal scrollers. Other layouts are
+  // content-sized and let the page-level container scroll if necessary.
+  const isFillSection = section.layout === 'module-slots'
+
   return (
-    <div className='flex flex-col gap-3'>
+    <div className={`flex flex-col gap-3 ${isFillSection ? 'min-h-0 flex-1' : ''}`}>
       <div
         className={`flex items-center justify-between ${section.collapsible ? 'cursor-pointer' : ''}`}
         onClick={() => section.collapsible && setCollapsed(!collapsed)}

@@ -52,7 +52,7 @@ class PackageManagerModule {
           error: `Invalid manifest schema: ${parsed.error.issues.map((i) => i.path.join('.') + ': ' + i.message).join('; ')}`,
         }
       }
-      const manifest: PackageManifest = parsed.data as PackageManifest
+      const manifest: PackageManifest = parsed.data as unknown as PackageManifest
 
       // Validate package.id BEFORE using it as a path component. Without
       // this, a malicious .vpp with `"id": "../../something"` would have
@@ -177,7 +177,7 @@ class PackageManagerModule {
       return null
     }
     const parsed = PackageManifestSchema.safeParse(raw)
-    return parsed.success ? (parsed.data as PackageManifest) : null
+    return parsed.success ? (parsed.data as unknown as PackageManifest) : null
   }
 
   getPackagePath(packageId: string): string | null {

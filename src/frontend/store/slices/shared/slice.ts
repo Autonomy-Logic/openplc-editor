@@ -387,16 +387,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
 
     closeFile: (name) => {
-      // Check if file has unsaved changes
-      const isSaved = getState().fileActions.getSavedState({ name })
-
-      if (!isSaved) {
-        // File has unsaved changes - show save prompt modal
-        getState().modalActions.openModal('save-changes-file', { fileName: name })
-        return { success: false }
+      // Tabs that don't persist any project data (Package Manager,
+      // Library Manager browsing view, ...) never register a file
+      // entry. Treat their absence from the file slice as "nothing
+      // to save" — otherwise getSavedState's `?? false` default
+      // would route them through the save-changes modal, and the
+      // subsequent "Save" path would fail with "File not found"
+      // because executeSaveFile has nothing to write.
+      const fileExists = getState().files[name] !== undefined
+      if (fileExists) {
+        const isSaved = getState().fileActions.getSavedState({ name })
+        if (!isSaved) {
+          getState().modalActions.openModal('save-changes-file', { fileName: name })
+          return { success: false }
+        }
       }
 
-      // File is saved, proceed with close
       return getState().sharedWorkspaceActions.forceCloseFile(name)
     },
 
