@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 // OpenPLC HAL for FX3U-14 Clone / WS3U-14Mx
 // 2024 by Dieter Lambrecht

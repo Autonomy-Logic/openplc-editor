@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 //OpenPLC HAL for CONTROLLINO MAXI Automation see https://www.controllino.com/wp-content/uploads/2021/03/CONTROLLINO-MAXI-Automation-Pinout.pdf
 

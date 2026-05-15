@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 //OpenPLC HAL for ESP8266 boards
 

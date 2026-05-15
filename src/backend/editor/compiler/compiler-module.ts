@@ -1061,7 +1061,12 @@ class CompilerModule {
 
     const stProgramFilePath = join(buildTargetDirectoryPath, 'src', 'program.st')
 
-    const definitionsFilePath = join(buildTargetDirectoryPath, 'examples', 'Baremetal', 'defines.h')
+    // defines.h lives alongside arduino.cpp in src/. The HAL templates
+    // include it as plain "defines.h" so the file is found whether
+    // arduino-cli compiles the source in place or moves it into its
+    // sketch sandbox first. Avoids the directory-relative include
+    // that broke on paths with spaces and on VM shared-folder mounts.
+    const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
 
     // === Files contents that we need ===
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
