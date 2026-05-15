@@ -21,6 +21,10 @@
       {
         "from": "./resources/sources",
         "to": "./sources"
+      },
+      {
+        "from": "./resources/strucpp",
+        "to": "./strucpp"
       }
     ],
     "target": {
@@ -64,6 +68,10 @@
       {
         "from": "./resources/sources",
         "to": "./sources"
+      },
+      {
+        "from": "./resources/strucpp",
+        "to": "./strucpp"
       }
     ],
     "target": [
@@ -83,6 +91,10 @@
       {
         "from": "./resources/sources",
         "to": "./sources"
+      },
+      {
+        "from": "./resources/strucpp",
+        "to": "./strucpp"
       }
     ],
     "target": [
