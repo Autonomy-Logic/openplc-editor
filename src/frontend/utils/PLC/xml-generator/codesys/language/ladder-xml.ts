@@ -82,10 +82,17 @@ const findNodesBasedOnParallelClose = (
   return findNodesBasedOnParallelClose(bottomNode as ParallelNode, rung, path)
 }
 
-const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offsetY: number = 0) => {
+const findConnections = (
+  node: Node<BasicNodeData>,
+  rung: RungLadderState,
+  offsetY: number = 0,
+  targetHandle?: string,
+) => {
   const { nodes: rungNodes, edges: rungEdges } = rung
 
-  const connectedEdges = rungEdges.filter((edge) => edge.target === node.id)
+  const connectedEdges = rungEdges.filter(
+    (edge) => edge.target === node.id && (targetHandle === undefined || edge.targetHandle === targetHandle),
+  )
   if (!connectedEdges.length) return []
 
   const connections = connectedEdges.map((edge) => {
@@ -95,10 +102,10 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
 
     // Node is not a parallel node
     if (sourceNode.type !== 'parallel') {
+      const sourceHandle = edge.sourceHandle ?? sourceNode.data.outputConnector?.id ?? ''
       return {
         '@refLocalId': sourceNode.data.numericId,
-        '@formalParameter':
-          sourceNode.data.outputConnector?.id === 'OUT' ? '' : sourceNode.data.outputConnector?.id || '',
+        '@formalParameter': sourceHandle === 'OUT' ? '' : sourceHandle,
         position: [
           // Final edge destination
           {
@@ -434,21 +441,22 @@ const blockToXml = (
   offsetY: number = 0,
   leftRailId: string,
 ): BlockLadderXML => {
-  const connections = findConnections(block, rung, offsetY)
-
-  // If the block is connected to a power rail, replace the refLocalId with the left rail id at connections
-  const railConnection = connections.find((connection) => {
-    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
-    if (rail?.data.numericId === connection['@refLocalId']) {
-      return true
-    }
-    return false
-  })
-
   const inputVariables = block.data.inputHandles.map((handle) => {
-    // Only the input of the block contains connections from other blocks
-    // The other handles are connected to variables
+    // Main input connector: connections from other elements on the main rail
     if (handle.id === block.data.inputConnector?.id) {
+      const connections = findConnections(block, rung, offsetY, handle.id)
+
+      // If the block is connected to a power rail, replace the refLocalId with the left rail id at connections
+      const railConnection = connections.find((connection) => {
+        const rail = rung.nodes.find(
+          (node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left',
+        )
+        if (rail?.data.numericId === connection['@refLocalId']) {
+          return true
+        }
+        return false
+      })
+
       return {
         '@formalParameter': handle.id || '',
         connectionPointIn: {
@@ -472,18 +480,34 @@ const blockToXml = (
         (node as VariableNode).data.block.id === block.id &&
         (node as VariableNode).data.block.handleId === handle.id,
     ) as Node<BasicNodeData>
-    if (!variableNode) return undefined
 
-    return {
-      '@formalParameter': handle.id || '',
-      connectionPointIn: {
-        connection: [
-          {
-            '@refLocalId': variableNode.data.numericId,
-          },
-        ],
-      },
+    if (variableNode) {
+      return {
+        '@formalParameter': handle.id || '',
+        connectionPointIn: {
+          connection: [
+            {
+              '@refLocalId': variableNode.data.numericId,
+            },
+          ],
+        },
+      }
     }
+
+    // No variable node — check if there's a branch (contacts/coils) connected to this handle.
+    // Reuse findConnections with a handle filter to trace the branch elements,
+    // including any parallels within the branch.
+    const handleConnections = findConnections(block, rung, offsetY, handle.id)
+    if (handleConnections.length > 0) {
+      return {
+        '@formalParameter': handle.id || '',
+        connectionPointIn: {
+          connection: handleConnections,
+        },
+      }
+    }
+
+    return undefined
   })
 
   const outputVariable = block.data.outputHandles.map((handle, handleIndex) => {

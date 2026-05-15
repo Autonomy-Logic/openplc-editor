@@ -14,9 +14,9 @@ type ZodLadderFlowState = z.infer<typeof zodLadderFlowStateSchema>
 const zodLadderNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
 type ZodLadderNodeType = z.infer<typeof zodLadderNodeTypesSchema>
 
-import type { RungLadderState } from '../../../../middleware/shared/ports/types'
+import type { HandleBranch, RungLadderState } from '../../../../middleware/shared/ports/types'
 
-export type { RungLadderState }
+export type { HandleBranch, RungLadderState }
 
 /**
  * Types used at the slice
@@ -108,6 +108,16 @@ type LadderFlowActions = {
     editorName: string
   }) => void
   addEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
+
+  setHandleBranches: ({
+    handleBranches,
+    rungId,
+    editorName,
+  }: {
+    handleBranches: HandleBranch[]
+    rungId: string
+    editorName: string
+  }) => void
 
   /**
    * Control the flow viewport of the rung
