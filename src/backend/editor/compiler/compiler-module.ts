@@ -1871,6 +1871,17 @@ class CompilerModule {
           assertPathContained(confFolderPath, configFilePath, 'plugin config path')
           await writeFile(configFilePath, JSON.stringify(finalConfig, null, 2), 'utf-8')
           handleOutputData(`Generated conf/${pluginName}.json for VPP plugin`, 'info')
+
+          // Generate vpp_plugins.conf so the runtime knows exactly which
+          // VPP plugin to load and where its compiled .so and config live.
+          // Format matches plugins.conf: name,path,enabled,type,config_path,venv_path
+          // The paths are the deterministic locations that compile.sh and the
+          // runtime's apply_vpp_plugin_conf() agree on.
+          const vppPluginsConfContent =
+            `${pluginName},./build/vpp/lib${pluginName}_plugin.so,1,1,./build/vpp/${pluginName}.json,\n`
+          const vppPluginsConfPath = join(sourceTargetFolderPath, 'vpp_plugins.conf')
+          await writeFile(vppPluginsConfPath, vppPluginsConfContent, 'utf-8')
+          handleOutputData('Generated vpp_plugins.conf', 'info')
         }
       } else {
         handleOutputData('VPP board has no HAL configTemplate, skipping plugin config generation', 'info')
