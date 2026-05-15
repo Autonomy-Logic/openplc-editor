@@ -128,6 +128,23 @@ describe('createSharedSlice', () => {
         expect(Object.keys(state.files)).toHaveLength(3)
         expect(state.libraries.user).toHaveLength(3)
       })
+
+      it('seeds ladderFlows when creating an LD POU', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'LdProg', language: 'ld' })
+        const state = store.getState()
+        const flow = state.ladderFlows.find((f) => f.name === 'LdProg')
+        expect(flow).toBeDefined()
+        expect(flow!.rungs).toEqual([])
+      })
+
+      it('seeds fbdFlows when creating an FBD POU', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdProg', language: 'fbd' })
+        const state = store.getState()
+        const flow = state.fbdFlows.find((f) => f.name === 'FbdProg')
+        expect(flow).toBeDefined()
+        expect(flow!.rung.nodes).toEqual([])
+        expect(flow!.rung.edges).toEqual([])
+      })
     })
 
     // -----------------------------------------------------------------------
@@ -279,6 +296,23 @@ describe('createSharedSlice', () => {
         const copyPou = store.getState().project.data.pous.find((p) => p.name === 'LdCopy')
         expect(copyPou).toBeDefined()
         expect(copyPou!.body.language).toBe('ld')
+
+        // The duplicate must also seed ladderFlows so the editor renders.
+        const flow = store.getState().ladderFlows.find((f) => f.name === 'LdCopy')
+        expect(flow).toBeDefined()
+      })
+
+      it('duplicates a POU with FBD language and seeds fbdFlows', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdSource', language: 'fbd' })
+        const result = store.getState().pouActions.duplicate('FbdSource', 'FbdCopy')
+        expect(result.ok).toBe(true)
+
+        const copyPou = store.getState().project.data.pous.find((p) => p.name === 'FbdCopy')
+        expect(copyPou).toBeDefined()
+        expect(copyPou!.body.language).toBe('fbd')
+
+        const flow = store.getState().fbdFlows.find((f) => f.name === 'FbdCopy')
+        expect(flow).toBeDefined()
       })
 
       it('duplicates a POU that has no interface variables (null branch)', () => {

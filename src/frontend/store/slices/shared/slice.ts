@@ -73,6 +73,18 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
 
+      // Seed the graphical-flow slice for new LD/FBD POUs. The project
+      // slice owns the persisted body (rungs/nodes/edges); the per-
+      // language flow slice is what the editor reads to render. Without
+      // this, the FBD editor falls through to "No rung found for editor"
+      // and ladder shows a bare canvas. handleOpenProjectResponse does
+      // the same on project load — this matches it for create.
+      if (language === 'ld') {
+        state.ladderFlowActions.addLadderFlow(pouDto.data.body.value as LadderFlowType)
+      } else if (language === 'fbd') {
+        state.fbdFlowActions.addFBDFlow(pouDto.data.body.value as FBDFlowType)
+      }
+
       const editorModel = createEditorObjectForPou(name, type, language)
       state.editorActions.addModel(editorModel)
 
@@ -144,6 +156,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const result = state.projectActions.createPou(pouDto)
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
+
+      // Seed the graphical-flow slice for the duplicated POU. Mirrors
+      // the create-path so a duplicated LD/FBD POU's editor finds its
+      // rungs/nodes immediately instead of rendering empty.  The body
+      // value was shallow-copied from the source, so its `name` field
+      // still refers to `sourceName` — override it so the flow lands
+      // under the new POU's name (the editor's lookup key).
+      if (language === 'ld') {
+        state.ladderFlowActions.addLadderFlow({
+          ...(pouDto.data.body.value as LadderFlowType),
+          name: newName,
+        })
+      } else if (language === 'fbd') {
+        state.fbdFlowActions.addFBDFlow({
+          ...(pouDto.data.body.value as FBDFlowType),
+          name: newName,
+        })
+      }
 
       const editorModel = createEditorObjectForPou(newName, sourcePou.pouType, language)
       state.editorActions.addModel(editorModel)
