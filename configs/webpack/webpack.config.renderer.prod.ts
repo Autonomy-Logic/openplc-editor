@@ -81,6 +81,15 @@ const configuration: webpack.Configuration = {
         test: /\.(woff|woff2|eot|ttf|otf)$/i,
         type: 'asset/resource',
       },
+      // Static JS assets — used by the STruC++ LSP worker.  The
+      // strucpp browser-server bundle is a pre-built IIFE that
+      // webpack must NOT re-bundle (it already self-contains the
+      // compiler).  Importing it with `?url` returns the emitted
+      // asset's URL so `new Worker(url)` spawns it directly.
+      {
+        resourceQuery: /^\?url$/,
+        type: 'asset/resource',
+      },
       // Images
       {
         test: /\.(png|jpg|jpeg|gif)$/i,
