@@ -7,6 +7,7 @@ import { useEffect } from 'react'
 import { AppLayout } from './frontend/components/_templates/app-layout'
 import { StartScreen } from './frontend/screens/start-screen'
 import { WorkspaceScreen } from './frontend/screens/workspace-screen'
+import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { openPLCStoreBase, useOpenPLCStore } from './frontend/store'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
 import { editorPorts, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
@@ -46,6 +47,16 @@ hydrateLibraries()
 // install/uninstall/CDN change.  Subscriber lives outside React to
 // catch events fired before any component mounts.
 editorPorts.library.onLibrariesChanged(() => hydrateLibraries())
+
+// Pre-warm the STruC++ LSP worker so the first ST POU opens with
+// completion + diagnostics already streaming.  `bootStLsp` returns
+// null when the capability flag is off (web build before its
+// adapter lands, jsdom test envs, …).  Lazy-import monaco-editor
+// to avoid pulling its top-level side effects into modules that
+// only need the boot wrapper.
+void import('monaco-editor').then((monaco) => {
+  bootStLsp(editorPorts, monaco)
+})
 
 export default function App() {
   const {

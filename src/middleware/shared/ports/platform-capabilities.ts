@@ -124,8 +124,10 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasVersionControl: false,
   hasAboutDialog: true,
   hasPythonLSP: true,
-  // Flipped on in editor-platform.ts once Phase 4 wires the worker.
-  hasStLSP: false,
+  // Worker wired via src/frontend/services/st-lsp/boot.ts, started
+  // from App.tsx at module load.  Web build keeps this off until
+  // their HTTP-backed stlibSource adapter ships.
+  hasStLSP: true,
   hasUndoRedoHistory: true,
   hasFileWatcher: true,
   hasAIAssistant: false,
