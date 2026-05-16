@@ -42,6 +42,7 @@ import {
   lspTextEditToMonaco,
   monacoPositionToLsp,
 } from './converters'
+import { redirectToGraphicalPou } from './graphical-redirect'
 
 interface ProviderOptions {
   connection: MessageConnection
@@ -128,6 +129,17 @@ export function registerStLspProviders({
         // LocationLink[].  Normalise to LocationLink[] first so the
         // converter sees a uniform shape.
         const normalised = normaliseLocationResponse(result)
+        if (!normalised) return null
+
+        // If any returned location is a stub:// URI (graphical POU
+        // signature), reroute the user to the graphical editor for
+        // that POU and cancel the default Monaco navigation —
+        // Monaco has no model for the synthetic stub source, so
+        // navigating to it would dead-end.
+        const locations = Array.isArray(normalised) ? normalised : [normalised]
+        const stubLocation = locations.find((l) => redirectToGraphicalPou(l.uri))
+        if (stubLocation) return null
+
         return lspLocationsToMonaco(normalised, monacoApi) ?? null
       },
     }),
