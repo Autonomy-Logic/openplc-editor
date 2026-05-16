@@ -9,8 +9,8 @@
 
 import type * as monaco from 'monaco-editor'
 import {
-  PublishDiagnosticsNotification,
   type MessageConnection,
+  PublishDiagnosticsNotification,
 } from 'vscode-languageserver-protocol'
 
 import { lspDiagnosticToMonaco } from './converters'

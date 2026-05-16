@@ -28,7 +28,7 @@
 import type { PLCPou } from '../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../store'
 import { serializePouSignatureToST } from '../../utils/PLC/pou-signature-serializer'
-import { pouUri, stubUri, type StLspService } from './types'
+import { pouUri, type StLspService,stubUri } from './types'
 
 /**
  * Determines whether a POU's source goes through the live-body

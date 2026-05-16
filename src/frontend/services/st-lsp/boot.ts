@@ -17,8 +17,8 @@
  */
 
 import type { PlatformPorts } from '../../../middleware/shared/providers/types'
-import { attachLibrarySync, attachProjectSync } from './project-sync'
 import { startStLsp } from './index'
+import { attachLibrarySync, attachProjectSync } from './project-sync'
 import type { StLspService } from './types'
 
 export interface StLspBootHandle {

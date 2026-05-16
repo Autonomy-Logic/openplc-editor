@@ -20,9 +20,8 @@ import {
   DidCloseTextDocumentNotification,
   DidOpenTextDocumentNotification,
   InitializedNotification,
-  InitializeRequest,
   type InitializeParams,
-  type InitializeResult,
+  InitializeRequest,
 } from 'vscode-languageserver-protocol'
 
 import { attachDiagnosticsBridge } from './diagnostics'
@@ -55,19 +54,14 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   let workerUrl = workerUrlOverride
   if (!workerUrl) {
     // Webpack rewrites this `?url` import to the emitted asset URL.
-    // Importing inside the function keeps the bundler from probing
-    // when the service is constructed under test (where the worker
-    // file isn't on disk).
-    workerUrl = (
-      require('strucpp/dist/browser-server.js?url') as {
-        default: string
-      } | string
-    ).valueOf() as unknown as string
-    // require() may return either a default export (webpack 5
-    // asset/resource) or the URL directly (some loaders).
-    if (typeof workerUrl !== 'string') {
-      workerUrl = (workerUrl as { default: string }).default
-    }
+    // The require lives inside the function so the bundler probe
+    // never runs under test (jsdom test envs don't ship the asset).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const moduleExports = require('strucpp/dist/browser-server.js?url') as
+      | { default: string }
+      | string
+    workerUrl =
+      typeof moduleExports === 'string' ? moduleExports : moduleExports.default
   }
 
   let transport: LspTransport
@@ -80,7 +74,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     const stalled = new Promise<void>(() => undefined)
     return {
       ready: stalled,
-      refreshStlibs: async () => undefined,
+      refreshStlibs: () => Promise.resolve(),
       openDocument: () => undefined,
       changeDocument: () => undefined,
       closeDocument: () => undefined,
@@ -123,14 +117,10 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       },
       workspaceFolders: null,
     }
-    const initResult = (await connection.sendRequest(
-      InitializeRequest.type,
-      initParams,
-    )) as InitializeResult
-    // We don't currently use anything from initResult.capabilities;
-    // a runtime check would belong here when we start advertising
-    // capabilities the worker may not support.
-    void initResult
+    // We don't currently use anything from the InitializeResult's
+    // capabilities; a runtime check would belong here when we
+    // start advertising capabilities the worker may not support.
+    await connection.sendRequest(InitializeRequest.type, initParams)
     await connection.sendNotification(InitializedNotification.type, {})
     await pushAllStlibs()
   })().catch((err) => {
@@ -162,7 +152,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   return {
     ready,
 
-    async refreshStlibs() {
+    refreshStlibs: async () => {
       // Best-effort: if ready hasn't resolved, queue behind it.
       try {
         await ready
@@ -225,4 +215,4 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
 }
 
 export type { StLspService, StLspStartOptions } from './types'
-export { POU_URI_SCHEME, parsePouUri, pouUri, stubUri } from './types'
+export { parsePouUri, POU_URI_SCHEME, pouUri, stubUri } from './types'

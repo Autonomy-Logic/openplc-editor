@@ -15,19 +15,18 @@ import {
   CompletionRequest,
   DefinitionRequest,
   DocumentFormattingRequest,
+  type DocumentSymbol,
   DocumentSymbolRequest,
   HoverRequest,
-  PrepareRenameRequest,
-  ReferencesRequest,
-  RenameRequest,
-  SignatureHelpRequest,
-  type DocumentSymbol,
   type Location,
   type LocationLink,
   type MessageConnection,
+  PrepareRenameRequest,
   type Range as LspRange,
+  ReferencesRequest,
+  RenameRequest,
+  SignatureHelpRequest,
   type SymbolInformation,
-  type SymbolKind,
   type TextEdit as LspTextEdit,
   type WorkspaceEdit,
 } from 'vscode-languageserver-protocol'
@@ -249,7 +248,7 @@ export function registerStLspProviders({
           },
         })
         if (!result) return []
-        return (result as LspTextEdit[]).map(lspTextEditToMonaco)
+        return (result).map(lspTextEditToMonaco)
       },
     }),
   )
@@ -333,7 +332,7 @@ function lspDocumentSymbolToMonaco(
   return {
     name: sym.name,
     detail: sym.detail ?? '',
-    kind: lspSymbolKindToMonaco(sym.kind as SymbolKind),
+    kind: lspSymbolKindToMonaco(sym.kind),
     range: lspRangeToMonaco(sym.range),
     selectionRange: lspRangeToMonaco(sym.selectionRange),
     tags: [],
