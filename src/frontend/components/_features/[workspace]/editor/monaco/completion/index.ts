@@ -4,8 +4,6 @@ import * as monaco from 'monaco-editor'
 
 import type { EditorState } from '../../../../../../store/slices/editor'
 import type { LibraryState } from '../../../../../../store/slices/library'
-import { pythonSnippets } from '../configs/languages/python/python.snippets'
-import { stSnippets } from '../configs/languages/st/st.snippets'
 import { parsePouToStText } from '../drag-and-drop/st'
 
 export {
@@ -14,14 +12,6 @@ export {
   cppSnippetsCompletion,
   cppStandardLibraryCompletion,
 } from './cpp.completion'
-
-interface SnippetItem {
-  label: string
-  insertText: string
-  documentation: string
-  kind: monaco.languages.CompletionItemKind
-  insertTextRules?: monaco.languages.CompletionItemInsertTextRule
-}
 
 export const languageKeywords = {
   st: [
@@ -415,50 +405,6 @@ export const libraryCompletion = ({
   return {
     suggestions: [...systemSuggestions, ...userSuggestions],
   }
-}
-
-export const snippetsCompletion = ({ language, range }: { language: 'st' | 'il' | 'python'; range: monaco.IRange }) => {
-  let snippets: SnippetItem[] = []
-
-  switch (language) {
-    case 'st':
-      snippets = stSnippets
-      break
-    case 'python':
-      snippets = pythonSnippets
-      break
-    case 'il':
-    default:
-      return { suggestions: [] }
-  }
-
-  const suggestions = snippets.map((snippet) => ({
-    label: snippet.label,
-    insertText: snippet.insertText,
-    documentation: snippet.documentation,
-    kind: snippet.kind,
-    insertTextRules: snippet.insertTextRules,
-    range,
-  }))
-
-  return { suggestions }
-}
-
-export const snippetsSTCompletion = ({ language, range }: { language: 'st' | 'il'; range: monaco.IRange }) => {
-  if (language !== 'st') {
-    return { suggestions: [] }
-  }
-
-  const suggestions = stSnippets.map((snippet) => ({
-    label: snippet.label,
-    insertText: snippet.insertText,
-    documentation: snippet.documentation,
-    kind: snippet.kind,
-    insertTextRules: snippet.insertTextRules,
-    range,
-  }))
-
-  return { suggestions }
 }
 
 export const pythonBuiltinsCompletion = ({ range }: { range: monaco.IRange }) => {

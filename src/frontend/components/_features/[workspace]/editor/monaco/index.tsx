@@ -4,7 +4,6 @@ import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { baseTypeEnum } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
@@ -23,17 +22,9 @@ import {
   cppStandardLibraryCompletion,
   keywordsCompletion,
   libraryCompletion,
-  snippetsSTCompletion,
   tableGlobalVariablesCompletion,
   tableVariablesCompletion,
 } from './completion'
-import { dataTypeCompletion } from './completion/datatype.completion'
-import { fbCompletion } from './completion/fb.completion'
-import {
-  updateDataTypeVariablesInTokenizer,
-  updateEnumValuesInTokenizer,
-  updateLocalVariablesInTokenizer,
-} from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
 import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
 import { applyThemeNow, ensureOpenplcThemes } from './theme-utils'
@@ -150,7 +141,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         configurations: {
           resource: { globalVariables },
         },
-        dataTypes,
       },
     },
     deviceDefinitions: {
@@ -296,16 +286,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [searchQuery, sensitiveCase, regularExpression])
 
-  useEffect(() => {
-    if (language === 'st' && pouVariables.length > 0) {
-      const variableNames = pouVariables
-        .filter((variable) => variable.name && variable.name.trim() !== '')
-        .map((variable) => variable.name)
-
-      updateLocalVariablesInTokenizer(variableNames)
-    }
-  }, [pouVariables, language])
-
   // Template injection when POU changes (for already mounted editors)
   useEffect(() => {
     if (language === 'python' && editorRef.current && pou) {
@@ -329,13 +309,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       }
     }
   }, [name, language])
-
-  useEffect(() => {
-    if (language === 'st' && dataTypes.length > 0) {
-      updateDataTypeVariablesInTokenizer(dataTypes)
-      updateEnumValuesInTokenizer(dataTypes)
-    }
-  }, [dataTypes, language])
 
   // -----------------------------------------------------------------------
   // File watching for external changes (editor-only, gated by hasFileWatcher)
@@ -590,128 +563,35 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     [sliceLibraries],
   )
 
-  const fbSuggestions = useCallback(
-    (range: monaco.IRange, model: monaco.editor.ITextModel, position: monaco.IPosition) => {
-      const customFBs = pous.filter((p) => p.pouType === 'function-block')
-
-      const suggestions = fbCompletion({
-        model,
-        position,
-        range,
-        pouVariables,
-        customFBs,
-        editorName: name,
-      }).suggestions
-      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
-      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
-      return { suggestions: uniqueSuggestions, labels }
-    },
-    [pouVariables, pous],
-  )
-
-  const dataTypeSuggestions = useCallback(
-    (range: monaco.IRange, model: monaco.editor.ITextModel, position: monaco.IPosition) => {
-      const suggestions = dataTypeCompletion({
-        model,
-        position,
-        range,
-        pouVariables,
-        customDataTypes: dataTypes,
-      }).suggestions
-      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
-      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
-      return { suggestions: uniqueSuggestions, labels }
-    },
-    [dataTypes, pouVariables],
-  )
-
   const keywordsSuggestions = useCallback(
     (range: monaco.IRange) => {
       const allSuggestions = keywordsCompletion({
         range,
-        language: language as 'st' | 'il',
+        language: 'il',
       }).suggestions
-
-      let filteredSuggestions = allSuggestions
-      let filteredLabels = allSuggestions.map((suggestion) => suggestion.label)
-      let uniqueSuggestions = allSuggestions
-
-      if (language === 'st') {
-        const stSnippetLabels = [
-          'if',
-          'ifelse',
-          'ifelseif',
-          'for',
-          'while',
-          'repeat',
-          'case',
-          'program',
-          'function',
-          'function_block',
-          'var',
-          'var_input',
-          'var_output',
-          'array',
-          'struct',
-          'comment_block',
-        ]
-
-        filteredSuggestions = allSuggestions.filter(
-          (suggestion) => !stSnippetLabels.includes(suggestion.label.toLowerCase()),
-        )
-
-        uniqueSuggestions = Array.from(new Map(filteredSuggestions.map((s) => [s.label, s])).values())
-        filteredLabels = uniqueSuggestions.map((suggestion) => suggestion.label)
-      }
-
-      return { suggestions: uniqueSuggestions, labels: filteredLabels }
-    },
-    [language],
-  )
-
-  const snippetsSTSuggestions = useCallback(
-    (range: monaco.IRange) => {
-      const suggestions = snippetsSTCompletion({
-        range,
-        language: language as 'st' | 'il',
-      }).suggestions
-      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
+      const uniqueSuggestions = Array.from(new Map(allSuggestions.map((s) => [s.label, s])).values())
       const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
       return { suggestions: uniqueSuggestions, labels }
     },
-    [language],
+    [],
   )
 
   // -----------------------------------------------------------------------
-  // ST/IL completion provider
+  // IL completion provider
+  //
+  // ST is intentionally absent — the strucpp LSP worker (booted
+  // from src/App.tsx) registers its own completion provider for
+  // language id `st` and supersedes everything this useEffect used
+  // to do.  IL keeps the hand-written keyword + variable + library
+  // path because strucpp's LSP doesn't cover IL syntax; the trivial
+  // mnemonic-completion is enough for what little IL gets written.
   // -----------------------------------------------------------------------
-
   useEffect(() => {
-    if (language === 'python' || language === 'cpp') {
-      return
-    }
+    if (language !== 'il') return
 
-    const disposable = monaco.languages.registerCompletionItemProvider(language, {
+    const disposable = monaco.languages.registerCompletionItemProvider('il', {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
-        const textUntilPosition = model.getValueInRange({
-          startLineNumber: position.lineNumber,
-          startColumn: 1,
-          endLineNumber: position.lineNumber,
-          endColumn: position.column,
-        })
-
-        const dotAccessMatch = textUntilPosition.match(/(\w+)\.$/)
-        if (dotAccessMatch) {
-          const variableName = dotAccessMatch[1]
-          const primitiveTypes: string[] = baseTypeEnum.options
-          const allVariables = [...pouVariables, ...(globalVariables ?? [])]
-          const variable = allVariables.find((v) => v.name === variableName)
-          if (variable && primitiveTypes.includes(variable.type.value)) {
-            return { suggestions: [] }
-          }
-        }
-
         const word = model.getWordUntilPosition(position)
         const range = {
           startLineNumber: position.lineNumber,
@@ -719,60 +599,18 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           startColumn: word.startColumn,
           endColumn: word.endColumn,
         }
-
-        const linesContent: Array<string[]> = []
-        model.getLinesContent().forEach((line) => {
-          linesContent.push(line.trim().split(' '))
-        })
-
-        const identifierTokens = linesContent.flat().flatMap((token) => {
-          return token.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || []
-        })
-
-        const identifiers = Array.from(
-          new Set(
-            identifierTokens
-              .map((token) => {
-                if (
-                  snippetsSTSuggestions(range).labels.includes(token) ||
-                  variablesSuggestions(range).labels.includes(token) ||
-                  globalVariablesSuggestions(range).labels.includes(token) ||
-                  librarySuggestions(range).labels.includes(token) ||
-                  keywordsSuggestions(range).labels.includes(token) ||
-                  fbSuggestions(range, model, position).labels.includes(token) ||
-                  dataTypeSuggestions(range, model, position).labels.includes(token)
-                ) {
-                  return null
-                }
-                return token
-              })
-              .filter((suggestion) => suggestion !== null),
-          ),
-        )
-        const identifiersSuggestions = identifiers.map((identifier) => ({
-          label: identifier,
-          kind: monaco.languages.CompletionItemKind.Text,
-          insertText: identifier,
-          range,
-        }))
-
         const suggestions = [
-          ...fbSuggestions(range, model, position).suggestions,
-          ...dataTypeSuggestions(range, model, position).suggestions,
-          ...snippetsSTSuggestions(range).suggestions,
           ...variablesSuggestions(range).suggestions,
           ...globalVariablesSuggestions(range).suggestions,
           ...librarySuggestions(range).suggestions,
           ...keywordsSuggestions(range).suggestions,
-          ...identifiersSuggestions,
         ]
         const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
-
         return { suggestions: uniqueSuggestions }
       },
     })
     return () => disposable.dispose()
-  }, [pouVariables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
+  }, [pouVariables, globalVariables, sliceLibraries, language])
 
   // -----------------------------------------------------------------------
   // C/C++ completion provider

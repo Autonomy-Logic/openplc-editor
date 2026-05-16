@@ -24,10 +24,10 @@ if (typeof (globalThis as any).structuredClone !== 'function') {
 /*
  * Pre-populate the system-library Zustand slice with the bundled .stlib
  * archives so helpers that look up FBs by name (`pou-helpers`,
- * `debug-tree-traversal`, `fb.completion`) find them in tests just like
- * they do at runtime. The production wiring loads these via IPC at app
- * startup; tests run in a node environment with no IPC bridge, so we
- * read the same files directly from the workspace.
+ * `debug-tree-traversal`) find them in tests just like they do at
+ * runtime. The production wiring loads these via IPC at app startup;
+ * tests run in a node environment with no IPC bridge, so we read the
+ * same files directly from the workspace.
  *
  * Cheap to do unconditionally: 4 .stlib JSONs total, parsed once per
  * test process — Jest reuses the setup across every spec file.
