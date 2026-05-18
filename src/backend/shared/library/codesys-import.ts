@@ -1,18 +1,11 @@
 /**
- * Thin wrapper around strucpp's CODESYS V2.3 / V3 library importer.
+ * Browser-pure wrapper around strucpp's CODESYS V2.3 / V3 importer.
  *
- * Strucpp does the heavy lifting (parsing the `.lib` / `.library`
- * binary, extracting the ST sources, building global-constants
- * tables).  This shim keeps the call surface stable so editor
- * consumers don't bind to strucpp's exact signature, and so the
- * web editor can call into the same logic without re-implementing
- * the importer.
- *
- * NOTE: strucpp's importer takes a filesystem PATH today, not a
- * buffer.  That's a platform-coupled choice on strucpp's side —
- * for the web editor the backend service will need to materialise
- * the upload to a temp file before calling this.  Worth tracking
- * as a follow-up but out of scope here.
+ * Bytes-in / result-out — no filesystem, no path coupling, so the
+ * same module compiles for the Electron main process AND for the
+ * web backend's browser-bundled service.  Whichever caller has the
+ * archive bytes in hand (Electron reads them off disk; web reads
+ * them off an HTTP upload body) passes them straight through.
  */
 
 import { loadStrucpp } from './strucpp-runtime'
@@ -30,7 +23,7 @@ export interface CodesysImportResult {
   errors?: string[]
 }
 
-export function importCodesysLibrary(filePath: string): CodesysImportResult {
+export async function importCodesysLibrary(bytes: Uint8Array): Promise<CodesysImportResult> {
   const strucpp = loadStrucpp()
-  return strucpp.importCodesysLibrary(filePath)
+  return strucpp.importCodesysLibraryFromBytes(bytes)
 }

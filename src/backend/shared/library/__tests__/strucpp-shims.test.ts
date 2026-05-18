@@ -1,15 +1,15 @@
 /**
- * Covers the thin strucpp shims that live in `backend/shared/library`.
- *
- * Each shim is a one-line delegation to the strucpp runtime, so the
- * tests inject a stub via `__setStrucppRuntimeForTests` and assert the
- * call shape.  `loadStrucpp`'s cache-hit branch is exercised by calling
- * twice with the stub set — the second call must not re-load.
+ * Covers the browser-pure strucpp shims that live in
+ * `backend/shared/library`.  Each shim is a one-line delegation to
+ * the strucpp runtime, so the tests inject a stub via
+ * `__setStrucppRuntimeForTests` and assert the call shape.
+ * `loadStrucpp`'s cache-hit branch is exercised by calling twice
+ * with the stub set — the second call must not re-load.
  */
 
 import { importCodesysLibrary } from '../codesys-import'
 import { compileStlib } from '../compile-stlib'
-import { loadStlibFromFile } from '../parse-stlib-archive'
+import { parseStlibArchive } from '../parse-stlib-archive'
 import { __setStrucppRuntimeForTests, loadStrucpp, type StrucppRuntime } from '../strucpp-runtime'
 
 function makeStub(overrides: Partial<StrucppRuntime> = {}): StrucppRuntime {
@@ -18,11 +18,11 @@ function makeStub(overrides: Partial<StrucppRuntime> = {}): StrucppRuntime {
     formatDiagnostic: jest.fn(),
     buildSourceMap: jest.fn(),
     getVersion: jest.fn(),
-    importCodesysLibrary: jest.fn().mockReturnValue({ success: true, sources: [] }),
-    loadStlibFromFile: jest.fn().mockReturnValue({ manifest: { name: 'IEC' } }),
+    importCodesysLibraryFromBytes: jest.fn().mockResolvedValue({ success: true, sources: [] }),
+    loadStlibFromString: jest.fn().mockReturnValue({ manifest: { name: 'IEC' } }),
     compileStlib: jest.fn().mockReturnValue({ success: true, archive: {} }),
     ...overrides,
-  }
+  } as StrucppRuntime
 }
 
 afterEach(() => {
@@ -60,29 +60,33 @@ describe('compileStlib shim', () => {
 })
 
 describe('importCodesysLibrary shim', () => {
-  it('delegates to strucpp.importCodesysLibrary with the file path', () => {
+  it('delegates to strucpp.importCodesysLibraryFromBytes with the raw bytes', async () => {
     const stub = makeStub({
-      importCodesysLibrary: jest.fn().mockReturnValue({ success: true, sources: [{ fileName: 'a.st', source: '' }] }),
+      importCodesysLibraryFromBytes: jest
+        .fn()
+        .mockResolvedValue({ success: true, sources: [{ fileName: 'a.st', source: '' }] }),
     })
     __setStrucppRuntimeForTests(stub)
 
-    const res = importCodesysLibrary('/path/to/lib.library')
+    const bytes = new Uint8Array([0x43, 0x6f, 0x44, 0x65])
+    const res = await importCodesysLibrary(bytes)
 
-    expect(stub.importCodesysLibrary).toHaveBeenCalledWith('/path/to/lib.library')
+    expect(stub.importCodesysLibraryFromBytes).toHaveBeenCalledWith(bytes)
     expect(res.success).toBe(true)
     expect(res.sources).toHaveLength(1)
   })
 })
 
-describe('loadStlibFromFile shim', () => {
-  it('delegates to strucpp.loadStlibFromFile with the archive path', () => {
+describe('parseStlibArchive shim', () => {
+  it('delegates to strucpp.loadStlibFromString with the archive text', () => {
     const archive = { manifest: { name: 'IEC' } }
-    const stub = makeStub({ loadStlibFromFile: jest.fn().mockReturnValue(archive) })
+    const stub = makeStub({ loadStlibFromString: jest.fn().mockReturnValue(archive) })
     __setStrucppRuntimeForTests(stub)
 
-    const res = loadStlibFromFile('/path/to/lib.stlib')
+    const text = '{"manifest":{"name":"IEC"}}'
+    const res = parseStlibArchive(text)
 
-    expect(stub.loadStlibFromFile).toHaveBeenCalledWith('/path/to/lib.stlib')
+    expect(stub.loadStlibFromString).toHaveBeenCalledWith(text)
     expect(res).toBe(archive)
   })
 })
