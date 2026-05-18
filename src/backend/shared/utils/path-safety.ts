@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Autonomy / OpenPLC Project
 /**
- * Path-safety helpers used at the boundary where untrusted input
- * (e.g. fields from a `.vpp` package's manifest, IPC payloads) is
- * combined with filesystem paths.
+ * Identifier-shape validation at the boundary where untrusted input
+ * (e.g. fields from a `.vpp` package's manifest, a library archive
+ * manifest, an IPC payload) is combined with filesystem paths.
  *
- * Two failure modes to close:
+ * Lives in `backend/shared/` because the library-build pipeline
+ * (`backend/shared/library/build-pipeline.ts`) runs in either
+ * platform's runtime and needs the same validation rule.  The pure
+ * regex check has no Node dependency.
  *
- *   1. Identifier injection — a manifest sets `package.id` to
- *      `"../../something"` and the editor resolves it under its
- *      packages directory; a downstream `rm -rf` then deletes
- *      whatever sits at the resolved path.
+ * The companion path-containment check (`assertPathContained`)
+ * lives in `backend/editor/utils/path-containment.ts` — it's
+ * Electron-only because the web edition has no local filesystem
+ * to defend.
  *
- *   2. Path traversal — a manifest sets `image: "../../etc/passwd"`
- *      or similar and a `readFile` call hands the file contents back
- *      across the IPC boundary.
+ * Closes one failure mode at the entry point:
  *
- * The two helpers below reject both at the entry point. Both throw
- * on rejection rather than returning a boolean — boolean callers tend
- * to forget the negation and use the value anyway.
+ *   Identifier injection — a manifest sets `package.id` to
+ *   `"../../something"` and downstream code resolves it under its
+ *   packages directory; a later `rm -rf` then deletes whatever
+ *   sits at the resolved path.
  */
-
-import path from 'node:path'
 
 /** Allowed shape for identifiers used as filesystem path components.
  *  Conservative on purpose: alphanumerics, dot, underscore, hyphen.
@@ -65,24 +65,4 @@ export function checkPathId(id: unknown, fieldName: string): string | null {
 export function validatePathId(id: string, fieldName: string): void {
   const error = checkPathId(id, fieldName)
   if (error !== null) throw new Error(error)
-}
-
-/**
- * Assert that `child` resolves to a path inside `parent`. Both inputs
- * are normalised through `path.resolve` before comparison so symlinks
- * in `parent` itself won't trick the check (the contract here is
- * "deny lexical traversal", not "deny TOCTOU symlink races").
- *
- * Throws with the expected vs actual paths so callers can surface a
- * useful error.
- */
-export function assertPathContained(parent: string, child: string, fieldName: string): void {
-  const parentResolved = path.resolve(parent)
-  const childResolved = path.resolve(child)
-  const rel = path.relative(parentResolved, childResolved)
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error(
-      `${fieldName} resolves outside of ${parentResolved} (got ${childResolved})`,
-    )
-  }
 }

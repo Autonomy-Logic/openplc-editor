@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, w
 import { join } from 'path'
 
 import { PackageManifestSchema } from '../../../middleware/shared/ports/package-manifest-schema'
-import { assertPathContained, validatePathId } from '../../shared/utils/path-safety'
+import { validatePathId } from '../../shared/utils/path-safety'
+import { assertPathContained } from '../utils/path-containment'
 import type { ImportResult, InstalledPackage, PackageManifest, PackageRegistry } from './types'
 
 class PackageManagerModule {
