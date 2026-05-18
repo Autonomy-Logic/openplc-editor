@@ -8,6 +8,7 @@ import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
+import { pouUri } from '../../../../../services/st-lsp'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { applyAcceptedHunks, computeHunks } from '../../../../../utils/ai-diff-review'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
@@ -159,6 +160,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   // Create a unique Monaco path for editor (prevents model caching across projects)
   const uniqueMonacoPath = capabilities.hasLocalFilesystem && projectPath ? `${projectPath}${path}` : path
+
+  // ST POUs use the STruC++ LSP — Monaco's model URI must match the
+  // URI the LSP service opens documents under (`inmemory://pou/<name>.st`),
+  // otherwise completion/hover/definition queries arrive with a URI
+  // the worker doesn't know and silently return empty.  Other languages
+  // keep the project-scoped filesystem path so model caching still
+  // isolates between projects.
+  const editorModelPath = language === 'st' ? pouUri(name) : uniqueMonacoPath
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
@@ -452,7 +461,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     // Guard: ensure the model matches the current POU. During tab switches the memo may
     // fire before @monaco-editor/react has swapped the model, so we'd scan the wrong file.
-    const expectedUri = monacoRef.current.Uri.file(uniqueMonacoPath).toString()
+    // ST models live under `inmemory://pou/<name>.st` (the LSP scheme); other languages
+    // keep their project-scoped filesystem URI.
+    const expectedUri =
+      language === 'st'
+        ? editorModelPath
+        : monacoRef.current.Uri.file(uniqueMonacoPath).toString()
     if (model.uri.toString() !== expectedUri) return null
 
     const prefix = fbInstanceContext
@@ -1132,6 +1146,22 @@ void loop()
     dropIntoEditor: { enabled: true },
     readOnly: isDebuggerVisible,
     quickSuggestions: capabilities.hasAIAssistant ? false : undefined,
+    // Monaco's standalone themes default `semanticHighlighting=false`,
+    // so without this flag the STruC++ LSP's semantic-tokens response
+    // is silently dropped — `isSemanticColoringEnabled()` short-circuits
+    // before the provider's result is ever consumed.  Forcing it on
+    // unblocks variable/function/parameter/type coloring on ST POUs.
+    'semanticHighlighting.enabled': true,
+    // Hover / suggest / signature-help / parameter-hints widgets
+    // normally render absolutely-positioned inside Monaco's own
+    // `.overflowingContentWidgets` container.  In this editor the
+    // Monaco panel sits below the variables table, and that table
+    // visually clips any hover anchored on the first few lines —
+    // Monaco's own "flip direction" logic can't see past its own
+    // bounds.  `fixedOverflowWidgets` re-parents those overlays to
+    // `document.body` with `position: fixed`, so they escape both
+    // the editor container and the variables table above it.
+    fixedOverflowWidgets: true,
     ...(capabilities.hasAIAssistant && {
       inlineSuggest: {
         enabled: true,
@@ -1299,11 +1329,11 @@ void loop()
     <>
       <div id='editor drop handler' className='oplc-monaco-wrapper relative h-full w-full' onDrop={handleDrop}>
         <PrimitiveEditor
-          key={capabilities.hasLocalFilesystem ? undefined : path}
+          key={capabilities.hasLocalFilesystem ? undefined : editorModelPath}
           options={monacoEditorUserOptions}
           height='100%'
           width='100%'
-          path={uniqueMonacoPath}
+          path={editorModelPath}
           language={language}
           defaultValue={''}
           value={localText}

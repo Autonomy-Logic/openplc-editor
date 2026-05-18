@@ -63,14 +63,41 @@ function buildDeclarationLine(pou: PLCPou): string {
  *     editors keeps its own native autocomplete / tooling.
  */
 export function serializePouSignatureToST(pou: PLCPou): string {
+  return serializePouSignatureToSTWithBodyOffset(pou).text
+}
+
+/**
+ * Same as `serializePouSignatureToST` but also returns the 0-indexed
+ * line number where the body starts inside the serialized text.
+ *
+ * Why: Monaco's ST editor only displays the body (variables go in a
+ * separate table), but strucpp parses the whole serialized stub —
+ * declaration + VAR blocks + body — to resolve cross-symbol
+ * references.  Every position strucpp emits (diagnostics, semantic
+ * tokens, definition links) is therefore offset by the preamble's
+ * line count.  Providers and the diagnostics bridge subtract this
+ * offset to map LSP coordinates back to Monaco's body-only view.
+ *
+ * Computed as the line count of `${declaration}\n${variables}\n` —
+ * the literal prefix the template prepends before `${body}`.
+ */
+export function serializePouSignatureToSTWithBodyOffset(pou: PLCPou): {
+  text: string
+  bodyLineOffset: number
+} {
   const declaration = buildDeclarationLine(pou)
   const variables = generateIecVariablesToString(pou.interface?.variables ?? [])
-  const body =
-    pou.body.language === 'st'
-      ? (pou.body.value as string)
-      : OPAQUE_BODY_PLACEHOLDER
+  const body = pou.body.language === 'st' ? (pou.body.value as string) : OPAQUE_BODY_PLACEHOLDER
   const endKeyword = getEndKeyword(pou.pouType)
-  return `${declaration}\n${variables}\n${body}\n${endKeyword}`
+  const prefix = `${declaration}\n${variables}\n`
+  // `prefix` ends with '\n', so its split count = lines-before-body + 1
+  // for the empty terminating slice; the (-1) gives the 0-indexed body
+  // start line.
+  const bodyLineOffset = prefix.split('\n').length - 1
+  return {
+    text: `${prefix}${body}\n${endKeyword}`,
+    bodyLineOffset,
+  }
 }
 
 export { OPAQUE_BODY_PLACEHOLDER }

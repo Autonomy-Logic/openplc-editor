@@ -35,31 +35,41 @@ import type {
   TextEdit as LspTextEdit,
 } from 'vscode-languageserver-protocol'
 
+import { getBodyLineOffset } from './body-offsets'
+
 // ---------------------------------------------------------------------------
 // Position / Range
+//
+// All converters accept an optional `lineOffset` to account for the
+// preamble (declaration + VAR blocks) the project-sync layer prepends
+// to ST POUs before handing them to the worker.  Monaco's body-only
+// view starts at line 0; the worker sees the same body at line
+// `bodyLineOffset`.  Outbound (Monaco → LSP) adds the offset; inbound
+// (LSP → Monaco) subtracts it.  Defaults to 0 so non-translating
+// callers (tests, future read-only flows) keep working unchanged.
 // ---------------------------------------------------------------------------
 
-export function monacoPositionToLsp(pos: monaco.IPosition): LspPosition {
-  return { line: pos.lineNumber - 1, character: pos.column - 1 }
+export function monacoPositionToLsp(pos: monaco.IPosition, lineOffset = 0): LspPosition {
+  return { line: pos.lineNumber - 1 + lineOffset, character: pos.column - 1 }
 }
 
-export function lspPositionToMonaco(pos: LspPosition): monaco.IPosition {
-  return { lineNumber: pos.line + 1, column: pos.character + 1 }
+export function lspPositionToMonaco(pos: LspPosition, lineOffset = 0): monaco.IPosition {
+  return { lineNumber: pos.line + 1 - lineOffset, column: pos.character + 1 }
 }
 
-export function lspRangeToMonaco(range: LspRange): monaco.IRange {
+export function lspRangeToMonaco(range: LspRange, lineOffset = 0): monaco.IRange {
   return {
-    startLineNumber: range.start.line + 1,
+    startLineNumber: range.start.line + 1 - lineOffset,
     startColumn: range.start.character + 1,
-    endLineNumber: range.end.line + 1,
+    endLineNumber: range.end.line + 1 - lineOffset,
     endColumn: range.end.character + 1,
   }
 }
 
-export function monacoRangeToLsp(range: monaco.IRange): LspRange {
+export function monacoRangeToLsp(range: monaco.IRange, lineOffset = 0): LspRange {
   return {
-    start: { line: range.startLineNumber - 1, character: range.startColumn - 1 },
-    end: { line: range.endLineNumber - 1, character: range.endColumn - 1 },
+    start: { line: range.startLineNumber - 1 + lineOffset, character: range.startColumn - 1 },
+    end: { line: range.endLineNumber - 1 + lineOffset, character: range.endColumn - 1 },
   }
 }
 
@@ -75,13 +85,14 @@ export function monacoRangeToLsp(range: monaco.IRange): LspRange {
 export function lspDiagnosticToMonaco(
   diag: LspDiagnostic,
   monacoApi: typeof monaco,
+  lineOffset = 0,
 ): monaco.editor.IMarkerData {
   const severity = lspSeverityToMonaco(diag.severity, monacoApi)
   return {
     severity,
     message: diag.message,
     source: diag.source ?? 'strucpp',
-    ...lspRangeToMonaco(diag.range),
+    ...lspRangeToMonaco(diag.range, lineOffset),
     ...(diag.code !== undefined ? { code: String(diag.code) } : {}),
   }
 }
@@ -117,11 +128,12 @@ export function lspCompletionToMonaco(
   item: LspCompletionItem,
   defaultRange: monaco.IRange,
   monacoApi: typeof monaco,
+  lineOffset = 0,
 ): monaco.languages.CompletionItem {
   const range = item.textEdit
     ? 'range' in item.textEdit
-      ? lspRangeToMonaco(item.textEdit.range)
-      : lspRangeToMonaco(item.textEdit.insert)
+      ? lspRangeToMonaco(item.textEdit.range, lineOffset)
+      : lspRangeToMonaco(item.textEdit.insert, lineOffset)
     : defaultRange
 
   const insertText = item.textEdit
@@ -159,12 +171,13 @@ export function lspCompletionListToMonaco(
   list: LspCompletionList | LspCompletionItem[] | null,
   defaultRange: monaco.IRange,
   monacoApi: typeof monaco,
+  lineOffset = 0,
 ): monaco.languages.CompletionList {
   if (!list) return { suggestions: [] }
   const items = Array.isArray(list) ? list : list.items
   const isIncomplete = Array.isArray(list) ? false : list.isIncomplete
   return {
-    suggestions: items.map((item) => lspCompletionToMonaco(item, defaultRange, monacoApi)),
+    suggestions: items.map((item) => lspCompletionToMonaco(item, defaultRange, monacoApi, lineOffset)),
     incomplete: isIncomplete,
   }
 }
@@ -173,7 +186,10 @@ export function lspCompletionListToMonaco(
 // Hover
 // ---------------------------------------------------------------------------
 
-export function lspHoverToMonaco(hover: LspHover | null): monaco.languages.Hover | null {
+export function lspHoverToMonaco(
+  hover: LspHover | null,
+  lineOffset = 0,
+): monaco.languages.Hover | null {
   if (!hover) return null
   const contents = Array.isArray(hover.contents) ? hover.contents : [hover.contents]
   const monacoContents = contents.map((c) => {
@@ -183,7 +199,7 @@ export function lspHoverToMonaco(hover: LspHover | null): monaco.languages.Hover
   })
   return {
     contents: monacoContents,
-    ...(hover.range ? { range: lspRangeToMonaco(hover.range) } : {}),
+    ...(hover.range ? { range: lspRangeToMonaco(hover.range, lineOffset) } : {}),
   }
 }
 
@@ -191,10 +207,14 @@ export function lspHoverToMonaco(hover: LspHover | null): monaco.languages.Hover
 // Definition / Location
 // ---------------------------------------------------------------------------
 
+// Location URIs may refer to ANY open document, not just the current
+// one, so the body offset is looked up per-URI rather than passed in
+// from the call site.  That keeps go-to-definition correct when the
+// target POU has a different VAR-block size than the source POU.
 export function lspLocationToMonaco(loc: LspLocation): monaco.languages.Location {
   return {
     uri: { toString: () => loc.uri } as monaco.Uri,
-    range: lspRangeToMonaco(loc.range),
+    range: lspRangeToMonaco(loc.range, getBodyLineOffset(loc.uri)),
   }
 }
 
@@ -206,7 +226,7 @@ export function lspLocationsToMonaco(
   const arr = Array.isArray(locs) ? locs : [locs]
   return arr.map((l) => ({
     uri: monacoApi.Uri.parse(l.uri),
-    range: lspRangeToMonaco(l.range),
+    range: lspRangeToMonaco(l.range, getBodyLineOffset(l.uri)),
   }))
 }
 
@@ -249,9 +269,9 @@ export function lspSymbolToMonaco(sym: LspSymbolInformation): {
 // Text edits (used by rename + formatting)
 // ---------------------------------------------------------------------------
 
-export function lspTextEditToMonaco(edit: LspTextEdit): monaco.languages.TextEdit {
+export function lspTextEditToMonaco(edit: LspTextEdit, lineOffset = 0): monaco.languages.TextEdit {
   return {
-    range: lspRangeToMonaco(edit.range),
+    range: lspRangeToMonaco(edit.range, lineOffset),
     text: edit.newText,
   }
 }

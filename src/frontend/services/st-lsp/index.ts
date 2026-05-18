@@ -22,10 +22,11 @@ import {
   InitializedNotification,
   type InitializeParams,
   InitializeRequest,
+  type InitializeResult,
 } from 'vscode-languageserver-protocol'
 
 import { attachDiagnosticsBridge } from './diagnostics'
-import { registerStLspProviders } from './providers'
+import { registerStLspProviders, registerStLspSemanticTokens } from './providers'
 import { createLspTransport, type LspTransport } from './transport'
 import type { StLspService, StLspStartOptions } from './types'
 
@@ -91,6 +92,10 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   const diagnosticsDisposable = monaco
     ? attachDiagnosticsBridge(connection, monaco)
     : null
+  // Semantic-tokens provider needs the legend from the worker's
+  // `initialize` result, so it can't be registered synchronously
+  // alongside the others.  Filled in inside the ready promise below.
+  let semanticTokensDisposable: import('monaco-editor').IDisposable | null = null
 
   // ---------------------------------------------------------------------------
   // LSP handshake — initialize, initialized, push stlibs
@@ -112,16 +117,40 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
           documentSymbol: { hierarchicalDocumentSymbolSupport: true },
           rename: { prepareSupport: true },
           formatting: {},
+          semanticTokens: {
+            requests: { full: true },
+            tokenTypes: [],
+            tokenModifiers: [],
+            formats: ['relative'],
+          },
         },
         workspace: {},
       },
       workspaceFolders: null,
     }
-    // We don't currently use anything from the InitializeResult's
-    // capabilities; a runtime check would belong here when we
-    // start advertising capabilities the worker may not support.
-    await connection.sendRequest(InitializeRequest.type, initParams)
+    const initResult = (await connection.sendRequest(
+      InitializeRequest.type,
+      initParams,
+    )) as InitializeResult
     await connection.sendNotification(InitializedNotification.type, {})
+
+    // Wire semantic tokens once we know the worker's legend.  The
+    // worker advertises `semanticTokensProvider: { legend, full: true }`;
+    // if it ever drops the capability, we silently skip registration
+    // so ST still renders (as plain text), with completion/hover/etc.
+    // unaffected.
+    const legend = initResult.capabilities.semanticTokensProvider
+    if (monaco && legend && 'legend' in legend && legend.legend) {
+      semanticTokensDisposable = registerStLspSemanticTokens({
+        connection,
+        monacoApi: monaco,
+        legend: {
+          tokenTypes: [...legend.legend.tokenTypes],
+          tokenModifiers: [...legend.legend.tokenModifiers],
+        },
+      })
+    }
+
     await pushAllStlibs()
   })().catch((err) => {
     console.error('[strucpp-lsp] initialize failed:', err)
@@ -209,6 +238,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       disposed = true
       providerDisposable?.dispose()
       diagnosticsDisposable?.dispose()
+      semanticTokensDisposable?.dispose()
       transport.dispose()
     },
   }

@@ -13,6 +13,7 @@ import {
   PublishDiagnosticsNotification,
 } from 'vscode-languageserver-protocol'
 
+import { getBodyLineOffset } from './body-offsets'
 import { lspDiagnosticToMonaco } from './converters'
 
 const MARKER_OWNER = 'strucpp-lsp'
@@ -32,10 +33,17 @@ export function attachDiagnosticsBridge(
         .getModels()
         .find((m) => m.uri.toString() === params.uri)
       if (!model) return
+      // Worker emits diagnostics in full-document coordinates; the
+      // body-line offset shifts them back to Monaco's body-only view.
+      // Diagnostics that fall in the preamble end up with negative
+      // line numbers — Monaco's marker service silently discards
+      // those, which is the right outcome (we can't show a marker on
+      // a line the editor doesn't render).
+      const offset = getBodyLineOffset(params.uri)
       monacoApi.editor.setModelMarkers(
         model,
         MARKER_OWNER,
-        params.diagnostics.map((d) => lspDiagnosticToMonaco(d, monacoApi)),
+        params.diagnostics.map((d) => lspDiagnosticToMonaco(d, monacoApi, offset)),
       )
     },
   )

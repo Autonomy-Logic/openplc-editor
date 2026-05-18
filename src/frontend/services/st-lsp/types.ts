@@ -22,6 +22,15 @@ export const POU_URI_AUTHORITY = 'pou'
 /** URI scheme for graphical-POU signature stubs. */
 export const STUB_URI_AUTHORITY = 'stub'
 
+/**
+ * URI for the synthesized `TYPE…END_TYPE` document carrying every
+ * user-defined `PLCDataType` (structures, enumerations, arrays).
+ * Strucpp parses this once at sync time so any POU that references
+ * a user data type resolves it.  Single fixed URI per session — the
+ * project's data-type set is global, not per-POU.
+ */
+export const DATA_TYPES_URI = 'inmemory://datatypes/__project__.st'
+
 /** Public service the rest of the renderer talks to. */
 export interface StLspService {
   /**

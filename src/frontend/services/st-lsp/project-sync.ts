@@ -25,10 +25,12 @@
  * `refreshStlibs()` on the service.
  */
 
-import type { PLCPou } from '../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou } from '../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../store'
-import { serializePouSignatureToST } from '../../utils/PLC/pou-signature-serializer'
-import { pouUri, type StLspService,stubUri } from './types'
+import { serializeDataTypesToST } from '../../utils/PLC/data-type-serializer'
+import { serializePouSignatureToSTWithBodyOffset } from '../../utils/PLC/pou-signature-serializer'
+import { deleteBodyLineOffset, setBodyLineOffset } from './body-offsets'
+import { DATA_TYPES_URI, pouUri, type StLspService,stubUri } from './types'
 
 /**
  * Determines whether a POU's source goes through the live-body
@@ -38,17 +40,6 @@ import { pouUri, type StLspService,stubUri } from './types'
  */
 function uriForPou(pou: PLCPou): string {
   return pou.body.language === 'st' ? pouUri(pou.name) : stubUri(pou.name)
-}
-
-/**
- * Builds the ST text the worker should see for a POU.  ST POUs
- * pass their body verbatim; everything else gets a signature stub.
- * Wrapping `serializePouSignatureToST` lets future per-language
- * tweaks (e.g. inlining the IL body as a comment block) land
- * without touching every call site.
- */
-function textForPou(pou: PLCPou): string {
-  return serializePouSignatureToST(pou)
 }
 
 interface Snapshot {
@@ -78,26 +69,58 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   const snapshot = emptySnapshot()
   let disposed = false
 
+  function reconcileDataTypes(dataTypes: PLCDataType[]): void {
+    if (disposed) return
+    // Single fixed-URI document that carries the whole TYPE block.
+    // Empty `dataTypes` (or types that all serialise to nothing) →
+    // close any previously-open document so strucpp doesn't keep a
+    // stale set around.
+    const nextText = serializeDataTypesToST(dataTypes)
+    const previousText = snapshot.contentByUri.get(DATA_TYPES_URI)
+    if (nextText.length === 0) {
+      if (previousText !== undefined) {
+        service.closeDocument(DATA_TYPES_URI)
+        snapshot.contentByUri.delete(DATA_TYPES_URI)
+      }
+      return
+    }
+    if (previousText === undefined) {
+      service.openDocument(DATA_TYPES_URI, nextText)
+    } else if (previousText !== nextText) {
+      snapshot.version += 1
+      service.changeDocument(DATA_TYPES_URI, nextText, snapshot.version)
+    }
+    snapshot.contentByUri.set(DATA_TYPES_URI, nextText)
+  }
+
   function reconcile(pous: PLCPou[]): void {
     if (disposed) return
 
     const seenNames = new Set<string>()
     const seenUris = new Set<string>()
+    // The data-types document survives every POU reconcile — mark its
+    // URI as seen so the catch-all cleanup loop below doesn't close it.
+    seenUris.add(DATA_TYPES_URI)
 
     for (const pou of pous) {
       seenNames.add(pou.name)
       const nextUri = uriForPou(pou)
       const previousUri = snapshot.uriByName.get(pou.name)
-      const nextText = textForPou(pou)
+      const { text: nextText, bodyLineOffset } = serializePouSignatureToSTWithBodyOffset(pou)
 
       // POU name unchanged but URI switched (body language change).
       // Send didClose for the previous URI before didOpen on the new.
       if (previousUri && previousUri !== nextUri) {
         service.closeDocument(previousUri)
         snapshot.contentByUri.delete(previousUri)
+        deleteBodyLineOffset(previousUri)
       }
 
       seenUris.add(nextUri)
+      // Track the body offset so providers/diagnostics can translate
+      // LSP line numbers back to Monaco's body-only view.  Stored on
+      // every reconcile because variable-count changes shift the body.
+      setBodyLineOffset(nextUri, bodyLineOffset)
       const previousText = snapshot.contentByUri.get(nextUri)
       if (previousText === undefined) {
         service.openDocument(nextUri, nextText)
@@ -115,12 +138,14 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
       service.closeDocument(uri)
       snapshot.contentByUri.delete(uri)
       snapshot.uriByName.delete(name)
+      deleteBodyLineOffset(uri)
     }
     // Defensive: also drop content entries whose URIs vanished
     // (e.g. a POU renamed at the same time as a language flip).
     for (const uri of snapshot.contentByUri.keys()) {
       if (!seenUris.has(uri)) {
         snapshot.contentByUri.delete(uri)
+        deleteBodyLineOffset(uri)
       }
     }
   }
@@ -129,27 +154,41 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // project-level open/close also reconciles.  Equality compares
   // by reference; the project slice uses Immer so pous array
   // references update on every mutation.
-  const unsubscribe = openPLCStoreBase.subscribe(
+  const unsubscribePous = openPLCStoreBase.subscribe(
     (state) => state.project.data.pous,
     (pous) => reconcile(pous),
   )
+  // Data types live in their own slice and change independently of
+  // POUs (a user can add an enum without touching any POU body).
+  // Subscribe separately so a type-only mutation refreshes the LSP
+  // without waiting on a POU edit.
+  const unsubscribeDataTypes = openPLCStoreBase.subscribe(
+    (state) => state.project.data.dataTypes,
+    (dataTypes) => reconcileDataTypes(dataTypes),
+  )
 
-  // Initial reconcile against whatever is already in the store.
+  // Initial reconcile against whatever is already in the store.  The
+  // data types load first so any POU that references them resolves
+  // on the first didOpen, not on a follow-up didChange.
+  reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
   reconcile(openPLCStoreBase.getState().project.data.pous)
 
   return {
     resync() {
       if (disposed) return
+      reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
       reconcile(openPLCStoreBase.getState().project.data.pous)
     },
     dispose() {
       if (disposed) return
       disposed = true
-      unsubscribe()
+      unsubscribePous()
+      unsubscribeDataTypes()
       // Close every doc we'd opened so the worker stays consistent
       // if the service is restarted in the same session.
       for (const uri of snapshot.contentByUri.keys()) {
         service.closeDocument(uri)
+        deleteBodyLineOffset(uri)
       }
       snapshot.contentByUri.clear()
       snapshot.uriByName.clear()
