@@ -30,7 +30,8 @@ export function collectAllSlaveNames(remoteDevices: RemoteDeviceForNameCollectio
 
 /**
  * Return `base` if unused, otherwise the first `${base}_NN` (two-digit padded)
- * not present in `existing`. Pad widens past 99 automatically.
+ * not present in `existing`. Two-digit pad doesn't truncate, so 3+ digit
+ * indices pass through unchanged.
  */
 export function generateUniqueSlaveName(base: string, existing: Iterable<string>): string {
   const taken = new Set(existing)

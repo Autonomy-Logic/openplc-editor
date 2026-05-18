@@ -346,9 +346,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!device) return { ok: false, message: 'EtherCAT device not found' }
 
       const oldName = device.name
-      // Reject if another slave (any master) already owns the target name.
-      // Same-name rename is a no-op the UI short-circuits before us, but we
-      // still allow it here so the action stays idempotent.
+      // Only *rejecting* enforcement of slave-name uniqueness — scan-bus add
+      // auto-suffixes instead. Tabs/editor/file slices are name-keyed and break
+      // silently on duplicates, so new write paths must replicate one strategy.
+      // Same-name rename is allowed (the action stays idempotent).
       if (newName !== oldName && collectAllSlaveNames(state.project.data.remoteDevices).has(newName)) {
         return { ok: false, message: `An EtherCAT slave named "${newName}" already exists in this project` }
       }

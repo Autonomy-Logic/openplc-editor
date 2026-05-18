@@ -7,6 +7,7 @@ import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-p
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
+import { getShortDeviceName } from '@root/frontend/utils/short-device-name'
 import { collectAllSlaveNames, generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
 import type {
   ConfiguredEtherCATDevice,
@@ -410,10 +411,7 @@ const EtherCATEditor = () => {
         for (const m of enriched.channelMappings ?? []) usedAddresses.add(m.iecLocation)
       }
 
-      // Prefer the short product code from <Type> (e.g. "EL1809") over the
-      // long localized name from <Name LcId="1033"> — the long form is
-      // verbose and identical for any two units of the same model.
-      const baseName = bestMatch.esiDevice.type.name || bestMatch.esiDevice.name || match.device.name
+      const baseName = getShortDeviceName(bestMatch.esiDevice)
       const uniqueName = generateUniqueSlaveName(baseName, takenNames)
       takenNames.add(uniqueName)
 
@@ -484,8 +482,7 @@ const EtherCATEditor = () => {
       const nextPosition =
         configuredDevices.length > 0 ? Math.max(...configuredDevices.map((d) => d.position ?? 0)) + 1 : 1
 
-      // Prefer the short product code from <Type> over the long localized name.
-      const baseName = device.type.name || device.name
+      const baseName = getShortDeviceName(device)
       const uniqueName = generateUniqueSlaveName(baseName, collectAllSlaveNames(project.data.remoteDevices))
 
       const newDevice: ConfiguredEtherCATDevice = {
