@@ -1011,25 +1011,15 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Bridge method consumed by the compiler module.  Walks the
-   * library manager's registry to turn `project.libraries` names
-   * into the disk directories strucpp's `libraryPaths` should scan,
-   * always including bundled libraries.  Bridge owns the library
-   * manager instance, so the compiler module doesn't need its own
-   * reference.
-   */
-  resolveLibraryDirs = (enabledNames: string[]): { dirs: string[]; missing: string[] } =>
-    this.libraryManagerModule.resolveEnabledLibraryDirs(enabledNames)
-
-  /**
-   * Bridge method consumed by the Library Project build pipeline.
-   * Returns the parsed `.stlib` archives for every enabled library
-   * — bundled + the user-installed subset — so strucpp's
-   * `compileStlib` can resolve cross-library symbol references when
-   * the library under build depends on another archive (e.g. an
-   * OSCAT-using utility library).  `missing` mirrors the same
-   * shape `resolveLibraryDirs` returns so callers fail with the
-   * same diagnostic.
+   * Bridge method consumed by the compiler module and the Library
+   * Project build pipeline.  Resolves project-enabled library names
+   * to parsed `.stlib` archives — bundled libs are always included,
+   * the user-installed subset is filtered by name, and missing-
+   * but-enabled names come back for the caller to surface as a
+   * pre-compile "open the Library Manager" error.  Same call feeds
+   * both the program build (strucpp.compile's `libraries:` option)
+   * and the library build (compileStlib's dependency list) so the
+   * verify pass can't drift from the actual compile.
    */
   loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
     this.libraryManagerModule.loadEnabledArchives(enabledNames)

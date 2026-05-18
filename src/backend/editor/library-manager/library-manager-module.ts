@@ -128,35 +128,18 @@ export class LibraryManagerModule {
   }
 
   /**
-   * Resolve enabled libraries to the directory list strucpp's
-   * `libraryPaths` option expects.  Each directory is a root that
-   * `strucpp.discoverStlibs` walks for `.stlib` files.
-   *
-   * Returns:
-   *   - bundled directory always (it carries the full canonical set
-   *     in one folder; bundled libs are always-on).
-   *   - per-library directories for `enabledNames` that resolve to a
-   *     registered user library on disk.  Each user lib is its own
-   *     `{userData}/libraries/<name>/` so we can include only the
-   *     enabled subset without exposing disabled ones.
-   *
-   * `missing` lists enabled names that have no archive on disk —
-   * the caller surfaces this as a pre-compile error so the user gets
-   * a clear "open the Library Manager" message instead of strucpp's
-   * per-symbol "function not found" cascade.
-   */
-  /**
    * Load the full parsed archives for every enabled library — both
-   * bundled and user-installed.  Used by the Library Project build
-   * pipeline to pass `dependencies` into strucpp's `compileStlib` so
-   * a user library that references external symbols (e.g. an OSCAT
-   * function) resolves them at compile time.
+   * bundled and user-installed.  Used by the program build pipeline
+   * (fed into `strucpp.compile`'s `libraries:` option) and by the
+   * Library Project build pipeline (fed into `compileStlib`'s
+   * dependency list so a library that references external symbols —
+   * an OSCAT function, say — resolves at compile time).
    *
    * Bundled libraries are always-on and included unconditionally;
    * user libraries are filtered by `enabledNames`.  `missing` lists
-   * enabled names that have no archive on disk — same shape
-   * `resolveEnabledLibraryDirs` returns, so the caller can surface
-   * a single "install or remove" error before strucpp runs.
+   * enabled names that have no archive on disk so the caller can
+   * surface a single "install or remove" error before strucpp runs,
+   * instead of strucpp's per-symbol "function not found" cascade.
    */
   loadEnabledArchives(enabledNames: string[]): { archives: StlibArchiveDTO[]; missing: string[] } {
     const archives: StlibArchiveDTO[] = []
@@ -177,26 +160,6 @@ export class LibraryManagerModule {
       archives.push(archive)
     }
     return { archives, missing }
-  }
-
-  resolveEnabledLibraryDirs(enabledNames: string[]): { dirs: string[]; missing: string[] } {
-    const dirs: string[] = []
-    if (existsSync(this.bundledDir)) {
-      dirs.push(this.bundledDir)
-    }
-    const registry = this.readRegistry()
-    const missing: string[] = []
-    for (const name of enabledNames) {
-      const entry = registry.libraries[name]
-      if (entry && existsSync(entry.stlibPath)) {
-        // Each user library lives under its own folder; pass that
-        // (not the librariesDir root) so disabled libs stay out.
-        dirs.push(join(this.librariesDir, name))
-      } else {
-        missing.push(name)
-      }
-    }
-    return { dirs, missing }
   }
 
   /**
@@ -263,7 +226,12 @@ export class LibraryManagerModule {
   }
 
   private async installFromCodesys(filePath: string): Promise<LibraryInstallResult> {
-    const importResult = sharedImportCodesys(filePath)
+    // Read the .lib/.library bytes here (Node-only territory) and
+    // hand them to the browser-pure shared importer.  The bytes-in
+    // shape is the same the web backend uses against an HTTP upload
+    // body, so the shared importer doesn't grow a path coupling.
+    const bytes = new Uint8Array(readFileSync(filePath))
+    const importResult = await sharedImportCodesys(bytes)
     if (!importResult.success || !importResult.sources) {
       const errs = (importResult.errors ?? ['unknown error']).join('; ')
       return { success: false, error: `CODESYS import failed: ${errs}` }
