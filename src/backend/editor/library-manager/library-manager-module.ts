@@ -6,7 +6,8 @@ import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-p
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
 import { importCodesysLibrary as sharedImportCodesys } from '../../shared/library/codesys-import'
 import { compileStlib as sharedCompileStlib } from '../../shared/library/compile-stlib'
-import { assertPathContained, validatePathId } from '../../shared/utils/path-safety'
+import { assertPathContained } from '../utils/path-containment'
+import { validatePathId } from '../../shared/utils/path-safety'
 import type { LibraryRegistry } from './types'
 
 /**
@@ -43,16 +44,14 @@ export class LibraryManagerModule {
   }
 
   /**
-   * Resolve the strucpp-shipped bundled-libs directory.  Dev runs
-   * point at the repo's `resources/strucpp/libs/`, packaged builds
-   * at `process.resourcesPath/strucpp/libs/` — same logic the
-   * existing `system-libraries:load-bundled` IPC handler uses.
+   * Resolve the strucpp-shipped bundled-libs directory.  Reads
+   * directly from the strucpp package — dev mode resolves to
+   * `<repo>/node_modules/strucpp/libs/`, packaged builds to the
+   * same path inside asar.  Electron's `readdirSync` / `readFileSync`
+   * handle asar paths transparently, so no `asarUnpack` is needed.
    */
   private resolveDefaultBundledDir(): string {
-    const isDev = process.env.NODE_ENV === 'development'
-    return isDev
-      ? join(process.cwd(), 'resources', 'strucpp', 'libs')
-      : join(process.resourcesPath, 'strucpp', 'libs')
+    return join(app.getAppPath(), 'node_modules', 'strucpp', 'libs')
   }
 
   // -------------------------------------------------------------------------

@@ -3,6 +3,10 @@ import { CompilerModule } from './compiler-module'
 jest.mock('electron', () => ({
   app: {
     getPath: jest.fn().mockReturnValue('/tmp/mock-user-data'),
+    // strucppRuntimeDir resolves under `<app-root>/node_modules/strucpp/...`;
+    // any non-empty string works for the type-asserting tests.
+    getAppPath: jest.fn().mockReturnValue('/tmp/mock-app-root'),
+    getVersion: jest.fn().mockReturnValue('0.0.0-test'),
   },
   dialog: {
     showSaveDialog: jest.fn().mockResolvedValue({ filePath: '/tmp/mock-save-path' }),

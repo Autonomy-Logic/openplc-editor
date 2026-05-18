@@ -38,7 +38,12 @@ import { join } from 'path'
 import { openPLCStoreBase } from './frontend/store'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
 
-const stlibsDir = join(process.cwd(), 'resources', 'strucpp', 'libs')
+// Bundled stlibs live inside the strucpp npm package — see
+// `library-manager-module.resolveDefaultBundledDir`.  Reading them
+// from there at jest setup matches the runtime path so helpers like
+// `pou-helpers` and `debug-tree-traversal` see the same library set
+// the editor renders.
+const stlibsDir = join(process.cwd(), 'node_modules', 'strucpp', 'libs')
 try {
   const archives = readdirSync(stlibsDir)
     .filter((f) => f.endsWith('.stlib'))
@@ -46,6 +51,6 @@ try {
     .map((f) => JSON.parse(readFileSync(join(stlibsDir, f), 'utf-8')))
   openPLCStoreBase.getState().libraryActions.setSystemLibraries(stlibsToSystemLibraries(archives))
 } catch (err) {
-   
+
   console.warn(`[jest-setup] could not pre-load bundled .stlibs from ${stlibsDir}:`, err)
 }
