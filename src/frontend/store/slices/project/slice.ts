@@ -1,6 +1,8 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { buildAddressPool, type ClaimedAddress, nextFreeAddress } from '../../../../backend/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '../../../../backend/shared/utils/target-capabilities'
 import type {
   ModbusIOPoint,
   OpcUaServerConfig,
@@ -140,31 +142,20 @@ function generateIOPoints(
   functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
   length: number,
   groupName: string,
-  usedAddresses: Set<string>,
+  /* Pool of every claim active for the current target. The bulk
+   * allocator threads its own `pending` set alongside the pool so
+   * each new point in the same batch sees the prior batch picks
+   * without needing to rebuild the pool inside the loop. */
+  pool: Parameters<typeof nextFreeAddress>[0],
+  pending: Set<string>,
 ): ModbusIOPoint[] {
   const { type, iecPrefix, isBit } = getFunctionCodeInfo(functionCode)
   const points: ModbusIOPoint[] = []
-  let currentAddress = 0
 
   for (let i = 0; i < length; i++) {
-    let iecLocation: string
-    if (isBit) {
-      iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
-      while (usedAddresses.has(iecLocation)) {
-        currentAddress++
-        iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
-      }
-    } else {
-      iecLocation = `${iecPrefix}${currentAddress}`
-      while (usedAddresses.has(iecLocation)) {
-        currentAddress++
-        iecLocation = `${iecPrefix}${currentAddress}`
-      }
-    }
-
+    const iecLocation = nextFreeAddress(pool, iecPrefix, isBit, undefined, pending)
+    pending.add(iecLocation)
     points.push({ id: `${groupName}_${i}`, name: `${groupName}_${i}`, type, iecLocation, alias: '' })
-    usedAddresses.add(iecLocation)
-    currentAddress++
   }
 
   return points
@@ -1097,30 +1088,43 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       return ok()
     },
     addIOGroup: (deviceName, group) => {
+      // Read producer state from the live store before entering produce
+      // so the pool reflects every active source (pin-mapping, VPP,
+      // every Modbus / EtherCAT remote device — including this one's
+      // existing groups, which must not be reclaimed) under the
+      // current target's capabilities.
+      const liveState = getState()
+      const deviceStateModule = (liveState as unknown as { deviceDefinitions?: { pinMapping?: { pins?: ClaimedAddress[] }; configuration?: { deviceBoard?: string; vendorScreenData?: Record<string, unknown> } }; deviceAvailableOptions?: { availableBoards?: Map<string, unknown> } })
+      const pins = deviceStateModule.deviceDefinitions?.pinMapping?.pins ?? []
+      const boardName = deviceStateModule.deviceDefinitions?.configuration?.deviceBoard ?? ''
+      const boardInfo = deviceStateModule.deviceAvailableOptions?.availableBoards?.get(boardName)
+      const vendorScreenData = deviceStateModule.deviceDefinitions?.configuration?.vendorScreenData
+      const ioMapping = (vendorScreenData?.['io-mapping'] as { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> } | undefined)?.entries ?? []
+
+      // ignoreCapabilities: the user is actively editing a Modbus
+      // TCP remote device, so the pool must include every existing
+      // claim — pin-mapping, VPP, sibling Modbus groups, EtherCAT —
+      // regardless of whether the current target gates them. Without
+      // this, two consecutive addIOGroup calls would reallocate the
+      // same addresses when no target board is configured (e.g. in
+      // tests, or in projects pre-board-selection).
+      const pool = buildAddressPool(
+        {
+          pinMapping: { pins: pins as Array<{ address: string; name?: string; pinType?: string }> },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: liveState.project.data.remoteDevices,
+        },
+        resolveTargetCapabilities(boardInfo as Parameters<typeof resolveTargetCapabilities>[0]),
+        { ignoreCapabilities: true },
+      )
+
       setState(
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)
           if (!device?.modbusTcpConfig) return
 
-          const usedAddresses = new Set<string>()
-          for (const g of device.modbusTcpConfig.ioGroups) {
-            /* istanbul ignore next -- defensive: ioPoints may be undefined */
-            for (const p of g.ioPoints ?? []) {
-              usedAddresses.add(p.iecLocation)
-            }
-          }
-          // Include EtherCAT channel mappings from all remote devices
-          for (const rd of slice.project.data.remoteDevices ?? []) {
-            if (rd.ethercatConfig?.devices) {
-              for (const dev of rd.ethercatConfig.devices) {
-                for (const mapping of dev.channelMappings) {
-                  usedAddresses.add(mapping.iecLocation)
-                }
-              }
-            }
-          }
-
-          const ioPoints = generateIOPoints(group.functionCode, group.length, group.name, usedAddresses)
+          const pending = new Set<string>()
+          const ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending)
           device.modbusTcpConfig.ioGroups.push({ ...group, ioPoints })
         }),
       )

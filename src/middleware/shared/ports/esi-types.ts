@@ -362,10 +362,9 @@ export interface PersistedChannelInfo {
 export interface EtherCATChannelMapping {
   /** Matches ESIChannel.id */
   channelId: string
-  /** IEC 61131-3 located variable address (e.g., "%IX0.0", "%QW2") */
+  /** IEC 61131-3 located variable address (e.g., "%IX0.0", "%QW2").
+   *  Editor-allocated; never user-edited (the picker uses the alias). */
   iecLocation: string
-  /** True if the user manually edited this address */
-  userEdited: boolean
   /** User-editable alias for this channel mapping */
   alias?: string
 }

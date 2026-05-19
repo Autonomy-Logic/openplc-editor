@@ -607,7 +607,10 @@ type PLCRemoteDeviceProtocol = z.infer<typeof PLCRemoteDeviceProtocolSchema>
 const EtherCATChannelMappingSchema = z.object({
   channelId: z.string(),
   iecLocation: z.string(),
-  userEdited: z.boolean(),
+  /* `userEdited` was carried here historically; addresses are always
+   * editor-allocated, so the flag was dead. Accepted but ignored on
+   * load (via Zod's stripping unknown keys) to keep legacy projects
+   * compatible. */
   alias: z.string().optional(),
 })
 

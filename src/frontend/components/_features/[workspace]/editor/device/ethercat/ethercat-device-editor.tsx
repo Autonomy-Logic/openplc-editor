@@ -1,5 +1,6 @@
 import * as Tabs from '@radix-ui/react-tabs'
-import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
+import { buildAddressPool } from '@root/backend/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
 import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configuration'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
@@ -84,12 +85,28 @@ const EtherCATDeviceEditor = () => {
     )
   }, [remoteDevice])
 
-  // Collect all IEC addresses claimed across remote devices and VPP
-  // vendor modules — all three share the Runtime v4 image table.
-  const usedAddresses = useMemo(
-    () => collectUsedIecAddresses(project.data.remoteDevices, vendorScreenData),
-    [project.data.remoteDevices, vendorScreenData],
-  )
+  // Pool of every claim from producers active on the current target.
+  // EtherCAT is sharing the image table with VPP and Modbus TCP on
+  // Runtime v4, so all three feed into the pool — but capability
+  // scoping ensures inactive producers don't claim.
+  const usedAddresses = useMemo(() => {
+    const state = useOpenPLCStore.getState()
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(
+      state.deviceDefinitions.configuration.deviceBoard,
+    )
+    const ioMapping =
+      (vendorScreenData?.['io-mapping'] as { entries?: { iecAddress: string; alias?: string; slot: number; channelName: string }[] } | undefined)
+        ?.entries ?? []
+    const pool = buildAddressPool(
+      {
+        pinMapping: { pins: state.deviceDefinitions.pinMapping.pins },
+        vendorIoMapping: { entries: ioMapping },
+        remoteDevices: project.data.remoteDevices,
+      },
+      resolveTargetCapabilities(boardInfo),
+    )
+    return new Set(pool.byAddress.keys())
+  }, [project.data.remoteDevices, vendorScreenData])
 
   // Exclude the current device's own addresses from the "external" set
   const externalAddresses = useMemo(() => {

@@ -1,1 +1,16 @@
-export { collectUsedIecAddresses } from './collect-used-iec-addresses'
+export {
+  type AddressPool,
+  buildAddressPool,
+  type BuildPoolOptions,
+  type ClaimedAddress,
+  type ConflictReport,
+  isAddressClaimed,
+  listClaims,
+  nextFreeAddress,
+  type PoolInputs,
+  type PoolPinMappingInput,
+  type PoolRemoteDeviceInput,
+  type PoolVppIoInput,
+  type SourceKind,
+  type SourceRef,
+} from './address-pool'
