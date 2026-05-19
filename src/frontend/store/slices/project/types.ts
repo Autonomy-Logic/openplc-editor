@@ -146,6 +146,23 @@ export type ProjectActions = {
     newIndex: number
   }) => void
 
+  /**
+   * Re-sync every located variable (POU-local + globals) against the
+   * current alias registry. Variables auto-adopt new aliases, follow
+   * existing ones to refreshed addresses, and surface orphans (alias
+   * the registry no longer knows about). Called from every site that
+   * mutates an alias-producing source (VPP slot edits, Modbus / EtherCAT
+   * alias edits, pin renames, target switch, project load, pre-compile).
+   *
+   * Returns a combined sync report so the caller can log a one-liner
+   * summary ("Adopted N aliases, refreshed M, K orphaned").
+   */
+  syncVariableAliases: () => {
+    adopted: number
+    refreshed: number
+    orphaned: number
+  }
+
   // Data types
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse
   deleteDatatype: (name: string) => void

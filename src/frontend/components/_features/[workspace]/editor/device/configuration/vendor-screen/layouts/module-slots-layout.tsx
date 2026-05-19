@@ -368,6 +368,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     }
 
     setVendorScreenData('io-mapping', { entries: newEntries })
+    // Producer mutation: every VPP slot just had its addresses
+    // re-allocated. Sync variables that were bound to those aliases.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -516,6 +519,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       e.slot === slot && e.channelName === channelName ? { ...e, alias } : e,
     )
     setVendorScreenData('io-mapping', { entries })
+    // Alias name changed — refresh variables bound to the old name.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }
 
   /* ------------------------------------------------------------ */

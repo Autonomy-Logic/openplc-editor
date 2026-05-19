@@ -778,6 +778,21 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
 
+      // Self-upgrade pass: bind variables to current aliases so older
+      // projects (no `alias` field on variables) pick up the
+      // producer-declared aliases on first open. Refreshes any
+      // variable whose alias has moved since last save, and surfaces
+      // orphans for the UI to flag. Idempotent — projects that have
+      // already been sync'd produce a no-op report.
+      const syncReport = getState().projectActions.syncVariableAliases()
+      if (syncReport.adopted > 0 || syncReport.refreshed > 0 || syncReport.orphaned > 0) {
+        // Single info-level summary; the per-variable detail isn't
+        // user-facing noise.
+        console.info(
+          `[alias-sync] On project open: adopted=${syncReport.adopted} refreshed=${syncReport.refreshed} orphaned=${syncReport.orphaned}`,
+        )
+      }
+
       toast({
         title: 'Project opened!',
         description: 'Your project was opened, and loaded.',

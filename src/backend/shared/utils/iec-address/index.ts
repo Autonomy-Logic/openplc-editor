@@ -22,3 +22,10 @@ export {
   isAliasNameAvailable,
   resolveAlias,
 } from './alias-registry'
+export {
+  type SyncableVariable,
+  syncMadeChanges,
+  type SyncReport,
+  type SyncResult,
+  syncVariableAliases,
+} from './sync-variable-aliases'

@@ -1,4 +1,5 @@
 import { pinSelectors } from '@root/frontend/hooks/use-store-selectors'
+import { useOpenPLCStore } from '@root/frontend/store'
 import type { DevicePin } from '@root/middleware/shared/ports/types'
 import { createColumnHelper } from '@tanstack/react-table'
 
@@ -41,6 +42,12 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
     const res = updatePin({
       [columnId as keyof DevicePin]: value,
     })
+    // Pin alias / address edits are producer mutations — refresh
+    // variables bound to the affected addresses so the table
+    // reflects the new bindings without a save/reload.
+    if (res?.ok && (columnId === 'alias' || columnId === 'address')) {
+      useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    }
     return res
   }
 

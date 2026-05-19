@@ -6,6 +6,7 @@ import {
   buildAliasRegistry,
   type ClaimedAddress,
   nextFreeAddress,
+  syncVariableAliases as syncVariablesPure,
 } from '../../../../backend/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '../../../../backend/shared/utils/target-capabilities'
 import type {
@@ -573,6 +574,71 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           variables.splice(newIndex, 0, item)
         }),
       )
+    },
+
+    syncVariableAliases: () => {
+      // Build pool + registry once from the live state before entering
+      // produce so we don't read draft proxies inside the registry
+      // build. Capabilities are honoured: variables bound to aliases
+      // from a producer the target no longer supports show up as
+      // orphans (Phase 5 will surface them in the UI).
+      const live = getState() as unknown as {
+        deviceDefinitions?: {
+          pinMapping?: { pins?: Array<{ address: string; alias?: string; pinType?: string }> }
+          configuration?: { deviceBoard?: string; vendorScreenData?: Record<string, unknown> }
+        }
+        deviceAvailableOptions?: { availableBoards?: Map<string, Parameters<typeof resolveTargetCapabilities>[0]> }
+      }
+      const boardInfo = live.deviceAvailableOptions?.availableBoards?.get(
+        live.deviceDefinitions?.configuration?.deviceBoard ?? '',
+      )
+      const vendorScreenData = live.deviceDefinitions?.configuration?.vendorScreenData
+      const ioMapping =
+        (vendorScreenData?.['io-mapping'] as
+          | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+          | undefined)?.entries ?? []
+      const pool = buildAddressPool(
+        {
+          pinMapping: { pins: live.deviceDefinitions?.pinMapping?.pins ?? [] },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: getState().project.data.remoteDevices,
+        },
+        resolveTargetCapabilities(boardInfo),
+      )
+      const registry = buildAliasRegistry(pool)
+
+      let adopted = 0
+      let refreshed = 0
+      let orphaned = 0
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          for (const pou of slice.project.data.pous) {
+            if (!pou.interface?.variables) continue
+            const result = syncVariablesPure(pou.interface.variables, registry)
+            adopted += result.report.adopted.length
+            refreshed += result.report.refreshed.length
+            orphaned += result.report.orphaned.length
+            // Mutate in place to preserve draft semantics.
+            for (let i = 0; i < result.variables.length; i++) {
+              pou.interface.variables[i] = result.variables[i]
+            }
+          }
+
+          const globals = slice.project.data.configurations.resource.globalVariables
+          if (globals) {
+            const result = syncVariablesPure(globals, registry)
+            adopted += result.report.adopted.length
+            refreshed += result.report.refreshed.length
+            orphaned += result.report.orphaned.length
+            for (let i = 0; i < result.variables.length; i++) {
+              globals[i] = result.variables[i]
+            }
+          }
+        }),
+      )
+
+      return { adopted, refreshed, orphaned }
     },
 
     // -----------------------------------------------------------------------
@@ -1206,6 +1272,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (point) point.alias = alias
         }),
       )
+      // Producer mutation: refresh variables that were bound to the
+      // old alias (or that now resolve to the new one).
+      getState().projectActions.syncVariableAliases()
       return ok()
     },
     updateEthercatConfig: (deviceName, ethercatConfig) => {

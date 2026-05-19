@@ -142,6 +142,9 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
 
     setEntries(newEntries)
     setVendorScreenData(persistenceKey, { entries: newEntries })
+    // Producer mutation: addresses were just re-allocated for every
+    // VPP-active slot. Refresh variables bound to those aliases.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -150,6 +153,8 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     updated[index] = { ...updated[index], alias }
     setEntries(updated)
     setVendorScreenData(persistenceKey, { entries: updated })
+    // Alias name changed on a single entry — refresh.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }
 
   const groups = useMemo(() => {

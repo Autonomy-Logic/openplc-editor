@@ -124,6 +124,11 @@ const EtherCATDeviceEditor = () => {
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
       projectActions.updateEthercatConfig(busName, { masterConfig, devices })
+      // Producer mutation: any change to channelMappings or aliases
+      // may move addresses or attach/detach aliases. Refresh the
+      // variables bound to those aliases so the table reflects the
+      // new bindings without waiting for save/reload.
+      projectActions.syncVariableAliases()
       // Mark the slave file dirty (same pattern as other file types)
       const { sharedWorkspaceActions } = useOpenPLCStore.getState()
       if (deviceName) {
