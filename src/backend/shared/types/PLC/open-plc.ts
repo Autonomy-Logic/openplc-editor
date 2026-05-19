@@ -141,6 +141,14 @@ const PLCVariableSchema = z.object({
     }),
   ]),
   location: z.string(),
+  /** Stable alias name the variable is bound to, when present. Looked
+   *  up in the alias registry to refresh `location` whenever the
+   *  underlying producer reassigns the address. Variable cells show
+   *  `alias` when set, falling back to the raw `location` otherwise.
+   *  When the alias goes missing from the registry, the variable is
+   *  "orphaned" — last-known `location` is kept, the cell flags it
+   *  for the user. */
+  alias: z.string().optional(),
   initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
   debug: z.boolean().optional(),

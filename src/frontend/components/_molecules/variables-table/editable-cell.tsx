@@ -531,6 +531,13 @@ const EditableLocationCell = ({
     ]
   }, [id, variable, existingPins, remoteIOPoints, vendorIoEntries])
 
+  // Display the alias name when the variable has one bound; falls back
+  // to the raw IEC address otherwise. The cell still commits an address
+  // (typed or picked); the alias is patched in by updateVariable's
+  // auto-adopt path. When editing, expose the raw address so the user
+  // can change the binding directly.
+  const displayValue = variable?.alias && !selected ? variable.alias : cellValue
+
   return selected ? (
     <GenericComboboxCell
       value={cellValue}
@@ -544,13 +551,14 @@ const EditableLocationCell = ({
     />
   ) : (
     <div
+      title={variable?.alias ? `${variable.alias} -> ${cellValue}` : undefined}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !selected,
         'cursor-not-allowed': !isEditable(),
       })}
     >
       <HighlightedText
-        text={cellValue}
+        text={displayValue}
         searchQuery={searchQuery}
         className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
       />

@@ -1,7 +1,12 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { buildAddressPool, type ClaimedAddress, nextFreeAddress } from '../../../../backend/shared/utils/iec-address'
+import {
+  buildAddressPool,
+  buildAliasRegistry,
+  type ClaimedAddress,
+  nextFreeAddress,
+} from '../../../../backend/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '../../../../backend/shared/utils/target-capabilities'
 import type {
   ModbusIOPoint,
@@ -407,6 +412,44 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     },
     updateVariable: ({ scope, associatedPou, rowId, variableId, data: updates }) => {
       let response: ProjectResponse = { ok: true }
+
+      // Auto-adopt path: whenever the location changes, look up the
+      // alias registry and patch updates.alias to match the new
+      // address. If the address has an alias, the variable adopts it
+      // (cell shows the alias name, Phase 4 sync will keep the
+      // location current as the alias moves). If not, the alias
+      // clears — re-typing a now-orphaned location intentionally
+      // drops the stale alias label too. Done outside `produce` so
+      // we read the live store state including pinMapping + caps.
+      let aliasOverride: { alias: string | undefined } | undefined
+      if (typeof updates.location === 'string') {
+        const live = getState() as unknown as {
+          deviceDefinitions?: {
+            pinMapping?: { pins?: Array<{ address: string; alias?: string; pinType?: string }> }
+            configuration?: { deviceBoard?: string; vendorScreenData?: Record<string, unknown> }
+          }
+          deviceAvailableOptions?: { availableBoards?: Map<string, Parameters<typeof resolveTargetCapabilities>[0]> }
+        }
+        const boardInfo = live.deviceAvailableOptions?.availableBoards?.get(
+          live.deviceDefinitions?.configuration?.deviceBoard ?? '',
+        )
+        const vendorScreenData = live.deviceDefinitions?.configuration?.vendorScreenData
+        const ioMapping =
+          (vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined)?.entries ?? []
+        const pool = buildAddressPool(
+          {
+            pinMapping: { pins: live.deviceDefinitions?.pinMapping?.pins ?? [] },
+            vendorIoMapping: { entries: ioMapping },
+            remoteDevices: getState().project.data.remoteDevices,
+          },
+          resolveTargetCapabilities(boardInfo),
+        )
+        const registry = buildAliasRegistry(pool)
+        aliasOverride = { alias: registry.byAddress.get(updates.location)?.alias }
+      }
+
       setState(
         produce((slice: ProjectSlice) => {
           // Resolve the target variables array (local POU or global)
@@ -437,6 +480,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           variables[found.index] = {
             ...variables[found.index],
             ...updates,
+            ...(aliasOverride ?? {}),
             ...(validationResponse.data ? validationResponse.data : {}),
           }
           response.data = variables[found.index]

@@ -275,7 +275,7 @@ const EditableInitialValueCell = ({
 
 const EditableLocationCell = ({
   getValue,
-  row: { index },
+  row: { index, original },
   column: { id },
   table,
   editable = true,
@@ -350,6 +350,12 @@ const EditableLocationCell = ({
     ]
   }, [id, existingPins, remoteIOPoints, vendorIoEntries])
 
+  // Same display rule as the variables-table cell: bound alias takes
+  // precedence over the raw address when present. Editing exposes the
+  // address so the user can change the binding.
+  const variableAlias = original?.alias
+  const displayValue = variableAlias && !editable ? variableAlias : cellValue
+
   return editable ? (
     <GenericComboboxCell
       value={cellValue}
@@ -363,12 +369,13 @@ const EditableLocationCell = ({
     />
   ) : (
     <div
+      title={variableAlias ? `${variableAlias} -> ${cellValue}` : undefined}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
       })}
     >
       <HighlightedText
-        text={cellValue}
+        text={displayValue}
         searchQuery={searchQuery}
         className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
       />
