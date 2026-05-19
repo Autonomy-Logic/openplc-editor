@@ -551,7 +551,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                   <button
                     type='button'
                     onClick={() => setRemoveModalOpen(true)}
-                    className='h-[32px] rounded-md border border-neutral-200 px-3 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-neutral-700 dark:text-red-400 dark:hover:bg-red-950/30'
+                    className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
                   >
                     Remove module
                   </button>
