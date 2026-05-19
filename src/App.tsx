@@ -1,6 +1,15 @@
 import '@xyflow/react/dist/style.css'
 import 'tailwindcss/tailwind.css'
 import './backend/shared/styles/globals.css'
+// Monaco language + theme registrations (`openplc-dark` / `openplc-light`,
+// ST / IL / Python LanguageConfigurations).  Imported here as a
+// side-effect at app boot so EVERY Monaco editor in the app — body
+// editor, variables text-mode editor, future LSP-driven views — sees
+// the registered themes regardless of mount order.  Previously this
+// import lived only inside the body editor's index.tsx, which meant
+// any editor that mounted first (e.g. variables text-mode opened
+// without the body editor) saw Monaco's default vs-dark theme.
+import './frontend/components/_features/[workspace]/editor/monaco/configs'
 
 import { useEffect } from 'react'
 

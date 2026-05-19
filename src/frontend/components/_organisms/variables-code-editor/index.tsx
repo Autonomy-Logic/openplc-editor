@@ -85,7 +85,10 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode, cursorPosi
           scrollBeyondLastLine: false,
           wordWrap: 'on',
           fontSize: 14,
-          tabSize: 2,
+          // Match the body editor's default (Monaco's default is 4 too).
+          // Inconsistent values would split-personality the indentation
+          // of LSP-inserted snippets (`\t` substitutes per this option).
+          tabSize: 4,
           inlineSuggest: { enabled: false },
           quickSuggestions: false,
         }}

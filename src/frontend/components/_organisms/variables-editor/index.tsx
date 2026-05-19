@@ -1,5 +1,5 @@
 import { ColumnFiltersState } from '@tanstack/react-table'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
@@ -946,6 +946,20 @@ const VariablesEditor = () => {
     commitCodeRef.current = commitCode
   }, [commitCode])
 
+  // Memoise so the `<VariablesCodeEditor cursorPosition>` prop holds a
+  // stable reference when the underlying values don't change.  Without
+  // this, the child's cursor-jump effect — keyed on `cursorPosition`
+  // identity — re-fires on every parent render (one per keystroke,
+  // because `setEditorCode` triggers it), re-selects the navigation
+  // line, and the next character typed replaces that selection.
+  const codeEditorCursorPosition = useMemo(
+    () =>
+      editor.cursorPosition
+        ? { lineNumber: editor.cursorPosition.lineNumber, column: editor.cursorPosition.column }
+        : undefined,
+    [editor.cursorPosition?.lineNumber, editor.cursorPosition?.column],
+  )
+
   return (
     <>
       {confirmRenameBlocksOpen && renameImpactData && (
@@ -1274,11 +1288,7 @@ const VariablesEditor = () => {
               code={editorCode}
               onCodeChange={setEditorCode}
               shouldUseDarkMode={shouldUseDarkMode}
-              cursorPosition={
-                editor.cursorPosition
-                  ? { lineNumber: editor.cursorPosition.lineNumber, column: editor.cursorPosition.column }
-                  : undefined
-              }
+              cursorPosition={codeEditorCursorPosition}
             />
 
             {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}
