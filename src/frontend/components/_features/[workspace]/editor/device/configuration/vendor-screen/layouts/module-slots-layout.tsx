@@ -1,4 +1,8 @@
+import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core'
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
+import { DragHandleIcon } from '@root/frontend/assets/icons/interface/DragHandle'
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
@@ -111,6 +115,79 @@ function evalVisible(visible: VisibleCondition | undefined, values: Record<strin
     default:
       return true
   }
+}
+
+type SortableSlotButtonProps = {
+  idx: number
+  moduleName: string | undefined
+  ioSummary: string
+  isSelected: boolean
+  draggable: boolean
+  onSelect: () => void
+}
+
+/* One row in the slot list. Memberships in the DndContext are by row,
+ * not by module — dragging shifts whatever module currently sits at
+ * the source index to the target index. Empty slots are rendered but
+ * not draggable: there's no module to move. */
+function SortableSlotButton({ idx, moduleName, ioSummary, isSelected, draggable, onSelect }: SortableSlotButtonProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: String(idx),
+    disabled: !draggable,
+  })
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : undefined,
+  }
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex shrink-0 items-stretch border-b border-neutral-100 dark:border-neutral-800 ${
+        isSelected
+          ? 'bg-brand/20 shadow-[inset_3px_0_0_var(--primary-default)] dark:bg-brand/30'
+          : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
+      }`}
+    >
+      {draggable ? (
+        <button
+          type='button'
+          aria-label={`Drag slot ${idx + 1}`}
+          {...attributes}
+          {...listeners}
+          tabIndex={-1}
+          className='flex w-6 shrink-0 cursor-grab items-center justify-center text-neutral-400 hover:text-neutral-600 active:cursor-grabbing dark:text-neutral-500 dark:hover:text-neutral-300'
+        >
+          <DragHandleIcon className='h-4 w-4 fill-current' />
+        </button>
+      ) : (
+        <div className='w-6 shrink-0' aria-hidden />
+      )}
+      <button
+        type='button'
+        aria-selected={isSelected}
+        onClick={onSelect}
+        className='flex min-w-0 flex-1 flex-col gap-0.5 px-2 py-2 text-left'
+      >
+        <div className='flex items-center justify-between gap-2'>
+          <span
+            className={`font-caption text-cp-sm text-neutral-950 dark:text-white ${isSelected ? 'font-bold' : 'font-semibold'}`}
+          >
+            Slot {idx + 1}
+          </span>
+          {moduleName && (
+            <span className='shrink-0 text-[10px] text-neutral-400 dark:text-neutral-500'>{ioSummary}</span>
+          )}
+        </div>
+        <span
+          className={`truncate text-xs ${moduleName ? 'text-neutral-700 dark:text-neutral-300' : 'italic text-neutral-400 dark:text-neutral-600'} ${isSelected ? 'font-semibold' : ''}`}
+        >
+          {moduleName ?? 'Empty'}
+        </span>
+      </button>
+    </div>
+  )
 }
 
 function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
@@ -318,6 +395,65 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     setSelectedSlot(targetIndex)
   }
 
+  /* Drag-reorder the slot at `fromIdx` to `toIdx` using arrayMove
+   * semantics — the dragged module lands at toIdx and everything in
+   * between shifts by one. slotsConfig and io-mapping entries are
+   * rewritten so per-slot config and aliases follow each module's
+   * new position. The io-mapping reallocator will re-assign IEC
+   * addresses on the next render in the new slot order. */
+  const performReorderSlots = (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return
+    if (fromIdx < 0 || fromIdx >= slots.length) return
+    if (toIdx < 0 || toIdx >= slots.length) return
+
+    const nextSlots = arrayMove(slots, fromIdx, toIdx)
+
+    // Build old-1based-slot -> new-1based-slot for the moved range.
+    // Indices outside [min,max] of the move are unaffected.
+    const lo = Math.min(fromIdx, toIdx)
+    const hi = Math.max(fromIdx, toIdx)
+    const remap = (slot1: number): number => {
+      const i = slot1 - 1
+      if (i < lo || i > hi) return slot1
+      if (i === fromIdx) return toIdx + 1
+      return (fromIdx < toIdx ? i - 1 : i + 1) + 1
+    }
+
+    const nextSlotsConfig: SlotConfigMap = {}
+    for (const [key, value] of Object.entries(slotsConfig)) {
+      const n = Number(key)
+      if (Number.isNaN(n)) {
+        nextSlotsConfig[key] = value
+        continue
+      }
+      nextSlotsConfig[String(remap(n))] = value
+    }
+    writeModuleConfig({ ...moduleConfig, slots: nextSlots, slotsConfig: nextSlotsConfig })
+
+    const vsd = useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData
+    const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
+    const shifted = entries.map((e) => ({ ...e, slot: remap(e.slot) }))
+    setVendorScreenData('io-mapping', { entries: shifted })
+
+    // Keep the focus on whichever module the user is currently looking at.
+    if (selectedSlot === fromIdx) {
+      setSelectedSlot(toIdx)
+    } else if (fromIdx < selectedSlot && selectedSlot <= toIdx) {
+      setSelectedSlot(selectedSlot - 1)
+    } else if (toIdx <= selectedSlot && selectedSlot < fromIdx) {
+      setSelectedSlot(selectedSlot + 1)
+    }
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const fromIdx = Number(active.id)
+    const toIdx = Number(over.id)
+    if (Number.isNaN(fromIdx) || Number.isNaN(toIdx)) return
+    performReorderSlots(fromIdx, toIdx)
+  }
+
   /* Stackable: drop the slot at `index` and shift every following slot
    * (modules + slot config + io-mapping entries + aliases) up by one
    * so positions stay dense. The io-mapping effect will re-allocate
@@ -440,40 +576,25 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       <div className='flex min-h-0 flex-1 gap-4'>
         {/* ------ Left: slot tree ------ */}
         <div className='flex w-56 shrink-0 flex-col overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-700'>
-          {displayedSlots.map((idx) => {
-            const moduleId = slots[idx]
-            const mod = findModule(moduleId)
-            const isSelected = idx === selectedSlot
-            return (
-              <button
-                key={idx}
-                type='button'
-                aria-selected={isSelected}
-                onClick={() => setSelectedSlot(idx)}
-                className={`flex shrink-0 flex-col gap-0.5 border-b border-neutral-100 px-3 py-2 text-left dark:border-neutral-800 ${
-                  isSelected
-                    ? 'bg-brand/20 font-medium shadow-[inset_3px_0_0_var(--primary-default)] dark:bg-brand/30'
-                    : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
-                }`}
-              >
-                <div className='flex items-center justify-between'>
-                  <span
-                    className={`font-caption text-cp-sm text-neutral-950 dark:text-white ${isSelected ? 'font-bold' : 'font-semibold'}`}
-                  >
-                    Slot {idx + 1}
-                  </span>
-                  {mod && (
-                    <span className='text-[10px] text-neutral-400 dark:text-neutral-500'>{slotIoSummary(moduleId)}</span>
-                  )}
-                </div>
-                <span
-                  className={`truncate text-xs ${mod ? 'text-neutral-700 dark:text-neutral-300' : 'italic text-neutral-400 dark:text-neutral-600'} ${isSelected ? 'font-semibold' : ''}`}
-                >
-                  {mod?.name ?? 'Empty'}
-                </span>
-              </button>
-            )
-          })}
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={displayedSlots.map((idx) => String(idx))} strategy={verticalListSortingStrategy}>
+              {displayedSlots.map((idx) => {
+                const moduleId = slots[idx]
+                const mod = findModule(moduleId)
+                return (
+                  <SortableSlotButton
+                    key={idx}
+                    idx={idx}
+                    moduleName={mod?.name}
+                    ioSummary={slotIoSummary(moduleId)}
+                    isSelected={idx === selectedSlot}
+                    draggable={!!mod}
+                    onSelect={() => setSelectedSlot(idx)}
+                  />
+                )
+              })}
+            </SortableContext>
+          </DndContext>
           {stackable && (
             <button
               type='button'
