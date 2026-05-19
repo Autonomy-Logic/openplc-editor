@@ -1,4 +1,5 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -538,6 +539,16 @@ const EditableLocationCell = ({
   // can change the binding directly.
   const displayValue = variable?.alias && !selected ? variable.alias : cellValue
 
+  // Orphan detection: variable has an alias bound but the registry no
+  // longer knows about it (its producer was removed, or the target
+  // dropped the capability). Keep the last-known location but flag
+  // the cell so the user can re-bind or clear.
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
+  const orphanTooltip = isOrphaned
+    ? `Alias "${variable?.alias}" is no longer declared by any active source. Last known address: ${cellValue}`
+    : undefined
+
   return selected ? (
     <GenericComboboxCell
       value={cellValue}
@@ -551,16 +562,34 @@ const EditableLocationCell = ({
     />
   ) : (
     <div
-      title={variable?.alias ? `${variable.alias} -> ${cellValue}` : undefined}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+      title={orphanTooltip ?? (variable?.alias ? `${variable.alias} -> ${cellValue}` : undefined)}
+      className={cn('flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !selected,
         'cursor-not-allowed': !isEditable(),
       })}
     >
+      {isOrphaned && (
+        <span
+          aria-label='Orphaned alias'
+          className='text-amber-500 dark:text-amber-400'
+          /* small inline-svg keeps the cell self-contained */
+        >
+          <svg
+            viewBox='0 0 16 16'
+            fill='currentColor'
+            className='h-3.5 w-3.5'
+            aria-hidden='true'
+          >
+            <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
+          </svg>
+        </span>
+      )}
       <HighlightedText
         text={displayValue}
         searchQuery={searchQuery}
-        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
+          'text-amber-600 dark:text-amber-400': isOrphaned,
+        })}
       />
     </div>
   )

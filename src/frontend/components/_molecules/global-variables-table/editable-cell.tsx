@@ -1,4 +1,5 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -350,11 +351,14 @@ const EditableLocationCell = ({
     ]
   }, [id, existingPins, remoteIOPoints, vendorIoEntries])
 
-  // Same display rule as the variables-table cell: bound alias takes
-  // precedence over the raw address when present. Editing exposes the
-  // address so the user can change the binding.
+  // Same display + orphan-badge rules as the variables-table cell.
   const variableAlias = original?.alias
   const displayValue = variableAlias && !editable ? variableAlias : cellValue
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variableAlias && !aliasRegistry.byAlias.has(variableAlias)
+  const orphanTooltip = isOrphaned
+    ? `Alias "${variableAlias}" is no longer declared by any active source. Last known address: ${cellValue}`
+    : undefined
 
   return editable ? (
     <GenericComboboxCell
@@ -369,15 +373,24 @@ const EditableLocationCell = ({
     />
   ) : (
     <div
-      title={variableAlias ? `${variableAlias} -> ${cellValue}` : undefined}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+      title={orphanTooltip ?? (variableAlias ? `${variableAlias} -> ${cellValue}` : undefined)}
+      className={cn('flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
       })}
     >
+      {isOrphaned && (
+        <span aria-label='Orphaned alias' className='text-amber-500 dark:text-amber-400'>
+          <svg viewBox='0 0 16 16' fill='currentColor' className='h-3.5 w-3.5' aria-hidden='true'>
+            <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
+          </svg>
+        </span>
+      )}
       <HighlightedText
         text={displayValue}
         searchQuery={searchQuery}
-        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
+          'text-amber-600 dark:text-amber-400': isOrphaned,
+        })}
       />
     </div>
   )
