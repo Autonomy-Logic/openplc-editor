@@ -587,7 +587,13 @@ class CompilerModule {
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
   ) {
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = this.#executeXml2st(['--generate-st', generatedXMLFilePath])
+      // `--keep-structs` tells xml2st to emit user-defined STRUCT data
+      // types as native `TYPE name : STRUCT … END_STRUCT;` declarations
+      // instead of rewriting them as FUNCTION_BLOCKs (matiec's legacy
+      // workaround).  Strucpp parses STRUCT natively and rejects the FB
+      // rewrite as a type-vs-instance mismatch — every program build in
+      // the editor targets strucpp now, so we always set the flag.
+      const executeCommand = this.#executeXml2st(['--generate-st', generatedXMLFilePath, '--keep-structs'])
 
       let stderrData = ''
 
