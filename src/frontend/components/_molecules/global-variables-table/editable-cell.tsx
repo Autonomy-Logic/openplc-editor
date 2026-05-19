@@ -311,14 +311,14 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
     const aoutPins = existingPins
       .filter((pin) => pin.pinType === 'analogOutput')
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const dinPins = existingPins
@@ -326,7 +326,7 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const doutPins = existingPins
@@ -334,7 +334,7 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)

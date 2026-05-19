@@ -22,8 +22,8 @@ const columns = [
     header: 'Address',
     cell: (props) => props.getValue(),
   }),
-  columnHelper.accessor('name', {
-    header: 'Name',
+  columnHelper.accessor('alias', {
+    header: 'Alias',
     cell: PinTextInputCell,
   }),
 ]

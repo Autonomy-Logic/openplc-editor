@@ -4,14 +4,14 @@ import {
   checkIfAddressExists,
   checkIfPinExists,
   checkIfPinIsValid,
-  checkIfPinNameExists,
-  checkIfPinNameIsValid,
+  checkIfPinAliasExists,
+  checkIfPinAliasIsValid,
   createNewAddress,
   extractPositionForAnalogAddress,
   extractPositionsForDigitalAddress,
   getHighestPinAddress,
   isAddressTheLowestInItsType,
-  pinNameValidation,
+  pinAliasValidation,
   pinValidation,
   removeAddressPrefix,
 } from '../slices/device/validation/pins'
@@ -25,7 +25,7 @@ function makePin(overrides?: Partial<DevicePin>): DevicePin {
     pin: overrides?.pin ?? 'P0',
     pinType: overrides?.pinType ?? 'digitalInput',
     address: overrides?.address ?? '%IX0.0',
-    name: overrides?.name ?? 'pin_0',
+    alias: overrides?.alias ?? 'pin_0',
   }
 }
 
@@ -452,107 +452,107 @@ describe('checkIfPinIsValid', () => {
 })
 
 // ---------------------------------------------------------------------------
-// checkIfPinNameExists
+// checkIfPinAliasExists
 // ---------------------------------------------------------------------------
 
-describe('checkIfPinNameExists', () => {
-  const pins: DevicePin[] = [makePin({ name: 'Sensor1' })]
+describe('checkIfPinAliasExists', () => {
+  const pins: DevicePin[] = [makePin({ alias: 'Sensor1' })]
 
   it('returns true when name exists (case insensitive)', () => {
-    expect(checkIfPinNameExists(pins, 'sensor1')).toBe(true)
+    expect(checkIfPinAliasExists(pins, 'sensor1')).toBe(true)
   })
 
   it('returns true when name matches exactly', () => {
-    expect(checkIfPinNameExists(pins, 'Sensor1')).toBe(true)
+    expect(checkIfPinAliasExists(pins, 'Sensor1')).toBe(true)
   })
 
   it('returns false when name does not exist', () => {
-    expect(checkIfPinNameExists(pins, 'Motor1')).toBe(false)
+    expect(checkIfPinAliasExists(pins, 'Motor1')).toBe(false)
   })
 
   it('returns false for empty map', () => {
-    expect(checkIfPinNameExists([], 'Sensor1')).toBe(false)
+    expect(checkIfPinAliasExists([], 'Sensor1')).toBe(false)
   })
 })
 
 // ---------------------------------------------------------------------------
-// pinNameValidation
+// pinAliasValidation
 // ---------------------------------------------------------------------------
 
-describe('pinNameValidation', () => {
+describe('pinAliasValidation', () => {
   it('accepts pure numeric string', () => {
-    expect(pinNameValidation('123')).toBe(true)
+    expect(pinAliasValidation('123')).toBe(true)
   })
 
   it('accepts alphabetic string', () => {
-    expect(pinNameValidation('Sensor')).toBe(true)
+    expect(pinAliasValidation('Sensor')).toBe(true)
   })
 
   it('accepts alphanumeric with underscores', () => {
-    expect(pinNameValidation('Sensor_1')).toBe(true)
+    expect(pinAliasValidation('Sensor_1')).toBe(true)
   })
 
   it('accepts alphanumeric suffix', () => {
-    expect(pinNameValidation('Pin1')).toBe(true)
+    expect(pinAliasValidation('Pin1')).toBe(true)
   })
 
   it('accepts multi-segment underscore name', () => {
-    expect(pinNameValidation('input_temp_sensor')).toBe(true)
+    expect(pinAliasValidation('input_temp_sensor')).toBe(true)
   })
 
   it('rejects empty string', () => {
-    expect(pinNameValidation('')).toBe(false)
+    expect(pinAliasValidation('')).toBe(false)
   })
 
   it('rejects string with spaces', () => {
-    expect(pinNameValidation('my sensor')).toBe(false)
+    expect(pinAliasValidation('my sensor')).toBe(false)
   })
 
   it('rejects string with special chars', () => {
-    expect(pinNameValidation('pin@1')).toBe(false)
+    expect(pinAliasValidation('pin@1')).toBe(false)
   })
 
   it('rejects string starting with underscore', () => {
-    expect(pinNameValidation('_pin')).toBe(false)
+    expect(pinAliasValidation('_pin')).toBe(false)
   })
 
   it('rejects string with dot', () => {
-    expect(pinNameValidation('pin.1')).toBe(false)
+    expect(pinAliasValidation('pin.1')).toBe(false)
   })
 })
 
 // ---------------------------------------------------------------------------
-// checkIfPinNameIsValid
+// checkIfPinAliasIsValid
 // ---------------------------------------------------------------------------
 
-describe('checkIfPinNameIsValid', () => {
-  const pins: DevicePin[] = [makePin({ name: 'Motor1' })]
+describe('checkIfPinAliasIsValid', () => {
+  const pins: DevicePin[] = [makePin({ alias: 'Motor1' })]
 
   it('returns error when name is undefined', () => {
-    const result = checkIfPinNameIsValid(pins, undefined)
+    const result = checkIfPinAliasIsValid(pins, undefined)
     expect(result.ok).toBe(false)
-    expect(result.title).toBe('Invalid Pin Name')
-    expect(result.message).toBe('Pin name cannot be empty.')
+    expect(result.title).toBe('Invalid Pin Alias')
+    expect(result.message).toBe('Pin alias cannot be empty.')
   })
 
   it('returns error when name is empty string', () => {
-    const result = checkIfPinNameIsValid(pins, '')
+    const result = checkIfPinAliasIsValid(pins, '')
     expect(result.ok).toBe(false)
-    expect(result.title).toBe('Invalid Pin Name')
-    expect(result.message).toBe('Pin name cannot be empty.')
+    expect(result.title).toBe('Invalid Pin Alias')
+    expect(result.message).toBe('Pin alias cannot be empty.')
   })
 
   it('returns error when name has invalid characters', () => {
-    const result = checkIfPinNameIsValid(pins, 'invalid name')
+    const result = checkIfPinAliasIsValid(pins, 'invalid name')
     expect(result.ok).toBe(false)
-    expect(result.title).toBe('Invalid Pin Name')
+    expect(result.title).toBe('Invalid Pin Alias')
     expect(result.message).toContain('alphanumeric or use underscores')
   })
 
   it('returns error when name already exists', () => {
-    const result = checkIfPinNameIsValid(pins, 'motor1')
+    const result = checkIfPinAliasIsValid(pins, 'motor1')
     expect(result.ok).toBe(false)
-    expect(result.title).toBe('Pin Name Already Exists')
+    expect(result.title).toBe('Pin Alias Already Exists')
     expect(result.message).toContain('Check the table row: 1')
   })
 
@@ -560,7 +560,7 @@ describe('checkIfPinNameIsValid', () => {
     // Force findIndex to return -1 even though some() returned true
     const _originalFindIndex = Array.prototype.findIndex
     const spied = vi.spyOn(Array.prototype, 'findIndex').mockReturnValueOnce(-1)
-    const result = checkIfPinNameIsValid(pins, 'motor1')
+    const result = checkIfPinAliasIsValid(pins, 'motor1')
     expect(result.ok).toBe(false)
     expect(result.message).toContain('Unknown')
     spied.mockRestore()
@@ -569,14 +569,14 @@ describe('checkIfPinNameIsValid', () => {
   })
 
   it('returns valid for unique well-formed name', () => {
-    const result = checkIfPinNameIsValid(pins, 'Sensor2')
+    const result = checkIfPinAliasIsValid(pins, 'Sensor2')
     expect(result.ok).toBe(true)
-    expect(result.title).toBe('Valid Pin Name')
-    expect(result.message).toBe('Pin name is valid.')
+    expect(result.title).toBe('Valid Pin Alias')
+    expect(result.message).toBe('Pin alias is valid.')
   })
 
   it('returns valid for empty pin map', () => {
-    const result = checkIfPinNameIsValid([], 'Motor1')
+    const result = checkIfPinAliasIsValid([], 'Motor1')
     expect(result.ok).toBe(true)
   })
 })

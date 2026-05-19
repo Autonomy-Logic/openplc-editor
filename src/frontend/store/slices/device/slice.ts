@@ -5,8 +5,8 @@ import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shar
 import { defaultDeviceConfiguration } from './data/types'
 import type { DeviceSlice, PinUpdateResponse } from './types'
 import {
+  checkIfPinAliasIsValid,
   checkIfPinIsValid,
-  checkIfPinNameIsValid,
   createNewAddress,
   getHighestPinAddress,
   removeAddressPrefix,
@@ -119,7 +119,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: defaultPinType,
             address: nextAddress,
-            name: '',
+            alias: '',
           }
 
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) {
@@ -132,7 +132,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
-            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, name: '' }
+            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, alias: '' }
             pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
             pinMapping.currentSelectedPinTableRow += 1
             return
@@ -145,7 +145,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: pinExists.pinType,
             address: newAddressForHighestPinAddress,
-            name: '',
+            alias: '',
           }
 
           pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
@@ -190,7 +190,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         ok: true,
         title: '',
         message: '',
-        data: { pin: '', pinType: '', address: '', name: '' },
+        data: { pin: '', pinType: '', address: '', alias: '' },
       }
       setState(
         produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
@@ -285,16 +285,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
 
                 break
 
-              case 'name': {
-                const validation = checkIfPinNameIsValid(pinMapping.pins, updatedData.name)
+              case 'alias': {
+                const validation = checkIfPinAliasIsValid(pinMapping.pins, updatedData.alias)
                 if (!validation.ok) {
                   returnMessage.ok = false
                   returnMessage.title = validation.title
                   returnMessage.message = validation.message
                   return
                 }
-                currentPin.name = updatedData.name
-                returnMessage.data!.name = updatedData.name || ''
+                currentPin.alias = updatedData.alias
+                returnMessage.data!.alias = updatedData.alias || ''
                 return
               }
 

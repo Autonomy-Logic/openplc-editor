@@ -86,7 +86,7 @@ export type PinUpdateResponse = {
     pin: string
     pinType: string
     address: string
-    name: string
+    alias: string
   }
 }
 

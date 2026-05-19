@@ -30,7 +30,7 @@ describe('buildAddressPool', () => {
     // Runtime v4 (pinMapping=false) ignores pin entries even when the
     // project data contains them.
     const inputs: PoolInputs = {
-      pinMapping: { pins: [{ address: '%QX0.0', name: 'door' }, { address: '%QX0.1' }] },
+      pinMapping: { pins: [{ address: '%QX0.0', alias: 'door' }, { address: '%QX0.1' }] },
     }
     const pool = buildAddressPool(inputs, v4Caps)
     expect(pool.byAddress.size).toBe(0)
@@ -38,7 +38,7 @@ describe('buildAddressPool', () => {
 
   it('claims pin-mapping addresses on Arduino-style targets', () => {
     const inputs: PoolInputs = {
-      pinMapping: { pins: [{ address: '%QX0.0', name: 'door' }, { address: '%IX0.3' }] },
+      pinMapping: { pins: [{ address: '%QX0.0', alias: 'door' }, { address: '%IX0.3' }] },
     }
     const pool = buildAddressPool(inputs, arduinoCaps)
     expect(pool.byAddress.size).toBe(2)
@@ -116,7 +116,7 @@ describe('buildAddressPool', () => {
 
   it('records a conflict when two sources claim the same address (first wins)', () => {
     const inputs: PoolInputs = {
-      pinMapping: { pins: [{ address: '%QX0.0', name: 'pin' }] },
+      pinMapping: { pins: [{ address: '%QX0.0', alias: 'pin' }] },
       vendorIoMapping: {
         entries: [{ iecAddress: '%QX0.0', alias: 'vpp_claim', slot: 1, channelName: 'DO1' }],
       },
@@ -256,7 +256,7 @@ describe('isAddressClaimed / listClaims', () => {
 describe('target scoping releases claims when capabilities change', () => {
   // Same project data — different active targets produce different pools.
   const inputs: PoolInputs = {
-    pinMapping: { pins: [{ address: '%QX0.0', name: 'pin' }] },
+    pinMapping: { pins: [{ address: '%QX0.0', alias: 'pin' }] },
     vendorIoMapping: {
       entries: [{ iecAddress: '%QX1.0', alias: 'vpp_thing', slot: 1, channelName: 'DO1' }],
     },

@@ -14,3 +14,11 @@ export {
   type SourceKind,
   type SourceRef,
 } from './address-pool'
+export {
+  type AliasEntry,
+  aliasForAddress,
+  type AliasRegistry,
+  buildAliasRegistry,
+  isAliasNameAvailable,
+  resolveAlias,
+} from './alias-registry'

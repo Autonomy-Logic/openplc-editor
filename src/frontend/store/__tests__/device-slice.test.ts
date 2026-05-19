@@ -19,7 +19,7 @@ function makePin(overrides?: Partial<DevicePin>): DevicePin {
     pin: overrides?.pin ?? '',
     pinType: overrides?.pinType ?? 'digitalInput',
     address: overrides?.address ?? '%IX0.0',
-    name: overrides?.name ?? '',
+    alias: overrides?.alias ?? '',
   }
 }
 
@@ -190,7 +190,7 @@ describe('createDeviceSlice', () => {
 
     it('sets pinMapping', () => {
       const store = makeStore()
-      const pins: DevicePin[] = [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0', name: 'sensor' })]
+      const pins: DevicePin[] = [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' })]
       store.getState().deviceActions.setDeviceDefinitions({ pinMapping: pins })
       expect(store.getState().deviceDefinitions.pinMapping.pins).toEqual(pins)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
@@ -327,7 +327,7 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       // Seed with a pin and select it
       store.getState().deviceActions.setDeviceDefinitions({
-        pinMapping: [makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0', name: 'pin0' })],
+        pinMapping: [makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0', alias: 'pin0' })],
       })
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
@@ -591,13 +591,13 @@ describe('createDeviceSlice', () => {
       it('updates pin name', () => {
         const store = makeStore()
         store.getState().deviceActions.setDeviceDefinitions({
-          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0', name: '' })],
+          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0', alias: '' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
-        const result = store.getState().deviceActions.updatePin({ name: 'Sensor1' })
+        const result = store.getState().deviceActions.updatePin({ alias: 'Sensor1' })
         expect(result.ok).toBe(true)
-        expect(result.data?.name).toBe('Sensor1')
-        expect(store.getState().deviceDefinitions.pinMapping.pins[0].name).toBe('Sensor1')
+        expect(result.data?.alias).toBe('Sensor1')
+        expect(store.getState().deviceDefinitions.pinMapping.pins[0].alias).toBe('Sensor1')
       })
 
       it('returns error for empty name', () => {
@@ -606,23 +606,23 @@ describe('createDeviceSlice', () => {
           pinMapping: [makePin({ pin: 'D0', address: '%IX0.0' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
-        const result = store.getState().deviceActions.updatePin({ name: '' })
+        const result = store.getState().deviceActions.updatePin({ alias: '' })
         expect(result.ok).toBe(false)
-        expect(result.title).toBe('Invalid Pin Name')
+        expect(result.title).toBe('Invalid Pin Alias')
       })
 
       it('returns error for duplicate name', () => {
         const store = makeStore()
         store.getState().deviceActions.setDeviceDefinitions({
           pinMapping: [
-            makePin({ pin: 'D0', address: '%IX0.0', name: 'Motor' }),
-            makePin({ pin: 'D1', address: '%IX0.1', name: '' }),
+            makePin({ pin: 'D0', address: '%IX0.0', alias: 'Motor' }),
+            makePin({ pin: 'D1', address: '%IX0.1', alias: '' }),
           ],
         })
         store.getState().deviceActions.selectPinTableRow(1)
-        const result = store.getState().deviceActions.updatePin({ name: 'Motor' })
+        const result = store.getState().deviceActions.updatePin({ alias: 'Motor' })
         expect(result.ok).toBe(false)
-        expect(result.title).toBe('Pin Name Already Exists')
+        expect(result.title).toBe('Pin Alias Already Exists')
       })
 
       it('returns error for invalid name characters', () => {
@@ -631,9 +631,9 @@ describe('createDeviceSlice', () => {
           pinMapping: [makePin({ pin: 'D0', address: '%IX0.0' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
-        const result = store.getState().deviceActions.updatePin({ name: 'invalid name' })
+        const result = store.getState().deviceActions.updatePin({ alias: 'invalid name' })
         expect(result.ok).toBe(false)
-        expect(result.title).toBe('Invalid Pin Name')
+        expect(result.title).toBe('Invalid Pin Alias')
       })
     })
 
@@ -660,21 +660,21 @@ describe('createDeviceSlice', () => {
     })
 
     describe('name field fallback branch', () => {
-      it('falls back to empty string when updatedData.name is undefined and validation is bypassed', () => {
+      it('falls back to empty string when updatedData.alias is undefined and validation is bypassed', () => {
         const store = makeStore()
         store.getState().deviceActions.setDeviceDefinitions({
-          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0', name: 'Sensor' })],
+          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0', alias: 'Sensor' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
 
-        const spy = vi.spyOn(pinsValidation, 'checkIfPinNameIsValid').mockReturnValueOnce({
+        const spy = vi.spyOn(pinsValidation, 'checkIfPinAliasIsValid').mockReturnValueOnce({
           ok: true,
-          title: 'Valid Pin Name',
-          message: 'Pin name is valid.',
+          title: 'Valid Pin Alias',
+          message: 'Pin alias is valid.',
         })
-        const result = store.getState().deviceActions.updatePin({ name: undefined })
+        const result = store.getState().deviceActions.updatePin({ alias: undefined })
         expect(result.ok).toBe(true)
-        expect(result.data?.name).toBe('')
+        expect(result.data?.alias).toBe('')
         spy.mockRestore()
       })
     })

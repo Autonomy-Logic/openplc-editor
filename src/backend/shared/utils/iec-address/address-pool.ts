@@ -87,7 +87,9 @@ export interface AddressPool {
 export interface PoolPinMappingInput {
   pins: Array<{
     address: string
-    name?: string
+    /** User-supplied label that participates in the alias registry.
+     *  See `DevicePin.alias` in middleware/shared/ports/types. */
+    alias?: string
     pinType?: string
   }>
 }
@@ -217,7 +219,7 @@ export function buildAddressPool(
   //    Arduino-style targets are active.
   if ((bypassCaps || caps.pinMapping) && inputs.pinMapping && ignore !== 'pin-mapping') {
     for (const pin of inputs.pinMapping.pins) {
-      claim(pin.address, { kind: 'pin-mapping', ref: pin.address }, pin.name)
+      claim(pin.address, { kind: 'pin-mapping', ref: pin.address }, pin.alias)
     }
   }
 

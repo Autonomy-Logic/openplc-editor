@@ -759,7 +759,9 @@ export interface DevicePin {
   pin: string
   pinType: PinType
   address: string
-  name?: string
+  /** User-supplied label that participates in the alias registry.
+   *  Used to be `name` — legacy projects are auto-upgraded on load. */
+  alias?: string
 }
 
 export interface DeviceConfiguration {
