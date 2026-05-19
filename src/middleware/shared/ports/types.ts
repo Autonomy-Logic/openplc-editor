@@ -557,6 +557,27 @@ export function projectCapabilities(
 
 export type CompilerType = 'arduino-cli' | 'openplc-compiler' | 'simulator'
 
+/** Per-target capability matrix. Populated from hals.json `capabilities`
+ *  blocks for vanilla targets, from VPP manifest `target.capabilities`
+ *  for VPP-derived boards, or attached by the platform (orchestrator
+ *  devices on web). See `target-capabilities` in backend/shared for the
+ *  authoritative type definition and resolver. */
+export interface TargetCapabilities {
+  pinMapping: boolean
+  vppIo: boolean
+  modbusTcpRemote: boolean
+  ethercat: boolean
+  modbusTcpServer: boolean
+  opcuaServer: boolean
+  s7Server: boolean
+  debuggerTransports: Array<'modbus-serial' | 'modbus-tcp' | 'websocket'>
+  pythonFunctionBlocks: boolean
+  arduinoApiCompletions: boolean
+  hasRuntimeStats: boolean
+  isInProcessSimulator: boolean
+  directUsbUpload: boolean
+}
+
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
   core: string
@@ -569,6 +590,10 @@ export interface BoardInfo {
     defaultDin?: string[]
     defaultDout?: string[]
   }
+  /** Optional explicit capability declaration. When absent, the resolver
+   *  in backend/shared infers capabilities from the legacy `compiler`
+   *  field (back-compat for pre-migration data). */
+  capabilities?: Partial<TargetCapabilities>
   vpp?: VppMetadata
 }
 

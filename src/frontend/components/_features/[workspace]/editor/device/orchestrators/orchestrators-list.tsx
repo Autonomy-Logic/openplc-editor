@@ -1,3 +1,4 @@
+import { resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { OrchestratorInfo } from '../../../../../../../middleware/shared/ports/orchestrator-port'
@@ -81,7 +82,7 @@ const OrchestratorsList = () => {
   const isSimulatorSelected = useOpenPLCStore((state) => {
     const boardName = state.deviceDefinitions.configuration.deviceBoard
     const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardName)
-    return boardInfo?.compiler === 'simulator'
+    return resolveTargetCapabilities(boardInfo).isInProcessSimulator
   })
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)

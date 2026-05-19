@@ -1,3 +1,4 @@
+import { resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
@@ -81,7 +82,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
-  const isSimulatorBoard = currentBoardInfo?.compiler === 'simulator'
+  const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
 
   // Sync simulatorRunning when the simulator stops externally
   useEffect(() => {

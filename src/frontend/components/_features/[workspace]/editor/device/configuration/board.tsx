@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+import { resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -10,13 +11,7 @@ import { boardSelectors, compileOnlySelectors, pinSelectors } from '../../../../
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
-import {
-  isArduinoTarget,
-  isOpenPLCRuntimeTarget,
-  isOpenPLCRuntimeV4Target,
-  isSimulatorTarget,
-  validateRuntimeVersion,
-} from '../../../../../../utils/device'
+import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
 import { Checkbox } from '../../../../../_atoms/checkbox'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
@@ -197,26 +192,31 @@ const Board = memo(function () {
       }
 
       const targetBoardInfo = availableBoards.get(normalizedBoard)
-      const isArduino = isArduinoTarget(targetBoardInfo)
+      const targetCaps = resolveTargetCapabilities(targetBoardInfo)
       const hasPythonFunctionBlocks = pous.some(
         (pou) => pou.pouType === 'function-block' && pou.body.language === 'python',
       )
 
-      if (isArduino && hasPythonFunctionBlocks) {
+      if (!targetCaps.pythonFunctionBlocks && hasPythonFunctionBlocks) {
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
         setShowPythonWarning(true)
         return
       }
 
-      // Check if switching to a non-v4 target when servers or remote devices exist
-      const isTargetV4 = isOpenPLCRuntimeV4Target(normalizedBoard, targetBoardInfo)
-      const isTargetSimulator = isSimulatorTarget(targetBoardInfo)
+      // Warn when the new target can't host the servers or remote-device
+      // I/O the project currently has configured.
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
+      const targetCantHostServers =
+        !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
+      const targetCantHostRemoteIo = !targetCaps.modbusTcpRemote && !targetCaps.ethercat
 
-      if (!isTargetV4 && !isTargetSimulator && (hasServers || hasRemoteDevices)) {
+      const losingServers = hasServers && targetCantHostServers
+      const losingRemoteIo = hasRemoteDevices && targetCantHostRemoteIo
+
+      if (losingServers || losingRemoteIo) {
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
-        setV4FeaturesAffected({ hasServers: !!hasServers, hasRemoteDevices: !!hasRemoteDevices })
+        setV4FeaturesAffected({ hasServers: !!losingServers, hasRemoteDevices: !!losingRemoteIo })
         setShowV4FeaturesWarning(true)
         return
       }

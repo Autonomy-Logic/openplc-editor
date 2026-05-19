@@ -33,20 +33,65 @@
     },
     "cxx_flags": [
       "-std=gnu++17"
-    ]
+    ],
+    "capabilities": {
+      "pinMapping": false,
+      "vppIo": false,
+      "modbusTcpRemote": true,
+      "ethercat": true,
+      "modbusTcpServer": true,
+      "opcuaServer": true,
+      "s7Server": true,
+      "debuggerTransports": ["modbus-serial"],
+      "pythonFunctionBlocks": true,
+      "arduinoApiCompletions": true,
+      "hasRuntimeStats": false,
+      "isInProcessSimulator": true,
+      "directUsbUpload": true
+    }
   },
   "OpenPLC Runtime v3": {
     "compiler": "openplc-compiler",
     "preview": "generic.png",
     "cxx_flags": [
       "-std=gnu++17"
-    ]
+    ],
+    "capabilities": {
+      "pinMapping": false,
+      "vppIo": false,
+      "modbusTcpRemote": false,
+      "ethercat": false,
+      "modbusTcpServer": false,
+      "opcuaServer": false,
+      "s7Server": false,
+      "debuggerTransports": ["modbus-tcp"],
+      "pythonFunctionBlocks": true,
+      "arduinoApiCompletions": false,
+      "hasRuntimeStats": false,
+      "isInProcessSimulator": false,
+      "directUsbUpload": false
+    }
   },
   "OpenPLC Runtime v4": {
     "compiler": "openplc-compiler",
     "preview": "generic.png",
     "cxx_flags": [
       "-std=gnu++17"
-    ]
+    ],
+    "capabilities": {
+      "pinMapping": false,
+      "vppIo": false,
+      "modbusTcpRemote": true,
+      "ethercat": true,
+      "modbusTcpServer": true,
+      "opcuaServer": true,
+      "s7Server": true,
+      "debuggerTransports": ["websocket"],
+      "pythonFunctionBlocks": true,
+      "arduinoApiCompletions": false,
+      "hasRuntimeStats": true,
+      "isInProcessSimulator": false,
+      "directUsbUpload": false
+    }
   }
 }
