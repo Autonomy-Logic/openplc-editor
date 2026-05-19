@@ -216,10 +216,14 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
     const configScreenDef = moduleDef.configScreenDefinition
     const slotConfigValues = slotsConfigBag[String(slotNumber)] ?? {}
 
-    // Bucket channels by addressPrefix (not type): an analogInput with
-    // addressPrefix=%ID is a REAL channel living in the 32-bit image
-    // table, not a 16-bit one, even though its semantic type is still
-    // "analogInput".
+    // Bucket channels by the resolved address prefix from the io-mapping
+    // (the authoritative source for what address the editor assigned),
+    // not by the manifest's static channel.addressPrefix. For modules
+    // that use channelsByFormat (e.g. SLM V/mA cards toggling between
+    // %IW and %ID via the data_format selector), the manifest's
+    // `channels` fallback array carries the raw-mode prefix; the actual
+    // allocated address is what determines whether the channel goes to
+    // analog_inputs (%IW) or analog_real_inputs (%ID).
     const di: { name: string; address: string }[] = []
     const dout: { name: string; address: string }[] = []
     const ai: { name: string; address: string }[] = []
@@ -231,14 +235,12 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
       const ioEntry = ioEntries.find((e) => e.slot === slotNumber && e.channelName === channel.name)
       const address = ioEntry?.iecAddress
       if (!address) continue
-      switch (channel.addressPrefix) {
-        case '%IX': di.push({ name: channel.name, address }); break
-        case '%QX': dout.push({ name: channel.name, address }); break
-        case '%IW': ai.push({ name: channel.name, address }); break
-        case '%QW': ao.push({ name: channel.name, address }); break
-        case '%ID': aiReal.push({ name: channel.name, address }); break
-        case '%QD': aoReal.push({ name: channel.name, address }); break
-      }
+      if (address.startsWith('%IX')) di.push({ name: channel.name, address })
+      else if (address.startsWith('%QX')) dout.push({ name: channel.name, address })
+      else if (address.startsWith('%IW')) ai.push({ name: channel.name, address })
+      else if (address.startsWith('%QW')) ao.push({ name: channel.name, address })
+      else if (address.startsWith('%ID')) aiReal.push({ name: channel.name, address })
+      else if (address.startsWith('%QD')) aoReal.push({ name: channel.name, address })
     }
 
     const ioMappingBlock: PluginSlotIoMapping = {}

@@ -250,6 +250,52 @@ describe('generateVendorPluginConfig', () => {
     expect(slot.io_mapping.analog_real_inputs).toEqual({ base_dword: 4, count: 1 })
   })
 
+  it('routes by io-mapping address even when manifest channels still carry the raw prefix', () => {
+    // Simulates a channelsByFormat module (SLM-AI4-AO2-V) flipped to
+    // engineering mode: the manifest's `channels` array (the raw-mode
+    // fallback) declares %IW/%QW, but the editor allocated %ID/%QD.
+    // The generator must follow the allocated addresses, not the
+    // manifest's static prefixes — otherwise the plugin gets no
+    // analog_real_inputs block and the REAL path silently never fires.
+    const channelsByFormatModule: VppModuleDefinition = {
+      id: 'ai4-ao2-flip',
+      name: 'AI4-AO2 Flip',
+      addressMapping: {
+        channels: [
+          { name: 'AI1', type: 'analogInput', dataType: 'UINT', addressPrefix: '%IW' },
+          { name: 'AI2', type: 'analogInput', dataType: 'UINT', addressPrefix: '%IW' },
+          { name: 'AO1', type: 'analogOutput', dataType: 'UINT', addressPrefix: '%QW' },
+        ],
+      },
+    }
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['ai4-ao2-flip'] },
+      'io-mapping': {
+        entries: [
+          // editor allocated REAL/%ID/%QD addresses based on the slot
+          // being in engineering mode, even though the fallback
+          // `channels` array above still says %IW/%QW.
+          { slot: 1, channelName: 'AI1', iecAddress: '%ID0', alias: '' },
+          { slot: 1, channelName: 'AI2', iecAddress: '%ID1', alias: '' },
+          { slot: 1, channelName: 'AO1', iecAddress: '%QD0', alias: '' },
+        ],
+      },
+    }
+    const result = generateVendorPluginConfig({}, data, [channelsByFormatModule])
+    const slot = (result.slots as Array<{
+      io_mapping: {
+        analog_inputs?: unknown
+        analog_outputs?: unknown
+        analog_real_inputs?: unknown
+        analog_real_outputs?: unknown
+      }
+    }>)[0]
+    expect(slot.io_mapping.analog_real_inputs).toEqual({ base_dword: 0, count: 2 })
+    expect(slot.io_mapping.analog_real_outputs).toEqual({ base_dword: 0, count: 1 })
+    expect(slot.io_mapping.analog_inputs).toBeUndefined()
+    expect(slot.io_mapping.analog_outputs).toBeUndefined()
+  })
+
   it('aborts the dword-range build when an address fails to parse', () => {
     const moduleBad: VppModuleDefinition = {
       id: 'real-bad',
@@ -335,7 +381,7 @@ describe('generateVendorPluginConfig', () => {
     expect((result.slots as Array<{ io_mapping: object }>)[0].io_mapping).toEqual({})
   })
 
-  it('aborts the bit-range build when an address fails to parse', () => {
+  it('drops channels whose io-mapping address has no recognized prefix', () => {
     const moduleBadAddr: VppModuleDefinition = {
       id: 'di-bad',
       name: 'DI-bad',
@@ -356,8 +402,10 @@ describe('generateVendorPluginConfig', () => {
       },
     }
     const result = generateVendorPluginConfig({}, data, [moduleBadAddr])
-    const slot = (result.slots as Array<{ io_mapping: object }>)[0]
-    expect(slot.io_mapping).toEqual({}) // bit-range failed, so digital_inputs is omitted
+    const slot = (result.slots as Array<{ io_mapping: { digital_inputs?: { count: number } } }>)[0]
+    // The unparseable address is silently skipped; the valid one is
+    // still emitted (partial success rather than all-or-nothing).
+    expect(slot.io_mapping.digital_inputs).toEqual({ base_byte: 0, base_bit: 0, count: 1 })
   })
 
   it('handles modules with no addressMapping (zero channels)', () => {
