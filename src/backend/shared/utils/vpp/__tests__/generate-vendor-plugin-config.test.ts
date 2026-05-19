@@ -28,6 +28,21 @@ const moduleAi4 = {
   },
 } satisfies VppModuleDefinition
 
+// REAL-typed analog input module (e.g. SLM-THM-4): channels live in the
+// 32-bit image table (%ID) so the plugin gets IEEE-754 floats with no
+// scaling loss.
+const moduleRealAi2 = {
+  id: 'real-ai-2',
+  name: 'Real-AI-2',
+  hwId: '0xFEEDFACE',
+  addressMapping: {
+    channels: [
+      { name: 'TC1', type: 'analogInput', dataType: 'REAL', addressPrefix: '%ID' },
+      { name: 'TC2', type: 'analogInput', dataType: 'REAL', addressPrefix: '%ID' },
+    ],
+  },
+} satisfies VppModuleDefinition
+
 // A module with a configScreen — used for module_config encoding tests.
 const moduleThm4 = {
   id: 'thm-4',
@@ -171,6 +186,89 @@ describe('generateVendorPluginConfig', () => {
     const result = generateVendorPluginConfig({}, data, [moduleAi4])
     const slot = (result.slots as Array<{ io_mapping: { analog_inputs: unknown } }>)[0]
     expect(slot.io_mapping.analog_inputs).toEqual({ base_word: 10, count: 2 })
+  })
+
+  it('builds dword-range mapping for REAL analog inputs (%ID)', () => {
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['real-ai-2'] },
+      'io-mapping': {
+        entries: [
+          { slot: 1, channelName: 'TC1', iecAddress: '%ID5', alias: '' },
+          { slot: 1, channelName: 'TC2', iecAddress: '%ID6', alias: '' },
+        ],
+      },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleRealAi2])
+    const slot = (result.slots as Array<{ io_mapping: { analog_real_inputs: unknown; analog_inputs?: unknown } }>)[0]
+    expect(slot.io_mapping.analog_real_inputs).toEqual({ base_dword: 5, count: 2 })
+    // %ID channels must not double-emit into analog_inputs.
+    expect(slot.io_mapping.analog_inputs).toBeUndefined()
+  })
+
+  it('builds dword-range mapping for REAL analog outputs (%QD)', () => {
+    const moduleRealAo: VppModuleDefinition = {
+      id: 'real-ao-1',
+      name: 'Real-AO-1',
+      addressMapping: {
+        channels: [{ name: 'AO1', type: 'analogOutput', dataType: 'REAL', addressPrefix: '%QD' }],
+      },
+    }
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['real-ao-1'] },
+      'io-mapping': {
+        entries: [{ slot: 1, channelName: 'AO1', iecAddress: '%QD3', alias: '' }],
+      },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleRealAo])
+    const slot = (result.slots as Array<{ io_mapping: { analog_real_outputs: unknown } }>)[0]
+    expect(slot.io_mapping.analog_real_outputs).toEqual({ base_dword: 3, count: 1 })
+  })
+
+  it('mixes %IW and %ID channels in a single slot into separate buckets', () => {
+    const moduleMixed: VppModuleDefinition = {
+      id: 'mixed',
+      name: 'Mixed',
+      addressMapping: {
+        channels: [
+          { name: 'AI1', type: 'analogInput', dataType: 'UINT', addressPrefix: '%IW' },
+          { name: 'TC1', type: 'analogInput', dataType: 'REAL', addressPrefix: '%ID' },
+        ],
+      },
+    }
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['mixed'] },
+      'io-mapping': {
+        entries: [
+          { slot: 1, channelName: 'AI1', iecAddress: '%IW20', alias: '' },
+          { slot: 1, channelName: 'TC1', iecAddress: '%ID4', alias: '' },
+        ],
+      },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleMixed])
+    const slot = (result.slots as Array<{ io_mapping: { analog_inputs: unknown; analog_real_inputs: unknown } }>)[0]
+    expect(slot.io_mapping.analog_inputs).toEqual({ base_word: 20, count: 1 })
+    expect(slot.io_mapping.analog_real_inputs).toEqual({ base_dword: 4, count: 1 })
+  })
+
+  it('aborts the dword-range build when an address fails to parse', () => {
+    const moduleBad: VppModuleDefinition = {
+      id: 'real-bad',
+      name: 'Real-bad',
+      addressMapping: {
+        channels: [{ name: 'TC1', type: 'analogInput', dataType: 'REAL', addressPrefix: '%ID' }],
+      },
+    }
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['real-bad'] },
+      'io-mapping': {
+        entries: [{ slot: 1, channelName: 'TC1', iecAddress: 'not-an-address', alias: '' }],
+      },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleBad])
+    const slot = (result.slots as Array<{ io_mapping: object }>)[0]
+    // Unparseable address means the channel is dropped entirely (no
+    // entry in any bucket), so io_mapping ends up empty.
+    expect(slot.io_mapping).toEqual({})
   })
 
   it('skips slots where the module id has no matching definition', () => {
