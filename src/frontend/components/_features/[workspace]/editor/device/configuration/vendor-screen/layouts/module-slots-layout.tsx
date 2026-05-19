@@ -169,6 +169,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   }, [stackable, populatedCount, selectedSlot])
 
   const [removeModalOpen, setRemoveModalOpen] = useState(false)
+  const [clearAllModalOpen, setClearAllModalOpen] = useState(false)
 
   const findModule = useCallback(
     (id: string | null | undefined): ModuleDefinition | undefined =>
@@ -418,12 +419,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       {/* Top-level actions (e.g. Clear All Slots) */}
       {section.actions && (
         <div className='flex gap-2'>
-          {(section.actions as Array<{ id: string; label: string; type: string; action?: string }>).map((action) =>
+          {(
+            section.actions as Array<{ id: string; label: string; type: string; action?: string; confirm?: string }>
+          ).map((action) =>
             action.type === 'local' && action.action === 'clear-module-slots' ? (
               <button
                 key={action.id}
                 type='button'
-                onClick={handleClearAll}
+                onClick={() => (action.confirm ? setClearAllModalOpen(true) : handleClearAll())}
                 disabled={!slots.some((s) => s !== null)}
                 className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
               >
@@ -815,6 +818,40 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
           </ModalContent>
         </Modal>
       )}
+
+      {/* Clear-all confirmation. Driven by the action's `confirm` field
+       *  in the screen JSON — when present, the local button routes
+       *  through here instead of firing immediately. */}
+      <Modal open={clearAllModalOpen} onOpenChange={setClearAllModalOpen}>
+        <ModalContent className='flex w-[420px] select-none flex-col items-center justify-evenly gap-5 rounded-lg p-6'>
+          <ModalTitle className='text-center font-caption text-base font-semibold text-neutral-950 dark:text-white'>
+            Clear all slots?
+          </ModalTitle>
+          <p className='text-center text-sm text-neutral-600 dark:text-neutral-300'>
+            Every module will be removed from the backplane and the slot configuration cleared. I/O addresses
+            allocated to those modules will be released.
+          </p>
+          <div className='flex w-full flex-col gap-2'>
+            <button
+              type='button'
+              onClick={() => {
+                handleClearAll()
+                setClearAllModalOpen(false)
+              }}
+              className='w-full rounded-lg bg-red-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-red-700'
+            >
+              Clear all slots
+            </button>
+            <button
+              type='button'
+              onClick={() => setClearAllModalOpen(false)}
+              className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+            >
+              Cancel
+            </button>
+          </div>
+        </ModalContent>
+      </Modal>
     </div>
   )
 }
