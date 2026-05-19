@@ -2,6 +2,7 @@ import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { generateIecAddress } from '@root/frontend/utils/iec-address'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
+import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry, VendorIoMapping } from '@root/middleware/shared/ports/types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -23,10 +24,13 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
   const getStoreState = useCallback(() => {
     const state = useOpenPLCStore.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
-    const moduleConfig = vsd?.['module-configuration'] as { slots?: (string | null)[] } | undefined
+    const moduleConfig = vsd?.['module-configuration'] as
+      | { slots?: (string | null)[]; slotsConfig?: Record<string, Record<string, string | number | boolean>> }
+      | undefined
     const storedMapping = vsd?.[persistenceKey] as VendorIoMapping | undefined
     return {
       slots: moduleConfig?.slots ?? [],
+      slotsConfig: moduleConfig?.slotsConfig ?? {},
       storedMapping,
       remoteDevices: (state.project.data.remoteDevices ?? []) as Array<{
         modbusTcpConfig?: { ioGroups?: Array<{ ioPoints: Array<{ iecLocation: string }> }> }
@@ -40,24 +44,42 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
   const moduleConfig = useOpenPLCStore(
     (s) =>
       s.deviceDefinitions.configuration.vendorScreenData?.['module-configuration'] as
-        | { slots?: (string | null)[] }
+        | { slots?: (string | null)[]; slotsConfig?: Record<string, Record<string, string | number | boolean>> }
         | undefined,
   )
-  const slots = moduleConfig?.slots ?? []
+  const slots = useMemo(() => moduleConfig?.slots ?? [], [moduleConfig?.slots])
+  const slotsConfig = useMemo(() => moduleConfig?.slotsConfig ?? {}, [moduleConfig?.slotsConfig])
+
+  // Captures the per-slot format selection (where the module opted into
+  // channelsByFormat). Re-runs the allocator when any slot flips its
+  // format selector, even though `slots` itself didn't change.
+  const formatSelectionKey = useMemo(() => {
+    return slots
+      .map((moduleId, idx) => {
+        if (!moduleId) return ''
+        const md = availableModules.find((m) => m.id === moduleId) as ResolverModuleDef | undefined
+        const fid = md?.addressMapping?.formatFieldId
+        if (!fid) return ''
+        const cfg = slotsConfig[String(idx + 1)] ?? {}
+        const val = cfg[fid] ?? md?.addressMapping?.formatDefault ?? ''
+        return `${idx}:${val}`
+      })
+      .join('|')
+  }, [slots, slotsConfig, availableModules])
 
   const [entries, setEntries] = useState<IoMappingEntry[]>(() => {
     const { storedMapping } = getStoreState()
     return storedMapping?.entries ?? []
   })
 
-  const lastSlotsRef = useRef<string>('')
+  const lastAllocKey = useRef<string>('')
 
   useEffect(() => {
-    const slotsKey = JSON.stringify(slots)
-    if (slotsKey === lastSlotsRef.current) return
-    lastSlotsRef.current = slotsKey
+    const allocKey = `${JSON.stringify(slots)}::${formatSelectionKey}`
+    if (allocKey === lastAllocKey.current) return
+    lastAllocKey.current = allocKey
 
-    const { remoteDevices, storedMapping } = getStoreState()
+    const { remoteDevices, slotsConfig: liveSlotsConfig, storedMapping } = getStoreState()
 
     const existingAliases = new Map<string, string>()
     const existingEntries = storedMapping?.entries ?? entries
@@ -77,42 +99,35 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       const moduleId = slots[slotIndex]
       if (!moduleId) continue
 
-      const moduleDef = availableModules.find((m) => m.id === moduleId)
+      const moduleDef = availableModules.find((m) => m.id === moduleId) as ResolverModuleDef | undefined
       if (!moduleDef) continue
 
-      const channels = (
-        moduleDef as {
-          addressMapping?: {
-            channels?: Array<{ name: string; type: string; dataType: string; addressPrefix: string }>
-          }
-        }
-      ).addressMapping?.channels
+      const slotConfig = liveSlotsConfig[String(slotIndex + 1)] ?? {}
+      const channels = resolveModuleChannels(moduleDef, slotConfig)
 
-      if (channels) {
-        for (const channel of channels) {
-          const isBit = channel.addressPrefix === '%IX' || channel.addressPrefix === '%QX'
-          const iecAddress = generateIecAddress(channel.addressPrefix, isBit, usedAddresses)
-          usedAddresses.add(iecAddress)
+      for (const channel of channels) {
+        const isBit = channel.addressPrefix === '%IX' || channel.addressPrefix === '%QX'
+        const iecAddress = generateIecAddress(channel.addressPrefix, isBit, usedAddresses)
+        usedAddresses.add(iecAddress)
 
-          const aliasKey = `${slotIndex + 1}:${channel.name}`
-          newEntries.push({
-            slot: slotIndex + 1,
-            moduleId,
-            moduleName: moduleDef.name,
-            channelName: channel.name,
-            channelType: channel.type,
-            dataType: channel.dataType,
-            iecAddress,
-            alias: existingAliases.get(aliasKey) ?? '',
-          })
-        }
+        const aliasKey = `${slotIndex + 1}:${channel.name}`
+        newEntries.push({
+          slot: slotIndex + 1,
+          moduleId,
+          moduleName: (moduleDef as { name?: string }).name ?? moduleId,
+          channelName: channel.name,
+          channelType: channel.type,
+          dataType: channel.dataType,
+          iecAddress,
+          alias: existingAliases.get(aliasKey) ?? '',
+        })
       }
     }
 
     setEntries(newEntries)
     setVendorScreenData(persistenceKey, { entries: newEntries })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots])
+  }, [slots, formatSelectionKey])
 
   const handleAliasChange = (index: number, alias: string) => {
     const updated = [...entries]

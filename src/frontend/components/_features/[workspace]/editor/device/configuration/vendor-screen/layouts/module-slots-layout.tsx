@@ -7,6 +7,7 @@ import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { generateIecAddress } from '@root/frontend/utils/iec-address'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
+import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
 import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -180,11 +181,27 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   /* slot:channel key. Writes to the 'io-mapping' persistence key */
   /* so the rest of the compile flow keeps reading the same data. */
   /* ------------------------------------------------------------ */
-  const lastSlotsRef = useRef<string>('')
+  // Re-allocate when the slot module list OR any format selector
+  // (per-slot channelsByFormat resolver input) changes.
+  const formatSelectionKey = useMemo(() => {
+    return slots
+      .map((moduleId, idx) => {
+        if (!moduleId) return ''
+        const md = availableModules.find((m) => m.id === moduleId) as ResolverModuleDef | undefined
+        const fid = md?.addressMapping?.formatFieldId
+        if (!fid) return ''
+        const cfg = slotsConfig[String(idx + 1)] ?? {}
+        const val = cfg[fid] ?? md?.addressMapping?.formatDefault ?? ''
+        return `${idx}:${val}`
+      })
+      .join('|')
+  }, [slots, slotsConfig, availableModules])
+
+  const lastAllocKey = useRef<string>('')
   useEffect(() => {
-    const slotsKey = JSON.stringify(slots)
-    if (slotsKey === lastSlotsRef.current) return
-    lastSlotsRef.current = slotsKey
+    const allocKey = `${JSON.stringify(slots)}::${formatSelectionKey}`
+    if (allocKey === lastAllocKey.current) return
+    lastAllocKey.current = allocKey
 
     const state = useOpenPLCStore.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
@@ -207,14 +224,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       if (!moduleId) continue
       const moduleDef = availableModules.find((m) => m.id === moduleId)
       if (!moduleDef) continue
-      const channels = (
-        moduleDef as {
-          addressMapping?: {
-            channels?: Array<{ name: string; type: string; dataType: string; addressPrefix: string }>
-          }
-        }
-      ).addressMapping?.channels
-      if (!channels) continue
+      const slotConfig = slotsConfig[String(slotIndex + 1)] ?? {}
+      const channels = resolveModuleChannels(moduleDef as ResolverModuleDef, slotConfig)
+      if (channels.length === 0) continue
 
       for (const channel of channels) {
         const isBit = channel.addressPrefix === '%IX' || channel.addressPrefix === '%QX'
@@ -236,7 +248,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
     setVendorScreenData('io-mapping', { entries: newEntries })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots])
+  }, [slots, formatSelectionKey])
 
   /* ------------------------------------------------------------ */
   /* Mutators                                                      */
