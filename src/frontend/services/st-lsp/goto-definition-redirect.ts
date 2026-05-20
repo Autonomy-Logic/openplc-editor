@@ -203,9 +203,28 @@ export function redirectDefinitionToStore(loc: Location | LocationLink): boolean
   if (!parsed) return false
 
   const bodyOffset = getBodyLineOffset(target.uri)
+  // LSP line 0 of any POU's synthesized doc is the `PROGRAM` /
+  // `FUNCTION` / `FUNCTION_BLOCK` declaration — that's where strucpp
+  // points "Go to Definition" for a POU type name reference (e.g.
+  // clicking on `Manual_Override` in `inst : Manual_Override;`).
+  // Variable declarations sit on LSP lines 1..bodyOffset-1.  Treating
+  // line 0 the same as a variable would force the target POU's
+  // variables panel into text mode with no useful position to land
+  // on — and on first open the panel renders empty because the
+  // VariablesEditor state initialises from an empty `tableData`.
+  // Open the tab and let the editor settle into its natural default
+  // (variables in table mode, cursor at body line 1).
+  const isPouDeclaration = target.lineLsp === 0
   const isInPreamble = target.lineLsp < bodyOffset
 
   if (!openPouEditor(parsed.name)) return false
+
+  if (isPouDeclaration) {
+    // openPouEditor already brought the tab to the front and the
+    // editor model defaults to `variable.display: 'table'`; no
+    // cursor jump is meaningful for "click on the POU name itself".
+    return true
+  }
 
   const {
     editorActions: { setEditorCursor, updateModelVariablesForName },

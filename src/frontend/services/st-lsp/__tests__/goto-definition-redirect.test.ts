@@ -159,17 +159,31 @@ describe('redirectDefinitionToStore', () => {
     expect(state.tabs.find((t) => t.name === 'TankFB')).toBeDefined()
   })
 
-  it('clamps preamble line/column to positive values when LSP returns 0,0', () => {
+  it('opens the POU tab without forcing text mode when LSP points at the declaration line', () => {
+    // Line 0 of any POU's synthesized doc is the `PROGRAM` /
+    // `FUNCTION` / `FUNCTION_BLOCK` declaration — strucpp uses that
+    // position when Go to Definition lands on the POU name itself
+    // (e.g. clicking `Manual_Override` in `inst : Manual_Override;`).
+    // The redirect must open the tab but leave the target POU's
+    // variables panel in its default table mode and skip the cursor
+    // jump.
     setProjectPous([makeStPou('Main')])
     setBodyLineOffset('inmemory://pou/Main.st', 5)
 
-    redirectDefinitionToStore({
+    const handled = redirectDefinitionToStore({
       uri: 'inmemory://pou/Main.st',
       range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
     })
 
+    expect(handled).toBe(true)
     const state = openPLCStoreBase.getState()
-    expect(state.editor.cursorPosition!.lineNumber).toBeGreaterThanOrEqual(1)
-    expect(state.editor.cursorPosition!.column).toBeGreaterThanOrEqual(1)
+    expect(state.editor.meta.name).toBe('Main')
+    // No cursorPosition set — declaration target doesn't carry a
+    // useful caret location.
+    expect(state.editor.cursorPosition).toBeUndefined()
+    // Variables panel stays in its default table mode.
+    if (state.editor.type === 'plc-textual') {
+      expect(state.editor.variable.display).toBe('table')
+    }
   })
 })
