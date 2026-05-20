@@ -161,6 +161,7 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
     expect(vars[0].alias).toBe('conveyor_motor')
   })
 
+
   it('reports orphans when the producer no longer exposes the alias', () => {
     const store = makeStore()
     seedBoard(store, 'SLM-RP4', VPP_V4)
@@ -200,29 +201,6 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
     store.getState().deviceActions.setDeviceBoard('Arduino Mega')
     report = store.getState().projectActions.syncVariableAliases()
     expect(report.orphaned).toBe(1)
-  })
-
-  it('ignoreCapabilities bypasses target gating (project-load callers use this)', () => {
-    const store = makeStore()
-    seedBoard(store, 'Arduino Mega', ARDUINO_BOARD) // VPP NOT in caps
-    seedVendorScreenData(
-      store,
-      withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]),
-    )
-    seedProject(store, [pou('main', [variable('motor', '%QX0.0')])])
-
-    // Without bypass, the Arduino-target pool has no VPP claims and
-    // no aliases get adopted.
-    expect(store.getState().projectActions.syncVariableAliases()).toEqual({
-      adopted: 0,
-      refreshed: 0,
-      orphaned: 0,
-    })
-
-    // With bypass (the load-time callsite) the alias IS adopted
-    // despite VPP being off on the active target.
-    const report = store.getState().projectActions.syncVariableAliases({ ignoreCapabilities: true })
-    expect(report.adopted).toBe(1)
   })
 
   it('syncs POU-local and global variables in the same call', () => {
@@ -289,5 +267,48 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
     store.getState().projectActions.syncVariableAliases()
     const logs = store.getState().logs
     expect(logs.some((log) => log.message.includes('Address pool reports'))).toBe(true)
+  })
+
+  it('setAvailableOptions auto-syncs aliases once boards land (project-load path)', () => {
+    const store = makeStore()
+    // Seed project + VPP data BEFORE the boards land, mimicking the
+    // real load order: handleOpenProjectResponse populates the project,
+    // workspace-screen then resolves availableBoards.
+    seedVendorScreenData(
+      store,
+      withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]),
+    )
+    seedProject(store, [pou('main', [variable('motor_var', '%QX0.0')])])
+    store.getState().deviceActions.setDeviceBoard('SLM-RP4')
+
+    // Pre-sync: no aliases bound because boards haven't landed (caps are empty).
+    expect(store.getState().project.data.pous[0].interface!.variables[0].alias).toBeUndefined()
+
+    // Boards land — this is the project-load sync point.
+    store.getState().deviceActions.setAvailableOptions({
+      availableBoards: new Map<string, BoardInfo>([['SLM-RP4', VPP_V4]]),
+    })
+
+    // Alias was adopted by the auto-sync inside setAvailableOptions.
+    expect(store.getState().project.data.pous[0].interface!.variables[0].alias).toBe('motor')
+    // And a summary log was emitted.
+    expect(store.getState().logs.some((l) => l.message.startsWith('Alias sync:'))).toBe(true)
+  })
+
+  it('setAvailableOptions skips sync when only ports change (no caps churn)', () => {
+    const store = makeStore()
+    seedBoard(store, 'SLM-RP4', VPP_V4) // initial sync runs (no project data — no-op)
+    seedVendorScreenData(
+      store,
+      withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]),
+    )
+    seedProject(store, [pou('main', [variable('motor_var', '%QX0.0')])])
+
+    // Ports-only update — must NOT trigger a sync (would adopt the
+    // alias prematurely without any cap change to justify it).
+    store.getState().deviceActions.setAvailableOptions({
+      availableCommunicationPorts: [],
+    })
+    expect(store.getState().project.data.pous[0].interface!.variables[0].alias).toBeUndefined()
   })
 })

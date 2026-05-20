@@ -2,16 +2,26 @@ import { createStore } from 'zustand/vanilla'
 
 import type { EtherCATRuntimeStatusResponse } from '../../../middleware/shared/ports/ethercat-types'
 import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../../../middleware/shared/ports/types'
+import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice, DeviceSlice } from '../slices/device'
 import { defaultDeviceConfiguration } from '../slices/device/data/types'
+import type { DeviceSliceRoot } from '../slices/device/types'
 import * as pinsValidation from '../slices/device/validation/pins'
+import { createProjectSlice } from '../slices/project/slice'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function makeStore() {
-  return createStore<DeviceSlice>()(createDeviceSlice)
+  // The device slice now reads from project + console slices for the
+  // alias-sync trigger inside setAvailableOptions. Compose all three
+  // so the cross-slice types resolve correctly.
+  return createStore<DeviceSliceRoot>()((...args) => ({
+    ...createDeviceSlice(...args),
+    ...createProjectSlice(...args),
+    ...createConsoleSlice(...args),
+  }))
 }
 
 function makePin(overrides?: Partial<DevicePin>): DevicePin {

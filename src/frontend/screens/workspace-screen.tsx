@@ -346,23 +346,16 @@ const WorkspaceScreen = () => {
     })
   }, [isCollapsed])
 
-  // Load available boards via device port
+  // Load available boards via device port.
+  // `setAvailableOptions` owns the alias sync — once the boards land,
+  // target-capability resolution becomes accurate and the device slice
+  // re-syncs aliases for the active target. We respect the board saved
+  // in the project (no override on load).
   useEffect(() => {
     const loadAvailableBoards = async () => {
       try {
         const boardsMap = await device.getAvailableBoards()
         setAvailableOptions({ availableBoards: boardsMap })
-
-        // availableBoards drives target-capability resolution, which the
-        // alias registry uses to gate producers. The project-load sync
-        // runs before this resolves (it bypasses caps), so we re-sync
-        // here with full caps to surface orphans for the active target
-        // without waiting for the user to visit device-config.
-        useOpenPLCStore.getState().projectActions.syncVariableAliases()
-
-        // Respect the board saved in the project — do not override on load.
-        // The user explicitly chose a target board; resetting it would discard
-        // their selection every time the project reopens.
       } catch (error) {
         console.error('Failed to load boards data:', error)
       }

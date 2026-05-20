@@ -141,16 +141,6 @@ export interface BuildPoolOptions {
    *  the pool must reflect "everything except me" so we don't
    *  conflict with our own about-to-be-overwritten entries. */
   ignoreSource?: SourceKind
-  /** Bypass capability gating: every producer's claims are included
-   *  regardless of the active target's capability flags.
-   *
-   *  Use case: when a producer is *itself* being edited (e.g. user
-   *  adds a new Modbus TCP I/O group), the operation always intends
-   *  to include the entire current claim set so the new entries
-   *  don't collide. Target-switching scenarios — where claims
-   *  become "inactive" because the target dropped the capability —
-   *  call the default (cap-gated) form. */
-  ignoreCapabilities?: boolean
 }
 
 /* ------------------------------------------------------------------
@@ -197,7 +187,6 @@ export function buildAddressPool(
   const conflicts: ConflictReport[] = []
 
   const ignore = options.ignoreSource
-  const bypassCaps = options.ignoreCapabilities === true
 
   const claim = (address: string, source: SourceRef, alias?: string): void => {
     if (!address) return
@@ -217,14 +206,14 @@ export function buildAddressPool(
   // 1. Pin mapping — fixed hardware addresses. Goes first so other
   //    producers can't accidentally claim a pin-bound slot when
   //    Arduino-style targets are active.
-  if ((bypassCaps || caps.pinMapping) && inputs.pinMapping && ignore !== 'pin-mapping') {
+  if (caps.pinMapping && inputs.pinMapping && ignore !== 'pin-mapping') {
     for (const pin of inputs.pinMapping.pins) {
       claim(pin.address, { kind: 'pin-mapping', ref: pin.address }, pin.alias)
     }
   }
 
   // 2. VPP module I/O.
-  if ((bypassCaps || caps.vppIo) && inputs.vendorIoMapping?.entries && ignore !== 'vpp-io') {
+  if (caps.vppIo && inputs.vendorIoMapping?.entries && ignore !== 'vpp-io') {
     for (const entry of inputs.vendorIoMapping.entries) {
       claim(
         entry.iecAddress,
@@ -235,7 +224,7 @@ export function buildAddressPool(
   }
 
   // 3. Modbus TCP slave remote-device I/O points.
-  if ((bypassCaps || caps.modbusTcpRemote) && inputs.remoteDevices && ignore !== 'modbus-tcp-remote') {
+  if (caps.modbusTcpRemote && inputs.remoteDevices && ignore !== 'modbus-tcp-remote') {
     for (const dev of inputs.remoteDevices) {
       const devRef = dev.deviceName || dev.name || 'unknown-device'
       for (const group of dev.modbusTcpConfig?.ioGroups ?? []) {
@@ -251,7 +240,7 @@ export function buildAddressPool(
   }
 
   // 4. EtherCAT channel mappings.
-  if ((bypassCaps || caps.ethercat) && inputs.remoteDevices && ignore !== 'ethercat') {
+  if (caps.ethercat && inputs.remoteDevices && ignore !== 'ethercat') {
     for (const dev of inputs.remoteDevices) {
       const devRef = dev.deviceName || dev.name || 'unknown-device'
       for (const slave of dev.ethercatConfig?.devices ?? []) {

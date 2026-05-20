@@ -568,7 +568,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
     },
 
-    syncVariableAliases: (options) => {
+    syncVariableAliases: () => {
       // Build pool + registry once from the live state before entering
       // produce so we don't read draft proxies inside the registry
       // build.
@@ -587,11 +587,6 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           remoteDevices: live.project.data.remoteDevices,
         },
         resolveTargetCapabilities(boardInfo),
-        // Project-load callers pass ignoreCapabilities so the sync
-        // doesn't depend on the async availableBoards load timing.
-        // Cap-gated sync still runs after the board switch effect
-        // fires once availableBoards is populated.
-        { ignoreCapabilities: options?.ignoreCapabilities === true },
       )
       const registry = buildAliasRegistry(pool)
 
@@ -1218,13 +1213,6 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
           | undefined)?.entries ?? []
 
-      // ignoreCapabilities: the user is actively editing a Modbus
-      // TCP remote device, so the pool must include every existing
-      // claim — pin-mapping, VPP, sibling Modbus groups, EtherCAT —
-      // regardless of whether the current target gates them. Without
-      // this, two consecutive addIOGroup calls would reallocate the
-      // same addresses when no target board is configured (e.g. in
-      // tests, or in projects pre-board-selection).
       const pool = buildAddressPool(
         {
           pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
@@ -1232,7 +1220,6 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           remoteDevices: live.project.data.remoteDevices,
         },
         resolveTargetCapabilities(boardInfo),
-        { ignoreCapabilities: true },
       )
 
       setState(

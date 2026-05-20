@@ -138,3 +138,15 @@ export type DeviceActions = {
 export type DeviceSlice = DeviceState & {
   deviceActions: DeviceActions
 }
+
+/**
+ * Cross-slice root-state view the device slice needs at runtime —
+ * `setAvailableOptions` triggers the alias sync once the workspace
+ * screen finishes board discovery (capabilities depend on the active
+ * board info), and the sync's summary log is routed through the
+ * console slice. Same shape pattern as `ProjectSliceRoot`.
+ */
+import type { ConsoleSlice } from '../console'
+import type { ProjectSlice } from '../project/types'
+
+export type DeviceSliceRoot = DeviceSlice & ProjectSlice & ConsoleSlice

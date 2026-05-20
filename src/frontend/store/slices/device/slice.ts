@@ -3,7 +3,7 @@ import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { defaultDeviceConfiguration } from './data/types'
-import type { DeviceSlice, PinUpdateResponse } from './types'
+import type { DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
 import {
   checkIfPinAliasIsValid,
   checkIfPinIsValid,
@@ -12,7 +12,7 @@ import {
   removeAddressPrefix,
 } from './validation/pins'
 
-const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
+const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (setState, getState) => ({
   deviceAvailableOptions: {
     availableBoards: new Map(),
     availableCommunicationPorts: [],
@@ -52,6 +52,28 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           }
         }),
       )
+
+      // availableBoards drives target-capability resolution, which the
+      // alias registry depends on. This action is the project-load
+      // sync point: the workspace screen calls us once it finishes
+      // board discovery, so by the time we run, the active target's
+      // capabilities resolve correctly. Re-syncing on every subsequent
+      // boards refresh (e.g. VPP package install) catches capability
+      // shifts for the active board.
+      //
+      // We only sync when `availableBoards` was actually provided —
+      // ports-only updates (e.g. board.tsx refresh-ports) don't affect
+      // capabilities and shouldn't churn the alias registry.
+      if (availableBoards) {
+        const syncReport = getState().projectActions.syncVariableAliases()
+        if (syncReport.adopted > 0 || syncReport.refreshed > 0 || syncReport.orphaned > 0) {
+          getState().consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Alias sync: adopted=${syncReport.adopted} refreshed=${syncReport.refreshed} orphaned=${syncReport.orphaned}`,
+          })
+        }
+      }
     },
     setDeviceDefinitions: ({ configuration, pinMapping }): void => {
       setState(

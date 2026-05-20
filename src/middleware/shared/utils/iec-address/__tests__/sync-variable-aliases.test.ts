@@ -99,6 +99,66 @@ describe('syncVariableAliases', () => {
     expect(result.report.orphaned).toHaveLength(1)
   })
 
+  it('refresh is producer-agnostic: alias name wins over IEC address for VPP, Modbus, and EtherCAT alike', () => {
+    // The registry/sync layer doesn't care which producer staked a
+    // claim — `byAlias` is a flat name->address map. If the alias
+    // moves, every variable bound to that name follows. Build one
+    // registry seeded from all three producer kinds and verify a
+    // refresh fires for each.
+    const pool = buildAddressPool(
+      {
+        // VPP: alias "tank_level" relocated from %IW2 to %IW10.
+        vendorIoMapping: {
+          entries: [
+            { iecAddress: '%IW10', alias: 'tank_level', slot: 1, channelName: 'AI0' },
+          ],
+        },
+        remoteDevices: [
+          {
+            name: 'modbus-slave',
+            // Modbus: alias "temp" relocated from %IW0 to %IW20.
+            modbusTcpConfig: {
+              ioGroups: [
+                {
+                  id: 'g1',
+                  ioPoints: [{ id: 'p1', iecLocation: '%IW20', alias: 'temp' }],
+                },
+              ],
+            },
+          },
+          {
+            name: 'ec-master',
+            // EtherCAT: alias "estop" relocated from %IX0.0 to %IX2.3.
+            ethercatConfig: {
+              devices: [
+                {
+                  name: 'coupler',
+                  channelMappings: [{ channelId: 'ch-0', iecLocation: '%IX2.3', alias: 'estop' }],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      { ...RUNTIME_V4_CAPABILITIES, vppIo: true, modbusTcpRemote: true, ethercat: true },
+    )
+    const registry = buildAliasRegistry(pool)
+
+    const vars: SyncableVariable[] = [
+      VAR({ name: 'tank_level_var', location: '%IW2', alias: 'tank_level' }),
+      VAR({ name: 'temperature', location: '%IW0', alias: 'temp' }),
+      VAR({ name: 'estop_var', location: '%IX0.0', alias: 'estop' }),
+    ]
+    const result = syncVariableAliases(vars, registry)
+
+    expect(result.variables[0]).toMatchObject({ name: 'tank_level_var', alias: 'tank_level', location: '%IW10' })
+    expect(result.variables[1]).toMatchObject({ name: 'temperature', alias: 'temp', location: '%IW20' })
+    expect(result.variables[2]).toMatchObject({ name: 'estop_var', alias: 'estop', location: '%IX2.3' })
+    expect(result.report.refreshed).toHaveLength(3)
+    expect(result.report.adopted).toEqual([])
+    expect(result.report.orphaned).toEqual([])
+  })
+
   it('preserves carry-through fields (type, class, etc.) on changed variables', () => {
     const registry = buildRegistryFromVpp([
       { iecAddress: '%QX0.0', alias: 'motor', slot: 1, channelName: 'DO1' },
