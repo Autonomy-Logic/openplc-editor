@@ -46,13 +46,17 @@ interface VariablesEditorProps {
   name?: string
   /**
    * Whether this instance corresponds to the currently active tab.
-   * Gates effects that would otherwise misfire when a hidden
-   * instance subscribes to globally-active state.
+   * Currently unused — every effect in this component is naturally
+   * scoped to its own POU via `propName`, so hidden instances don't
+   * react to other POUs' state changes.  Kept on the prop contract
+   * so callers in workspace-screen.tsx pass it consistently with
+   * the other multi-mounted editors and so future gating (e.g. of
+   * expensive memos) has a hook to attach to without an API break.
    */
   isActive?: boolean
 }
 
-const VariablesEditor = ({ name: propName, isActive = true }: VariablesEditorProps = {}) => {
+const VariablesEditor = ({ name: propName, isActive: _isActive = true }: VariablesEditorProps = {}) => {
   const ROWS_NOT_SELECTED = -1
   // Multi-mount support: every open POU's VariablesEditor needs to
   // read ITS OWN model — not whichever happens to be active — so
@@ -66,11 +70,6 @@ const VariablesEditor = ({ name: propName, isActive = true }: VariablesEditorPro
       ? (s.editors.find((e) => e.meta.name === propName) ?? s.editor)
       : s.editor,
   )
-  // `isActive` is not used in this phase but is part of the props
-  // contract: Phase 3 wires it into effects that should pause while
-  // the panel is hidden.  Reference it once so eslint stops warning
-  // about an unused prop without affecting behaviour.
-  void isActive
   const {
     ladderFlows,
     ladderFlowActions: { updateNode },
@@ -212,14 +211,13 @@ const VariablesEditor = ({ name: propName, isActive = true }: VariablesEditorPro
     }
   }, [tableData, editorVariables.display])
 
-  // Re-derive the local view state from the active editor whenever its
-  // identity changes (tab switch, programmatic navigation from a
-  // compile-error click, etc.).  Both `editorVariables` and
-  // `editorCode` are useState initialisers that run only on mount, so
-  // without this sync the panel keeps showing the previous POU's
-  // display mode and code after `setEditor(...)` swaps the model
-  // beneath us.  Driven off `editor.meta.name` so we don't re-fire on
-  // unrelated `editor` mutations (cursorPosition, etc.).
+  // Sync local view state from this instance's own model when the
+  // POU is renamed or its display mode toggles (table ↔ code).  Each
+  // VariablesEditor is bound to a specific POU via `propName`, so this
+  // effect only re-derives for changes to THIS POU's model, not
+  // whichever happens to be active.  Driven off `editor.meta.name` so
+  // unrelated mutations (cursorPosition, variable list edits) don't
+  // re-fire it.
   const editorVariableState =
     editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.variable : null
   const editorVariableDisplay = editorVariableState?.display

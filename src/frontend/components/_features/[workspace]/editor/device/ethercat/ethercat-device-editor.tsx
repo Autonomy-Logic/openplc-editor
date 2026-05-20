@@ -39,20 +39,37 @@ const TabItem = ({ value, label, isActive }: { value: string; label: string; isA
   </Tabs.Trigger>
 )
 
+interface EtherCATDeviceEditorProps {
+  /**
+   * Bus this device belongs to.  When omitted (legacy callers), the
+   * editor falls back to reading `busName` from the currently-active
+   * editor's meta — the pre-multi-mount behaviour.
+   */
+  busName?: string
+  /**
+   * Device identifier within the bus.  Same fallback semantics as
+   * `busName`.
+   */
+  deviceId?: string
+}
+
 /**
  * Standalone full-page editor for a single EtherCAT slave device.
  *
- * Opened when the user clicks on a device child node in the project tree.
- * Reads `busName` and `deviceId` from the editor meta and looks up the
- * device from the Zustand store.
+ * Opened when the user clicks on a device child node in the project
+ * tree.  When the workspace multi-mounts EtherCAT editors (one per
+ * `deviceId`), `busName` and `deviceId` are passed explicitly so each
+ * instance reads its own device regardless of which tab is active.
  */
-const EtherCATDeviceEditor = () => {
+const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: EtherCATDeviceEditorProps = {}) => {
   const { editor, project, projectActions, workspaceActions } = useOpenPLCStore()
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const esi = useEsi()
 
-  const busName = editor.type === 'plc-ethercat-device' ? editor.meta.busName : ''
-  const deviceId = editor.type === 'plc-ethercat-device' ? editor.meta.deviceId : ''
+  const fallbackBusName = editor.type === 'plc-ethercat-device' ? editor.meta.busName : ''
+  const fallbackDeviceId = editor.type === 'plc-ethercat-device' ? editor.meta.deviceId : ''
+  const busName = propBusName ?? fallbackBusName
+  const deviceId = propDeviceId ?? fallbackDeviceId
   const projectPath = project.meta.path
 
   const [activeTab, setActiveTab] = useState<DeviceDetailTab>('channel-mappings')

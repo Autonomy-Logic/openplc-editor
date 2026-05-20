@@ -533,7 +533,11 @@ const WorkspaceScreen = () => {
 
                         {/* EtherCAT device editors — multi-instance (one tab
                             per `deviceId`).  Kept mounted across tab switches
-                            so the device's view state survives. */}
+                            so the device's view state (active tab pane,
+                            scroll position, etc.) survives.  `busName` and
+                            `deviceId` are passed as props so each instance
+                            reads its own device regardless of which tab is
+                            active. */}
                         {editors
                           .filter((m) => m.type === 'plc-ethercat-device')
                           .map((model) => {
@@ -544,7 +548,7 @@ const WorkspaceScreen = () => {
                                 key={model.meta.deviceId}
                                 className={cn('h-full w-full', !isActive && 'hidden')}
                               >
-                                <EtherCATDeviceEditor key={model.meta.deviceId} />
+                                <EtherCATDeviceEditor busName={model.meta.busName} deviceId={model.meta.deviceId} />
                               </div>
                             )
                           })}
