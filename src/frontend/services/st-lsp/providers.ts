@@ -323,6 +323,17 @@ export function registerStLspProviders({
  * answers `textDocument/semanticTokens/full` (no delta protocol), so
  * there's no per-result state to free.
  */
+export interface SemanticTokensRegistration extends monaco.IDisposable {
+  /**
+   * Tell Monaco to re-query semantic tokens for every model in the
+   * language.  Used by the boot path after initial registration (so
+   * already-mounted models get tokens once the provider is alive)
+   * and by the LSP refresh request handler when strucpp finishes
+   * background analysis.
+   */
+  refresh(): void
+}
+
 export function registerStLspSemanticTokens({
   connection,
   monacoApi,
@@ -331,13 +342,9 @@ export function registerStLspSemanticTokens({
   connection: MessageConnection
   monacoApi: typeof monaco
   legend: monaco.languages.SemanticTokensLegend
-}): monaco.IDisposable {
+}): SemanticTokensRegistration {
   // Emitter Monaco subscribes to via `onDidChange` to know when to
-  // re-tokenise every model in this language.  Fired once right after
-  // registration so models that already mounted (e.g. an open
-  // variables-text editor on a graphical POU) get their tokens
-  // populated — without this, Monaco caches the empty result from
-  // its first pre-registration query and never re-asks.
+  // re-tokenise every model in this language.
   const changeEmitter = new monacoApi.Emitter<void>()
   const providerDisposable = monacoApi.languages.registerDocumentSemanticTokensProvider('st', {
     getLegend() {
@@ -346,10 +353,25 @@ export function registerStLspSemanticTokens({
     onDidChange: changeEmitter.event,
     async provideDocumentSemanticTokens(model): Promise<monaco.languages.SemanticTokens | null> {
       const { lspUri, lineOffset } = effectiveLspContext(model.uri.toString())
+      // TEMP DIAGNOSTIC — investigation of "vars-text on graphical
+      // POUs stays uncoloured until an ST POU is opened".  Logs the
+      // model URI, the routed LSP URI, the line offset, and what
+      // strucpp returned so we can see whether the chain breaks at
+      // the LSP-response stage or at Monaco's caching.
+      console.log('[tokens:1-query]', Date.now(), {
+        modelUri: model.uri.toString(),
+        lspUri,
+        lineOffset,
+      })
       const result: SemanticTokens | null = await connection.sendRequest(
         SemanticTokensRequest.type,
         { textDocument: { uri: lspUri } },
       )
+      console.log('[tokens:2-response]', Date.now(), {
+        modelUri: model.uri.toString(),
+        hasResult: result !== null,
+        rawTokenTriples: result ? Math.floor(result.data.length / 5) : 0,
+      })
       if (!result) return null
       // For body editors: keep tokens at LSP line >= lineOffset (skip
       // the synthesized declaration + VAR preamble) and shift down.
@@ -359,9 +381,16 @@ export function registerStLspSemanticTokens({
       // synthesized doc's bodyLineOffset.
       const isVarsView = parsePouVarsUri(model.uri.toString()) !== null
       const endLineExclusive = isVarsView ? getBodyLineOffset(lspUri) : Number.POSITIVE_INFINITY
+      const shifted = shiftSemanticTokensToBody(result.data, lineOffset, endLineExclusive)
+      console.log('[tokens:3-shifted]', Date.now(), {
+        modelUri: model.uri.toString(),
+        isVarsView,
+        endLineExclusive,
+        tripleCount: Math.floor(shifted.length / 5),
+      })
       return {
         ...(result.resultId ? { resultId: result.resultId } : {}),
-        data: shiftSemanticTokensToBody(result.data, lineOffset, endLineExclusive),
+        data: shifted,
       }
     },
     releaseDocumentSemanticTokens() {
@@ -371,8 +400,15 @@ export function registerStLspSemanticTokens({
   // Microtask defer so the registration has fully propagated into
   // Monaco's internal language-features registry before we tell it
   // to refresh.
-  queueMicrotask(() => changeEmitter.fire())
+  queueMicrotask(() => {
+    console.log('[tokens:0-initial-refresh-fire]', Date.now())
+    changeEmitter.fire()
+  })
   return {
+    refresh() {
+      console.log('[tokens:0-refresh-fire]', Date.now())
+      changeEmitter.fire()
+    },
     dispose() {
       providerDisposable.dispose()
       changeEmitter.dispose()

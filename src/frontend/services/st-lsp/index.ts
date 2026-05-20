@@ -23,10 +23,11 @@ import {
   type InitializeParams,
   InitializeRequest,
   type InitializeResult,
+  SemanticTokensRefreshRequest,
 } from 'vscode-languageserver-protocol'
 
 import { attachDiagnosticsBridge } from './diagnostics'
-import { registerStLspProviders, registerStLspSemanticTokens } from './providers'
+import { registerStLspProviders, registerStLspSemanticTokens, type SemanticTokensRegistration } from './providers'
 import { createLspTransport, type LspTransport } from './transport'
 import type { StLspService, StLspStartOptions } from './types'
 
@@ -95,12 +96,25 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   // Semantic-tokens provider needs the legend from the worker's
   // `initialize` result, so it can't be registered synchronously
   // alongside the others.  Filled in inside the ready promise below.
-  let semanticTokensDisposable: import('monaco-editor').IDisposable | null = null
+  let semanticTokensRegistration: SemanticTokensRegistration | null = null
+
+  // Handler for `workspace/semanticTokens/refresh` — strucpp sends
+  // this when its background analysis catches up to docs that were
+  // didOpen'd before they were ready, and asks the client to
+  // re-query all semantic tokens.  Registered immediately (not
+  // inside the ready promise) so the request handler is in place
+  // even for refreshes the server sends mid-handshake.
+  connection.onRequest(SemanticTokensRefreshRequest.type, () => {
+    console.log('[lsp:tokens-refresh-from-server]', Date.now())
+    semanticTokensRegistration?.refresh()
+    return null
+  })
 
   // ---------------------------------------------------------------------------
   // LSP handshake — initialize, initialized, push stlibs
   // ---------------------------------------------------------------------------
   const ready = (async () => {
+    console.log('[lsp-boot:1-listen]', Date.now())
     connection.listen()
 
     const initParams: InitializeParams = {
@@ -124,14 +138,24 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
             formats: ['relative'],
           },
         },
-        workspace: {},
+        workspace: {
+          // Advertise that we honour server-initiated requests to
+          // refresh semantic tokens.  Servers send this when their
+          // background analysis catches up to docs that were
+          // didOpen'd before analysis was ready — without
+          // refreshSupport, the client (us) keeps showing whatever
+          // empty result the first query returned.
+          semanticTokens: { refreshSupport: true },
+        },
       },
       workspaceFolders: null,
     }
+    console.log('[lsp-boot:2-init-send]', Date.now())
     const initResult = (await connection.sendRequest(
       InitializeRequest.type,
       initParams,
     )) as InitializeResult
+    console.log('[lsp-boot:3-init-result]', Date.now(), initResult.capabilities.semanticTokensProvider)
     await connection.sendNotification(InitializedNotification.type, {})
 
     // Wire semantic tokens once we know the worker's legend.  The
@@ -141,7 +165,8 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     // unaffected.
     const legend = initResult.capabilities.semanticTokensProvider
     if (monaco && legend && 'legend' in legend && legend.legend) {
-      semanticTokensDisposable = registerStLspSemanticTokens({
+      console.log('[lsp-boot:4-register-tokens]', Date.now())
+      semanticTokensRegistration = registerStLspSemanticTokens({
         connection,
         monacoApi: monaco,
         legend: {
@@ -152,6 +177,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     }
 
     await pushAllStlibs()
+    console.log('[lsp-boot:5-stlibs-pushed]', Date.now())
   })().catch((err) => {
     console.error('[strucpp-lsp] initialize failed:', err)
     throw err
@@ -238,7 +264,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       disposed = true
       providerDisposable?.dispose()
       diagnosticsDisposable?.dispose()
-      semanticTokensDisposable?.dispose()
+      semanticTokensRegistration?.dispose()
       transport.dispose()
     },
   }
