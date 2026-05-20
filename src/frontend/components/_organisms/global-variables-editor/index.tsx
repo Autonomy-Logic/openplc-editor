@@ -306,7 +306,6 @@ const GlobalVariablesEditor = () => {
       // Mark project as unsaved
       handleFileAndWorkspaceSavedState('Resource')
 
-      toast({ title: 'Global Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
       return true
     } catch (err) {
