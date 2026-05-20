@@ -37,6 +37,14 @@ import { buildGenericNode } from './fbd-utils/nodes'
 import { useFBDClipboard } from './fbd-utils/useCopyPaste'
 
 interface FBDProps {
+  /**
+   * POU this FBD body is bound to.  Passed in by `FbdEditor` so the
+   * body operates on its OWN POU's state — variable lookups, snapshot
+   * captures, flow mutations — regardless of which tab the user has
+   * active.  Without it every multi-mounted FBDBody would read the
+   * active editor's name and the same flow would render N times.
+   */
+  pouName: string
   rung: FBDRungState
   nodeDivergences?: string[]
   isDebuggerActive?: boolean
@@ -44,9 +52,8 @@ interface FBDProps {
 
 const EDGE_COLOR_TRUE = '#00FF00'
 
-export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
+export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
   const {
-    editor,
     editorActions: { updateModelVariables },
     fbdFlowActions,
     libraries,
@@ -55,13 +62,21 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     modals,
     modalActions: { closeModal, openModal },
   } = useOpenPLCStore()
+  // Use this POU's own model for any read of variable display /
+  // graphical configuration, instead of the active editor's.  Same
+  // pattern as `<VariablesEditor>` — a hidden FBDBody otherwise looks
+  // up the visible POU's settings, which leads to inconsistent
+  // selection / zoom-pan behaviour across tab switches.
+  const editor = useOpenPLCStore(
+    (s) => s.editors.find((e) => e.meta.name === pouName) ?? s.editor,
+  )
   const isDebuggerVisible = useIsDebuggerVisible()
   const debugVariableValues = useDebugBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()
   const { captureAndPush } = usePouSnapshot()
 
   const { pous } = project.data
-  const pouRef = pous.find((pou) => pou.name === editor.meta.name)
+  const pouRef = pous.find((pou) => pou.name === pouName)
   const getCompositeKey = useDebugCompositeKey()
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)

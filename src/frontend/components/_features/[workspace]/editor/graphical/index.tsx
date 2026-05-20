@@ -21,7 +21,7 @@ type GraphicalEditorProps = ComponentPropsWithoutRef<'div'> & {
   isActive?: boolean
 }
 
-const GraphicalEditor = ({ language, readOnly, isActive = true }: GraphicalEditorProps) => {
+const GraphicalEditor = ({ name, language, readOnly, isActive = true }: GraphicalEditorProps) => {
   const editorComponents = {
     sfc: SfcEditor,
     fbd: FbdEditor,
@@ -37,7 +37,7 @@ const GraphicalEditor = ({ language, readOnly, isActive = true }: GraphicalEdito
           <div className='absolute inset-0 z-10 cursor-not-allowed' title='Read-only: viewing historical commit' />
         )}
         <div className={`h-full w-full${readOnly ? ' pointer-events-none' : ''}`}>
-          <EditorComponent />
+          <EditorComponent name={name} />
         </div>
       </div>
     </GraphicalEditorActiveProvider>

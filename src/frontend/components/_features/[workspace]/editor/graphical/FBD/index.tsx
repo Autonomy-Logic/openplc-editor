@@ -6,8 +6,23 @@ import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
 
-export default function FbdEditor() {
-  const editor = useOpenPLCStore((state) => state.editor)
+interface FbdEditorProps {
+  /**
+   * POU name this FbdEditor instance is bound to.  With multi-mount,
+   * every open FBD POU has its own FbdEditor that must look up its
+   * OWN flow — not whichever POU happens to be active in the store.
+   * Without this prop the ReactFlow inside would render the active
+   * POU's nodes inside every hidden FbdEditor too, and the viewport
+   * the user set while a POU was visible would get clobbered on
+   * subsequent tab switches.  Defaults to the active editor's name
+   * for legacy callers.
+   */
+  name?: string
+}
+
+export default function FbdEditor({ name: propName }: FbdEditorProps = {}) {
+  const activeEditorName = useOpenPLCStore((state) => state.editor.meta.name)
+  const pouName = propName ?? activeEditorName
   const fbdFlows = useOpenPLCStore((state) => state.fbdFlows)
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
@@ -18,7 +33,7 @@ export default function FbdEditor() {
   )
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
-  const flow = fbdFlows.find((flow) => flow.name === editor.meta.name)
+  const flow = fbdFlows.find((flow) => flow.name === pouName)
   const flowUpdated = flow?.updated || false
 
   const nodeDivergences = useMemo(() => {
@@ -85,24 +100,29 @@ export default function FbdEditor() {
     if (!flowSchema.success) return
 
     updatePou({
-      name: editor.meta.name,
+      name: pouName,
       content: {
         language: 'fbd',
         value: flowSchema.data,
       },
     })
 
-    fbdFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
+    fbdFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
 
     if (!isDebuggerVisible) {
-      handleFileAndWorkspaceSavedState(editor.meta.name)
+      handleFileAndWorkspaceSavedState(pouName)
     }
   }, [flowUpdated])
 
   return (
     <div className='h-full w-full'>
       {flow?.rung ? (
-        <FBDBody rung={flow?.rung} nodeDivergences={nodeDivergences} isDebuggerActive={isDebuggerVisible} />
+        <FBDBody
+          pouName={pouName}
+          rung={flow?.rung}
+          nodeDivergences={nodeDivergences}
+          isDebuggerActive={isDebuggerVisible}
+        />
       ) : (
         <span>No rung found for editor</span>
       )}
