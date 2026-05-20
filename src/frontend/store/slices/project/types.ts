@@ -154,10 +154,20 @@ export type ProjectActions = {
    * mutates an alias-producing source (VPP slot edits, Modbus / EtherCAT
    * alias edits, pin renames, target switch, project load, pre-compile).
    *
+   * `options.ignoreCapabilities`: build the alias registry without
+   * target-capability gating. Used at project load, because
+   * `availableBoards` is populated asynchronously by the workspace
+   * screen — at the moment the load handler fires, the target's
+   * capabilities resolve to an empty block and no producer
+   * contributes its aliases. Bypass mode adopts every alias the
+   * project data declares, regardless of which target is selected.
+   * Subsequent syncs (board switch, producer edits) run with the
+   * default cap-gated behaviour so orphan detection stays correct.
+   *
    * Returns a combined sync report so the caller can log a one-liner
    * summary ("Adopted N aliases, refreshed M, K orphaned").
    */
-  syncVariableAliases: () => {
+  syncVariableAliases: (options?: { ignoreCapabilities?: boolean }) => {
     adopted: number
     refreshed: number
     orphaned: number

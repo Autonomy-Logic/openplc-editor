@@ -353,6 +353,13 @@ const WorkspaceScreen = () => {
         const boardsMap = await device.getAvailableBoards()
         setAvailableOptions({ availableBoards: boardsMap })
 
+        // availableBoards drives target-capability resolution, which the
+        // alias registry uses to gate producers. The project-load sync
+        // runs before this resolves (it bypasses caps), so we re-sync
+        // here with full caps to surface orphans for the active target
+        // without waiting for the user to visit device-config.
+        useOpenPLCStore.getState().projectActions.syncVariableAliases()
+
         // Respect the board saved in the project — do not override on load.
         // The user explicitly chose a target board; resetting it would discard
         // their selection every time the project reopens.

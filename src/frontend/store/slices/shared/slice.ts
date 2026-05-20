@@ -781,10 +781,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Self-upgrade pass: bind variables to current aliases so older
       // projects (no `alias` field on variables) pick up the
       // producer-declared aliases on first open. Refreshes any
-      // variable whose alias has moved since last save, and surfaces
-      // orphans for the UI to flag. Idempotent — projects that have
-      // already been sync'd produce a no-op report.
-      const syncReport = getState().projectActions.syncVariableAliases()
+      // variable whose alias has moved since last save.
+      //
+      // `availableBoards` is populated asynchronously by the
+      // workspace-screen effect, so at this point the active target's
+      // capabilities resolve to empty — meaning a cap-gated sync would
+      // see no aliases. Bypass cap gating here; once availableBoards
+      // loads, the board-switch effect runs another (cap-gated) sync
+      // that correctly surfaces orphans for the chosen target.
+      const syncReport = getState().projectActions.syncVariableAliases({ ignoreCapabilities: true })
       if (syncReport.adopted > 0 || syncReport.refreshed > 0 || syncReport.orphaned > 0) {
         // Single info-level summary; the per-variable detail isn't
         // user-facing noise.

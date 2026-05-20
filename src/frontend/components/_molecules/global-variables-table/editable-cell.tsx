@@ -352,17 +352,20 @@ const EditableLocationCell = ({
   }, [id, existingPins, remoteIOPoints, vendorIoEntries])
 
   // Same display + orphan-badge rules as the variables-table cell.
+  // Combined label "alias (address)" stays consistent across editable
+  // and read-only states so the cell doesn't flip on row select.
   const variableAlias = original?.alias
-  const displayValue = variableAlias && !editable ? variableAlias : cellValue
   const aliasRegistry = useAliasRegistry()
   const isOrphaned = !!variableAlias && !aliasRegistry.byAlias.has(variableAlias)
   const orphanTooltip = isOrphaned
     ? `Alias "${variableAlias}" is no longer declared by any active source. Last known address: ${cellValue}`
     : undefined
+  const combinedLabel = variableAlias ? `${variableAlias} (${cellValue})` : cellValue
 
   return editable ? (
     <GenericComboboxCell
       value={cellValue}
+      displayLabel={combinedLabel}
       onValueChange={(value) => {
         onBlur(value)
       }}
@@ -386,7 +389,7 @@ const EditableLocationCell = ({
         </span>
       )}
       <HighlightedText
-        text={displayValue}
+        text={combinedLabel}
         searchQuery={searchQuery}
         className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
           'text-amber-600 dark:text-amber-400': isOrphaned,

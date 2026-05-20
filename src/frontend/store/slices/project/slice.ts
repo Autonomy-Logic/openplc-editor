@@ -576,12 +576,10 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
     },
 
-    syncVariableAliases: () => {
+    syncVariableAliases: (options) => {
       // Build pool + registry once from the live state before entering
       // produce so we don't read draft proxies inside the registry
-      // build. Capabilities are honoured: variables bound to aliases
-      // from a producer the target no longer supports show up as
-      // orphans (Phase 5 will surface them in the UI).
+      // build.
       const live = getState() as unknown as {
         deviceDefinitions?: {
           pinMapping?: { pins?: Array<{ address: string; alias?: string; pinType?: string }> }
@@ -604,6 +602,11 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           remoteDevices: getState().project.data.remoteDevices,
         },
         resolveTargetCapabilities(boardInfo),
+        // Project-load callers pass ignoreCapabilities so the sync
+        // doesn't depend on the async availableBoards load timing.
+        // Cap-gated sync still runs after the board switch effect
+        // fires once availableBoards is populated.
+        { ignoreCapabilities: options?.ignoreCapabilities === true },
       )
       const registry = buildAliasRegistry(pool)
 

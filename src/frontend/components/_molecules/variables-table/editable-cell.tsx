@@ -532,26 +532,23 @@ const EditableLocationCell = ({
     ]
   }, [id, variable, existingPins, remoteIOPoints, vendorIoEntries])
 
-  // Display the alias name when the variable has one bound; falls back
-  // to the raw IEC address otherwise. The cell still commits an address
-  // (typed or picked); the alias is patched in by updateVariable's
-  // auto-adopt path. When editing, expose the raw address so the user
-  // can change the binding directly.
-  const displayValue = variable?.alias && !selected ? variable.alias : cellValue
-
-  // Orphan detection: variable has an alias bound but the registry no
-  // longer knows about it (its producer was removed, or the target
-  // dropped the capability). Keep the last-known location but flag
-  // the cell so the user can re-bind or clear.
+  // Combined display: when the variable carries an alias, show it
+  // alongside the raw address as "alias (address)" — same shape
+  // across selected and unselected states so clicking a row doesn't
+  // flip the cell's appearance. When there's no alias, only the
+  // address shows. The combobox `value` stays as the raw address so
+  // typing / picking still operates on the canonical form.
   const aliasRegistry = useAliasRegistry()
   const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
   const orphanTooltip = isOrphaned
     ? `Alias "${variable?.alias}" is no longer declared by any active source. Last known address: ${cellValue}`
     : undefined
+  const combinedLabel = variable?.alias ? `${variable.alias} (${cellValue})` : cellValue
 
   return selected ? (
     <GenericComboboxCell
       value={cellValue}
+      displayLabel={combinedLabel}
       onValueChange={(value) => {
         onBlur(value)
       }}
@@ -585,7 +582,7 @@ const EditableLocationCell = ({
         </span>
       )}
       <HighlightedText
-        text={displayValue}
+        text={combinedLabel}
         searchQuery={searchQuery}
         className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
           'text-amber-600 dark:text-amber-400': isOrphaned,
