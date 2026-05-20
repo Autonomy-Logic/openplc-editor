@@ -62,14 +62,17 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
     modals,
     modalActions: { closeModal, openModal },
   } = useOpenPLCStore()
-  // Use this POU's own model for any read of variable display /
-  // graphical configuration, instead of the active editor's.  Same
-  // pattern as `<VariablesEditor>` — a hidden FBDBody otherwise looks
-  // up the visible POU's settings, which leads to inconsistent
-  // selection / zoom-pan behaviour across tab switches.
-  const editor = useOpenPLCStore(
-    (s) => s.editors.find((e) => e.meta.name === pouName) ?? s.editor,
-  )
+  // Use this POU's own model for variable display / graphical
+  // configuration reads.  When the FBDBody's `pouName` matches the
+  // currently-active editor we prefer `state.editor` (the fresh copy
+  // that action callsites mutate); for hidden POUs we read the
+  // last-saved snapshot from `state.editors[]`.  Same pattern as
+  // `<VariablesEditor>` — without it, updates that target the active
+  // editor would be invisible here.
+  const editor = useOpenPLCStore((s) => {
+    if (s.editor.meta.name === pouName) return s.editor
+    return s.editors.find((e) => e.meta.name === pouName) ?? s.editor
+  })
   const isDebuggerVisible = useIsDebuggerVisible()
   const debugVariableValues = useDebugBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()

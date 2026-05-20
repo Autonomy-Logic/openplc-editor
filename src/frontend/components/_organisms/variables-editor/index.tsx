@@ -58,18 +58,22 @@ interface VariablesEditorProps {
 
 const VariablesEditor = ({ name: propName, isActive: _isActive = true }: VariablesEditorProps = {}) => {
   const ROWS_NOT_SELECTED = -1
-  // Multi-mount support: every open POU's VariablesEditor needs to
-  // read ITS OWN model — not whichever happens to be active — so
-  // hidden instances don't manipulate the visible POU's data and
-  // vice versa.  Falls back to the active editor when no `propName`
-  // is supplied (legacy callers).
-  // Alias `editor` to this instance's own model so the rest of the
+  // Multi-mount support: every open POU's VariablesEditor reads ITS
+  // OWN model.  When this instance's POU matches the currently-active
+  // editor we read `state.editor` directly — that's the *fresh* copy
+  // most action callsites (`updateModelVariables`, etc.) mutate.
+  // Falling back to `state.editors[]` for non-matching tabs is fine
+  // because hidden VariablesEditors aren't interactive; reading the
+  // last-saved snapshot is correct.  Without this preference the
+  // hidden-snapshot lookup would shadow updates to the active editor
+  // and the UI would never re-render after `updateModelVariables`.
+  // Alias `editor` to this instance's model so the rest of the
   // component reads from the right POU without a sweeping rename.
-  const editor = useOpenPLCStore((s) =>
-    propName
-      ? (s.editors.find((e) => e.meta.name === propName) ?? s.editor)
-      : s.editor,
-  )
+  const editor = useOpenPLCStore((s) => {
+    if (!propName) return s.editor
+    if (s.editor.meta.name === propName) return s.editor
+    return s.editors.find((e) => e.meta.name === propName) ?? s.editor
+  })
   const {
     ladderFlows,
     ladderFlowActions: { updateNode },
