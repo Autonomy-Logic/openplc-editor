@@ -180,13 +180,11 @@ export function registerStLspProviders({
         // targets) or place the body cursor.  When the redirect
         // claims a location, return a no-op self-reference so
         // Monaco doesn't render "No definition found for 'X'" on
-        // top of our successful redirect — the redirect already
-        // moved the user where they wanted to go.  Then open the
-        // References peek inline so the user can see every usage
-        // of the symbol in the body alongside the redirect target.
+        // top of our successful redirect — and so it doesn't open
+        // the References peek as a fallback either (see
+        // `suppressNoDefinitionFound` for both pitfalls).
         const primary = locations[0]
         if (primary && redirectDefinitionToStore(primary)) {
-          openReferencesPeek(model, monacoApi)
           return suppressNoDefinitionFound(model, position, monacoApi)
         }
 
@@ -396,51 +394,39 @@ function shiftSemanticTokensToBody(data: number[], offset: number): Uint32Array 
 }
 
 /**
- * Build a Location whose target is the source cursor itself, so the
- * caller's `provideDefinition` can claim "definition found" without
- * triggering a visible Monaco navigation.
+ * Build a Location whose target is *just off* the source cursor, so
+ * the caller's `provideDefinition` can claim "definition found"
+ * without either of Monaco's two unwanted fallbacks firing.
  *
- * Why we need this: when our redirect (stub → graphical, preamble →
- * variables panel, cross-POU → store nav) has already handled the
- * navigation, the provider must NOT return `null` / `[]`.  Monaco
- * interprets both as "no definition" and renders the inline
- * "No definition found for 'X'" badge on top of our successful
- * redirect.  Returning a Location at the current cursor position
- * counts as a valid result for Monaco's UI but makes its "navigate"
- * call a no-op because the cursor is already there.
+ * Two pitfalls had to be avoided here:
+ *
+ *   1. Returning `null` / `[]` makes Monaco render an inline
+ *      "No definition found for 'X'" badge on top of our successful
+ *      store redirect.
+ *   2. Returning a Location whose range CONTAINS the cursor position
+ *      makes Monaco's `revealDefinition` action take its
+ *      "already-at-target" branch and open the References peek
+ *      widget inline instead of navigating — also undesirable on
+ *      top of the redirect.
+ *
+ * Picking a zero-width range one column off the cursor satisfies
+ * Monaco's "definition found" check but fails its `containsPosition`
+ * test, so it falls through to the silent navigation branch.  The
+ * cursor shifts by one character, which is imperceptible at typical
+ * font sizes; we accept that cost.
  */
 function suppressNoDefinitionFound(
   model: monaco.editor.ITextModel,
   position: monaco.IPosition,
   monacoApi: typeof monaco,
 ): monaco.languages.Location[] {
+  const offsetCol = position.column > 1 ? position.column - 1 : position.column + 1
   return [
     {
       uri: model.uri,
-      range: new monacoApi.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+      range: new monacoApi.Range(position.lineNumber, offsetCol, position.lineNumber, offsetCol),
     },
   ]
-}
-
-/**
- * Open Monaco's inline References peek widget on the editor that
- * currently has the symbol under cursor.  Used after a successful
- * Go to Definition redirect for variables / data types — Monaco's
- * own action would otherwise navigate to the no-op self-location
- * silently, leaving the user no in-body affordance to spot the
- * other usages of the symbol.
- *
- * Scheduled on a microtask so it runs *after* Monaco's
- * `revealDefinition` action consumes our provider's return value;
- * triggering it synchronously would race with that action and the
- * peek would close itself immediately.
- */
-function openReferencesPeek(model: monaco.editor.ITextModel, monacoApi: typeof monaco): void {
-  const editor = monacoApi.editor.getEditors().find((e) => e.getModel() === model)
-  if (!editor) return
-  setTimeout(() => {
-    editor.trigger('lsp-redirect', 'editor.action.goToReferences', null)
-  }, 0)
 }
 
 function normaliseLocationResponse(
