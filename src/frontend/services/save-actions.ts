@@ -411,11 +411,6 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
         state.fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
 
-      toast({
-        title: 'Changes saved!',
-        description: 'The project was saved successfully!',
-        variant: 'default',
-      })
     } else {
       setEditingState('unsaved')
       toast({
@@ -612,7 +607,6 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       setEditingState('unsaved')
     }
 
-    toast({ title: 'File saved', description: `"${fileName}" saved successfully.`, variant: 'default' })
     return { success: true }
   } catch {
     return fail('An unexpected error occurred.')

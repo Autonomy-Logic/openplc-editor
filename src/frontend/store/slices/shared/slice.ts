@@ -787,12 +787,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Alias self-upgrade pass runs in `deviceActions.setAvailableOptions`
       // once the workspace screen finishes board discovery — capabilities
       // depend on the active board info, which isn't loaded here yet.
-
-      toast({
-        title: 'Project opened!',
-        description: 'Your project was opened, and loaded.',
-        variant: 'default',
-      })
     },
   },
 

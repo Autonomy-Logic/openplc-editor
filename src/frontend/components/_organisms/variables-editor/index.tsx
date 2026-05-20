@@ -961,7 +961,6 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
         }
       }
 
-      toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
