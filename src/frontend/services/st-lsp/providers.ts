@@ -181,9 +181,12 @@ export function registerStLspProviders({
         // claims a location, return a no-op self-reference so
         // Monaco doesn't render "No definition found for 'X'" on
         // top of our successful redirect — the redirect already
-        // moved the user where they wanted to go.
+        // moved the user where they wanted to go.  Then open the
+        // References peek inline so the user can see every usage
+        // of the symbol in the body alongside the redirect target.
         const primary = locations[0]
         if (primary && redirectDefinitionToStore(primary)) {
+          openReferencesPeek(model, monacoApi)
           return suppressNoDefinitionFound(model, position, monacoApi)
         }
 
@@ -417,6 +420,27 @@ function suppressNoDefinitionFound(
       range: new monacoApi.Range(position.lineNumber, position.column, position.lineNumber, position.column),
     },
   ]
+}
+
+/**
+ * Open Monaco's inline References peek widget on the editor that
+ * currently has the symbol under cursor.  Used after a successful
+ * Go to Definition redirect for variables / data types — Monaco's
+ * own action would otherwise navigate to the no-op self-location
+ * silently, leaving the user no in-body affordance to spot the
+ * other usages of the symbol.
+ *
+ * Scheduled on a microtask so it runs *after* Monaco's
+ * `revealDefinition` action consumes our provider's return value;
+ * triggering it synchronously would race with that action and the
+ * peek would close itself immediately.
+ */
+function openReferencesPeek(model: monaco.editor.ITextModel, monacoApi: typeof monaco): void {
+  const editor = monacoApi.editor.getEditors().find((e) => e.getModel() === model)
+  if (!editor) return
+  setTimeout(() => {
+    editor.trigger('lsp-redirect', 'editor.action.goToReferences', null)
+  }, 0)
 }
 
 function normaliseLocationResponse(
