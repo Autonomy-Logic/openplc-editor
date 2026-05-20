@@ -28,6 +28,7 @@ import {
   type SymbolInformation,
 } from 'vscode-languageserver-protocol'
 
+import { openPLCStoreBase } from '../../store'
 import { getBodyLineOffset } from './body-offsets'
 import {
   lspCompletionListToMonaco,
@@ -41,7 +42,7 @@ import {
 } from './converters'
 import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
-import { parsePouVarsUri, POU_DECLARATION_LINE_COUNT, pouUri } from './types'
+import { parsePouVarsUri, POU_DECLARATION_LINE_COUNT, pouUri, stubUri } from './types'
 
 interface ProviderOptions {
   connection: MessageConnection
@@ -58,15 +59,28 @@ interface ProviderOptions {
  *   - `pouvars://<name>.st` (variables text view): the LSP doesn't
  *     index this URI — the variables-code-editor only displays VAR
  *     blocks lifted out of the synthesized doc.  Remap the request
- *     to the live `pou://` document and use the declaration's
- *     single-line offset so Monaco line 1 (= first VAR block line)
- *     maps to LSP line 1 (= first VAR line in the synthesized doc).
+ *     to the live LSP document.  Crucially the LSP URI depends on
+ *     the POU's body language: ST POUs live under `pou://` (real
+ *     body), graphical / hybrid POUs live under `stub://` (signature
+ *     stub).  Without this branching the variables-text view on an
+ *     FBD POU would query a `pou://` URI strucpp has no document
+ *     for, producing "No definition found" on any in-vars symbol
+ *     (FB type names, struct field types, etc.).  Either way the
+ *     declaration is a single line at LSP index 0, so the offset is
+ *     a constant 1.
  *   - Anything else: pass through unchanged.
  */
 function effectiveLspContext(modelUri: string): { lspUri: string; lineOffset: number } {
   const varsPou = parsePouVarsUri(modelUri)
   if (varsPou !== null) {
-    return { lspUri: pouUri(varsPou), lineOffset: POU_DECLARATION_LINE_COUNT }
+    // Look the POU up by name to decide which URI scheme its LSP
+    // document is registered under.  Falls back to `pou://` when the
+    // POU isn't in the store yet (race during boot) — strucpp will
+    // simply return empty, no worse than the old behaviour.
+    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === varsPou)
+    const isStLanguage = pou?.body.language === 'st'
+    const lspUri = isStLanguage ? pouUri(varsPou) : stubUri(varsPou)
+    return { lspUri, lineOffset: POU_DECLARATION_LINE_COUNT }
   }
   return { lspUri: modelUri, lineOffset: getBodyLineOffset(modelUri) }
 }
