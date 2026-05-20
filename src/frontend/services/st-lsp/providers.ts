@@ -332,10 +332,18 @@ export function registerStLspSemanticTokens({
   monacoApi: typeof monaco
   legend: monaco.languages.SemanticTokensLegend
 }): monaco.IDisposable {
-  return monacoApi.languages.registerDocumentSemanticTokensProvider('st', {
+  // Emitter Monaco subscribes to via `onDidChange` to know when to
+  // re-tokenise every model in this language.  Fired once right after
+  // registration so models that already mounted (e.g. an open
+  // variables-text editor on a graphical POU) get their tokens
+  // populated — without this, Monaco caches the empty result from
+  // its first pre-registration query and never re-asks.
+  const changeEmitter = new monacoApi.Emitter<void>()
+  const providerDisposable = monacoApi.languages.registerDocumentSemanticTokensProvider('st', {
     getLegend() {
       return legend
     },
+    onDidChange: changeEmitter.event,
     async provideDocumentSemanticTokens(model): Promise<monaco.languages.SemanticTokens | null> {
       const { lspUri, lineOffset } = effectiveLspContext(model.uri.toString())
       const result: SemanticTokens | null = await connection.sendRequest(
@@ -360,6 +368,16 @@ export function registerStLspSemanticTokens({
       /* no-op */
     },
   })
+  // Microtask defer so the registration has fully propagated into
+  // Monaco's internal language-features registry before we tell it
+  // to refresh.
+  queueMicrotask(() => changeEmitter.fire())
+  return {
+    dispose() {
+      providerDisposable.dispose()
+      changeEmitter.dispose()
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
