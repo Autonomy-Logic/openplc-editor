@@ -10,10 +10,17 @@ import type {
   S7CommPlcIdentity,
   S7CommServerSettings,
 } from '../../../../middleware/shared/ports/types'
+import {
+  buildAddressPool,
+  buildAliasRegistry,
+  nextFreeAddress,
+  syncVariableAliases as syncVariablesPure,
+} from '../../../../middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
-import type { ProjectResponse, ProjectSlice } from './types'
+import type { ProjectResponse, ProjectSlice, ProjectSliceRoot } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import { createVariableValidation, updateVariableValidation } from './validation/variables'
 
@@ -140,37 +147,26 @@ function generateIOPoints(
   functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
   length: number,
   groupName: string,
-  usedAddresses: Set<string>,
+  /* Pool of every claim active for the current target. The bulk
+   * allocator threads its own `pending` set alongside the pool so
+   * each new point in the same batch sees the prior batch picks
+   * without needing to rebuild the pool inside the loop. */
+  pool: Parameters<typeof nextFreeAddress>[0],
+  pending: Set<string>,
 ): ModbusIOPoint[] {
   const { type, iecPrefix, isBit } = getFunctionCodeInfo(functionCode)
   const points: ModbusIOPoint[] = []
-  let currentAddress = 0
 
   for (let i = 0; i < length; i++) {
-    let iecLocation: string
-    if (isBit) {
-      iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
-      while (usedAddresses.has(iecLocation)) {
-        currentAddress++
-        iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
-      }
-    } else {
-      iecLocation = `${iecPrefix}${currentAddress}`
-      while (usedAddresses.has(iecLocation)) {
-        currentAddress++
-        iecLocation = `${iecPrefix}${currentAddress}`
-      }
-    }
-
+    const iecLocation = nextFreeAddress(pool, iecPrefix, isBit, undefined, pending)
+    pending.add(iecLocation)
     points.push({ id: `${groupName}_${i}`, name: `${groupName}_${i}`, type, iecLocation, alias: '' })
-    usedAddresses.add(iecLocation)
-    currentAddress++
   }
 
   return points
 }
 
-const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (setState, getState) => ({
+const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> = (setState, getState) => ({
   project: {
     meta: { name: '', type: 'plc-project', path: '' },
     data: {
@@ -416,6 +412,37 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     },
     updateVariable: ({ scope, associatedPou, rowId, variableId, data: updates }) => {
       let response: ProjectResponse = { ok: true }
+
+      // Auto-adopt path: whenever the location changes, look up the
+      // alias registry and patch updates.alias to match the new
+      // address. If the address has an alias, the variable adopts it
+      // (cell shows the alias name, Phase 4 sync will keep the
+      // location current as the alias moves). If not, the alias
+      // clears — re-typing a now-orphaned location intentionally
+      // drops the stale alias label too. Done outside `produce` so
+      // we read the live store state including pinMapping + caps.
+      let aliasOverride: { alias: string | undefined } | undefined
+      if (typeof updates.location === 'string') {
+        const live = getState()
+        const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+          live.deviceDefinitions.configuration.deviceBoard ?? '',
+        )
+        const ioMapping =
+          (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined)?.entries ?? []
+        const pool = buildAddressPool(
+          {
+            pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+            vendorIoMapping: { entries: ioMapping },
+            remoteDevices: live.project.data.remoteDevices,
+          },
+          resolveTargetCapabilities(boardInfo),
+        )
+        const registry = buildAliasRegistry(pool)
+        aliasOverride = { alias: registry.byAddress.get(updates.location)?.alias }
+      }
+
       setState(
         produce((slice: ProjectSlice) => {
           // Resolve the target variables array (local POU or global)
@@ -446,6 +473,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           variables[found.index] = {
             ...variables[found.index],
             ...updates,
+            ...(aliasOverride ?? {}),
             ...(validationResponse.data ? validationResponse.data : {}),
           }
           response.data = variables[found.index]
@@ -538,6 +566,80 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           variables.splice(newIndex, 0, item)
         }),
       )
+    },
+
+    syncVariableAliases: () => {
+      // Build pool + registry once from the live state before entering
+      // produce so we don't read draft proxies inside the registry
+      // build.
+      const live = getState()
+      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+        live.deviceDefinitions.configuration.deviceBoard ?? '',
+      )
+      const ioMapping =
+        (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+          | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+          | undefined)?.entries ?? []
+      const pool = buildAddressPool(
+        {
+          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: live.project.data.remoteDevices,
+        },
+        resolveTargetCapabilities(boardInfo),
+      )
+      const registry = buildAliasRegistry(pool)
+
+      // Conflicts are unreachable under normal editor flows because
+      // the editor always assigns addresses uniquely. They can
+      // appear when a project file has been hand-edited or migrated
+      // incorrectly — silent first-wins is the worst failure mode,
+      // so surface them in the console panel.
+      if (pool.conflicts.length > 0) {
+        const sample = pool.conflicts
+          .slice(0, 5)
+          .map((c) => `${c.address} (${c.sources.map((s) => s.kind).join(', ')})`)
+          .join('; ')
+        const overflow = pool.conflicts.length > 5 ? ` (+${pool.conflicts.length - 5} more)` : ''
+        live.consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `Address pool reports ${pool.conflicts.length} conflicting claim(s): ${sample}${overflow}. The first source wins; later ones lose their address binding.`,
+        })
+      }
+
+      let adopted = 0
+      let refreshed = 0
+      let orphaned = 0
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          for (const pou of slice.project.data.pous) {
+            if (!pou.interface?.variables) continue
+            const result = syncVariablesPure(pou.interface.variables, registry)
+            adopted += result.report.adopted.length
+            refreshed += result.report.refreshed.length
+            orphaned += result.report.orphaned.length
+            // Mutate in place to preserve draft semantics.
+            for (let i = 0; i < result.variables.length; i++) {
+              pou.interface.variables[i] = result.variables[i]
+            }
+          }
+
+          const globals = slice.project.data.configurations.resource.globalVariables
+          if (globals) {
+            const result = syncVariablesPure(globals, registry)
+            adopted += result.report.adopted.length
+            refreshed += result.report.refreshed.length
+            orphaned += result.report.orphaned.length
+            for (let i = 0; i < result.variables.length; i++) {
+              globals[i] = result.variables[i]
+            }
+          }
+        }),
+      )
+
+      return { adopted, refreshed, orphaned }
     },
 
     // -----------------------------------------------------------------------
@@ -1097,30 +1199,36 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       return ok()
     },
     addIOGroup: (deviceName, group) => {
+      // Read producer state from the live store before entering produce
+      // so the pool reflects every active source (pin-mapping, VPP,
+      // every Modbus / EtherCAT remote device — including this one's
+      // existing groups, which must not be reclaimed) under the
+      // current target's capabilities.
+      const live = getState()
+      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+        live.deviceDefinitions.configuration.deviceBoard ?? '',
+      )
+      const ioMapping =
+        (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+          | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+          | undefined)?.entries ?? []
+
+      const pool = buildAddressPool(
+        {
+          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: live.project.data.remoteDevices,
+        },
+        resolveTargetCapabilities(boardInfo),
+      )
+
       setState(
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)
           if (!device?.modbusTcpConfig) return
 
-          const usedAddresses = new Set<string>()
-          for (const g of device.modbusTcpConfig.ioGroups) {
-            /* istanbul ignore next -- defensive: ioPoints may be undefined */
-            for (const p of g.ioPoints ?? []) {
-              usedAddresses.add(p.iecLocation)
-            }
-          }
-          // Include EtherCAT channel mappings from all remote devices
-          for (const rd of slice.project.data.remoteDevices ?? []) {
-            if (rd.ethercatConfig?.devices) {
-              for (const dev of rd.ethercatConfig.devices) {
-                for (const mapping of dev.channelMappings) {
-                  usedAddresses.add(mapping.iecLocation)
-                }
-              }
-            }
-          }
-
-          const ioPoints = generateIOPoints(group.functionCode, group.length, group.name, usedAddresses)
+          const pending = new Set<string>()
+          const ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending)
           device.modbusTcpConfig.ioGroups.push({ ...group, ioPoints })
         }),
       )
@@ -1158,6 +1266,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (point) point.alias = alias
         }),
       )
+      // Producer mutation: refresh variables that were bound to the
+      // old alias (or that now resolve to the new one).
+      getState().projectActions.syncVariableAliases()
       return ok()
     },
     updateEthercatConfig: (deviceName, ethercatConfig) => {

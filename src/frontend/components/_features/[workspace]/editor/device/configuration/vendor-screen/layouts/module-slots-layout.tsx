@@ -1,7 +1,8 @@
 import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
+import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { DragHandleIcon } from '@root/frontend/assets/icons/interface/DragHandle'
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
@@ -10,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore } from '@root/frontend/store'
-import { generateIecAddress } from '@root/frontend/utils/iec-address'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
@@ -320,17 +320,24 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     const state = useOpenPLCStore.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const storedMapping = vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined
-    const remoteDevices = (state.project.data.remoteDevices ?? []) as Array<{
-      modbusTcpConfig?: { ioGroups?: Array<{ ioPoints: Array<{ iecLocation: string }> }> }
-      ethercatConfig?: { devices?: Array<{ channelMappings?: Array<{ iecLocation: string }> }> }
-    }>
+    const remoteDevices = state.project.data.remoteDevices ?? []
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard)
+    const capabilities = resolveTargetCapabilities(boardInfo)
 
     const existingAliases = new Map<string, string>()
     for (const entry of storedMapping?.entries ?? []) {
       if (entry.alias) existingAliases.set(`${entry.slot}:${entry.channelName}`, entry.alias)
     }
 
-    const usedAddresses = collectUsedIecAddresses(remoteDevices)
+    // VPP slots are being regenerated, so the pool excludes the
+    // current vpp-io claims and includes everything else (pin mapping,
+    // modbus remote, EtherCAT) when active for the target.
+    const pool = buildAddressPool(
+      { pinMapping: { pins: state.deviceDefinitions.pinMapping.pins }, remoteDevices },
+      capabilities,
+      { ignoreSource: 'vpp-io' },
+    )
+    const inFlight = new Set<string>()
     const newEntries: IoMappingEntry[] = []
 
     for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
@@ -344,8 +351,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
       for (const channel of channels) {
         const isBit = channel.addressPrefix === '%IX' || channel.addressPrefix === '%QX'
-        const iecAddress = generateIecAddress(channel.addressPrefix, isBit, usedAddresses)
-        usedAddresses.add(iecAddress)
+        const iecAddress = nextFreeAddress(pool, channel.addressPrefix, isBit, undefined, inFlight)
+        inFlight.add(iecAddress)
         const aliasKey = `${slotIndex + 1}:${channel.name}`
         newEntries.push({
           slot: slotIndex + 1,
@@ -361,6 +368,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     }
 
     setVendorScreenData('io-mapping', { entries: newEntries })
+    // Producer mutation: every VPP slot just had its addresses
+    // re-allocated. Sync variables that were bound to those aliases.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -509,6 +519,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       e.slot === slot && e.channelName === channelName ? { ...e, alias } : e,
     )
     setVendorScreenData('io-mapping', { entries })
+    // Alias name changed — refresh variables bound to the old name.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }
 
   /* ------------------------------------------------------------ */

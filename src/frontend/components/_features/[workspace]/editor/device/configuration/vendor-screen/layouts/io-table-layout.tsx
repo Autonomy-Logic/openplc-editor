@@ -1,6 +1,6 @@
-import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
+import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useOpenPLCStore } from '@root/frontend/store'
-import { generateIecAddress } from '@root/frontend/utils/iec-address'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry, VendorIoMapping } from '@root/middleware/shared/ports/types'
@@ -28,14 +28,15 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       | { slots?: (string | null)[]; slotsConfig?: Record<string, Record<string, string | number | boolean>> }
       | undefined
     const storedMapping = vsd?.[persistenceKey] as VendorIoMapping | undefined
+    const boardName = state.deviceDefinitions.configuration.deviceBoard
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardName)
     return {
       slots: moduleConfig?.slots ?? [],
       slotsConfig: moduleConfig?.slotsConfig ?? {},
       storedMapping,
-      remoteDevices: (state.project.data.remoteDevices ?? []) as Array<{
-        modbusTcpConfig?: { ioGroups?: Array<{ ioPoints: Array<{ iecLocation: string }> }> }
-        ethercatConfig?: { devices?: Array<{ channelMappings?: Array<{ iecLocation: string }> }> }
-      }>,
+      remoteDevices: state.project.data.remoteDevices ?? [],
+      pinMappingPins: state.deviceDefinitions.pinMapping.pins,
+      capabilities: resolveTargetCapabilities(boardInfo),
     }
   }, [persistenceKey])
 
@@ -79,7 +80,13 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     if (allocKey === lastAllocKey.current) return
     lastAllocKey.current = allocKey
 
-    const { remoteDevices, slotsConfig: liveSlotsConfig, storedMapping } = getStoreState()
+    const {
+      remoteDevices,
+      slotsConfig: liveSlotsConfig,
+      storedMapping,
+      pinMappingPins,
+      capabilities,
+    } = getStoreState()
 
     const existingAliases = new Map<string, string>()
     const existingEntries = storedMapping?.entries ?? entries
@@ -89,10 +96,19 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       }
     }
 
-    // Seed "used" from every other I/O source (Modbus TCP, EtherCAT) so the
-    // VPP allocator avoids collisions. We explicitly DON'T pass vendorScreenData
-    // here — the existing VPP entries are the ones we're about to re-generate.
-    const usedAddresses = collectUsedIecAddresses(remoteDevices)
+    // Build the pool from every active producer EXCEPT VPP I/O — we're
+    // about to regenerate the VPP entries from scratch, so the
+    // existing ones must not block the new allocations from reclaiming
+    // their own addresses.
+    const pool = buildAddressPool(
+      {
+        pinMapping: { pins: pinMappingPins },
+        remoteDevices,
+      },
+      capabilities,
+      { ignoreSource: 'vpp-io' },
+    )
+    const inFlight = new Set<string>()
     const newEntries: IoMappingEntry[] = []
 
     for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
@@ -107,8 +123,8 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
 
       for (const channel of channels) {
         const isBit = channel.addressPrefix === '%IX' || channel.addressPrefix === '%QX'
-        const iecAddress = generateIecAddress(channel.addressPrefix, isBit, usedAddresses)
-        usedAddresses.add(iecAddress)
+        const iecAddress = nextFreeAddress(pool, channel.addressPrefix, isBit, undefined, inFlight)
+        inFlight.add(iecAddress)
 
         const aliasKey = `${slotIndex + 1}:${channel.name}`
         newEntries.push({
@@ -126,6 +142,9 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
 
     setEntries(newEntries)
     setVendorScreenData(persistenceKey, { entries: newEntries })
+    // Producer mutation: addresses were just re-allocated for every
+    // VPP-active slot. Refresh variables bound to those aliases.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -134,6 +153,8 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     updated[index] = { ...updated[index], alias }
     setEntries(updated)
     setVendorScreenData(persistenceKey, { entries: updated })
+    // Alias name changed on a single entry — refresh.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }
 
   const groups = useMemo(() => {

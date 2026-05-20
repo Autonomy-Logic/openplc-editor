@@ -146,6 +146,25 @@ export type ProjectActions = {
     newIndex: number
   }) => void
 
+  /**
+   * Re-sync every located variable (POU-local + globals) against the
+   * current alias registry. Variables auto-adopt new aliases, follow
+   * existing ones to refreshed addresses, and surface orphans (alias
+   * the registry no longer knows about). Called from every site that
+   * mutates an alias-producing source (VPP slot edits, Modbus / EtherCAT
+   * alias edits, pin renames, target switch, pre-compile) and from
+   * `deviceActions.setAvailableOptions` once the workspace screen
+   * finishes board discovery — that's the project-load sync point.
+   *
+   * Returns a combined sync report so the caller can log a one-liner
+   * summary ("Adopted N aliases, refreshed M, K orphaned").
+   */
+  syncVariableAliases: () => {
+    adopted: number
+    refreshed: number
+    orphaned: number
+  }
+
   // Data types
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse
   deleteDatatype: (name: string) => void
@@ -260,3 +279,20 @@ export type ProjectSlice = {
   pendingDeletions: string[]
   projectActions: ProjectActions
 }
+
+/**
+ * Cross-slice root-state view the project slice needs at runtime —
+ * `setDeviceDefinitions` / `setVendorScreenData` lives in the device
+ * slice, `addLog` lives in the console slice, both consumed by the
+ * alias-sync flow. Keeps the slice creator's `getState()` typed
+ * properly instead of relying on `as unknown as { ... }` casts.
+ *
+ * Slice types are imported via dynamic `type-only` style — declared
+ * up here in `types.ts` rather than `slice.ts` so the project slice
+ * has a single source of truth for cross-slice shape without
+ * circular module deps.
+ */
+import type { ConsoleSlice } from '../console'
+import type { DeviceSlice } from '../device'
+
+export type ProjectSliceRoot = ProjectSlice & DeviceSlice & ConsoleSlice

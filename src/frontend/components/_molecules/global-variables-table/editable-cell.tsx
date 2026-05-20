@@ -1,4 +1,5 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -275,7 +276,7 @@ const EditableInitialValueCell = ({
 
 const EditableLocationCell = ({
   getValue,
-  row: { index },
+  row: { index, original },
   column: { id },
   table,
   editable = true,
@@ -311,14 +312,14 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
     const aoutPins = existingPins
       .filter((pin) => pin.pinType === 'analogOutput')
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const dinPins = existingPins
@@ -326,7 +327,7 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const doutPins = existingPins
@@ -334,7 +335,7 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)
@@ -350,9 +351,21 @@ const EditableLocationCell = ({
     ]
   }, [id, existingPins, remoteIOPoints, vendorIoEntries])
 
+  // Same display + orphan-badge rules as the variables-table cell.
+  // Combined label "alias (address)" stays consistent across editable
+  // and read-only states so the cell doesn't flip on row select.
+  const variableAlias = original?.alias
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variableAlias && !aliasRegistry.byAlias.has(variableAlias)
+  const orphanTooltip = isOrphaned
+    ? `Alias "${variableAlias}" is no longer declared by any active source. Last known address: ${cellValue}`
+    : undefined
+  const combinedLabel = variableAlias ? `${variableAlias} (${cellValue})` : cellValue
+
   return editable ? (
     <GenericComboboxCell
       value={cellValue}
+      displayLabel={combinedLabel}
       onValueChange={(value) => {
         onBlur(value)
       }}
@@ -363,14 +376,24 @@ const EditableLocationCell = ({
     />
   ) : (
     <div
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+      title={orphanTooltip ?? (variableAlias ? `${variableAlias} -> ${cellValue}` : undefined)}
+      className={cn('flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
       })}
     >
+      {isOrphaned && (
+        <span aria-label='Orphaned alias' className='text-amber-500 dark:text-amber-400'>
+          <svg viewBox='0 0 16 16' fill='currentColor' className='h-3.5 w-3.5' aria-hidden='true'>
+            <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
+          </svg>
+        </span>
+      )}
       <HighlightedText
-        text={cellValue}
+        text={combinedLabel}
         searchQuery={searchQuery}
-        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
+          'text-amber-600 dark:text-amber-400': isOrphaned,
+        })}
       />
     </div>
   )

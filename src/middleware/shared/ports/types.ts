@@ -49,6 +49,11 @@ export interface PLCVariable {
   class?: VariableClass
   type: PLCVariableType
   location: string
+  /** Stable alias name the variable is bound to, when present. Looked
+   *  up in the alias registry to keep `location` current as the
+   *  producer reassigns the address. Cell renders `alias (address)`
+   *  when set; falls back to raw `location` otherwise. */
+  alias?: string
   initialValue?: string | null
   documentation: string
   debug?: boolean
@@ -557,6 +562,14 @@ export function projectCapabilities(
 
 export type CompilerType = 'arduino-cli' | 'openplc-compiler' | 'simulator'
 
+/** Re-export of the canonical capability shape so consumers of
+ *  `BoardInfo` get the same union without crossing the utils layer
+ *  directly. Authoritative definition lives in
+ *  `middleware/shared/utils/target-capabilities`. */
+import type { DebuggerTransport, TargetCapabilities } from '../utils/target-capabilities'
+
+export type { DebuggerTransport, TargetCapabilities }
+
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
   core: string
@@ -569,6 +582,10 @@ export interface BoardInfo {
     defaultDin?: string[]
     defaultDout?: string[]
   }
+  /** Optional explicit capability declaration. When absent, the resolver
+   *  in backend/shared infers capabilities from the legacy `compiler`
+   *  field (back-compat for pre-migration data). */
+  capabilities?: Partial<TargetCapabilities>
   vpp?: VppMetadata
 }
 
@@ -734,7 +751,9 @@ export interface DevicePin {
   pin: string
   pinType: PinType
   address: string
-  name?: string
+  /** User-supplied label that participates in the alias registry.
+   *  Used to be `name` — legacy projects are auto-upgraded on load. */
+  alias?: string
 }
 
 export interface DeviceConfiguration {
