@@ -34,10 +34,44 @@ import { TypeChangeModal } from '../../_molecules/type-change-modal'
 import { VariablesTable } from '../../_molecules/variables-table'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
-const VariablesEditor = () => {
+interface VariablesEditorProps {
+  /**
+   * POU name this VariablesEditor instance is bound to.  When omitted
+   * (legacy callers) the editor falls back to whichever POU is
+   * currently active in the store.  With multi-mount, every open POU
+   * has its own VariablesEditor instance with `name` set explicitly,
+   * so each operates on its own model regardless of which tab is
+   * visible.
+   */
+  name?: string
+  /**
+   * Whether this instance corresponds to the currently active tab.
+   * Gates effects that would otherwise misfire when a hidden
+   * instance subscribes to globally-active state.
+   */
+  isActive?: boolean
+}
+
+const VariablesEditor = ({ name: propName, isActive = true }: VariablesEditorProps = {}) => {
   const ROWS_NOT_SELECTED = -1
+  // Multi-mount support: every open POU's VariablesEditor needs to
+  // read ITS OWN model — not whichever happens to be active — so
+  // hidden instances don't manipulate the visible POU's data and
+  // vice versa.  Falls back to the active editor when no `propName`
+  // is supplied (legacy callers).
+  // Alias `editor` to this instance's own model so the rest of the
+  // component reads from the right POU without a sweeping rename.
+  const editor = useOpenPLCStore((s) =>
+    propName
+      ? (s.editors.find((e) => e.meta.name === propName) ?? s.editor)
+      : s.editor,
+  )
+  // `isActive` is not used in this phase but is part of the props
+  // contract: Phase 3 wires it into effects that should pause while
+  // the panel is hidden.  Reference it once so eslint stops warning
+  // about an unused prop without affecting behaviour.
+  void isActive
   const {
-    editor,
     ladderFlows,
     ladderFlowActions: { updateNode },
     fbdFlows,
@@ -955,10 +989,25 @@ const VariablesEditor = () => {
   const codeEditorCursorPosition = useMemo(
     () =>
       editor.cursorPosition
-        ? { lineNumber: editor.cursorPosition.lineNumber, column: editor.cursorPosition.column }
+        ? {
+            lineNumber: editor.cursorPosition.lineNumber,
+            column: editor.cursorPosition.column,
+            target: editor.cursorPosition.target,
+          }
         : undefined,
-    [editor.cursorPosition?.lineNumber, editor.cursorPosition?.column],
+    [editor.cursorPosition?.lineNumber, editor.cursorPosition?.column, editor.cursorPosition?.target],
   )
+
+  // Go to Definition on a variable lands here with `target='variables'`
+  // even when the panel is currently in table mode — force the switch
+  // so the user actually sees the highlight.  Idempotent when already
+  // in code mode.
+  useEffect(() => {
+    if (editor.cursorPosition?.target !== 'variables') return
+    if (editorVariables.display === 'code') return
+    updateModelVariables({ display: 'code', code: editorCode })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.cursorPosition?.target, editor.cursorPosition?.lineNumber, editor.cursorPosition?.column])
 
   return (
     <>
@@ -1289,6 +1338,7 @@ const VariablesEditor = () => {
               onCodeChange={setEditorCode}
               shouldUseDarkMode={shouldUseDarkMode}
               cursorPosition={codeEditorCursorPosition}
+              pouName={editor.meta.name}
             />
 
             {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}

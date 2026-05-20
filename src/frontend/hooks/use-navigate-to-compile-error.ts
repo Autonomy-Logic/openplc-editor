@@ -108,13 +108,17 @@ export function useNavigateToCompileError(): (err: StructuredCompileError) => vo
             lineNumber,
             column: Math.max(1, err.column),
             offset: 0,
+            target: 'body',
           })
         }
         return
       }
 
       // Var-block errors: switch the variables panel to text mode and
-      // route the cursor through it.
+      // route the cursor through it.  The `target: 'variables'` tag
+      // keeps the body Monaco from also re-highlighting the same line
+      // number in the body (which would be meaningless for a var-block
+      // error and visually distracting).
       if (err.section === 'var-block') {
         updateModelVariablesForName(pou.name, { display: 'code' })
         if (err.line > 0) {
@@ -122,6 +126,7 @@ export function useNavigateToCompileError(): (err: StructuredCompileError) => vo
             lineNumber: err.line,
             column: Math.max(1, err.column),
             offset: 0,
+            target: 'variables',
           })
         }
         return

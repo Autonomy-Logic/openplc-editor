@@ -21,16 +21,11 @@ import {
   type Location,
   type LocationLink,
   type MessageConnection,
-  PrepareRenameRequest,
-  type Range as LspRange,
   ReferencesRequest,
-  RenameRequest,
   type SemanticTokens,
   SemanticTokensRequest,
   SignatureHelpRequest,
   type SymbolInformation,
-  type TextEdit as LspTextEdit,
-  type WorkspaceEdit,
 } from 'vscode-languageserver-protocol'
 
 import { getBodyLineOffset } from './body-offsets'
@@ -44,11 +39,36 @@ import {
   lspTextEditToMonaco,
   monacoPositionToLsp,
 } from './converters'
+import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
+import { parsePouVarsUri, POU_DECLARATION_LINE_COUNT, pouUri } from './types'
 
 interface ProviderOptions {
   connection: MessageConnection
   monacoApi: typeof monaco
+}
+
+/**
+ * Resolve the URI a provider should hand to the LSP, plus the
+ * line-offset translation it should apply on the way in and out.
+ *
+ *   - `pou://<name>.st` (body editor): the model URI IS the LSP URI
+ *     and the offset is whatever project-sync registered (preamble
+ *     line count).
+ *   - `pouvars://<name>.st` (variables text view): the LSP doesn't
+ *     index this URI — the variables-code-editor only displays VAR
+ *     blocks lifted out of the synthesized doc.  Remap the request
+ *     to the live `pou://` document and use the declaration's
+ *     single-line offset so Monaco line 1 (= first VAR block line)
+ *     maps to LSP line 1 (= first VAR line in the synthesized doc).
+ *   - Anything else: pass through unchanged.
+ */
+function effectiveLspContext(modelUri: string): { lspUri: string; lineOffset: number } {
+  const varsPou = parsePouVarsUri(modelUri)
+  if (varsPou !== null) {
+    return { lspUri: pouUri(varsPou), lineOffset: POU_DECLARATION_LINE_COUNT }
+  }
+  return { lspUri: modelUri, lineOffset: getBodyLineOffset(modelUri) }
 }
 
 export function registerStLspProviders({
@@ -96,9 +116,9 @@ export function registerStLspProviders({
   disposables.push(
     monacoApi.languages.registerHoverProvider('st', {
       provideHover: async (model, position) => {
-        const offset = getBodyLineOffset(model.uri.toString())
+        const { lspUri, lineOffset: offset } = effectiveLspContext(model.uri.toString())
         const result = await connection.sendRequest(HoverRequest.type, {
-          textDocument: { uri: model.uri.toString() },
+          textDocument: { uri: lspUri },
           position: monacoPositionToLsp(position, offset),
         })
         return lspHoverToMonaco(result, offset) ?? undefined
@@ -133,28 +153,37 @@ export function registerStLspProviders({
   disposables.push(
     monacoApi.languages.registerDefinitionProvider('st', {
       provideDefinition: async (model, position) => {
-        const offset = getBodyLineOffset(model.uri.toString())
+        const { lspUri, lineOffset: offset } = effectiveLspContext(model.uri.toString())
         const result = await connection.sendRequest(DefinitionRequest.type, {
-          textDocument: { uri: model.uri.toString() },
+          textDocument: { uri: lspUri },
           position: monacoPositionToLsp(position, offset),
         })
         // DefinitionRequest may resolve to Location, Location[], or
-        // LocationLink[].  Normalise to LocationLink[] first so the
-        // converter sees a uniform shape.  `lspLocationsToMonaco` looks
-        // up each location's URI in the offsets registry so the target
-        // POU's preamble is subtracted even when it differs from the
-        // source POU's.
+        // LocationLink[].  Normalise to Location[] first so the
+        // downstream handlers see a uniform shape.
         const normalised = normaliseLocationResponse(result)
         if (!normalised) return null
+
+        const locations = Array.isArray(normalised) ? normalised : [normalised]
 
         // If any returned location is a stub:// URI (graphical POU
         // signature), reroute the user to the graphical editor for
         // that POU and cancel the default Monaco navigation —
         // Monaco has no model for the synthetic stub source, so
         // navigating to it would dead-end.
-        const locations = Array.isArray(normalised) ? normalised : [normalised]
         const stubLocation = locations.find((l) => redirectToGraphicalPou(l.uri))
         if (stubLocation) return null
+
+        // Route variable-declaration and cross-POU targets through
+        // the Zustand store: open the target POU's tab and either
+        // switch the variables panel to text mode (for preamble
+        // targets) or place the body cursor.  When the redirect
+        // claims a location, return null so Monaco doesn't try to
+        // navigate on top of it.
+        const primary = locations[0]
+        if (primary && redirectDefinitionToStore(primary)) {
+          return null
+        }
 
         return lspLocationsToMonaco(normalised, monacoApi) ?? null
       },
@@ -168,9 +197,9 @@ export function registerStLspProviders({
   disposables.push(
     monacoApi.languages.registerReferenceProvider('st', {
       provideReferences: async (model, position, context) => {
-        const offset = getBodyLineOffset(model.uri.toString())
+        const { lspUri, lineOffset: offset } = effectiveLspContext(model.uri.toString())
         const result = await connection.sendRequest(ReferencesRequest.type, {
-          textDocument: { uri: model.uri.toString() },
+          textDocument: { uri: lspUri },
           position: monacoPositionToLsp(position, offset),
           context: { includeDeclaration: context.includeDeclaration },
         })
@@ -215,44 +244,18 @@ export function registerStLspProviders({
   )
 
   // -------------------------------------------------------------------------
-  // Rename
+  // Rename — intentionally NOT registered.
   // -------------------------------------------------------------------------
-
-  disposables.push(
-    monacoApi.languages.registerRenameProvider('st', {
-      async resolveRenameLocation(model, position) {
-        const offset = getBodyLineOffset(model.uri.toString())
-        const result = await connection.sendRequest(PrepareRenameRequest.type, {
-          textDocument: { uri: model.uri.toString() },
-          position: monacoPositionToLsp(position, offset),
-        })
-        if (!result) {
-          return {
-            range: zeroRange(model, position),
-            text: '',
-            rejectReason: 'No symbol at cursor',
-          }
-        }
-        // PrepareRename can return either a Range or `{range, placeholder}`.
-        if ('range' in result) {
-          return {
-            range: lspRangeToMonaco(result.range, offset),
-            text: result.placeholder,
-          }
-        }
-        return { range: lspRangeToMonaco(result as LspRange, offset), text: '' }
-      },
-      async provideRenameEdits(model, position, newName) {
-        const offset = getBodyLineOffset(model.uri.toString())
-        const result = await connection.sendRequest(RenameRequest.type, {
-          textDocument: { uri: model.uri.toString() },
-          position: monacoPositionToLsp(position, offset),
-          newName,
-        })
-        return workspaceEditToMonaco(result, monacoApi)
-      },
-    }),
-  )
+  // Rename via LSP would emit WorkspaceEdits against every POU's full
+  // serialized doc, including the synthesized variable-header lines
+  // Monaco doesn't own (those live in the variables table).  Applying
+  // those edits to Monaco models alone produces inconsistent state —
+  // the body editor renames but the table keeps the old name, and the
+  // bulk-edit also tries to write to Monaco models for inactive POUs
+  // that may not be loaded, which trips StandaloneBulkEditService.
+  // The editor already exposes its own search-and-replace via the
+  // panel; users get rename through that.  Not registering also
+  // disables "Change All Occurrences" (same provider).
 
   // -------------------------------------------------------------------------
   // Formatting
@@ -270,7 +273,16 @@ export function registerStLspProviders({
           },
         })
         if (!result) return []
-        return result.map((te) => lspTextEditToMonaco(te, offset))
+        // The worker formats the *full* serialized document (declaration
+        // + synthesized VAR blocks + body), but Monaco's model only
+        // shows the body — the variables panel owns the declarations.
+        // Any edit touching the preamble (range.end.line < offset)
+        // would land at negative or clamped line numbers in Monaco and
+        // overwrite the first body line.  Drop those; keep body-only
+        // edits and shift them into Monaco's body-relative frame.
+        return result
+          .filter((te) => te.range.start.line >= offset && te.range.end.line >= offset)
+          .map((te) => lspTextEditToMonaco(te, offset))
       },
     }),
   )
@@ -378,20 +390,6 @@ function shiftSemanticTokensToBody(data: number[], offset: number): Uint32Array 
   return new Uint32Array(out)
 }
 
-function zeroRange(
-  model: monaco.editor.ITextModel,
-  position: monaco.IPosition,
-): monaco.IRange {
-  return {
-    startLineNumber: position.lineNumber,
-    startColumn: position.column,
-    endLineNumber: position.lineNumber,
-    endColumn: position.column,
-    // Touch model so TS knows it's used (no-op).
-    ...(model ? {} : {}),
-  }
-}
-
 function normaliseLocationResponse(
   result: Location | Location[] | LocationLink[] | null,
 ): Location | Location[] | null {
@@ -404,41 +402,6 @@ function normaliseLocationResponse(
     }))
   }
   return result as Location | Location[]
-}
-
-function workspaceEditToMonaco(
-  edit: WorkspaceEdit | null,
-  monacoApi: typeof monaco,
-): monaco.languages.WorkspaceEdit {
-  const empty: monaco.languages.WorkspaceEdit = { edits: [] }
-  if (!edit) return empty
-  const edits: monaco.languages.WorkspaceEdit['edits'] = []
-  if (edit.changes) {
-    for (const [uri, textEdits] of Object.entries(edit.changes)) {
-      const offset = getBodyLineOffset(uri)
-      for (const te of textEdits) {
-        edits.push({
-          resource: monacoApi.Uri.parse(uri),
-          versionId: undefined,
-          textEdit: lspTextEditToMonaco(te, offset),
-        })
-      }
-    }
-  }
-  if (edit.documentChanges) {
-    for (const change of edit.documentChanges) {
-      if (!('textDocument' in change)) continue // skip create/rename/delete file ops
-      const offset = getBodyLineOffset(change.textDocument.uri)
-      for (const te of change.edits) {
-        edits.push({
-          resource: monacoApi.Uri.parse(change.textDocument.uri),
-          versionId: change.textDocument.version ?? undefined,
-          textEdit: lspTextEditToMonaco(te as LspTextEdit, offset),
-        })
-      }
-    }
-  }
-  return { edits }
 }
 
 function lspDocumentSymbolToMonaco(

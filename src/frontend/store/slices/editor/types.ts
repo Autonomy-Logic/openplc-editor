@@ -61,6 +61,22 @@ export type CursorPosition = {
   lineNumber: number
   column: number
   offset: number
+  /**
+   * Which Monaco surface should consume this cursor jump.
+   *
+   *   - `body` (default) — targets the POU body editor.  The
+   *     variables-code-editor ignores positions tagged this way.
+   *   - `variables` — targets the variables panel's text-mode
+   *     editor.  Triggers a forced switch to text mode if the panel
+   *     is currently in table mode, and the body editor ignores
+   *     positions tagged this way.
+   *
+   * Used by Go to Definition redirects: when the LSP points at a
+   * variable declaration (synthesized header line), we surface that
+   * line inside the variables panel instead of clamping the cursor
+   * to the body's line 1.
+   */
+  target?: 'body' | 'variables'
 }
 
 export type ScrollPosition = {

@@ -23,6 +23,15 @@ export const POU_URI_AUTHORITY = 'pou'
 export const STUB_URI_AUTHORITY = 'stub'
 
 /**
+ * URI scheme for the variables-code-editor surface.  This Monaco
+ * model only shows the VAR blocks of a POU — declarations live in
+ * the body editor or get synthesized when the LSP doc is sent over.
+ * Used so the LSP providers can recognise the vars-text view and
+ * remap requests to the corresponding `pou://` document.
+ */
+export const POUVARS_URI_AUTHORITY = 'pouvars'
+
+/**
  * URI for the synthesized `TYPE…END_TYPE` document carrying every
  * user-defined `PLCDataType` (structures, enumerations, arrays).
  * Strucpp parses this once at sync time so any POU that references
@@ -90,6 +99,33 @@ export function pouUri(name: string): string {
 export function stubUri(name: string): string {
   return `${POU_URI_SCHEME}://${STUB_URI_AUTHORITY}/${encodeURIComponent(name)}.st`
 }
+
+/** Make a synthetic in-memory URI for a POU's variables-text view. */
+export function pouVarsUri(name: string): string {
+  return `${POU_URI_SCHEME}://${POUVARS_URI_AUTHORITY}/${encodeURIComponent(name)}.st`
+}
+
+/**
+ * If `uri` is a `pouvars://` URI, return the POU name; otherwise null.
+ * Used by the LSP providers to detect the variables-text surface and
+ * route queries to the corresponding live `pou://` document.
+ */
+export function parsePouVarsUri(uri: string): string | null {
+  const match = new RegExp(
+    `^${POU_URI_SCHEME}://${POUVARS_URI_AUTHORITY}/(.+)\\.st$`,
+  ).exec(uri)
+  if (!match) return null
+  return decodeURIComponent(match[1])
+}
+
+/**
+ * Number of lines the synthesized declaration occupies before the
+ * VAR blocks.  Currently always 1 ("PROGRAM main", "FUNCTION foo :
+ * INT", etc.) — kept as a named constant so the providers and the
+ * variables-code-editor share a single source of truth for the
+ * Monaco-line → LSP-line shift.
+ */
+export const POU_DECLARATION_LINE_COUNT = 1
 
 /**
  * Returns the POU name encoded in a URI minted by `pouUri` or

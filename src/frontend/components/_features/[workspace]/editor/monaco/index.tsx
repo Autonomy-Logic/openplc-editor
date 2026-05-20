@@ -34,6 +34,16 @@ type monacoEditorProps = {
   path: string
   name: string
   language: 'il' | 'st' | 'python' | 'cpp'
+  /**
+   * Whether this editor is the active (visible) tab.  Multi-mount
+   * keeps every open POU's MonacoEditor alive simultaneously; this
+   * flag gates user-visible side effects (debug badges, search
+   * reveal, animation loops) so background editors don't waste work
+   * decorating or animating their hidden DOM.  Defaults to `true`
+   * for safety — pre-refactor callers that don't pass it keep the
+   * old behaviour.
+   */
+  isActive?: boolean
 }
 
 type PouToText = {
@@ -112,7 +122,7 @@ let didApplyInitialTheme = false
 // ---------------------------------------------------------------------------
 
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
-  const { language, path, name } = props
+  const { language, path, name, isActive = true } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
@@ -289,11 +299,26 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     updatePendingDiffAcceptedHunks,
   ])
 
+  // Global search-and-replace targets exactly the visible editor —
+  // every multi-mounted MonacoEditor subscribes to `searchQuery`, but
+  // only the active tab should reveal a match.
   useEffect(() => {
+    if (!isActive) return
     if (editorRef.current && searchQuery) {
       moveToMatch(editorRef.current, searchQuery, sensitiveCase, regularExpression)
     }
-  }, [searchQuery, sensitiveCase, regularExpression])
+  }, [searchQuery, sensitiveCase, regularExpression, isActive])
+
+  // Monaco's layout is measured at mount time and on container resize.
+  // When a hidden editor (`display: none`) becomes the active tab and
+  // gets shown again, the dimensions it captured while hidden are stale
+  // (often zero), so the editor renders with zero height until something
+  // resizes the container.  Re-measuring on every `isActive` flip avoids
+  // that initial blank frame.
+  useEffect(() => {
+    if (!isActive) return
+    editorRef.current?.layout()
+  }, [isActive])
 
   // Template injection when POU changes (for already mounted editors)
   useEffect(() => {
@@ -410,10 +435,21 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   // editor already is.
   useEffect(() => {
     if (!editorMounted) return
+    // Multi-mount: every open POU's MonacoEditor subscribes to
+    // `state.editor.cursorPosition`, but the jump is only meaningful
+    // for the visible editor — when state.editor swaps to a different
+    // POU during Go to Definition / compile-error click, hidden
+    // editors must NOT also apply that POU's cursor onto themselves.
+    if (!isActive) return
     const ed = editorRef.current
     const monacoInst = monacoRef.current
     const target = editor.cursorPosition
     if (!ed || !monacoInst || !target) return
+    // Cursor jumps tagged for the variables panel belong to the
+    // variables-code-editor, not the body.  Ignore them here so a
+    // Go-to-definition redirect that lands on a VAR declaration
+    // doesn't also re-highlight a line in the body.
+    if (target.target === 'variables') return
     const current = ed.getPosition()
     if (current && current.lineNumber === target.lineNumber && current.column === target.column) {
       return
@@ -430,7 +466,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     ed.setSelection(range)
     ed.revealRangeInCenter(range)
     ed.focus()
-  }, [editor.cursorPosition, editorMounted])
+  }, [editor.cursorPosition, editorMounted, isActive])
 
   // -----------------------------------------------------------------------
   // Debug variable inline values (editor-only debugger feature)
@@ -849,9 +885,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    if (editor.cursorPosition) {
+    if (editor.cursorPosition && editor.cursorPosition.target !== 'variables') {
       // Select the whole line for visible feedback (matches the
       // already-mounted reactive path above and Search's UX).
+      // Skip if the jump is tagged for the variables panel.
       const monacoInst = monacoInstance
       const model = editorInstance.getModel()
       const lineLength = model ? model.getLineMaxColumn(editor.cursorPosition.lineNumber) : editor.cursorPosition.column
@@ -1146,6 +1183,11 @@ void loop()
     dropIntoEditor: { enabled: true },
     readOnly: isDebuggerVisible,
     quickSuggestions: capabilities.hasAIAssistant ? false : undefined,
+    // Pinned for cross-platform consistency with the variables-code-editor.
+    // Monaco's default is platform-dependent (12 on macOS, 14 elsewhere) —
+    // without this both surfaces would mismatch on Linux/Windows even
+    // if Mac happens to look right by accident.
+    fontSize: 12,
     // Monaco's standalone themes default `semanticHighlighting=false`,
     // so without this flag the STruC++ LSP's semantic-tokens response
     // is silently dropped — `isSemanticColoringEnabled()` short-circuits

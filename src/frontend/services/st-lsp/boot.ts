@@ -18,6 +18,7 @@
 
 import type { PlatformPorts } from '../../../middleware/shared/providers/types'
 import { startStLsp } from './index'
+import { attachMonacoModelSync, type MonacoModelSyncHandle } from './monaco-model-sync'
 import { attachLibrarySync, attachProjectSync } from './project-sync'
 import type { StLspService } from './types'
 
@@ -52,11 +53,26 @@ export function bootStLsp(
   const projectSync = attachProjectSync(service)
   const unsubscribeLibrarySync = attachLibrarySync(service)
 
+  // Pre-register Monaco models for every POU so cross-POU
+  // references / peek-definition / go-to-references resolve through
+  // Monaco's StandaloneTextModelService without throwing "Model not
+  // found" for POUs the user hasn't opened yet.
+  let modelSync: MonacoModelSyncHandle | null = null
+  try {
+    modelSync = attachMonacoModelSync(monaco)
+  } catch (err) {
+    // Don't let model-sync failure tear down the rest of the LSP —
+    // the worst case is references stay broken (the pre-existing
+    // state); diagnostics / completion / semantic tokens still work.
+    console.warn('[strucpp-lsp] Monaco model sync failed to attach:', err)
+  }
+
   return {
     service,
     dispose() {
       unsubscribeLibrarySync()
       projectSync.dispose()
+      modelSync?.dispose()
       service.dispose()
     },
   }

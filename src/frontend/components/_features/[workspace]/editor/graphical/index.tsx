@@ -9,6 +9,14 @@ type GraphicalEditorProps = ComponentPropsWithoutRef<'div'> & {
   language: 'ld' | 'sfc' | 'fbd'
   path: string
   readOnly?: boolean
+  /**
+   * Whether this editor is the active (visible) tab.  Defaults to
+   * `true` for safety with pre-refactor callers.  Currently unused
+   * here — the language-specific subeditors (FBD/LD/SFC) read it
+   * once they're individually wired in Phase 3, since they own the
+   * polling and decoration that should pause while hidden.
+   */
+  isActive?: boolean
 }
 
 const GraphicalEditor = ({ language, readOnly }: GraphicalEditorProps) => {

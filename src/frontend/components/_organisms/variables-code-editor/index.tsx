@@ -3,21 +3,50 @@ import type { editor as MonacoEditor } from 'monaco-editor'
 import * as monaco from 'monaco-editor'
 import { useEffect, useRef, useState } from 'react'
 
+import { pouVarsUri } from '../../../services/st-lsp/types'
+
 interface VariablesCodeEditorProps {
   code: string
   onCodeChange: (code: string) => void
   shouldUseDarkMode: boolean
   /**
-   * Programmatic cursor jump (e.g. compile-error click → vars-text
-   * view).  Applied on mount and whenever the value changes; the
-   * caller is responsible for clearing it once the user takes over,
-   * but a stale value is harmless because we only re-apply when it
-   * actually differs from the editor's current position.
+   * POU name whose VAR blocks this editor surface displays.  When
+   * provided, the Monaco model URI is derived from it
+   * (`inmemory://pouvars/<name>.st`) so the LSP providers can
+   * recognise the variables-text view and route Go to Definition /
+   * Hover queries to the corresponding `pou://` document with the
+   * right line-offset translation.
+   *
+   * Optional because this editor is also re-used for non-POU
+   * surfaces (global variables, FB instances, tasks) where no
+   * corresponding LSP document exists — leave unset there and
+   * `@monaco-editor/react` mints an internal URI with no
+   * cross-routing.
    */
-  cursorPosition?: { lineNumber: number; column: number }
+  pouName?: string
+  /**
+   * Programmatic cursor jump (e.g. compile-error click → vars-text
+   * view, or Go to Definition redirect for a variable declaration).
+   * Applied on mount and whenever the value changes; the caller is
+   * responsible for clearing it once the user takes over, but a
+   * stale value is harmless because we only re-apply when it
+   * actually differs from the editor's current position.
+   *
+   * `target` filters which Monaco surface consumes the jump.  When
+   * `target === 'body'`, the variables editor ignores the position
+   * (it's meant for the body editor).  Undefined or
+   * `target === 'variables'` is honoured here.
+   */
+  cursorPosition?: { lineNumber: number; column: number; target?: 'body' | 'variables' }
 }
 
-const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode, cursorPosition }: VariablesCodeEditorProps) => {
+const VariablesCodeEditor = ({
+  code,
+  onCodeChange,
+  shouldUseDarkMode,
+  cursorPosition,
+  pouName,
+}: VariablesCodeEditorProps) => {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [editorMounted, setEditorMounted] = useState(false)
@@ -51,6 +80,8 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode, cursorPosi
   // twice.
   useEffect(() => {
     if (!editorMounted || !cursorPosition) return
+    // Jumps explicitly tagged for the body editor never apply here.
+    if (cursorPosition.target === 'body') return
     const ed = editorRef.current
     if (!ed) return
     const current = ed.getPosition()
@@ -76,6 +107,7 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode, cursorPosi
         height='100%'
         width='100%'
         language='st'
+        {...(pouName ? { path: pouVarsUri(pouName) } : {})}
         defaultValue={''}
         value={code}
         onMount={handleEditorDidMount}
@@ -84,7 +116,10 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode, cursorPosi
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
           wordWrap: 'on',
-          fontSize: 14,
+          // Pinned for cross-platform consistency with the body editor.
+          // Matches Monaco's macOS default; explicit so Linux/Windows
+          // don't fall back to 14 and mismatch the body surface.
+          fontSize: 12,
           // Match the body editor's default (Monaco's default is 4 too).
           // Inconsistent values would split-personality the indentation
           // of LSP-inserted snippets (`\t` substitutes per this option).
