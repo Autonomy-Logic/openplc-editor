@@ -1,3 +1,4 @@
+import { useIsGraphicalEditorActive } from '../../_features/[workspace]/editor/graphical/active-context'
 import { useDebugVariableValue } from '../../../hooks/use-debug-value'
 import { cn } from '../../../utils/cn'
 
@@ -15,8 +16,16 @@ type DebugValueBadgeProps = {
  * Designed to be used by both FBD and LD variable/block nodes.
  */
 const DebugValueBadge = ({ compositeKey, variableType, position = 'right' }: DebugValueBadgeProps) => {
+  // Multi-mount: badges render only on the visible POU.  Inactive
+  // editors stay alive in the DOM (display: none) so debug-state
+  // subscriptions across N tabs would otherwise multiply polling work
+  // and re-render churn during a debug session.
+  const isActive = useIsGraphicalEditorActive()
   const value = useDebugVariableValue(compositeKey)
 
+  if (!isActive) {
+    return null
+  }
   if (!variableType || variableType.toUpperCase() === 'BOOL') {
     return null
   }

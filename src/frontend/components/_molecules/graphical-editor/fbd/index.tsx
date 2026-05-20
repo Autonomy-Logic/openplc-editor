@@ -47,7 +47,7 @@ const EDGE_COLOR_TRUE = '#00FF00'
 export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
   const {
     editor,
-    editorActions: { updateModelVariables, saveEditorViewState },
+    editorActions: { updateModelVariables },
     fbdFlowActions,
     libraries,
     project,
@@ -354,33 +354,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     debouncedUpdateRungStateCallback()
     return () => debouncedUpdateRungStateCallback.cancel()
   }, [rungLocal])
-
-  /**
-   * Handle screen position changes
-   */
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (newName, prevEditorName) => {
-        if (newName === prevEditorName || !reactFlowInstance) return
-        const { x, y, zoom } = reactFlowInstance.getViewport()
-        saveEditorViewState({
-          prevEditorName,
-          fbdPosition: { x, y, zoom },
-        })
-      },
-    )
-
-    return () => unsub()
-  }, [reactFlowInstance])
-
-  useEffect(() => {
-    const viewport = editor.fbdPosition
-    if (!reactFlowInstance || !viewport) return
-    setTimeout(() => {
-      reactFlowInstance.setViewport(viewport, { duration: 0 })
-    }, 0)
-  }, [reactFlowInstance, editor.meta.name])
 
   /**
    * Handle the addition of a new element by dropping it in the viewport

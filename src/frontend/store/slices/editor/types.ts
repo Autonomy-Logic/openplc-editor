@@ -79,25 +79,20 @@ export type CursorPosition = {
   target?: 'body' | 'variables'
 }
 
-export type ScrollPosition = {
-  top: number
-  left: number
-}
-
-export type FbdPosition = {
-  x: number
-  y: number
-  zoom: number
-}
-
 // ---------------------------------------------------------------------------
 // Editor model — discriminated union for all POU types
 // ---------------------------------------------------------------------------
 
 type EditorModelBase = {
+  /**
+   * Programmatic cursor target.  Set by the Go to Definition redirect,
+   * the compile-error click handler, etc.  The editor's reactive
+   * effect picks it up and calls `setSelection` on its Monaco
+   * instance.  Not used for "remember the user's position across a
+   * tab switch" — editors stay mounted across switches now, so
+   * Monaco's own internal cursor state is preserved naturally.
+   */
   cursorPosition?: CursorPosition
-  scrollPosition?: ScrollPosition
-  fbdPosition?: FbdPosition
 }
 
 export type EditorModel = EditorModelBase &
@@ -250,20 +245,17 @@ export type EditorActions = {
   }) => void
   setEditor: (newEditor: EditorModel) => void
   clearEditor: () => void
-  saveEditorViewState: (data: {
-    prevEditorName: string
-    cursorPosition?: CursorPosition
-    scrollPosition?: ScrollPosition
-    fbdPosition?: FbdPosition
-  }) => void
   /**
-   * Programmatically update an editor model's cursor position.  Unlike
-   * {@link saveEditorViewState} (which captures view state for the
-   * *previously*-active editor on tab switch), this is meant for
-   * navigation INTO an editor (e.g. compile-error click).  Updates
-   * both the model in `state.editors[]` AND `state.editor` when names
-   * match — without that double-write the active editor's reactive
-   * Monaco useEffect never sees the change.
+   * Programmatically update an editor model's cursor position.  Used
+   * by navigation into an editor (Go to Definition redirect,
+   * compile-error click).  Updates both the model in
+   * `state.editors[]` AND `state.editor` when names match — without
+   * that double-write the active editor's reactive Monaco useEffect
+   * never sees the change.
+   *
+   * The save-on-tab-switch / restore-on-mount cycle no longer exists
+   * (every editor stays mounted across tab switches), so the field
+   * is exclusively a programmatic-jump channel.
    */
   setEditorCursor: (name: string, cursorPosition: CursorPosition) => void
   getEditorFromEditors: (name: string) => EditorModel | null

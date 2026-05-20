@@ -158,7 +158,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       configuration: { deviceBoard },
     },
     libraries: sliceLibraries,
-    editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { pushToHistory },
@@ -489,6 +488,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }, [debugBoolValues, debugNonBoolValues])
 
   const debugVarPositions = useMemo(() => {
+    // Inline debug badges are an active-tab-only affordance.  Without
+    // this guard, every multi-mounted MonacoEditor would re-scan its
+    // model for debug-variable occurrences on every poll cycle, then
+    // try to apply decorations to a hidden editor that the user can't
+    // see.  Wasted CPU during debug, especially with many open tabs.
+    if (!isActive) return null
     if (!isDebuggerVisible || !editorRef.current || !monacoRef.current || (language !== 'st' && language !== 'il'))
       return null
 
@@ -548,7 +553,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     return { prefix, positions }
-  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
+  }, [isActive, isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
 
   useEffect(() => {
     if (!debugVarPositions || !editorRef.current) return
@@ -886,20 +891,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     if (editor.cursorPosition && editor.cursorPosition.target !== 'variables') {
-      // Select the whole line for visible feedback (matches the
-      // already-mounted reactive path above and Search's UX).
-      // Skip if the jump is tagged for the variables panel.
+      // Apply a pending programmatic cursor jump (e.g. a Go to
+      // Definition or compile-error click that fired before this
+      // editor's mount completed).  The reactive useEffect above
+      // handles subsequent jumps on the already-mounted editor.
       const monacoInst = monacoInstance
       const model = editorInstance.getModel()
       const lineLength = model ? model.getLineMaxColumn(editor.cursorPosition.lineNumber) : editor.cursorPosition.column
       const range = new monacoInst.Range(editor.cursorPosition.lineNumber, 1, editor.cursorPosition.lineNumber, lineLength)
       editorInstance.setSelection(range)
       editorInstance.revealRangeInCenter(range)
-    }
-
-    if (editor.scrollPosition) {
-      editorInstance.setScrollTop(editor.scrollPosition.top)
-      editorInstance.setScrollLeft(editor.scrollPosition.left)
     }
 
     // Python LSP (gated)
@@ -1333,36 +1334,6 @@ void loop()
     setNewName('')
   }
 
-  // -----------------------------------------------------------------------
-  // Save editor view state on tab switch
-  // -----------------------------------------------------------------------
-
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (nextName, prevEditorName) => {
-        if (nextName === prevEditorName || !editorRef.current) return
-
-        const ed = editorRef.current
-        const model = ed.getModel()
-        const pos = ed.getPosition()
-        const offset = pos && model?.getOffsetAt(pos)
-
-        const cursorPosition = pos && offset ? { lineNumber: pos.lineNumber, column: pos.column, offset } : undefined
-
-        const scrollPosition = {
-          top: ed.getScrollTop(),
-          left: ed.getScrollLeft(),
-        }
-
-        saveEditorViewState({ prevEditorName, cursorPosition, scrollPosition })
-      },
-    )
-
-    return () => unsub()
-  }, [])
-
-  // -----------------------------------------------------------------------
   // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------

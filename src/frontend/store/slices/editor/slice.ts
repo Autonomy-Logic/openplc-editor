@@ -309,21 +309,6 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    saveEditorViewState: ({ prevEditorName, cursorPosition, scrollPosition, fbdPosition }) =>
-      setState(
-        produce((state: EditorState) => {
-          const currentEditor = state.editor
-          if (currentEditor.type === 'available') return
-
-          const index = state.editors.findIndex((e) => e.meta.name === prevEditorName)
-          if (index === -1) return
-
-          state.editors[index].cursorPosition = cursorPosition
-          state.editors[index].scrollPosition = scrollPosition
-          state.editors[index].fbdPosition = fbdPosition
-        }),
-      ),
-
     getEditorFromEditors: (name) => {
       const { editor, editors } = getState()
       if (name === editor.meta.name) return editor
