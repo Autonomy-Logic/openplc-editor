@@ -1,12 +1,18 @@
-import { collectUsedIecAddresses } from '@root/backend/shared/utils/iec-address'
+import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core'
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { DragHandleIcon } from '@root/frontend/assets/icons/interface/DragHandle'
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
+import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore } from '@root/frontend/store'
-import { generateIecAddress } from '@root/frontend/utils/iec-address'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
+import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
 import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -111,6 +117,79 @@ function evalVisible(visible: VisibleCondition | undefined, values: Record<strin
   }
 }
 
+type SortableSlotButtonProps = {
+  idx: number
+  moduleName: string | undefined
+  ioSummary: string
+  isSelected: boolean
+  draggable: boolean
+  onSelect: () => void
+}
+
+/* One row in the slot list. Memberships in the DndContext are by row,
+ * not by module — dragging shifts whatever module currently sits at
+ * the source index to the target index. Empty slots are rendered but
+ * not draggable: there's no module to move. */
+function SortableSlotButton({ idx, moduleName, ioSummary, isSelected, draggable, onSelect }: SortableSlotButtonProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: String(idx),
+    disabled: !draggable,
+  })
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : undefined,
+  }
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex shrink-0 items-stretch border-b border-neutral-100 dark:border-neutral-800 ${
+        isSelected
+          ? 'bg-brand/20 shadow-[inset_3px_0_0_var(--primary-default)] dark:bg-brand/30'
+          : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
+      }`}
+    >
+      {draggable ? (
+        <button
+          type='button'
+          aria-label={`Drag slot ${idx + 1}`}
+          {...attributes}
+          {...listeners}
+          tabIndex={-1}
+          className='flex w-6 shrink-0 cursor-grab items-center justify-center text-neutral-400 hover:text-neutral-600 active:cursor-grabbing dark:text-neutral-500 dark:hover:text-neutral-300'
+        >
+          <DragHandleIcon className='h-4 w-4 fill-current' />
+        </button>
+      ) : (
+        <div className='w-6 shrink-0' aria-hidden />
+      )}
+      <button
+        type='button'
+        aria-selected={isSelected}
+        onClick={onSelect}
+        className='flex min-w-0 flex-1 flex-col gap-0.5 px-2 py-2 text-left'
+      >
+        <div className='flex items-center justify-between gap-2'>
+          <span
+            className={`font-caption text-cp-sm text-neutral-950 dark:text-white ${isSelected ? 'font-bold' : 'font-semibold'}`}
+          >
+            Slot {idx + 1}
+          </span>
+          {moduleName && (
+            <span className='shrink-0 text-[10px] text-neutral-400 dark:text-neutral-500'>{ioSummary}</span>
+          )}
+        </div>
+        <span
+          className={`truncate text-xs ${moduleName ? 'text-neutral-700 dark:text-neutral-300' : 'italic text-neutral-400 dark:text-neutral-600'} ${isSelected ? 'font-semibold' : ''}`}
+        >
+          {moduleName ?? 'Empty'}
+        </span>
+      </button>
+    </div>
+  )
+}
+
 function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   const maxSlots = section.maxSlots || moduleSystem?.maxSlots || 8
   // Memoize so hooks depending on this don't fire every render.
@@ -128,10 +207,46 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   }, [moduleConfig.slots, maxSlots])
   const slotsConfig = useMemo(() => moduleConfig.slotsConfig ?? {}, [moduleConfig.slotsConfig])
 
+  /* Stackable mode treats the backplane as a contiguous chain: empty
+   * slots only exist at the tail, the user adds modules at the end,
+   * and removing a module shifts the rest up so positions are always
+   * dense. Physical (default) mode keeps the original behavior with
+   * maxSlots fixed positions and the "-- Empty --" picker option. */
+  const stackable = section.stackable === true
+  const populatedCount = useMemo(() => {
+    if (!stackable) return slots.length
+    // In stackable mode the slot list should be dense, but tolerate
+    // any nulls that snuck in by counting the prefix only.
+    let n = 0
+    for (const s of slots) {
+      if (s === null) break
+      n++
+    }
+    return n
+  }, [slots, stackable])
+  const displayedSlots = useMemo(() => {
+    if (!stackable) return slots.map((_, idx) => idx)
+    const out: number[] = []
+    for (let i = 0; i < populatedCount; i++) out.push(i)
+    return out
+  }, [stackable, slots, populatedCount])
+
   const [selectedSlot, setSelectedSlot] = useState(0)
   useEffect(() => {
     if (selectedSlot >= maxSlots) setSelectedSlot(0)
   }, [maxSlots, selectedSlot])
+  // In stackable mode, keep the selection inside the populated range.
+  useEffect(() => {
+    if (!stackable) return
+    if (populatedCount === 0) {
+      if (selectedSlot !== 0) setSelectedSlot(0)
+    } else if (selectedSlot >= populatedCount) {
+      setSelectedSlot(populatedCount - 1)
+    }
+  }, [stackable, populatedCount, selectedSlot])
+
+  const [removeModalOpen, setRemoveModalOpen] = useState(false)
+  const [clearAllModalOpen, setClearAllModalOpen] = useState(false)
 
   const findModule = useCallback(
     (id: string | null | undefined): ModuleDefinition | undefined =>
@@ -180,26 +295,49 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   /* slot:channel key. Writes to the 'io-mapping' persistence key */
   /* so the rest of the compile flow keeps reading the same data. */
   /* ------------------------------------------------------------ */
-  const lastSlotsRef = useRef<string>('')
+  // Re-allocate when the slot module list OR any format selector
+  // (per-slot channelsByFormat resolver input) changes.
+  const formatSelectionKey = useMemo(() => {
+    return slots
+      .map((moduleId, idx) => {
+        if (!moduleId) return ''
+        const md = availableModules.find((m) => m.id === moduleId) as ResolverModuleDef | undefined
+        const fid = md?.addressMapping?.formatFieldId
+        if (!fid) return ''
+        const cfg = slotsConfig[String(idx + 1)] ?? {}
+        const val = cfg[fid] ?? md?.addressMapping?.formatDefault ?? ''
+        return `${idx}:${val}`
+      })
+      .join('|')
+  }, [slots, slotsConfig, availableModules])
+
+  const lastAllocKey = useRef<string>('')
   useEffect(() => {
-    const slotsKey = JSON.stringify(slots)
-    if (slotsKey === lastSlotsRef.current) return
-    lastSlotsRef.current = slotsKey
+    const allocKey = `${JSON.stringify(slots)}::${formatSelectionKey}`
+    if (allocKey === lastAllocKey.current) return
+    lastAllocKey.current = allocKey
 
     const state = useOpenPLCStore.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const storedMapping = vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined
-    const remoteDevices = (state.project.data.remoteDevices ?? []) as Array<{
-      modbusTcpConfig?: { ioGroups?: Array<{ ioPoints: Array<{ iecLocation: string }> }> }
-      ethercatConfig?: { devices?: Array<{ channelMappings?: Array<{ iecLocation: string }> }> }
-    }>
+    const remoteDevices = state.project.data.remoteDevices ?? []
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard)
+    const capabilities = resolveTargetCapabilities(boardInfo)
 
     const existingAliases = new Map<string, string>()
     for (const entry of storedMapping?.entries ?? []) {
       if (entry.alias) existingAliases.set(`${entry.slot}:${entry.channelName}`, entry.alias)
     }
 
-    const usedAddresses = collectUsedIecAddresses(remoteDevices)
+    // VPP slots are being regenerated, so the pool excludes the
+    // current vpp-io claims and includes everything else (pin mapping,
+    // modbus remote, EtherCAT) when active for the target.
+    const pool = buildAddressPool(
+      { pinMapping: { pins: state.deviceDefinitions.pinMapping.pins }, remoteDevices },
+      capabilities,
+      { ignoreSource: 'vpp-io' },
+    )
+    const inFlight = new Set<string>()
     const newEntries: IoMappingEntry[] = []
 
     for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
@@ -207,19 +345,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       if (!moduleId) continue
       const moduleDef = availableModules.find((m) => m.id === moduleId)
       if (!moduleDef) continue
-      const channels = (
-        moduleDef as {
-          addressMapping?: {
-            channels?: Array<{ name: string; type: string; dataType: string; addressPrefix: string }>
-          }
-        }
-      ).addressMapping?.channels
-      if (!channels) continue
+      const slotConfig = slotsConfig[String(slotIndex + 1)] ?? {}
+      const channels = resolveModuleChannels(moduleDef as ResolverModuleDef, slotConfig)
+      if (channels.length === 0) continue
 
       for (const channel of channels) {
         const isBit = channel.addressPrefix === '%IX' || channel.addressPrefix === '%QX'
-        const iecAddress = generateIecAddress(channel.addressPrefix, isBit, usedAddresses)
-        usedAddresses.add(iecAddress)
+        const iecAddress = nextFreeAddress(pool, channel.addressPrefix, isBit, undefined, inFlight)
+        inFlight.add(iecAddress)
         const aliasKey = `${slotIndex + 1}:${channel.name}`
         newEntries.push({
           slot: slotIndex + 1,
@@ -235,8 +368,11 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     }
 
     setVendorScreenData('io-mapping', { entries: newEntries })
+    // Producer mutation: every VPP slot just had its addresses
+    // re-allocated. Sync variables that were bound to those aliases.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots])
+  }, [slots, formatSelectionKey])
 
   /* ------------------------------------------------------------ */
   /* Mutators                                                      */
@@ -257,6 +393,115 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     writeModuleConfig({ ...moduleConfig, slots: Array<string | null>(maxSlots).fill(null), slotsConfig: {} })
   }
 
+  /* Stackable: append the first available module to the tail of the
+   * populated range. The user can then change it via the dropdown. */
+  const handleAddModule = () => {
+    if (!stackable) return
+    if (populatedCount >= maxSlots || availableModules.length === 0) return
+    const targetIndex = populatedCount
+    const next = [...slots]
+    next[targetIndex] = availableModules[0].id
+    writeModuleConfig({ ...moduleConfig, slots: next, slotsConfig })
+    setSelectedSlot(targetIndex)
+  }
+
+  /* Drag-reorder the slot at `fromIdx` to `toIdx` using arrayMove
+   * semantics — the dragged module lands at toIdx and everything in
+   * between shifts by one. slotsConfig and io-mapping entries are
+   * rewritten so per-slot config and aliases follow each module's
+   * new position. The io-mapping reallocator will re-assign IEC
+   * addresses on the next render in the new slot order. */
+  const performReorderSlots = (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return
+    if (fromIdx < 0 || fromIdx >= slots.length) return
+    if (toIdx < 0 || toIdx >= slots.length) return
+
+    const nextSlots = arrayMove(slots, fromIdx, toIdx)
+
+    // Build old-1based-slot -> new-1based-slot for the moved range.
+    // Indices outside [min,max] of the move are unaffected.
+    const lo = Math.min(fromIdx, toIdx)
+    const hi = Math.max(fromIdx, toIdx)
+    const remap = (slot1: number): number => {
+      const i = slot1 - 1
+      if (i < lo || i > hi) return slot1
+      if (i === fromIdx) return toIdx + 1
+      return (fromIdx < toIdx ? i - 1 : i + 1) + 1
+    }
+
+    const nextSlotsConfig: SlotConfigMap = {}
+    for (const [key, value] of Object.entries(slotsConfig)) {
+      const n = Number(key)
+      if (Number.isNaN(n)) {
+        nextSlotsConfig[key] = value
+        continue
+      }
+      nextSlotsConfig[String(remap(n))] = value
+    }
+    writeModuleConfig({ ...moduleConfig, slots: nextSlots, slotsConfig: nextSlotsConfig })
+
+    const vsd = useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData
+    const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
+    const shifted = entries.map((e) => ({ ...e, slot: remap(e.slot) }))
+    setVendorScreenData('io-mapping', { entries: shifted })
+
+    // Keep the focus on whichever module the user is currently looking at.
+    if (selectedSlot === fromIdx) {
+      setSelectedSlot(toIdx)
+    } else if (fromIdx < selectedSlot && selectedSlot <= toIdx) {
+      setSelectedSlot(selectedSlot - 1)
+    } else if (toIdx <= selectedSlot && selectedSlot < fromIdx) {
+      setSelectedSlot(selectedSlot + 1)
+    }
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const fromIdx = Number(active.id)
+    const toIdx = Number(over.id)
+    if (Number.isNaN(fromIdx) || Number.isNaN(toIdx)) return
+    performReorderSlots(fromIdx, toIdx)
+  }
+
+  /* Stackable: drop the slot at `index` and shift every following slot
+   * (modules + slot config + io-mapping entries + aliases) up by one
+   * so positions stay dense. The io-mapping effect will re-allocate
+   * addresses on the next render — preserving aliases via the
+   * shifted entries it reads from the store. */
+  const performRemoveModule = (index: number) => {
+    if (!stackable) return
+    if (index < 0 || index >= populatedCount) return
+
+    const nextSlots = [...slots]
+    for (let i = index; i < maxSlots - 1; i++) nextSlots[i] = nextSlots[i + 1] ?? null
+    nextSlots[maxSlots - 1] = null
+
+    const nextSlotsConfig: SlotConfigMap = {}
+    for (const [key, value] of Object.entries(slotsConfig)) {
+      const slotNum = Number(key)
+      if (slotNum === index + 1) continue
+      const newKey = slotNum > index + 1 ? String(slotNum - 1) : key
+      nextSlotsConfig[newKey] = value
+    }
+    writeModuleConfig({ ...moduleConfig, slots: nextSlots, slotsConfig: nextSlotsConfig })
+
+    // Rewrite io-mapping so the alias preservation effect finds the
+    // shifted entries at their new slot numbers.
+    const vsd = useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData
+    const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
+    const shifted = entries
+      .filter((e) => e.slot !== index + 1)
+      .map((e) => (e.slot > index + 1 ? { ...e, slot: e.slot - 1 } : e))
+    setVendorScreenData('io-mapping', { entries: shifted })
+
+    if (populatedCount > 1 && selectedSlot >= populatedCount - 1) {
+      setSelectedSlot(populatedCount - 2)
+    } else if (selectedSlot > index) {
+      setSelectedSlot(selectedSlot - 1)
+    }
+  }
+
   const handleFieldChange = (slotIndex: number, fieldId: string, value: FieldValue) => {
     const key = String(slotIndex + 1)
     const slotValues = { ...(slotsConfig[key] ?? {}), [fieldId]: value }
@@ -274,6 +519,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       e.slot === slot && e.channelName === channelName ? { ...e, alias } : e,
     )
     setVendorScreenData('io-mapping', { entries })
+    // Alias name changed — refresh variables bound to the old name.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }
 
   /* ------------------------------------------------------------ */
@@ -320,12 +567,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       {/* Top-level actions (e.g. Clear All Slots) */}
       {section.actions && (
         <div className='flex gap-2'>
-          {(section.actions as Array<{ id: string; label: string; type: string; action?: string }>).map((action) =>
+          {(
+            section.actions as Array<{ id: string; label: string; type: string; action?: string; confirm?: string }>
+          ).map((action) =>
             action.type === 'local' && action.action === 'clear-module-slots' ? (
               <button
                 key={action.id}
                 type='button'
-                onClick={handleClearAll}
+                onClick={() => (action.confirm ? setClearAllModalOpen(true) : handleClearAll())}
                 disabled={!slots.some((s) => s !== null)}
                 className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
               >
@@ -339,40 +588,46 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       <div className='flex min-h-0 flex-1 gap-4'>
         {/* ------ Left: slot tree ------ */}
         <div className='flex w-56 shrink-0 flex-col overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-700'>
-          {slots.map((moduleId, idx) => {
-            const mod = findModule(moduleId)
-            const isSelected = idx === selectedSlot
-            return (
-              <button
-                key={idx}
-                type='button'
-                onClick={() => setSelectedSlot(idx)}
-                className={`flex shrink-0 flex-col gap-0.5 border-b border-neutral-100 px-3 py-2 text-left dark:border-neutral-800 ${
-                  isSelected
-                    ? 'bg-brand-light/20 dark:bg-brand-medium-dark/30'
-                    : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
-                }`}
-              >
-                <div className='flex items-center justify-between'>
-                  <span className='font-caption text-cp-sm font-semibold text-neutral-950 dark:text-white'>
-                    Slot {idx + 1}
-                  </span>
-                  {mod && (
-                    <span className='text-[10px] text-neutral-400 dark:text-neutral-500'>{slotIoSummary(moduleId)}</span>
-                  )}
-                </div>
-                <span
-                  className={`truncate text-xs ${mod ? 'text-neutral-700 dark:text-neutral-300' : 'italic text-neutral-400 dark:text-neutral-600'}`}
-                >
-                  {mod?.name ?? 'Empty'}
-                </span>
-              </button>
-            )
-          })}
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={displayedSlots.map((idx) => String(idx))} strategy={verticalListSortingStrategy}>
+              {displayedSlots.map((idx) => {
+                const moduleId = slots[idx]
+                const mod = findModule(moduleId)
+                return (
+                  <SortableSlotButton
+                    key={idx}
+                    idx={idx}
+                    moduleName={mod?.name}
+                    ioSummary={slotIoSummary(moduleId)}
+                    isSelected={idx === selectedSlot}
+                    draggable={!!mod}
+                    onSelect={() => setSelectedSlot(idx)}
+                  />
+                )
+              })}
+            </SortableContext>
+          </DndContext>
+          {stackable && (
+            <button
+              type='button'
+              onClick={handleAddModule}
+              disabled={populatedCount >= maxSlots || availableModules.length === 0}
+              className='flex shrink-0 items-center justify-center gap-1 border-t border-neutral-100 px-3 py-2 text-xs font-medium text-brand hover:bg-brand-light/10 disabled:cursor-not-allowed disabled:text-neutral-400 disabled:hover:bg-transparent dark:border-neutral-800 dark:text-brand-light dark:hover:bg-brand-medium-dark/10 dark:disabled:text-neutral-600'
+            >
+              + Add module
+            </button>
+          )}
         </div>
 
         {/* ------ Right: contextual detail pane ------ */}
         <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-md border border-neutral-200 p-4 dark:border-neutral-700'>
+        {stackable && populatedCount === 0 ? (
+          <div className='flex flex-1 flex-col items-center justify-center text-center text-sm text-neutral-500 dark:text-neutral-400'>
+            <p>No modules configured.</p>
+            <p className='mt-1 text-xs'>Use &quot;+ Add module&quot; in the slot list to start a backplane.</p>
+          </div>
+        ) : (
+          <>
           {/* Header: Slot title, module picker, description, specs
               on the left; module image fills the right column from
               the top of the card down to the end of the specs. */}
@@ -382,9 +637,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                 Slot {selectedSlot + 1}
               </h3>
 
-              {/* Module picker — always visible. Selecting "-- Empty --"
-                  clears the slot; selecting another module switches
-                  in place without an intermediate clear step. */}
+              {/* Module picker — always visible. In physical mode,
+                  selecting "-- Empty --" clears the slot; in stackable
+                  mode there is no empty option and removal goes through
+                  the Remove button so the remaining slots shift up. */}
               <div className='mb-4 flex items-center gap-3'>
                 <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>Module</Label>
                 <Select
@@ -404,14 +660,16 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                     align='center'
                     side='bottom'
                   >
-                    <SelectItem
-                      value='__empty__'
-                      className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                    >
-                      <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
-                        -- Empty --
-                      </span>
-                    </SelectItem>
+                    {!stackable && (
+                      <SelectItem
+                        value='__empty__'
+                        className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                      >
+                        <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
+                          -- Empty --
+                        </span>
+                      </SelectItem>
+                    )}
                     {availableModules.map((mod) => (
                       <SelectItem
                         key={mod.id}
@@ -425,6 +683,15 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                     ))}
                   </SelectContent>
                 </Select>
+                {stackable && selectedModule && (
+                  <button
+                    type='button'
+                    onClick={() => setRemoveModalOpen(true)}
+                    className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
+                  >
+                    Remove module
+                  </button>
+                )}
               </div>
 
               {selectedModule && (
@@ -643,8 +910,81 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               This slot is empty. Pick a module above to populate it.
             </p>
           )}
+          </>
+        )}
         </div>
       </div>
+
+      {/* Remove-module confirmation (stackable only). All slots after
+       *  the removed one shift up so positions stay dense; addresses
+       *  are reallocated by the io-mapping effect. */}
+      {stackable && (
+        <Modal open={removeModalOpen} onOpenChange={setRemoveModalOpen}>
+          <ModalContent className='flex w-[420px] select-none flex-col items-center justify-evenly gap-5 rounded-lg p-6'>
+            <ModalTitle className='text-center font-caption text-base font-semibold text-neutral-950 dark:text-white'>
+              Remove module from slot {selectedSlot + 1}?
+            </ModalTitle>
+            <p className='text-center text-sm text-neutral-600 dark:text-neutral-300'>
+              {selectedModule ? <strong>{selectedModule.name}</strong> : 'This module'} will be removed and all
+              following slots will shift up to keep the backplane contiguous. I/O addresses on the affected slots
+              will be re-allocated.
+            </p>
+            <div className='flex w-full flex-col gap-2'>
+              <button
+                type='button'
+                onClick={() => {
+                  performRemoveModule(selectedSlot)
+                  setRemoveModalOpen(false)
+                }}
+                className='w-full rounded-lg bg-red-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-red-700'
+              >
+                Remove module
+              </button>
+              <button
+                type='button'
+                onClick={() => setRemoveModalOpen(false)}
+                className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+              >
+                Cancel
+              </button>
+            </div>
+          </ModalContent>
+        </Modal>
+      )}
+
+      {/* Clear-all confirmation. Driven by the action's `confirm` field
+       *  in the screen JSON — when present, the local button routes
+       *  through here instead of firing immediately. */}
+      <Modal open={clearAllModalOpen} onOpenChange={setClearAllModalOpen}>
+        <ModalContent className='flex w-[420px] select-none flex-col items-center justify-evenly gap-5 rounded-lg p-6'>
+          <ModalTitle className='text-center font-caption text-base font-semibold text-neutral-950 dark:text-white'>
+            Clear all slots?
+          </ModalTitle>
+          <p className='text-center text-sm text-neutral-600 dark:text-neutral-300'>
+            Every module will be removed from the backplane and the slot configuration cleared. I/O addresses
+            allocated to those modules will be released.
+          </p>
+          <div className='flex w-full flex-col gap-2'>
+            <button
+              type='button'
+              onClick={() => {
+                handleClearAll()
+                setClearAllModalOpen(false)
+              }}
+              className='w-full rounded-lg bg-red-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-red-700'
+            >
+              Clear all slots
+            </button>
+            <button
+              type='button'
+              onClick={() => setClearAllModalOpen(false)}
+              className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+            >
+              Cancel
+            </button>
+          </div>
+        </ModalContent>
+      </Modal>
     </div>
   )
 }

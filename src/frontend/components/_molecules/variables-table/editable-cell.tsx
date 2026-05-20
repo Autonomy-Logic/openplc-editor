@@ -1,4 +1,5 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -492,14 +493,14 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
     const aoutPins = existingPins
       .filter((pin) => pin.pinType === 'analogOutput')
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const dinPins = existingPins
@@ -507,7 +508,7 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const doutPins = existingPins
@@ -515,7 +516,7 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)
@@ -531,9 +532,23 @@ const EditableLocationCell = ({
     ]
   }, [id, variable, existingPins, remoteIOPoints, vendorIoEntries])
 
+  // Combined display: when the variable carries an alias, show it
+  // alongside the raw address as "alias (address)" — same shape
+  // across selected and unselected states so clicking a row doesn't
+  // flip the cell's appearance. When there's no alias, only the
+  // address shows. The combobox `value` stays as the raw address so
+  // typing / picking still operates on the canonical form.
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
+  const orphanTooltip = isOrphaned
+    ? `Alias "${variable?.alias}" is no longer declared by any active source. Last known address: ${cellValue}`
+    : undefined
+  const combinedLabel = variable?.alias ? `${variable.alias} (${cellValue})` : cellValue
+
   return selected ? (
     <GenericComboboxCell
       value={cellValue}
+      displayLabel={combinedLabel}
       onValueChange={(value) => {
         onBlur(value)
       }}
@@ -544,15 +559,34 @@ const EditableLocationCell = ({
     />
   ) : (
     <div
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+      title={orphanTooltip ?? (variable?.alias ? `${variable.alias} -> ${cellValue}` : undefined)}
+      className={cn('flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !selected,
         'cursor-not-allowed': !isEditable(),
       })}
     >
+      {isOrphaned && (
+        <span
+          aria-label='Orphaned alias'
+          className='text-amber-500 dark:text-amber-400'
+          /* small inline-svg keeps the cell self-contained */
+        >
+          <svg
+            viewBox='0 0 16 16'
+            fill='currentColor'
+            className='h-3.5 w-3.5'
+            aria-hidden='true'
+          >
+            <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
+          </svg>
+        </span>
+      )}
       <HighlightedText
-        text={cellValue}
+        text={combinedLabel}
         searchQuery={searchQuery}
-        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
+          'text-amber-600 dark:text-amber-400': isOrphaned,
+        })}
       />
     </div>
   )

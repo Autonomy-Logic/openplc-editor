@@ -1,6 +1,7 @@
 import './configs'
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -727,8 +728,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
         const snippetSuggestions = cppSnippetsCompletion({ range }).suggestions
 
-        const isArduinoTarget = deviceBoard && !deviceBoard.includes('OpenPLC Runtime')
-        const arduinoSuggestions = isArduinoTarget ? arduinoApiCompletion({ range }).suggestions : []
+        const boardInfo = openPLCStoreBase.getState().deviceAvailableOptions.availableBoards.get(deviceBoard)
+        const offerArduinoApi = resolveTargetCapabilities(boardInfo).arduinoApiCompletions
+        const arduinoSuggestions = offerArduinoApi ? arduinoApiCompletion({ range }).suggestions : []
 
         const code = model.getValue()
         const variableSuggestions = parseCppVariables(code, range)

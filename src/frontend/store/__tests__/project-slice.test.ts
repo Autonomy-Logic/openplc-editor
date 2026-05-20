@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 
 import type {
+  BoardInfo,
   ModbusIOGroup,
   OpcUaNodeConfig,
   OpcUaSecurityProfile,
@@ -16,11 +17,20 @@ import type {
   PLCVariable,
   S7CommDataBlock,
 } from '../../../middleware/shared/ports/types'
+import { createConsoleSlice } from '../slices/console'
+import { createDeviceSlice } from '../slices/device'
 import { createProjectSlice } from '../slices/project/slice'
-import type { ProjectSlice, ProjectState } from '../slices/project/types'
+import type { ProjectSliceRoot, ProjectState } from '../slices/project/types'
 
 function makeStore() {
-  return createStore<ProjectSlice>()(createProjectSlice)
+  // The project slice now reads from device + console slices for the
+  // alias-sync flow. Compose all three so the cross-slice types
+  // resolve correctly.
+  return createStore<ProjectSliceRoot>()((...args) => ({
+    ...createProjectSlice(...args),
+    ...createDeviceSlice(...args),
+    ...createConsoleSlice(...args),
+  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +240,42 @@ function seedRemoteDevice(store: ReturnType<typeof makeStore>, device: PLCRemote
     ...current,
     data: { ...current.data, remoteDevices: [...(current.data.remoteDevices ?? []), device] },
   })
+}
+
+/** Seed a Runtime v4 target so the cap-gated address pool counts
+ *  Modbus claims. Producer-edit actions (addIOGroup, updateIOGroup …)
+ *  rely on `caps.modbusTcpRemote = true` to count sibling groups when
+ *  allocating addresses. */
+function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      [
+        'OpenPLC Runtime v4',
+        {
+          compiler: 'openplc-compiler',
+          core: 'rt-v4',
+          preview: '',
+          specs: {},
+          capabilities: {
+            pinMapping: false,
+            vppIo: false,
+            modbusTcpRemote: true,
+            ethercat: true,
+            modbusTcpServer: true,
+            opcuaServer: true,
+            s7Server: true,
+            debuggerTransports: ['websocket'],
+            pythonFunctionBlocks: true,
+            arduinoApiCompletions: false,
+            hasRuntimeStats: true,
+            isInProcessSimulator: false,
+            directUsbUpload: false,
+          },
+        },
+      ],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
 }
 
 // ===========================================================================
@@ -1922,6 +1968,15 @@ describe('createProjectSlice', () => {
   })
 
   describe('addIOGroup', () => {
+    beforeEach(() => {
+      // Cap-gated pool needs a target with modbusTcpRemote capability,
+      // otherwise sibling Modbus groups don't count and consecutive
+      // addIOGroup calls collide on the same address space. In
+      // production the workspace screen seeds availableBoards before
+      // the user reaches the remote-device UI, so this mirrors reality.
+      seedRuntimeV4Board(store)
+    })
+
     it('adds an IO group and generates IO points', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '3', 3)
@@ -2091,9 +2146,36 @@ describe('createProjectSlice', () => {
       expect(groups[1].ioPoints![0].iecLocation).toBe('%IX0.1')
       expect(groups[1].ioPoints![1].iecLocation).toBe('%IX0.3')
     })
+
+    it('ignores VPP claims on a target whose caps do not include vppIo', () => {
+      // Regression: a project saved with target SLM-RP4 carries VPP
+      // entries in vendorScreenData.io-mapping. When the user switches
+      // to plain Runtime v4 (vppIo=false), those claims become
+      // inactive — adding a Modbus group must allocate from %IW0
+      // upward, not skip past the inactive VPP block.
+      store.getState().deviceActions.setVendorScreenData('io-mapping', {
+        entries: [
+          { slot: 1, moduleId: 'm', moduleName: 'M', channelName: 'AI0', channelType: 'analogInput', dataType: 'INT', iecAddress: '%IW0', alias: '' },
+          { slot: 1, moduleId: 'm', moduleName: 'M', channelName: 'AI1', channelType: 'analogInput', dataType: 'INT', iecAddress: '%IW1', alias: '' },
+          { slot: 1, moduleId: 'm', moduleName: 'M', channelName: 'AI2', channelType: 'analogInput', dataType: 'INT', iecAddress: '%IW2', alias: '' },
+          { slot: 1, moduleId: 'm', moduleName: 'M', channelName: 'AI3', channelType: 'analogInput', dataType: 'INT', iecAddress: '%IW3', alias: '' },
+        ],
+      })
+
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      expect(points[0].iecLocation).toBe('%IW0')
+      expect(points[1].iecLocation).toBe('%IW1')
+    })
   })
 
   describe('updateIOGroup', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
     it('updates an IO group by id', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
@@ -2117,6 +2199,10 @@ describe('createProjectSlice', () => {
   })
 
   describe('deleteIOGroup', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
     it('deletes an IO group by id', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
@@ -2135,6 +2221,10 @@ describe('createProjectSlice', () => {
   })
 
   describe('updateIOPointAlias', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
     it('updates a point alias', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))

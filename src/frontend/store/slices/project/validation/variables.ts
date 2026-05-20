@@ -149,12 +149,12 @@ const variableLocationValidationErrorMessage = (variableType: string) => {
     case 'UDINT':
     case 'REAL':
     case 'DWORD':
-      return 'Valid locations: %MD0 (change the number to the desired location)'
+      return 'Valid locations: %QD0, %ID0, %MD0 (change the number to the desired location)'
     case 'LINT':
     case 'ULINT':
     case 'LREAL':
     case 'LWORD':
-      return 'Valid locations: %ML0 (change the number to the desired location)'
+      return 'Valid locations: %QL0, %IL0, %ML0 (change the number to the desired location)'
     default:
       return ''
   }
@@ -261,9 +261,17 @@ const createVariableValidation = (
       case 'UDINT':
       case 'REAL':
       case 'DWORD': {
-        const stringWithNoPrefix = variableFound.location.replace(PLC_ADDRESS_PREFIX.DWORD_MEMORY, '')
+        const stringWithNoPrefix = variableFound.location
+          .replace(PLC_ADDRESS_PREFIX.DWORD_OUTPUT, '')
+          .replace(PLC_ADDRESS_PREFIX.DWORD_INPUT, '')
+          .replace(PLC_ADDRESS_PREFIX.DWORD_MEMORY, '')
         const position = parseInt(stringWithNoPrefix)
-        response.location = `${PLC_ADDRESS_PREFIX.DWORD_MEMORY}${position + 1}`
+        const prefix = variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.DWORD_OUTPUT)
+          ? PLC_ADDRESS_PREFIX.DWORD_OUTPUT
+          : variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.DWORD_INPUT)
+            ? PLC_ADDRESS_PREFIX.DWORD_INPUT
+            : PLC_ADDRESS_PREFIX.DWORD_MEMORY
+        response.location = `${prefix}${position + 1}`
         break
       }
 
@@ -271,9 +279,17 @@ const createVariableValidation = (
       case 'ULINT':
       case 'LREAL':
       case 'LWORD': {
-        const stringWithNoPrefix = variableFound.location.replace(PLC_ADDRESS_PREFIX.LWORD_MEMORY, '')
+        const stringWithNoPrefix = variableFound.location
+          .replace(PLC_ADDRESS_PREFIX.LWORD_OUTPUT, '')
+          .replace(PLC_ADDRESS_PREFIX.LWORD_INPUT, '')
+          .replace(PLC_ADDRESS_PREFIX.LWORD_MEMORY, '')
         const position = parseInt(stringWithNoPrefix)
-        response.location = `${PLC_ADDRESS_PREFIX.LWORD_MEMORY}${position + 1}`
+        const prefix = variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.LWORD_OUTPUT)
+          ? PLC_ADDRESS_PREFIX.LWORD_OUTPUT
+          : variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.LWORD_INPUT)
+            ? PLC_ADDRESS_PREFIX.LWORD_INPUT
+            : PLC_ADDRESS_PREFIX.LWORD_MEMORY
+        response.location = `${prefix}${position + 1}`
         break
       }
 

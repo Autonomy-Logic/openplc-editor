@@ -274,6 +274,20 @@ describe('createVariableValidation', () => {
     expect(result.location).toBe('%MD3')
   })
 
+  it('preserves DWORD input prefix on increment (%ID0 -> %ID1)', () => {
+    const existing = [makeVariable('Var1', 'REAL', '%ID0')]
+    const variable = makeVariable('NewVar', 'REAL', '%ID0')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%ID1')
+  })
+
+  it('preserves DWORD output prefix on increment (%QD3 -> %QD4)', () => {
+    const existing = [makeVariable('Var1', 'REAL', '%QD3')]
+    const variable = makeVariable('NewVar', 'REAL', '%QD3')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%QD4')
+  })
+
   // -- LWORD location increment (LINT, ULINT, LREAL, LWORD) --
   it('increments LINT memory location', () => {
     const existing = [makeVariable('Var1', 'LINT', '%ML0')]
@@ -301,6 +315,20 @@ describe('createVariableValidation', () => {
     const variable = makeVariable('NewVar', 'LWORD', '%ML9')
     const result = createVariableValidation(existing, variable)
     expect(result.location).toBe('%ML10')
+  })
+
+  it('preserves LWORD input prefix on increment (%IL2 -> %IL3)', () => {
+    const existing = [makeVariable('Var1', 'LREAL', '%IL2')]
+    const variable = makeVariable('NewVar', 'LREAL', '%IL2')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%IL3')
+  })
+
+  it('preserves LWORD output prefix on increment (%QL0 -> %QL1)', () => {
+    const existing = [makeVariable('Var1', 'LREAL', '%QL0')]
+    const variable = makeVariable('NewVar', 'LREAL', '%QL0')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%QL1')
   })
 
   // -- Default case (unknown type) --

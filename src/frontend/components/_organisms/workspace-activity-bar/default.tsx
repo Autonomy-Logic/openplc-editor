@@ -1,3 +1,4 @@
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
@@ -81,7 +82,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
-  const isSimulatorBoard = currentBoardInfo?.compiler === 'simulator'
+  const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
 
   // Sync simulatorRunning when the simulator stops externally
   useEffect(() => {
@@ -136,10 +137,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     setIsCompiling(true)
     addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
 
+    // Pre-compile alias sync: ensure every located variable's
+    // `location` reflects the latest address its alias points to,
+    // before we snapshot projectData for the compiler. The compile
+    // pipeline itself reads `variable.location` verbatim — same
+    // contract as before, just guaranteed-fresh now.
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    const freshProjectData = useOpenPLCStore.getState().project.data
+
     try {
       const result = await compiler.compileProgram(
         {
-          projectData,
+          projectData: freshProjectData,
           boardTarget: deviceDefinitions.configuration.deviceBoard,
           projectPath: projectMeta.path,
           compileOnly: overrides?.compileOnly ?? deviceDefinitions.configuration.compileOnly,
@@ -452,9 +461,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         if (response === 0) {
           const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
           const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
+          // See the handleBuild call above — same pre-compile sync pass.
+          useOpenPLCStore.getState().projectActions.syncVariableAliases()
+          const freshProjectData = useOpenPLCStore.getState().project.data
           const compileResult = await compiler.compileProgram(
             {
-              projectData,
+              projectData: freshProjectData,
               boardTarget,
               projectPath,
               compileOnly: false,

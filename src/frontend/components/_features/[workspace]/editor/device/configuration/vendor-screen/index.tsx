@@ -10,6 +10,10 @@ type ScreenSection = {
   collapsed?: boolean
   maxSlots?: number
   moduleSource?: string
+  /** When true on a module-slots section, the backplane is treated as
+   *  stackable: empty slots are hidden, modules are added at the end
+   *  via an "Add module" button, and removal shifts following slots up. */
+  stackable?: boolean
   fields?: unknown[]
   actions?: unknown[]
   persistence?: string

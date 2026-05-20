@@ -202,7 +202,7 @@ describe('Device slice types', () => {
         ok: true,
         title: 'Updated',
         message: 'Success',
-        data: { pin: 'A0', pinType: 'digitalInput', address: '%IX0.0', name: 'sensor' },
+        data: { pin: 'A0', pinType: 'digitalInput', address: '%IX0.0', alias: 'sensor' },
       }
       expect(response.ok).toBe(true)
       expect(response.data).toBeDefined()

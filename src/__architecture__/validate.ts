@@ -148,6 +148,13 @@ function getLayer(filePath: string): LayerName | null {
   // Middleware layers
   if (rel.startsWith('middleware/shared/ports/')) return 'ports'
   if (rel.startsWith('middleware/shared/providers/')) return 'provider'
+  // Pure utilities that need to be reachable from any layer (store,
+  // services, hooks, components, adapters, backend) live here.
+  // Architecturally treated as part of the `utils` layer — same rule
+  // set, but the physical path is under middleware/shared/ to make
+  // openplc-web parity explicit (this folder is byte-identical
+  // between repos).
+  if (rel.startsWith('middleware/shared/utils/')) return 'utils'
   if (rel.match(/^middleware\/adapters\/[^/]+\/components\//)) return 'adapter-components'
   if (rel.startsWith('middleware/adapters/')) return 'adapters'
 

@@ -352,16 +352,16 @@ const WorkspaceScreen = () => {
     })
   }, [isCollapsed])
 
-  // Load available boards via device port
+  // Load available boards via device port.
+  // `setAvailableOptions` owns the alias sync — once the boards land,
+  // target-capability resolution becomes accurate and the device slice
+  // re-syncs aliases for the active target. We respect the board saved
+  // in the project (no override on load).
   useEffect(() => {
     const loadAvailableBoards = async () => {
       try {
         const boardsMap = await device.getAvailableBoards()
         setAvailableOptions({ availableBoards: boardsMap })
-
-        // Respect the board saved in the project — do not override on load.
-        // The user explicitly chose a target board; resetting it would discard
-        // their selection every time the project reopens.
       } catch (error) {
         console.error('Failed to load boards data:', error)
       }

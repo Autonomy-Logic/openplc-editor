@@ -17,9 +17,15 @@
  *       "digital_inputs":  { "base_byte": 0, "base_bit": 0, "count": 8 },
  *       "digital_outputs": { "base_byte": 0, "base_bit": 1, "count": 8 },
  *       "analog_inputs":   { "base_word": 0, "count": 4 },
- *       "analog_outputs":  { "base_word": 0, "count": 2 }
+ *       "analog_outputs":  { "base_word": 0, "count": 2 },
+ *       "analog_real_inputs":  { "base_dword": 0, "count": 4 },
+ *       "analog_real_outputs": { "base_dword": 0, "count": 2 }
  *     }
  *   }
+ *
+ * Channels are bucketed by `addressPrefix` (not `type`) because a single
+ * "analogInput" channel may live in either the UINT16 image table (%IW,
+ * scaled counts) or the 32-bit image table (%ID, IEEE-754 floats).
  */
 
 import { bytesToHexString, encodeConfigBytes } from './byte-encoder'
@@ -75,11 +81,18 @@ type WordRangeMapping = {
   count: number
 }
 
+type DwordRangeMapping = {
+  base_dword: number
+  count: number
+}
+
 type PluginSlotIoMapping = {
   digital_inputs?: BitRangeMapping
   digital_outputs?: BitRangeMapping
   analog_inputs?: WordRangeMapping
   analog_outputs?: WordRangeMapping
+  analog_real_inputs?: DwordRangeMapping
+  analog_real_outputs?: DwordRangeMapping
 }
 
 type PluginSlot = {
@@ -95,6 +108,7 @@ type PluginSlot = {
 
 const BIT_ADDRESS_REGEX = /^%[IQ]X(\d+)\.(\d+)$/
 const WORD_ADDRESS_REGEX = /^%[IQ]W(\d+)$/
+const DWORD_ADDRESS_REGEX = /^%[IQ]D(\d+)$/
 
 /** Parse a bit IEC address (%IX5.3 / %QX1.7) into a byte+bit pair. */
 function parseBitAddress(addr: string): { byte: number; bit: number } | null {
@@ -106,6 +120,13 @@ function parseBitAddress(addr: string): { byte: number; bit: number } | null {
 /** Parse a word IEC address (%IW12 / %QW5) into a word index. */
 function parseWordAddress(addr: string): number | null {
   const m = WORD_ADDRESS_REGEX.exec(addr)
+  if (!m) return null
+  return Number(m[1])
+}
+
+/** Parse a double-word IEC address (%ID12 / %QD5) into a dword index. */
+function parseDwordAddress(addr: string): number | null {
+  const m = DWORD_ADDRESS_REGEX.exec(addr)
   if (!m) return null
   return Number(m[1])
 }
@@ -155,6 +176,18 @@ function buildWordRange(channels: { name: string; address: string }[]): WordRang
   return { base_word: parsed[0], count: parsed.length }
 }
 
+function buildDwordRange(channels: { name: string; address: string }[]): DwordRangeMapping | null {
+  if (channels.length === 0) return null
+  const parsed: number[] = []
+  for (const ch of channels) {
+    const d = parseDwordAddress(ch.address)
+    if (d === null) return null
+    parsed.push(d)
+  }
+  parsed.sort((a, b) => a - b)
+  return { base_dword: parsed[0], count: parsed.length }
+}
+
 /**
  * Build the `slots` array for the plugin config by cross-referencing:
  *   - Which module is in each slot (from vendor screen `module-configuration`)
@@ -183,20 +216,31 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
     const configScreenDef = moduleDef.configScreenDefinition
     const slotConfigValues = slotsConfigBag[String(slotNumber)] ?? {}
 
-    // Group channels by type and resolve each channel's assigned IEC address
+    // Bucket channels by the resolved address prefix from the io-mapping
+    // (the authoritative source for what address the editor assigned),
+    // not by the manifest's static channel.addressPrefix. For modules
+    // that use channelsByFormat (e.g. SLM V/mA cards toggling between
+    // %IW and %ID via the data_format selector), the manifest's
+    // `channels` fallback array carries the raw-mode prefix; the actual
+    // allocated address is what determines whether the channel goes to
+    // analog_inputs (%IW) or analog_real_inputs (%ID).
     const di: { name: string; address: string }[] = []
     const dout: { name: string; address: string }[] = []
     const ai: { name: string; address: string }[] = []
     const ao: { name: string; address: string }[] = []
+    const aiReal: { name: string; address: string }[] = []
+    const aoReal: { name: string; address: string }[] = []
 
     for (const channel of channels) {
       const ioEntry = ioEntries.find((e) => e.slot === slotNumber && e.channelName === channel.name)
       const address = ioEntry?.iecAddress
       if (!address) continue
-      if (channel.type === 'digitalInput') di.push({ name: channel.name, address })
-      else if (channel.type === 'digitalOutput') dout.push({ name: channel.name, address })
-      else if (channel.type === 'analogInput') ai.push({ name: channel.name, address })
-      else if (channel.type === 'analogOutput') ao.push({ name: channel.name, address })
+      if (address.startsWith('%IX')) di.push({ name: channel.name, address })
+      else if (address.startsWith('%QX')) dout.push({ name: channel.name, address })
+      else if (address.startsWith('%IW')) ai.push({ name: channel.name, address })
+      else if (address.startsWith('%QW')) ao.push({ name: channel.name, address })
+      else if (address.startsWith('%ID')) aiReal.push({ name: channel.name, address })
+      else if (address.startsWith('%QD')) aoReal.push({ name: channel.name, address })
     }
 
     const ioMappingBlock: PluginSlotIoMapping = {}
@@ -204,10 +248,14 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
     const doRange = buildBitRange(dout)
     const aiRange = buildWordRange(ai)
     const aoRange = buildWordRange(ao)
+    const aiRealRange = buildDwordRange(aiReal)
+    const aoRealRange = buildDwordRange(aoReal)
     if (diRange) ioMappingBlock.digital_inputs = diRange
     if (doRange) ioMappingBlock.digital_outputs = doRange
     if (aiRange) ioMappingBlock.analog_inputs = aiRange
     if (aoRange) ioMappingBlock.analog_outputs = aoRange
+    if (aiRealRange) ioMappingBlock.analog_real_inputs = aiRealRange
+    if (aoRealRange) ioMappingBlock.analog_real_outputs = aoRealRange
 
     const slot: PluginSlot = {
       slot: slotNumber,
