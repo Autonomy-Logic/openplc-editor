@@ -172,17 +172,19 @@ export function registerStLspProviders({
         // Monaco has no model for the synthetic stub source, so
         // navigating to it would dead-end.
         const stubLocation = locations.find((l) => redirectToGraphicalPou(l.uri))
-        if (stubLocation) return null
+        if (stubLocation) return suppressNoDefinitionFound(model, position, monacoApi)
 
         // Route variable-declaration and cross-POU targets through
         // the Zustand store: open the target POU's tab and either
         // switch the variables panel to text mode (for preamble
         // targets) or place the body cursor.  When the redirect
-        // claims a location, return null so Monaco doesn't try to
-        // navigate on top of it.
+        // claims a location, return a no-op self-reference so
+        // Monaco doesn't render "No definition found for 'X'" on
+        // top of our successful redirect — the redirect already
+        // moved the user where they wanted to go.
         const primary = locations[0]
         if (primary && redirectDefinitionToStore(primary)) {
-          return null
+          return suppressNoDefinitionFound(model, position, monacoApi)
         }
 
         return lspLocationsToMonaco(normalised, monacoApi) ?? null
@@ -388,6 +390,33 @@ function shiftSemanticTokensToBody(data: number[], offset: number): Uint32Array 
     prevCol = t.col
   }
   return new Uint32Array(out)
+}
+
+/**
+ * Build a Location whose target is the source cursor itself, so the
+ * caller's `provideDefinition` can claim "definition found" without
+ * triggering a visible Monaco navigation.
+ *
+ * Why we need this: when our redirect (stub → graphical, preamble →
+ * variables panel, cross-POU → store nav) has already handled the
+ * navigation, the provider must NOT return `null` / `[]`.  Monaco
+ * interprets both as "no definition" and renders the inline
+ * "No definition found for 'X'" badge on top of our successful
+ * redirect.  Returning a Location at the current cursor position
+ * counts as a valid result for Monaco's UI but makes its "navigate"
+ * call a no-op because the cursor is already there.
+ */
+function suppressNoDefinitionFound(
+  model: monaco.editor.ITextModel,
+  position: monaco.IPosition,
+  monacoApi: typeof monaco,
+): monaco.languages.Location[] {
+  return [
+    {
+      uri: model.uri,
+      range: new monacoApi.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+    },
+  ]
 }
 
 function normaliseLocationResponse(
