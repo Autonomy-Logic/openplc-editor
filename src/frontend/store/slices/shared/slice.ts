@@ -791,11 +791,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // that correctly surfaces orphans for the chosen target.
       const syncReport = getState().projectActions.syncVariableAliases({ ignoreCapabilities: true })
       if (syncReport.adopted > 0 || syncReport.refreshed > 0 || syncReport.orphaned > 0) {
-        // Single info-level summary; the per-variable detail isn't
-        // user-facing noise.
-        console.info(
-          `[alias-sync] On project open: adopted=${syncReport.adopted} refreshed=${syncReport.refreshed} orphaned=${syncReport.orphaned}`,
-        )
+        // Single info-level summary in the in-app console; per-variable
+        // detail isn't useful enough to warrant the noise.
+        getState().consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: `Alias sync on project open: adopted=${syncReport.adopted} refreshed=${syncReport.refreshed} orphaned=${syncReport.orphaned}`,
+        })
       }
 
       toast({

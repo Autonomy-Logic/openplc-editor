@@ -1,14 +1,6 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import {
-  buildAddressPool,
-  buildAliasRegistry,
-  type ClaimedAddress,
-  nextFreeAddress,
-  syncVariableAliases as syncVariablesPure,
-} from '../../../../backend/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '../../../../backend/shared/utils/target-capabilities'
 import type {
   ModbusIOPoint,
   OpcUaServerConfig,
@@ -18,10 +10,17 @@ import type {
   S7CommPlcIdentity,
   S7CommServerSettings,
 } from '../../../../middleware/shared/ports/types'
+import {
+  buildAddressPool,
+  buildAliasRegistry,
+  nextFreeAddress,
+  syncVariableAliases as syncVariablesPure,
+} from '../../../../middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
-import type { ProjectResponse, ProjectSlice } from './types'
+import type { ProjectResponse, ProjectSlice, ProjectSliceRoot } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import { createVariableValidation, updateVariableValidation } from './validation/variables'
 
@@ -167,7 +166,7 @@ function generateIOPoints(
   return points
 }
 
-const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (setState, getState) => ({
+const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> = (setState, getState) => ({
   project: {
     meta: { name: '', type: 'plc-project', path: '' },
     data: {
@@ -424,26 +423,19 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       // we read the live store state including pinMapping + caps.
       let aliasOverride: { alias: string | undefined } | undefined
       if (typeof updates.location === 'string') {
-        const live = getState() as unknown as {
-          deviceDefinitions?: {
-            pinMapping?: { pins?: Array<{ address: string; alias?: string; pinType?: string }> }
-            configuration?: { deviceBoard?: string; vendorScreenData?: Record<string, unknown> }
-          }
-          deviceAvailableOptions?: { availableBoards?: Map<string, Parameters<typeof resolveTargetCapabilities>[0]> }
-        }
-        const boardInfo = live.deviceAvailableOptions?.availableBoards?.get(
-          live.deviceDefinitions?.configuration?.deviceBoard ?? '',
+        const live = getState()
+        const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+          live.deviceDefinitions.configuration.deviceBoard ?? '',
         )
-        const vendorScreenData = live.deviceDefinitions?.configuration?.vendorScreenData
         const ioMapping =
-          (vendorScreenData?.['io-mapping'] as
+          (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
             | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
             | undefined)?.entries ?? []
         const pool = buildAddressPool(
           {
-            pinMapping: { pins: live.deviceDefinitions?.pinMapping?.pins ?? [] },
+            pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
             vendorIoMapping: { entries: ioMapping },
-            remoteDevices: getState().project.data.remoteDevices,
+            remoteDevices: live.project.data.remoteDevices,
           },
           resolveTargetCapabilities(boardInfo),
         )
@@ -580,26 +572,19 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       // Build pool + registry once from the live state before entering
       // produce so we don't read draft proxies inside the registry
       // build.
-      const live = getState() as unknown as {
-        deviceDefinitions?: {
-          pinMapping?: { pins?: Array<{ address: string; alias?: string; pinType?: string }> }
-          configuration?: { deviceBoard?: string; vendorScreenData?: Record<string, unknown> }
-        }
-        deviceAvailableOptions?: { availableBoards?: Map<string, Parameters<typeof resolveTargetCapabilities>[0]> }
-      }
-      const boardInfo = live.deviceAvailableOptions?.availableBoards?.get(
-        live.deviceDefinitions?.configuration?.deviceBoard ?? '',
+      const live = getState()
+      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+        live.deviceDefinitions.configuration.deviceBoard ?? '',
       )
-      const vendorScreenData = live.deviceDefinitions?.configuration?.vendorScreenData
       const ioMapping =
-        (vendorScreenData?.['io-mapping'] as
+        (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
           | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
           | undefined)?.entries ?? []
       const pool = buildAddressPool(
         {
-          pinMapping: { pins: live.deviceDefinitions?.pinMapping?.pins ?? [] },
+          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
           vendorIoMapping: { entries: ioMapping },
-          remoteDevices: getState().project.data.remoteDevices,
+          remoteDevices: live.project.data.remoteDevices,
         },
         resolveTargetCapabilities(boardInfo),
         // Project-load callers pass ignoreCapabilities so the sync
@@ -609,6 +594,24 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         { ignoreCapabilities: options?.ignoreCapabilities === true },
       )
       const registry = buildAliasRegistry(pool)
+
+      // Conflicts are unreachable under normal editor flows because
+      // the editor always assigns addresses uniquely. They can
+      // appear when a project file has been hand-edited or migrated
+      // incorrectly — silent first-wins is the worst failure mode,
+      // so surface them in the console panel.
+      if (pool.conflicts.length > 0) {
+        const sample = pool.conflicts
+          .slice(0, 5)
+          .map((c) => `${c.address} (${c.sources.map((s) => s.kind).join(', ')})`)
+          .join('; ')
+        const overflow = pool.conflicts.length > 5 ? ` (+${pool.conflicts.length - 5} more)` : ''
+        live.consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `Address pool reports ${pool.conflicts.length} conflicting claim(s): ${sample}${overflow}. The first source wins; later ones lose their address binding.`,
+        })
+      }
 
       let adopted = 0
       let refreshed = 0
@@ -1206,13 +1209,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       // every Modbus / EtherCAT remote device — including this one's
       // existing groups, which must not be reclaimed) under the
       // current target's capabilities.
-      const liveState = getState()
-      const deviceStateModule = (liveState as unknown as { deviceDefinitions?: { pinMapping?: { pins?: ClaimedAddress[] }; configuration?: { deviceBoard?: string; vendorScreenData?: Record<string, unknown> } }; deviceAvailableOptions?: { availableBoards?: Map<string, unknown> } })
-      const pins = deviceStateModule.deviceDefinitions?.pinMapping?.pins ?? []
-      const boardName = deviceStateModule.deviceDefinitions?.configuration?.deviceBoard ?? ''
-      const boardInfo = deviceStateModule.deviceAvailableOptions?.availableBoards?.get(boardName)
-      const vendorScreenData = deviceStateModule.deviceDefinitions?.configuration?.vendorScreenData
-      const ioMapping = (vendorScreenData?.['io-mapping'] as { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> } | undefined)?.entries ?? []
+      const live = getState()
+      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+        live.deviceDefinitions.configuration.deviceBoard ?? '',
+      )
+      const ioMapping =
+        (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+          | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+          | undefined)?.entries ?? []
 
       // ignoreCapabilities: the user is actively editing a Modbus
       // TCP remote device, so the pool must include every existing
@@ -1223,11 +1227,11 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       // tests, or in projects pre-board-selection).
       const pool = buildAddressPool(
         {
-          pinMapping: { pins: pins as Array<{ address: string; name?: string; pinType?: string }> },
+          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
           vendorIoMapping: { entries: ioMapping },
-          remoteDevices: liveState.project.data.remoteDevices,
+          remoteDevices: live.project.data.remoteDevices,
         },
-        resolveTargetCapabilities(boardInfo as Parameters<typeof resolveTargetCapabilities>[0]),
+        resolveTargetCapabilities(boardInfo),
         { ignoreCapabilities: true },
       )
 

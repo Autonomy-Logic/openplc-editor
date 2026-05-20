@@ -315,18 +315,61 @@ export function nextFreeAddress(
   startFrom?: number,
   alsoUsed?: ReadonlySet<string>,
 ): string {
-  let current = startFrom ?? 0
-  // Hard cap so a fully-full prefix can't loop forever. 1M slots is
-  // far beyond any realistic backplane.
-  const cap = 1_000_000
-  while (current < cap) {
-    const candidate = isBit ? `${prefix}${Math.floor(current / 8)}.${current % 8}` : `${prefix}${current}`
-    if (!pool.byAddress.has(candidate) && !(alsoUsed && alsoUsed.has(candidate))) {
-      return candidate
-    }
-    current++
+  // Linearise: bit addresses become byte*8 + bit; word addresses are
+  // already a single integer. The pool's `byPrefix` list is sorted on
+  // construction, so we walk it once and find the lowest unclaimed
+  // linear slot >= startFrom. `alsoUsed` (caller-tracked in-flight
+  // allocations) is merged in via a second sorted cursor. Time
+  // complexity is O(N + M) for N pool claims and M extras under the
+  // same prefix — strictly better than the previous candidate-by-
+  // candidate scan when claims are sparse, and lets later phases
+  // reclaim freed slots without a linear walk.
+  const linearOf = (parsed: ParsedAddress | null): number => {
+    if (!parsed || parsed.prefix !== prefix) return -1
+    return isBit ? parsed.index * 8 + (parsed.bit ?? 0) : parsed.index
   }
-  throw new Error(`nextFreeAddress: exhausted ${prefix} after ${cap} slots`)
+  const formatLinear = (linear: number): string =>
+    isBit ? `${prefix}${Math.floor(linear / 8)}.${linear % 8}` : `${prefix}${linear}`
+
+  // Claims already sorted by `buildAddressPool`. Skip entries that
+  // belong to other prefixes (shouldn't happen — byPrefix is keyed
+  // by prefix — but defensive against future refactors).
+  const poolClaims: number[] = []
+  for (const claim of pool.byPrefix.get(prefix) ?? []) {
+    const n = linearOf(parseAddress(claim.address))
+    if (n >= 0) poolClaims.push(n)
+  }
+
+  const extras: number[] = []
+  if (alsoUsed) {
+    for (const addr of alsoUsed) {
+      const n = linearOf(parseAddress(addr))
+      if (n >= 0) extras.push(n)
+    }
+    extras.sort((a, b) => a - b)
+  }
+
+  let expect = startFrom ?? 0
+  let i = 0
+  let j = 0
+  while (i < poolClaims.length || j < extras.length) {
+    const a = i < poolClaims.length ? poolClaims[i] : Number.POSITIVE_INFINITY
+    const b = j < extras.length ? extras[j] : Number.POSITIVE_INFINITY
+    const next = a < b ? a : b
+    // Advance cursors past anything < startFrom (we don't care about
+    // earlier slots) and dedupe pool/extras overlap.
+    if (next < expect) {
+      if (a === next) i++
+      if (b === next) j++
+      continue
+    }
+    if (next > expect) return formatLinear(expect)
+    // next === expect: this slot is taken; try the next one.
+    expect++
+    if (a === next) i++
+    if (b === next) j++
+  }
+  return formatLinear(expect)
 }
 
 /** Convenience: is this address currently claimed by any source? */

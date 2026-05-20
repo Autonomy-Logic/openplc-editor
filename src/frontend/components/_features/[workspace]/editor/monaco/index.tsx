@@ -1,7 +1,7 @@
 import './configs'
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
-import { resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 

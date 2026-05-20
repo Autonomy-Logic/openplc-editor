@@ -220,6 +220,42 @@ describe('nextFreeAddress', () => {
     // %QX0.* are now redundant. Next free is the start of the second byte.
     expect(nextFreeAddress(pool, '%QX', true, undefined, allFirstByte)).toBe('%QX1.0')
   })
+
+  it('reclaims a gap left by a sparse claim set (byPrefix walk)', () => {
+    // Claims at %IW0, %IW1, %IW3 (skipping 2) and %IW10 (big gap).
+    // The gap-find should return %IW2, not extend past the highest
+    // claim.
+    const sparse = buildAddressPool(
+      {
+        vendorIoMapping: {
+          entries: [
+            { iecAddress: '%IW0', slot: 1, channelName: 'A' },
+            { iecAddress: '%IW1', slot: 2, channelName: 'B' },
+            { iecAddress: '%IW3', slot: 3, channelName: 'C' },
+            { iecAddress: '%IW10', slot: 4, channelName: 'D' },
+          ],
+        },
+      },
+      vppOnlyCaps,
+    )
+    expect(nextFreeAddress(sparse, '%IW', false)).toBe('%IW2')
+  })
+
+  it('allocates %ID (double-word) addresses', () => {
+    const dword = buildAddressPool(
+      {
+        vendorIoMapping: {
+          entries: [
+            { iecAddress: '%ID0', slot: 1, channelName: 'TC1' },
+            { iecAddress: '%ID2', slot: 2, channelName: 'TC2' },
+          ],
+        },
+      },
+      vppOnlyCaps,
+    )
+    expect(nextFreeAddress(dword, '%ID', false)).toBe('%ID1')
+    expect(nextFreeAddress(dword, '%ID', false, 3)).toBe('%ID3')
+  })
 })
 
 describe('isAddressClaimed / listClaims', () => {

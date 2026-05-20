@@ -1,5 +1,5 @@
-import { buildAddressPool, nextFreeAddress } from '@root/backend/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
+import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'

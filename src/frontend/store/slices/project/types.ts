@@ -287,3 +287,20 @@ export type ProjectSlice = {
   pendingDeletions: string[]
   projectActions: ProjectActions
 }
+
+/**
+ * Cross-slice root-state view the project slice needs at runtime —
+ * `setDeviceDefinitions` / `setVendorScreenData` lives in the device
+ * slice, `addLog` lives in the console slice, both consumed by the
+ * alias-sync flow. Keeps the slice creator's `getState()` typed
+ * properly instead of relying on `as unknown as { ... }` casts.
+ *
+ * Slice types are imported via dynamic `type-only` style — declared
+ * up here in `types.ts` rather than `slice.ts` so the project slice
+ * has a single source of truth for cross-slice shape without
+ * circular module deps.
+ */
+import type { ConsoleSlice } from '../console'
+import type { DeviceSlice } from '../device'
+
+export type ProjectSliceRoot = ProjectSlice & DeviceSlice & ConsoleSlice

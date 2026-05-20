@@ -11,7 +11,7 @@
  * cleaner "does this target support <feature>?".
  */
 
-import { type BoardInfoLike, resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
+import { type BoardInfoLike, resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 /**
  * Minimal board info shape used by device utility functions.

@@ -1,4 +1,4 @@
-import { resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { OrchestratorInfo } from '../../../../../../../middleware/shared/ports/orchestrator-port'

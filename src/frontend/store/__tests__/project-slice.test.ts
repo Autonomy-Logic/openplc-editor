@@ -16,11 +16,20 @@ import type {
   PLCVariable,
   S7CommDataBlock,
 } from '../../../middleware/shared/ports/types'
+import { createConsoleSlice } from '../slices/console'
+import { createDeviceSlice } from '../slices/device'
 import { createProjectSlice } from '../slices/project/slice'
-import type { ProjectSlice, ProjectState } from '../slices/project/types'
+import type { ProjectSliceRoot, ProjectState } from '../slices/project/types'
 
 function makeStore() {
-  return createStore<ProjectSlice>()(createProjectSlice)
+  // The project slice now reads from device + console slices for the
+  // alias-sync flow. Compose all three so the cross-slice types
+  // resolve correctly.
+  return createStore<ProjectSliceRoot>()((...args) => ({
+    ...createProjectSlice(...args),
+    ...createDeviceSlice(...args),
+    ...createConsoleSlice(...args),
+  }))
 }
 
 // ---------------------------------------------------------------------------

@@ -49,6 +49,11 @@ export interface PLCVariable {
   class?: VariableClass
   type: PLCVariableType
   location: string
+  /** Stable alias name the variable is bound to, when present. Looked
+   *  up in the alias registry to keep `location` current as the
+   *  producer reassigns the address. Cell renders `alias (address)`
+   *  when set; falls back to raw `location` otherwise. */
+  alias?: string
   initialValue?: string | null
   documentation: string
   debug?: boolean
@@ -557,26 +562,13 @@ export function projectCapabilities(
 
 export type CompilerType = 'arduino-cli' | 'openplc-compiler' | 'simulator'
 
-/** Per-target capability matrix. Populated from hals.json `capabilities`
- *  blocks for vanilla targets, from VPP manifest `target.capabilities`
- *  for VPP-derived boards, or attached by the platform (orchestrator
- *  devices on web). See `target-capabilities` in backend/shared for the
- *  authoritative type definition and resolver. */
-export interface TargetCapabilities {
-  pinMapping: boolean
-  vppIo: boolean
-  modbusTcpRemote: boolean
-  ethercat: boolean
-  modbusTcpServer: boolean
-  opcuaServer: boolean
-  s7Server: boolean
-  debuggerTransports: Array<'modbus-serial' | 'modbus-tcp' | 'websocket'>
-  pythonFunctionBlocks: boolean
-  arduinoApiCompletions: boolean
-  hasRuntimeStats: boolean
-  isInProcessSimulator: boolean
-  directUsbUpload: boolean
-}
+/** Re-export of the canonical capability shape so consumers of
+ *  `BoardInfo` get the same union without crossing the utils layer
+ *  directly. Authoritative definition lives in
+ *  `middleware/shared/utils/target-capabilities`. */
+import type { DebuggerTransport, TargetCapabilities } from '../utils/target-capabilities'
+
+export type { DebuggerTransport, TargetCapabilities }
 
 export interface BoardInfo {
   compiler: CompilerType | (string & {})

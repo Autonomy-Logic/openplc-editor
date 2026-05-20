@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { resolveTargetCapabilities } from '@root/backend/shared/utils/target-capabilities'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
